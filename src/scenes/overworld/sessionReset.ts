@@ -1,3 +1,4 @@
+import { goalEndsOnDeath } from '../../goals/goalSafety';
 import type {
   RoomCoordinates,
   RoomSnapshot,
@@ -72,8 +73,8 @@ export class OverworldSessionResetController {
     this.host.cancelPlayerAttack();
 
     // These deaths start a fresh run or end survival, so keep its original spawn.
-    if (activeCourseRun?.course.goal?.type === 'survival'
-      || (!activeCourseRun && (activeRun?.goal.type === 'survival' || activeRun?.qualificationState === 'practice'))) {
+    if (goalEndsOnDeath(activeCourseRun?.course.goal)
+      || (!activeCourseRun && (goalEndsOnDeath(activeRun?.goal) || activeRun?.qualificationState === 'practice'))) {
       this.host.clearRespawnCheckpoints?.();
     }
 
@@ -100,13 +101,13 @@ export class OverworldSessionResetController {
         return;
       }
 
-      if (activeCourseRun?.course.goal?.type === 'survival') {
+      if (goalEndsOnDeath(activeCourseRun?.course.goal)) {
         this.host.failCourseRun('Expanded room survival failed.');
         this.host.showTransientStatus(`${reason} Expanded room run failed.`);
         return;
       }
 
-      if (activeRun?.goal.type === 'survival') {
+      if (activeRun && goalEndsOnDeath(activeRun.goal)) {
         const goalRoom = this.host.getRoomSnapshotForCoordinates(activeRun.roomCoordinates);
         this.host.failGoalRun('Survival failed.');
         if (goalRoom?.goal) {

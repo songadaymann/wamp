@@ -1,5 +1,12 @@
 ## 2026-10-15 overnight — editor authoring shipped; lifecycle in progress
 
+## 2026-10-16 — Finish F070
+
+User request: finish remaining F070, verify, push, merge and deploy. Branch `codex/wamp-f070-final-2026-10-16` from merged PR223/main `4aa356d7`. Plan: (1) audit remaining goal-specific dispatch including Clear Check, API validation, fingerprints and lifecycle guards; (2) require explicit typed policies while preserving behavior; (3) run frozen-baseline comparisons, focused/full quality, muted native/official browser checks and mobile gates; (4) OSS check, PR/source gates, merge/main gates, guarded release and actual-domain proof. PR223 Expanded Room authoring is already delivered; preserve the primary dirty checkout, selected animation and decision-gated work. F070 source implementation and final audit are now complete; delivery follows the gates below.
+
+Source/audit accepted: 513 files/3,768 tests (two workers), all quality gates,28,086 exact old/new comparisons,13 required new-goal rejection roots,18 strict Clear Check cases and two official real-API movement/jump iterations.48 mobile cases accepted across the matrix and isolated landscape recheck; full unchanged CI suite remains required. Master146/215 with source complete, delivery explicitly pending. See `docs/review/wamp-f070-final-2026-10-16.md` for retained unaccepted diagnostics and exact boundaries. Next: staged OSS, push/attach PR, source/main gates, guarded API+Pages release and actual-domain proof.
+
+
 ## 2026-10-16 — Expanded Room editor source verified
 
 Typed Expanded Room authoring and integrations pass3,763 full tests,48 mobile cases and frozen38,857-method/1,456-view/273-descriptor compatibility. Three candidate desktop/phone public-control flows pass12 saves each with0 errors/misses; baseline behavior matches, with one explicitly retained baseline-only WebKit presence CORS. Phone setup header now clears account controls; narrow/landscape World navigation passes. Source/main hosted gates and guarded Pages/live delivery follow. F070/master partial/145; no saved/API formats change. See `docs/review/wamp-expanded-goal-authoring-registry-2026-10-15.md`.

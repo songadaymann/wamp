@@ -1,3 +1,4 @@
+import type { Goal, GoalMarkerPoint, GoalType } from '../goals/goalSchema';
 import {
   getPlacedObjectInstanceId,
   getObjectById,
@@ -611,56 +612,8 @@ function serializeMintedRoomTilesV2(
   return Object.keys(serialized).length > 0 ? serialized : undefined;
 }
 
-function serializeRoomGoalV2(goal: RoomGoal): WampMintedRoomGoalV2 {
-  switch (goal.type) {
-    case 'reach_exit':
-      return {
-        t: 'e',
-        ...(goal.exit ? { e: [goal.exit.x, goal.exit.y] } : {}),
-        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
-      };
-    case 'collect_target':
-      return {
-        t: 'c',
-        r: goal.requiredCount,
-        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
-      };
-    case 'collect_race':
-      return {
-        t: 'r',
-        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
-      };
-    case 'defeat_all':
-      return {
-        t: 'd',
-        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
-      };
-    case 'checkpoint_sprint':
-      return {
-        t: 'k',
-        ...(goal.checkpoints.length > 0
-          ? {
-              c: goal.checkpoints.map((point) => [point.x, point.y] as [number, number]),
-            }
-          : {}),
-        ...(goal.finish ? { f: [goal.finish.x, goal.finish.y] } : {}),
-        ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
-      };
-    case 'survival':
-      return {
-        t: 's',
-        d: goal.durationMs,
-      };
-    case 'npc_quest':
-      return {
-        t: 'n',
-        q: goal.questType === 'protect' ? 'p' : goal.questType === 'escort' ? 'e' : 'g',
-        ...(goal.npcInstanceId ? { i: goal.npcInstanceId } : {}),
-        ...(goal.questType === 'protect' ? { d: goal.durationMs } : {}),
-        ...(goal.questType === 'give' ? { r: goal.requiredCount } : {}),
-        ...(goal.destination ? { e: [goal.destination.x, goal.destination.y] } : {}),
-      };
-  }
+function serializeRoomGoalV2<K extends GoalType>(goal: Goal<GoalMarkerPoint, K>): WampMintedRoomGoalV2 {
+  return MINT_GOAL_SERIALIZERS[goal.type](goal);
 }
 
 function decodeMintedTileData(
@@ -942,6 +895,7 @@ function normalizeRoomGoalV2(value: unknown): RoomGoal | null {
   const goal = value as Partial<WampMintedRoomGoalV2>;
   const goalType = goal.t as WampGoalCode | undefined;
 
+  // Frozen V2 protocol codes, not the extensible runtime GoalType union.
   switch (goalType) {
     case 'e': {
       const reachExitGoal = value as Partial<WampMintedReachExitGoalV2>;
@@ -1367,3 +1321,61 @@ function isRoomTokenAttribute(value: unknown): value is WampRoomTokenAttribute {
       (typeof attribute.value === 'string' || typeof attribute.value === 'number')
   );
 }
+
+/** Encode the existing V2 wire format; a new goal must choose an explicit representation. */
+const MINT_GOAL_SERIALIZERS: { [K in GoalType]: (goal: Goal<GoalMarkerPoint, K>) => WampMintedRoomGoalV2 } = {
+  reach_exit: goal => {
+    return {
+      t: 'e',
+      ...(goal.exit ? { e: [goal.exit.x, goal.exit.y] } : {}),
+      ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+    };
+  },
+  collect_target: goal => {
+    return {
+      t: 'c',
+      r: goal.requiredCount,
+      ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+    };
+  },
+  collect_race: goal => {
+    return {
+      t: 'r',
+      ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+    };
+  },
+  defeat_all: goal => {
+    return {
+      t: 'd',
+      ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+    };
+  },
+  checkpoint_sprint: goal => {
+    return {
+      t: 'k',
+      ...(goal.checkpoints.length > 0
+        ? {
+            c: goal.checkpoints.map((point) => [point.x, point.y] as [number, number]),
+          }
+        : {}),
+      ...(goal.finish ? { f: [goal.finish.x, goal.finish.y] } : {}),
+      ...(goal.timeLimitMs ? { l: goal.timeLimitMs } : {}),
+    };
+  },
+  survival: goal => {
+    return {
+      t: 's',
+      d: goal.durationMs,
+    };
+  },
+  npc_quest: goal => {
+    return {
+      t: 'n',
+      q: goal.questType === 'protect' ? 'p' : goal.questType === 'escort' ? 'e' : 'g',
+      ...(goal.npcInstanceId ? { i: goal.npcInstanceId } : {}),
+      ...(goal.questType === 'protect' ? { d: goal.durationMs } : {}),
+      ...(goal.questType === 'give' ? { r: goal.requiredCount } : {}),
+      ...(goal.destination ? { e: [goal.destination.x, goal.destination.y] } : {}),
+    };
+  },
+};

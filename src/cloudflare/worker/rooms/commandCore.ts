@@ -1,3 +1,4 @@
+import type { GoalType } from '../../../goals/goalSchema';
 import {
   BACKGROUND_GROUPS,
   LAYER_NAMES,
@@ -389,107 +390,11 @@ function normalizeSelector(value: unknown, label: string, availableRefs: Set<str
 
 function normalizeGoalCommandValue(value: unknown, availableRefs: Set<string>): RoomGoal | NpcQuestGoalCommandValue {
   const goal = asRecord(value, 'set_goal.goal');
-  switch (goal.type) {
-    case 'reach_exit': {
-      assertAllowedKeys(goal, ['type', 'exit', 'timeLimitMs'], 'set_goal.goal');
-      const nextGoal = normalizeRoomGoal({
-        type: 'reach_exit',
-        exit: normalizeGoalMarkerPoint(goal.exit, 'set_goal.goal.exit'),
-        timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'reach_exit' || !nextGoal.exit) throw new HttpError(400, 'reach_exit goal is invalid.');
-      return nextGoal;
-    }
-    case 'collect_target': {
-      assertAllowedKeys(goal, ['type', 'requiredCount', 'timeLimitMs'], 'set_goal.goal');
-      const nextGoal = normalizeRoomGoal({
-        type: 'collect_target',
-        requiredCount: normalizePositiveInteger(goal.requiredCount, 'set_goal.goal.requiredCount'),
-        timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'collect_target') throw new HttpError(400, 'collect_target goal is invalid.');
-      return nextGoal;
-    }
-    case 'collect_race': {
-      assertAllowedKeys(goal, ['type', 'timeLimitMs'], 'set_goal.goal');
-      const nextGoal = normalizeRoomGoal({
-        type: 'collect_race',
-        timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'collect_race') throw new HttpError(400, 'collect_race goal is invalid.');
-      return nextGoal;
-    }
-    case 'defeat_all': {
-      assertAllowedKeys(goal, ['type', 'timeLimitMs'], 'set_goal.goal');
-      const nextGoal = normalizeRoomGoal({
-        type: 'defeat_all',
-        timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'defeat_all') throw new HttpError(400, 'defeat_all goal is invalid.');
-      return nextGoal;
-    }
-    case 'checkpoint_sprint': {
-      assertAllowedKeys(goal, ['type', 'checkpoints', 'finish', 'timeLimitMs'], 'set_goal.goal');
-      if (!Array.isArray(goal.checkpoints) || goal.checkpoints.length === 0) {
-        throw new HttpError(400, 'checkpoint_sprint goal requires at least one checkpoint.');
-      }
-      const checkpoints = goal.checkpoints.map((point, index) =>
-        normalizeGoalMarkerPoint(point, `set_goal.goal.checkpoints[${index}]`));
-      const nextGoal = normalizeRoomGoal({
-        type: 'checkpoint_sprint',
-        checkpoints,
-        finish: normalizeGoalMarkerPoint(goal.finish, 'set_goal.goal.finish'),
-        timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'checkpoint_sprint' || !nextGoal.finish) throw new HttpError(400, 'checkpoint_sprint goal is invalid.');
-      return nextGoal;
-    }
-    case 'survival': {
-      assertAllowedKeys(goal, ['type', 'durationMs'], 'set_goal.goal');
-      const nextGoal = normalizeRoomGoal({
-        type: 'survival',
-        durationMs: normalizePositiveInteger(goal.durationMs, 'set_goal.goal.durationMs'),
-      });
-      if (!nextGoal || nextGoal.type !== 'survival') throw new HttpError(400, 'survival goal is invalid.');
-      return nextGoal;
-    }
-    case 'npc_quest': {
-      if (goal.questType !== 'protect' && goal.questType !== 'escort' && goal.questType !== 'give') {
-        throw new HttpError(400, 'set_goal.goal.questType must be protect, escort, or give.');
-      }
-      const commonKeys = ['type', 'questType', 'npc', 'npcInstanceId'];
-      const allowedKeys = goal.questType === 'protect'
-        ? [...commonKeys, 'durationMs']
-        : goal.questType === 'escort'
-          ? [...commonKeys, 'destination']
-          : [...commonKeys, 'requiredCount'];
-      assertAllowedKeys(goal, allowedKeys, 'set_goal.goal');
-      const hasNpc = hasOwn(goal, 'npc');
-      const hasNpcInstanceId = hasOwn(goal, 'npcInstanceId');
-      if (hasNpc === hasNpcInstanceId) {
-        throw new HttpError(400, 'npc_quest requires exactly one of npc or npcInstanceId.');
-      }
-      const npc = hasNpc
-        ? normalizeSelector(goal.npc, 'set_goal.goal.npc', availableRefs)
-        : { instanceId: normalizeInstanceId(goal.npcInstanceId, 'set_goal.goal.npcInstanceId') };
-      return {
-        type: 'npc_quest',
-        questType: goal.questType,
-        npc,
-        durationMs: goal.questType === 'protect'
-          ? normalizeOptionalPositiveInteger(goal.durationMs, 'set_goal.goal.durationMs') ?? 30_000
-          : 30_000,
-        requiredCount: goal.questType === 'give'
-          ? normalizePositiveInteger(goal.requiredCount, 'set_goal.goal.requiredCount')
-          : 1,
-        destination: goal.questType === 'escort'
-          ? normalizeGoalMarkerPoint(goal.destination, 'set_goal.goal.destination')
-          : null,
-      };
-    }
-    default:
-      throw new HttpError(400, 'set_goal.goal.type is invalid.');
+  const type = goal.type;
+  if (typeof type !== 'string' || !Object.prototype.hasOwnProperty.call(GOAL_COMMAND_PARSERS, type)) {
+    throw new HttpError(400, 'set_goal.goal.type is invalid.');
   }
+  return GOAL_COMMAND_PARSERS[type as GoalType](goal, availableRefs);
 }
 
 function getBuildStyleOrThrow(tilesetKey: string, styleId: string): AgentTilesetBuildStyle {
@@ -1058,3 +963,104 @@ export function applyRoomDraftCommands(baseSnapshot: RoomSnapshot, commands: rea
     commandRefs: Object.fromEntries(Array.from(refs).filter(([, instanceId]) => persistedIds.has(instanceId))),
   };
 }
+
+/** Runtime own-key guard above is required for untrusted commands. */
+const GOAL_COMMAND_PARSERS: Record<GoalType, (goal: Record<string, unknown>, availableRefs: Set<string>) => RoomGoal | NpcQuestGoalCommandValue> = {
+  reach_exit: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'exit', 'timeLimitMs'], 'set_goal.goal');
+    const nextGoal = normalizeRoomGoal({
+      type: 'reach_exit',
+      exit: normalizeGoalMarkerPoint(goal.exit, 'set_goal.goal.exit'),
+      timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'reach_exit' || !nextGoal.exit) throw new HttpError(400, 'reach_exit goal is invalid.');
+    return nextGoal;
+  },
+  collect_target: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'requiredCount', 'timeLimitMs'], 'set_goal.goal');
+    const nextGoal = normalizeRoomGoal({
+      type: 'collect_target',
+      requiredCount: normalizePositiveInteger(goal.requiredCount, 'set_goal.goal.requiredCount'),
+      timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'collect_target') throw new HttpError(400, 'collect_target goal is invalid.');
+    return nextGoal;
+  },
+  collect_race: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'timeLimitMs'], 'set_goal.goal');
+    const nextGoal = normalizeRoomGoal({
+      type: 'collect_race',
+      timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'collect_race') throw new HttpError(400, 'collect_race goal is invalid.');
+    return nextGoal;
+  },
+  defeat_all: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'timeLimitMs'], 'set_goal.goal');
+    const nextGoal = normalizeRoomGoal({
+      type: 'defeat_all',
+      timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'defeat_all') throw new HttpError(400, 'defeat_all goal is invalid.');
+    return nextGoal;
+  },
+  checkpoint_sprint: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'checkpoints', 'finish', 'timeLimitMs'], 'set_goal.goal');
+    if (!Array.isArray(goal.checkpoints) || goal.checkpoints.length === 0) {
+      throw new HttpError(400, 'checkpoint_sprint goal requires at least one checkpoint.');
+    }
+    const checkpoints = goal.checkpoints.map((point, index) =>
+      normalizeGoalMarkerPoint(point, `set_goal.goal.checkpoints[${index}]`));
+    const nextGoal = normalizeRoomGoal({
+      type: 'checkpoint_sprint',
+      checkpoints,
+      finish: normalizeGoalMarkerPoint(goal.finish, 'set_goal.goal.finish'),
+      timeLimitMs: normalizeOptionalPositiveInteger(goal.timeLimitMs, 'set_goal.goal.timeLimitMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'checkpoint_sprint' || !nextGoal.finish) throw new HttpError(400, 'checkpoint_sprint goal is invalid.');
+    return nextGoal;
+  },
+  survival: (goal, _availableRefs) => {
+    assertAllowedKeys(goal, ['type', 'durationMs'], 'set_goal.goal');
+    const nextGoal = normalizeRoomGoal({
+      type: 'survival',
+      durationMs: normalizePositiveInteger(goal.durationMs, 'set_goal.goal.durationMs'),
+    });
+    if (!nextGoal || nextGoal.type !== 'survival') throw new HttpError(400, 'survival goal is invalid.');
+    return nextGoal;
+  },
+  npc_quest: (goal, availableRefs) => {
+    if (goal.questType !== 'protect' && goal.questType !== 'escort' && goal.questType !== 'give') {
+      throw new HttpError(400, 'set_goal.goal.questType must be protect, escort, or give.');
+    }
+    const commonKeys = ['type', 'questType', 'npc', 'npcInstanceId'];
+    const allowedKeys = goal.questType === 'protect'
+      ? [...commonKeys, 'durationMs']
+      : goal.questType === 'escort'
+        ? [...commonKeys, 'destination']
+        : [...commonKeys, 'requiredCount'];
+    assertAllowedKeys(goal, allowedKeys, 'set_goal.goal');
+    const hasNpc = hasOwn(goal, 'npc');
+    const hasNpcInstanceId = hasOwn(goal, 'npcInstanceId');
+    if (hasNpc === hasNpcInstanceId) {
+      throw new HttpError(400, 'npc_quest requires exactly one of npc or npcInstanceId.');
+    }
+    const npc = hasNpc
+      ? normalizeSelector(goal.npc, 'set_goal.goal.npc', availableRefs)
+      : { instanceId: normalizeInstanceId(goal.npcInstanceId, 'set_goal.goal.npcInstanceId') };
+    return {
+      type: 'npc_quest',
+      questType: goal.questType,
+      npc,
+      durationMs: goal.questType === 'protect'
+        ? normalizeOptionalPositiveInteger(goal.durationMs, 'set_goal.goal.durationMs') ?? 30_000
+        : 30_000,
+      requiredCount: goal.questType === 'give'
+        ? normalizePositiveInteger(goal.requiredCount, 'set_goal.goal.requiredCount')
+        : 1,
+      destination: goal.questType === 'escort'
+        ? normalizeGoalMarkerPoint(goal.destination, 'set_goal.goal.destination')
+        : null,
+    };
+  },
+};

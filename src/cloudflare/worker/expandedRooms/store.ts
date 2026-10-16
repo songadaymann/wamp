@@ -1,3 +1,4 @@
+import { toCourseGoalType } from '../../../courses/model';
 import {
   createExpandedRoomSummaryFromLegacyCourse,
   createExpandedRoomSummaryFromResolvedTarget,
@@ -637,8 +638,7 @@ async function loadLegacyCourseMembershipsAsExpandedRoomsForRoomIds(
         settings = getPublishedGameplaySettings(row.published_json);
         settingsByCourseId.set(row.course_id, settings);
       }
-      const goalType: CourseGoalType | null = settings.goalType === 'collect_race' || settings.goalType === 'npc_quest'
-        ? null : settings.goalType;
+      const goalType: CourseGoalType | null = toCourseGoalType(settings.goalType);
       memberships.push({
         ...createExpandedRoomSummaryFromLegacyCourse({
           courseId: row.course_id,

@@ -1,3 +1,4 @@
+import type { Goal, GoalMarkerPoint, GoalType } from '../goals/goalSchema';
 import { isCoopPressurePlate } from '../placedObjects/coopPressurePlates';
 import {
   LAYER_NAMES,
@@ -359,58 +360,7 @@ function normalizeGoalForFingerprint(goal: RoomGoal | null): CanonicalGoalPayloa
     return null;
   }
 
-  switch (normalized.type) {
-    case 'reach_exit':
-      return {
-        type: normalized.type,
-        exit: normalized.exit ? [Math.round(normalized.exit.x), Math.round(normalized.exit.y)] : null,
-        timeLimitMs: normalized.timeLimitMs,
-      };
-    case 'collect_target':
-      return {
-        type: normalized.type,
-        requiredCount: normalized.requiredCount,
-        timeLimitMs: normalized.timeLimitMs,
-      };
-    case 'collect_race':
-      return {
-        type: normalized.type,
-        timeLimitMs: normalized.timeLimitMs,
-      };
-    case 'defeat_all':
-      return {
-        type: normalized.type,
-        timeLimitMs: normalized.timeLimitMs,
-      };
-    case 'checkpoint_sprint':
-      return {
-        type: normalized.type,
-        checkpoints: normalized.checkpoints.map((checkpoint) => [
-          Math.round(checkpoint.x),
-          Math.round(checkpoint.y),
-        ]),
-        finish: normalized.finish
-          ? [Math.round(normalized.finish.x), Math.round(normalized.finish.y)]
-          : null,
-        timeLimitMs: normalized.timeLimitMs,
-      };
-    case 'survival':
-      return {
-        type: normalized.type,
-        durationMs: normalized.durationMs,
-      };
-    case 'npc_quest':
-      return {
-        type: normalized.type,
-        questType: normalized.questType,
-        npcInstanceId: normalized.npcInstanceId,
-        durationMs: normalized.durationMs,
-        requiredCount: normalized.requiredCount,
-        destination: normalized.destination
-          ? [Math.round(normalized.destination.x), Math.round(normalized.destination.y)]
-          : null,
-      };
-  }
+  return fingerprintGoal(normalized);
 }
 
 function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalPlacedObjectPayload[] {
@@ -630,4 +580,68 @@ function compareNormalizedPlacedObjects(
     Number(left.policePatrolShoots ?? false) - Number(right.policePatrolShoots ?? false) ||
     (left.signText ?? '').localeCompare(right.signText ?? '')
   );
+}
+
+/** Fingerprint field order and rounding are persisted version-family semantics. */
+const GOAL_FINGERPRINT_RULES: { [K in GoalType]: (goal: Goal<GoalMarkerPoint, K>) => CanonicalGoalPayload } = {
+  reach_exit: goal => {
+    return {
+      type: goal.type,
+      exit: goal.exit ? [Math.round(goal.exit.x), Math.round(goal.exit.y)] : null,
+      timeLimitMs: goal.timeLimitMs,
+    };
+  },
+  collect_target: goal => {
+    return {
+      type: goal.type,
+      requiredCount: goal.requiredCount,
+      timeLimitMs: goal.timeLimitMs,
+    };
+  },
+  collect_race: goal => {
+    return {
+      type: goal.type,
+      timeLimitMs: goal.timeLimitMs,
+    };
+  },
+  defeat_all: goal => {
+    return {
+      type: goal.type,
+      timeLimitMs: goal.timeLimitMs,
+    };
+  },
+  checkpoint_sprint: goal => {
+    return {
+      type: goal.type,
+      checkpoints: goal.checkpoints.map((checkpoint) => [
+        Math.round(checkpoint.x),
+        Math.round(checkpoint.y),
+      ]),
+      finish: goal.finish
+        ? [Math.round(goal.finish.x), Math.round(goal.finish.y)]
+        : null,
+      timeLimitMs: goal.timeLimitMs,
+    };
+  },
+  survival: goal => {
+    return {
+      type: goal.type,
+      durationMs: goal.durationMs,
+    };
+  },
+  npc_quest: goal => {
+    return {
+      type: goal.type,
+      questType: goal.questType,
+      npcInstanceId: goal.npcInstanceId,
+      durationMs: goal.durationMs,
+      requiredCount: goal.requiredCount,
+      destination: goal.destination
+        ? [Math.round(goal.destination.x), Math.round(goal.destination.y)]
+        : null,
+    };
+  },
+};
+function fingerprintGoal<K extends GoalType>(goal: Goal<GoalMarkerPoint, K>): CanonicalGoalPayload {
+  return GOAL_FINGERPRINT_RULES[goal.type](goal);
 }

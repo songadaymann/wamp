@@ -1,3 +1,5 @@
+import { ROOM_GOAL_DEFINITIONS } from '../../../goals/roomGoals';
+import { roomGoalRankingPolicy } from '../../../goals/goalSchema';
 import type { DailyPick, DailyResponse, DailyLeaderboardEntry } from '../../../daily/model';
 import { DAILY_CLEAR_PXP } from '../../../daily/model';
 import { normalizeRoomGoal } from '../../../goals/roomGoals';
@@ -187,7 +189,7 @@ export async function loadDailyResponse(env: Env, userId: string | null, now = n
     const courseGoal = row.target_type === 'expanded_room' ? normalizeCourseGoal(rawGoal) : null;
     if (roomGoal) rankingMode = getLeaderboardRankingMode(roomGoal);
     else if (courseGoal) rankingMode = getCourseLeaderboardRankingMode(courseGoal);
-    const order = roomGoal?.type === 'npc_quest' && roomGoal.questType === 'protect'
+    const order = roomGoal && roomGoalRankingPolicy(roomGoal, ROOM_GOAL_DEFINITIONS) === 'protect'
       ? 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC'
       : rankingMode === 'time' ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
         : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';

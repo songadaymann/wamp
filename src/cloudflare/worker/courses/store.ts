@@ -1,8 +1,9 @@
+import { COURSE_SERVER_RULES, getCourseGoalPublishError } from '../../../courses/goalServerRules';
+import { goalValidationMarkers } from '../../../goals/goalSafety';
 import type { AuthUser } from '../../../auth/model';
 import { normalizePlayerHearts, type PlayerHearts } from '../../../player/hearts';
 import type { RequestAuthSource } from '../../../agents/model';
 import { cloneRoomSnapshot, countRoomPlacedObjectsByCategory, type RoomSnapshot } from '../../../persistence/roomModel';
-import { getCourseEnemyGoalPublishValidationError } from '../../../courses/publishValidation';
 import {
   cloneCourseRecord,
   cloneCourseSnapshot,
@@ -10,7 +11,6 @@ import {
   courseRoomRefsFormConnectedCluster,
   courseRoomRefsHaveUniqueRoomIds,
   createCourseVersionRecord,
-  getCourseRoomOrder,
   normalizeCourseGoal,
   normalizeCourseSnapshot,
   sortCourseRoomRefsForStorage,
@@ -569,7 +569,7 @@ async function resolveValidatedCourseDraft(
     options.roomVersionPolicy,
     async (roomId, requestedVersion) => {
       const roomVersion = await loadPublishedRoomVersionForCourse(env, roomId, requestedVersion);
-      if (options.requirePublishedGoal && draft.goal?.type === 'defeat_all') {
+      if (options.requirePublishedGoal && (draft.goal && COURSE_SERVER_RULES[draft.goal.type].countsEnemies)) {
         const snapshot = cloneRoomSnapshot(JSON.parse(roomVersion.snapshot_json) as RoomSnapshot);
         enemyCount += countRoomPlacedObjectsByCategory(snapshot.placedObjects, 'enemy');
       }
@@ -684,21 +684,8 @@ function validateCourseGoalMarkers(goal: CourseSnapshot['goal'], roomRefs: Cours
     return;
   }
 
-  switch (goal.type) {
-    case 'reach_exit':
-      validateCourseMarkerBelongsToCourse(goal.exit, roomRefs, 'Exit');
-      return;
-    case 'checkpoint_sprint':
-      for (const checkpoint of goal.checkpoints) {
-        validateCourseMarkerBelongsToCourse(checkpoint, roomRefs, 'Checkpoint');
-      }
-      validateCourseMarkerBelongsToCourse(goal.finish, roomRefs, 'Finish');
-      return;
-    case 'collect_target':
-    case 'defeat_all':
-    case 'survival':
-      // No placed markers to validate.
-      return;
+  for (const { point, label } of goalValidationMarkers<CourseMarkerPoint>(goal)) {
+    validateCourseMarkerBelongsToCourse(point, roomRefs, label);
   }
 }
 
@@ -723,35 +710,8 @@ function validatePublishableCourseDraft(
     throw new HttpError(400, 'Published expanded rooms need a start point.');
   }
 
-  switch (draft.goal.type) {
-    case 'reach_exit':
-      if (!draft.goal.exit) {
-        throw new HttpError(400, 'Reach Exit expanded rooms need an exit.');
-      }
-      return;
-    case 'checkpoint_sprint':
-      if (draft.goal.checkpoints.length === 0) {
-        throw new HttpError(400, 'Checkpoint Sprint expanded rooms need at least one checkpoint.');
-      }
-      if (!draft.goal.finish) {
-        throw new HttpError(400, 'Checkpoint Sprint expanded rooms need a finish.');
-      }
-      for (const checkpoint of draft.goal.checkpoints) {
-        const order = getCourseRoomOrder(roomRefs, checkpoint.roomId);
-        if (order < 0) {
-          throw new HttpError(400, 'Checkpoint must belong to a room in the expanded room.');
-        }
-      }
-      return;
-    case 'collect_target':
-    case 'survival':
-      return;
-    case 'defeat_all': {
-      const error = getCourseEnemyGoalPublishValidationError(draft.goal, enemyCount);
-      if (error) throw new HttpError(400, error);
-      return;
-    }
-  }
+  const error = getCourseGoalPublishError(draft.goal, roomRefs, enemyCount);
+  if (error) throw new HttpError(400, error);
 }
 
 async function loadExpandedRoomCellLimit(

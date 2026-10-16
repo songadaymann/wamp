@@ -1,3 +1,4 @@
+import { removeCourseGoalRoom } from '../../../courses/goalServerRules';
 import {
   cloneCourseSnapshot,
   sortCourseRoomRefsForStorage,
@@ -382,18 +383,7 @@ function stripRoomFromExpandedRoomDraft(
     draft.startPoint = null;
   }
 
-  if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === roomId) {
-    draft.goal = {
-      ...draft.goal,
-      exit: null,
-    };
-  } else if (draft.goal?.type === 'checkpoint_sprint') {
-    draft.goal = {
-      ...draft.goal,
-      checkpoints: draft.goal.checkpoints.filter((checkpoint) => checkpoint.roomId !== roomId),
-      finish: draft.goal.finish?.roomId === roomId ? null : draft.goal.finish,
-    };
-  }
+  if (draft.goal) draft.goal = removeCourseGoalRoom(draft.goal, roomId);
 
   return draft;
 }

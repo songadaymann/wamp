@@ -21,6 +21,10 @@ export const COURSE_GOAL_DEFINITIONS = createGoalDefinitions<CourseMarkerPoint>(
 export const COURSE_GOAL_TYPES = (Object.keys(COURSE_GOAL_DEFINITIONS) as GoalType[])
   .filter((type): type is CourseGoalType => COURSE_GOAL_DEFINITIONS[type].courseSupported);
 
+export function toCourseGoalType(type: GoalType | null): CourseGoalType | null {
+  return COURSE_GOAL_TYPES.find(candidate => candidate === type) ?? null;
+}
+
 export type CourseStatus = 'draft' | 'published';
 
 export interface CourseMarkerPoint {

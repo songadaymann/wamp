@@ -1,3 +1,5 @@
+import { ROOM_GOAL_DEFINITIONS } from '../../../goals/roomGoals';
+import { roomGoalRankingPolicy } from '../../../goals/goalSchema';
 import type { CourseGoal, CourseRecord, CourseSnapshot } from '../../../courses/model';
 import { compareCourseLeaderboardEntries } from '../../../courses/scoring';
 import type { CourseRunRecord } from '../../../courses/runModel';
@@ -234,7 +236,7 @@ async function loadLeaderboardRoomRunsForVersions(
       FROM room_runs
       WHERE room_id = ?
         AND room_version IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
-        AND ${goal.type === 'npc_quest' && goal.questType === 'protect' ? "result IN ('completed', 'failed')" : "result = 'completed'"}
+        AND ${roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect' ? "result IN ('completed', 'failed')" : "result = 'completed'"}
         AND ${sqlIsVerificationAccepted('room_runs')}
         AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
     `

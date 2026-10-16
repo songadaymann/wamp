@@ -1,3 +1,5 @@
+import { ROOM_GOAL_DEFINITIONS } from '../../../goals/roomGoals';
+import { goalCheckpoints } from '../../../goals/goalSafety';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../../config/room';
 import type { CourseSnapshot } from '../../../courses/model';
 import { getObjectRespawnCheckpointPoint, type RespawnCheckpointReference } from '../../../goals/respawnCheckpoints';
@@ -88,9 +90,9 @@ export function validateTraceRespawns(input: {
         bound = { kind: 'object', roomId: room.id, roomX: event.roomX, roomY: event.roomY,
           ...point, instanceId: event.instanceId, checkpointIndex: null };
       } else {
-        if (goal?.type !== 'checkpoint_sprint' || event.checkpointIndex !== nextGoalIndex
+        if ((!goal || ROOM_GOAL_DEFINITIONS[goal.type].markerKind !== 'checkpoints') || event.checkpointIndex !== nextGoalIndex
           || event.instanceId !== null) return fail('trace_goal', 'checkpoint_order');
-        const marker = goal.checkpoints[nextGoalIndex];
+        const marker = goalCheckpoints(goal)[nextGoalIndex];
         if (!marker || ('roomId' in marker && marker.roomId !== room.id)) return fail('trace_goal', 'checkpoint_marker');
         point = marker;
         bound = { kind: 'goal', roomId: room.id, roomX: event.roomX, roomY: event.roomY,

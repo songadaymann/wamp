@@ -1,3 +1,4 @@
+import { goalCheckpoints } from '../../../goals/goalSafety';
 import { placedObjectContributesToCategory } from '../../../config';
 import type { CourseRunRecord } from '../../../courses/runModel';
 import type { RoomGoal } from '../../../goals/roomGoals';
@@ -568,7 +569,7 @@ export function clampRunMetricsToSnapshot(
   const maxCollectibles = countRoomObjectsByCategory(room, 'collectible');
   const maxEnemies = countRoomObjectsByCategory(room, 'enemy');
   const maxCheckpoints =
-    room.goal?.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : 0;
+    goalCheckpoints(room.goal).length;
 
   return {
     collectiblesCollected: clampMetric(metrics.collectiblesCollected, maxCollectibles),
@@ -585,7 +586,7 @@ export function getRunMetricCapsForSnapshot(room: RoomSnapshot): {
   return {
     maxCollectibles: countRoomObjectsByCategory(room, 'collectible'),
     maxEnemies: countRoomObjectsByCategory(room, 'enemy'),
-    maxCheckpoints: room.goal?.type === 'checkpoint_sprint' ? room.goal.checkpoints.length : 0,
+    maxCheckpoints: goalCheckpoints(room.goal).length,
   };
 }
 

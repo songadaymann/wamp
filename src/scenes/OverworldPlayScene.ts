@@ -1,3 +1,4 @@
+import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
 import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
 import { OverworldGhostRaceController } from './overworld/ghostRace';
 import { OverworldLostSongController, type LostSongPlayContext } from './overworld/lostSongs';
@@ -730,11 +731,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.respawnCheckpointController = new OverworldRespawnCheckpointController({
       getScope: () => {
         if (this.mode !== 'play' || this.activeRoomRushRun || this.isPvpArenaActive()) return null;
-        if (this.activeCourseRun) return this.activeCourseRun.course.goal?.type === 'survival' ? null
+        if (this.activeCourseRun) return goalEndsOnDeath(this.activeCourseRun.course.goal) ? null
           : { owner: this.activeCourseRun, roomIds: this.activeCourseRun.course.roomRefs.map(ref => ref.roomId) };
         const roomId = roomIdFromCoordinates(this.currentRoomCoordinates);
         const run = this.currentGoalRun?.roomId === roomId ? this.currentGoalRun : null;
-        if (run?.goal.type === 'survival') return null;
+        if (goalEndsOnDeath(run?.goal)) return null;
         return { owner: run ?? `room:${roomId}`, phase: run?.qualificationState, roomIds: [roomId] };
       },
       onActivated: checkpoint => {
@@ -2183,9 +2184,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private isTimedGoalRunActive(): boolean {
     const run = this.currentGoalRun;
     if (!run || run.result !== 'active') return false;
-    if (run.goal.type === 'survival') return true;
-    if (run.goal.type === 'npc_quest') return run.goal.questType === 'protect';
-    return run.goal.timeLimitMs !== null;
+    return goalIsTimed(run.goal);
   }
 
   private get activeCourseSnapshot(): CourseSnapshot | null {
