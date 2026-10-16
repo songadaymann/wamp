@@ -83,7 +83,6 @@ import {
   createDefaultRoomGoal,
   createGoalMarkerPointFromTile,
   getRoomGoalPublishValidationError,
-  goalSupportsTimeLimit,
   normalizeRoomGoalIntroText,
   type RoomGoal,
   type RoomGoalType,
@@ -171,6 +170,7 @@ import {
 import { buildMovedObjectDocument } from './objectMovement';
 import {
   clearRoomGoalMarkers,
+  getRoomGoalAuthoringControls,
   getRoomGoalSummaryText,
   placeRoomGoalMarker,
   removeRoomGoalMarkerAt,
@@ -3027,7 +3027,7 @@ export class EditorEditRuntime {
     if (!this.guardEditable()) {
       return;
     }
-    if (!this.roomGoal || !goalSupportsTimeLimit(this.roomGoal.type)) {
+    if (!this.roomGoal || getRoomGoalAuthoringControls(this.roomGoal).timeLimitHidden) {
       return;
     }
 
@@ -3040,10 +3040,7 @@ export class EditorEditRuntime {
     }
     if (
       !this.roomGoal ||
-      (
-        this.roomGoal.type !== 'collect_target' &&
-        !(this.roomGoal.type === 'npc_quest' && this.roomGoal.questType === 'give')
-      )
+      getRoomGoalAuthoringControls(this.roomGoal).requiredCountHidden
     ) {
       return;
     }
@@ -3057,10 +3054,7 @@ export class EditorEditRuntime {
     }
     if (
       !this.roomGoal ||
-      (
-        this.roomGoal.type !== 'survival' &&
-        !(this.roomGoal.type === 'npc_quest' && this.roomGoal.questType === 'protect')
-      )
+      getRoomGoalAuthoringControls(this.roomGoal).survivalHidden
     ) {
       return;
     }
@@ -3069,7 +3063,7 @@ export class EditorEditRuntime {
   }
 
   setNpcQuestType(questType: 'protect' | 'escort' | 'give'): void {
-    if (!this.guardEditable() || this.roomGoal?.type !== 'npc_quest') {
+    if (!this.guardEditable() || !this.roomGoal || getRoomGoalAuthoringControls(this.roomGoal).npcQuestTypeHidden) {
       return;
     }
     this.goalPlacementMode = null;
