@@ -1,3 +1,4 @@
+import { expandedGoalSetupError } from '../goalAuthoring';
 import type {
   CourseGoalType,
   CourseMarkerPoint,
@@ -105,23 +106,7 @@ export function getCurrentCourseDraftGoalSetupDisabledReason(
     return 'Expanded room goal is authored in Edit Expanded Room. Open Edit Expanded Room to place a start marker first.';
   }
 
-  switch (draft.goal.type) {
-    case 'reach_exit':
-      return draft.goal.exit
-        ? null
-        : 'Expanded room goal is authored in Edit Expanded Room. Open Edit Expanded Room to place an exit marker.';
-    case 'checkpoint_sprint':
-      if (draft.goal.checkpoints.length === 0) {
-        return 'Expanded room goal is authored in Edit Expanded Room. Open Edit Expanded Room to add at least one checkpoint first.';
-      }
-      return draft.goal.finish
-        ? null
-        : 'Expanded room goal is authored in Edit Expanded Room. Open Edit Expanded Room to place a finish marker.';
-    case 'collect_target':
-    case 'defeat_all':
-    case 'survival':
-      return null;
-  }
+  return expandedGoalSetupError(draft.goal);
 }
 
 export function getPublishedCourseStillLiveWarningText(record: CourseRecord | null): string | null {

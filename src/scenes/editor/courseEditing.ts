@@ -1,3 +1,4 @@
+import * as goalAuthoring from '../../courses/goalAuthoring';
 import {
   cloneCourseSnapshot,
   type CourseGoal,
@@ -66,34 +67,7 @@ export function getCourseGoalSummaryText(
     return 'No expanded room goal selected.';
   }
 
-  const parts: string[] = [];
-  switch (goal.type) {
-    case 'reach_exit':
-      parts.push('Reach Exit');
-      parts.push(draft?.startPoint ? 'start set' : 'start missing');
-      parts.push(goal.exit ? 'exit set' : 'exit missing');
-      break;
-    case 'checkpoint_sprint':
-      parts.push('Checkpoint Sprint');
-      parts.push(draft?.startPoint ? 'start set' : 'start missing');
-      parts.push(`${goal.checkpoints.length} checkpoint${goal.checkpoints.length === 1 ? '' : 's'}`);
-      parts.push(goal.finish ? 'finish set' : 'finish missing');
-      break;
-    case 'collect_target': {
-      const placedText =
-        typeof context.collectiblesPlaced === 'number'
-          ? ` (${context.collectiblesPlaced} placed)`
-          : '';
-      parts.push(`Collect Target · ${goal.requiredCount} required${placedText}`);
-      break;
-    }
-    case 'defeat_all':
-      parts.push('Defeat All');
-      break;
-    case 'survival':
-      parts.push(`Survival · ${Math.max(1, Math.round(goal.durationMs / 1000))}s`);
-      break;
-  }
+  const parts = goalAuthoring.expandedGoalSummaryParts(goal, Boolean(draft?.startPoint), 'cell', context.collectiblesPlaced);
 
   if (draft?.roomRefs.length) {
     parts.push(`${draft.roomRefs.length} cell${draft.roomRefs.length === 1 ? '' : 's'}`);
@@ -106,55 +80,9 @@ export function buildCourseMarkerDescriptors(
   draft: CourseSnapshot | null,
   currentRoomId: string,
 ): CourseMarkerOverlayDescriptor[] {
-  const goal = draft?.goal ?? null;
-  if (!draft || !goal) {
-    return [];
-  }
-
-  const markers: CourseMarkerOverlayDescriptor[] = [];
-  if (draft.startPoint?.roomId === currentRoomId) {
-    markers.push({
-      point: draft.startPoint,
-      label: 'START',
-      variant: 'checkpoint-pending',
-      textColor: '#ffefef',
-    });
-  }
-
-  if (goal.type === 'reach_exit' && goal.exit?.roomId === currentRoomId) {
-    markers.push({
-      point: goal.exit,
-      label: null,
-      variant: 'finish-pending',
-      textColor: '#ffefef',
-    });
-  }
-
-  if (goal.type === 'checkpoint_sprint') {
-    goal.checkpoints.forEach((checkpoint, index) => {
-      if (checkpoint.roomId !== currentRoomId) {
-        return;
-      }
-
-      markers.push({
-        point: checkpoint,
-        label: `${index + 1}`,
-        variant: 'checkpoint-pending',
-        textColor: '#ffefef',
-      });
-    });
-
-    if (goal.finish?.roomId === currentRoomId) {
-      markers.push({
-        point: goal.finish,
-        label: 'FINISH',
-        variant: 'finish-pending',
-        textColor: '#ffefef',
-      });
-    }
-  }
-
-  return markers;
+  return goalAuthoring.buildExpandedEditorMarkers(draft, 'cell')
+    .filter(marker => marker.point.roomId === currentRoomId)
+    .map(marker => ({ point: marker.point, label: marker.label, variant: marker.finish ? 'finish-pending' : 'checkpoint-pending', textColor: '#ffefef' }));
 }
 
 export function buildCourseEditorState(

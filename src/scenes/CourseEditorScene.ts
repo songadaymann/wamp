@@ -1,3 +1,4 @@
+import * as goalAuthoring from '../courses/goalAuthoring';
 import type { EditorMusicCommands } from '../ui/setup/sceneBridge';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
 import { mouseButtonsReleased } from './pointerRelease';
@@ -907,6 +908,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   getCourseEditorState(): EditorCourseUiState {
     const draft = this.getActiveCourseDraft();
     const goal = draft?.goal ?? null;
+    const goalFields = goalAuthoring.getExpandedGoalAuthoringFields(goal);
     const cellUsageText = draft
       ? this.courseRecord
         ? getExpandedRoomCellUsageText(this.courseRecord)
@@ -927,7 +929,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       goalTypeValue: goal?.type ?? '',
       goalTypeDisabled: false,
       timeLimitHidden:
-        !(goal?.type === 'reach_exit' || goal?.type === 'collect_target' || goal?.type === 'defeat_all' || goal?.type === 'checkpoint_sprint'),
+        !goalFields.timeLimitEditable,
       timeLimitDisabled: false,
       timeLimitValue:
         goal &&
@@ -935,13 +937,13 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         goal.timeLimitMs
           ? String(Math.round(goal.timeLimitMs / 1000))
           : '',
-      requiredCountHidden: goal?.type !== 'collect_target',
+      requiredCountHidden: !goalFields.requiredCountEditable,
       requiredCountDisabled: false,
-      requiredCountValue: goal?.type === 'collect_target' ? String(goal.requiredCount) : '1',
-      survivalHidden: goal?.type !== 'survival',
+      requiredCountValue: goalFields.requiredCountEditable ? String(goalFields.requiredCount) : '1',
+      survivalHidden: !goalFields.durationEditable,
       survivalDisabled: false,
-      survivalValue: goal?.type === 'survival' ? String(Math.round(goal.durationMs / 1000)) : '30',
-      markerControlsHidden: !(goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint'),
+      survivalValue: goalFields.durationEditable ? String(Math.round(Number(goalFields.durationMs) / 1000)) : '30',
+      markerControlsHidden: !goalFields.usesMarkers,
       placementHintHidden: this.courseGoalPlacementMode === null,
       placementHintText:
         this.courseGoalPlacementMode === 'start'
@@ -958,13 +960,13 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
             collectiblesPlaced: this.countPlacedObjectsByCategory('collectible'),
           })
         : 'No expanded room selected.',
-      placeStartHidden: !(goal?.type === 'reach_exit' || goal?.type === 'checkpoint_sprint'),
+      placeStartHidden: !goalFields.usesMarkers,
       placeStartActive: this.courseGoalPlacementMode === 'start',
-      placeExitHidden: goal?.type !== 'reach_exit',
+      placeExitHidden: !goalFields.exitEditable,
       placeExitActive: this.courseGoalPlacementMode === 'exit',
-      addCheckpointHidden: goal?.type !== 'checkpoint_sprint',
+      addCheckpointHidden: !goalFields.checkpointsEditable,
       addCheckpointActive: this.courseGoalPlacementMode === 'checkpoint',
-      placeFinishHidden: goal?.type !== 'checkpoint_sprint',
+      placeFinishHidden: !goalFields.checkpointsEditable,
       placeFinishActive: this.courseGoalPlacementMode === 'finish',
     };
   }
@@ -1055,39 +1057,36 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
     const draft = this.getActiveCourseDraft();
-    if (!draft?.goal || draft.goal.type === 'survival' || !('timeLimitMs' in draft.goal)) {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).timeLimitEditable || !('timeLimitMs' in draft.goal)) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal && 'timeLimitMs' in nextDraft.goal) {
-      nextDraft.goal.timeLimitMs = seconds === null ? null : Math.max(1, seconds) * 1000;
+    if (goalAuthoring.setExpandedGoalTimeLimit(nextDraft.goal, seconds === null ? null : Math.max(1, seconds) * 1000)) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
     const draft = this.getActiveCourseDraft();
-    if (draft?.goal?.type !== 'collect_target') {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).requiredCountEditable) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'collect_target') {
-      nextDraft.goal.requiredCount = Math.max(1, requiredCount);
+    if (goalAuthoring.setExpandedGoalRequiredCount(nextDraft.goal, Math.max(1, requiredCount))) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
     const draft = this.getActiveCourseDraft();
-    if (draft?.goal?.type !== 'survival') {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).durationEditable) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'survival') {
-      nextDraft.goal.durationMs = Math.max(1, seconds) * 1000;
+    if (goalAuthoring.setExpandedGoalDuration(nextDraft.goal, Math.max(1, seconds) * 1000)) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
@@ -1118,12 +1117,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     const nextDraft = cloneCourseSnapshot(draft);
     nextDraft.startPoint = null;
-    if (nextDraft.goal?.type === 'reach_exit') {
-      nextDraft.goal.exit = null;
-    } else if (nextDraft.goal?.type === 'checkpoint_sprint') {
-      nextDraft.goal.checkpoints = [];
-      nextDraft.goal.finish = null;
-    }
+    goalAuthoring.clearExpandedGoalMarkers(nextDraft.goal);
     this.courseGoalPlacementMode = null;
     this.setActiveCourseDraft(nextDraft);
   }
@@ -2383,22 +2377,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       this.courseMarkerLabels.push(label);
     };
 
-    if (draft.startPoint) {
-      addMarker(draft.startPoint, 'START', false);
-    }
-
-    if (goal.type === 'reach_exit' && goal.exit) {
-      addMarker(goal.exit, 'EXIT', true);
-    }
-
-    if (goal.type === 'checkpoint_sprint') {
-      goal.checkpoints.forEach((checkpoint, index) => {
-        addMarker(checkpoint, `${index + 1}`, false);
-      });
-      if (goal.finish) {
-        addMarker(goal.finish, 'FINISH', true);
-      }
-    }
+    for (const marker of goalAuthoring.buildExpandedEditorMarkers(draft, 'canvas')) addMarker(marker.point, marker.label, marker.finish);
   }
 
   private setupPointerControls(): void {
@@ -3073,29 +3052,9 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
 
-    if (goal.type === 'reach_exit' && nextDraft.goal?.type === 'reach_exit' && this.courseGoalPlacementMode === 'exit') {
-      nextDraft.goal.exit = point;
-      this.courseGoalPlacementMode = null;
-      this.setActiveCourseDraft(nextDraft);
-      return;
-    }
-
-    if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-      return;
-    }
-
-    if (this.courseGoalPlacementMode === 'checkpoint') {
-      nextDraft.goal.checkpoints = [...nextDraft.goal.checkpoints, point];
-      this.courseGoalPlacementMode = null;
-      this.setActiveCourseDraft(nextDraft);
-      return;
-    }
-
-    if (this.courseGoalPlacementMode === 'finish') {
-      nextDraft.goal.finish = point;
-      this.courseGoalPlacementMode = null;
-      this.setActiveCourseDraft(nextDraft);
-    }
+    if (!goalAuthoring.placeExpandedGoalMarker(nextDraft.goal, this.courseGoalPlacementMode, point)) return;
+    this.courseGoalPlacementMode = null;
+    this.setActiveCourseDraft(nextDraft);
   }
 
   private pasteClipboardIntoSlice(slice: CourseRoomSlice, tileX: number, tileY: number): void {

@@ -1,5 +1,10 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-16 5am — overnight window closed
+
+PR220 editor authoring and PR221 lifecycle/status are merged, deployed and verified. Final PR221 actual-domain26-case report passes with0 captured errors; source/main gates and27-file proof pass. Expanded Room authoring remains local WIP:3,758-test quality and38,857 method/1,456 view/273 descriptor comparisons pass; native/mobile/hosted/OSS/release acceptance pending. F070 partial/master145/215. Owned servers stopped, cutoff heartbeat paused, primary dirty lane and animation/decisions preserved. See `docs/review/wamp-overnight-cutoff-2026-10-16.md`.
+
+
 ## 2026-10-15 overnight — editor authoring shipped; lifecycle in progress
 
 PR220/source5ecb198e/main0c4ce26a/Pages e8e98030 is delivered.3,746 tests,48 mobile cases, all source/main gates,27 exact custom/immutable files and actual-domain three-profile edits/markers/reload pass; official real-API playback has0 captured errors. F070 stays partial/master145. Next branch `codex/wamp-goal-run-lifecycle-2026-10-15`: typed NPC/checkpoint/start/race/status rules,7,616 exact startup and7,616 event/status comparisons,32 focused and3,752 full quality tests pass; native/mobile/hosted/release checks are in progress. Keep the5am Eastern cutoff, selected animation, primary dirty lane and pending decisions.
