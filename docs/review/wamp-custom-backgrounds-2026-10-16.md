@@ -23,3 +23,5 @@ The approved identity `59f7f031-fba7-4447-550d-4f8b96bf4000` serves a dedicated 
 Native production-build, final mobile, hosted source/main gates, guarded API+Pages deployment and actual-domain proof are tracked in ignored `output/f094-2026-10-16/` and the final PR body. This source receipt does not claim delivery before those gates complete.
 
 Local source acceptance: the full production-build Chrome desktop, Chrome phone and WebKit phone normal-control matrix passes with zero console/page errors and fixture misses. All48 mobile cases pass in both engines. Visual review adds solid contrasting active-fit colors, square corners and44px fit targets; the reusable flow explicitly checks these. Final hosted/live acceptance remains pending.
+
+The first hosted quality gate caught the newly committed smoke executable missing from Knip's explicit entry registry. The registry is corrected; all tests, including the unchanged executable-entry contract, remain required. This was introduced after the earlier local full run when the reusable browser script was added.
