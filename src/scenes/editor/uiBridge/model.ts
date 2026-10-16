@@ -151,6 +151,7 @@ export interface EditorUiViewModel {
   roomVideoMuteMusic?: boolean;
   roomVideoSnap?: boolean;
   roomVideoHasVideo?: boolean;
+  roomVideoLocked?: boolean;
   roomCoordinatesText: string;
   saveStatusText: string;
   saveStatusAccentText: string;

@@ -228,9 +228,10 @@ export function setText(elements: HTMLElement | HTMLElement[] | null, text: stri
 }
 
 export function renderRoomVideo(elements: EditorUiElements, viewModel: EditorUiViewModel): void {
-  const locked = viewModel.saveDisabled || viewModel.roomVideoHasVideo !== true;
+  const trustLocked = viewModel.roomVideoLocked === true;
+  const locked = viewModel.saveDisabled || viewModel.roomVideoHasVideo !== true || trustLocked;
   setValue(elements.roomVideoUrlInput, viewModel.roomVideoUrl ?? '');
-  if (elements.roomVideoUrlInput) elements.roomVideoUrlInput.disabled = viewModel.saveDisabled;
+  if (elements.roomVideoUrlInput) elements.roomVideoUrlInput.disabled = viewModel.saveDisabled || trustLocked;
   setText(elements.roomVideoStatus, viewModel.roomVideoStatus ?? '');
   elements.roomVideoOptions?.classList.toggle('hidden', viewModel.roomVideoHasVideo !== true);
   if (elements.roomVideoLoopInput) {
@@ -256,7 +257,9 @@ export function renderRoomVideo(elements: EditorUiElements, viewModel: EditorUiV
     elements.roomVideoSnapInput.checked = viewModel.roomVideoSnap === true;
     elements.roomVideoSnapInput.disabled = locked;
   }
-  if (elements.roomVideoClearButton) elements.roomVideoClearButton.disabled = locked;
+  if (elements.roomVideoClearButton) {
+    elements.roomVideoClearButton.disabled = viewModel.saveDisabled || viewModel.roomVideoHasVideo !== true;
+  }
 }
 
 export function setValue(

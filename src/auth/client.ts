@@ -15,6 +15,7 @@ import { setStoredPlayerAvatarId } from '../player/avatar/storage';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { apiRequest as requestApi } from '../api/request';
 import { createProfileRepository } from '../profiles/profileRepository';
+import { rememberBuilderTrustTier } from '../roomVideo/access';
 import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
 import type {
   PreparedWalletTransaction,
@@ -401,6 +402,7 @@ async function refreshSession(): Promise<void> {
       state.school = null;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
+      rememberBuilderTrustTier(null);
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     } else {
@@ -410,6 +412,7 @@ async function refreshSession(): Promise<void> {
       state.status = DEFAULT_GUEST_STATUS;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
+      rememberBuilderTrustTier(null);
       lastCheckedDisplayName = '';
       lastDisplayNameAvailability = null;
     }
@@ -428,6 +431,7 @@ async function refreshSession(): Promise<void> {
     };
     authIdentityProfile = null;
     authIdentityProfileLoadingUserId = null;
+    rememberBuilderTrustTier(null);
     lastCheckedDisplayName = '';
     lastDisplayNameAvailability = null;
   }
@@ -458,6 +462,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
   if (!user) {
     authIdentityProfile = null;
     authIdentityProfileLoadingUserId = null;
+    rememberBuilderTrustTier(null);
     return;
   }
 
@@ -478,6 +483,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
       builderLevel: null,
       builderProgressFraction: null,
     };
+    rememberBuilderTrustTier(null);
     return;
   }
 
@@ -492,6 +498,7 @@ async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<
   if (!state.authenticated || !state.user) {
     authIdentityProfile = null;
     authIdentityProfileLoadingUserId = null;
+    rememberBuilderTrustTier(null);
     renderAuthUi();
     return;
   }
@@ -529,6 +536,7 @@ async function ensureAuthIdentityProfileLoaded(force: boolean = false): Promise<
       builderLevel: profile.progression.builder.level,
       builderProgressFraction: profile.progression.builder.progressFraction,
     };
+    rememberBuilderTrustTier(profile.progression.builderCaps.trustTier);
   } catch (error) {
     console.warn('Failed to load auth identity profile summary', error);
   } finally {

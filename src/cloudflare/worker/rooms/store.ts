@@ -43,6 +43,7 @@ import { syncRoomOwnershipFromChain, type RoomChainSyncFailureMode } from '../mi
 import { prepareMusicPhrasePublishStatements } from '../music/store';
 import { assertCustomBackgroundApproved } from '../backgroundImages/routes';
 import {
+  assertCanPersistRoomVideo,
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForUser,
 } from './guardrails';
@@ -910,8 +911,6 @@ export function assertDraftUnchangedSince(existing: RoomRecord, expectedDraftUpd
   if (!expectedDraftUpdatedAt) {
     return;
   }
-  // Rooms that were never saved have no stored draft; their placeholder timestamp changes on
-  // every load, so there is nothing to compare against.
   const hasStoredDraft = existing.claimedAt !== null || existing.published !== null;
   if (hasStoredDraft && existing.draft.updatedAt !== expectedDraftUpdatedAt) {
     throw new HttpError(409, ROOM_EDIT_CONFLICT_MESSAGE);
@@ -961,6 +960,7 @@ export async function saveDraft(
     if (!actor.ownerUser) {
       throw new HttpError(401, 'Sign in to save room drafts.');
     }
+    await assertCanPersistRoomVideo(env, incomingRoom, existing.draft, actor.ownerUser.id, actor.requestAuthSource);
   }
   const draftOwnerDisplayName =
     actor.principalDisplayName || actor.ownerUser?.displayName || existing.claimerDisplayName || 'Guest';
