@@ -108,10 +108,10 @@
 
 .background-photo-fit-button {
   width: 100%;
-  min-height: 30px;
+  min-height: 44px;
   padding: 5px 4px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--panel-2);
   color: var(--text);
   font-family: 'Courier New', monospace;
@@ -122,8 +122,9 @@
 }
 
 .background-photo-fit-button.active {
-  border-color: var(--accent-warm);
-  background: var(--accent-warm-soft);
+  border-color: #211c23;
+  background: #ffec78;
+  color: #211c23;
 }
 
 #background-photos-modal,

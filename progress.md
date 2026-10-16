@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-16 — F094 custom backgrounds
+
+User approved the recommended next item, finishing custom backgrounds. Branch `codex/wamp-animated-backgrounds-2026-10-16` starts at merged main22bece9c. Plan and diagnostics: ignored `output/f094-2026-10-16/`. Bounded WebP frame parsing, browser-native frame decode/compositing, visible-only Phaser texture animation, reduce-motion support, upload conversion and authenticated original-byte validation are implemented. Safari needs a lazy jSquash/libwebp encoder; both engines preserve the59-frame/5.9s loop and produce bounded WebP uploads. Selected asset stays unchanged; account variants and unrelated primary work remain untouched. Full/native/mobile/release verification remains pending.
+
 ## 2026-10-16 — Finish F070
 
 User request: finish remaining F070, verify, push, merge and deploy. Branch `codex/wamp-f070-final-2026-10-16` from merged PR223/main `4aa356d7`. Plan: (1) audit remaining goal-specific dispatch including Clear Check, API validation, fingerprints and lifecycle guards; (2) require explicit typed policies while preserving behavior; (3) run frozen-baseline comparisons, focused/full quality, muted native/official browser checks and mobile gates; (4) OSS check, PR/source gates, merge/main gates, guarded release and actual-domain proof. PR223 Expanded Room authoring is already delivered; preserve the primary dirty checkout, selected animation and decision-gated work. F070 source implementation and final audit are now complete; delivery follows the gates below.
@@ -1915,3 +1919,5 @@ Jonathan requested push, merge and production deployment. Rebased both activity 
 Request: click a guest's name to see their activity across rooms.
 Plan: expose a public activity reference for guest rows; resolve it to the persistent guest identity on the server; add a bounded, indexed guest feed using existing public visibility rules; add an in-panel guest view that preserves feed position on Back; verify privacy, pagination, navigation and desktop/phone layouts, then deliver through the approved activity release process.
 Scope: recorded public activity only; never publish browser IDs or recovery tokens. Use current-main branch codex/wamp-guest-activity in the existing managed worktree.
+
+F094 acceptance:3,780 tests/full quality,59 exact pixel-oracle frames in two engines, three normal-control production browser profiles and48 mobile cases pass. Restored missing Photos/Upload actions; TileSprite's private repeating pattern now refreshes through its public texture setter. Safari's actual prepared File is observed before fetch because WebKit omits multipart file bytes from protocol; Chrome also verifies wire bytes. Visual review corrects fit contrast/corners/44px targets; final exact-source hosted and API+Pages/live acceptance follow. Chosen hosted derivative is917,468bytes with identical selected SHA256; original image and shared account variants preserved.

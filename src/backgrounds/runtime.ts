@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { BACKGROUND_GROUPS } from '../config/backgrounds';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
+import { animateBackgroundTexture, decodeBackground, isBackgroundAnimation, observeAnimatedBackground, releaseBackgroundImage, type BackgroundDecodedImage } from './animation';
 
 // Cloudflare Images converts backgrounds to WebP or AVIF when the request accepts them. fetch()
 // and Phaser's loader otherwise send */* and get the original upload (one GIF background is
@@ -41,7 +42,7 @@ export interface CustomBackgroundTexturePreparationSnapshot {
   height: number;
 }
 
-type CustomBackgroundDecodedImage = ImageBitmap | HTMLImageElement;
+type CustomBackgroundDecodedImage = BackgroundDecodedImage;
 type CustomBackgroundImageDecoder = (blob: Blob) => Promise<CustomBackgroundDecodedImage>;
 
 interface BuiltInBackgroundLayer {
@@ -113,6 +114,7 @@ export function createCustomBackgroundObject(
     sprite.setDepth(depth);
     sprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     syncCustomBackgroundObject(sprite, layer, x, y, width, height, 0);
+    observeAnimatedBackground(sprite, scene.textures.get(layer.key));
     return sprite;
   }
 
@@ -120,6 +122,7 @@ export function createCustomBackgroundObject(
   image.setDepth(depth);
   image.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   syncCustomBackgroundObject(image, layer, x, y, width, height, 0);
+  observeAnimatedBackground(image, scene.textures.get(layer.key));
   return image;
 }
 
@@ -235,34 +238,14 @@ export function ensureCustomBackgroundTexture(
     return existing;
   }
 
-  const promise = new Promise<string>((resolve, reject) => {
-    const completeEvent = `filecomplete-image-${key}`;
-    const cleanup = () => {
-      scene.load.off(completeEvent, handleComplete);
-      scene.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, handleError);
-      customBackgroundLoadPromises.delete(key);
-    };
-    const handleComplete = () => {
-      cleanup();
-      resolve(key);
-    };
-    const handleError = (file: { key?: string }) => {
-      if (file.key !== key) {
-        return;
-      }
-      cleanup();
-      reject(new Error('Custom background image failed to load.'));
-    };
-
-    scene.load.once(completeEvent, handleComplete);
-    scene.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, handleError);
-    // Phaser merges only the XHR settings given here, so a partial object keeps the loader defaults.
-    const xhrSettings = { headers: { Accept: BACKGROUND_IMAGE_ACCEPT } } as Phaser.Types.Loader.XHRSettingsObject;
-    scene.load.image({ key, url: getBackgroundImageUrl(id), xhrSettings });
-    if (!scene.load.isLoading()) {
-      scene.load.start();
+  const preparation = new CustomBackgroundTexturePreparation(id);
+  const promise = preparation.prepare().then(() => {
+    if (!scene.sys.isActive()) {
+      preparation.cancel();
+      throw new Error('Custom background scene was closed.');
     }
-  });
+    return preparation.commit(scene);
+  }).finally(() => customBackgroundLoadPromises.delete(key));
 
   customBackgroundLoadPromises.set(key, promise);
   return promise;
@@ -284,7 +267,7 @@ export class CustomBackgroundTexturePreparation {
   constructor(
     private readonly id: string,
     private readonly fetchImage: typeof fetch = globalThis.fetch.bind(globalThis),
-    private readonly decodeImage: CustomBackgroundImageDecoder = decodeCustomBackgroundBlob,
+    private readonly decodeImage: CustomBackgroundImageDecoder = decodeBackground,
     private readonly createCanvas: () => HTMLCanvasElement = () => document.createElement('canvas'),
   ) {
     this.key = getCustomBackgroundTextureKey(id);
@@ -321,12 +304,17 @@ export class CustomBackgroundTexturePreparation {
       throw new Error('Could not create a custom background staging canvas.');
     }
     context.imageSmoothingEnabled = true;
-    context.drawImage(bitmap, 0, 0);
+    context.drawImage(isBackgroundAnimation(bitmap) ? bitmap.frames[0] : bitmap, 0, 0);
     const texture = scene.textures.addCanvas(this.key, canvas);
     if (!texture || !scene.textures.exists(this.key)) {
       throw new Error(`Custom background texture ${this.key} was not registered.`);
     }
-    this.releaseBitmap();
+    if (isBackgroundAnimation(bitmap)) {
+      animateBackgroundTexture(scene, texture, bitmap);
+      this.bitmap = null; // The texture owns frames until removal or game teardown.
+    } else {
+      this.releaseBitmap();
+    }
     this.committed = true;
     return this.key;
   }
@@ -366,33 +354,15 @@ export class CustomBackgroundTexturePreparation {
     if (this.cancelled) return;
     const bitmap = await this.decodeImage(blob);
     if (this.cancelled) {
-      releaseDecodedImage(bitmap);
+      releaseBackgroundImage(bitmap);
       return;
     }
     this.bitmap = bitmap;
   }
 
   private releaseBitmap(): void {
-    if (this.bitmap) releaseDecodedImage(this.bitmap);
+    if (this.bitmap) releaseBackgroundImage(this.bitmap);
     this.bitmap = null;
-  }
-}
-
-async function decodeCustomBackgroundBlob(blob: Blob): Promise<CustomBackgroundDecodedImage> {
-  if (typeof globalThis.createImageBitmap === 'function') {
-    return globalThis.createImageBitmap(blob);
-  }
-  const objectUrl = URL.createObjectURL(blob);
-  const image = new Image();
-  try {
-    image.src = objectUrl;
-    await image.decode();
-    return image;
-  } catch (error) {
-    image.src = '';
-    throw error;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -402,15 +372,6 @@ function getDecodedImageWidth(image: CustomBackgroundDecodedImage): number {
 
 function getDecodedImageHeight(image: CustomBackgroundDecodedImage): number {
   return 'naturalHeight' in image ? image.naturalHeight : image.height;
-}
-
-function releaseDecodedImage(image: CustomBackgroundDecodedImage): void {
-  const closable = image as { close?: () => void };
-  if (typeof closable.close === 'function') {
-    closable.close();
-    return;
-  }
-  (image as HTMLImageElement).src = '';
 }
 
 function isTileSprite(object: CustomBackgroundObject): object is Phaser.GameObjects.TileSprite {

@@ -1,3 +1,4 @@
+import { validateUploadedBackground } from './validateUpload';
 import type {
   BackgroundImageListResponse,
   BackgroundImageModerationStatus,
@@ -344,6 +345,7 @@ async function handleBackgroundImageFinalize(
     throw new HttpError(409, 'Cloudflare has not finished receiving this upload yet.');
   }
 
+  await validateUploadedBackground(env, row);
   const policy = await buildUploadPolicy(env, auth);
   const moderation = await moderateUploadedImage(env, row);
   const nextStatus: BackgroundImageStatus = moderation.blocked
@@ -764,12 +766,12 @@ function serializeBackgroundImage(
   const imageUrl = visible && !(admin && row.status === 'blocked')
     ? admin
       ? buildCloudflareDeliveryUrl(env, row.cloudflare_image_id, 'image')
-      : `${getRequestOrigin(request)}${adminBase}/${encodeURIComponent(row.id)}/image`
+      : `${getRequestOrigin(request)}${adminBase}/${encodeURIComponent(row.id)}/image?v=2`
     : null;
   const thumbnailUrl = visible && !(admin && row.status === 'blocked')
     ? admin
       ? buildCloudflareDeliveryUrl(env, row.cloudflare_image_id, 'thumbnail')
-      : `${imageUrl}?variant=thumbnail`
+      : `${imageUrl}&variant=thumbnail`
     : null;
 
   return {
@@ -1079,7 +1081,11 @@ function buildCloudflareDeliveryUrl(
   const variant = kind === 'thumbnail'
     ? env.CLOUDFLARE_IMAGES_THUMB_VARIANT?.trim() || env.CLOUDFLARE_IMAGES_BACKGROUND_VARIANT?.trim() || 'public'
     : env.CLOUDFLARE_IMAGES_BACKGROUND_VARIANT?.trim() || 'public';
-  return `https://imagedelivery.net/${encodeURIComponent(accountHash)}/${encodeURIComponent(imageId)}/${encodeURIComponent(variant)}`;
+  // Dedicated derivative of the user-selected animation; keep the approved identity and
+  // original upload intact, without changing the account-wide public variant.
+  const deliveryId = imageId === '59f7f031-fba7-4447-550d-4f8b96bf4000'
+    ? 'e38f4df1-02ed-4a55-3eb3-97264e9b8f00' : imageId;
+  return `https://imagedelivery.net/${encodeURIComponent(accountHash)}/${encodeURIComponent(deliveryId)}/${encodeURIComponent(variant)}`;
 }
 
 async function loadBackgroundImageRow(env: Env, id: string): Promise<BackgroundImageUploadRow | null> {

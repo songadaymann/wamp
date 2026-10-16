@@ -35,7 +35,7 @@ export async function restoreKeyboardViewport(page) {
 export async function readBackgroundThumbnailImages(page) {
   return page.evaluate(async () => {
     const cards = Array.from(document.querySelectorAll('#background-card-grid [data-background-id]'))
-      .filter(card => !['none', 'solid_color'].includes(card.dataset.backgroundId));
+      .filter(card => !['none', 'solid_color', 'photo'].includes(card.dataset.backgroundId));
     if (!cards.length) throw new Error('No built-in background cards');
     const images = cards.flatMap(card => {
       const art = card.querySelector('.background-card-art');
