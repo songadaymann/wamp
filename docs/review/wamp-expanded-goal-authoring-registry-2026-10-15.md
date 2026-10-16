@@ -11,3 +11,22 @@ Current state: registry and seven integration modules are implemented; initial t
 ## Cutoff checkpoint — October 16, 5am Eastern
 
 Local only; no PR/push/release. Existing full quality completed exit0 (509 files/3,758 tests,633.9 KB brotli boot). Frozen compatibility matched38,857 class method calls,1,456 complete views and273 descriptor sets across91 variants, with no exceptions. Focused9 tests/typecheck/targeted lint passed. Native baseline/candidate authoring, exact-source48-mobile, hosted, OSS-before-push and release/live checks remain pending. Clear Check and final F070 residual audit remain separate. PR221 was delivered and its26 actual-domain cases finished with0 captured errors. See [final overnight receipt](wamp-overnight-cutoff-2026-10-16.md).
+
+
+## October 16 — resumed delivery
+
+Jonathan authorized finishing verification, pushing, merging and production deployment after the closed overnight window. The saved checkpoint rebased cleanly onto main861cbaf3. Plan: complete ordinary-input baseline/candidate Expanded Room canvas/composer/cell checks; validate goal fields, exact marker coordinates, placement completion, checkpoint reorder/removal, protected cells and save/reload; run full quality/mobile and hosted checks; push a reviewable PR; merge after required checks; deploy from clean current main with the guarded Pages-only command; verify custom-domain flows and exact built assets. Keep the selected animation and unrelated primary-checkout work intact. This is a new delivery task; the overnight heartbeat stays paused.
+
+Current-source quality passes511 files/3,763 tests; frozen compatibility again matches38,857 actual method calls,1,456 view outputs and273 descriptor sets across91 variants, with no exceptions. Browser/mobile checks are in progress. The native test begins with an unconfigured draft so selecting Reach Exit makes an actual change; its first draft had an already-selected Reach Exit goal and correctly disabled an unchanged Save. This was fixture setup, not an application defect.
+
+Native browser follow-up found an unchanged-production phone layout defect: the account controls cover the setup header World button. The phone setup panel now starts below those controls; desktop layout stays the same. Baseline goal-authoring comparisons use the existing Escape shortcut to return to World, while candidate checks require a normal tap on World. The fix adds no account, data or goal changes. Full quality/mobile and exact-source browser checks are rerun after this CSS adjustment.
+
+## Source acceptance — October 16
+
+Full quality passes511 files/3,763 tests; boot634.2 KB brotli under670 KB. All48 Chromium/WebKit mobile scenarios pass with0 console/page errors and0 missing API fixtures. Frozen38,857-method/1,456-view/273-descriptor compatibility still passes.
+
+Ordinary public UI candidate flows pass on desktop, Chromium phone and WebKit phone with12 saves each,0 captured errors and0 fixture misses. They cover all five goal defaults, count/timer/duration edits, exact cross-cell start/exit/checkpoint/finish coordinates, marker clearing, placement completion, checkpoint reorder/removal, protected cells, publication readiness, cell-editor entry/return and persisted draft reopening. All synthetic API writes stay intercepted; no preview hooks are used. Both Chrome baselines match. WebKit baseline completes every functional assertion and its12 saved goals match too, but its final console assertion retains one production presence-token CORS error; this is recorded explicitly in ignored acceptance evidence. Candidate WebKit passes with0 errors.
+
+The phone World-button overlap is reproduced unchanged in both old builds. The corrected setup header remains reachable at390×844,320×568 and844×390, with normal World navigation; screenshots inspected. Baseline phone checks use the existing Escape shortcut for that pre-existing obstruction. Official-client two-iteration gameplay runs complete with0 captured error files; screenshots inspected, including the existing performance adviser, with no performance claim.
+
+Source/main hosted gates, guarded Pages-only deployment and exact custom-domain/browser postflight are the remaining delivery steps. The attached pull request will record their final release identifiers and acceptance. F070 stays partial because Clear Check marker validation and the final residual audit remain separate.

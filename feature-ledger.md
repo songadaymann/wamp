@@ -1,5 +1,15 @@
 ## 2026-10-15 overnight — editor authoring shipped; lifecycle in progress
 
+## 2026-10-16 — Expanded Room editor source verified
+
+Typed Expanded Room authoring and integrations pass3,763 full tests,48 mobile cases and frozen38,857-method/1,456-view/273-descriptor compatibility. Three candidate desktop/phone public-control flows pass12 saves each with0 errors/misses; baseline behavior matches, with one explicitly retained baseline-only WebKit presence CORS. Phone setup header now clears account controls; narrow/landscape World navigation passes. Source/main hosted gates and guarded Pages/live delivery follow. F070/master partial/145; no saved/API formats change. See `docs/review/wamp-expanded-goal-authoring-registry-2026-10-15.md`.
+
+
+## 2026-10-16 — Expanded Room editor delivery resumed
+
+User request: finish verification, push, merge and deploy. Canonical branch `codex/wamp-expanded-goal-authoring-2026-10-15`, rebased onto861cbaf3. Full3,763-test quality and frozen38,857-method/1,456-view/273-descriptor comparisons pass; native/mobile/hosted/release work continues. Closed overnight goal and paused heartbeat remain closed; F070 stays partial pending its separate Clear Check/residual audit. See `docs/review/wamp-expanded-goal-authoring-registry-2026-10-15.md`.
+
+
 ## 2026-10-16 5am — overnight window closed
 
 PR220 editor authoring and PR221 lifecycle/status are merged, deployed and verified. Final PR221 actual-domain26-case report passes with0 captured errors; source/main gates and27-file proof pass. Expanded Room authoring remains local WIP:3,758-test quality and38,857 method/1,456 view/273 descriptor comparisons pass; native/mobile/hosted/OSS/release acceptance pending. F070 partial/master145/215. Owned servers stopped, cutoff heartbeat paused, primary dirty lane and animation/decisions preserved. See `docs/review/wamp-overnight-cutoff-2026-10-16.md`.
