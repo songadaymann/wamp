@@ -1,3 +1,4 @@
+import * as goalAuthoring from '../goalAuthoring';
 import type { CourseRecord } from '../model';
 import {
   getCourseEditorPlacementHintText,
@@ -59,6 +60,7 @@ export function buildCourseEditorUiState(
     checkpointEntries,
   } = options;
   const draft = record?.draft ?? null;
+  const goalFields = goalAuthoring.getExpandedGoalAuthoringFields(draft?.goal ?? null);
   const permissions = record?.permissions ?? null;
   const testDraftDisabledReason = permissions?.canSaveDraft
     ? getCurrentCourseDraftPreviewDisabledReason(record)
@@ -101,10 +103,10 @@ export function buildCourseEditorUiState(
         ? String(Math.max(1, Math.round(draft.goal.timeLimitMs / 1000)))
         : '',
     requiredCount:
-      draft?.goal?.type === 'collect_target' ? String(draft.goal.requiredCount) : '5',
+      goalFields.requiredCountEditable ? String(goalFields.requiredCount) : '5',
     survivalSeconds:
-      draft?.goal?.type === 'survival'
-        ? String(Math.max(1, Math.round(draft.goal.durationMs / 1000)))
+      goalFields.durationEditable
+        ? String(Math.max(1, Math.round(Number(goalFields.durationMs) / 1000)))
         : '30',
     publishedStateText: getCoursePublishedStateText(record, dirty),
     publishedDraftWarningText: getCoursePublishedDraftWarningText(record),
@@ -137,28 +139,7 @@ function buildCourseSummaryText(record: CourseRecord | null): string {
     return parts.join(' · ');
   }
 
-  switch (goal.type) {
-    case 'reach_exit':
-      parts.push('Reach Exit');
-      parts.push(draft.startPoint ? 'start set' : 'start missing');
-      parts.push(goal.exit ? 'exit set' : 'exit missing');
-      break;
-    case 'checkpoint_sprint':
-      parts.push('Checkpoint Sprint');
-      parts.push(draft.startPoint ? 'start set' : 'start missing');
-      parts.push(`${goal.checkpoints.length} checkpoint${goal.checkpoints.length === 1 ? '' : 's'}`);
-      parts.push(goal.finish ? 'finish set' : 'finish missing');
-      break;
-    case 'collect_target':
-      parts.push(`Collect ${goal.requiredCount}`);
-      break;
-    case 'defeat_all':
-      parts.push('Defeat All');
-      break;
-    case 'survival':
-      parts.push(`Survival ${Math.max(1, Math.round(goal.durationMs / 1000))}s`);
-      break;
-  }
+  parts.push(...goalAuthoring.expandedGoalSummaryParts(goal, Boolean(draft.startPoint), 'composer'));
 
   return parts.join(' · ');
 }

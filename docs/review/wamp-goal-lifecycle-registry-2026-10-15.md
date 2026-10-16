@@ -8,3 +8,7 @@ The original controller is frozen under ignored `output/f070-goal-lifecycle-2026
 
 
 Native harness diagnostics: the first fixture read a populated run before the paused scene had resumed, so the first sword key was discarded. The updated native probe waits for the intro to close and the run timer to advance before input. Its protected NPC also sits within the actual sword reach, and the probe clicks the ordinary Play Room button once the focused public room is ready. The corrected NPC-defeat case passes on both the unchanged production baseline and candidate with the expected failed goal and0 errors. The full26-case native matrix is ongoing. No runtime sword/NPC bug or fix is claimed from these harness failures.
+
+## Final delivery evidence reconciled at cutoff
+
+PR221/sourceb167c9c5/mainbadee824 and guarded Pages7ab73e44 are delivered. All four source and four main gates pass; deploy and immediate production smoke exit0. The saved actual-domain26-case desktop/WebKit-phone report passes all expected success/failure assertions with0 captured errors, ordinary inputs and intercepted synthetic API writes.27 exact custom/immutable/local files match. Official-client two-iteration run exits0 with no captured error files; screenshots inspected, including one performance adviser, with no performance claim. Full3,752-test quality/48 mobile and frozen comparison evidence above passed. This final evidence supersedes the earlier pending statuses. F070 remains partial/master145. See [cutoff receipt](wamp-overnight-cutoff-2026-10-16.md).

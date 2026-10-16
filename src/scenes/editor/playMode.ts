@@ -1,3 +1,4 @@
+import { expandedGoalSetupError } from '../../courses/goalAuthoring';
 import {
   cloneCourseSnapshot,
   courseGoalRequiresStartPoint,
@@ -24,16 +25,7 @@ export function getSelectedCoursePreviewForPlay(
     return null;
   }
 
-  if (draft.goal.type === 'reach_exit' && !draft.goal.exit) {
-    return null;
-  }
-
-  if (
-    draft.goal.type === 'checkpoint_sprint' &&
-    (!draft.goal.finish || draft.goal.checkpoints.length === 0)
-  ) {
-    return null;
-  }
+  if (expandedGoalSetupError(draft.goal) !== null) return null;
 
   return cloneCourseSnapshot(draft);
 }

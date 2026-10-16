@@ -1,3 +1,4 @@
+import * as goalAuthoring from '../courses/goalAuthoring';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
 import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
 import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draftBackupController';
@@ -256,35 +257,19 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
     this.mutateDraft((draft) => {
-      const goal = draft.goal;
-      if (!goal || !('timeLimitMs' in goal)) {
-        return;
-      }
-
-      goal.timeLimitMs =
-        seconds === null || !Number.isFinite(seconds) || seconds <= 0
-          ? null
-          : Math.round(seconds * 1000);
+      goalAuthoring.setExpandedGoalTimeLimit(draft.goal, seconds === null || !Number.isFinite(seconds) || seconds <= 0 ? null : Math.round(seconds * 1000));
     });
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
     this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'collect_target') {
-        return;
-      }
-
-      draft.goal.requiredCount = Math.max(1, Math.round(requiredCount));
+      goalAuthoring.setExpandedGoalRequiredCount(draft.goal, Math.max(1, Math.round(requiredCount)));
     });
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
     this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'survival') {
-        return;
-      }
-
-      draft.goal.durationMs = Math.max(1, Math.round(seconds)) * 1000;
+      goalAuthoring.setExpandedGoalDuration(draft.goal, Math.max(1, Math.round(seconds)) * 1000);
     });
   }
 
@@ -296,13 +281,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   clearMarkers(): void {
     this.mutateDraft((draft) => {
       draft.startPoint = null;
-      if (draft.goal?.type === 'reach_exit') {
-        draft.goal.exit = null;
-      }
-      if (draft.goal?.type === 'checkpoint_sprint') {
-        draft.goal.checkpoints = [];
-        draft.goal.finish = null;
-      }
+      goalAuthoring.clearExpandedGoalMarkers(draft.goal);
     });
     this.tool = 'select';
   }
@@ -507,28 +486,13 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   moveCheckpoint(index: number, direction: -1 | 1): void {
     this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-
-      const nextIndex = Phaser.Math.Clamp(index + direction, 0, draft.goal.checkpoints.length - 1);
-      if (nextIndex === index) {
-        return;
-      }
-
-      const nextCheckpoints = [...draft.goal.checkpoints];
-      const [moved] = nextCheckpoints.splice(index, 1);
-      nextCheckpoints.splice(nextIndex, 0, moved);
-      draft.goal.checkpoints = nextCheckpoints;
+      goalAuthoring.moveExpandedGoalCheckpoint(draft.goal, index, direction);
     });
   }
 
   removeCheckpoint(index: number): void {
     this.mutateDraft((draft) => {
-      if (draft.goal?.type !== 'checkpoint_sprint') {
-        return;
-      }
-      draft.goal.checkpoints = draft.goal.checkpoints.filter((_, checkpointIndex) => checkpointIndex !== index);
+      goalAuthoring.removeExpandedGoalCheckpoint(draft.goal, index);
     });
   }
 
@@ -1146,18 +1110,8 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       return 'Remove the expanded room start marker first.';
     }
 
-    if (draft.goal?.type === 'reach_exit' && draft.goal.exit?.roomId === roomId) {
-      return 'Remove the expanded room exit marker first.';
-    }
-
-    if (draft.goal?.type === 'checkpoint_sprint') {
-      if (draft.goal.finish?.roomId === roomId) {
-        return 'Remove the finish marker first.';
-      }
-      if (draft.goal.checkpoints.some((checkpoint) => checkpoint.roomId === roomId)) {
-        return 'Remove checkpoints in this room first.';
-      }
-    }
+    const goalMarkerReason = goalAuthoring.expandedGoalRoomRemovalReason(draft.goal, roomId);
+    if (goalMarkerReason !== null) return goalMarkerReason;
 
     const anchorRoomId =
       draft.startPoint?.roomId ?? sortCourseRoomRefsForStorage(draft.roomRefs)[0]?.roomId ?? null;
@@ -1180,13 +1134,11 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     }
 
     const checkpointIndexesByRoomId = new Map<string, number[]>();
-    if (draft.goal?.type === 'checkpoint_sprint') {
-      draft.goal.checkpoints.forEach((checkpoint, index) => {
-        const existing = checkpointIndexesByRoomId.get(checkpoint.roomId) ?? [];
-        existing.push(index);
-        checkpointIndexesByRoomId.set(checkpoint.roomId, existing);
-      });
-    }
+    goalAuthoring.getExpandedGoalCheckpoints(draft.goal).forEach((point, index) => {
+      const existing = checkpointIndexesByRoomId.get(point.roomId) ?? [];
+      existing.push(index);
+      checkpointIndexesByRoomId.set(point.roomId, existing);
+    });
 
     const roomEntries = sortCourseRoomRefsForStorage(draft.roomRefs).map((roomRef) => ({
       roomId: roomRef.roomId,
@@ -1195,12 +1147,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       roomTitle: roomRef.roomTitle,
       selected: roomRef.roomId === roomIdFromCoordinates(this.selectedCoordinates),
       isStartRoom: draft.startPoint?.roomId === roomRef.roomId,
-      isFinishRoom:
-        draft.goal?.type === 'reach_exit'
-          ? draft.goal.exit?.roomId === roomRef.roomId
-          : draft.goal?.type === 'checkpoint_sprint'
-            ? draft.goal.finish?.roomId === roomRef.roomId
-            : false,
+      isFinishRoom: goalAuthoring.getExpandedGoalFinish(draft.goal)?.roomId === roomRef.roomId,
       checkpointIndexes: checkpointIndexesByRoomId.get(roomRef.roomId) ?? [],
     }));
 
@@ -1209,12 +1156,12 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private buildCheckpointEntries(): CourseEditorCheckpointEntry[] {
     const draft = this.record?.draft ?? null;
-    const goal = draft?.goal?.type === 'checkpoint_sprint' ? draft.goal : null;
-    if (!draft || !goal) {
+    const checkpoints = goalAuthoring.getExpandedGoalCheckpoints(draft?.goal ?? null);
+    if (!draft) {
       return [];
     }
 
-    return goal.checkpoints.map((point, index) => {
+    return checkpoints.map((point, index) => {
       const roomRef = draft.roomRefs.find((room) => room.roomId === point.roomId) ?? null;
       return {
         index,
@@ -1222,7 +1169,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         roomTitle: roomRef?.roomTitle ?? null,
         coordinates: roomRef?.coordinates ? { ...roomRef.coordinates } : { ...this.selectedCoordinates },
         canMoveEarlier: index > 0,
-        canMoveLater: index < goal.checkpoints.length - 1,
+        canMoveLater: index < checkpoints.length - 1,
       };
     });
   }
@@ -1286,22 +1233,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       this.markerLabels.push(label);
     };
 
-    if (draft.startPoint) {
-      addLabel(draft.startPoint, 'START', false);
-    }
-
-    if (draft.goal.type === 'reach_exit' && draft.goal.exit) {
-      addLabel(draft.goal.exit, 'EXIT', true);
-    }
-
-    if (draft.goal.type === 'checkpoint_sprint') {
-      draft.goal.checkpoints.forEach((checkpoint, index) => {
-        addLabel(checkpoint, `${index + 1}`, false);
-      });
-      if (draft.goal.finish) {
-        addLabel(draft.goal.finish, 'FINISH', true);
-      }
-    }
+    for (const marker of goalAuthoring.buildExpandedEditorMarkers(draft, 'canvas')) addLabel(marker.point, marker.label, marker.finish);
   }
 
   private setupCamera(): void {
@@ -1407,19 +1339,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         return;
       }
 
-      if (draft.goal?.type === 'reach_exit' && activePlacementMode === 'exit') {
-        draft.goal.exit = point;
-        return;
-      }
-
-      if (draft.goal?.type === 'checkpoint_sprint' && activePlacementMode === 'checkpoint') {
-        draft.goal.checkpoints = [...draft.goal.checkpoints, point];
-        return;
-      }
-
-      if (draft.goal?.type === 'checkpoint_sprint' && activePlacementMode === 'finish') {
-        draft.goal.finish = point;
-      }
+      goalAuthoring.placeExpandedGoalMarker(draft.goal, activePlacementMode, point);
     });
     this.tool = 'select';
     this.statusText = 'Marker updated.';

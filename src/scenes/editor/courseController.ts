@@ -1,3 +1,4 @@
+import * as goalAuthoring from '../../courses/goalAuthoring';
 import Phaser from 'phaser';
 import {
   cloneCourseSnapshot,
@@ -179,39 +180,36 @@ export class EditorCourseController {
 
   setCourseGoalTimeLimitSeconds(seconds: number | null): void {
     const draft = this.getActiveCourseDraft();
-    if (!draft?.goal || draft.goal.type === 'survival' || !('timeLimitMs' in draft.goal)) {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).timeLimitEditable || !('timeLimitMs' in draft.goal)) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal && 'timeLimitMs' in nextDraft.goal) {
-      nextDraft.goal.timeLimitMs = seconds === null ? null : Math.max(1, seconds) * 1000;
+    if (goalAuthoring.setExpandedGoalTimeLimit(nextDraft.goal, seconds === null ? null : Math.max(1, seconds) * 1000)) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
 
   setCourseGoalRequiredCount(requiredCount: number): void {
     const draft = this.getActiveCourseDraft();
-    if (draft?.goal?.type !== 'collect_target') {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).requiredCountEditable) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'collect_target') {
-      nextDraft.goal.requiredCount = Math.max(1, requiredCount);
+    if (goalAuthoring.setExpandedGoalRequiredCount(nextDraft.goal, Math.max(1, requiredCount))) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
 
   setCourseGoalSurvivalSeconds(seconds: number): void {
     const draft = this.getActiveCourseDraft();
-    if (draft?.goal?.type !== 'survival') {
+    if (!draft?.goal || !goalAuthoring.getExpandedGoalAuthoringFields(draft.goal).durationEditable) {
       return;
     }
 
     const nextDraft = cloneCourseSnapshot(draft);
-    if (nextDraft.goal?.type === 'survival') {
-      nextDraft.goal.durationMs = Math.max(1, seconds) * 1000;
+    if (goalAuthoring.setExpandedGoalDuration(nextDraft.goal, Math.max(1, seconds) * 1000)) {
       this.setActiveCourseDraft(nextDraft);
     }
   }
@@ -234,12 +232,7 @@ export class EditorCourseController {
 
     const nextDraft = cloneCourseSnapshot(draft);
     nextDraft.startPoint = null;
-    if (nextDraft.goal?.type === 'reach_exit') {
-      nextDraft.goal.exit = null;
-    } else if (nextDraft.goal?.type === 'checkpoint_sprint') {
-      nextDraft.goal.checkpoints = [];
-      nextDraft.goal.finish = null;
-    }
+    goalAuthoring.clearExpandedGoalMarkers(nextDraft.goal);
     this.courseGoalPlacementMode = null;
     this.setActiveCourseDraft(nextDraft);
   }
@@ -268,82 +261,26 @@ export class EditorCourseController {
       return true;
     }
 
-    if (
-      goal.type === 'reach_exit' &&
-      this.courseGoalPlacementMode === 'exit' &&
-      nextDraft.goal?.type === 'reach_exit'
-    ) {
-      nextDraft.goal.exit = localPoint;
-      this.courseGoalPlacementMode = null;
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-      return false;
-    }
-
-    if (this.courseGoalPlacementMode === 'checkpoint') {
-      nextDraft.goal.checkpoints = [...nextDraft.goal.checkpoints, localPoint];
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    if (this.courseGoalPlacementMode === 'finish') {
-      nextDraft.goal.finish = localPoint;
-      this.courseGoalPlacementMode = null;
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    return false;
+    if (!nextDraft.goal || goal.type !== nextDraft.goal.type || !goalAuthoring.placeExpandedGoalMarker(nextDraft.goal, this.courseGoalPlacementMode, localPoint)) return false;
+    if (this.courseGoalPlacementMode !== 'checkpoint') this.courseGoalPlacementMode = null;
+    this.setActiveCourseDraft(nextDraft);
+    return true;
   }
 
   removeGoalMarkerAt(worldX: number, worldY: number): boolean {
     const draft = this.getActiveCourseDraft();
     const goal = this.getActiveCourseGoal();
-    if (!draft || !goal) {
-      return false;
-    }
-
+    if (!draft || !goal) return false;
     const nextDraft = cloneCourseSnapshot(draft);
-    const tryRemovePoint = (point: CourseMarkerPoint | null): boolean =>
-      Boolean(point && point.roomId === this.host.getRoomId() && Math.hypot(point.x - worldX, point.y - worldY) < 16);
-
-    if (tryRemovePoint(nextDraft.startPoint)) {
+    const start = nextDraft.startPoint;
+    if (start && start.roomId === this.host.getRoomId() && Math.hypot(start.x - worldX, start.y - worldY) < 16) {
       nextDraft.startPoint = null;
       this.setActiveCourseDraft(nextDraft);
       return true;
     }
-
-    if (goal.type === 'reach_exit' && nextDraft.goal?.type === 'reach_exit' && tryRemovePoint(nextDraft.goal.exit)) {
-      nextDraft.goal.exit = null;
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    if (goal.type !== 'checkpoint_sprint' || nextDraft.goal?.type !== 'checkpoint_sprint') {
-      return false;
-    }
-
-    if (tryRemovePoint(nextDraft.goal.finish)) {
-      nextDraft.goal.finish = null;
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    const index = nextDraft.goal.checkpoints.findIndex(
-      (checkpoint) =>
-        checkpoint.roomId === this.host.getRoomId() &&
-        Math.hypot(checkpoint.x - worldX, checkpoint.y - worldY) < 16,
-    );
-    if (index >= 0) {
-      nextDraft.goal.checkpoints.splice(index, 1);
-      this.setActiveCourseDraft(nextDraft);
-      return true;
-    }
-
-    return false;
+    if (!nextDraft.goal || goal.type !== nextDraft.goal.type || !goalAuthoring.removeExpandedGoalMarker(nextDraft.goal, this.host.getRoomId(), worldX, worldY)) return false;
+    this.setActiveCourseDraft(nextDraft);
+    return true;
   }
 
   clearPlacementMode(): void {
