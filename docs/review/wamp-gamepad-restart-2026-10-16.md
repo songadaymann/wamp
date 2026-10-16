@@ -23,3 +23,5 @@ Physical Xbox/PlayStation/Switch controllers and iOS Safari hardware have not be
 ## Delivery
 
 Frontend-only release. Source and merge hosted gates, guarded Pages-only production deployment, custom-domain/immutable asset proof and live input checks must all pass before delivery is reported complete. The final pull-request receipt supersedes this source-time delivery note. The primary dirty checkout and selected animated background are preserved; decision-gated work and the closed overnight goal stay untouched.
+
+Hosted acceptance: initial49/50 mobile cases passed; new Chromium held-shoot check observed86.7ms of remaining game cooldown after its fixed700ms wall-clock sleep. Replaced that assumption with waiting for cooldown drain and asserting no reactivation over400ms more game time; all gameplay code is unchanged. Rerun exact local cases and all hosted gates on final test revision before merge.

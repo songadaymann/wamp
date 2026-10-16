@@ -43,11 +43,18 @@ export async function auditGamepadControls(page, capture = async () => {}) {
   await capture('gamepad-jump');
   await neutral();
   await wait(s => s.player.velocityY === 0 && s.player.coyoteMs > 0, 'land after jump');
-  await input([2]); await wait(s => s.combat.meleeCooldownMs > 0, 'pad slash');
-  await page.waitForTimeout(700); assert.equal((await read()).combat.meleeCooldownMs, 0, 'held slash is not auto-repeat');
+  const heldAction = async (button, cooldown, label) => {
+    await input([button]); await wait(s => s.combat[cooldown] > 0, `pad ${label}`);
+    const drained = await wait(s => s.combat[cooldown] === 0, `${label} cooldown drains while held`);
+    const until = drained.goalRun.elapsedMs + 400;
+    await wait(s => {
+      assert.equal(s.combat[cooldown], 0, `held ${label} is not auto-repeat`);
+      return s.goalRun.elapsedMs >= until;
+    }, `${label} stays idle through more gameplay while held`);
+  };
+  await heldAction(2, 'meleeCooldownMs', 'slash');
   await neutral();
-  await input([3]); await wait(s => s.combat.rangedCooldownMs > 0, 'pad shoot');
-  await page.waitForTimeout(700); assert.equal((await read()).combat.rangedCooldownMs, 0, 'held shoot is not auto-repeat');
+  await heldAction(3, 'rangedCooldownMs', 'shoot');
   await neutral();
 
   // Repeated input must not restart while a modal or text field owns the controls.
