@@ -758,8 +758,10 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
   await assertVisible(page, '#bottom-bar', 'compact phone footer during portrait focused room HUD');
   await assertVisible(page, '#world-hud', 'portrait focused room compact HUD');
   await assertVisible(page, '#btn-world-play', 'portrait focused room Play button');
-  await assertVisible(page, '#btn-world-edit', 'portrait focused room Edit button');
-  await assertVisible(page, '#btn-world-build', 'portrait focused room Build button');
+  await assertHidden(page, '#btn-world-edit', 'locked room has no unusable Edit button');
+  await assertHidden(page, '#btn-world-build', 'published room has no unusable Build button');
+  await assertVisible(page, '#world-selected-action-reason', 'locked room edit explanation');
+  await assertVisible(page, '#world-selected-goal', 'portrait focused room goal');
   await assertVisible(page, '#btn-mobile-world-hud-details', 'portrait focused room More disclosure');
   await assertVisible(page, '#btn-mobile-world-hud-minimize', 'portrait focused room collapse button');
   await assertHidden(page, '#btn-world-course-builder', 'portrait focused room Course Builder by default');
@@ -779,8 +781,8 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     [
       '#world-hud',
       '#btn-world-play',
-      '#btn-world-edit',
-      '#btn-world-build',
+      '#world-selected-goal',
+      '#world-selected-action-reason',
       '#btn-world-jump-sheet',
       '#btn-mobile-world-hud-details',
       '#btn-mobile-world-hud-minimize',
@@ -800,8 +802,8 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     `portrait focused room HUD should stay compact at the top: ${JSON.stringify(layout.hud)}`,
   );
   assertCondition(
-    layout.hud.height <= 150,
-    `portrait focused room HUD should use less than 150px by default: ${JSON.stringify(layout.hud)}`,
+    layout.hud.height <= 280,
+    `portrait focused room HUD should fit its goal, best result and primary Play within 280px: ${JSON.stringify(layout.hud)}`,
   );
   assertCondition(
     layout.buttons.filter((button) => button.visible).every((button) => button.withinHud),
@@ -815,12 +817,20 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
     `portrait focused room should show its actions, Warp included, in at most two rows inside the card: ${JSON.stringify(layout.primaryButtons)}`,
   );
   assertCondition(
-    !layout.leaderboard.visible,
-    `portrait focused room best-run strip should be removed from the mobile HUD: ${JSON.stringify(layout.leaderboard)}`,
+    layout.leaderboard.visible && layout.leaderboard.withinHud && layout.leaderboard.text.startsWith('Best:'),
+    `portrait focused room best-run strip should remain readable inside the card: ${JSON.stringify(layout.leaderboard)}`,
   );
 
+  const play = layout.primaryButtons.find(button => button.id === 'btn-world-play');
+  assertCondition(play?.visible && play.rect.height >= 48 && play.rect.width >= layout.hud.width - 24,
+    `Play should fill its own 48px row: ${JSON.stringify(play)}`);
+  assertCondition(layout.buttons.filter(button => button.visible).every(button => !button.disabled),
+    `visible room actions should be usable: ${JSON.stringify(layout.buttons)}`);
+
   await clickElement(page, '#btn-mobile-world-hud-details');
-  await assertVisible(page, '#btn-world-course-builder', 'portrait focused room Course Builder after More');
+  await assertHidden(page, '#btn-world-course-builder', 'locked room has no unusable Course Builder after More');
+  await assertHidden(page, '#btn-world-edit', 'locked room Edit stays hidden after More');
+  await assertHidden(page, '#btn-world-build', 'published room Build stays hidden after More');
   await assertVisible(page, '#btn-world-explore', 'portrait focused room Explore after More');
   await assertVisible(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard after More');
   await assertVisible(page, '#btn-world-chat', 'portrait focused room Chat after More');
@@ -1746,6 +1756,7 @@ async function readPortraitFocusedWorldHudLayout(page) {
         && rect.height > 0;
       return {
         id: candidate.id,
+        disabled: candidate instanceof HTMLButtonElement && candidate.disabled,
         visible,
         rect: serializeRect(rect),
         withinHud:
