@@ -778,3 +778,7 @@ Canonical branch: `codex/wamp-activity-tabs` in managed worktree `wamp-activity-
 Activity tabs and guest names: implementation complete and verified. Full 3,534-test quality gate passed; 40 final focused regressions and final build pass. Real application + migrated SQLite activity handlers pass all four desktop/phone layouts with no unexpected errors. Preview: `output/web-game/activity-tabs/desktop-all.png`. No schema migration required; deployment needs the API Worker and Pages together. Ready for requested delivery.
 
 Clarified My activity: only players' events in rooms the viewer authored, including published-version authorship after a claimant changes. Alerts on someone else's room are excluded from both the feed and its unread badge. 42 focused tests and all four browser layouts pass; delivery remains pending.
+
+## 2026-10-15 — Approved activity delivery
+
+Push/merge/deploy authorized. Branch refreshed onto current main; the four-layout activity/API browser matrix and public-source check pass. Full quality, hosted checks, API Worker + Pages delivery and live verification are in progress.

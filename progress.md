@@ -1875,3 +1875,7 @@ Verified: full quality check passed 469 files / 3,534 tests, lint, typecheck, DO
 ### Clarified My activity scope
 
 Jonathan confirmed "Players in my rooms." The My activity API and unread badge now filter by published-version authorship (with owner fallbacks), excluding dethrone notifications on other builders' rooms. All activity and opt-in email handling retain their existing scopes. A later room claimant does not erase activity on a version the original builder authored. Two new regression tests cover room ownership and the authenticated API. All 42 focused tests, typecheck, targeted lint and all four browser layouts pass. No deployment performed.
+
+## 2026-10-15 — Approved activity release
+
+Jonathan requested push, merge and production deployment. Rebased both activity commits cleanly onto origin/main 8031df65, preserved the primary checkout, and reran the four-layout real-app/SQLite-backed activity smoke (all pass, zero unexpected errors). The open-source checker reports zero blockers and warnings. New main's executable-root contract required registering the smoke script in knip.json; added it and rerunning the full quality suite before merge. Full API Worker + Pages delivery and custom-domain postflight are required; no new schema migration is introduced.

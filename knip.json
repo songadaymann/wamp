@@ -68,6 +68,7 @@
     "scripts/runtime_performance_trace.mjs",
     "scripts/safety_ranked_run_spoof_probe.js",
     "scripts/sanitize_placed_object_stacks.ts",
+    "scripts/smoke_activity_tabs.ts",
     "scripts/smoke_boygame_tileset.mjs",
     "scripts/smoke_community_sprites.mjs",
     "scripts/smoke_jungle_vines.mjs",
