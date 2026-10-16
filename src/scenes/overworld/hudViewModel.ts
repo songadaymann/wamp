@@ -308,12 +308,17 @@ export function buildOverworldHudViewModel(
   const editButtonText = selectedIsExpandedRoom ? 'Edit Expanded Room' : 'Edit Room';
   const selectedGoalText =
     selectedExpandedRoom
-      ? ''
+      ? getExpandedRoomGoalBadgeText(selectedPublishedCourse?.goal ?? null)
       : selectedState === 'published' && selectedPublishedRoom?.goal
       ? getSelectedRoomGoalText(selectedPublishedRoom)
       : selectedState === 'draft' && selectedDraft?.goal
         ? getSelectedRoomGoalText(selectedDraft)
         : '';
+  const selectedActionReasonText = canEditSelectedRoom ? ''
+    : selectedSummary?.world ? 'Only this World’s builders can edit here.'
+    : selectedRoomMinted ? 'Minted: only the token owner can edit.'
+    : selectedState === 'claimed_unpublished' ? 'Only the claimer can edit this unpublished room.'
+    : '';
   const selectedStateVisible = selectedState !== 'published' && !selectedRoomMinted;
 
   let selectedMetaText = '';
@@ -467,6 +472,7 @@ export function buildOverworldHudViewModel(
     selectedMetaText,
     selectedMetaTone,
     selectedGoalText,
+    selectedActionReasonText,
     statusText,
     leaderboardText,
     rateRoomButtonVisible,
@@ -490,6 +496,7 @@ export function buildOverworldHudViewModel(
           : selectedState !== 'published' &&
             selectedState !== 'draft' &&
             selectedState !== 'claimed_unpublished',
+    playButtonHidden: mode !== 'play' && !['published', 'draft', 'claimed_unpublished'].includes(selectedState),
     playButtonActive: mode === 'play' && !activeRoomRushRun,
     shareButtonDisabled: selectedState !== 'published',
     shareButtonHidden: selectedState !== 'published',
@@ -518,18 +525,22 @@ export function buildOverworldHudViewModel(
     roomRushButtonActive: Boolean(activeRoomRushRun),
     roomCommentButtonText: 'Comment',
     roomCommentButtonDisabled: mode !== 'play' || selectedState !== 'published',
-    roomCommentButtonHidden: mode !== 'play',
+    roomCommentButtonHidden: mode !== 'play' || selectedState !== 'published',
     roomCommentButtonActive: mode === 'play',
     commentButtonText: 'Comments',
     commentButtonDisabled: false,
-    commentButtonHidden: mode === 'play',
+    commentButtonHidden: mode === 'play' || selectedState !== 'published',
+    leaderboardButtonHidden: mode === 'play' || selectedState !== 'published',
     commentButtonActive: roomCommentsVisible,
     courseBuilderButtonText,
     courseBuilderButtonDisabled: resolvedCourseBuilderButtonDisabled,
     courseBuilderButtonTitle,
+    courseBuilderButtonHidden: mode === 'play' || resolvedCourseBuilderButtonDisabled,
     editButtonText,
     editButtonDisabled: !canEditSelectedRoom,
     editButtonTitle,
+    editButtonHidden: mode === 'play' || !canEditSelectedRoom,
+    buildButtonHidden: mode === 'play' || selectedState !== 'frontier' || frontierBuildBlocked,
     buildButtonDisabled: selectedState !== 'frontier' || frontierBuildBlocked,
     roomCoordinatesText: '',
     cursorText: '',

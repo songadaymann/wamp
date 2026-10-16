@@ -144,6 +144,7 @@ export interface OverworldHudViewModel {
   selectedMetaText: string;
   selectedMetaTone: 'default' | 'challenge' | 'claimed_unpublished' | 'draft' | 'frontier';
   selectedGoalText: string;
+  selectedActionReasonText: string;
   statusText: string;
   leaderboardText: string;
   rateRoomButtonVisible: boolean;
@@ -152,6 +153,7 @@ export interface OverworldHudViewModel {
   zoomLabelText: string;
   playButtonText: string;
   playButtonDisabled: boolean;
+  playButtonHidden: boolean;
   playButtonActive: boolean;
   shareButtonDisabled: boolean;
   shareButtonHidden: boolean;
@@ -178,11 +180,15 @@ export interface OverworldHudViewModel {
   commentButtonActive: boolean;
   courseBuilderButtonText: string;
   courseBuilderButtonDisabled: boolean;
+  courseBuilderButtonHidden: boolean;
   courseBuilderButtonTitle: string;
   editButtonText: string;
   editButtonDisabled: boolean;
+  editButtonHidden: boolean;
   editButtonTitle: string;
   buildButtonDisabled: boolean;
+  buildButtonHidden: boolean;
+  leaderboardButtonHidden: boolean;
   roomCoordinatesText: string;
   cursorText: string;
   playersOnlineText: string;
@@ -606,6 +612,8 @@ export class OverworldHudBridge {
     this.setMetaTone(viewModel.selectedMetaTone);
     this.setText(this.statusEl, viewModel.statusText);
     this.setText(this.selectedGoalEl, viewModel.selectedGoalText);
+    this.setText(this.doc.getElementById('world-selected-action-reason'), viewModel.selectedActionReasonText);
+    this.leaderboardButton?.classList.toggle('hidden', viewModel.leaderboardButtonHidden);
     this.setText(this.leaderboardEl, viewModel.leaderboardText);
     this.setButton(
       this.rateRoomButton,
@@ -623,6 +631,7 @@ export class OverworldHudBridge {
     this.setText(this.bottomBarZoomEl, viewModel.bottomBarZoomText);
     this.setButton(this.playButton, viewModel.playButtonText, viewModel.playButtonDisabled);
     this.setText(this.doc.getElementById('btn-mobile-world-stop'), viewModel.playButtonText === 'Back to Editor' ? 'Back to Editor' : 'Stop');
+    this.playButton?.classList.toggle('hidden', viewModel.playButtonHidden);
     this.setActive(this.playButton, viewModel.playButtonActive);
     this.setButton(this.shareButton, 'Share', viewModel.shareButtonDisabled);
     this.setActive(this.shareButton, viewModel.playButtonActive);
@@ -670,9 +679,12 @@ export class OverworldHudBridge {
       viewModel.courseBuilderButtonDisabled,
     );
     this.setTitle(this.courseBuilderButton, viewModel.courseBuilderButtonTitle);
+    this.courseBuilderButton?.classList.toggle('hidden', viewModel.courseBuilderButtonHidden);
     this.setButton(this.editButton, viewModel.editButtonText, viewModel.editButtonDisabled);
     this.setTitle(this.editButton, viewModel.editButtonTitle);
+    this.editButton?.classList.toggle('hidden', viewModel.editButtonHidden);
     this.setDisabled(this.buildButton, viewModel.buildButtonDisabled);
+    this.buildButton?.classList.toggle('hidden', viewModel.buildButtonHidden);
     this.renderGoalPanel(viewModel);
     this.renderSignPanel(viewModel);
   }

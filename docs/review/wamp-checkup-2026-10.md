@@ -6,7 +6,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 147 of 215 done.**
+**Progress: 148 of 215 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -224,7 +224,7 @@ Portrait phone play is good, but tablets and sideways phones can't play, and bui
 
 WAMP's retro look is distinctive. These items make the main actions obvious, finish the visual cleanup, and make error messages say what to do next.
 
-- [ ] **F108** Room card: 'Play Room' isn't the main button, and buttons that can't be used crowd it out · medium impact · medium effort
+- [x] **F108** Room card: 'Play Room' isn't the main button, and buttons that can't be used crowd it out · medium impact · medium effort — **done 2026-10-16** (source verified; delivery pending). Full-width Play, context-dependent building actions, plain edit restrictions and visible phone goals/best results. Duplicate card chrome removed; [verification receipt](wamp-room-cards-2026-10-16.md).
 - [x] **F119** Error and empty messages are dead ends, and a few were written for developers (also covers F107) · low impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). Shared friendly errors and load-retry buttons; empty profile Levels and Playlists offer existing building and playlist actions with permission restrictions.
 - [x] **F115** Four dialogs still use the old dark theme · medium impact · small effort — **done 2026-10-11** (`007f3cf1`, [PR #148](https://github.com/songadaymann/wamp/pull/148)). Sign Text, Choose Avatar, Chat Moderation and the phone Warp sheet use the cream paper skin (panels, buttons, inputs); their panels redefine the dark-theme colour variables so inner text reads on cream. Not done: making cream the base dialog style and deleting the per-ID copies.
 - [x] **F116** Stacked popups: one Esc closes everything, and the screen goes nearly black (also covers F073) · low impact · small effort — **done 2026-10-10** (`61269ba6`, [PR #134](https://github.com/songadaymann/wamp/pull/134)). With two or more dialogs open, Escape closes only the top one (its close button) and stops there; covered dialogs drop their backdrop. Not done: focus return and moving hand-rolled dialogs onto `createModalLifecycle`.

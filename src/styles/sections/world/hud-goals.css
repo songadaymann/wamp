@@ -444,6 +444,7 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 #world-selected-meta:empty,
 #world-selected-subtitle:empty,
 #world-selected-goal:empty,
+#world-selected-action-reason:empty,
 #world-leaderboard:empty {
   display: none;
 }
@@ -454,7 +455,7 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
 
 #world-leaderboard {
   padding-top: 8px;
-  border-top: 2px solid rgba(255, 243, 219, 0.14);
+  border-top: 2px solid #403c35;
   color: var(--text);
 }
 
@@ -572,4 +573,36 @@ body[data-app-mode="play-world"]:not([data-coarse-pointer="true"]) #world-hud .w
   overflow-wrap: anywhere;
   font-synthesis: none;
   -webkit-font-smoothing: none;
+}
+
+/* F108: one clear starting action, followed by available room tools. */
+body[data-app-mode='world'] #world-hud .world-hud-row-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+body[data-app-mode='world'] #world-hud .world-hud-row-primary-actions > .bar-btn {
+  flex: 1 1 0;
+  min-height: 44px;
+  min-width: 0;
+  white-space: normal;
+}
+
+body[data-app-mode='world'] #world-hud #btn-world-play {
+  flex-basis: 100%;
+  grid-column: 1 / -1;
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+#world-hud #world-selected-action-reason {
+  color: #fff3db;
+  line-height: 1.5;
+}
+
+body[data-app-mode='world'] #world-hud .room-sequence-hud {
+  flex-basis: 100%;
+  grid-column: 1 / -1;
 }

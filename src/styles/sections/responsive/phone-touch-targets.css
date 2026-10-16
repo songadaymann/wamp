@@ -45,7 +45,7 @@ body[data-device-class='phone'][data-app-mode='play-world'][data-orientation-sta
 }
 
 /* Let the currently visible actions share one row, including Share, without a taller HUD. */
-body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions {
+body[data-device-class='phone'][data-app-mode='play-world'] #world-hud .world-hud-row-primary-actions {
   grid-template-columns: none;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
@@ -85,7 +85,7 @@ body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud
 
 /* Expanded details can use another row; the default card still stays compact. */
 body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-primary-actions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-flow: row;
 }
 
@@ -109,4 +109,17 @@ body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-
 /* Keep the focused music panel Close corner clear of Activity. */
 body[data-app-mode='editor'][data-editor-music-mode='true'] #auth-panel:not(.menu-open) #btn-activity-open {
   display: none;
+}
+
+/* Browse keeps Play on its own row, even when More is open. */
+body[data-device-class='phone'][data-app-mode='world'] #world-hud .world-hud-row-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: row;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #world-hud {
+  max-height: calc(var(--visible-vh) - 16px - var(--safe-top) - var(--safe-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }

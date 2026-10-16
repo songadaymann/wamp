@@ -1921,3 +1921,9 @@ Plan: expose a public activity reference for guest rows; resolve it to the persi
 Scope: recorded public activity only; never publish browser IDs or recovery tokens. Use current-main branch codex/wamp-guest-activity in the existing managed worktree.
 
 F094 acceptance:3,780 tests/full quality,59 exact pixel-oracle frames in two engines, three normal-control production browser profiles and48 mobile cases pass. Restored missing Photos/Upload actions; TileSprite's private repeating pattern now refreshes through its public texture setter. Safari's actual prepared File is observed before fetch because WebKit omits multipart file bytes from protocol; Chrome also verifies wire bytes. Visual review corrects fit contrast/corners/44px targets; final exact-source hosted and API+Pages/live acceptance follow. Chosen hosted derivative is917,468bytes with identical selected SHA256; original image and shared account variants preserved.
+
+## 2026-10-16 — F108 room card actions
+
+User request: clean up room cards, make Play Room the main action, verify, push, merge and deploy. Branch `codex/wamp-room-card-actions-2026-10-16` from main e46ff1a4. Plan: full-width Play; context-dependent Edit/Build/Expand; plain lock reasons; goal/best result visible on phones; remove duplicate brand/zoom and empty row. Preserve play Stop/Restart/Share, mobile More, Expanded Room flows and primary dirty checkout. Verification and delivery pending.
+
+F108 source accepted: 3,789 full-suite tests, 18 final focused HUD tests, final build/lint, five normal-control desktop/phone browser profiles plus a minted-room phone check pass. Two installed-client native Chrome movement/jump iterations pass. All accepted browser cases have zero errors/fixture misses; screenshots inspected. Public-source scan: zero blockers/warnings. Master148/215. Next: source/main hosted gates, approved merge, guarded Pages-only deployment and actual-domain proof. No API/room data/background changes.
