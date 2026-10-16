@@ -1,3 +1,4 @@
+import { OverworldGamepadInput } from './gamepadInput';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OverworldMovementInput } from './physicsCadence';
 import { createRequire } from 'node:module';
@@ -920,5 +921,24 @@ describe('nonfatal hurt movement', () => {
     const h = createHarness(); h.controller.applyHurtKnockback(-1);
     h.controller[method](); h.controller.updateMovement(16, false);
     expect(h.body.velocity.x).toBeCloseTo(0);
+  });
+});
+
+
+describe('gamepad movement handoff', () => {
+  it('combines keyboard/touch with held pad directions and one-shot jump edges', () => {
+    const h = createHarness();
+    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
+    const device = { index: 0, id: 'fixture', mapping: 'standard' as const, connected: true, axes: [0, 0], buttons };
+    const pad = new OverworldGamepadInput(() => [device]);
+    Object.assign(h.host, { getGamepadInput: () => pad });
+    pad.sample(true);
+    device.axes[0] = 1; buttons[0].pressed = true; pad.sample(true);
+    const first = h.controller.captureInput();
+    expect(first).toMatchObject({ right: true, rightPressed: true, spaceHeld: true, spacePressed: true });
+    h.cursors.left.isDown = true; pad.sample(true);
+    expect(h.controller.captureInput()).toMatchObject({ left: true, right: true, rightPressed: false, spaceHeld: true, spacePressed: false });
+    buttons[0].pressed = false; device.axes[0] = 0; pad.sample(true);
+    expect(h.controller.captureInput()).toMatchObject({ left: true, right: false, spaceHeld: false });
   });
 });

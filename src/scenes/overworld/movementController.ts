@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { consumePressedAliases, mergeGamepadMovement, type GamepadControls } from './gameplayInput';
 import type { OverworldMovementInput } from './physicsCadence';
 import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
 import { OverworldTraversalMovementState } from './traversalMovement';
@@ -64,12 +65,6 @@ const BUTT_STOMP_FALL_SPEED = 520;
 const BUTT_STOMP_FLIP_MS = 190;
 const BUTT_STOMP_IMPACT_GRACE_MS = 120;
 
-function consumePressedAliases(first: Phaser.Input.Keyboard.Key, second: Phaser.Input.Keyboard.Key): boolean {
-  // Consume both aliases even when the first is pressed, so the second cannot replay next frame.
-  const firstPressed = Phaser.Input.Keyboard.JustDown(first);
-  const secondPressed = Phaser.Input.Keyboard.JustDown(second);
-  return firstPressed || secondPressed;
-}
 
 export interface OverworldCrateInteraction {
   crateBody: Phaser.Physics.Arcade.Body;
@@ -126,6 +121,7 @@ interface OverworldMovementControllerHost {
   ): Iterable<LoadedRoomObject>;
   getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle;
   getCursors(): Phaser.Types.Input.Keyboard.CursorKeys;
+  getGamepadInput?(): GamepadControls;
   getWasd(): {
     W: Phaser.Input.Keyboard.Key;
     A: Phaser.Input.Keyboard.Key;
@@ -473,7 +469,7 @@ export class OverworldMovementController {
     const rightPressed = consumePressedAliases(cursors.right, wasd.D);
     const spacePressed = Phaser.Input.Keyboard.JustDown(cursors.space!);
     const touchJumpPressed = consumeTouchAction('jump');
-    return {
+    return mergeGamepadMovement({
       left: cursors.left.isDown || wasd.A.isDown || touchLeft,
       right: cursors.right.isDown || wasd.D.isDown || touchRight,
       upKeyHeld: cursors.up.isDown || wasd.W.isDown,
@@ -482,7 +478,7 @@ export class OverworldMovementController {
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed,
       spacePressed: spacePressed || touchJumpPressed,
-    };
+    }, this.host.getGamepadInput?.());
   }
 
   updateMovement(delta: number, inQuicksand: boolean, frameInput?: OverworldMovementInput): OverworldMovementStepResult {

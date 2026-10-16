@@ -1,3 +1,4 @@
+import { installRestartShortcut } from './restartShortcut';
 import Phaser from 'phaser';
 import type { LazyModal } from './lazyModal';
 import type { AboutModalController } from './aboutModal';
@@ -143,6 +144,7 @@ export function setupSceneCommands(
     event.stopPropagation();
   };
 
+  installRestartShortcut(() => getActiveOverworldScene(game)?.restartCurrentRun(), doc);
   doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
   doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 
