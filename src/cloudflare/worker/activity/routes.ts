@@ -1,7 +1,7 @@
 import { requireAuthenticatedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { loadActivity, loadAllActivity, loadActivityPreferences, markActivitySeen, publicPreferences, saveActivityPreferences } from './store';
+import { loadActivity, loadAllActivity, loadGuestActivity, loadActivityPreferences, markActivitySeen, publicPreferences, saveActivityPreferences } from './store';
 
 function activityPage(url: URL): number | undefined {
   const raw = url.searchParams.get('before');
@@ -12,7 +12,12 @@ function activityPage(url: URL): number | undefined {
 
 export async function handleAllActivity(request: Request, url: URL, env: Env): Promise<Response> {
   const db = env.DB.withSession?.('first-primary') ?? env.DB;
-  return jsonResponse(request, await loadAllActivity(db, activityPage(url)), { headers: { 'Cache-Control': 'no-store' } });
+  const rawGuest = url.searchParams.get('guest');
+  const guest = rawGuest === null ? null : Number(rawGuest);
+  if (guest !== null && (!Number.isSafeInteger(guest) || guest < 1)) throw new HttpError(400, 'Invalid guest activity reference.');
+  const before = activityPage(url);
+  const feed = guest === null ? await loadAllActivity(db, before) : await loadGuestActivity(db, guest, before);
+  return jsonResponse(request, feed, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function handleMyActivity(request: Request, url: URL, env: Env): Promise<Response> {

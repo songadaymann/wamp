@@ -1879,3 +1879,9 @@ Jonathan confirmed "Players in my rooms." The My activity API and unread badge n
 ## 2026-10-15 — Approved activity release
 
 Jonathan requested push, merge and production deployment. Rebased both activity commits cleanly onto origin/main 8031df65, preserved the primary checkout, and reran the four-layout real-app/SQLite-backed activity smoke (all pass, zero unexpected errors). The open-source checker reports zero blockers and warnings. New main's executable-root contract required registering the smoke script in knip.json; added it and rerunning the full quality suite before merge. Full API Worker + Pages delivery and custom-domain postflight are required; no new schema migration is introduced.
+
+## 2026-10-15 — Clickable guest activity
+
+Request: click a guest's name to see their activity across rooms.
+Plan: expose a public activity reference for guest rows; resolve it to the persistent guest identity on the server; add a bounded, indexed guest feed using existing public visibility rules; add an in-panel guest view that preserves feed position on Back; verify privacy, pagination, navigation and desktop/phone layouts, then deliver through the approved activity release process.
+Scope: recorded public activity only; never publish browser IDs or recovery tokens. Use current-main branch codex/wamp-guest-activity in the existing managed worktree.

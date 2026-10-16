@@ -34,7 +34,7 @@ export function fixture(includeActivity = true) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../../../../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
-    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_'))) continue;
+    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_'))) continue;
     sqlite.exec(readFileSync(new URL(file, directory), 'utf8'));
   }
   for (const user of ['builder', 'p1', 'p2', 'p3', 'generated']) sqlite.prepare('INSERT INTO users (id,email,display_name,created_at,updated_at) VALUES (?,?,?,?,?)')
@@ -50,6 +50,7 @@ export function fixture(includeActivity = true) {
   return { sqlite, env, record, migrate: () => {
     sqlite.exec(readFileSync(new URL('0055_builder_activity.sql', directory), 'utf8'));
     sqlite.exec(readFileSync(new URL('0057_daily_rooms.sql', directory), 'utf8'));
+    sqlite.exec(readFileSync(new URL('0066_guest_activity_index.sql', directory), 'utf8'));
   } };
 }
 export function award(f: ReturnType<typeof fixture>, id: string, kind = 'unique_completion_room', actor = 'p1', at = NOW, structured = true): void {
@@ -59,6 +60,13 @@ export function award(f: ReturnType<typeof fixture>, id: string, kind = 'unique_
 export function top1(f: ReturnType<typeof fixture>, id: string, displaced = 'p1', at = NOW): void {
   f.sqlite.prepare(`INSERT INTO pxp_events (id,user_id,event_type,source_type,source_id,dedupe_key,amount,breakdown_json,created_at) VALUES (?,'p2','top1_take','room_attempt',?,?,1,?,?)`)
     .run(id, id, id, JSON.stringify({ activity: { contentType: 'room', contentId: '0,0', version: 1, builderUserId: 'builder', dethronedUserId: displaced } }), at);
+}
+export function guestClear(f: ReturnType<typeof fixture>, id: string, guest = 'guest-fixture', room = '0,0'): void {
+  f.sqlite.prepare(`INSERT INTO guest_run_attempts
+    (attempt_id,guest_user_id,recovery_token_hash,client_run_id,content_type,content_id,content_version,progress_source_type,progress_source_id,snapshot_json,verification_nonce,snapshot_hash,started_at,expires_at)
+    VALUES (?,?,'private-fixture-token',?,'room',?,1,'room',?,'{}','nonce','hash',?,?)`)
+    .run(id, guest, id, room, room, NOW, '2026-10-18T00:00:00.000Z');
+  f.sqlite.prepare("UPDATE guest_run_attempts SET result='completed',verification_status='passed',finished_at=? WHERE attempt_id=?").run(NOW, id);
 }
 export function run(f: ReturnType<typeof fixture>, id: string, user = 'p1', elapsedMs = 10000, status = 'passed', version = 1): RoomRunRecord {
   f.sqlite.prepare(`INSERT INTO room_runs (attempt_id,room_id,room_x,room_y,room_version,goal_type,goal_json,user_id,user_display_name,started_at,finished_at,result,elapsed_ms,verification_status)

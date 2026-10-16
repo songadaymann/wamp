@@ -3,6 +3,7 @@ export interface BuilderActivity {
   id: number;
   kind: ActivityKind;
   actorName: string;
+  guestActivityRef?: number;
   contentTitle: string;
   contentVersion: number;
   contentPath: string;
@@ -24,6 +25,9 @@ export interface ActivityFeedResponse {
 export interface ActivityResponse extends ActivityFeedResponse {
   unreadCount: number;
   preferences: ActivityPreferences;
+}
+export interface GuestActivityResponse extends ActivityFeedResponse {
+  guestName: string;
 }
 export function activityDescription(entry: BuilderActivity): string {
   const action = entry.kind === 'completion' ? 'cleared'

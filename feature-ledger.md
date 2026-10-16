@@ -782,3 +782,7 @@ Clarified My activity: only players' events in rooms the viewer authored, includ
 ## 2026-10-15 — Approved activity delivery
 
 Push/merge/deploy authorized. Branch refreshed onto current main; the four-layout activity/API browser matrix and public-source check pass. Full quality, hosted checks, API Worker + Pages delivery and live verification are in progress.
+
+## 2026-10-15 — Clickable guest activity
+
+Canonical branch: codex/wamp-guest-activity, based on merged activity main ef4faa7e. Guest name buttons open an in-panel cross-room feed; Back preserves loaded rows, pagination, scroll and focus. The API resolves a visible public activity reference to the existing guest identity server-side, without exposing raw browser IDs or recovery tokens. Guest rows use migration 0066_guest_activity_index.sql for indexed history reads; apply before Worker/Pages deployment. All 3,741 tests pass; desktop/phone guest navigation and pagination pass. Full release checks and approved activity delivery are in progress.

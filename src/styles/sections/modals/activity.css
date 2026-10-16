@@ -128,6 +128,33 @@
   text-underline-offset: 3px;
 }
 .activity-row a:hover { background: #ffe66b; }
+.activity-actor-link {
+  display: block;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #2c5071;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.activity-actor-link:hover { color: #18161c; }
+.activity-guest-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #18161c;
+}
+.activity-guest-name { margin: 0; min-width: 0; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
 .activity-email-options {
   border-top: 2px solid #18161c;
   margin-top: 20px;
