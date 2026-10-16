@@ -1,5 +1,9 @@
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
+## 2026-10-15 overnight — editor authoring shipped; lifecycle in progress
+
+PR220/source5ecb198e/main0c4ce26a/Pages e8e98030 is delivered.3,746 tests,48 mobile cases, all source/main gates,27 exact custom/immutable files and actual-domain three-profile edits/markers/reload pass; official real-API playback has0 captured errors. F070 stays partial/master145. Next branch `codex/wamp-goal-run-lifecycle-2026-10-15`: typed NPC/checkpoint/start/race/status rules,7,616 exact startup and7,616 event/status comparisons,32 focused and3,752 full quality tests pass; native/mobile/hosted/release checks are in progress. Keep the5am Eastern cutoff, selected animation, primary dirty lane and pending decisions.
+
 ## 2026-10-15 overnight — F070 editor authoring registry
 
 Continue the checklist until October16 at5am Eastern. Typed editor rules now own all seven goals' field controls/edits, marker mutations and summaries; command guards/view-model controls use those rules.5,980 exact frozen old/new operations,528 full view-model comparisons and12 focused tests pass. Desktop public-build defaults/edits/canvas markers/clearing/reload pass. Final exact-source quality/mobile/native/official-client/hosted/delivery are pending; master145/215 and F070 remain partial. Primary auth/editor lane, selected240px/32-color animation and decision-gated work preserved. See `docs/review/wamp-overnight-checklist-2026-10-15.md` and `docs/review/wamp-goal-authoring-registry-2026-10-15.md`.

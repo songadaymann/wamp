@@ -1,3 +1,4 @@
+import { formatGoalRoomLeaderboardMetric, formatGoalRunStatus, GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
 import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
 import { initializeRoomGoalTargets, roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
 import { getObjectById, type GameObjectConfig } from '../../config';
@@ -412,7 +413,7 @@ export class OverworldGoalRunController {
   resolveNpcTarget(instanceId: string | null): void {
     if (
       this.currentGoalRun?.result === 'active' &&
-      this.currentGoalRun.goal.type === 'npc_quest' &&
+      GOAL_LIFECYCLE_RULES[this.currentGoalRun.goal.type].resolvesNpcTarget &&
       this.currentGoalRun.npcTargetInstanceId === null
     ) {
       this.currentGoalRun.npcTargetInstanceId = instanceId;
@@ -428,7 +429,7 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'npc_quest' ||
+      !GOAL_LIFECYCLE_RULES[this.currentGoalRun.goal.type].acceptsNpcDefeat ||
       this.currentGoalRun.roomId !== roomId ||
       (
         this.currentGoalRun.npcTargetInstanceId !== null &&
@@ -447,8 +448,7 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'npc_quest' ||
-      this.currentGoalRun.goal.questType !== 'escort' ||
+      !roomGoalDestinationCompleted(this.currentGoalRun.goal) ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -461,9 +461,7 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'npc_quest' ||
-      this.currentGoalRun.goal.questType !== 'give' ||
-      this.currentGoalRun.collectiblesCollected < this.currentGoalRun.goal.requiredCount ||
+      !roomGoalDeliveryCompleted(this.currentGoalRun.goal, this.currentGoalRun.collectiblesCollected) ||
       this.currentGoalRun.roomId !== roomId
     ) {
       return NOOP_MUTATION_RESULT;
@@ -476,7 +474,7 @@ export class OverworldGoalRunController {
       !this.currentGoalRun ||
       this.currentGoalRun.result !== 'active' ||
       this.currentGoalRun.qualificationState !== 'qualified' ||
-      this.currentGoalRun.goal.type !== 'checkpoint_sprint'
+      !GOAL_LIFECYCLE_RULES[this.currentGoalRun.goal.type].countsCheckpoints
     ) {
       return NOOP_MUTATION_RESULT;
     }
@@ -619,61 +617,7 @@ export class OverworldGoalRunController {
       return null;
     }
 
-    const elapsedSeconds = (runState.elapsedMs / 1000).toFixed(1);
-    const countdownText = this.getGoalCountdownText(runState);
-    const submissionSuffix = this.getGoalSubmissionStatusText(runState);
-    switch (runState.goal.type) {
-      case 'reach_exit':
-        return `goal ${ROOM_GOAL_LABELS[runState.goal.type]} · ${countdownText ?? `${elapsedSeconds}s`} · deaths ${runState.deaths}${submissionSuffix}`;
-      case 'collect_target':
-        return `goal ${runState.collectiblesCollected}/${runState.goal.requiredCount} collected · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
-      case 'collect_race':
-        return `goal race · you ${runState.collectiblesCollected} · hunter ${runState.enemyCollectiblesCollected} · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
-      case 'defeat_all':
-        return `goal ${runState.enemiesDefeated}/${runState.enemyTarget ?? 0} defeated · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
-      case 'checkpoint_sprint':
-        return `goal ${runState.checkpointsReached}/${runState.checkpointTarget ?? 0} checkpoints · ${countdownText ?? `${elapsedSeconds}s`}${submissionSuffix}`;
-      case 'survival': {
-        const remaining = Math.max(0, runState.goal.durationMs - runState.elapsedMs);
-        const parts = [`goal survive ${(remaining / 1000).toFixed(1)}s`];
-        if (runState.collectiblesCollected > 0) {
-          parts.push(
-            `${runState.collectiblesCollected} item${runState.collectiblesCollected === 1 ? '' : 's'}`
-          );
-        }
-        if (runState.enemiesDefeated > 0) {
-          parts.push(
-            `${runState.enemiesDefeated} enem${runState.enemiesDefeated === 1 ? 'y' : 'ies'}`
-          );
-        }
-        if (runState.deaths > 0) {
-          parts.push(`deaths ${runState.deaths}`);
-        }
-        return `${parts.join(' · ')}${submissionSuffix}`;
-      }
-      case 'npc_quest':
-        if (runState.goal.questType === 'protect') {
-          const protectedMs = Math.min(runState.elapsedMs, runState.goal.durationMs);
-          return `goal protect ${(protectedMs / 1000).toFixed(1)}/${(runState.goal.durationMs / 1000).toFixed(1)}s${submissionSuffix}`;
-        }
-        if (runState.goal.questType === 'escort') {
-          return `goal escort NPC · ${elapsedSeconds}s${submissionSuffix}`;
-        }
-        return `goal give ${Math.min(runState.collectiblesCollected, runState.goal.requiredCount)}/${runState.goal.requiredCount} · ${runState.collectiblesCollected >= runState.goal.requiredCount ? 'return to NPC' : `${elapsedSeconds}s`}${submissionSuffix}`;
-    }
-  }
-
-  private getGoalCountdownText(runState: GoalRunState): string | null {
-    if (runState.goal.type === 'survival' || runState.goal.type === 'npc_quest') {
-      return null;
-    }
-
-    if (runState.goal.timeLimitMs === null) {
-      return null;
-    }
-
-    const remainingMs = Math.max(0, runState.goal.timeLimitMs - runState.elapsedMs);
-    return `${(remainingMs / 1000).toFixed(1)}s left`;
+    return formatGoalRunStatus(runState.goal, runState, this.getGoalSubmissionStatusText(runState));
   }
 
   getLeaderboardSummaryText(): string | null {
@@ -695,13 +639,7 @@ export class OverworldGoalRunController {
 
     if (roomTop && this.currentRoomLeaderboard) {
       const rankingMode = this.currentRoomLeaderboard.rankingMode;
-      const metric =
-        rankingMode === 'time'
-          ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
-          : this.currentGoalRun?.goal.type === 'npc_quest' &&
-              this.currentGoalRun.goal.questType === 'protect'
-            ? `${(roomTop.elapsedMs / 1000).toFixed(1)}s`
-            : `${roomTop.score} pts`;
+      const metric = formatGoalRoomLeaderboardMetric(this.currentGoalRun?.goal ?? null, rankingMode, roomTop);
       parts.push(`Room top ${roomTop.userDisplayName} ${metric}`);
     }
 
@@ -1021,8 +959,9 @@ export class OverworldGoalRunController {
       });
     }
 
-    if (runState.goal.type === 'defeat_all' && runState.enemyTarget === 0) {
-      const completed = this.markCompleted('No enemies remain.');
+    const startCompletion = roomGoalStartCompletion(runState.goal, runState);
+    if (startCompletion !== null) {
+      const completed = this.markCompleted(startCompletion);
       return {
         ...completed,
         resetChallengeState,
@@ -1275,25 +1214,10 @@ export class OverworldGoalRunController {
   }
 
   private resolveCollectRace(_reason: string): GoalRunMutationResult {
-    if (!this.currentGoalRun || this.currentGoalRun.goal.type !== 'collect_race') {
-      return NOOP_MUTATION_RESULT;
-    }
-
-    if (this.currentGoalRun.collectiblesCollected > this.currentGoalRun.enemyCollectiblesCollected) {
-      return this.markCompleted(
-        `Collect race won ${this.currentGoalRun.collectiblesCollected}-${this.currentGoalRun.enemyCollectiblesCollected}.`,
-      );
-    }
-
-    if (this.currentGoalRun.collectiblesCollected === this.currentGoalRun.enemyCollectiblesCollected) {
-      return this.markFailed(
-        `Collect race tied ${this.currentGoalRun.collectiblesCollected}-${this.currentGoalRun.enemyCollectiblesCollected}.`,
-      );
-    }
-
-    return this.markFailed(
-      `Sword Hunter won ${this.currentGoalRun.enemyCollectiblesCollected}-${this.currentGoalRun.collectiblesCollected}.`,
-    );
+    if (!this.currentGoalRun) return NOOP_MUTATION_RESULT;
+    const resolution = GOAL_LIFECYCLE_RULES[this.currentGoalRun.goal.type].raceResolution(this.currentGoalRun);
+    if (!resolution) return NOOP_MUTATION_RESULT;
+    return resolution.completed ? this.markCompleted(resolution.message) : this.markFailed(resolution.message);
   }
 
   private nowIso(): string {
