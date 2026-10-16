@@ -1,3 +1,4 @@
+import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
@@ -144,6 +145,7 @@ const scenarios = [
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
+  { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
   { name: 'phone-narrow-signed-room-controls', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
 ];
@@ -272,6 +274,10 @@ async function runScenario(browserInstance, scenario) {
     }
   });
 
+  if (scenario.gamepadFixture) await context.addInitScript(() => {
+    localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
+    localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
+  });
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() !== 'error') {
@@ -1962,4 +1968,11 @@ async function checkPhoneGoalPrompt(page, summary, directory) {
   summary.assertions.push({ label: 'full-width phone Goal Prompt accepts and saves text', layout });
   await captureScenarioScreenshot(page, summary, directory, 'signed-goal-prompt');
   return prompt;
+}
+
+
+async function runGamepadControls(page, scenarioSummary, scenarioDir) {
+  const result = await auditGamepadControls(page,
+    label => captureScenarioScreenshot(page, scenarioSummary, scenarioDir, label));
+  scenarioSummary.assertions.push({ label: 'standard Gamepad API and R route existing gameplay actions safely', ...result });
 }

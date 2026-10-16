@@ -1,3 +1,5 @@
+import { createOverworldGameplayKeys } from './overworld/gameplayInput';
+import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadInput';
 import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
 import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
 import { OverworldGhostRaceController } from './overworld/ghostRace';
@@ -452,6 +454,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     Q: Phaser.Input.Keyboard.Key;
     E: Phaser.Input.Keyboard.Key;
   };
+  private readonly gamepadInput = new OverworldGamepadInput();
+  private restartInProgress = false;
   private cameraToggleKey!: Phaser.Input.Keyboard.Key;
   private externalLaunchGraceUntil = 0;
 
@@ -804,7 +808,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         })),
       getEnemyStompBounceVelocity: () => {
         const jumpHeld = this.cursors.up.isDown || this.cursors.space.isDown
-          || this.wasd.W.isDown || getTouchInputState().jumpHeld;
+          || this.wasd.W.isDown || getTouchInputState().jumpHeld
+          || this.gamepadInput.held('jump') || this.gamepadInput.held('up');
         return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
       },
       playEnemyStompImpact: () => { if (!prefersReducedMotion()) this.cameras.main.shake(50, 0.002); },
@@ -1707,6 +1712,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
           ),
         getArcadeBodyBounds: (body) => this.getArcadeBodyBounds(body),
         getCursors: () => this.cursors,
+        getGamepadInput: () => this.gamepadInput,
         getWasd: () => this.wasd,
         findOverlappingLadder: () => this.findOverlappingLadder(),
         playJumpDustFx: (x, y, facing) => this.fxController?.playJumpDustFx(x, y, facing),
@@ -2372,6 +2378,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this.captureCriticalFrameStart,
       this,
     );
+    attachGamepadInput(this.gamepadInput, this.events, this.game.events,
+      () => this.mode === 'play' && Boolean(this.input.keyboard?.enabled));
     this.physicsCadence?.destroy();
     this.physicsCadence = new OverworldPhysicsCadence(this.events, this.physics.world, {
       canSimulate: () => this.mode === 'play' && !this.scenePauseApplied && !this.gameFeelController.isDeathPending(),
@@ -2502,12 +2510,12 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       if (
         this.mode === 'play' &&
         !this.isPvpMatchActive() &&
-        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle'))
+        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle') || this.gamepadInput.pressed('camera'))
       ) {
         this.toggleCameraMode();
       }
 
-      if (this.mode === 'play' && consumeTouchAction('stop')) {
+      if (this.mode === 'play' && (consumeTouchAction('stop') || this.gamepadInput.pressed('stop'))) {
         if (this.activeRoomRushRun) {
           this.endRoomRushRun();
         } else {
@@ -2516,7 +2524,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         return;
       }
 
-      if (this.mode === 'play' && consumeTouchAction('restart')) {
+      if (this.mode === 'play' && (consumeTouchAction('restart') || this.gamepadInput.pressed('restart'))) {
         void this.restartCurrentRun();
         return;
       }
@@ -2556,8 +2564,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       }
 
       const pvpCountdownLocked = this.isPvpCountdownActive();
-      const swordInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash');
-      const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot');
+      const swordInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash') || this.gamepadInput.pressed('slash');
+      const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot') || this.gamepadInput.pressed('shoot');
       if (this.gameFeelController.isHoldingPhysics()) {
         this.gameFeelController.bufferCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
         this.recordRankedRunTraceFrame(delta, this.physicsCadence!.getMovement());
@@ -2857,18 +2865,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private setupGameplayKeys(): void {
     const keyboard = this.input.keyboard!;
 
-    this.cursors = keyboard.createCursorKeys();
-    this.wasd = {
-      W: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
-    this.attackKeys = {
-      Q: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-      E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-    };
-    this.cameraToggleKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE);
+    const keys = createOverworldGameplayKeys(keyboard);
+    this.cursors = keys.cursors; this.wasd = keys.wasd;
+    this.attackKeys = keys.attackKeys; this.cameraToggleKey = keys.cameraToggleKey;
     keyboard.on('keydown-ESC', () => {
       if (this.roomCommentsController.handleEscapeKey()) {
         return;
@@ -5928,17 +5927,21 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   async restartCurrentRun(): Promise<void> {
-    if (this.activeRoomRushRun) {
-      await this.restartRoomRushRun();
-      return;
-    }
-    if (this.isPvpArenaActive()) {
-      this.respawnPlayerToCurrentRoom();
-      return;
-    }
+    if (this.mode !== 'play' || this.restartInProgress) return;
+    this.restartInProgress = true;
+    try {
+      if (this.activeRoomRushRun) {
+        await this.restartRoomRushRun();
+        return;
+      }
+      if (this.isPvpArenaActive()) {
+        this.respawnPlayerToCurrentRoom();
+        return;
+      }
 
-    await this.flowController.restartCurrentRun();
-    void this.ghostRaceController.refreshAfterRestart();
+      await this.flowController.restartCurrentRun();
+      void this.ghostRaceController.refreshAfterRestart();
+    } finally { this.restartInProgress = false; }
   }
 
   returnToWorld(): void {
@@ -6394,7 +6397,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       || this.attackKeys?.E?.isDown
       || this.cameraToggleKey?.isDown
     );
-    if (keyboardHeld) return true;
+    if (keyboardHeld || this.gamepadInput.hasHeldInput()) return true;
 
     const touchInput = getTouchInputState();
     return Boolean(
@@ -6609,6 +6612,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
     return {
       scene: 'overworld-play',
+      gamepad: { connected: this.gamepadInput.isConnected(), active: this.gamepadInput.hasHeldInput() },
       runtimeContext,
       performanceProfile: getDeviceLayoutState().performanceProfile,
       performancePolicy: streamingMetrics.resolvedPerformancePolicy,

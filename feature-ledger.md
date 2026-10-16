@@ -828,3 +828,13 @@ Canonical branch `codex/wamp-room-card-actions-2026-10-16`, base e46ff1a4. In pr
 F108 source accepted: 3,789 full-suite tests, 18 final focused HUD tests, final build/lint, five normal-control desktop/phone browser profiles plus a minted-room phone check pass. Two installed-client native Chrome movement/jump iterations pass. All accepted browser cases have zero errors/fixture misses; screenshots inspected. Public-source scan: zero blockers/warnings. Master148/215. Next: source/main hosted gates, approved merge, guarded Pages-only deployment and actual-domain proof. No API/room data/background changes.
 
 F108 final test contract: require full-width 48px Play, visible phone goal/best/restriction, hidden unusable Edit/Build/Expand and working More/collapse. The prior contract expected the old design (46/48 initial CI cases passed). Both corrected engine cases pass locally; application source is unchanged. Full final hosted checks/delivery pending.
+
+## 2026-10-16 — F148 gamepad and quick restart
+
+Canonical branch `codex/wamp-gamepad-restart-2026-10-16`, base461eb21d. In progress: standard Gamepad API inputs into existing gameplay actions; R restart protected during typing/menus. Preserve existing restart modes and keyboard/touch behavior. Verify and deliver through the established release workflow. Diagnostics: ignored output/f148-2026-10-16/.
+
+F148 implementation/browser acceptance: native production-build Chrome desktop/phone and WebKit phone each pass15 controller/R scenarios; both exact mobile smoke cases pass with zero errors/misses. Full520-file/3822-test run passes with one worker; final quality tail, installed-client proof, source scan and hosted/release delivery remain. Existing restart mode routing preserved. Physical controllers remain untested. No unrelated primary/background/decision-gated work changed.
+
+F148 final local acceptance: full quality passes,520 files/3822 tests;637.4KB boot budget; installed-client2 movement/jump iterations and visual review pass. Both new mobile cases pass. Source scan zero blockers/warnings. Next: exact-source hosted50-case mobile gate, merge and guarded Pages-only live delivery.
+
+Hosted acceptance: initial49/50 mobile cases passed; new Chromium held-shoot check observed86.7ms of remaining game cooldown after its fixed700ms wall-clock sleep. Replaced that assumption with waiting for cooldown drain and asserting no reactivation over400ms more game time; all gameplay code is unchanged. Rerun exact local cases and all hosted gates on final test revision before merge.
