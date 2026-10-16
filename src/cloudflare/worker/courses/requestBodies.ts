@@ -1,3 +1,5 @@
+import type { Goal } from '../../../goals/goalSchema';
+import type { CourseGoalType, CourseMarkerPoint } from '../../../courses/model';
 import {
   normalizeCourseGoal,
   normalizeCourseSnapshot,
@@ -153,26 +155,25 @@ export function normalizeFinalizedCourseRunBody(
     throw new HttpError(409, 'Completed expanded room runs must finish within the published time limit.');
   }
 
-  switch (goal.type) {
-    case 'collect_target':
-      if (body.collectiblesCollected < goal.requiredCount) {
-        throw new HttpError(409, 'Completed collect-target expanded room runs must meet the published goal.');
-      }
-      break;
-    case 'checkpoint_sprint':
-      if (body.checkpointsReached < goal.checkpoints.length) {
-        throw new HttpError(409, 'Completed checkpoint expanded room runs must hit every checkpoint.');
-      }
-      break;
-    case 'survival':
-      if (body.elapsedMs < goal.durationMs) {
-        throw new HttpError(409, 'Completed survival expanded room runs must last the full published duration.');
-      }
-      break;
-    case 'defeat_all':
-    case 'reach_exit':
-      break;
-  }
+  validateExpandedGoalCompletion(goal, body);
 
   return body;
+}
+
+export type ExpandedCompletionRules = { [K in CourseGoalType]: (goal: Goal<CourseMarkerPoint, K>, body: CourseRunFinishRequestBody) => void };
+export const EXPANDED_COMPLETION_RULES: ExpandedCompletionRules = {
+  reach_exit: () => {},
+  defeat_all: () => {},
+  collect_target: (goal, body) => {
+    if (body.collectiblesCollected < goal.requiredCount) throw new HttpError(409, 'Completed collect-target expanded room runs must meet the published goal.');
+  },
+  checkpoint_sprint: (goal, body) => {
+    if (body.checkpointsReached < goal.checkpoints.length) throw new HttpError(409, 'Completed checkpoint expanded room runs must hit every checkpoint.');
+  },
+  survival: (goal, body) => {
+    if (body.elapsedMs < goal.durationMs) throw new HttpError(409, 'Completed survival expanded room runs must last the full published duration.');
+  },
+};
+function validateExpandedGoalCompletion<K extends CourseGoalType>(goal: Goal<CourseMarkerPoint, K>, body: CourseRunFinishRequestBody): void {
+  EXPANDED_COMPLETION_RULES[goal.type](goal, body);
 }

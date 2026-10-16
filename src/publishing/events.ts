@@ -1,3 +1,4 @@
+import type { GoalType } from '../goals/goalSchema';
 import type { CourseSnapshot } from '../courses/model';
 import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
 
@@ -46,7 +47,11 @@ export function announceFirstPublishedExpandedRoom(options: {
     play: () => options.play({ ...coordinates }) });
 }
 
+const GOAL_SUGGESTED_TITLES: Record<GoalType, string> = {
+  reach_exit: 'The Great Escape', collect_target: 'Treasure Hunt', defeat_all: 'Monster Mash',
+  checkpoint_sprint: 'Checkpoint Chase', survival: 'Stay Alive', collect_race: 'My WAMP Room', npc_quest: 'My WAMP Room',
+};
 export function suggestRoomTitle(goalType: string | undefined): string {
-  return ({ reach_exit: 'The Great Escape', collect_target: 'Treasure Hunt', defeat_all: 'Monster Mash',
-    checkpoint_sprint: 'Checkpoint Chase', survival: 'Stay Alive' } as Record<string, string>)[goalType ?? ''] ?? 'My WAMP Room';
+  return goalType && Object.prototype.hasOwnProperty.call(GOAL_SUGGESTED_TITLES, goalType)
+    ? GOAL_SUGGESTED_TITLES[goalType as GoalType] : 'My WAMP Room';
 }

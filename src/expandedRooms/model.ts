@@ -1,3 +1,4 @@
+import { ROOM_GOAL_TYPES } from '../goals/roomGoals';
 import type { CourseGoalType } from '../courses/model';
 import type { RoomGoalType } from '../goals/roomGoals';
 import type { RoomCoordinates } from '../persistence/roomModel';
@@ -126,15 +127,7 @@ export function createExpandedRoomSummaryFromResolvedTarget(
 }
 
 export function isExpandedRoomGoalType(value: unknown): value is ExpandedRoomGoalType {
-  return (
-    value === 'reach_exit' ||
-    value === 'collect_target' ||
-    value === 'collect_race' ||
-    value === 'defeat_all' ||
-    value === 'checkpoint_sprint' ||
-    value === 'survival' ||
-    value === 'npc_quest'
-  );
+  return ROOM_GOAL_TYPES.some(type => type === value);
 }
 
 export function expandedRoomFootprintIsConnected(cells: ExpandedRoomFootprintCell[]): boolean {

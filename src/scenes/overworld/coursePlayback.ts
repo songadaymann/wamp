@@ -1,3 +1,4 @@
+import { COURSE_SERVER_RULES } from '../../courses/goalServerRules';
 import { getAuthDebugState } from '../../auth/client';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { createCourseRepository } from '../../courses/courseRepository';
@@ -209,7 +210,7 @@ export class OverworldCoursePlaybackController {
       returnCoordinates: { ...this.host.getSelectedCoordinates() },
       startRoomId: startRoomRef?.roomId ?? null,
       enemyTarget:
-        course.goal?.type === 'defeat_all'
+        (course.goal && COURSE_SERVER_RULES[course.goal.type].countsEnemies)
           ? this.countCourseObjectsByCategory(course, 'enemy')
           : null,
       leaderboardEligible,

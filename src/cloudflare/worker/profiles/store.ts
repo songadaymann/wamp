@@ -1,3 +1,4 @@
+import type { GoalType } from '../../../goals/goalSchema';
 import { attachRoomInsights } from '../insights/store';
 import type {
   ProfilePublishedRoomEntry,
@@ -300,8 +301,13 @@ function mapProfilePlayableContentRow(row: ProfilePlayableContentRow): ProfilePu
   };
 }
 
+// Preserve the legacy profile projection; new goal types must choose visibility explicitly.
+const PROFILE_GOAL_TYPES: Record<GoalType, boolean> = {
+  reach_exit: true, collect_target: true, collect_race: true, defeat_all: true,
+  checkpoint_sprint: true, survival: true, npc_quest: false,
+};
 function normalizeProfileGoalType(value: string | null): ProfilePublishedRoomEntry['goalType'] {
-  return value && ['reach_exit', 'collect_target', 'collect_race', 'defeat_all', 'checkpoint_sprint', 'survival'].includes(value)
+  return value && Object.prototype.hasOwnProperty.call(PROFILE_GOAL_TYPES, value) && PROFILE_GOAL_TYPES[value as GoalType]
     ? value as ProfilePublishedRoomEntry['goalType']
     : null;
 }

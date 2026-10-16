@@ -1,3 +1,4 @@
+import { toCourseGoalType } from '../../courses/model';
 import { getAuthDebugState } from '../../auth/client';
 import { isRoomInActiveCourseDraftSession } from '../../courses/draftSession';
 import {
@@ -133,9 +134,7 @@ export class OverworldHudStateController {
         courseId: expandedRoom.legacyCourseId,
         courseTitle: expandedRoom.title,
         goalType:
-          expandedRoom.goalType === 'collect_race' || expandedRoom.goalType === 'npc_quest'
-            ? null
-            : expandedRoom.goalType,
+          toCourseGoalType(expandedRoom.goalType),
         roomCount: expandedRoom.cellCount,
       };
     }

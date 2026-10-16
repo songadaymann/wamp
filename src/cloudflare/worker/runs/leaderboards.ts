@@ -1,3 +1,5 @@
+import { ROOM_GOAL_DEFINITIONS } from '../../../goals/roomGoals';
+import { roomGoalRankingPolicy } from '../../../goals/goalSchema';
 import type { RoomGoal } from '../../../goals/roomGoals';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { RoomRecordView } from '../../../persistence/roomVersionLineage';
@@ -30,7 +32,7 @@ interface RankedRoomLeaderboardRow {
 }
 
 function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
-  if (goal.type === 'npc_quest' && goal.questType === 'protect') {
+  if (roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect') {
     return 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC';
   }
   return getLeaderboardRankingMode(goal) === 'time'
@@ -41,7 +43,7 @@ function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
 function buildRankedRoomLeaderboardCte(goal: RoomGoal): string {
   const orderClause = getRoomLeaderboardSqlOrderClause(goal);
   const resultPredicate =
-    goal.type === 'npc_quest' && goal.questType === 'protect'
+    roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect'
       ? "result IN ('completed', 'failed')"
       : "result = 'completed'";
   return `

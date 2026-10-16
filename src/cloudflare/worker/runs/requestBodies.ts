@@ -1,3 +1,4 @@
+import type { Goal, GoalMarkerPoint, GoalType } from '../../../goals/goalSchema';
 import { normalizeRoomGoal, type RoomGoal } from '../../../goals/roomGoals';
 import { roomIdFromCoordinates } from '../../../persistence/roomModel';
 import type {
@@ -306,56 +307,38 @@ export function normalizeFinalizedRunBody(
     throw new HttpError(409, 'Completed runs must finish within the published time limit.');
   }
 
-  switch (goal.type) {
-    case 'collect_target':
-      if (body.collectiblesCollected < goal.requiredCount) {
-        throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
-      }
-      break;
-    case 'collect_race': {
-      const totalCollected = body.collectiblesCollected + body.enemyCollectiblesCollected;
-      const finishedByTime = goal.timeLimitMs !== null && reportedElapsedMs >= goal.timeLimitMs;
-      const finishedByExhaustion = totalCollected >= metricCaps.maxCollectibles;
-      if (!finishedByTime && !finishedByExhaustion) {
-        throw new HttpError(
-          409,
-          'Completed collect-race runs must end when time expires or all collectibles are claimed.',
-        );
-      }
-      if (body.collectiblesCollected <= body.enemyCollectiblesCollected) {
-        throw new HttpError(409, 'Completed collect-race runs must beat the Sword Hunter.');
-      }
-      break;
-    }
-    case 'defeat_all':
-      if (body.enemiesDefeated < metricCaps.maxEnemies) {
-        throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');
-      }
-      break;
-    case 'checkpoint_sprint':
-      if (body.checkpointsReached < metricCaps.maxCheckpoints) {
-        throw new HttpError(409, 'Completed checkpoint-sprint runs must hit every checkpoint.');
-      }
-      break;
-    case 'survival':
-      if (body.elapsedMs < goal.durationMs) {
-        throw new HttpError(409, 'Completed survival runs must last the full published duration.');
-      }
-      break;
-    case 'npc_quest':
-      if (goal.questType === 'protect' && body.elapsedMs < goal.durationMs) {
-        throw new HttpError(409, 'Completed protect runs must last the full published duration.');
-      }
-      if (
-        goal.questType === 'give' &&
-        body.collectiblesCollected < goal.requiredCount
-      ) {
-        throw new HttpError(409, 'Completed give runs must collect the published target.');
-      }
-      break;
-    case 'reach_exit':
-      break;
-  }
+  validateRoomGoalCompletion(goal, body, metricCaps, reportedElapsedMs);
 
   return body;
+}
+
+export type RoomCompletionRules = { [K in GoalType]: (goal: Goal<GoalMarkerPoint, K>, body: RunFinishRequestBody, caps: { maxCollectibles: number; maxEnemies: number; maxCheckpoints: number }, reportedElapsedMs: number) => void };
+export const ROOM_COMPLETION_RULES: RoomCompletionRules = {
+  reach_exit: () => {},
+  collect_target: (goal, body) => {
+    if (body.collectiblesCollected < goal.requiredCount) throw new HttpError(409, 'Completed collect-target runs must meet the published goal.');
+  },
+  collect_race: (goal, body, caps, reportedElapsedMs) => {
+    const totalCollected = body.collectiblesCollected + body.enemyCollectiblesCollected;
+    const finishedByTime = goal.timeLimitMs !== null && reportedElapsedMs >= goal.timeLimitMs;
+    const finishedByExhaustion = totalCollected >= caps.maxCollectibles;
+    if (!finishedByTime && !finishedByExhaustion) throw new HttpError(409, 'Completed collect-race runs must end when time expires or all collectibles are claimed.');
+    if (body.collectiblesCollected <= body.enemyCollectiblesCollected) throw new HttpError(409, 'Completed collect-race runs must beat the Sword Hunter.');
+  },
+  defeat_all: (_goal, body, caps) => {
+    if (body.enemiesDefeated < caps.maxEnemies) throw new HttpError(409, 'Completed defeat-all runs must clear every published enemy.');
+  },
+  checkpoint_sprint: (_goal, body, caps) => {
+    if (body.checkpointsReached < caps.maxCheckpoints) throw new HttpError(409, 'Completed checkpoint-sprint runs must hit every checkpoint.');
+  },
+  survival: (goal, body) => {
+    if (body.elapsedMs < goal.durationMs) throw new HttpError(409, 'Completed survival runs must last the full published duration.');
+  },
+  npc_quest: (goal, body) => {
+    if (goal.questType === 'protect' && body.elapsedMs < goal.durationMs) throw new HttpError(409, 'Completed protect runs must last the full published duration.');
+    if (goal.questType === 'give' && body.collectiblesCollected < goal.requiredCount) throw new HttpError(409, 'Completed give runs must collect the published target.');
+  },
+};
+function validateRoomGoalCompletion<K extends GoalType>(goal: Goal<GoalMarkerPoint, K>, body: RunFinishRequestBody, caps: Parameters<RoomCompletionRules[K]>[2], reportedElapsedMs: number): void {
+  ROOM_COMPLETION_RULES[goal.type](goal, body, caps, reportedElapsedMs);
 }
