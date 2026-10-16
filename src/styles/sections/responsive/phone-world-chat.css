@@ -35,12 +35,9 @@ body[data-device-class='phone'] #world-hud {
 body[data-device-class='phone'] #world-hud::after,
 body[data-device-class='phone'] #world-hud .world-hud-topline,
 body[data-device-class='phone'] #world-hud .world-room-subtitle,
-body[data-device-class='phone'] #world-hud #world-selected-meta,
 body[data-device-class='phone'] #world-hud #world-jump-row,
 body[data-device-class='phone'] #world-hud #world-zoom-label,
 body[data-device-class='phone'] #world-hud #world-status,
-body[data-device-class='phone'] #world-hud #world-selected-goal,
-body[data-device-class='phone'] #world-hud #world-leaderboard,
 body[data-device-class='phone'] #world-hud .world-hud-row-secondary-actions,
 body[data-device-class='phone'] #world-hud .world-hud-row-tertiary-actions,
 body[data-device-class='phone'] #world-hud #btn-world-course-builder,
@@ -114,7 +111,7 @@ body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-nam
   line-height: 1;
 }
 
-/* Four across, so Warp sits on the card without adding a row (Play, Edit, Build, Warp for a focused room). */
+/* Gameplay stays compact; Browse gives Play its own row. */
 body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -135,8 +132,8 @@ body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions .bar-b
   border-radius: 0;
 }
 
-body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-course-builder,
-body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-room-rush {
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-course-builder:not(.hidden),
+body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud #btn-world-room-rush:not(.hidden) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -477,4 +474,10 @@ body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat
 
 body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
   padding: 8px 10px;
+}
+
+body[data-device-class='phone'][data-app-mode='world'] #world-hud :is(#world-selected-goal, #world-leaderboard, #world-selected-meta, #world-selected-action-reason) {
+  font-size: 8px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }

@@ -1,0 +1,17 @@
+# F108 — room card actions
+
+Request: clean up the selected room card and make Play Room the main action; verify and deliver to production.
+
+The card starts with room identity, goal and the existing best result, followed by a full-width Play Room (or Play Expanded Room) action. Play is at least 48px tall and uses the existing 16px type size. Edit and Build appear only in their applicable states. Expand/Expanded Room Setup stays with the secondary tools and appears only when usable. Share, Room Rush, leaderboard, comments and existing phone More controls retain their flows. Stop, Restart and Back to Editor retain the compact gameplay layout.
+
+Unusable actions no longer reserve room-card slots. Minted rooms and other builders’ unpublished claims show plain edit restrictions; the existing frontier claim-limit and adjacency explanations are visible on phones. Phone cards retain goals and best results and scroll within the viewport when expanded. The duplicate brand header, duplicate card zoom readout and empty action row are removed from view; footer zoom remains.
+
+Implementation stays in the existing HUD view model, renderer and style sheets. Numbered World context now reaches the view model’s existing edit-permission policy rather than being dropped by the adapter. No server permissions, room formats, data or background assets change.
+
+Verification and delivery are recorded in the final pull-request receipt. Initial focused tests cover public, frontier, empty, draft, claimed, minted, owner-expanded, numbered-World and active-play states. Browser acceptance uses intercepted API fixtures for signed-in editor transitions; it does not save production rooms or create player activity.
+
+Verified source: the full quality gate passes 518 files / 3,789 tests, typecheck, DOM/binding contracts, production build, bundle budget and asset checks. After the final layout refinement, the production build, final lint and 18 focused HUD tests pass. Startup remains 636.3 KB brotli (670 KB budget). The native Chrome desktop, 390px and 320px phone, landscape and WebKit phone matrix passes Play → Stop → Edit, goal/best visibility, full-width 48px Play and applicable-only actions; phone More and the separate minted-room restriction check pass. All six scenarios have zero browser errors and zero fixture misses. Screenshots inspected. The installed game client completes two real-API movement/jump iterations in muted native Chrome with no captured errors; its render states and screenshot agree. Earlier diagnostic attempts interrupted by the goal-intro dialog and software-renderer performance prompt are retained and excluded from acceptance.
+
+Release boundary: frontend Pages only. No API Worker, migration, PartyKit, renderer or room data delivery is needed. Source/main hosted checks, guarded Pages deployment and custom-domain acceptance follow after the source commit.
+
+The first hosted mobile run passed 46/48 cases. Its remaining case in both engines asserted the previous design: visible disabled Edit/Build/Expand buttons, a hidden best result and a 150px card. The updated contract requires hidden unusable actions before/after More, visible goal/best/restriction, a full-width 48px Play row and a bounded card with at most two action rows. That exact case passes locally in Chromium and WebKit with zero errors or fixture misses. Application code is unchanged from the accepted source; the full hosted matrix is rerun on the final test revision.

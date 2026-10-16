@@ -218,6 +218,7 @@ export class OverworldHudStateController {
               title: this.selectedSummary.title ?? null,
               creatorUserId: this.selectedSummary.creatorUserId ?? null,
               creatorDisplayName: this.selectedSummary.creatorDisplayName ?? null,
+              world: this.selectedSummary.world,
             }
           : null,
         selectedCreatorProfile: selectedCreatorUserId

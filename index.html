@@ -1921,12 +1921,6 @@
         </div>
       </div>
       <div id="world-hud" class="hidden">
-        <div class="world-hud-topline">
-          <div class="world-hud-title-wrap">
-            <div class="world-hud-title">We All Make A Platformer</div>
-            <div class="world-hud-beta">BETA</div>
-          </div>
-        </div>
         <div class="world-room-title-row">
           <div id="world-selected-title" class="world-room-title">Room 0,0</div>
           <div id="world-selected-state-info-wrap" class="world-title-lock-wrap hidden">
@@ -2024,7 +2018,10 @@
           <input id="world-jump-input" aria-label="Warp to room (x,y)" type="text" value="0,0" spellcheck="false" />
           <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
         </div>
-        <div id="world-zoom-label" class="world-hud-meta world-zoom-label">Zoom: 1x</div>
+        <div id="world-zoom-label" class="world-hud-meta world-zoom-label hidden" aria-hidden="true"></div>
+        <div id="world-selected-goal" class="world-hud-goal"></div>
+        <div id="world-leaderboard" class="world-hud-meta"></div>
+        <div id="world-selected-action-reason" class="world-hud-meta"></div>
         <div class="world-hud-row world-hud-row-primary-actions">
           <div id="room-sequence-hud" class="room-sequence-hud hidden" aria-hidden="true">
             <div class="room-sequence-copy">
@@ -2048,12 +2045,10 @@
           <button id="btn-world-room-rush" class="bar-btn bar-btn-small world-btn-room-rush hidden" type="button">Room Rush</button>
           <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
           <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
-          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Expanded Room Builder</button>
           <button id="btn-world-jump-sheet" class="bar-btn bar-btn-small world-btn-controls hidden">Warp</button>
         </div>
-        <div class="world-hud-row world-hud-row-secondary-actions">
-        </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Expanded Room Builder</button>
           <button id="btn-world-worlds" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button">Worlds</button>
           <button id="btn-world-explore" class="bar-btn bar-btn-small world-btn-leaderboard" type="button">Explore</button>
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
@@ -2063,8 +2058,6 @@
           <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button">Say</button>
         </div>
         <div id="world-status" class="world-hud-status"></div>
-        <div id="world-selected-goal" class="world-hud-goal"></div>
-        <div id="world-leaderboard" class="world-hud-meta">Leaderboard inactive.</div>
       </div>
       <div id="world-goal-panel" class="world-goal-panel hidden">
         <div id="world-goal-panel-room" class="world-goal-panel-room">ROOM 0,0</div>
