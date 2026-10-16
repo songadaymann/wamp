@@ -1,0 +1,10 @@
+# F070 goal lifecycle and status rules
+
+Per-goal NPC/checkpoint eligibility, empty-enemy startup completion, Collect Race resolution, status/countdown text and room leaderboard metric selection are being consolidated into `goalLifecycleRules.ts`. Every goal requires a typed policy. The controller keeps active/qualified/room and NPC identity guards, state ownership, guest capture and submission/effect ordering. No saved/API data or gameplay/copy change is intended.
+
+The original controller is frozen under ignored `output/f070-goal-lifecycle-2026-10-15/`. A controlled baseline harness first validates itself, then compares7,616 actual startup results and7,616 event/status cases across68 goal variants, including practice/finished/failed state, wrong-room/NPC events, empty targets, null/empty NPC identities and nonfinite raw numbers. Full run state and observed effects match; repository write spies remain unused. Preserve the original delivery comparison (`not less than`) for raw values instead of changing its NaN behavior during a refactor.
+
+32 focused contracts and full508-file/3,752-test quality pass; all48 local Chromium/WebKit mobile cases pass. Native gameplay/hosted/release acceptance remains pending. F070 stays partial and master145/215. The authoring predecessor PR220 is fully delivered as main0c4ce26a/Pages e8e98030, with27 exact files and three strict actual-domain editor flows.
+
+
+Native harness diagnostics: the first fixture read a populated run before the paused scene had resumed, so the first sword key was discarded. The updated native probe waits for the intro to close and the run timer to advance before input. Its protected NPC also sits within the actual sword reach, and the probe clicks the ordinary Play Room button once the focused public room is ready. The corrected NPC-defeat case passes on both the unchanged production baseline and candidate with the expected failed goal and0 errors. The full26-case native matrix is ongoing. No runtime sword/NPC bug or fix is claimed from these harness failures.
