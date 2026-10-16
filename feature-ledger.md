@@ -1,3 +1,7 @@
+## 2026-10-16 — F094 custom backgrounds source accepted
+
+Canonical branch `codex/wamp-animated-backgrounds-2026-10-16`, base main22bece9c. Preserve chosen240x135/32-color WebP. Implement bounded upload conversion, actual-byte validation and animated editor/playback; Source quality/native/mobile pass; final hosted/API+Pages/live acceptance follows. No account variant changes or original-image deletion. F070/PR224 is already fully delivered; its older source-time status is superseded by the final PR receipt.
+
 ## 2026-10-15 overnight — editor authoring shipped; lifecycle in progress
 
 ## 2026-10-16 — Finish F070

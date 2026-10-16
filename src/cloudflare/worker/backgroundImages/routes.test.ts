@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleBackgroundImageRequest } from './routes';
 import type { Env } from '../core/types';
 
-function envWithApprovedImage(): Env {
+function envWithApprovedImage(imageId = 'cf-image-1', status = 'approved'): Env {
   const row = {
     id: 'bg-1',
-    status: 'approved',
-    cloudflare_image_id: 'cf-image-1',
+    status,
+    cloudflare_image_id: imageId,
     cloudflare_deleted_at: null,
     mime_type: 'image/png',
   };
@@ -19,6 +19,17 @@ function envWithApprovedImage(): Env {
 
 describe('background image delivery (F094)', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('serves the exact selected derivative behind the existing approval gate', async () => {
+    const fetcher = vi.fn(async () => new Response('selected-webp', { headers: { 'Content-Type': 'image/webp' } }));
+    vi.stubGlobal('fetch', fetcher);
+    const request = new Request('https://api.wamp.land/api/background-images/59f7f031-fba7-4447-550d-4f8b96bf4000/image?v=2');
+    await handleBackgroundImageRequest(request, new URL(request.url), envWithApprovedImage('59f7f031-fba7-4447-550d-4f8b96bf4000'));
+    expect(fetcher).toHaveBeenCalledWith('https://imagedelivery.net/hash/e38f4df1-02ed-4a55-3eb3-97264e9b8f00/public', expect.anything());
+    fetcher.mockClear();
+    await expect(handleBackgroundImageRequest(request, new URL(request.url), envWithApprovedImage('59f7f031-fba7-4447-550d-4f8b96bf4000', 'rejected'))).rejects.toMatchObject({ status: 404 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 
   it('forwards Accept to Cloudflare Images and tells caches the reply depends on it', async () => {
     const delivery = vi.fn(async () => new Response('webp-bytes', {

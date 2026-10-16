@@ -1,3 +1,4 @@
+import { prepareBackgroundFile } from '../../backgrounds/upload';
 import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
@@ -1700,10 +1701,6 @@ export class EditorUiBridge {
       this.setBackgroundUploadStatus(`Image must be ${formatBytes(policy.maxBytes)} or smaller.`, true);
       return;
     }
-    if (policy && !policy.allowedMimeTypes.includes(file.type)) {
-      this.setBackgroundUploadStatus('Upload a PNG, JPG, or WebP image.', true);
-      return;
-    }
 
     this.backgroundUploadInFlight = true;
     setDisabled(this.elements.backgroundUploadButton, true);
@@ -1720,6 +1717,7 @@ export class EditorUiBridge {
     });
 
     try {
+      const uploadFile = await prepareBackgroundFile(file);
       this.showBackgroundUploadModal({
         title: 'Sending photo',
         meta: 'Creating a safe upload slot.',
@@ -1729,9 +1727,9 @@ export class EditorUiBridge {
         error: false,
       });
       const prepared = await prepareBackgroundUpload({
-        filename: file.name,
-        contentType: file.type,
-        sizeBytes: file.size,
+        filename: uploadFile.name,
+        contentType: uploadFile.type,
+        sizeBytes: uploadFile.size,
       });
       this.showBackgroundUploadModal({
         title: 'Sending photo',
@@ -1741,7 +1739,7 @@ export class EditorUiBridge {
         done: false,
         error: false,
       });
-      await uploadBackgroundFile(prepared.uploadUrl, file);
+      await uploadBackgroundFile(prepared.uploadUrl, uploadFile);
       this.showBackgroundUploadModal({
         title: 'Checking photo',
         meta: 'Running the first safety pass.',

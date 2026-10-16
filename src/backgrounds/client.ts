@@ -142,7 +142,7 @@ export async function finalizeBackgroundUpload(
 }
 
 export function getBackgroundImageUrl(id: string, variant: 'image' | 'thumbnail' = 'image'): string {
-  const query = variant === 'thumbnail' ? '?variant=thumbnail' : '';
+  const query = variant === 'thumbnail' ? '?variant=thumbnail&v=2' : '?v=2';
   return `${getApiBaseUrl()}/api/background-images/${encodeURIComponent(id)}/image${query}`;
 }
 

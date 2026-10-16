@@ -25,3 +25,7 @@ CryptoPunks-derived files under `public/assets/cryptopunks/`, `public/assets/pla
 These are pre-existing files, not an approved catalog of third-party assets for reuse. Their provenance and any necessary migration to private storage remain an asset-audit follow-up. New third-party media without confirmed rights belongs in `private-assets/`, with a public fallback rather than a new tracked source file.
 
 Keep personal data, captured network logs and generated review output in gitignored `data/`, `logs/` or `output/`. Never commit credentials or signing keys.
+
+## F094 upload encoder
+
+Safari upload conversion lazily loads `@jsquash/webp`1.5.0 (https://github.com/jamsinclair/jSquash/tree/main/packages/webp), Apache2.0, and its bundled Google libwebp codec, BSD3-Clause. Distribution notices: `public/licenses/jsquash-webp-apache-2.0.txt` and `public/licenses/libwebp-bsd.txt`. This is executable codec code, not an art pack. No new third-party media is added. The existing selected background remains the exact user-approved `docs/review/assets/wamp-background-choice-240px-32colors-2026-10-13.webp`.
