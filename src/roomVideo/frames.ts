@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { editorState } from '../config';
+import { currentBuilderCanUseRoomVideo } from './access';
 import { roomHasPressedPressurePlate } from './pressure';
 import { normalizeRoomVideo } from './model';
 import { RoomVideoFrameController, type RoomVideoFrameSync } from './frameController';
@@ -33,6 +34,7 @@ export function destroyRoomVideoFrame(scene: Phaser.Scene): void {
 }
 
 export function roomVideoPointerDown(scene: Phaser.Scene, pointer: Phaser.Input.Pointer): boolean {
+  if (!currentBuilderCanUseRoomVideo()) return false;
   const key = `${pointer.id}:${pointer.downTime}`;
   if (key === lastDownKey) return lastDownResult;
   upConsumed = false;
@@ -42,10 +44,12 @@ export function roomVideoPointerDown(scene: Phaser.Scene, pointer: Phaser.Input.
 }
 
 export function roomVideoPointerMove(scene: Phaser.Scene, pointer: Phaser.Input.Pointer): boolean {
+  if (!currentBuilderCanUseRoomVideo()) return false;
   return frameFor(scene)?.handlePointerMove(pointer) ?? false;
 }
 
 export function roomVideoPointerUp(scene: Phaser.Scene): boolean {
+  if (!currentBuilderCanUseRoomVideo()) return false;
   if (upConsumed) return true;
   upConsumed = frameFor(scene)?.handlePointerUp() ?? false;
   return upConsumed;

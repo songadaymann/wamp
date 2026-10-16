@@ -24,6 +24,7 @@ export interface BuildEditorUiViewModelOptions {
   roomVideoMuteMusic?: boolean;
   roomVideoSnap?: boolean;
   roomVideoHasVideo?: boolean;
+  roomVideoLocked?: boolean;
   roomCoordinates: RoomCoordinates;
   roomGoal: RoomGoal | null;
   roomGoalIntroText: string | null;
@@ -115,6 +116,7 @@ export function buildEditorUiViewModel(
     roomVideoMuteMusic: options.roomVideoMuteMusic ?? activeVideo.roomVideoMuteMusic,
     roomVideoSnap: options.roomVideoSnap ?? activeVideo.roomVideoSnap,
     roomVideoHasVideo: options.roomVideoHasVideo ?? activeVideo.roomVideoHasVideo,
+    roomVideoLocked: options.roomVideoLocked ?? activeVideo.roomVideoLocked,
     roomCoordinatesText: `Room (${roomCoordinates.x}, ${roomCoordinates.y})`,
     saveStatusText: saveStatus.text,
     saveStatusAccentText: saveStatus.accentText,

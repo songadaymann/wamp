@@ -1,6 +1,12 @@
 import { canPlacedObjectTriggerOtherObjects, type PlacedObject } from '../config';
 import type { RoomSnapshot } from '../persistence/roomRepository';
 import { EditorEditRuntime } from '../scenes/editor/editRuntime';
+import {
+  currentBuilderCanUseRoomVideo,
+  ROOM_VIDEO_TRUST_MESSAGE,
+  roomVideoChangeNeedsTrust,
+  watchRoomVideoAccess,
+} from './access';
 import { ROOM_VIDEO_LINK_TARGET_ID } from './link';
 import {
   createDefaultRoomVideo,
@@ -59,6 +65,11 @@ export function setRoomVideo(runtime: object, next: RoomVideo | null, quiet = fa
   }
   const state = ensureRoomVideoState(runtime);
   const normalized = normalizeRoomVideo(next);
+  if (!currentBuilderCanUseRoomVideo() && roomVideoChangeNeedsTrust(normalized, state.video)) {
+    state.error = ROOM_VIDEO_TRUST_MESSAGE;
+    if (!quiet) host.host.updateGoalUi();
+    return;
+  }
   if (roomVideosEqual(state.video, normalized)) {
     if (!quiet && host.roomDirty) {
       host.host.updatePersistenceStatus(
@@ -87,6 +98,11 @@ export function setRoomVideoUrl(runtime: object, raw: string, commit = true): vo
   if (!host.guardEditable()) return;
   const state = ensureRoomVideoState(runtime);
   const trimmed = raw.trim();
+  if (trimmed && !currentBuilderCanUseRoomVideo()) {
+    state.error = ROOM_VIDEO_TRUST_MESSAGE;
+    host.host.updateGoalUi();
+    return;
+  }
   if (!trimmed) {
     state.error = null;
     setRoomVideo(runtime, null);
@@ -140,6 +156,7 @@ export function clearRoomVideo(runtime: object): void {
 }
 
 export function linkPressurePlateToRoomVideo(runtime: object, sourceInstanceId: string): boolean {
+  if (!currentBuilderCanUseRoomVideo()) return false;
   if (!getRoomVideo(runtime)?.trigger) return false;
   const host = asRuntime(runtime);
   if (!host.guardEditable()) return false;
@@ -169,6 +186,10 @@ export function linkPressurePlateToRoomVideo(runtime: object, sourceInstanceId: 
 export function installRoomVideoEditing(): void {
   if (installed) return;
   installed = true;
+  watchRoomVideoAccess(() => {
+    const runtime = getActiveRoomVideoRuntime();
+    if (runtime) asRuntime(runtime).host.updateGoalUi();
+  });
   const prototype = EditorEditRuntime.prototype;
   const originalReset = prototype.reset;
   prototype.reset = function resetRoomVideo(this: EditorEditRuntime) {

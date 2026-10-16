@@ -1,3 +1,4 @@
+import { currentBuilderCanUseRoomVideo, ROOM_VIDEO_TRUST_MESSAGE } from './access';
 import { describeRoomVideo, youtubeWatchUrl, type RoomVideo } from './model';
 
 interface VideoState {
@@ -44,12 +45,16 @@ export function roomVideoUiFields(runtime: object | null | undefined): {
   roomVideoMuteMusic: boolean;
   roomVideoSnap: boolean;
   roomVideoHasVideo: boolean;
+  roomVideoLocked: boolean;
 } {
   const state = runtime ? states.get(runtime) : undefined;
   const video = state?.video ?? null;
+  const locked = !currentBuilderCanUseRoomVideo();
   return {
     roomVideoUrl: video ? youtubeWatchUrl(video.youtubeId) : '',
-    roomVideoStatus: describeRoomVideo(video, state?.error ?? null),
+    roomVideoStatus: locked
+      ? (video ? 'Builder trust level 1 is required to change this video link.' : ROOM_VIDEO_TRUST_MESSAGE)
+      : describeRoomVideo(video, state?.error ?? null),
     roomVideoLoop: video?.loop === true,
     roomVideoAutoplay: video?.autoplay === true,
     roomVideoTrigger: video?.trigger === true,
@@ -57,5 +62,6 @@ export function roomVideoUiFields(runtime: object | null | undefined): {
     roomVideoMuteMusic: video?.muteMusic === true,
     roomVideoSnap: video?.snap === true,
     roomVideoHasVideo: video != null,
+    roomVideoLocked: locked,
   };
 }
