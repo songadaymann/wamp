@@ -103,6 +103,9 @@ try {
     await page.screenshot({ path: `${output}/${name}-inbox.png` });
     await page.locator('#btn-activity-more').scrollIntoViewIfNeeded(); await click(page, '#btn-activity-more', touch);
     await page.waitForFunction(() => document.querySelectorAll('#activity-list li').length === 36);
+    if (!await page.locator('#activity-email-options').evaluate(node => node.open)) {
+      await click(page, '#activity-email-options summary', touch);
+    }
     await page.locator('#activity-weekly-digest').scrollIntoViewIfNeeded(); await page.locator('#activity-weekly-digest').check();
     await page.locator('#activity-dethrone-alerts').check();
     await click(page, '#btn-activity-save', touch); await page.waitForFunction(() => document.getElementById('activity-preferences-status')?.textContent === 'Email preferences saved.');

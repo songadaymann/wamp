@@ -2319,11 +2319,17 @@
         <h2 id="activity-title" class="history-modal-title">Activity</h2>
         <button id="btn-activity-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
-      <div class="activity-scroll">
+      <div class="activity-tabs" role="tablist" aria-label="Activity feeds">
+        <button id="activity-tab-my" class="bar-btn active" type="button" role="tab" aria-selected="true" aria-controls="activity-feed" tabindex="0">My activity</button>
+        <button id="activity-tab-all" class="bar-btn" type="button" role="tab" aria-selected="false" aria-controls="activity-feed" tabindex="-1">All activity</button>
+      </div>
+      <div id="activity-feed" class="activity-scroll" role="tabpanel" aria-labelledby="activity-tab-my">
         <p id="activity-status" class="history-modal-meta" role="status"></p>
         <button id="btn-activity-retry" class="bar-btn bar-btn-small hidden" type="button">Try Again</button>
         <ul id="activity-list" class="activity-list"></ul>
         <button id="btn-activity-more" class="bar-btn bar-btn-small hidden" type="button">Older Activity</button>
+        <details id="activity-email-options" class="activity-email-options">
+        <summary>Email updates</summary>
         <fieldset class="activity-preferences">
           <legend>Email updates</legend>
           <label><input id="activity-weekly-digest" type="checkbox"> Weekly activity digest</label>
@@ -2332,6 +2338,7 @@
           <p id="activity-preferences-status" class="history-modal-meta" role="status"></p>
           <button id="btn-activity-save" class="bar-btn bar-btn-small" type="button">Save Email Preferences</button>
         </fieldset>
+        </details>
       </div>
     </div>
   </div>

@@ -29,7 +29,8 @@ function fixture(search = '', initialUser: string | null = 'builder') {
   const doc = Object.assign(new EventTarget(), { visibilityState: 'visible', activeElement: null,
     getElementById: (id: string) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); }, createElement: () => new Element() });
   const win = Object.assign(new EventTarget(), { setInterval, clearInterval, location: { search } });
-  const repository = { load: vi.fn().mockResolvedValue(response()), markSeen: vi.fn().mockResolvedValue(undefined),
+  const repository = { load: vi.fn().mockResolvedValue(response()), loadAll: vi.fn().mockResolvedValue({ ...response(2), unreadCount: undefined }),
+    markSeen: vi.fn().mockResolvedValue(undefined),
     savePreferences: vi.fn().mockResolvedValue(response().preferences) };
   const controller = new ActivityInboxController(doc as unknown as Document, win as unknown as Window, repository, () => auth(initialUser));
   controllers.push(controller); controller.init();
@@ -86,5 +87,41 @@ describe('activity inbox lifecycle', () => {
     expect(f.elements.get('activity-modal')?.classList.contains('hidden')).toBe(true);
     const calls = f.repository.load.mock.calls.length; f.controller.destroy(); vi.advanceTimersByTime(120000); f.win.dispatchEvent(new Event('online')); await settle();
     expect(f.repository.load.mock.calls.length).toBe(calls);
+  });
+  it('keeps private notifications and preferences separate from the all-activity feed', async () => {
+    const f = fixture(); await settle();
+    f.click('btn-activity-open'); await settle(); const seen = f.repository.markSeen.mock.calls.length;
+    f.repository.loadAll.mockResolvedValueOnce({ ...response(20, 20), unreadCount: undefined });
+    f.click('activity-tab-all'); await settle();
+    expect(f.repository.loadAll).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(f.elements.get('activity-tab-all')?.attributes.get('aria-selected')).toBe('true');
+    expect(f.elements.get('activity-feed')?.attributes.get('aria-labelledby')).toBe('activity-tab-all');
+    expect(f.elements.get('activity-email-options')?.classList.contains('hidden')).toBe(true);
+    expect(f.repository.markSeen).toHaveBeenCalledTimes(seen);
+    f.repository.loadAll.mockResolvedValueOnce({ ...response(10), unreadCount: undefined });
+    f.click('btn-activity-more'); await settle();
+    expect(f.repository.loadAll).toHaveBeenLastCalledWith(20);
+    expect(f.elements.get('activity-list')?.children.length).toBe(2);
+    f.click('activity-tab-my'); await settle();
+    expect(f.elements.get('activity-email-options')?.classList.contains('hidden')).toBe(false);
+    expect(f.repository.markSeen).toHaveBeenCalledTimes(seen + 1);
+  });
+  it('ignores a delayed community page when the viewer switches back to My activity', async () => {
+    const f = fixture(); await settle(); f.click('btn-activity-open'); await settle();
+    const old = deferred<ActivityResponse>(); f.repository.loadAll.mockReturnValueOnce(old.promise);
+    f.click('activity-tab-all'); f.repository.load.mockResolvedValueOnce(response(50)); f.click('activity-tab-my'); await settle();
+    old.resolve(response(40)); await settle();
+    expect(f.elements.get('activity-list')?.children[0].children[0].textContent).toBe('tkinter cleared Room 50');
+    expect(f.elements.get('activity-tab-my')?.attributes.get('aria-selected')).toBe('true');
+    expect(f.elements.get('activity-feed')?.attributes.get('aria-busy')).toBe('false');
+  });
+  it('returns notification and profile entry points to My activity after viewing the community feed', async () => {
+    const f = fixture(); await settle(); f.click('btn-activity-open'); await settle();
+    f.click('activity-tab-all'); await settle(); f.click('btn-activity-close');
+    f.click('activity-catchup'); await settle();
+    expect(f.elements.get('activity-tab-my')?.attributes.get('aria-selected')).toBe('true');
+    f.click('activity-tab-all'); await settle(); f.click('btn-activity-close');
+    f.win.dispatchEvent(new Event('activity-open-request')); await settle();
+    expect(f.elements.get('activity-tab-my')?.attributes.get('aria-selected')).toBe('true');
   });
 });

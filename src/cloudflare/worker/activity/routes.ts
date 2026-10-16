@@ -1,7 +1,19 @@
 import { requireAuthenticatedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import { loadActivity, loadActivityPreferences, markActivitySeen, publicPreferences, saveActivityPreferences } from './store';
+import { loadActivity, loadAllActivity, loadActivityPreferences, markActivitySeen, publicPreferences, saveActivityPreferences } from './store';
+
+function activityPage(url: URL): number | undefined {
+  const raw = url.searchParams.get('before');
+  const before = raw === null ? undefined : Number(raw);
+  if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new HttpError(400, 'Invalid activity page.');
+  return before;
+}
+
+export async function handleAllActivity(request: Request, url: URL, env: Env): Promise<Response> {
+  const db = env.DB.withSession?.('first-primary') ?? env.DB;
+  return jsonResponse(request, await loadAllActivity(db, activityPage(url)), { headers: { 'Cache-Control': 'no-store' } });
+}
 
 export async function handleMyActivity(request: Request, url: URL, env: Env): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(env, request, 'view your activity');
@@ -9,10 +21,7 @@ export async function handleMyActivity(request: Request, url: URL, env: Env): Pr
   const db = env.DB.withSession?.('first-primary') ?? env.DB;
   const emailAvailable = Boolean(auth.user.email?.trim()) && !auth.school;
   if (request.method === 'GET' && url.pathname === '/api/me/activity') {
-    const raw = url.searchParams.get('before');
-    const before = raw === null ? undefined : Number(raw);
-    if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) throw new HttpError(400, 'Invalid activity page.');
-    return jsonResponse(request, await loadActivity(db, auth.user.id, emailAvailable, before), { headers: { 'Cache-Control': 'no-store' } });
+    return jsonResponse(request, await loadActivity(db, auth.user.id, emailAvailable, activityPage(url), 'rooms'), { headers: { 'Cache-Control': 'no-store' } });
   }
   if (url.pathname === '/api/me/activity/seen' && request.method === 'POST') {
     const body = await parseJsonBody<{ latestId?: unknown }>(request, { maxBytes: 1024 });
