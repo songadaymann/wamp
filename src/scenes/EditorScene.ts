@@ -721,7 +721,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       hasDeadlyPits: () => !this.courseController.hasActiveCourseEdit() && this.editRuntime.roomPitsAreDeadly,
       getLayers: () => this.layers,
       getPlacedObjects: () => editorState.placedObjects,
-      isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
     });
     this.backgroundController = new EditorBackgroundController(this, this.worldRepository, {
       getRoomId: () => this.roomId,
