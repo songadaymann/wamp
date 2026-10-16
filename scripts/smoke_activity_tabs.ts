@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { award, fixture, NOW, top1 } from '../src/cloudflare/worker/activity/testDatabase';
+import { award, fixture, guestClear, NOW, top1 } from '../src/cloudflare/worker/activity/testDatabase';
 import { handleAllActivity, handleMyActivity } from '../src/cloudflare/worker/activity/routes';
 import { loadActivity } from '../src/cloudflare/worker/activity/store';
 import { createSession } from '../src/cloudflare/worker/auth/store';
@@ -23,6 +23,11 @@ try {
       award(f, 'rating', 'unique_rating_room'); top1(f, 'winner');
       f.sqlite.exec(`INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id)
         VALUES ('1,0',1,0,'{}','{}','Moon Bounce','p3')`);
+      for (let i = 0; i < 30; i++) {
+        const id = `${100 + i},0`;
+        f.sqlite.prepare("INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id) VALUES (?,?,0,'{}','{}',?,'p3')").run(id, 100 + i, `Guest Room ${i}`);
+        guestClear(f, `guest-extra-${i}`, 'guest-activity-browser', id);
+      }
       for (const [id, room] of [['guest-first', '0,0'], ['guest-second', '1,0']]) {
         f.sqlite.prepare(`INSERT INTO guest_run_attempts
           (attempt_id,guest_user_id,recovery_token_hash,client_run_id,content_type,content_id,content_version,progress_source_type,progress_source_id,snapshot_json,verification_nonce,snapshot_hash,started_at,expires_at)
@@ -85,7 +90,15 @@ try {
       assert.equal(await page.locator('.activity-panel').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(255, 243, 219)');
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({ path: `${output}/${name}-my.png` });
-      const nameInMy = await page.locator('#activity-list li').first().textContent();
+      const nameInMy = await page.locator('#activity-list .activity-actor-link').first().textContent();
+      const seenBeforeGuest = seenWrites;
+      await page.locator('#activity-list .activity-actor-link').first().click();
+      await page.waitForFunction(() => document.getElementById('activity-feed')?.getAttribute('aria-busy') === 'false'
+        && !document.getElementById('activity-guest-header')?.classList.contains('hidden'));
+      assert.ok((await page.locator('#activity-list').textContent())?.includes('Moon Bounce'));
+      assert.equal(seenWrites, seenBeforeGuest);
+      await page.locator('#btn-activity-guest-back').click();
+      assert.equal(await page.locator('#activity-tab-my').getAttribute('aria-selected'), 'true');
       await page.locator('#btn-activity-more').click();
       await page.waitForFunction(expected => document.querySelectorAll('#activity-list li').length === expected, privateBefore.entries.length + 7);
       const watermark = f.sqlite.prepare("SELECT seen_id FROM builder_activity_preferences WHERE user_id='builder'").get();
@@ -93,11 +106,39 @@ try {
       await page.locator('#activity-tab-all').click();
       await page.waitForFunction(() => document.getElementById('activity-feed')?.getAttribute('aria-busy') === 'false');
       assert.ok((await page.locator('#activity-list').textContent())?.includes('Moon Bounce'));
-      assert.ok((await page.locator('#activity-list li').first().textContent())?.split(' cleared')[0] === nameInMy?.split(' cleared')[0]);
+      assert.equal(await page.locator('#activity-list .activity-actor-link').first().textContent(), nameInMy);
       assert.equal(await page.locator('#activity-email-options').isVisible(), false);
       assert.equal(seenWrites, seenAtSwitch);
       assert.deepEqual(f.sqlite.prepare("SELECT seen_id FROM builder_activity_preferences WHERE user_id='builder'").get(), watermark);
       await page.screenshot({ path: `${output}/${name}-all.png` });
+      const actor = page.locator('#activity-list .activity-actor-link').nth(10);
+      await actor.scrollIntoViewIfNeeded();
+      assert.ok((await actor.boundingBox())!.height >= 44);
+      await actor.evaluate(el => el.setAttribute('data-return-probe', 'true'));
+      const returnScroll = await page.locator('#activity-feed').evaluate(el => el.scrollTop);
+      await actor.click();
+      await page.waitForFunction(() => document.getElementById('activity-feed')?.getAttribute('aria-busy') === 'false'
+        && !document.getElementById('activity-guest-header')?.classList.contains('hidden'));
+      assert.equal(await page.locator('#activity-guest-name').textContent(), nameInMy);
+      assert.equal(await page.locator('#activity-tabs').isVisible(), false);
+      assert.equal(await page.locator('#activity-list .activity-actor-link').count(), 0);
+      assert.ok((await page.locator('#activity-list').textContent())?.includes('Moon Bounce'));
+      assert.equal(await page.locator('#activity-list li').count(), 30);
+      await page.screenshot({ path: `${output}/${name}-guest.png` });
+      await page.locator('#btn-activity-more').click();
+      await page.waitForFunction(() => document.querySelectorAll('#activity-list li').length === 32);
+      assert.equal(seenWrites, seenAtSwitch);
+      await page.locator('#btn-activity-guest-back').click();
+      assert.equal(await page.locator('#activity-tab-all').getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('#activity-list li').count(), 30);
+      assert.equal(await page.locator('[data-return-probe]').evaluate(el => el === document.activeElement), true);
+      assert.ok(Math.abs(await page.locator('#activity-feed').evaluate(el => el.scrollTop) - returnScroll) <= 1);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.getElementById('activity-feed')?.getAttribute('aria-busy') === 'false'
+        && !document.getElementById('activity-guest-header')?.classList.contains('hidden'));
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#activity-tab-all').getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('[data-return-probe]').evaluate(el => el === document.activeElement), true);
       await page.locator('#activity-tab-all').focus(); await page.keyboard.press('ArrowLeft');
       await page.waitForFunction(() => document.getElementById('activity-tab-my')?.getAttribute('aria-selected') === 'true' && document.getElementById('activity-feed')?.getAttribute('aria-busy') === 'false');
       await page.locator('#activity-email-options summary').click();
@@ -109,7 +150,7 @@ try {
       await page.waitForFunction(() => document.querySelectorAll('#activity-list li').length === 30);
       await page.keyboard.press('Escape'); await page.locator('#activity-modal').waitFor({ state: 'hidden' });
       assert.equal(await page.locator('#btn-activity-open').evaluate(el => el === document.activeElement), true);
-      report.layouts.push({ name, width, height, privateRows: privateBefore.unreadCount, requests, seenWrites, tabs: true, guestContinuity: true, privateReadState: true, emailPreferences: true, retry: true, keyboard: true });
+      report.layouts.push({ name, width, height, privateRows: privateBefore.unreadCount, requests, seenWrites, tabs: true, guestContinuity: true, guestDrilldown: true, guestPagination: true, backRestoresFeed: true, privateReadState: true, emailPreferences: true, retry: true, keyboard: true });
     } finally { await context.close(); f.sqlite.close(); }
   }
 } finally {

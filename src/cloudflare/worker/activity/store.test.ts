@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { award, fixture, NOW, params, run, top1 } from './testDatabase';
-import { loadActivity, loadAllActivity, markActivitySeen } from './store';
+import { award, fixture, guestClear, NOW, params, run, top1 } from './testDatabase';
+import { loadActivity, loadAllActivity, loadGuestActivity, markActivitySeen } from './store';
 import { activityGuestName } from '../../../activity/guestName';
 import { awardCourseRunProgression, awardRoomRunProgression } from '../progression/awards';
 import { submitCourseRating, submitRoomRating } from '../progression/ratings';
@@ -11,6 +11,40 @@ const opened: ReturnType<typeof fixture>[] = [];
 function setup(include = true) { const f = fixture(include); opened.push(f); return f; }
 afterEach(() => { for (const f of opened.splice(0)) f.sqlite.close(); });
 describe('private builder activity on the migrated schema', () => {
+  it('resolves a public guest reference to only that guest’s activity across builders', async () => {
+    const f = setup();
+    f.sqlite.exec("INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id) VALUES ('1,0',1,0,'{}','{}','Moon Bounce','p3')");
+    guestClear(f, 'g1'); guestClear(f, 'g2', 'guest-fixture', '1,0'); guestClear(f, 'other', 'guest-other', '1,0');
+    const own = await loadActivity(f.env.DB, 'builder', true, undefined, 'rooms');
+    const ref = own.entries[0].guestActivityRef!;
+    const feed = await loadGuestActivity(f.env.DB, ref);
+    expect(feed.guestName).toBe(own.entries[0].actorName);
+    expect(feed.entries.map(entry => entry.contentPath)).toEqual(['/r/1/0', '/r/0/0']);
+    expect(feed.entries.every(entry => entry.actorName === feed.guestName && !entry.unread)).toBe(true);
+    expect(JSON.stringify(feed)).not.toContain('guest-fixture'); expect(JSON.stringify(feed)).not.toContain('private-fixture-token');
+    expect(feed).not.toHaveProperty('preferences');
+    f.sqlite.exec("UPDATE rooms SET published_json=NULL WHERE id='1,0'");
+    expect((await loadGuestActivity(f.env.DB, ref)).entries).toHaveLength(1);
+    f.sqlite.exec("UPDATE rooms SET published_json=NULL WHERE id='0,0'");
+    await expect(loadGuestActivity(f.env.DB, ref)).rejects.toMatchObject({ status: 404 });
+  });
+  it('paginates one guest across many rooms and rejects missing or registered-player references', async () => {
+    const f = setup();
+    for (let i = 0; i < 36; i++) {
+      const id = `${i + 10},0`;
+      f.sqlite.prepare("INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id) VALUES (?,?,0,'{}','{}','Room','builder')").run(id, i + 10);
+      guestClear(f, `guest-${i}`, 'guest-fixture', id);
+    }
+    const publicFeed = await loadAllActivity(f.env.DB);
+    const ref = publicFeed.entries[0].guestActivityRef!;
+    const first = await loadGuestActivity(f.env.DB, ref); const next = await loadGuestActivity(f.env.DB, ref, first.nextBefore!);
+    expect(first.entries).toHaveLength(30); expect(next.entries).toHaveLength(6); expect(next.nextBefore).toBeNull();
+    expect(new Set([...first.entries,...next.entries].map(entry => entry.id)).size).toBe(36);
+    award(f, 'registered'); const player = (await loadAllActivity(f.env.DB)).entries[0];
+    expect(player.guestActivityRef).toBeUndefined();
+    await expect(loadGuestActivity(f.env.DB, player.id)).rejects.toMatchObject({ status: 404 });
+    await expect(loadGuestActivity(f.env.DB, 999999)).rejects.toMatchObject({ status: 404 });
+  });
   it('scopes My activity and its unread badge to rooms the recipient created', async () => {
     const f = setup(); award(f, 'clear'); top1(f, 'rank');
     expect((await loadActivity(f.env.DB, 'p1', true)).entries).toMatchObject([{ kind: 'dethroned' }]);

@@ -5,13 +5,13 @@ import type { AuthDebugState } from '../../auth/client';
 import type { ActivityResponse } from '../../activity/model';
 class Element extends EventTarget {
   classes = new Set(['hidden']); children: Element[] = []; textContent = ''; checked = false; disabled = false;
-  isConnected = true; attributes = new Map<string, string>(); href = ''; className = '';
+  isConnected = true; attributes = new Map<string, string>(); href = ''; className = ''; scrollTop = 0;
   classList = { add: (name: string) => this.classes.add(name), remove: (name: string) => this.classes.delete(name), contains: (name: string) => this.classes.has(name),
     toggle: (name: string, enabled?: boolean) => { const next = enabled ?? !this.classes.has(name); if (next) this.classes.add(name); else this.classes.delete(name); return next; } };
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
   replaceChildren(...children: Element[]) { this.children = children; }
   append(...children: Element[]) { this.children.push(...children); }
-  focus() {}
+  focus = vi.fn();
   querySelectorAll() { return []; }
 }
 function auth(id: string | null = 'builder') { return { authenticated: Boolean(id), source: 'session', user: id ? { id } : null } as AuthDebugState; }
@@ -19,6 +19,11 @@ function response(id = 1, before: number | null = null): ActivityResponse {
   return { latestId: id, unreadCount: 1, nextBefore: before, preferences: { weeklyDigest: false, dethroneAlerts: false, emailAvailable: true },
     entries: [{ id, kind: 'completion', actorName: 'tkinter', contentTitle: `Room ${id}`, contentVersion: 1, contentPath: '/r/0/0',
       qualityStars: null, createdAt: '2026-10-04T17:00:00Z', unread: true }] };
+}
+function guestResponse(id = 10, before: number | null = null) {
+  const result = response(id, before);
+  result.entries[0] = { ...result.entries[0], actorName: 'Guest Blue Hare 1234ABCD', guestActivityRef: id };
+  return { ...result, guestName: result.entries[0].actorName };
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
@@ -30,16 +35,51 @@ function fixture(search = '', initialUser: string | null = 'builder') {
     getElementById: (id: string) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); }, createElement: () => new Element() });
   const win = Object.assign(new EventTarget(), { setInterval, clearInterval, location: { search } });
   const repository = { load: vi.fn().mockResolvedValue(response()), loadAll: vi.fn().mockResolvedValue({ ...response(2), unreadCount: undefined }),
+    loadGuest: vi.fn().mockResolvedValue(guestResponse()),
     markSeen: vi.fn().mockResolvedValue(undefined),
     savePreferences: vi.fn().mockResolvedValue(response().preferences) };
   const controller = new ActivityInboxController(doc as unknown as Document, win as unknown as Window, repository, () => auth(initialUser));
   controllers.push(controller); controller.init();
   const click = (id: string) => elements.get(id)?.dispatchEvent(new Event('click'));
   const session = (id: string | null) => win.dispatchEvent(new CustomEvent('auth-state-changed', { detail: auth(id) }));
-  return { controller, elements, repository, click, session, win };
+  return { controller, elements, repository, click, session, win, doc };
 }
 afterEach(() => { for (const controller of controllers.splice(0)) controller.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('activity inbox lifecycle', () => {
+  it('opens a guest across rooms, pages their feed and restores the original list, cursor and focus', async () => {
+    const f = fixture(); await settle(); f.repository.load.mockResolvedValueOnce(guestResponse(50, 50));
+    f.click('btn-activity-open'); await settle();
+    const original = f.elements.get('activity-list')!.children[0], actor = original.children[0];
+    f.elements.get('activity-feed')!.scrollTop = 120;
+    const seen = f.repository.markSeen.mock.calls.length;
+    f.repository.loadGuest.mockResolvedValueOnce(guestResponse(20, 20));
+    actor.dispatchEvent(new Event('click')); await settle();
+    expect(f.repository.loadGuest).toHaveBeenLastCalledWith(50, undefined);
+    expect(f.elements.get('activity-guest-name')?.textContent).toBe('Guest Blue Hare 1234ABCD');
+    expect(f.elements.get('activity-tabs')?.classList.contains('hidden')).toBe(true);
+    expect(f.elements.get('activity-list')?.children[0].children[0].textContent).toBe('cleared Room 20');
+    f.repository.loadGuest.mockResolvedValueOnce(guestResponse(5)); f.click('btn-activity-more'); await settle();
+    expect(f.repository.loadGuest).toHaveBeenLastCalledWith(50, 20);
+    expect(f.elements.get('activity-list')?.children).toHaveLength(2);
+    expect(f.repository.markSeen).toHaveBeenCalledTimes(seen);
+    f.click('btn-activity-guest-back');
+    expect(f.elements.get('activity-list')?.children[0]).toBe(original);
+    expect(f.elements.get('activity-feed')?.scrollTop).toBe(120); expect(actor.focus).toHaveBeenCalled();
+    f.repository.load.mockResolvedValueOnce(response(3)); f.click('btn-activity-more'); await settle();
+    expect(f.repository.load).toHaveBeenLastCalledWith(50);
+  });
+  it('ignores a guest reply after Back and discards cached private rows on sign-out', async () => {
+    const f = fixture(); await settle(); f.repository.load.mockResolvedValueOnce(guestResponse(50));
+    f.click('btn-activity-open'); await settle();
+    const original = f.elements.get('activity-list')!.children[0];
+    const old = deferred<ReturnType<typeof guestResponse>>(); f.repository.loadGuest.mockReturnValueOnce(old.promise);
+    original.children[0].dispatchEvent(new Event('click')); f.click('btn-activity-guest-back'); old.resolve(guestResponse(20)); await settle();
+    expect(f.elements.get('activity-list')?.children[0]).toBe(original);
+    original.children[0].dispatchEvent(new Event('click')); await settle(); f.session(null);
+    expect(f.elements.get('activity-list')?.children).toHaveLength(0);
+    f.click('btn-activity-guest-back');
+    expect(f.elements.get('activity-list')?.children).toHaveLength(0);
+  });
   it('opens an email link once after sign-in and keeps it closed on later session refreshes', async () => {
     const f = fixture('?activity=1', null); await settle();
     expect(f.repository.load).not.toHaveBeenCalled();

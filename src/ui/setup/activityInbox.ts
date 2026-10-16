@@ -1,7 +1,8 @@
 import { AUTH_SESSION_REFRESHED_EVENT, AUTH_STATE_CHANGED_EVENT, getAuthDebugState, type AuthDebugState } from '../../auth/client';
-import { activityDescription, type ActivityResponse, type BuilderActivity } from '../../activity/model';
+import { type ActivityResponse, type BuilderActivity } from '../../activity/model';
 import { createActivityRepository, type ActivityRepository } from '../../activity/repository';
 import { createModalLifecycle } from './modalLifecycle';
+import { createActivityEntry } from './activityEntryRenderer';
 
 export class ActivityInboxController {
   private readonly modal;
@@ -22,8 +23,14 @@ export class ActivityInboxController {
   private readonly allTab;
   private readonly feed;
   private readonly emailOptions;
+  private readonly tabs;
+  private readonly guestBar;
+  private readonly guestName;
+  private readonly guestBack;
   private readonly lifecycle;
   private scope: 'my' | 'all' = 'my';
+  private guest: { ref: number; name: string } | null = null;
+  private guestReturn: { rows: Element[]; before: number | null; scrollTop: number; focus: HTMLElement; status: string } | null = null;
   private userId: string | null = null;
   private generation = 0;
   private destroyed = false;
@@ -49,6 +56,8 @@ export class ActivityInboxController {
     this.preferencesStatus = doc.getElementById('activity-preferences-status');
     this.myTab = doc.getElementById('activity-tab-my'); this.allTab = doc.getElementById('activity-tab-all');
     this.feed = doc.getElementById('activity-feed'); this.emailOptions = doc.getElementById('activity-email-options');
+    this.tabs = doc.getElementById('activity-tabs'); this.guestBar = doc.getElementById('activity-guest-header');
+    this.guestName = doc.getElementById('activity-guest-name'); this.guestBack = doc.getElementById('btn-activity-guest-back');
     this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.close() });
   }
   init(): void {
@@ -61,6 +70,7 @@ export class ActivityInboxController {
     this.retry?.addEventListener('click', this.onRetry); this.more?.addEventListener('click', this.onMore);
     this.save?.addEventListener('click', this.onSave); this.catchup?.addEventListener('click', this.onOpen);
     this.myTab?.addEventListener('click', this.onMyTab); this.allTab?.addEventListener('click', this.onAllTab);
+    this.guestBack?.addEventListener('click', this.onGuestBack);
     this.renderTabs();
     this.doc.addEventListener('keydown', this.onKeydown, true); this.lifecycle.attach(); this.syncAuth(this.auth());
     this.timer = this.win.setInterval(() => this.onWake(), 60000);
@@ -74,6 +84,7 @@ export class ActivityInboxController {
     this.retry?.removeEventListener('click', this.onRetry); this.more?.removeEventListener('click', this.onMore);
     this.save?.removeEventListener('click', this.onSave); this.catchup?.removeEventListener('click', this.onOpen);
     this.myTab?.removeEventListener('click', this.onMyTab); this.allTab?.removeEventListener('click', this.onAllTab);
+    this.guestBack?.removeEventListener('click', this.onGuestBack);
     this.doc.removeEventListener('keydown', this.onKeydown, true); this.lifecycle.detach();
     if (this.timer !== null) this.win.clearInterval(this.timer);
     this.close(false); this.userId = null; this.renderBadge(0);
@@ -82,6 +93,7 @@ export class ActivityInboxController {
   private readonly onWake = () => { if (this.doc.visibilityState !== 'hidden' && !this.lifecycle.isOpen() && Date.now() - this.lastLoaded >= 60000) void this.refresh(); };
   private readonly onOpen = (event?: Event) => {
     if (!this.userId || this.destroyed) return;
+    this.guest = null; this.guestReturn = null;
     if (event?.currentTarget === this.catchup || event?.type === 'activity-open-request') this.scope = 'my';
     this.returnFocus = this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : this.bell;
     this.generation++; this.busy = false; this.before = null; this.list?.replaceChildren();
@@ -94,8 +106,29 @@ export class ActivityInboxController {
   private readonly onSave = () => { void this.savePreferences(); };
   private readonly onMyTab = () => this.selectScope('my');
   private readonly onAllTab = () => this.selectScope('all');
+  private readonly onGuestBack = () => {
+    const previous = this.guestReturn;
+    if (!previous) return;
+    this.generation++; this.busy = false; this.saving = false; this.guest = null; this.guestReturn = null;
+    this.before = previous.before; this.list?.replaceChildren(...previous.rows);
+    this.renderTabs(); this.message(previous.status); this.feed?.setAttribute('aria-busy', 'false');
+    this.more?.classList.toggle('hidden', this.before === null); if (this.more) this.more.disabled = false;
+    if (this.save) this.save.disabled = !this.latest?.preferences.emailAvailable;
+    if (this.feed) this.feed.scrollTop = previous.scrollTop;
+    previous.focus.focus();
+  };
+  private readonly openGuest = (ref: number, name: string, trigger: HTMLElement): void => {
+    if (this.guest || !this.userId || !this.lifecycle.isOpen()) return;
+    this.guestReturn = { rows: Array.from(this.list?.children ?? []), before: this.before,
+      scrollTop: this.feed?.scrollTop ?? 0, focus: trigger, status: this.status?.textContent ?? '' };
+    this.generation++; this.busy = false; this.saving = false; this.before = null; this.guest = { ref, name };
+    this.list?.replaceChildren(); this.more?.classList.add('hidden'); this.renderTabs();
+    if (this.feed) this.feed.scrollTop = 0;
+    this.guestBack?.focus(); void this.refresh(true);
+  };
   private selectScope(scope: 'my' | 'all'): void {
-    if (scope === this.scope || !this.lifecycle.isOpen()) return;
+    if ((scope === this.scope && !this.guest) || !this.lifecycle.isOpen()) return;
+    this.guest = null; this.guestReturn = null;
     this.scope = scope; this.generation++; this.busy = false; this.saving = false; this.before = null;
     this.list?.replaceChildren(); this.more?.classList.add('hidden'); this.renderTabs();
     void this.refresh(true);
@@ -105,8 +138,12 @@ export class ActivityInboxController {
       tab?.classList.toggle('active', selected); tab?.setAttribute('aria-selected', String(selected));
       tab?.setAttribute('tabindex', selected ? '0' : '-1');
     }
-    this.feed?.setAttribute('aria-labelledby', this.scope === 'my' ? 'activity-tab-my' : 'activity-tab-all');
-    this.emailOptions?.classList.toggle('hidden', this.scope !== 'my');
+    this.tabs?.classList.toggle('hidden', Boolean(this.guest));
+    this.guestBar?.classList.toggle('hidden', !this.guest);
+    if (this.guestName) this.guestName.textContent = this.guest?.name ?? '';
+    this.feed?.setAttribute('role', this.guest ? 'region' : 'tabpanel');
+    this.feed?.setAttribute('aria-labelledby', this.guest ? 'activity-guest-name' : this.scope === 'my' ? 'activity-tab-my' : 'activity-tab-all');
+    this.emailOptions?.classList.toggle('hidden', this.scope !== 'my' || Boolean(this.guest));
   }
   private readonly onKeydown = (event: KeyboardEvent) => {
     if (!this.lifecycle.isOpen()) return;
@@ -115,7 +152,10 @@ export class ActivityInboxController {
       const scope = event.key === 'Home' ? 'my' : event.key === 'End' ? 'all' : this.scope === 'my' ? 'all' : 'my';
       this.selectScope(scope); (scope === 'my' ? this.myTab : this.allTab)?.focus(); return;
     }
-    if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.close(); }
+    if (event.key === 'Escape') {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (this.guest) this.onGuestBack(); else this.close();
+    }
     if (event.key !== 'Tab') return;
     const elements = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), a[href], summary') ?? [])
       .filter(element => element.getClientRects().length > 0);
@@ -136,6 +176,7 @@ export class ActivityInboxController {
   }
   private close(focus = true): void {
     this.generation++; this.lifecycle.hide(); this.busy = false; this.saving = false;
+    this.guest = null; this.guestReturn = null; this.renderTabs();
     if (focus && this.returnFocus?.isConnected) this.returnFocus.focus(); this.returnFocus = null;
   }
   private valid(userId: string, generation: number): boolean { return !this.destroyed && this.userId === userId && this.generation === generation; }
@@ -143,13 +184,16 @@ export class ActivityInboxController {
     if (!this.userId || this.busy || this.destroyed) return;
     const userId = this.userId, generation = this.generation;
     const scope = show ? this.scope : 'my';
+    const guest = show ? this.guest : null;
     this.busy = true; if (show) this.message('Loading activity…');
     if (show) this.feed?.setAttribute('aria-busy', 'true');
     if (this.more) this.more.disabled = true;
     try {
-      const personal = scope === 'my' ? await this.repository.load(before) : null;
-      const response = personal ?? await this.repository.loadAll(before);
+      const personal = scope === 'my' && !guest ? await this.repository.load(before) : null;
+      const guestResponse = guest ? await this.repository.loadGuest(guest.ref, before) : null;
+      const response = personal ?? guestResponse ?? await this.repository.loadAll(before);
       if (!this.valid(userId, generation)) return;
+      if (guestResponse && this.guest) { this.guest.name = guestResponse.guestName; this.renderTabs(); }
       if (personal) {
         this.lastLoaded = Date.now(); this.latest = personal; this.renderBadge(personal.unreadCount);
       }
@@ -157,9 +201,9 @@ export class ActivityInboxController {
       if (!before) { this.list?.replaceChildren(); if (personal) this.renderPreferences(personal); }
       this.renderEntries(response.entries); this.before = response.nextBefore;
       this.more?.classList.toggle('hidden', this.before === null);
-      this.message(this.list?.children.length ? '' : scope === 'all' ? 'No community activity yet.' : 'No activity on your rooms yet.');
+      this.message(this.list?.children.length ? '' : guest ? 'No activity for this guest yet.' : scope === 'all' ? 'No community activity yet.' : 'No activity on your rooms yet.');
       // A read acknowledges this snapshot only; a newer event stays unread.
-      if (!before && scope === 'my') {
+      if (!before && scope === 'my' && !guest) {
         await this.repository.markSeen(response.latestId);
         if (this.valid(userId, generation)) this.renderBadge(0);
       }
@@ -183,12 +227,7 @@ export class ActivityInboxController {
   }
   private renderEntries(entries: BuilderActivity[]): void {
     for (const entry of entries) {
-      const row = this.doc.createElement('li'); row.className = 'activity-row';
-      row.setAttribute('data-kind', entry.kind);
-      const link = this.doc.createElement('a'); link.href = entry.contentPath; link.textContent = activityDescription(entry);
-      const time = this.doc.createElement('div'); time.className = 'history-modal-meta';
-      time.textContent = `v${entry.contentVersion} · ${new Date(entry.createdAt).toLocaleString()}`;
-      row.append(link, time); this.list?.append(row);
+      this.list?.append(createActivityEntry(this.doc, entry, Boolean(this.guest), this.openGuest));
     }
   }
   private renderPreferences(response: ActivityResponse): void {

@@ -1,7 +1,8 @@
-import type { ActivityFeedResponse, ActivityPreferences, ActivityResponse, BuilderActivity } from '../../../activity/model';
+import type { ActivityFeedResponse, ActivityPreferences, ActivityResponse, BuilderActivity, GuestActivityResponse } from '../../../activity/model';
 import { activityGuestName } from '../../../activity/guestName';
 import type { D1DatabaseSession } from '../core/types';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
+import { HttpError } from '../core/http';
 
 export interface PreferenceRow {
   user_id: string; seen_id: number; weekly_digest: number; dethrone_alerts: number;
@@ -47,6 +48,7 @@ export function emailActivityExistsSql(kind?: 'dethroned'): string {
 
 async function mapEntry(row: ActivityRow, seenId: number): Promise<BuilderActivity> {
   return { id: row.id, kind: row.kind, actorName: row.source_kind === 'guest' ? await activityGuestName(row.actor_user_id) : row.actor_name,
+    ...(row.source_kind === 'guest' ? { guestActivityRef: row.id } : {}),
     contentTitle: row.content_title?.trim() || 'Untitled Room',
     contentVersion: row.content_version, contentPath: row.x === null || row.y === null ? '/?activity=1' : `/r/${row.x}/${row.y}`,
     qualityStars: row.quality_stars, createdAt: row.created_at, unread: row.id > seenId };
@@ -77,11 +79,24 @@ export async function loadActivity(db: D1DatabaseSession, userId: string, emailA
 }
 /** One public fact per event; a top-1 change also has a private dethrone recipient. */
 export async function loadAllActivity(db: D1DatabaseSession, before?: number): Promise<ActivityFeedResponse> {
-  const rows = await db.prepare(`${SELECT} WHERE ${PUBLIC_VISIBLE} AND a.id < ?
+  return loadPublicActivity(db, before);
+}
+/** Resolve only an already-public guest event, without exposing its browser identity. */
+export async function loadGuestActivity(db: D1DatabaseSession, activityRef: number, before?: number): Promise<GuestActivityResponse> {
+  const actor = await db.prepare(`SELECT a.actor_user_id ${JOINS}
+    WHERE a.id = ? AND a.source_kind = 'guest' AND ${PUBLIC_VISIBLE} LIMIT 1`)
+    .bind(activityRef).first<{ actor_user_id: string }>();
+  if (!actor) throw new HttpError(404, 'Guest activity not found.');
+  const feed = await loadPublicActivity(db, before, actor.actor_user_id);
+  return { ...feed, guestName: await activityGuestName(actor.actor_user_id) };
+}
+async function loadPublicActivity(db: D1DatabaseSession, before?: number, guestUserId?: string): Promise<ActivityFeedResponse> {
+  const rows = await db.prepare(`${SELECT} WHERE ${PUBLIC_VISIBLE}
+    ${guestUserId ? "AND a.source_kind = 'guest' AND a.actor_user_id = ?" : ''} AND a.id < ?
     AND (a.kind <> 'dethroned' OR NOT EXISTS (
       SELECT 1 FROM builder_activity duplicate WHERE duplicate.dedupe_key = 'pxp:top1:' || a.source_id
     )) ORDER BY a.id DESC LIMIT 31`)
-    .bind(before ?? Number.MAX_SAFE_INTEGER).all<ActivityRow>();
+    .bind(...(guestUserId ? [guestUserId, before ?? Number.MAX_SAFE_INTEGER] : [before ?? Number.MAX_SAFE_INTEGER])).all<ActivityRow>();
   const entries = await Promise.all(rows.results.slice(0, 30).map(row =>
     mapEntry({ ...row, kind: row.kind === 'dethroned' ? 'top1' : row.kind }, Number.MAX_SAFE_INTEGER)));
   return { entries, latestId: entries[0]?.id ?? 0,

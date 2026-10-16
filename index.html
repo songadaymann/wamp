@@ -2319,7 +2319,11 @@
         <h2 id="activity-title" class="history-modal-title">Activity</h2>
         <button id="btn-activity-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
-      <div class="activity-tabs" role="tablist" aria-label="Activity feeds">
+      <div id="activity-guest-header" class="activity-guest-header hidden">
+        <button id="btn-activity-guest-back" class="bar-btn" type="button">Back</button>
+        <h3 id="activity-guest-name" class="activity-guest-name"></h3>
+      </div>
+      <div id="activity-tabs" class="activity-tabs" role="tablist" aria-label="Activity feeds">
         <button id="activity-tab-my" class="bar-btn active" type="button" role="tab" aria-selected="true" aria-controls="activity-feed" tabindex="0">My activity</button>
         <button id="activity-tab-all" class="bar-btn" type="button" role="tab" aria-selected="false" aria-controls="activity-feed" tabindex="-1">All activity</button>
       </div>
