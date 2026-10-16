@@ -13,6 +13,7 @@ import {
   resolveNpcRoomBoundaryCorrection,
   type NpcRoomBoundaryBounds,
 } from './npcEnvironment';
+import { syncNpcNameLabelResolution } from './npcNameLabel';
 
 const NPC_WALK_SPEED = 70;
 const NPC_JUMP_VELOCITY = -210;
@@ -503,6 +504,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     if (!label) {
       return;
     }
+    syncNpcNameLabelResolution(label, this.options.scene.cameras.main.zoom);
     label
       .setPosition(liveObject.sprite.x, liveObject.sprite.y - 19)
       .setDepth(liveObject.sprite.depth + 0.05)
