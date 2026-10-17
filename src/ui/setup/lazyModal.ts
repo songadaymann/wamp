@@ -16,7 +16,10 @@ export class LazyModal<T extends ModalController> {
   private openGeneration = 0;
   private destroyed = false;
 
-  constructor(private readonly load: () => Promise<T>) {}
+  constructor(
+    private readonly load: () => Promise<T>,
+    private readonly deferredRoots: readonly string[] = [],
+  ) {}
 
   /** True once the pop-up has loaded and handles its own triggers. */
   get loaded(): boolean {
@@ -43,15 +46,21 @@ export class LazyModal<T extends ModalController> {
   }
 
   ensure(): Promise<T> {
-    this.loading ??= this.load().then((modal) => {
-      if (this.destroyed) return modal;
-      modal.init();
-      this.instance = modal;
-      return modal;
-    }).catch((error: unknown) => {
-      this.loading = null;
-      throw error;
-    });
+    if (!this.loading) {
+      for (const id of this.deferredRoots) {
+        const template = document.getElementById(`deferred-${id}`);
+        if (template instanceof HTMLTemplateElement) template.replaceWith(template.content);
+      }
+      this.loading = this.load().then((modal) => {
+        if (this.destroyed) return modal;
+        modal.init();
+        this.instance = modal;
+        return modal;
+      }).catch((error: unknown) => {
+        this.loading = null;
+        throw error;
+      });
+    }
     return this.loading;
   }
 }

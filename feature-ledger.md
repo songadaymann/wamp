@@ -896,3 +896,9 @@ F091 second hosted attempt:62/62 behaviors pass; strict gate catches Linux WebKi
 F091 latest hosted run: all62 behaviors pass, zero console errors/misses; one WebKit “Context is stopped” page event in the combined iframe case remains a gate failure. The final harness separates trusted/wrong-origin probes into fresh contexts and waits for post-gesture sound decode completion before closing them; no page-error exception or filter. Gate now64 (32 per engine). Six local WebGL targets pass (gamepad/trusted/untrusted in each engine); two Canvas targets verify the Linux input path before final source/main delivery.
 
 F09164-case hosted run: all integration probes clean; sole failure is the old haptic decode wait (unchanged-main reproduction already retained). Persistence now verifies the saved flag in a fresh same-context page; the original active decodes are not interrupted. Every page has strict error listeners, and init scripts skip opaque about: documents. Twelve affected probes pass in Chrome/WebKit with zero errors/misses. Product runtime is unchanged by this follow-up; final source/main64-case gates and guarded release remain.
+
+## 2026-10-17 — F025 first paint
+
+Canonical branch `codex/wamp-first-paint-2026-10-17`, base0d31e476. Full-coverage WOFF2, deferred editor styles with shared phone overrides retained, five lazy modal roots. Source in progress; baseline parity/full quality/hosted and guarded release pending. Evidence `output/f025-2026-10-17/`; primary dirty files, chosen animation and prior decisions preserved.
+
+F025 source accepted locally:528 files/3864 tests/full quality,42-view exact style parity, fonts/deferred-menu/retry production probes pass. Master156/215; approved exact-source/main hosted gates, guarded Pages-only release and actual-domain proof remain. Source-time notes are not a claim of completed delivery.

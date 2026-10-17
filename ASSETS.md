@@ -12,6 +12,8 @@ Project-authored traversal artwork is documented in [the traversal asset receipt
 
 IBM Plex Mono fonts in `public/assets/fonts/` retain their accompanying SIL Open Font License. Upstream: [IBM Plex](https://github.com/IBM/plex). Dependency packages retain their own copyright and license files; the Reown AppKit license is included in `licenses/reown-appkit.md`.
 
+The WOFF2 versions of Early GameBoy, HomeVideo Regular/Bold and Super Mario Bros. NES are lossless conversions of the existing TTF files in the same folder. They preserve the original glyph coverage and terms; originals remain available for existing screenshot/export consumers.
+
 Existing imported sprite, background and terrain exports under `public/assets/` need an asset-by-asset provenance audit before independent redistribution. The technical [asset intake rules](docs/development/asset-intake-rules.md) describe runtime formats, not ownership or redistribution rights. A pack being downloadable does not make it CC0 or CC BY.
 
 ## 3. Paid or restricted source packs

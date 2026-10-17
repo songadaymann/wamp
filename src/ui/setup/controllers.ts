@@ -110,10 +110,10 @@ export function setupUiControllers(game: Phaser.Game): void {
 
 function createUiControllers(game: Phaser.Game): UiControllers {
   // Rarely opened pop-ups load on first open (F019).
-  const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game));
+  const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game), ['leaderboard-modal']);
   const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController());
   const playlistIntroModal = new PlaylistIntroModalController();
-  const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game));
+  const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal']);
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
   game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new LazyRunRatingController(async () => new (await import('./runRatingModal')).RunRatingModalController(game));
@@ -131,7 +131,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     firstPublishModal: new LazyFirstPublishController(async () => new (await import('./firstPublishModal')).FirstPublishModalController()),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
-    historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game)),
+    historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game), ['room-history-modal']),
     leaderboardModal,
     exploreModal,
     roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary, runRatingModal),
@@ -143,7 +143,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     controlsModal,
     aboutModal: new LazyModal(async () => new (await import('./aboutModal')).AboutModalController()),
     chatModerationModal: new LazyModal(async () => new (await import('./chatModerationModal')).ChatModerationModalController()),
-    profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game)),
+    profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game), ['profile-modal', 'avatar-picker-modal']),
     playlistModal: new LazyModal(async () => new (await import('./playlistModal')).PlaylistModalController(game)),
     playlistIntroModal,
     performanceSuggestionModal: new PerformanceSuggestionModalController(game),
