@@ -19,6 +19,7 @@
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preload" as="image" href="/assets/objects/flag-checkered.png">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/fonts/Super Mario Bros. NES.woff2">
   <link rel="manifest" href="./app.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="https://api.wamp.land/skill.md">
@@ -2353,7 +2354,8 @@
       </div>
     </div>
   </div>
-  <div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-room-history-modal">
+<div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-history-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2371,6 +2373,7 @@
       <div id="room-history-list" class="history-version-list"></div>
     </div>
   </div>
+  </template>
 
   <div id="wamp-o-gram-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel wamp-o-gram-modal-panel" role="dialog" aria-modal="true" aria-labelledby="wamp-o-gram-modal-title">
@@ -2462,7 +2465,8 @@
     </div>
   </div>
 
-  <div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-leaderboard-modal">
+<div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2535,6 +2539,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="first-steps-summary-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="first-steps-summary-title">
@@ -2784,7 +2789,8 @@
     <p id="build-prompt-result-status" role="status"></p>
     <div class="build-prompt-actions"><button id="btn-build-prompt-entry-retry" class="bar-btn hidden" type="button">Retry Entry</button><button id="btn-build-prompt-view" class="bar-btn" type="button">View Prompt</button><button id="btn-build-prompt-result-close" class="bar-btn" type="button">Dismiss</button></div>
   </aside>
-  <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-explore-modal">
+<div id="explore-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2821,8 +2827,10 @@
       <div id="explore-list" class="history-version-list explore-room-list"></div>
     </div>
   </div>
+  </template>
 
-  <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-profile-modal">
+<div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
           <button id="btn-profile-activity" class="bar-btn bar-btn-small hidden" type="button">Activity</button>
@@ -2903,6 +2911,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="playlist-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel playlist-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
@@ -2938,7 +2947,8 @@
     </div>
   </div>
 
-  <div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-avatar-picker-modal">
+<div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel avatar-picker-modal-panel" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title">
       <div class="history-modal-header avatar-picker-modal-header">
         <div class="history-modal-title-group">
@@ -2968,6 +2978,7 @@
       <div id="avatar-picker-grid" class="profile-avatar-grid"></div>
     </div>
   </div>
+  </template>
 
   <div id="editor-music-phrase-save-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel editor-music-phrase-save-modal-panel" role="dialog" aria-modal="true" aria-labelledby="editor-music-phrase-save-title">

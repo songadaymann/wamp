@@ -1,0 +1,15 @@
+/* Keep inactive editor markup hidden before its stylesheet is requested. */
+.editor-shell-top,
+.editor-shell-dock,
+.editor-drawer-header,
+.editor-drawer-room-tabs,
+.editor-shell-label,
+.smart-visual-picker,
+.goal-type-button-grid,
+.goal-type-instructions,
+.environment-choice-grid,
+.editor-room-title-overlay,
+.editor-room-feedback-overlay,
+#course-editor-shell {
+  display: none;
+}

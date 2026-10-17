@@ -24,7 +24,7 @@
 
 @font-face {
   font-family: 'Early GameBoy';
-  src: url('/assets/fonts/early-gameboy.ttf') format('truetype');
+  src: url('/assets/fonts/early-gameboy.woff2') format('woff2');
   font-display: swap;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -32,21 +32,21 @@
 
 @font-face {
   font-family: 'HomeVideo';
-  src: url('/assets/fonts/HomeVideo-Regular.ttf') format('truetype');
+  src: url('/assets/fonts/HomeVideo-Regular.woff2') format('woff2');
   font-weight: 400;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'HomeVideo';
-  src: url('/assets/fonts/HomeVideo-Bold.ttf') format('truetype');
+  src: url('/assets/fonts/HomeVideo-Bold.woff2') format('woff2');
   font-weight: 700;
   font-display: swap;
 }
 
 @font-face {
   font-family: 'Super Mario Bros. NES';
-  src: url('/assets/fonts/Super Mario Bros. NES.ttf') format('truetype');
+  src: url('/assets/fonts/Super Mario Bros. NES.woff2') format('woff2');
   font-display: swap;
   font-synthesis: none;
   -webkit-font-smoothing: none;

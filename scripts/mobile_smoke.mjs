@@ -1,7 +1,7 @@
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
-import { auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
+import { auditFirstPaint, auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
 import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib/hapticAudits.mjs';
 import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -150,8 +150,8 @@ const scenarios = [
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
-  { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
-  { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
+  { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0', previewSmoke: '0' }, run: runNavigation },
+  { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0', previewSmoke: '0' }, run: runNavigation },
   { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
   { name: 'phone-mann-cool', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
@@ -1996,6 +1996,8 @@ async function runGamepadControls(page, scenarioSummary, scenarioDir) {
 }
 
 async function runNavigation(page, summary, directory) {
+  summary.assertions.push(await auditFirstPaint(page));
   const result = await auditNavigation(page, { capture: label => captureScenarioScreenshot(page, summary, directory, label) });
+  summary.assertions.push(await auditFirstPaint(page, { editorLoaded: true }));
   summary.assertions.push({ label: 'browse, account, play and editor navigation destinations', ...result });
 }

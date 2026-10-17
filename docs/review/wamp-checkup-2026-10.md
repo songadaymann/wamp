@@ -1,6 +1,8 @@
 # WAMP Checkup (October 2026)
 
-**October 17 mann.cool integration:** [F091 implementation and verification](wamp-mann-cool-2026-10-17.md) adds bounded visit reports and trusted parent-controller input while preserving standalone hosting. Platform PR2 is merged and live; WAMP final hosted/production delivery follows. F015 is fully delivered in [PR234](https://github.com/songadaymann/wamp/pull/234), superseding its source-time pending notes. Master155/215.
+**October 17 first paint:** [F025](wamp-first-paint-2026-10-17.md) reduces the first stylesheet and font downloads, with deferred editor styles and five rare menu trees. Local verification passes; exact-source/main gates and guarded delivery follow. Master156/215.
+
+**October 17 mann.cool integration:** [F091 implementation and verification](wamp-mann-cool-2026-10-17.md) adds bounded visit reports and trusted parent-controller input while preserving standalone hosting. Platform PR2 and WAMP PR235 are merged, deployed and verified. F015 is fully delivered in [PR234](https://github.com/songadaymann/wamp/pull/234), superseding its source-time pending notes. Master155/215 at F091 source acceptance; PR235 is now fully delivered.
 
 **October 17 parallel startup:** [F015 implementation and verification](wamp-parallel-startup-2026-10-17.md) starts low-priority runtime downloads alongside the map check while retaining its execution gate. Final hosted/production delivery follows; master154/215. F090 is fully delivered in [PR233](https://github.com/songadaymann/wamp/pull/233), superseding its source-time pending notes.
 
@@ -20,7 +22,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 155 of 215 done.**
+**Progress: 156 of 215 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -155,7 +157,7 @@ How long new players wait before they can play, and how much data that costs. Th
 - [x] **F021** Updated art can stay stale for returning players for up to a year · medium impact · small effort — public assets use automatic content versions at load time; only current versions/build hashes cache immutably, with a shorter fallback. Returning-browser cache regression passes. [Receipt](wamp-asset-cache-versioning-2026-10-13.md).
 - [x] **F023** Music and sound files: smaller formats and faster loading (also covers F230) · medium impact · small effort — **done 2026-10-13** (`d6307f3d`, [PR #191](https://github.com/songadaymann/wamp/pull/191), [receipt](wamp-audio-assets-2026-10-13.md)): baked drums are 92.8% smaller, gapless stems 37.8% smaller, and compact SFX fallback permits 7.6 MB of source-only deploy savings. Earlier parallel loading and hot SFX playback are preserved. Jonathan approved the listening comparison; main follows automatic Pages delivery.
 - [x] **F019** Players download the level-editor UI and about 30 menus before the first frame · medium impact · medium effort — _Partly done 2026-10-11 ([PR #177](https://github.com/songadaymann/wamp/pull/177), [PR #178](https://github.com/songadaymann/wamp/pull/178)): the editor's tool panels load with the editor, and the profile, leaderboard, explore and history pop-ups load on first open; startup JavaScript went from 718 to 638 KB brotli. More on 2026-10-13 ([PR #195](https://github.com/songadaymann/wamp/pull/195)): About, Controls, Guestbook, playlists, sign text, postcards and post-run ratings load on first use; stable room data is cached separately and startup is 641.1 KB brotli. The remaining rare controllers are completed below._ — **done 2026-10-14** (`8b1db184`, `77bbd0d6`, [PR #200](https://github.com/songadaymann/wamp/pull/200), Pages `307dcdd0`). Eighteen controllers stay outside startup; five load on first request and two guest recovery services start after readiness. Publish cancellation/retry and automatic recovery are preserved. Startup 630.7 KB; [live verification](wamp-remaining-dialogs-2026-10-14.md) passes.
-- [ ] **F025** Styles, hidden menus and fonts make the first paint heavier than needed · low impact · medium effort
+- [x] **F025** Styles, hidden menus and fonts make the first paint heavier than needed · low impact · medium effort — **done 2026-10-17** (source acceptance; delivery follows): editor CSS waits for building, five rare menu roots remain inert until opened, and full-glyph WOFF2 fonts retain the look. First stylesheet is 33% smaller; four display fonts are 88% smaller. [Receipt](wamp-first-paint-2026-10-17.md).
 - [x] **F020** Use a slimmer Phaser build and turn off Phaser's unused sound system · low impact · small effort — **done 2026-10-11** (`897b01d3`, [PR #160](https://github.com/songadaymann/wamp/pull/160)). Phaser resolves to its arcade-only build and licence comments are kept once per chunk: the Phaser chunk is 1,102,841 bytes (was 1,482,446; 237 KB brotli, was 270) and startup JavaScript 716 KB brotli (was 747). Phaser audio was already off (`be355ca3`).
 
 ### Backend speed, cost and reliability
