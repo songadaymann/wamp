@@ -165,7 +165,7 @@ const scenarios = [
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
   } },
   { name: 'phone-haptic-settings', profile: profiles.phonePortrait, navigationFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
-    row.assertions.push(await auditHapticSettings(page, label => captureScenarioScreenshot(page, row, dir, label)));
+    row.assertions.push(await auditHapticSettings(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));
   } },
   { name: 'phone-haptic-clear', profile: profiles.phonePortrait, navigationFixture: true, spawnPickupFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditHapticClear(page, label => captureScenarioScreenshot(page, row, dir, label)));
@@ -260,6 +260,7 @@ async function runScenario(browserInstance, scenario) {
     await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture, roomEditor: scenario.roomEditorFixture, activity: scenario.activityFixture });
   }
   await context.addInitScript(() => {
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
     window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
 
@@ -299,34 +300,26 @@ async function runScenario(browserInstance, scenario) {
   });
 
   if (scenario.gamepadFixture) await context.addInitScript(() => {
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
     localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
   });
   if (scenario.navigationFixture) await installNavigationFixtures(context);
   if (scenario.hapticFixture) await installHapticProbe(context);
   if (scenario.startupFixture) await installStartupFixture(context);
-  const page = await context.newPage();
-  page.on('console', (message) => {
-    if (message.type() !== 'error') {
-      return;
-    }
-    const location = message.location();
-    const record = {
-      scenario: scenario.name,
-      type: message.type(),
-      text: message.text(),
-      url: location.url || null,
-    };
-    if (!isIgnoredConsoleError(record.text, record.url)) {
-      summary.consoleErrors.push(record);
-    }
-  });
-  page.on('pageerror', (error) => {
-    summary.pageErrors.push({
-      scenario: scenario.name,
-      text: error.message,
+  // Persistence probes may open another page; every page keeps strict error reporting.
+  context.on('page', (observedPage) => {
+    observedPage.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const location = message.location();
+      const record = { scenario: scenario.name, type: message.type(), text: message.text(), url: location.url || null };
+      if (!isIgnoredConsoleError(record.text, record.url)) summary.consoleErrors.push(record);
+    });
+    observedPage.on('pageerror', (error) => {
+      summary.pageErrors.push({ scenario: scenario.name, text: error.message });
     });
   });
+  const page = await context.newPage();
 
   try {
     if (!scenario.mannCoolFixture) await gotoMobileSmokePage(page, scenario.searchParams);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 /** Hold only the first map-config reply so the cold download order is observable. */
 export async function installStartupFixture(context, { delayMs = 500 } = {}) {
   await context.addInitScript(() => {
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     performance.setResourceTimingBufferSize(2000);
     window.__wampStartupProbe = {};
     localStorage.setItem('wamp_replay_opt_out', '1');
