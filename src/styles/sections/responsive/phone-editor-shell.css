@@ -53,7 +53,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
   background: rgba(11, 11, 11, 0.96);
   backdrop-filter: blur(6px);
   border-radius: 16px 16px 0 0;
-  box-shadow: 0 -20px 48px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 -20px 48px rgba(var(--wamp-black-rgb), 0.34);
   transition: transform 0.16s ease, opacity 0.16s ease;
 }
 

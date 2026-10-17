@@ -49,13 +49,13 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   z-index: 20;
   min-height: 44px;
   padding: 8px 12px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #18161c;
+  background: var(--wamp-sky);
+  color: var(--wamp-ink);
   font-family: var(--hud-ui-font);
   font-size: 13px;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 .mobile-world-restart {
@@ -115,7 +115,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   border-radius: 999px;
   border: 1px solid rgba(243, 238, 226, 0.16);
   background: rgba(11, 11, 11, 0.64);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 14px 30px rgba(var(--wamp-black-rgb), 0.3);
   transition:
     transform 0.06s ease,
     background 0.12s ease,
@@ -221,7 +221,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   border: 1px solid rgba(255, 193, 7, 0.34);
   border-radius: 12px;
   background: rgba(5, 5, 5, 0.92);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 24px rgba(var(--wamp-black-rgb), 0.22);
 }
 
 .mobile-goal-footer[data-goal-panel-tone='complete'] {

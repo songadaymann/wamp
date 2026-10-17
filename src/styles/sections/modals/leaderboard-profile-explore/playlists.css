@@ -1,10 +1,10 @@
 #playlist-modal {
-  background: rgba(24, 22, 28, 0.8);
+  background: rgba(var(--wamp-ink-rgb), 0.8);
   backdrop-filter: none;
 }
 
 #playlist-intro-modal {
-  background: rgba(24, 22, 28, 0.84);
+  background: rgba(var(--wamp-ink-rgb), 0.84);
   backdrop-filter: none;
 }
 
@@ -15,10 +15,10 @@
   padding: 20px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 3px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 6px 6px 0 #18161c;
+  box-shadow: var(--shadow-6);
 }
 
 #playlist-intro-modal .playlist-intro-modal-panel {
@@ -28,10 +28,10 @@
   padding: 20px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 3px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 6px 6px 0 #18161c;
+  box-shadow: var(--shadow-6);
 }
 
 #playlist-modal .history-modal-kicker,
@@ -44,13 +44,13 @@
 #playlist-intro-modal .history-modal-meta,
 #playlist-intro-modal .playlist-intro-control,
 #playlist-intro-modal .playlist-intro-level-card {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
 }
 
 #playlist-modal .history-modal-kicker,
 #playlist-intro-modal .history-modal-kicker {
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-size: 11px;
   letter-spacing: 0.04em;
   line-height: 1.3;
@@ -60,7 +60,7 @@
 #playlist-modal .history-modal-title,
 #playlist-intro-modal .history-modal-title {
   margin-top: 6px;
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -70,21 +70,21 @@
 #playlist-modal .history-modal-meta,
 #playlist-modal .profile-overview-bio,
 #playlist-intro-modal .history-modal-meta {
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-size: 12px;
   line-height: 1.45;
 }
 
 #playlist-modal .history-modal-error {
   padding: 12px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #ed5f4b;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-red);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #playlist-modal .history-modal-header > .bar-btn,
@@ -96,16 +96,16 @@
 #playlist-intro-modal .playlist-intro-start-button {
   min-height: 34px;
   padding: 8px 12px 7px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #playlist-intro-modal .playlist-intro-start-button {
@@ -113,7 +113,7 @@
   min-height: 48px;
   margin-top: 2px;
   background: #f2cc4d;
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 8px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -142,9 +142,9 @@
   min-height: 78px;
   align-content: center;
   padding: 10px 8px;
-  background: #fffaf0;
-  border: 2px solid #2c5071;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-paper);
+  border: 2px solid var(--wamp-sky-deep);
+  box-shadow: var(--shadow-2);
   font-size: 12px;
   line-height: 1.2;
   text-align: center;
@@ -156,10 +156,10 @@
   min-width: 0;
   padding: 5px 7px 4px;
   overflow-wrap: anywhere;
-  background: #79ccde;
-  color: #18161c;
-  border-color: #18161c;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-sky);
+  color: var(--wamp-ink);
+  border-color: var(--wamp-ink);
+  box-shadow: var(--shadow-2);
   font-size: 9px;
   line-height: 1.15;
 }
@@ -180,9 +180,9 @@
   align-items: center;
   min-height: 64px;
   padding: 9px;
-  background: #fffaf0;
-  border: 2px solid #79ccde;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-paper);
+  border: 2px solid var(--wamp-sky);
+  box-shadow: var(--shadow-2);
 }
 
 #playlist-intro-modal .playlist-intro-level-number {
@@ -190,9 +190,9 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  background: #2c5071;
-  color: #fff3db;
-  font-family: 'Early GameBoy', monospace;
+  background: var(--wamp-sky-deep);
+  color: var(--wamp-cream);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1;
   font-synthesis: none;
@@ -205,7 +205,7 @@
 
 #playlist-intro-modal .playlist-intro-level-title {
   overflow: hidden;
-  color: #18161c;
+  color: var(--wamp-ink);
   font-size: 12px;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -214,7 +214,7 @@
 
 #playlist-intro-modal .playlist-intro-level-meta {
   margin-top: 4px;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-size: 10px;
   line-height: 1.25;
 }
@@ -228,8 +228,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  background: #fff3db;
-  border: 2px solid #2c5071;
+  background: var(--wamp-cream);
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
 }
 
@@ -282,24 +282,24 @@
 #explore-modal .explore-room-playlist-select {
   min-height: 34px;
   padding: 7px 9px;
-  border: 2px solid #2c5071;
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
-  background: #fff3db;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
 }
 
 #explore-modal .explore-room-playlist-feedback {
   grid-column: 1 / -1;
   padding: 7px 9px 6px;
-  border: 2px solid #277b30;
+  border: 2px solid var(--wamp-green);
   background: #f3ffd8;
   color: #143f1a;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.25;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
 }
 
 #profile-modal .profile-playlist-card {
@@ -308,10 +308,10 @@
   gap: 10px;
   align-items: center;
   padding: 12px;
-  background: #fffaf0;
-  border: 2px solid #79ccde;
+  background: var(--wamp-paper);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #profile-modal .profile-playlist-open {
@@ -326,8 +326,8 @@
 }
 
 #profile-modal .profile-playlist-description {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }

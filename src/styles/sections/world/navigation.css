@@ -38,7 +38,7 @@ body[data-app-mode='play-world'] #bottom-bar :is(.bar-left, .bar-right) {
 #menu-body .auth-discord-link {
   grid-column: 1 / -1;
   gap: 8px;
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 8px;
   text-transform: uppercase;
 }
@@ -73,7 +73,7 @@ body[data-device-class='phone'] #world-navigation .bar-btn {
 }
 
 #menu-body {
-  --editor-button-font: 'Early GameBoy', monospace;
+  --editor-button-font: var(--font-label);
   font-size: 12px;
 }
 #menu-body :is(input, .auth-status, .auth-display-name-status, .auth-email-code-help, .auth-debug-link) {

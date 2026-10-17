@@ -5,7 +5,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(24, 22, 28, 0.8);
+  background: rgba(var(--wamp-ink-rgb), 0.8);
   backdrop-filter: none;
 }
 
@@ -18,23 +18,23 @@
   padding: 20px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 3px solid #79ccde;
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
-  background: #fff3db;
-  color: #18161c;
-  box-shadow: 6px 6px 0 #18161c;
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  box-shadow: var(--shadow-6);
 }
 
 .pvp-modal-result[data-result='win'] .pvp-modal-panel {
-  border-color: #277b30;
+  border-color: var(--wamp-green);
 }
 
 .pvp-modal-result[data-result='loss'] .pvp-modal-panel {
-  border-color: #ed5f4b;
+  border-color: var(--wamp-red);
 }
 
 .pvp-modal-result[data-result='draw'] .pvp-modal-panel {
-  border-color: #fcea7c;
+  border-color: var(--wamp-yellow);
 }
 
 .pvp-modal-header {
@@ -44,8 +44,8 @@
 }
 
 .pvp-modal-kicker {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0;
   line-height: 1.3;
@@ -53,8 +53,8 @@
 }
 
 .pvp-modal-title {
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 1.25;
   font-synthesis: none;
@@ -62,16 +62,16 @@
 }
 
 .pvp-modal-result[data-result='win'] .pvp-modal-title {
-  color: #277b30;
+  color: var(--wamp-green);
 }
 
 .pvp-modal-result[data-result='loss'] .pvp-modal-title {
-  color: #ed5f4b;
+  color: var(--wamp-red);
 }
 
 .pvp-modal-body {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -82,14 +82,14 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 2px solid #2c5071;
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
-  background: #fffaf0;
-  box-shadow: 4px 4px 0 #18161c;
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-4);
 }
 
 .pvp-invite-card {
-  border-color: #ed5f4b;
+  border-color: var(--wamp-red);
 }
 
 .pvp-invite-copy {
@@ -102,14 +102,14 @@
   width: fit-content;
   max-width: 100%;
   padding: 5px 8px 4px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.35;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
   overflow-wrap: anywhere;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -117,10 +117,10 @@
 
 .pvp-modal-rule {
   padding: 8px 10px;
-  border: 2px solid #fcea7c;
-  background: rgba(252, 234, 124, 0.34);
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  border: 2px solid var(--wamp-yellow);
+  background: rgba(var(--wamp-yellow-rgb), 0.34);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.35;
@@ -136,25 +136,25 @@
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  border: 2px solid rgba(44, 80, 113, 0.72);
-  background: rgba(121, 204, 222, 0.12);
+  border: 2px solid rgba(var(--wamp-sky-deep-rgb), 0.72);
+  background: rgba(var(--wamp-sky-rgb), 0.12);
 }
 
 .pvp-result-row[data-local='true'] {
-  border-color: #277b30;
-  background: rgba(39, 123, 48, 0.14);
+  border-color: var(--wamp-green);
+  background: rgba(var(--wamp-green-rgb), 0.14);
 }
 
 .pvp-result-name {
   min-width: 0;
-  color: #18161c;
+  color: var(--wamp-ink);
   font-weight: 400;
   overflow-wrap: anywhere;
 }
 
 .pvp-result-stats {
   flex: 0 0 auto;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-size: 12px;
   line-height: 1.35;
   text-align: right;
@@ -171,21 +171,21 @@
 .pvp-modal-actions .bar-btn {
   min-height: 36px;
   padding: 9px 14px 8px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0;
   line-height: 1.1;
   text-transform: uppercase;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 .pvp-modal-actions .bar-btn.primary {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 .pvp-modal-actions .bar-btn:hover {
@@ -206,27 +206,27 @@
   place-items: center;
   padding: 20px;
   pointer-events: none;
-  background: rgba(24, 22, 28, 0.5);
+  background: rgba(var(--wamp-ink-rgb), 0.5);
   text-align: center;
 }
 
 .pvp-countdown-card {
   width: min(560px, calc(100vw - 36px));
   padding: 22px 20px 20px;
-  border: 3px solid #ed5f4b;
+  border: 3px solid var(--wamp-red);
   border-radius: 0;
-  background: #fff3db;
-  color: #18161c;
-  box-shadow: 8px 8px 0 #18161c;
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  box-shadow: 8px 8px 0 var(--wamp-ink);
 }
 
 .pvp-countdown-overlay[data-mode='go'] .pvp-countdown-card {
-  border-color: #277b30;
+  border-color: var(--wamp-green);
 }
 
 .pvp-countdown-kicker {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 12px;
   letter-spacing: 0;
   line-height: 1.3;
@@ -235,8 +235,8 @@
 
 .pvp-countdown-title {
   margin-top: 8px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 24px;
   line-height: 1.18;
   font-synthesis: none;
@@ -248,10 +248,10 @@
   max-width: 100%;
   margin: 14px auto 0;
   padding: 8px 10px;
-  border: 2px solid #fcea7c;
-  background: rgba(252, 234, 124, 0.38);
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  border: 2px solid var(--wamp-yellow);
+  background: rgba(var(--wamp-yellow-rgb), 0.38);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 400;
   line-height: 1.35;
@@ -263,17 +263,17 @@
 
 .pvp-countdown-count {
   margin-top: 18px;
-  color: #ed5f4b;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-red);
+  font-family: var(--font-display);
   font-size: 96px;
   line-height: 0.9;
-  text-shadow: 5px 5px 0 #18161c;
+  text-shadow: 5px 5px 0 var(--wamp-ink);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 .pvp-countdown-overlay[data-mode='go'] .pvp-countdown-count {
-  color: #277b30;
+  color: var(--wamp-green);
 }
 
 .pvp-damage-flash {
@@ -343,6 +343,6 @@
 
   .pvp-countdown-count {
     font-size: 72px;
-    text-shadow: 4px 4px 0 #18161c;
+    text-shadow: var(--shadow-4);
   }
 }

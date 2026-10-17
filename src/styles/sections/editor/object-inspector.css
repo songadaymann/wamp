@@ -68,7 +68,7 @@
 .object-subcategory-prefix {
   align-self: center;
   color: var(--text-muted);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   font-size: 8px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -85,7 +85,7 @@
   border: 1px solid var(--border);
   border-radius: 0;
   color: var(--text);
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -107,7 +107,7 @@
   border-radius: 0;
   color: var(--text-muted);
   font-size: 9px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -117,7 +117,7 @@
     color 0.1s,
     transform 0.06s ease,
     box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
 }
 
 .object-subcategory-tab {
@@ -140,7 +140,7 @@
 .obj-cat-tab.is-pressed,
 .object-subcategory-tab.is-pressed {
   transform: translateY(2px);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
 }
 
 /* Object Grid */
@@ -200,14 +200,14 @@
 
 .community-sprite-card-name {
   color: var(--text);
-  font: 700 10px/1.3 'IBM Plex Mono', 'Courier New', monospace;
+  font: 700 10px/1.3 var(--font-mono);
 }
 
 .community-sprite-card-credit,
 .community-sprite-card-kind {
   margin-top: 2px;
   color: var(--text-dim);
-  font: 8px/1.3 'Courier New', monospace;
+  font: 8px/1.3 var(--font-code);
 }
 
 .community-sprite-card-actions {
@@ -224,7 +224,7 @@
   gap: 8px;
   margin-top: 7px;
   color: var(--text-dim);
-  font: 9px/1.3 'Courier New', monospace;
+  font: 9px/1.3 var(--font-code);
 }
 
 .community-sprite-pagination.hidden {
@@ -264,7 +264,7 @@
     box-shadow 0.06s ease;
   min-width: 0;
   min-height: 56px;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
 }
 
 /* ── Palette Tooltips ── */
@@ -313,7 +313,7 @@
 
 .object-item.is-pressed {
   transform: translateY(2px);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
 }
 
 .object-item img {
@@ -330,15 +330,15 @@
 .object-selection-details {
   margin-top: 8px;
   padding: 7px 8px;
-  border: 1px solid rgba(255, 243, 219, 0.14);
+  border: 1px solid rgba(var(--wamp-cream-rgb), 0.14);
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(var(--wamp-black-rgb), 0.18);
   min-height: 54px;
 }
 
 .object-selection-name {
   color: var(--text);
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.25;
@@ -382,21 +382,21 @@
   gap: 10px;
   overflow: hidden;
   padding: 0 10px 12px;
-  border: 3px solid var(--editor-retro-shadow, #18161c);
+  border: 3px solid var(--editor-retro-shadow, var(--wamp-ink));
   border-radius: 0;
-  background: var(--editor-retro-cream, #fff3db);
-  color: var(--editor-retro-ink, #18161c);
-  box-shadow: 5px 5px 0 var(--editor-retro-shadow, #18161c);
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  background: var(--editor-retro-cream, var(--wamp-cream));
+  color: var(--editor-retro-ink, var(--wamp-ink));
+  box-shadow: 5px 5px 0 var(--editor-retro-shadow, var(--wamp-ink));
+  font-family: var(--editor-ui-font, var(--font-ui));
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .section-label {
   margin: 0 -10px;
   padding: 8px 10px 7px;
-  border-bottom: 3px solid var(--editor-retro-shadow, #18161c);
-  background: var(--editor-retro-red, #ed5f4b);
-  color: #18161c;
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  border-bottom: 3px solid var(--editor-retro-shadow, var(--wamp-ink));
+  background: var(--editor-retro-red, var(--wamp-red));
+  color: var(--wamp-ink);
+  font-family: var(--editor-ui-font, var(--font-ui));
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -409,20 +409,20 @@
   width: 9px;
   height: 9px;
   margin-right: 15px;
-  border: 2px solid var(--editor-retro-shadow, #18161c);
-  background: var(--editor-retro-yellow, #fcea7c);
-  box-shadow: 13px 0 0 var(--editor-retro-blue, #79ccde);
+  border: 2px solid var(--editor-retro-shadow, var(--wamp-ink));
+  background: var(--editor-retro-yellow, var(--wamp-yellow));
+  box-shadow: 13px 0 0 var(--editor-retro-blue, var(--wamp-sky));
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-context-note {
   margin: 0;
   padding: 8px 9px;
-  border: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border: 2px solid var(--editor-retro-blue-deep, var(--wamp-sky-deep));
   border-radius: 0;
   background: #e8fbff;
-  color: var(--editor-retro-blue-deep, #2c5071);
-  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c);
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  color: var(--editor-retro-blue-deep, var(--wamp-sky-deep));
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, var(--wamp-ink));
+  font-family: var(--editor-ui-font, var(--font-ui));
   font-size: 11px;
   line-height: 1.35;
 }
@@ -431,28 +431,28 @@
   gap: 5px;
   margin-top: 0;
   padding-left: 8px;
-  border-left: 6px solid var(--editor-retro-green, #277b30);
+  border-left: 6px solid var(--editor-retro-green, var(--wamp-green));
 }
 
 #enemy-boss-hits-input {
   width: 100%;
   min-width: 0;
-  accent-color: var(--editor-retro-green, #277b30);
+  accent-color: var(--editor-retro-green, var(--wamp-green));
 }
 
 #enemy-boss-panel {
   padding: 10px;
   border: 0;
-  border-top: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border-top: 2px solid var(--editor-retro-blue-deep, var(--wamp-sky-deep));
   border-radius: 0;
-  background: var(--editor-retro-cream, #fff3db);
-  color: var(--editor-retro-ink, #18161c);
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  background: var(--editor-retro-cream, var(--wamp-cream));
+  color: var(--editor-retro-ink, var(--wamp-ink));
+  font-family: var(--editor-ui-font, var(--font-ui));
   font-size: 11px;
 }
 
 #enemy-boss-hits-output {
-  color: var(--editor-retro-blue-deep, #2c5071);
+  color: var(--editor-retro-blue-deep, var(--wamp-sky-deep));
   font: inherit;
 }
 
@@ -481,12 +481,12 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-row:last-child {
-  border-left-color: var(--editor-retro-yellow, #fcea7c);
+  border-left-color: var(--editor-retro-yellow, var(--wamp-yellow));
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-control-label {
-  color: var(--editor-retro-blue-deep, #2c5071);
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  color: var(--editor-retro-blue-deep, var(--wamp-sky-deep));
+  font-family: var(--editor-ui-font, var(--font-ui));
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -495,25 +495,25 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input {
   height: 34px;
   padding: 7px 9px 6px;
-  border: 2px solid var(--editor-retro-blue-deep, #2c5071);
+  border: 2px solid var(--editor-retro-blue-deep, var(--wamp-sky-deep));
   border-radius: 0;
   background: #0b0b0b;
-  color: var(--editor-retro-cream, #fff3db);
-  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c);
-  font-family: var(--editor-ui-font, 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace);
+  color: var(--editor-retro-cream, var(--wamp-cream));
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, var(--wamp-ink));
+  font-family: var(--editor-ui-font, var(--font-ui));
   font-size: 12px;
   line-height: 1.2;
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input:focus {
   outline: none;
-  border-color: var(--editor-retro-green, #277b30);
-  box-shadow: 2px 2px 0 var(--editor-retro-shadow, #18161c), 0 0 0 2px rgba(121, 204, 222, 0.28);
+  border-color: var(--editor-retro-green, var(--wamp-green));
+  box-shadow: 2px 2px 0 var(--editor-retro-shadow, var(--wamp-ink)), 0 0 0 2px rgba(var(--wamp-sky-rgb), 0.28);
 }
 
 #editor-inspector :is(#swordsman-objective-panel, #police-behavior-panel) .goal-input option {
-  background: #18161c;
-  color: var(--editor-retro-cream, #fff3db);
+  background: var(--wamp-ink);
+  color: var(--editor-retro-cream, var(--wamp-cream));
 }
 
 .editor-inspector {
@@ -530,7 +530,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy
 
 .editor-inspector > * {
   pointer-events: auto;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 18px 42px rgba(var(--wamp-black-rgb), 0.32);
   backdrop-filter: blur(8px);
 }
 

@@ -1,12 +1,12 @@
 #course-editor-shell {
-  --course-editor-cream: #fff3db;
-  --course-editor-paper: #fffaf0;
-  --course-editor-blue: #79ccde;
-  --course-editor-blue-deep: #2c5071;
-  --course-editor-green: #277b30;
-  --course-editor-yellow: #fcea7c;
-  --course-editor-red: #ed5f4b;
-  --course-editor-shadow: #18161c;
+  --course-editor-cream: var(--wamp-cream);
+  --course-editor-paper: var(--wamp-paper);
+  --course-editor-blue: var(--wamp-sky);
+  --course-editor-blue-deep: var(--wamp-sky-deep);
+  --course-editor-green: var(--wamp-green);
+  --course-editor-yellow: var(--wamp-yellow);
+  --course-editor-red: var(--wamp-red);
+  --course-editor-shadow: var(--wamp-ink);
 }
 
 #course-editor-shell {
@@ -96,7 +96,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   border: 2px solid var(--course-editor-blue-deep);
   background: var(--course-editor-paper);
   color: var(--course-editor-blue-deep);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.15;
   box-shadow: 2px 2px 0 var(--course-editor-shadow);
@@ -130,7 +130,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 .course-editor-room-entry-title,
 .course-editor-checkpoint-title {
   color: var(--course-editor-shadow);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.25;
@@ -140,7 +140,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 .course-editor-checkpoint-meta,
 .course-editor-empty {
   color: var(--course-editor-blue-deep);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -162,7 +162,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 
 #course-editor-shell .history-modal-kicker {
   color: var(--course-editor-blue-deep);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.04em;
   line-height: 1.25;
@@ -171,7 +171,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 
 #course-editor-shell .history-modal-title {
   color: var(--course-editor-shadow);
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.2;
   font-synthesis: none;
@@ -181,7 +181,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .history-modal-meta,
 #course-editor-shell .goal-summary {
   color: var(--course-editor-blue-deep);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -199,7 +199,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 
 #course-editor-shell .about-section-title {
   color: var(--course-editor-blue-deep);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.04em;
   line-height: 1.25;
@@ -212,17 +212,17 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   border-radius: 0;
   background: var(--course-editor-cream);
   color: var(--course-editor-shadow);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 12px;
-  box-shadow: inset 0 0 0 1px rgba(121, 204, 222, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.22);
 }
 
 #course-editor-shell .goal-input:focus {
   outline: none;
   border-color: var(--course-editor-blue);
   box-shadow:
-    inset 0 0 0 1px rgba(121, 204, 222, 0.35),
-    0 0 0 1px rgba(121, 204, 222, 0.42);
+    inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.35),
+    0 0 0 1px rgba(var(--wamp-sky-rgb), 0.42);
 }
 
 #course-editor-shell .goal-summary,
@@ -250,7 +250,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   border-radius: 0;
   background: var(--course-editor-cream);
   color: var(--course-editor-shadow);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
   box-shadow: none;
@@ -266,7 +266,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell #course-workbench-publish-reason,
 #course-editor-shell #course-workbench-unpublish-reason {
   background: #eefbfd;
-  color: #000;
+  color: var(--wamp-black);
   border-color: var(--course-editor-blue);
 }
 
@@ -287,7 +287,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   padding: 8px 12px 7px;
   border: 2px solid var(--course-editor-shadow);
   border-radius: 0;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.03em;
   line-height: 1.1;
@@ -301,7 +301,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #btn-course-workbench-toggle-room,
 #btn-course-workbench-center-room {
   background: var(--course-editor-blue) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
 }
 
 body[data-device-class='phone'] .course-editor-panel {

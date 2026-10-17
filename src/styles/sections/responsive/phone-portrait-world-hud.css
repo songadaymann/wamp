@@ -4,9 +4,9 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-p
   --mobile-portrait-console-controls-height: calc(
     var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height)
   );
-  --mobile-portrait-console-ink: #18161c;
+  --mobile-portrait-console-ink: var(--wamp-ink);
   --mobile-portrait-console-line: #7a5a20;
-  --mobile-portrait-console-paper: #fffaf0;
+  --mobile-portrait-console-paper: var(--wamp-paper);
   height: 100dvh;
   overflow: hidden;
   -webkit-touch-callout: none;

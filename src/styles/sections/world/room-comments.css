@@ -12,11 +12,11 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 2px solid #18161c;
-  background: #fff3db;
-  box-shadow: 4px 4px 0 #18161c;
-  color: #18161c;
-  font-family: "IBM Plex Mono", "Courier New", monospace;
+  border: 2px solid var(--wamp-ink);
+  background: var(--wamp-cream);
+  box-shadow: var(--shadow-4);
+  color: var(--wamp-ink);
+  font-family: var(--font-mono);
 }
 
 .room-comment-input {
@@ -24,9 +24,9 @@
   min-height: 72px;
   resize: vertical;
   padding: 9px 10px;
-  border: 2px solid #18161c;
-  background: #fffaf0;
-  color: #18161c;
+  border: 2px solid var(--wamp-ink);
+  background: var(--wamp-paper);
+  color: var(--wamp-ink);
   font: inherit;
   line-height: 1.35;
 }
@@ -52,12 +52,12 @@
 
 
 #bottom-bar .world-footer-settings {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #bottom-bar .world-footer-settings:hover {
-  background: #79ccde;
+  background: var(--wamp-sky);
   filter: brightness(1.06);
 }
 

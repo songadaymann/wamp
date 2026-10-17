@@ -7,7 +7,7 @@
 #chat-moderation-modal,
 #mobile-jump-sheet,
 #editor-music-phrase-save-modal {
-  background: rgba(24, 22, 28, 0.8);
+  background: rgba(var(--wamp-ink-rgb), 0.8);
   backdrop-filter: none;
 }
 
@@ -24,10 +24,10 @@
   padding: 20px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 3px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 6px 6px 0 #18161c;
+  box-shadow: var(--shadow-6);
 }
 
 #leaderboard-modal .leaderboard-modal-panel {
@@ -59,8 +59,8 @@
 #chat-moderation-modal .history-modal-kicker,
 #mobile-jump-sheet .history-modal-kicker,
 #editor-music-phrase-save-modal .history-modal-kicker {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.04em;
   line-height: 1.3;
@@ -77,8 +77,8 @@
 #mobile-jump-sheet .history-modal-title,
 #editor-music-phrase-save-modal .history-modal-title {
   margin-top: 6px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -97,8 +97,8 @@
 #leaderboard-modal .leaderboard-secondary,
 #explore-modal .leaderboard-secondary,
 #profile-modal .leaderboard-secondary {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -113,14 +113,14 @@
 #mobile-jump-sheet .history-modal-error,
 #editor-music-phrase-save-modal .history-modal-error {
   padding: 12px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #ed5f4b;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-red);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #leaderboard-modal .history-modal-header > .bar-btn,
@@ -146,16 +146,16 @@
 #mobile-jump-sheet .bar-btn {
   min-height: 34px;
   padding: 8px 12px 7px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #leaderboard-modal .history-modal-header > .bar-btn:hover,
@@ -210,14 +210,14 @@
 #profile-modal #btn-profile-close,
 #editor-music-phrase-save-modal #btn-editor-music-phrase-save-close,
 #editor-music-phrase-save-modal #btn-editor-music-phrase-save-cancel {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #profile-modal #btn-profile-save,
 #editor-music-phrase-save-modal #btn-editor-music-phrase-save-confirm {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 #leaderboard-modal .leaderboard-tabs,
@@ -237,8 +237,8 @@
 
 #leaderboard-modal .leaderboard-tabs .bar-btn.active,
 #profile-modal .profile-tabs .bar-btn.active {
-  background: #fcea7c;
-  color: #000;
+  background: var(--wamp-yellow);
+  color: var(--wamp-black);
 }
 
 #leaderboard-modal .leaderboard-panel,
@@ -248,10 +248,10 @@
   overflow: visible;
   gap: 12px;
   padding: 14px;
-  background: #fffaf0;
-  border: 2px solid #79ccde;
+  background: var(--wamp-paper);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #leaderboard-modal .history-version-list,
@@ -267,8 +267,8 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 12px;
-  background: #fff3db;
-  border: 2px solid #2c5071;
+  background: var(--wamp-cream);
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
 }
 
@@ -280,8 +280,8 @@
 #profile-modal .goal-control-label,
 #editor-music-phrase-save-modal .music-phrase-save-section-title,
 #sign-text-modal .sign-text-modal-label {
-  color: #2c5071;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 0px;
   line-height: 1.35;
@@ -299,13 +299,13 @@
 #mobile-jump-sheet .goal-input {
   min-height: 38px;
   padding: 9px 10px;
-  border: 2px solid #2c5071;
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
-  background: #fff3db;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
-  box-shadow: inset 0 0 0 1px rgba(121, 204, 222, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.22);
 }
 
 #leaderboard-modal select:focus,
@@ -316,10 +316,10 @@
 #chat-moderation-modal input[type='text']:focus,
 #mobile-jump-sheet .goal-input:focus {
   outline: none;
-  border-color: #79ccde;
+  border-color: var(--wamp-sky);
   box-shadow:
-    inset 0 0 0 1px rgba(121, 204, 222, 0.35),
-    0 0 0 1px rgba(121, 204, 222, 0.42);
+    inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.35),
+    0 0 0 1px rgba(var(--wamp-sky-rgb), 0.42);
 }
 
 #leaderboard-modal .leaderboard-controls label {
@@ -345,36 +345,36 @@
 #profile-modal #profile-stats-panel > .history-modal-meta {
   margin-top: 0;
   padding: 10px 12px;
-  border: 2px solid #2c5071;
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
-  background: #fff3db;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-cream);
+  box-shadow: var(--shadow-2);
 }
 
 #leaderboard-modal #leaderboard-room-viewer,
 #leaderboard-modal #leaderboard-course-viewer,
 #leaderboard-modal #leaderboard-global-viewer,
 #profile-modal #profile-hero-progress {
-  border-color: #79ccde;
-  background: rgba(121, 204, 222, 0.14);
+  border-color: var(--wamp-sky);
+  background: rgba(var(--wamp-sky-rgb), 0.14);
 }
 
 #profile-modal #profile-save-status {
-  border-color: #277b30;
-  background: rgba(39, 123, 48, 0.14);
+  border-color: var(--wamp-green);
+  background: rgba(var(--wamp-green-rgb), 0.14);
 }
 
 #leaderboard-modal .leaderboard-difficulty {
   gap: 10px;
   padding: 12px;
-  border: 2px solid #fcea7c;
+  border: 2px solid var(--wamp-yellow);
   border-radius: 0;
   background: #fff7cf;
 }
 
 #leaderboard-modal .leaderboard-rating-label {
-  color: #2c5071;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.35;
   text-transform: uppercase;
@@ -391,138 +391,138 @@
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='easy'] {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='medium'] {
-  background: #fcea7c;
-  color: #000;
+  background: var(--wamp-yellow);
+  color: var(--wamp-black);
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='hard'] {
-  background: #ed5f4b;
-  color: #18161c;
+  background: var(--wamp-red);
+  color: var(--wamp-ink);
 }
 
 #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active[data-room-difficulty='extreme'] {
-  background: #2c5071;
-  color: #fff3db;
+  background: var(--wamp-sky-deep);
+  color: var(--wamp-cream);
 }
 
 #leaderboard-modal .leaderboard-quality-actions .bar-btn.active {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='easy:selected'] {
   background: #eef7dd;
-  border-color: #277b30;
-  color: #18161c;
+  border-color: var(--wamp-green);
+  color: var(--wamp-ink);
 }
 
 #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='hard:selected'] {
   background: #ffe7e2;
   border-color: #bd382b;
-  color: #18161c;
+  color: var(--wamp-ink);
 }
 
 #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='easy:origin'] {
   background: #eefbfd;
-  border-color: #2c5071;
-  color: #18161c;
+  border-color: var(--wamp-sky-deep);
+  color: var(--wamp-ink);
 }
 
 #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='hard:origin'] {
   background: #fff7cf;
   border-color: #faaa39;
-  color: #18161c;
+  color: var(--wamp-ink);
 }
 
 #leaderboard-modal .leaderboard-room-rush-modes .bar-btn.active {
-  box-shadow: 4px 4px 0 #18161c, inset 0 0 0 2px currentColor;
-  color: #18161c;
+  box-shadow: var(--shadow-4), inset 0 0 0 2px currentColor;
+  color: var(--wamp-ink);
   transform: translate(-1px, -1px);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='easy'] {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty=''] {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='easy'] {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='medium'],
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='medium'] {
-  background: #fcea7c;
-  color: #000;
+  background: var(--wamp-yellow);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='hard'],
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='hard'] {
   background: #d7ac63;
-  color: #000;
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='extreme'],
 #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='extreme'] {
-  background: #ed5f4b;
-  color: #18161c;
+  background: var(--wamp-red);
+  color: var(--wamp-ink);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='featured'] {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='quality'] {
-  background: #fcea7c;
-  color: #000;
+  background: var(--wamp-yellow);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='newest'] {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unbeaten'] {
-  background: #ed5f4b;
-  color: #18161c;
+  background: var(--wamp-red);
+  color: var(--wamp-ink);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unvisited'] {
-  background: #2c5071;
-  color: #fff3db;
+  background: var(--wamp-sky-deep);
+  color: var(--wamp-cream);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='unrated'] {
   background: #d7ac63;
-  color: #000;
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='builders'],
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-sort='guestRooms'],
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='rooms'] {
-  background: #fcea7c;
-  color: #000;
+  background: var(--wamp-yellow);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='alphabet'] {
-  background: #79ccde;
-  color: #000;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
 }
 
 #explore-modal .leaderboard-discover-sorts .bar-btn.active[data-explore-builder-sort='recent'] {
-  background: #277b30;
-  color: #fff3db;
+  background: var(--wamp-green);
+  color: var(--wamp-cream);
 }
 
 /* Sign Text, Choose Avatar, Chat Moderation and the phone Warp sheet use the same paper skin
@@ -531,13 +531,13 @@
 #avatar-picker-modal .history-modal-panel,
 #chat-moderation-modal .history-modal-panel,
 #mobile-jump-sheet .history-modal-panel {
-  --text: #18161c;
+  --text: var(--wamp-ink);
   --text-muted: #4b4552;
   --text-dim: #6d6768;
-  --border: rgba(44, 80, 113, 0.35);
-  --border-strong: #2c5071;
-  --field: #fff3db;
-  color: #18161c;
+  --border: rgba(var(--wamp-sky-deep-rgb), 0.35);
+  --border-strong: var(--wamp-sky-deep);
+  --field: var(--wamp-cream);
+  color: var(--wamp-ink);
 }
 
 #sign-text-modal .sign-text-modal-input {
@@ -546,8 +546,8 @@
 }
 
 #chat-moderation-modal .chat-moderation-section {
-  background: rgba(121, 204, 222, 0.12);
-  border: 2px solid #2c5071;
+  background: rgba(var(--wamp-sky-rgb), 0.12);
+  border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
 }
 
