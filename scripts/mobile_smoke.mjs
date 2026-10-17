@@ -1,3 +1,4 @@
+import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
 import { auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
@@ -151,10 +152,10 @@ const scenarios = [
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
   { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
   { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
-  { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
+  { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
-  { name: 'phone-mann-cool', mannCoolFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
-    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin));
+  { name: 'phone-mann-cool', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin, { renderer: process.env.MOBILE_SMOKE_IFRAME_RENDERER || (engineName === 'webkit' && process.platform === 'linux' ? 'canvas' : 'auto') }));
   } },
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
@@ -248,7 +249,8 @@ async function runScenario(browserInstance, scenario) {
     userAgent: scenario.profile.userAgent,
   });
   const scenarioApiFixtures = scenario.spawnPickupFixture
-    ? createMobileSpawnPickupFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz')) : apiFixtures;
+    ? createMobileSpawnPickupFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz'))
+    : scenario.inputRoomFixture ? createMobileInputRoomFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz')) : apiFixtures;
   await scenarioApiFixtures?.install(context);
   if (scenario.signedFixture) {
     if (!apiFixtures) throw new Error('Signed input checks require isolated API fixtures');
@@ -326,10 +328,10 @@ async function runScenario(browserInstance, scenario) {
   try {
     if (!scenario.mannCoolFixture) await gotoMobileSmokePage(page, scenario.searchParams);
     await scenario.run(page, scenarioSummary, scenarioDir);
-    if (scenario.spawnPickupFixture) {
+    if (scenario.spawnPickupFixture || scenario.inputRoomFixture) {
       const report = scenarioApiFixtures.report();
-      assertCondition(Object.keys(report.misses).length === 0, 'Spawn pickup requests must all be isolated fixtures');
-      scenarioSummary.assertions.push({ label: 'Spawn pickup API replay has no misses', apiFixtures: report });
+      assertCondition(Object.keys(report.misses).length === 0, 'Scenario requests must all be isolated fixtures');
+      scenarioSummary.assertions.push({ label: 'Scenario API replay has no misses', apiFixtures: report });
     }
     const state = await readState(page);
     scenarioSummary.ok = true;

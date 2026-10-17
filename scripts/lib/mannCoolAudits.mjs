@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 
 /** Real cross-origin parent frames; intercept analytics so automated visits never inflate counts. */
-export async function auditMannCool(page, capture = async () => {}, assetOrigin = new URL(page.url()).origin) {
+export async function auditMannCool(page, capture = async () => {}, assetOrigin = new URL(page.url()).origin, { renderer = 'auto' } = {}) {
+  assert(['auto', 'canvas', 'webgl'].includes(renderer), 'supported iframe renderer');
   const context = page.context(), reports = [];
   await context.route(url => url.protocol === 'https:' && url.origin === 'https://wamp.land' && !url.pathname.startsWith('/api/'), async route => {
     const url = new URL(route.request().url());
@@ -14,7 +15,7 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
     await route.fulfill({ status: request.method() === 'OPTIONS' ? 204 : 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'Content-Type' }, body: request.method() === 'OPTIONS' ? '' : '{}' });
   });
   await context.route('https://mann.cool/controller-empty', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Controller fixture transition</title>' }));
-  const parentHtml = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{display:block;width:100%;height:calc(100% - 56px);border:0}button{height:50px;width:80px}</style><iframe id="game" src="https://wamp.land/?x=0&y=0&welcome=0"></iframe><button id="right">Right</button><button id="jump">Jump</button><script>function send(key,eventType){game.contentWindow.postMessage({type:'keyEvent',key,eventType},'https://wamp.land')}for(const [id,key] of [['right','ArrowRight'],['jump',' ']]){document.getElementById(id).addEventListener('pointerdown',()=>send(key,'keydown'));document.getElementById(id).addEventListener('pointerup',()=>send(key,'keyup'))}</script>`;
+  const parentHtml = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{display:block;width:100%;height:calc(100% - 56px);border:0}button{height:50px;width:80px}</style><iframe id="game" src="https://wamp.land/?x=0&y=0&welcome=0&renderer=${renderer}"></iframe><button id="right">Right</button><button id="jump">Jump</button><script>function send(key,eventType){game.contentWindow.postMessage({type:'keyEvent',key,eventType},'https://wamp.land')}for(const [id,key] of [['right','ArrowRight'],['jump',' ']]){document.getElementById(id).addEventListener('pointerdown',()=>send(key,'keydown'));document.getElementById(id).addEventListener('pointerup',()=>send(key,'keyup'))}</script>`;
   await context.route(url => ['https://mann.cool', 'https://untrusted.example'].includes(url.origin) && url.pathname === '/controller-fixture', route => route.fulfill({ contentType: 'text/html', body: parentHtml }));
   const open = async origin => {
     await page.goto(origin + '/controller-fixture');
@@ -34,6 +35,7 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
   assert.equal(reports.length, 1); assert.deepEqual(reports[0].body, { slug: 'wamp', source: 'mann.cool' });
   assert(!reports[0].headers.cookie && !reports[0].headers.referer);
   const before = await read(frame);
+  if (renderer === 'canvas') assert.equal(before.graphics.renderer.type, 1, 'Linux iframe input probe uses supported Canvas rendering');
   // Physical pointer on a parent button moves focus out of the iframe, as the console does.
   const box = await page.locator('#right').boundingBox(); assert(box);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
@@ -116,7 +118,7 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
   await evil.waitForFunction(() => JSON.parse(window.render_game_to_text()).mannCool.playReport === 'sent');
   assert.equal(reports.length, 2); assert.deepEqual(reports[1].body, { slug: 'wamp', source: 'direct' });
   await capture('mann-cool-untrusted-parent');
-  return { label: 'mann.cool visit and real parent controller', reports: reports.map(r => r.body), trustedController: trusted.mannCool.controller, wrongOriginRejected: true };
+  return { label: 'mann.cool visit and real parent controller', reports: reports.map(r => r.body), trustedController: trusted.mannCool.controller, renderer, wrongOriginRejected: true };
   } catch (error) {
     const state = await read(frame).catch(() => null);
     throw new Error(`${error.stack || error}\nChild input at failure: ${JSON.stringify({ controller: state?.mannCool, mode: state?.activeScene?.mode, camera: state?.activeScene?.cameraMode })}`);
