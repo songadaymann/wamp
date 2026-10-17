@@ -1,0 +1,18 @@
+# F091 — mann.cool play reporting and controller input
+
+WAMP reports one best-effort visit after the app is ready on `wamp.land` or `www.wamp.land`. The request contains only `slug: wamp` and a source of `direct` or `mann.cool`, selected by exact referrer origin. Credentials and the browser referrer are omitted. Failures, a four-second timeout and teardown are harmless; no retries or reports from local/Pages previews occur.
+
+A mann.cool parent can send the existing `{type: 'keyEvent', key, eventType}` format when WAMP is embedded. Messages must come from the actual parent at `https://mann.cool`. The independent source feeds existing gameplay input without synthesizing Phaser keyboard events. Directions/WASD, Space/Up, Q/Z, E/X, 9, R and Escape follow the corresponding gameplay actions. Repeats and aliases produce one action edge; remote and native holds retain separate ownership. Menus, text/form focus, browsing/editor mode, hidden documents, blur and teardown release or block remote input. Held keys require release before resuming.
+
+The existing mann.cool spotlight still links to the standalone WAMP site. This change does not add an iframe or alter its homepage/catalog. The prerequisite [mann.cool PR2](https://github.com/songadaymann/mann-cool/pull/2) is merged into its production branch `redesign/platform-v1` (e2f1268) and deployed as Cloudflare Worker version `cf0c122c-237e-4aa6-85ab-dec347a295e8`. Its registration accepts WAMP only for play counts. Comments, tips and leaderboards remain outside this registration. No schema migration was needed.
+
+Validation so far:
+
+- Full WAMP quality check: 527 test files / 3,859 tests; types, styles, lint, DOM, asset checks and build pass. Boot is 639.9 KB brotli against the 670 KB budget.
+- Eleven new unit tests cover trust, parsing, input ownership/edges, neutral rearming, source classification, request privacy, deduplication, failures and timeout/teardown.
+- Platform: 14 Worker/SQLite tests, 48 local API/shell behaviors, catalog validation and dry run pass. Live API versions accept WAMP; unrelated WAMP API surfaces still reject it. A live cross-origin test report succeeded; its unique verification bucket was removed and live count returned to zero. Homepage JS/CSS retain the exact previous production hashes.
+- Public-source audit: WAMP has no blockers. mann.cool's generic historic `.env` filename alert was inspected without printing values; the sole entry is a public WalletConnect project ID, explicitly allowed by the user’s open-source rules. No secrets found or history changes required.
+
+Real cross-origin phone coverage is included in the existing Chromium/WebKit production-build smoke gate. It exercises parent pointer movement/jump, combat, native camera parity, restart/stop, menu/typing guards, release after blur/hidden state, sibling/wrong-origin rejection and report attribution/deduplication. Test reports are intercepted; gameplay/API fixtures prevent public room, account or chat writes.
+
+Delivery pending: finish browser acceptance, exact-source and merged-main hosted checks, clean-main guarded Pages-only deployment, and custom-domain/immutable bundle plus runtime verification. Evidence is retained under ignored `output/f091-2026-10-17/`.

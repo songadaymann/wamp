@@ -1,3 +1,4 @@
+import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
 import { auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
 import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib/hapticAudits.mjs';
@@ -152,6 +153,9 @@ const scenarios = [
   { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
   { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
+  { name: 'phone-mann-cool', mannCoolFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin));
+  } },
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
@@ -169,7 +173,7 @@ mkdirSync(outputDir, { recursive: true });
 
 const browser = await (engineName === 'webkit' ? webkit : chromium).launch({
   headless: true,
-  ...(engineName === 'chromium' ? { args: ['--use-gl=angle', '--use-angle=swiftshader'] } : {}),
+  ...(engineName === 'chromium' ? { args: ['--use-gl=angle', '--use-angle=swiftshader', '--mute-audio'] } : {}),
 });
 
 try {
@@ -320,7 +324,7 @@ async function runScenario(browserInstance, scenario) {
   });
 
   try {
-    await gotoMobileSmokePage(page, scenario.searchParams);
+    if (!scenario.mannCoolFixture) await gotoMobileSmokePage(page, scenario.searchParams);
     await scenario.run(page, scenarioSummary, scenarioDir);
     if (scenario.spawnPickupFixture) {
       const report = scenarioApiFixtures.report();
