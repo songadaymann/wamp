@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   JIMOTHY_ANIMATION_KEYS,
+  getJimothyActionAnimationKey,
   type NpcMode,
 } from '../../../npcs/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
@@ -17,6 +18,7 @@ import { syncNpcNameLabelResolution } from './npcNameLabel';
 
 const NPC_WALK_SPEED = 70;
 const NPC_JUMP_VELOCITY = -210;
+export const NPC_STEP_JUMP_VELOCITY_X = 52;
 const NPC_FOLLOW_STOP_DISTANCE = 7;
 const NPC_WANDER_WALK_MIN_MS = 1800;
 const NPC_WANDER_WALK_MAX_MS = 4500;
@@ -60,6 +62,7 @@ export interface NpcRuntimeStateSnapshot {
 
 export class LiveObjectNpcController<TEdgeWall = unknown> {
   private readonly roomBottomedNpcY = new WeakMap<LoadedRoomObject, number>();
+  private readonly stepJumpDirectionX = new WeakMap<LoadedRoomObject, -1 | 1>();
 
   constructor(private readonly options: NpcControllerOptions) {}
 
@@ -116,7 +119,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
     if (liveObject.runtime.npcVictorious) {
       body.setVelocityX(0);
-      this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.victory);
+      this.playActionAnimation(liveObject, 'victory');
       this.syncNameLabel(liveObject);
       return;
     }
@@ -169,6 +172,11 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         }
         liveObject.runtime.npcVictorious = victorious;
         if (!victorious) {
+          this.options.applyDirectionalFacing(
+            liveObject.sprite,
+            liveObject.config,
+            liveObject.runtime.directionX,
+          );
           this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
         }
       }
@@ -252,7 +260,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       }
     }
 
-    if (!liveObject.runtime.npcWalking) {
+    if (!liveObject.runtime.npcWalking && this.getStepJumpDirection(liveObject, body) === null) {
       this.applyHorizontalMovement(liveObject, body, delta, false);
       this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
       return;
@@ -307,6 +315,13 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     terrainActor: boolean,
     mode: NpcMode,
   ): boolean {
+    const stepJumpDirectionX = this.getStepJumpDirection(liveObject, body);
+    if (stepJumpDirectionX !== null) {
+      liveObject.runtime.directionX = stepJumpDirectionX;
+      body.setVelocityX(stepJumpDirectionX * NPC_STEP_JUMP_VELOCITY_X);
+      return false;
+    }
+
     const directionX = liveObject.runtime.directionX;
     const grounded = body.blocked.down || body.touching.down;
     const blocked =
@@ -322,7 +337,10 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       blocked &&
       this.hasOneTileJumpSpace(room, body, directionX)
     ) {
-      body.setVelocityY(NPC_JUMP_VELOCITY);
+      const jumpDirectionX: -1 | 1 = directionX < 0 ? -1 : 1;
+      this.stepJumpDirectionX.set(liveObject, jumpDirectionX);
+      liveObject.runtime.directionX = jumpDirectionX;
+      body.setVelocity(jumpDirectionX * NPC_STEP_JUMP_VELOCITY_X, NPC_JUMP_VELOCITY);
       return false;
     }
 
@@ -389,10 +407,14 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       this.options.getCurrentTime() < liveObject.runtime.npcBounceCooldownUntil &&
       !body.blocked.down &&
       !body.touching.down;
+    const stepJumpDirectionX = this.stepJumpDirectionX.get(liveObject);
+    if (stepJumpDirectionX !== undefined) {
+      liveObject.runtime.directionX = stepJumpDirectionX;
+    }
     body.setVelocityX(resolveNpcHorizontalVelocity({
       currentVelocityX: body.velocity.x,
       directionX: liveObject.runtime.directionX,
-      baseSpeed: NPC_WALK_SPEED,
+      baseSpeed: stepJumpDirectionX !== undefined ? NPC_STEP_JUMP_VELOCITY_X : NPC_WALK_SPEED,
       deltaMs: delta,
       walking,
       externallyLaunched,
@@ -488,6 +510,33 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         return;
       }
     }
+  }
+
+  private getStepJumpDirection(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): -1 | 1 | null {
+    const directionX = this.stepJumpDirectionX.get(liveObject);
+    if (directionX === undefined) {
+      return null;
+    }
+
+    const grounded = body.blocked.down || body.touching.down;
+    const velocityY = body.velocity?.y ?? 0;
+    if (grounded && velocityY >= -1) {
+      this.stepJumpDirectionX.delete(liveObject);
+      return null;
+    }
+
+    return directionX;
+  }
+
+  private playActionAnimation(liveObject: LoadedRoomObject, action: 'victory'): void {
+    liveObject.sprite.setFlipX(false);
+    this.playAnimation(
+      liveObject,
+      getJimothyActionAnimationKey(action, liveObject.runtime.directionX),
+    );
   }
 
   private playAnimation(liveObject: LoadedRoomObject, key: string): void {

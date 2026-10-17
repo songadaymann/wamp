@@ -9,7 +9,7 @@ import type {
   SwordsmanDefeatMode,
   SwordsmanObjectiveMode,
 } from '../../../enemies/swordsmanObjectives';
-import { JIMOTHY_ANIMATION_KEYS } from '../../../npcs/model';
+import { getJimothyActionAnimationKey } from '../../../npcs/model';
 import type {
   CreateLiveObjectEntryOptions,
   LiveObjectRemovedEvent,
@@ -324,7 +324,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       this.scheduleLiveObjectRespawn(loadedRoom, respawnOptions);
     }
 
-    const deathAnimation = isNpc ? JIMOTHY_ANIMATION_KEYS.death
+    const deathAnimation = isNpc
+      ? getJimothyActionAnimationKey('death', liveObject.runtime.directionX)
       : liveObject.runtime.boss
         ? isPoliceEnemyObjectId(liveObject.config.id)
           ? getPoliceAnimationKey(liveObject.config.id, 'death')
@@ -332,6 +333,9 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
         : null;
     if (deathAnimation && isAnimationSafelyPlayable(this.options.scene.anims, deathAnimation)) {
       liveObject.sprite.clearTint();
+      if (isNpc) {
+        liveObject.sprite.setFlipX(false);
+      }
       liveObject.sprite.play(deathAnimation);
       this.options.scene.time.delayedCall(isNpc ? 350 : 500, () => liveObject.sprite.destroy());
     } else {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LiveObjectNpcController } from './npcController';
+import { LiveObjectNpcController, NPC_STEP_JUMP_VELOCITY_X } from './npcController';
 
 vi.mock('phaser', () => ({
   default: {
@@ -130,8 +130,10 @@ describe('NPC path handling', () => {
       right: 48,
       left: 24,
       bottom: 64,
+      velocity: { x: 0, y: 0 },
       blocked: { left: false, right: true, down: true },
       touching: { left: false, right: false, down: true },
+      setVelocity: vi.fn(),
       setVelocityX: vi.fn(),
       setVelocityY: vi.fn(),
     };
@@ -148,7 +150,69 @@ describe('NPC path handling', () => {
     ).handleBlockedPath.bind(controller);
 
     expect(handleBlockedPath({} as never, liveObject, body, true, 'patrol')).toBe(false);
-    expect(body.setVelocityY).toHaveBeenCalledWith(-210);
+    expect(body.setVelocity).toHaveBeenCalledWith(NPC_STEP_JUMP_VELOCITY_X, -210);
+    expect(liveObject.runtime.directionX).toBe(1);
+  });
+
+  it('keeps a one-tile jump moving forward while the NPC is still against the step', () => {
+    const hasSolidTerrainAtWorldPoint = vi
+      .fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValue(false);
+    const controller = new LiveObjectNpcController({
+      scene: { anims: { exists: () => false } },
+      getCurrentTime: () => 0,
+      getPlayerBody: () => null,
+      resetDynamicObjectIfOutOfBounds: () => false,
+      applyDirectionalFacing: () => {},
+      hasSolidTerrainAtWorldPoint,
+      playBounceFx: () => {},
+      bouncePadVelocity: -320,
+      bouncePadCooldownMs: 180,
+    } as never);
+    const liveObject = {
+      runtime: {
+        directionX: 1,
+        npcCanJumpFall: true,
+        npcWalking: true,
+        nextActionAt: 0,
+      },
+      sprite: {},
+      config: {},
+    };
+    const blocked = { left: false, right: true, down: true as boolean };
+    const touching = { left: false, right: false, down: true as boolean };
+    const body = {
+      right: 48,
+      left: 24,
+      bottom: 64,
+      velocity: { x: 0, y: 0 },
+      blocked,
+      touching,
+      setVelocity: vi.fn(),
+      setVelocityX: vi.fn(),
+      setVelocityY: vi.fn(),
+    };
+    const handleBlockedPath = (
+      controller as unknown as {
+        handleBlockedPath(
+          room: object,
+          candidate: typeof liveObject,
+          candidateBody: typeof body,
+          terrainActor: boolean,
+          mode: 'patrol',
+        ): boolean;
+      }
+    ).handleBlockedPath.bind(controller);
+
+    expect(handleBlockedPath({} as never, liveObject, body, true, 'patrol')).toBe(false);
+    body.velocity.y = -180;
+    blocked.down = false;
+    touching.down = false;
+    body.setVelocityX.mockClear();
+
+    expect(handleBlockedPath({} as never, liveObject, body, true, 'patrol')).toBe(false);
+    expect(body.setVelocityX).toHaveBeenCalledWith(NPC_STEP_JUMP_VELOCITY_X);
     expect(liveObject.runtime.directionX).toBe(1);
   });
 });
