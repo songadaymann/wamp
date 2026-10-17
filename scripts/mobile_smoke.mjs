@@ -1,4 +1,5 @@
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
+import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib/hapticAudits.mjs';
 import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -150,6 +151,12 @@ const scenarios = [
   { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
   { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
+  { name: 'phone-haptic-settings', profile: profiles.phonePortrait, navigationFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditHapticSettings(page, label => captureScenarioScreenshot(page, row, dir, label)));
+  } },
+  { name: 'phone-haptic-clear', profile: profiles.phonePortrait, navigationFixture: true, spawnPickupFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditHapticClear(page, label => captureScenarioScreenshot(page, row, dir, label)));
+  } },
   { name: 'phone-narrow-signed-room-controls', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
 ];
 
@@ -282,6 +289,7 @@ async function runScenario(browserInstance, scenario) {
     localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
   });
   if (scenario.navigationFixture) await installNavigationFixtures(context);
+  if (scenario.hapticFixture) await installHapticProbe(context);
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() !== 'error') {

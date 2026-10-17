@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { playHaptic } from '../../feedback/haptics';
 import { PlayerHealth } from '../../player/health';
 import { PvpHeartDisplay, PVP_HEART_HEAD_CLEARANCE_PX } from './pvpHeartDisplay';
 import { syncPvpInvulnerabilitySpriteStyle } from './pvpInvulnerabilityFx';
@@ -33,7 +34,10 @@ export class OverworldPlayerHealthController {
     if (!this.host.isActive() || !this.host.getPlayerBody()) return false;
     this.health.setMaximum(this.host.getMaximumHearts());
     const result = this.health.damage(this.host.getCurrentTime());
-    if (result === 'hurt') this.host.onHurt();
+    if (result === 'hurt') {
+      playHaptic('damage');
+      this.host.onHurt();
+    }
     this.sync();
     return result !== 'death';
   }

@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../../feedback/haptics', () => ({ playHaptic: vi.fn() }));
+import { playHaptic } from '../../feedback/haptics';
+beforeEach(() => vi.clearAllMocks());
 
 vi.mock('phaser', () => ({ default: {} }));
 const display = vi.hoisted(() => ({ setHearts: vi.fn(), setPosition: vi.fn(), setVisible: vi.fn(),
@@ -28,6 +31,7 @@ describe('room health lifecycle and display ownership', () => {
     expect(f.controller.absorbDamage()).toBe(true);
     expect(f.controller.absorbDamage()).toBe(true);
     expect(f.host.onHurt).toHaveBeenCalledOnce();
+    expect(playHaptic).toHaveBeenCalledExactlyOnceWith('damage');
     expect(f.controller.describe()).toMatchObject({ current: 2, invulnerableMs: 1000 });
     f.state.now = 2000; f.controller.sync();
     expect(f.sprite.clearTint).toHaveBeenCalledOnce();

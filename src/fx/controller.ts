@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { playSfx, type SfxCue, type SfxPlaybackOptions } from '../audio/sfx';
 import { FX_ANIMATION_KEYS } from './manifest';
 import { getDevicePerformanceMode } from '../performance/devicePerformanceMode';
+import { playHaptic } from '../feedback/haptics';
 
 type GoalFxKind = 'start' | 'checkpoint' | 'success' | 'fail' | 'abandon';
 
@@ -28,6 +29,7 @@ export class SceneFxController {
     cue: SfxCue = 'collect',
     playbackOptions?: SfxPlaybackOptions | null
   ): void {
+    playHaptic('collect');
     this.playAnimatedFx(FX_ANIMATION_KEYS['coin-collect'], x, y - 8, {
       scale: 1.4,
       depth: 29,
@@ -59,6 +61,7 @@ export class SceneFxController {
   }
 
   playPlayerDeathFx(x: number, y: number): void {
+    playHaptic('damage');
     this.playAnimatedFx(FX_ANIMATION_KEYS.hit, x, y - 16, {
       scale: 1.6,
       depth: 30,
@@ -106,6 +109,7 @@ export class SceneFxController {
   }
 
   playJumpDustFx(x: number, y: number, facing: number): void {
+    playHaptic('jump');
     this.playAnimatedFx(FX_ANIMATION_KEYS['player-jump-dust'], x, y - 2, {
       scale: 1.1,
       depth: 26,
@@ -180,6 +184,7 @@ export class SceneFxController {
         playGoalCue('goal-checkpoint');
         break;
       case 'success':
+        playHaptic('goal');
         this.playAnimatedFx(FX_ANIMATION_KEYS['bomb-explosion'], x, y - 16, {
           scale: 1.5,
           depth: 31,
@@ -194,6 +199,7 @@ export class SceneFxController {
         break;
       case 'fail':
       case 'abandon':
+        if (kind === 'fail') playHaptic('damage');
         this.playAnimatedFx(FX_ANIMATION_KEYS.hit, x, y - 16, {
           scale: 1.4,
           depth: 30,

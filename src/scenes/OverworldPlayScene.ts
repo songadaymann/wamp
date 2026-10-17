@@ -13,6 +13,7 @@ import { PLAYER_BASE_HEIGHT, PLAYER_STANDING_HEIGHT, PLAYER_BODY_WIDTH } from '.
 import { createDailyRepository } from '../daily/repository';
 import { dailyEntryReady } from '../daily/entry';
 import { playSfx } from '../audio/sfx';
+import { playHaptic } from '../feedback/haptics';
 import { createCourseRepository } from '../courses/courseRepository';
 import { globalRoomMusicController } from '../music/controller';
 import { getCourseObjectLink } from '../courses/objectLinks';
@@ -5431,6 +5432,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     }
 
     this.pvpCombatCoordinator.recordStomp(this.time.now);
+    playHaptic('hit');
     this.playerBody.setVelocityY(this.JUMP_VELOCITY * 0.58);
     const instanceCenter = this.pvpInstanceRenderer.getOpponentCenter();
     const hitX = instanceStomped && instanceCenter ? instanceCenter.x : target?.sprite.x ?? this.playerBody.center.x;
