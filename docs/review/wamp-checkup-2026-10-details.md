@@ -1740,6 +1740,8 @@ Open: one socket per shard for both channels (PartyKit server change), the ident
 
 ### F036: Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database
 
+**Third step 2026-10-17:** share only room standings with a 20-second family/policy/limit key. Resolve access and lineage on every request; read ratings and eligibility fresh in parallel with the standings/private-rank work. Changed listed results and newly listed viewers get a fresh top list, and existing post-clear `fresh=1` bypasses both cache reads and writes. Non-prime Worlds stay uncached. Personalized discovery/filter handling remains. [Receipt](wamp-room-standings-cache-2026-10-17.md).
+
 **Second step 2026-10-17:** all-time global entries share the public cache with a private indexed rank/neighbor lookup. Changed listed scores/ranks/neighbors and explicit Refresh use a fresh full snapshot; weekly stays uncached. Room leaderboards and personal discovery remain. [Receipt](wamp-personal-global-cache-2026-10-17.md).
 
 **Partial 2026-10-17:** builder discovery, public profile rooms and public profile playlists now use the shared 20-second cache for every viewer, after authentication and builder token-scope checks. Personalized responses are unchanged. Leaderboard/discovery public-base plus viewer-overlay work remains, including post-submit freshness. [Receipt](wamp-public-list-cache-2026-10-17.md).
