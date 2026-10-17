@@ -1,3 +1,9 @@
+## 2026-10-17 — F036 public list caching
+
+User approved the next checklist step. Branch `codex/wamp-public-list-cache-2026-10-17` starts at main `e493c6e5`. Scope: share the existing 20-second public cache for builder discovery, profile room pages and public profile playlists across signed-in and anonymous requests. Keep authentication/scope checks before cache hits, credential-free keys, request-specific CORS and private viewer-dependent responses. Plan: route/cache isolation regression tests; full quality and hosted source/main gates; guarded API-only delivery from clean main; actual-domain signed-in/anonymous cache proof. F036 stays partial until the separate leaderboard/discovery viewer-overlay work is delivered; master remains 156/215. Preserve dirty primary work, selected animation and decision-gated items. Delivery pending.
+
+F036 public-list source acceptance: 10 new isolation/permission cases, 24 focused tests and full 529-file/3,874-test quality pass. Public-source scan has zero blockers/warnings. Sixteen actual-domain baseline checks confirm the old signed-in bypass and clean temporary-principal removal. Source/main hosted gates, API-only release and live shared-hit/expiry proof remain.
+
 Original prompt: "i think the 240px one works pretty good! Let's record that as our choice for now but I am going to bed so let's make a goal to just work through the checklist overnight until 5am."
 
 ## 2026-10-16 — F094 custom backgrounds

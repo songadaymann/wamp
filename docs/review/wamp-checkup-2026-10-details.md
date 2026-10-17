@@ -1740,6 +1740,8 @@ Open: one socket per shard for both channels (PartyKit server change), the ident
 
 ### F036: Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database
 
+**Partial 2026-10-17:** builder discovery, public profile rooms and public profile playlists now use the shared 20-second cache for every viewer, after authentication and builder token-scope checks. Personalized responses are unchanged. Leaderboard/discovery public-base plus viewer-overlay work remains, including post-submit freshness. [Receipt](wamp-public-list-cache-2026-10-17.md).
+
 - **Area:** Backend performance, cost & reliability
 - **Type:** improvement · **impact:** low · **effort:** medium
 - **Flagged before:** docs/performance-code-health-roadmap.md Wave 2: 'Cache public bases for 20 seconds and overlay viewer-specific state afterward'. Only the anonymous half shipped.
