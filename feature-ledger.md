@@ -1,3 +1,9 @@
+## 2026-10-17 — F036 public list caching
+
+User approved the next checklist step. Branch `codex/wamp-public-list-cache-2026-10-17` starts at main `e493c6e5`. Scope: share the existing 20-second public cache for builder discovery, profile room pages and public profile playlists across signed-in and anonymous requests. Keep authentication/scope checks before cache hits, credential-free keys, request-specific CORS and private viewer-dependent responses. Plan: route/cache isolation regression tests; full quality and hosted source/main gates; guarded API-only delivery from clean main; actual-domain signed-in/anonymous cache proof. F036 stays partial until the separate leaderboard/discovery viewer-overlay work is delivered; master remains 156/215. Preserve dirty primary work, selected animation and decision-gated items. Delivery pending.
+
+F036 public-list source acceptance: 10 new isolation/permission cases, 24 focused tests and full 529-file/3,874-test quality pass. Public-source scan has zero blockers/warnings. Sixteen actual-domain baseline checks confirm the old signed-in bypass and clean temporary-principal removal. Source/main hosted gates, API-only release and live shared-hit/expiry proof remain.
+
 ## 2026-10-16 — F094 custom backgrounds source accepted
 
 Canonical branch `codex/wamp-animated-backgrounds-2026-10-16`, base main22bece9c. Preserve chosen240x135/32-color WebP. Implement bounded upload conversion, actual-byte validation and animated editor/playback; Source quality/native/mobile pass; final hosted/API+Pages/live acceptance follows. No account variant changes or original-image deletion. F070/PR224 is already fully delivered; its older source-time status is superseded by the final PR receipt.

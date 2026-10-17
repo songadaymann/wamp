@@ -68,28 +68,30 @@ export async function handleProfileRoomsGet(
   request: Request, url: URL, env: Env, userId: string, context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const timing = new ServerTiming();
-  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  // Validate credentials before a shared hit; these lists contain only public content.
+  await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   const limit = parseBoundedInteger(url.searchParams.get('limit'), 24, 1, 100);
   const loadResponse = async () => {
     const response = await loadUserProfileRoomsPage(env, userId, limit, url.searchParams.get('cursor'), timing);
-    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(false));
   };
-  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 export async function handleProfilePlaylistsGet(
   request: Request, env: Env, userId: string, context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const timing = new ServerTiming();
-  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  // Validate credentials before a shared hit; these lists contain only public content.
+  await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   const loadResponse = async () => {
     if (!await findUserById(env, userId)) throw new HttpError(404, 'Profile not found.');
     const response = await loadUserProfilePlaylists(env, userId, timing);
-    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(false));
   };
-  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function profileCacheInit(authenticated: boolean): ResponseInit {

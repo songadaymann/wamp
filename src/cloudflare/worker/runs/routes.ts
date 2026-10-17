@@ -723,17 +723,15 @@ export async function handleBuilderDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const authenticated = auth !== null;
   const loadResponse = async () => {
     const response = await timing.measure('builders', () => loadBuilderDiscoveryResponse(env, limit, sort));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
+    timing.setDiagnostic('cache', 'public-20');
     return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+      headers: { 'Cache-Control': 'public, max-age=20' },
     });
   };
-  return authenticated
-    ? loadAnonymousPublicCache(request, undefined, loadResponse)
-    : loadAnonymousPublicCache(request, context, loadResponse);
+  // The builder list is viewer-independent; auth and scope checks still run before cache hits.
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function parseBooleanQueryFlag(value: string | null): boolean {
