@@ -18,6 +18,28 @@ describe('personal discovery session isolation', () => {
 });
 
 describe('fresh global windows', () => {
+  it('bypasses public lifetime caching on Refresh and after a saved run, then restores ordinary reads', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-17T18:00:00Z'));
+    try {
+      const board = { window: 'all', entries: [], viewerEntry: null, viewerNext: null };
+      const fetch = vi.fn(async (_path: string, options?: RequestInit) => options?.method === 'POST'
+        ? new Response(null, { status: 204 }) : Response.json(board));
+      vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      const abort = new AbortController();
+      await repo.loadGlobalLeaderboard(25, 'all', abort.signal, true);
+      expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({ cache: 'no-store', credentials: 'include', signal: abort.signal });
+      await repo.finishRun('clear', { result: 'completed', elapsedMs: 1000, deaths: 0, collectiblesCollected: 0,
+        enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: '2026-10-17T18:00:00Z', enemyCollectiblesCollected: 0 });
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      vi.advanceTimersByTime(20_001);
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+    } finally { vi.useRealTimers(); }
+  });
   it('keeps accounts and Monday rollovers out of the shared cache and preserves period metadata', async () => {
     const week = { window: 'week', period: { startsAt: '2026-10-05T00:00:00.000Z', endsAt: '2026-10-12T00:00:00.000Z' }, serverTime: '2026-10-05T18:00:00.000Z', entries: [], viewerEntry: null, viewerNext: null };
     const fetch = vi.fn().mockResolvedValueOnce(Response.json(week)).mockResolvedValueOnce(Response.json({ ...week, serverTime: '2026-10-05T19:00:00.000Z' }));

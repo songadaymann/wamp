@@ -1,3 +1,11 @@
+Original prompt: "ok let's do the next!"
+
+## 2026-10-17 — F036 personal global leaderboard cache
+
+Continue the approved checklist/release workflow from delivered PR237/main `ca82016c`. Branch `codex/wamp-personal-global-cache-2026-10-17`. Scope: reuse the public all-time leaderboard for signed-in players with a cheaper exact private viewer lookup; bypass after score/rank changes and explicit Refresh; keep weekly standings fresh. Plan: frozen SQL parity/query-plan and real-database route isolation tests; client Refresh/post-write cases; full quality and hosted source/main browser gates; guarded API + Pages release from clean main; actual-domain cross-viewer/cache/freshness proof and exact asset hashes. Room leaderboards and personalized discovery remain separate; F036/master stay partial/156. Preserve primary dirty work, selected animation and decision-gated items. Source and delivery in progress.
+
+Local source acceptance: 530 files/3,887 full tests and all quality gates pass; 29 focused cases and 124 exact private/full SQL comparisons pass. The 6,000-player query probe confirms existing-index range reads. Three native Refresh cases and two installed-client movement/jump iterations pass with inspected images and zero application errors/misses. Ten actual-domain baseline checks pass; temporary stats/users/sessions/token are removed. Hosted source/main gates, guarded API + Pages release and final live proof remain.
+
 ## 2026-10-17 — F036 public list caching
 
 User approved the next checklist step. Branch `codex/wamp-public-list-cache-2026-10-17` starts at main `e493c6e5`. Scope: share the existing 20-second public cache for builder discovery, profile room pages and public profile playlists across signed-in and anonymous requests. Keep authentication/scope checks before cache hits, credential-free keys, request-specific CORS and private viewer-dependent responses. Plan: route/cache isolation regression tests; full quality and hosted source/main gates; guarded API-only delivery from clean main; actual-domain signed-in/anonymous cache proof. F036 stays partial until the separate leaderboard/discovery viewer-overlay work is delivered; master remains 156/215. Preserve dirty primary work, selected animation and decision-gated items. Delivery pending.
