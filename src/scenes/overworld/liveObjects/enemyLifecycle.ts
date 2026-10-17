@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playHaptic } from '../../../feedback/haptics';
 import { getObjectDisplayOffset } from '../../../config';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { SfxCue } from '../../../audio/sfx';
@@ -163,7 +164,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
       if (stomped) {
         playerBody.setVelocityY(this.getStompBounceVelocity());
-        if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
+        if (this.defeatEnemy(loadedRoom, liveObject)) this.playStompImpact();
         if (this.options.getSwordsmanDefeatMode(liveObject) === 'invincible') {
           this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y, loadedRoom.room.coordinates);
         }
@@ -182,7 +183,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     }
 
     playerBody.setVelocityY(this.getStompBounceVelocity());
-    if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
+    if (this.defeatEnemy(loadedRoom, liveObject)) this.playStompImpact();
   }
 
   handleNpcContact(
@@ -202,7 +203,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
 
     playerBody.setVelocityY(this.getStompBounceVelocity());
     const defeated = this.defeatEnemy(loadedRoom, liveObject);
-    if (defeated) this.options.playEnemyStompImpact?.();
+    if (defeated) this.playStompImpact();
     if (!defeated && liveObject.runtime.npcDefeatMode === 'invincible') {
       this.options.playBounceFx(
         liveObject.sprite.x,
@@ -220,6 +221,11 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       return null;
     }
     return this.defeatEnemy(loadedRoom, liveObject);
+  }
+
+  private playStompImpact(): void {
+    playHaptic('hit');
+    this.options.playEnemyStompImpact?.();
   }
 
   private getStompBounceVelocity(): number {

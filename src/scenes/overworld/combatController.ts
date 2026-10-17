@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
+import { playHaptic } from '../../feedback/haptics';
 import type { DefaultPlayerAnimationState } from '../../player/defaultPlayer';
 import type {
   CombatPresentationEvent,
@@ -183,6 +184,7 @@ export class OverworldCombatController {
         const sampleY = projectileRect.y;
         const enemyHit = this.host.attackEnemyAtPoint(sampleX, sampleY, this.options.gunHitRadius);
         if (enemyHit) {
+          playHaptic('hit');
           playSfx('enemy-hit');
           this.host.playBulletImpactFx(enemyHit.x, enemyHit.y - 2);
           this.host.shakeCamera(40, 0.0015);
@@ -193,6 +195,7 @@ export class OverworldCombatController {
 
         const peerHit = this.host.attackPeerAtPoint(sampleX, sampleY, 'gun');
         if (peerHit) {
+          playHaptic('hit');
           playSfx('enemy-hit');
           this.host.playPeerHitFx(peerHit.x, peerHit.y);
           this.host.shakeCamera(40, 0.0015);
@@ -247,6 +250,7 @@ export class OverworldCombatController {
     }
     if ((hits.length === 0 && !peerHit) || swing.connected) return;
     swing.connected = true;
+    playHaptic('hit');
     playSfx('enemy-hit');
     if (swing.downward) {
       playerBody.setVelocityY(this.options.downwardSlashBounceVelocity);

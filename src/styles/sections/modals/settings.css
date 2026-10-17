@@ -250,6 +250,9 @@
   font-family: var(--font-ui);
   font-size: 12px;
 }
+
+#settings-haptics-row { min-height: 44px; }
+#settings-haptics-row .settings-label-copy { display: grid; gap: 4px; }
 .settings-comfort-motion { display: grid; gap: 8px; color: var(--wamp-ink); }
 .settings-comfort-select {
   width: 100%; height: 44px; min-height: 44px; padding: 8px 32px 8px 8px;
