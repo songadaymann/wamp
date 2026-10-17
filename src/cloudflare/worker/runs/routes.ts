@@ -1,3 +1,4 @@
+import { loadCachedRoomStandings } from './roomLeaderboardCache';
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
 import { canReuseGlobalLeaderboardBase, loadGlobalLeaderboardViewer } from './globalLeaderboardViewer';
 import type { GlobalLeaderboardResponse } from '../../../runs/model';
@@ -556,28 +557,38 @@ export async function handleRoomLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read room leaderboards');
-  const authenticated = auth !== null;
   const fresh = url.searchParams.get('fresh') === '1';
-  const loadResponse = async () => {
-    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
-    const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
-      viewerUserId: auth?.user.id ?? null,
-      viewerWalletAddress: auth?.user.walletAddress ?? null,
-      snapshotVersions: [version],
-    }));
-    const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
-    if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
-    const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
-      env, record, selection, limit, auth?.user.id ?? null,
-    ));
-    timing.setDiagnostic('cache', fresh ? 'fresh' : authenticated ? 'private-20' : 'public-20');
-    return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': fresh ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated || fresh ? undefined : context, loadResponse);
+  const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+  const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  // Resolve access and lineage on every request, including a warmed standings hit.
+  const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
+    viewerUserId: auth?.user.id ?? null,
+    viewerWalletAddress: auth?.user.walletAddress ?? null,
+    viewerIsAdmin: auth?.isAdmin ?? false,
+    snapshotVersions: [version],
+  }));
+  const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
+  if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
+  // Keep non-prime Worlds out of the shared cache, including future private/school Worlds.
+  const cached = !fresh && !record.world && hasPublicCache(context)
+    ? timing.measure('standings', () => loadCachedRoomStandings(
+      request, env, selection, limit, auth?.user.id ?? null, context!,
+    )) : null;
+  const [leaderboard, cacheResult] = await Promise.all([
+    timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
+      env, record, selection, limit, auth?.user.id ?? null, cached?.then(result => result.standings),
+    )),
+    cached,
+  ]);
+  const status = cacheResult?.status ?? 'bypass';
+  timing.setDiagnostic('cache', fresh ? 'fresh' : status);
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': auth || fresh || record.world ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': status,
+    },
+  });
 }
 
 export async function handleRoomDifficultyVote(
