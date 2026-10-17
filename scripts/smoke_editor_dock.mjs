@@ -1,3 +1,4 @@
+import { auditButtonRoles } from './lib/buttonRoleAudits.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -157,6 +158,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
     document.body.dataset.editorCourseMode === 'true'
     && document.body.dataset.editorDockShell === 'true'
   ));
+  await auditButtonRoles(page, 'editor');
   const topTools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await topTools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
     ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
@@ -289,6 +291,7 @@ async function resizeDrawer(page, deltaX) {
 }
 
 async function verifyCommonShell(page, viewport, viewportOutputDir) {
+  await auditButtonRoles(page, 'editor');
   const tools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await tools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
     ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);

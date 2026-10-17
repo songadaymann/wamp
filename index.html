@@ -235,9 +235,9 @@
         </nav>
         <details class="game-menu-admin game-menu-section">
           <summary>Admin</summary>
-          <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action>Reset Test Data</button></div>
+          <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Reset Test Data</button></div>
         </details>
-        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action>Log out</button>
+        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
       </div>
     </div>
   <div id="app">
@@ -903,26 +903,26 @@
         <div id="course-editor-placement-hint" class="goal-placement-hint hidden">Click the canvas to place the selected expanded room marker.</div>
         <div id="course-editor-summary" class="goal-summary">No expanded room selected.</div>
         <div class="course-room-actions">
-          <button id="btn-course-editor-save-course" class="bar-btn bar-btn-small" type="button">Save Expanded Room</button>
-          <button id="btn-course-editor-publish-course" class="bar-btn bar-btn-small" type="button">Publish Expanded Room</button>
+          <button id="btn-course-editor-save-course" class="bar-btn bar-btn-small" type="button" data-button-variant="build">Save Expanded Room</button>
+          <button id="btn-course-editor-publish-course" class="bar-btn bar-btn-small" type="button" data-button-variant="play" data-button-size="lg">Publish Expanded Room</button>
         </div>
       </div>
 
       <div class="sidebar-section" id="editor-actions" data-mobile-panel="actions">
         <div class="editor-action-rail">
-          <button id="btn-editor-back" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Return to World (Esc)">
+          <button id="btn-editor-back" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Return to World (Esc)" data-button-variant="neutral">
             <span class="tool-icon" aria-hidden="true">&#8592;</span>
             <span class="tool-label" data-button-label>World</span>
           </button>
-          <button id="btn-test-play" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Test Play (Enter / P)">
+          <button id="btn-test-play" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Test Play (Enter / P)" data-button-variant="play">
             <span class="tool-icon" aria-hidden="true">&#9654;</span>
             <span class="tool-label">Test</span>
           </button>
-          <button id="btn-save-draft" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Save Room Draft (Cmd/Ctrl+S)">
+          <button id="btn-save-draft" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Save Room Draft (Cmd/Ctrl+S)" data-button-variant="build">
             <span class="tool-icon" aria-hidden="true">&#128190;</span>
             <span class="tool-label" data-button-label>Save Room</span>
           </button>
-          <button id="btn-publish-room" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Publish Room (Cmd/Ctrl+Shift+P)">
+          <button id="btn-publish-room" class="bar-btn bar-btn-small editor-action-rail-btn" type="button" title="Publish Room (Cmd/Ctrl+Shift+P)" data-button-variant="play" data-button-size="lg">
             <span class="tool-icon" aria-hidden="true">&#128640;</span>
             <span class="tool-label" data-button-label>Publish Room</span>
           </button>
@@ -1449,11 +1449,11 @@
       <div id="editor-shell-title-slot" class="editor-shell-title-slot"></div>
       <div class="editor-shell-actions" aria-label="Room actions">
         <div class="editor-shell-action-grid">
-          <button class="editor-shell-chunky-button editor-shell-back-button" type="button" data-editor-shell-action="back"><span aria-hidden="true">&#8592;</span><span>Back to World</span></button>
-          <button class="editor-shell-chunky-button" type="button" data-editor-shell-action="share" aria-controls="editor-share-popover" aria-expanded="false"><span aria-hidden="true">&#8593;</span><span>Share</span></button>
-          <button class="editor-shell-chunky-button editor-shell-save-button" type="button" data-editor-shell-action="save" title="Save changed expanded room cells"><span aria-hidden="true">&#128190;</span><span>Save Cells</span></button>
-          <button class="editor-shell-chunky-button editor-shell-test-button" type="button" data-editor-shell-action="test" title="Test Play (Enter / P)"><span aria-hidden="true">&#9654;</span><span>Test</span></button>
-          <button class="editor-shell-chunky-button editor-shell-publish-button" type="button" data-editor-shell-action="publish"><span aria-hidden="true">&#128640;</span><span>Publish</span></button>
+          <button class="editor-shell-chunky-button editor-shell-back-button" type="button" data-button-variant="neutral" data-editor-shell-action="back"><span aria-hidden="true">&#8592;</span><span>Back to World</span></button>
+          <button class="editor-shell-chunky-button" type="button" data-button-variant="curate" data-editor-shell-action="share" aria-controls="editor-share-popover" aria-expanded="false"><span aria-hidden="true">&#8593;</span><span>Share</span></button>
+          <button class="editor-shell-chunky-button editor-shell-save-button" type="button" data-button-variant="build" data-editor-shell-action="save" title="Save changed expanded room cells"><span aria-hidden="true">&#128190;</span><span>Save Cells</span></button>
+          <button class="editor-shell-chunky-button editor-shell-test-button" type="button" data-button-variant="play" data-editor-shell-action="test" title="Test Play (Enter / P)"><span aria-hidden="true">&#9654;</span><span>Test</span></button>
+          <button class="editor-shell-chunky-button editor-shell-publish-button" type="button" data-button-variant="play" data-button-size="lg" data-editor-shell-action="publish"><span aria-hidden="true">&#128640;</span><span>Publish</span></button>
         </div>
         <div id="editor-share-popover" class="editor-shell-popover editor-share-popover hidden" role="dialog" aria-label="Share room" aria-hidden="true">
           <button type="button" data-editor-share-action="wampogram"><span class="editor-share-icon" aria-hidden="true">&#9829;</span><span data-editor-share-label>Wamp-O-Gram</span></button>
@@ -1514,7 +1514,7 @@
           <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
             People can’t see this room until you publish it.
           </div>
-          <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button">
+          <button id="btn-editor-publish-nudge" class="bar-btn bar-btn-small" type="button" data-button-variant="play">
             Publish Now
           </button>
         </div>
@@ -1858,7 +1858,7 @@
               <div class="history-modal-title">Expanded Room Setup</div>
               <div id="course-workbench-status" class="history-modal-meta hidden"></div>
             </div>
-            <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button">World</button>
+            <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button" data-button-variant="neutral">World</button>
           </div>
 
           <div class="course-editor-toolbar">
@@ -1887,9 +1887,9 @@
               <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>
               <div id="course-workbench-selected-room-actions" class="course-room-actions">
                 <button id="btn-course-workbench-toggle-room" class="bar-btn bar-btn-small" type="button">Add Cell</button>
-                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button">Open Cell</button>
+                <button id="btn-course-workbench-open-room" class="bar-btn bar-btn-small" type="button" data-button-variant="build">Open Cell</button>
                 <button id="btn-course-workbench-center-room" class="bar-btn bar-btn-small" type="button">Center</button>
-                <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button">Edit Expanded Room</button>
+                <button id="btn-course-workbench-edit-course" class="bar-btn bar-btn-small" type="button" data-button-variant="build">Edit Expanded Room</button>
               </div>
             </div>
 
@@ -1898,10 +1898,10 @@
               <div class="history-modal-meta">Save this title + cell list before opening the expanded room editor.</div>
               <div id="course-workbench-summary" class="goal-summary"></div>
               <div class="course-room-actions">
-                <button id="btn-course-workbench-save" class="bar-btn" type="button">Save Setup</button>
-                <button id="btn-course-workbench-test" class="bar-btn" type="button">Test Draft</button>
-                <button id="btn-course-workbench-publish" class="bar-btn" type="button">Publish Expanded Room</button>
-                <button id="btn-course-workbench-unpublish" class="bar-btn hidden" type="button">Unpublish Expanded Room</button>
+                <button id="btn-course-workbench-save" class="bar-btn" type="button" data-button-variant="build">Save Setup</button>
+                <button id="btn-course-workbench-test" class="bar-btn" type="button" data-button-variant="play">Test Draft</button>
+                <button id="btn-course-workbench-publish" class="bar-btn" type="button" data-button-variant="play" data-button-size="lg">Publish Expanded Room</button>
+                <button id="btn-course-workbench-unpublish" class="bar-btn bar-btn-danger hidden" type="button" data-button-variant="danger">Unpublish Expanded Room</button>
               </div>
               <div id="course-workbench-save-reason" class="history-modal-meta hidden"></div>
               <div id="course-workbench-test-reason" class="history-modal-meta hidden"></div>
@@ -2024,7 +2024,7 @@
         <div id="world-selected-meta" class="world-hud-meta">No adjacent published room</div>
         <div id="world-jump-row" class="world-hud-row">
           <input id="world-jump-input" aria-label="Warp to room (x,y)" type="text" value="0,0" spellcheck="false" />
-          <button id="btn-world-jump" class="bar-btn bar-btn-small">Warp</button>
+          <button id="btn-world-jump" class="bar-btn bar-btn-small" data-button-variant="curate">Warp</button>
         </div>
         <div id="world-zoom-label" class="world-hud-meta world-zoom-label hidden" aria-hidden="true"></div>
         <div id="world-selected-goal" class="world-hud-goal"></div>
@@ -2038,31 +2038,31 @@
               <div id="room-sequence-meta" class="room-sequence-meta"></div>
             </div>
             <div class="room-sequence-buttons">
-              <button id="btn-room-sequence-stop" class="bar-btn bar-btn-small" type="button">Stop</button>
-              <button id="btn-room-sequence-restart" class="bar-btn bar-btn-small" type="button">Restart</button>
-              <button id="btn-room-sequence-current" class="bar-btn bar-btn-small hidden" type="button">Rate</button>
-              <button id="btn-room-sequence-next" class="bar-btn bar-btn-small" type="button">Next</button>
-              <button id="btn-room-sequence-comment" class="bar-btn bar-btn-small" type="button">Comment</button>
+              <button id="btn-room-sequence-stop" class="bar-btn bar-btn-small" type="button" data-button-variant="danger">Stop</button>
+              <button id="btn-room-sequence-restart" class="bar-btn bar-btn-small" type="button" data-button-variant="play">Restart</button>
+              <button id="btn-room-sequence-current" class="bar-btn bar-btn-small hidden" type="button" data-button-variant="curate">Rate</button>
+              <button id="btn-room-sequence-next" class="bar-btn bar-btn-small" type="button" data-button-variant="play">Next</button>
+              <button id="btn-room-sequence-comment" class="bar-btn bar-btn-small" type="button" data-button-variant="curate">Comment</button>
             </div>
           </div>
-          <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled>Play Room</button>
-          <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button">Restart</button>
-          <button id="btn-world-room-comment" class="bar-btn bar-btn-small world-btn-room-comment hidden" type="button">Comment</button>
-          <button id="btn-world-share" class="bar-btn bar-btn-small hidden" type="button">Share</button>
-          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled>Play Expanded Room</button>
+          <button id="btn-world-play" class="bar-btn bar-btn-small world-btn-play" disabled data-button-variant="play" data-button-size="lg">Play Room</button>
+          <button id="btn-world-restart" class="bar-btn bar-btn-small world-btn-play hidden" type="button" data-button-variant="play">Restart</button>
+          <button id="btn-world-room-comment" class="bar-btn bar-btn-small world-btn-room-comment hidden" type="button" data-button-variant="curate">Comment</button>
+          <button id="btn-world-share" class="bar-btn bar-btn-small hidden" type="button" data-button-variant="curate">Share</button>
+          <button id="btn-world-play-course" class="bar-btn bar-btn-small world-btn-play hidden" disabled data-button-variant="play">Play Expanded Room</button>
           <button id="btn-world-room-rush" class="bar-btn bar-btn-small world-btn-room-rush hidden" type="button">Room Rush</button>
-          <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled>Edit Room</button>
-          <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled>Build Here</button>
-          <button id="btn-world-jump-sheet" class="bar-btn bar-btn-small world-btn-controls hidden">Warp</button>
+          <button id="btn-world-edit" class="bar-btn bar-btn-small world-btn-edit" disabled data-button-variant="build">Edit Room</button>
+          <button id="btn-world-build" class="bar-btn bar-btn-small world-btn-build" disabled data-button-variant="build">Build Here</button>
+          <button id="btn-world-jump-sheet" class="bar-btn bar-btn-small world-btn-controls hidden" data-button-variant="curate">Warp</button>
         </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
-          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Expanded Room Builder</button>
+          <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled data-button-variant="build">Expanded Room Builder</button>
 
-          <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
-          <button id="btn-world-comment" class="bar-btn bar-btn-small world-btn-comment" type="button">Comments</button>
-          <button id="btn-world-rate-room" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button">Rate Room</button>
-          <button id="btn-world-chat" class="bar-btn bar-btn-small world-btn-controls hidden">Chat</button>
-          <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button">Say</button>
+          <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard" data-button-variant="curate">Leaderboard</button>
+          <button id="btn-world-comment" class="bar-btn bar-btn-small world-btn-comment" type="button" data-button-variant="curate">Comments</button>
+          <button id="btn-world-rate-room" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button" data-button-variant="curate">Rate Room</button>
+          <button id="btn-world-chat" class="bar-btn bar-btn-small world-btn-controls hidden" data-button-variant="curate">Chat</button>
+          <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button" data-button-variant="curate">Say</button>
         </div>
         <div id="world-status" class="world-hud-status"></div>
       </div>
@@ -2089,18 +2089,18 @@
         id="btn-mobile-world-stop"
         class="bar-btn bar-btn-small world-btn-play active mobile-world-stop hidden"
         type="button"
-      >
+       data-button-variant="danger">
         Stop
       </button>
       <button
         id="btn-mobile-world-restart"
         class="bar-btn bar-btn-small world-btn-play active mobile-world-restart hidden"
         type="button"
-      >
+       data-button-variant="play">
         Restart
       </button>
-      <button id="btn-mobile-room-sequence-next" class="bar-btn mobile-room-sequence-next hidden" type="button">Next</button>
-      <button id="btn-mobile-world-share" class="bar-btn bar-btn-small mobile-world-share hidden" type="button">Share</button>
+      <button id="btn-mobile-room-sequence-next" class="bar-btn mobile-room-sequence-next hidden" type="button" data-button-variant="play">Next</button>
+      <button id="btn-mobile-world-share" class="bar-btn bar-btn-small mobile-world-share hidden" type="button" data-button-variant="curate">Share</button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
         <div id="mobile-move-zone" class="mobile-move-zone" aria-label="Move">
           <div id="mobile-move-stick" class="mobile-move-stick" aria-hidden="true">
@@ -2172,9 +2172,9 @@
       </div>
       <div class="bar-center">
         <nav id="world-navigation" aria-label="World navigation">
-          <button id="btn-world-explore" class="bar-btn bar-btn-small world-footer-controls-btn" type="button">Explore</button>
-          <button id="btn-world-worlds" class="bar-btn bar-btn-small world-footer-controls-btn hidden" type="button">Worlds</button>
-          <button id="btn-auth-leaderboard" class="bar-btn bar-btn-small world-footer-controls-btn" type="button">Leaderboards</button>
+          <button id="btn-world-explore" class="bar-btn bar-btn-small world-footer-controls-btn" type="button" data-button-variant="curate">Explore</button>
+          <button id="btn-world-worlds" class="bar-btn bar-btn-small world-footer-controls-btn hidden" type="button" data-button-variant="curate">Worlds</button>
+          <button id="btn-auth-leaderboard" class="bar-btn bar-btn-small world-footer-controls-btn" type="button" data-button-variant="curate">Leaderboards</button>
         </nav>
         <div id="world-online-wrap" class="world-online-wrap world-only-control hidden">
           <button

@@ -278,8 +278,8 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   padding: 5px 4px;
   border: 2px solid var(--mobile-portrait-console-ink);
   border-radius: 0;
-  background: #ed5f4b;
-  color: #18161c;
+  background: var(--button-background);
+  color: var(--button-foreground);
   box-shadow: 2px 2px 0 var(--mobile-portrait-console-ink);
   font-family: var(--hud-ui-font);
   font-size: 9px;

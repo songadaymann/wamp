@@ -295,32 +295,13 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   box-shadow: 3px 3px 0 var(--course-editor-shadow);
 }
 
-#btn-course-workbench-back-world,
 #btn-course-workbench-zoom-out,
 #btn-course-workbench-zoom-in,
 #btn-course-workbench-fit,
 #btn-course-workbench-toggle-room,
-#btn-course-workbench-center-room,
-#btn-course-workbench-unpublish {
+#btn-course-workbench-center-room {
   background: var(--course-editor-blue) !important;
   color: #000 !important;
-}
-
-#btn-course-workbench-open-room,
-#btn-course-workbench-edit-course,
-#btn-course-workbench-save {
-  background: var(--course-editor-yellow) !important;
-  color: #000 !important;
-}
-
-#btn-course-workbench-test {
-  background: var(--course-editor-green) !important;
-  color: var(--course-editor-cream) !important;
-}
-
-#btn-course-workbench-publish {
-  background: var(--course-editor-red) !important;
-  color: #18161c !important;
 }
 
 body[data-device-class='phone'] .course-editor-panel {

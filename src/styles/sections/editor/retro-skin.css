@@ -182,10 +182,10 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge .bar-bt
 body[data-app-mode='editor'] #editor-room-feedback #btn-editor-publish-nudge {
   border: 2px solid var(--editor-retro-shadow);
   border-radius: 0;
-  background: var(--editor-retro-red) !important;
-  background-color: var(--editor-retro-red) !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #18161c !important;
+  background: var(--button-background) !important;
+  background-color: var(--button-background) !important;
+  box-shadow: inset 0 0 0 999px var(--button-background), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--button-foreground) !important;
   font-family: var(--editor-ui-font);
   font-size: 11px;
   letter-spacing: 0;
@@ -422,11 +422,11 @@ body[data-app-mode='editor'] #sidebar .layer-info-button {
 body[data-app-mode='editor'] #sidebar .bar-btn {
   min-height: 32px;
   padding: 6px 10px 5px;
-  background: var(--editor-retro-blue) !important;
-  background-color: var(--editor-retro-blue) !important;
+  background: var(--button-background, var(--editor-retro-blue)) !important;
+  background-color: var(--button-background, var(--editor-retro-blue)) !important;
   background-image: none !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  box-shadow: inset 0 0 0 999px var(--button-background, var(--editor-retro-blue)), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--button-foreground, #000) !important;
   font-family: var(--editor-ui-font);
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -449,6 +449,9 @@ body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
 
 body[data-app-mode='editor'] #sidebar .bar-btn:disabled,
 body[data-app-mode='editor'] #sidebar .bar-btn[aria-disabled='true'] {
+  --button-background: #d2caba;
+  --button-foreground: #5f5a53;
+  opacity: 1;
   background: #d2caba;
   border-color: #8d877c;
   color: #5f5a53;
@@ -493,12 +496,12 @@ body[data-app-mode='editor'] #sidebar .editor-shape-fill-button {
 }
 
 body[data-app-mode='editor'] #sidebar .bar-btn-danger {
-  background: var(--editor-retro-red) !important;
-  background-color: var(--editor-retro-red) !important;
+  background: var(--button-background) !important;
+  background-color: var(--button-background) !important;
   background-image: none !important;
   border-color: var(--editor-retro-shadow) !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #18161c !important;
+  box-shadow: inset 0 0 0 999px var(--button-background), 2px 2px 0 var(--editor-retro-shadow) !important;
+  color: var(--button-foreground) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .tool-btn,
@@ -910,31 +913,6 @@ body[data-app-mode='editor'] #sidebar .editor-action-rail-btn {
   padding: 6px 4px 5px;
 }
 
-body[data-app-mode='editor'] #sidebar #btn-editor-back {
-  background: var(--editor-retro-blue) !important;
-  background-color: var(--editor-retro-blue) !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
-}
-
-body[data-app-mode='editor'] #sidebar #btn-test-play {
-  background: var(--editor-retro-green) !important;
-  background-color: var(--editor-retro-green) !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-green), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--editor-retro-cream) !important;
-}
-
-body[data-app-mode='editor'] #sidebar #btn-save-draft,
-body[data-app-mode='editor'] #sidebar #btn-course-editor-save-course {
-  background: var(--editor-retro-yellow) !important;
-  background-color: var(--editor-retro-yellow) !important;
-  box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
-}
-
-body[data-app-mode='editor'] #sidebar #btn-publish-room,
-body[data-app-mode='editor'] #sidebar #btn-course-editor-publish-course,
-body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge,
 body[data-app-mode='editor'] #sidebar #btn-mint-room {
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
@@ -950,7 +928,7 @@ body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {
 }
 
 body[data-app-mode='editor'] #sidebar #btn-publish-room .tool-label {
-  font-size: 7px;
+  font-size: 16px;
   letter-spacing: 0;
   line-height: 1.05;
 }

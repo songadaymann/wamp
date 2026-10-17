@@ -257,26 +257,6 @@ body[data-app-mode="play-world"] .world-only-control {
   display: inline-flex;
 }
 
-#world-hud .world-btn-play:not(:disabled) {
-  background: var(--hud-trial-green);
-  border-color: #18161c;
-  color: #fff;
-}
-
-#world-hud .world-btn-play:not(:disabled):hover {
-  background: var(--hud-trial-green);
-}
-
-#world-hud .world-btn-play.active {
-  background: var(--hud-trial-red);
-  border-color: #18161c;
-  color: #18161c;
-}
-
-#world-hud .world-btn-play.active:hover {
-  background: var(--hud-trial-red);
-}
-
 #world-hud .world-btn-room-rush:not(:disabled) {
   background: #faaa39;
   border-color: #18161c;
@@ -289,47 +269,11 @@ body[data-app-mode="play-world"] .world-only-control {
 
 #world-hud .world-btn-room-rush.active {
   order: -1;
-  background: #bd382b;
+  background: var(--button-danger);
   border-color: #18161c;
-  color: #fff;
+  color: var(--button-ink);
 }
 
 .world-btn-play.hidden {
   display: none;
-}
-
-#world-hud .world-btn-edit:not(:disabled),
-#world-hud .world-btn-course-builder:not(:disabled) {
-  background: var(--hud-trial-yellow);
-  border-color: #18161c;
-  color: var(--hud-trial-ink-dark);
-}
-
-#world-hud .world-btn-edit:not(:disabled):hover,
-#world-hud .world-btn-course-builder:not(:disabled):hover {
-  background: var(--hud-trial-yellow);
-}
-
-#world-hud .world-btn-build:not(:disabled) {
-  background: var(--hud-trial-red);
-  border-color: #18161c;
-  color: #18161c;
-}
-
-#world-hud .world-btn-build:not(:disabled):hover {
-  background: var(--hud-trial-red);
-}
-
-#world-hud #btn-world-jump,
-#world-hud .world-btn-leaderboard,
-#world-hud .world-btn-controls {
-  background: var(--hud-trial-blue);
-  border-color: #18161c;
-  color: var(--hud-trial-ink-dark);
-}
-
-#world-hud #btn-world-jump:hover,
-#world-hud .world-btn-leaderboard:hover,
-#world-hud .world-btn-controls:hover {
-  background: var(--hud-trial-blue);
 }
