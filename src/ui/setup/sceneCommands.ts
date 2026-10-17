@@ -1,3 +1,4 @@
+import { setupGameMenu } from './gameMenu';
 import { installRestartShortcut } from './restartShortcut';
 import Phaser from 'phaser';
 import type { LazyModal } from './lazyModal';
@@ -285,31 +286,6 @@ export function setupSceneCommands(
       chatModerationModal.close();
       getActiveOverworldScene(game)?.toggleRoomComments();
     },
-    onOpenSettings: () => {
-      leaderboardModal.close();
-      exploreModal.close();
-      guestbookModal.close();
-      historyModal.close();
-      controlsModal.close();
-      aboutModal.close();
-      roomRushModal.close();
-      roomRushResultModal.close();
-      chatModerationModal.close();
-      getActiveOverworldScene(game)?.closeRoomCommentComposer();
-      settingsModal.open();
-    },
-    onOpenControls: () => {
-      leaderboardModal.close();
-      exploreModal.close();
-      guestbookModal.close();
-      historyModal.close();
-      settingsModal.close();
-      aboutModal.close();
-      roomRushModal.close();
-      roomRushResultModal.close();
-      chatModerationModal.close();
-      void controlsModal.open();
-    },
     onFitWorld: () => {
       if (game.scene.isActive('EditorScene')) {
         return;
@@ -339,19 +315,14 @@ export function setupSceneCommands(
     void aboutModal.open();
   });
 
-  // Phones keep only Online, Settings and Chat in the world toolbar; these open from the menu there.
-  doc.getElementById('btn-menu-settings')?.addEventListener('click', () => {
+  setupGameMenu(() => { closeWorldPanels(); historyModal.close(); }, doc, doc.defaultView ?? window);
+  doc.getElementById('btn-world-settings')?.addEventListener('click', () => {
     closeMenu(); closeWorldPanels(); doc.getElementById('btn-chat-close')?.click(); settingsModal.open();
   });
   doc.getElementById('btn-menu-chat')?.addEventListener('click', () => {
     closeMenu(); closeWorldPanels(); doc.getElementById('btn-chat-toggle')?.click();
   });
-  doc.getElementById('btn-menu-guestbook')?.addEventListener('click', () => {
-    closeMenu();
-    closeWorldPanels();
-    void guestbookModal.open();
-  });
-  doc.getElementById('btn-menu-controls')?.addEventListener('click', () => {
+  doc.getElementById('btn-world-controls')?.addEventListener('click', () => {
     closeMenu();
     closeWorldPanels();
     void controlsModal.open();

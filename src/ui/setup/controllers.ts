@@ -237,8 +237,8 @@ function setupUiControllerCommands(game: Phaser.Game, controllers: UiControllers
 function setupLazyModalTriggers(controllers: UiControllers): void {
   window.addEventListener(PROFILE_OPEN_REQUEST_EVENT, (event) => {
     if (controllers.profileModal.loaded) return;
-    const userId = (event as CustomEvent<ProfileOpenRequestDetail>).detail?.userId;
-    if (userId) void controllers.profileModal.open(userId);
+    const detail = (event as CustomEvent<ProfileOpenRequestDetail>).detail;
+    if (detail?.userId) void controllers.profileModal.open(detail.userId, detail.tab);
   });
   document.getElementById('btn-wamp-o-gram')?.addEventListener('click', () => {
     if (!controllers.wampOGramModal.loaded) void controllers.wampOGramModal.open();

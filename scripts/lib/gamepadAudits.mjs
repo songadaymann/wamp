@@ -62,7 +62,7 @@ export async function auditGamepadControls(page, capture = async () => {}) {
   assert(outsideSpawn > spawnX + 10);
   const controls = page.locator('#btn-world-controls');
   if (await controls.isVisible()) await controls.click();
-  else { await page.locator('#menu-toggle').click(); await page.locator('#btn-menu-controls').click(); }
+  else { await page.locator('#menu-toggle').click(); await controls.click(); }
   await page.locator('#controls-modal').waitFor({ state: 'visible' });
   await page.keyboard.press('r'); await input([9]); await page.waitForTimeout(250);
   assert((await read()).player.x > spawnX + 10, 'modal R/Start must not restart');

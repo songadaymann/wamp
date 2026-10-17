@@ -1,7 +1,7 @@
 @media (max-width: 900px) {
   #auth-panel {
     width: calc(100vw - 24px);
-    top: 12px;
+    --auth-panel-top: 12px;
     right: 12px;
   }
 

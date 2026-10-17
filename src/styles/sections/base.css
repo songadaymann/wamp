@@ -487,7 +487,8 @@ body[data-app-mode="play-world"] #global-chat {
   --auth-retro-shadow: #18161c;
   --auth-retro-ink: #18161c;
   position: fixed;
-  top: calc(16px + var(--safe-top));
+  --auth-panel-top: calc(16px + var(--safe-top));
+  top: var(--auth-panel-top);
   right: calc(16px + var(--safe-right));
   z-index: 20;
   pointer-events: none;

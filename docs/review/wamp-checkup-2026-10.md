@@ -1,5 +1,7 @@
 # WAMP Checkup (October 2026)
 
+**October 16 navigation:** [F112 implementation and source acceptance](wamp-navigation-2026-10-16.md) separates room actions, browse navigation and account/game settings. Final hosted and production delivery follows. F148 is fully delivered in [PR227](https://github.com/songadaymann/wamp/pull/227), superseding its source-time pending notes. Master is150/215.
+
 **October 16 gamepad controls:** [F148 source acceptance](wamp-gamepad-restart-2026-10-16.md) adds standard gamepads and R restart. Full source/main hosted checks and guarded Pages delivery follow. F094 and F108 were delivered in [PR225](https://github.com/songadaymann/wamp/pull/225) and [PR226](https://github.com/songadaymann/wamp/pull/226), superseding their earlier source-time pending notes. Master is149/215.
 
 **October 16 custom backgrounds:** [F094 implementation and source acceptance](wamp-custom-backgrounds-2026-10-16.md) completes bounded uploads, original-byte checks, animation and the chosen917KB derivative. Final hosted and guarded API+Pages delivery follow. F070 was fully delivered in [PR224](https://github.com/songadaymann/wamp/pull/224); its earlier source-time pending delivery note is superseded. Master is147/215. The overnight goal remains closed and its heartbeat paused.
@@ -8,7 +10,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 149 of 215 done.**
+**Progress: 150 of 215 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -231,7 +233,7 @@ WAMP's retro look is distinctive. These items make the main actions obvious, fin
 - [x] **F115** Four dialogs still use the old dark theme · medium impact · small effort — **done 2026-10-11** (`007f3cf1`, [PR #148](https://github.com/songadaymann/wamp/pull/148)). Sign Text, Choose Avatar, Chat Moderation and the phone Warp sheet use the cream paper skin (panels, buttons, inputs); their panels redefine the dark-theme colour variables so inner text reads on cream. Not done: making cream the base dialog style and deleting the per-ID copies.
 - [x] **F116** Stacked popups: one Esc closes everything, and the screen goes nearly black (also covers F073) · low impact · small effort — **done 2026-10-10** (`61269ba6`, [PR #134](https://github.com/songadaymann/wamp/pull/134)). With two or more dialogs open, Escape closes only the top one (its close button) and stops there; covered dialogs drop their backdrop. Not done: focus return and moving hand-rolled dialogs onto `createModalLifecycle`.
 - [ ] **F118** Show the room name and builder when you run into a new room · medium impact · small effort — **won't do:** Jonathan does not want a room-name banner (2026-10-12, reconfirmed 2026-10-13).
-- [ ] **F112** Menus are grouped by history, not by what players need next · medium impact · medium effort
+- [x] **F112** Menus are grouped by history, not by what players need next · medium impact · medium effort — **done 2026-10-16**: Explore, Worlds and global Leaderboards are in the browse footer; room cards keep room actions. The menu puts Profile/My Rooms or guest sign-in first, with universal game settings, separate Admin actions and Log out last. [Receipt](wamp-navigation-2026-10-16.md).
 - [ ] **F114** No real primary/secondary/danger buttons: red means Build, Publish, Stop and Delete · medium impact · medium effort
 - [x] **F117** Pixel fonts are drawn at in-between sizes, so they look blurry · low impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). Mario/Game Boy text uses pixel-grid sizes and whole-pixel spacing, including phone overrides; HomeVideo body sizes remain the readability compromise.
 - [ ] **F113** One retro palette, defined five times and hard-coded 1,433 times · low impact · medium effort

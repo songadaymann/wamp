@@ -165,71 +165,79 @@
       </button>
     </div>
       <div id="menu-body">
-        <div class="auth-row auth-menu-action-row">
-          <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button">About WAMP</button>
-          <button id="btn-menu-report-bug" class="bar-btn auth-menu-action-btn" type="button" data-bug-report-open>Report a bug</button>
+        <section class="game-menu-account" aria-label="Your account">
+          <p id="auth-signin-reason">Sign in to keep your rooms and progress.</p>
+          <div id="auth-display-name-row" class="auth-row hidden">
+            <input id="auth-display-name-input" aria-label="Display name" type="text" placeholder="Display name" maxlength="24" spellcheck="false" />
+            <button id="btn-auth-display-name" class="bar-btn bar-btn-small" type="button">Save Name</button>
+          </div>
+          <div id="auth-display-name-status" class="auth-display-name-status hidden"></div>
+          <div class="game-menu-actions">
+            <button id="btn-menu-profile" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Profile</button>
+            <button id="btn-menu-my-rooms" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>My Rooms</button>
+            <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guest Clears</button>
+            <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guest Drafts</button>
+          </div>
+          <details id="account-signin-options" open>
+            <summary>Email &amp; wallet</summary>
+            <div class="game-menu-account">
+              <div id="auth-email-row" class="auth-row">
+                <input id="auth-email-input" aria-label="Email address" type="email" placeholder="you@example.com" spellcheck="false" />
+                <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
+              </div>
+              <div id="auth-email-code" class="auth-email-code hidden">
+                <p class="auth-email-code-help">Click the magic link we sent to <strong id="email-code-address"></strong>, or enter the code you received:</p>
+                <form id="email-code-form" class="auth-row email-code-form">
+                <input id="email-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-label="Six-digit email code" required />
+                <button id="email-code-submit" class="bar-btn bar-btn-small" type="submit">Verify Code</button>
+                </form>
+                <div id="email-code-status" class="auth-status" role="status">The code expires in 15 minutes.</div>
+              </div>
+              <div class="auth-row"><button id="btn-auth-wallet" class="bar-btn auth-menu-action-btn">Sign In With Wallet</button></div>
+              <div id="auth-session-summary" class="auth-session-summary hidden">
+                <span class="auth-session-summary-label">Signed In As</span>
+                <span id="auth-session-summary-value" class="auth-session-summary-value"></span>
+              </div>
+              <a id="auth-debug-link" class="auth-debug-link hidden"></a>
+            </div>
+          </details>
+          <div id="auth-status" class="auth-status">Use email, wallet, or both.</div>
+        </section>
+        <nav class="game-menu-actions game-menu-section" aria-label="Game">
+          <button id="btn-world-settings" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Settings</button>
+          <button id="btn-world-controls" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Controls</button>
+          <button id="btn-guestbook-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guestbook</button>
+          <button id="btn-menu-room-rush" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Room Rush</button>
+          <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Room of the Day</button>
+          <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Rate rooms</button>
+          <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Build Prompt</button>
+          <button id="btn-menu-chat" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Chat</button>
+        </nav>
+        <nav class="game-menu-actions game-menu-section" aria-label="Help and community">
+          <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>About WAMP</button>
+          <button id="btn-world-report-bug" class="bar-btn auth-menu-action-btn" type="button" data-bug-report-open data-menu-action>Report a bug</button>
           <a
-            id="auth-discord-link"
-            class="auth-discord-link"
-            href="https://discord.gg/bEpc3XsnvV"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Join the Discord"
-            title="Join the Discord"
+          id="auth-discord-link" data-menu-action
+          class="auth-discord-link"
+          href="https://discord.gg/bEpc3XsnvV"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Join the Discord"
+          title="Join the Discord"
           >
-            <svg viewBox="0 0 127.14 96.36" aria-hidden="true" focusable="false">
-              <path
-                d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.61.54 80.24a105.73 105.73 0 0 0 32.17 16.12 77.7 77.7 0 0 0 6.89-11.3 68.42 68.42 0 0 1-10.84-5.18c.91-.66 1.8-1.34 2.66-2.05 20.87 9.8 43.54 9.8 64.17 0 .87.71 1.76 1.39 2.66 2.05a68.68 68.68 0 0 1-10.86 5.19 77 77 0 0 0 6.89 11.28A105.25 105.25 0 0 0 126.6 80.22c2.64-27.39-4.51-51.14-18.9-72.15ZM42.45 65.69C36.18 65.69 31 59.96 31 52.91s5.05-12.78 11.3-12.78 11.57 5.78 11.46 12.78c0 7-5.1 12.78-11.31 12.78Zm42.24 0c-6.27 0-11.44-5.73-11.44-12.78s5.04-12.78 11.44-12.78S96.27 45.91 96.15 52.91c0 7-5.09 12.78-11.46 12.78Z"
-              />
-            </svg>
+          <svg viewBox="0 0 127.14 96.36" aria-hidden="true" focusable="false">
+          <path
+          d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0 105.89 105.89 0 0 0 19.39 8.09C2.79 32.65-1.71 56.61.54 80.24a105.73 105.73 0 0 0 32.17 16.12 77.7 77.7 0 0 0 6.89-11.3 68.42 68.42 0 0 1-10.84-5.18c.91-.66 1.8-1.34 2.66-2.05 20.87 9.8 43.54 9.8 64.17 0 .87.71 1.76 1.39 2.66 2.05a68.68 68.68 0 0 1-10.86 5.19 77 77 0 0 0 6.89 11.28A105.25 105.25 0 0 0 126.6 80.22c2.64-27.39-4.51-51.14-18.9-72.15ZM42.45 65.69C36.18 65.69 31 59.96 31 52.91s5.05-12.78 11.3-12.78 11.57 5.78 11.46 12.78c0 7-5.1 12.78-11.31 12.78Zm42.24 0c-6.27 0-11.44-5.73-11.44-12.78s5.04-12.78 11.44-12.78S96.27 45.91 96.15 52.91c0 7-5.09 12.78-11.46 12.78Z"
+          />
+          </svg>
+          Discord
           </a>
-        </div>
-        <div class="auth-row auth-menu-action-row">
-          <button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button">Chat Moderation</button>
-        </div>
-        <div class="auth-row auth-menu-action-row">
-          <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button">Rate rooms</button>
-          <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button">Build Prompt</button>
-          <button id="btn-auth-leaderboard" class="bar-btn auth-menu-action-btn" type="button">Leaderboard</button>
-          <button id="btn-menu-room-rush" class="bar-btn auth-menu-action-btn" type="button">Room Rush</button>
-          <button id="btn-menu-settings" class="bar-btn auth-menu-action-btn auth-menu-phone-only" type="button">Settings</button>
-          <button id="btn-menu-chat" class="bar-btn auth-menu-action-btn auth-menu-phone-only" type="button">Chat</button>
-          <button id="btn-menu-guestbook" class="bar-btn auth-menu-action-btn auth-menu-phone-only" type="button">Guestbook</button>
-          <button id="btn-menu-controls" class="bar-btn auth-menu-action-btn auth-menu-phone-only" type="button">Controls</button>
-          <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button">Room of the Day</button>
-          <button id="btn-auth-guest-progress" class="bar-btn auth-menu-action-btn" type="button">Guest Clears</button>
-          <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button">Guest Drafts</button>
-        </div>
-        <div id="auth-email-row" class="auth-row">
-          <input id="auth-email-input" aria-label="Email address" type="email" placeholder="you@example.com" spellcheck="false" />
-          <button id="btn-auth-email" class="bar-btn bar-btn-small">Sign In With Email</button>
-        </div>
-        <div id="auth-email-code" class="auth-email-code hidden">
-          <p class="auth-email-code-help">Click the magic link we sent to <strong id="email-code-address"></strong>, or enter the code you received:</p>
-          <form id="email-code-form" class="auth-row email-code-form">
-            <input id="email-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" aria-label="Six-digit email code" required />
-            <button id="email-code-submit" class="bar-btn bar-btn-small" type="submit">Verify Code</button>
-          </form>
-          <div id="email-code-status" class="auth-status" role="status">The code expires in 15 minutes.</div>
-        </div>
-        <div class="auth-row">
-          <button id="btn-auth-wallet" class="bar-btn">Sign In With Wallet</button>
-          <button id="btn-auth-logout" class="bar-btn hidden">Logout</button>
-        </div>
-      <div id="auth-display-name-row" class="auth-row hidden">
-        <input id="auth-display-name-input" aria-label="Display name" type="text" placeholder="Display name" maxlength="24" spellcheck="false" />
-        <button id="btn-auth-display-name" class="bar-btn bar-btn-small" type="button">Save Name</button>
-      </div>
-      <div id="auth-display-name-status" class="auth-display-name-status hidden"></div>
-      <div class="auth-row">
-        <button id="btn-test-reset" class="bar-btn bar-btn-danger hidden">Reset Test Data</button>
-      </div>
-      <a id="auth-debug-link" class="auth-debug-link hidden"></a>
-      <div id="auth-status" class="auth-status">Use email, wallet, or both.</div>
-      <div id="auth-session-summary" class="auth-session-summary hidden">
-        <span class="auth-session-summary-label">Signed In As</span>
-        <span id="auth-session-summary-value" class="auth-session-summary-value"></span>
-      </div>
+        </nav>
+        <details class="game-menu-admin game-menu-section">
+          <summary>Admin</summary>
+          <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action>Reset Test Data</button></div>
+        </details>
+        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action>Log out</button>
       </div>
     </div>
   <div id="app">
@@ -2049,8 +2057,7 @@
         </div>
         <div class="world-hud-row world-hud-row-tertiary-actions">
           <button id="btn-world-course-builder" class="bar-btn bar-btn-small world-btn-course-builder" disabled>Expanded Room Builder</button>
-          <button id="btn-world-worlds" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button">Worlds</button>
-          <button id="btn-world-explore" class="bar-btn bar-btn-small world-btn-leaderboard" type="button">Explore</button>
+
           <button id="btn-world-leaderboard" class="bar-btn bar-btn-small world-btn-leaderboard">Leaderboard</button>
           <button id="btn-world-comment" class="bar-btn bar-btn-small world-btn-comment" type="button">Comments</button>
           <button id="btn-world-rate-room" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button">Rate Room</button>
@@ -2164,6 +2171,11 @@
         <div id="mobile-goal-footer-timer" class="mobile-goal-footer-timer">0:00.0</div>
       </div>
       <div class="bar-center">
+        <nav id="world-navigation" aria-label="World navigation">
+          <button id="btn-world-explore" class="bar-btn bar-btn-small world-footer-controls-btn" type="button">Explore</button>
+          <button id="btn-world-worlds" class="bar-btn bar-btn-small world-footer-controls-btn hidden" type="button">Worlds</button>
+          <button id="btn-auth-leaderboard" class="bar-btn bar-btn-small world-footer-controls-btn" type="button">Leaderboards</button>
+        </nav>
         <div id="world-online-wrap" class="world-online-wrap world-only-control hidden">
           <button
             id="world-online-count"
@@ -2188,10 +2200,6 @@
           <span id="world-ghost-race-time"></span>
         </span>
         <span id="world-lost-songs" class="world-lost-songs hidden" aria-live="polite"></span>
-        <button id="btn-world-settings" class="bar-btn bar-btn-small world-footer-controls-btn world-footer-settings world-only-control" type="button">Settings</button>
-        <button id="btn-world-report-bug" class="bar-btn bar-btn-small world-footer-controls-btn" type="button" data-bug-report-open>Report a bug</button>
-        <button id="btn-guestbook-open" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Guestbook</button>
-        <button id="btn-world-controls" class="bar-btn bar-btn-small world-footer-controls-btn world-only-control" type="button">Controls</button>
         <button id="btn-chat-toggle" class="bar-btn bar-btn-small world-footer-controls-btn chat-footer-toggle" type="button" data-chat-toggle>
           Chat +
           <span id="chat-unread-badge" class="chat-unread-badge hidden">0</span>

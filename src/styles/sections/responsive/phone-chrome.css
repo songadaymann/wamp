@@ -56,19 +56,6 @@ body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center::
   flex: 1 0 0;
 }
 
-/* On phones the toolbar keeps Online, Settings and Chat; Report a bug, Guestbook and Controls are in the menu. */
-body[data-device-class='phone'][data-app-mode='world'] #bottom-bar :is(#btn-world-report-bug, #btn-guestbook-open, #btn-world-controls) {
-  display: none;
-}
-
-#menu-body .auth-menu-phone-only {
-  display: none;
-}
-
-body[data-device-class='phone'] #menu-body .auth-menu-phone-only {
-  display: inline-flex;
-}
-
 /* The scroller would clip the players-online popover, so on phones it opens from the bar. */
 body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .world-online-wrap {
   position: static;
@@ -130,16 +117,12 @@ body[data-device-class='phone'] #zoom-level {
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-settings,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls,
 body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
   min-height: 20px;
   padding: 3px 7px;
 }
 
-body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-settings,
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-controls {
+body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count {
   font-size: 8px;
 }
 

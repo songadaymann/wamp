@@ -158,7 +158,8 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
     && document.body.dataset.editorDockShell === 'true'
   ));
   const topTools = page.locator('.editor-shell-tools [data-tool]');
-  assert.equal(await topTools.count(), 8);
+  assert.deepEqual(await topTools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
   for (const tool of await topTools.all()) assert.equal(await tool.isVisible(), true);
   assert.equal(await page.locator('[data-editor-shell-action="back"] span:last-child').textContent(), 'Back to Setup');
   assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), true);
@@ -289,16 +290,19 @@ async function resizeDrawer(page, deltaX) {
 
 async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const tools = page.locator('.editor-shell-tools [data-tool]');
-  assert.equal(await tools.count(), 8);
+  assert.deepEqual(await tools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
+  await page.locator('#menu-toggle').click();
   for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
-    assert.equal(await page.locator(selector).isVisible(), true, `${selector} should remain in the editor footer`);
+    assert.equal(await page.locator(selector).isVisible(), true, `${selector} should remain reachable from the editor menu`);
     assert.match(
       await page.locator(selector).evaluate((button) => getComputedStyle(button).fontFamily),
       /Early GameBoy/i,
-      `${selector} should use the GameBoy footer font`,
+      `${selector} should use the GameBoy menu font`,
     );
   }
+  await page.locator('#menu-toggle').click();
   assert.match(
     await page.locator('#world-online-count').evaluate((button) => getComputedStyle(button).fontFamily),
     /Early GameBoy/i,
@@ -487,7 +491,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const sharePopoverBox = await page.locator('#editor-share-popover').boundingBox();
   assert.ok(sharePopoverBox);
   assert.ok(sharePopoverBox.x >= 0 && sharePopoverBox.x + sharePopoverBox.width <= viewport.width + 1);
-  assert.equal(await page.locator('#editor-share-popover .editor-share-icon').count(), 4);
+  assert.deepEqual(await page.locator('#editor-share-popover [data-editor-share-action]').evaluateAll(nodes => nodes.map(node => node.dataset.editorShareAction)), ['wampogram', 'copy']);
   await page.screenshot({ path: path.join(viewportOutputDir, 'share-responsive.png') });
   await page.keyboard.press('Escape');
 
