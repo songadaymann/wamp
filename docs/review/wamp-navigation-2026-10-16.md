@@ -25,3 +25,9 @@ No sign-in emails, wallet actions, profile edits or public posts are submitted b
 ## Delivery
 
 Final exact-source and merged-main hosted gates, guarded Pages-only deployment, live navigation and actual-domain/immutable asset proof follow. The final pull-request receipt supersedes this source-time delivery note.
+
+## Final narrow-editor acceptance
+
+After PR229 merged, a final native 320px tap-position check caught the editor bottom toolbar intercepting Log out even though menu bounds fit the viewport. Stopped the guarded deploy before Pages publish. The narrow follow-up reserves the existing editor dock height below the menu; it does not raise the drawer over other controls. The navigation audit now scrolls to the final action and requires `elementFromPoint` to resolve inside that button without clicking it. Added a 320px navigation scenario in both engines, raising regular mobile CI from52 to54 cases. Final follow-up gates/deployment/live proof supersede the earlier source-time delivery note.
+
+Final clearance local acceptance: native Chrome and WebKit at390px/320px pass all navigation flows and the actual bottom-action hit target. Four production test-hook cases pass (both widths, both engines), with zero application errors/fixture misses; screenshots inspected. Full source/main gates and guarded release follow.

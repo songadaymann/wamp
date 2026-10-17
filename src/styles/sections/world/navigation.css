@@ -100,7 +100,7 @@ body[data-device-class='phone'] #world-navigation .bar-btn {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  max-height: calc(var(--visible-vh) - var(--auth-panel-top) - 12px - var(--safe-bottom));
+  max-height: calc(var(--visible-vh) - var(--auth-panel-top) - var(--auth-panel-bottom-space, calc(12px + var(--safe-bottom))));
 }
 #auth-panel.menu-open .auth-panel-topline {
   flex: 0 0 auto;
