@@ -1,3 +1,5 @@
+import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
+import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
 import { auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
 import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib/hapticAudits.mjs';
@@ -150,14 +152,20 @@ const scenarios = [
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
   { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
   { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
-  { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
+  { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
+  { name: 'phone-mann-cool', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin, { renderer: process.env.MOBILE_SMOKE_IFRAME_RENDERER || (engineName === 'webkit' && process.platform === 'linux' ? 'canvas' : 'auto') }));
+  } },
+  { name: 'phone-mann-cool-untrusted', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin, { trusted: false, renderer: process.env.MOBILE_SMOKE_IFRAME_RENDERER || (engineName === 'webkit' && process.platform === 'linux' ? 'canvas' : 'auto') }));
+  } },
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
   } },
   { name: 'phone-haptic-settings', profile: profiles.phonePortrait, navigationFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
-    row.assertions.push(await auditHapticSettings(page, label => captureScenarioScreenshot(page, row, dir, label)));
+    row.assertions.push(await auditHapticSettings(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));
   } },
   { name: 'phone-haptic-clear', profile: profiles.phonePortrait, navigationFixture: true, spawnPickupFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditHapticClear(page, label => captureScenarioScreenshot(page, row, dir, label)));
@@ -169,7 +177,7 @@ mkdirSync(outputDir, { recursive: true });
 
 const browser = await (engineName === 'webkit' ? webkit : chromium).launch({
   headless: true,
-  ...(engineName === 'chromium' ? { args: ['--use-gl=angle', '--use-angle=swiftshader'] } : {}),
+  ...(engineName === 'chromium' ? { args: ['--use-gl=angle', '--use-angle=swiftshader', '--mute-audio'] } : {}),
 });
 
 try {
@@ -244,13 +252,15 @@ async function runScenario(browserInstance, scenario) {
     userAgent: scenario.profile.userAgent,
   });
   const scenarioApiFixtures = scenario.spawnPickupFixture
-    ? createMobileSpawnPickupFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz')) : apiFixtures;
+    ? createMobileSpawnPickupFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz'))
+    : scenario.inputRoomFixture ? createMobileInputRoomFixtures(apiFixtureFile, path.join(scenarioDir, 'api.json.gz')) : apiFixtures;
   await scenarioApiFixtures?.install(context);
   if (scenario.signedFixture) {
     if (!apiFixtures) throw new Error('Signed input checks require isolated API fixtures');
     await installMobileSignedFixture(context, { roomChat: scenario.roomChatFixture, roomEditor: scenario.roomEditorFixture, activity: scenario.activityFixture });
   }
   await context.addInitScript(() => {
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
     window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
 
@@ -290,42 +300,34 @@ async function runScenario(browserInstance, scenario) {
   });
 
   if (scenario.gamepadFixture) await context.addInitScript(() => {
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
     localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
   });
   if (scenario.navigationFixture) await installNavigationFixtures(context);
   if (scenario.hapticFixture) await installHapticProbe(context);
   if (scenario.startupFixture) await installStartupFixture(context);
-  const page = await context.newPage();
-  page.on('console', (message) => {
-    if (message.type() !== 'error') {
-      return;
-    }
-    const location = message.location();
-    const record = {
-      scenario: scenario.name,
-      type: message.type(),
-      text: message.text(),
-      url: location.url || null,
-    };
-    if (!isIgnoredConsoleError(record.text, record.url)) {
-      summary.consoleErrors.push(record);
-    }
-  });
-  page.on('pageerror', (error) => {
-    summary.pageErrors.push({
-      scenario: scenario.name,
-      text: error.message,
+  // Persistence probes may open another page; every page keeps strict error reporting.
+  context.on('page', (observedPage) => {
+    observedPage.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const location = message.location();
+      const record = { scenario: scenario.name, type: message.type(), text: message.text(), url: location.url || null };
+      if (!isIgnoredConsoleError(record.text, record.url)) summary.consoleErrors.push(record);
+    });
+    observedPage.on('pageerror', (error) => {
+      summary.pageErrors.push({ scenario: scenario.name, text: error.message });
     });
   });
+  const page = await context.newPage();
 
   try {
-    await gotoMobileSmokePage(page, scenario.searchParams);
+    if (!scenario.mannCoolFixture) await gotoMobileSmokePage(page, scenario.searchParams);
     await scenario.run(page, scenarioSummary, scenarioDir);
-    if (scenario.spawnPickupFixture) {
+    if (scenario.spawnPickupFixture || scenario.inputRoomFixture) {
       const report = scenarioApiFixtures.report();
-      assertCondition(Object.keys(report.misses).length === 0, 'Spawn pickup requests must all be isolated fixtures');
-      scenarioSummary.assertions.push({ label: 'Spawn pickup API replay has no misses', apiFixtures: report });
+      assertCondition(Object.keys(report.misses).length === 0, 'Scenario requests must all be isolated fixtures');
+      scenarioSummary.assertions.push({ label: 'Scenario API replay has no misses', apiFixtures: report });
     }
     const state = await readState(page);
     scenarioSummary.ok = true;

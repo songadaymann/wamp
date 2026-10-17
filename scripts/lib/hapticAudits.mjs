@@ -3,18 +3,7 @@ import assert from 'node:assert/strict';
 /** Record API requests, without claiming browser emulation has a vibration motor. */
 export async function installHapticProbe(context) {
   await context.addInitScript(() => {
-    window.__hapticPendingImageDecodes = 0;
-    const decodeImage = HTMLImageElement.prototype.decode;
-    HTMLImageElement.prototype.decode = function (...args) {
-      window.__hapticPendingImageDecodes++;
-      return decodeImage.apply(this, args).then(value => {
-        window.__hapticPendingImageDecodes--;
-        return value;
-      }, error => {
-        window.__hapticPendingImageDecodes--;
-        throw error;
-      });
-    };
+    if (!['http:', 'https:'].includes(location.protocol)) return;
     window.__hapticCalls = [];
     window.__hapticProbe = pattern => {
       window.__hapticCalls.push({ pattern, at: performance.now(), mode: document.body?.dataset.appMode });
@@ -61,22 +50,14 @@ export async function auditHapticSettings(page, capture = async () => {}) {
   assert(await page.locator('#settings-haptics').isChecked());
   await page.locator('#settings-haptics').uncheck();
   assert.equal(await page.evaluate(() => localStorage.getItem('wamp.settings.haptics')), 'false');
-  await capture('haptics-off');
-  // The existing sound warmer starts1.5s after the first gesture. Let it finish:
-  // desktop WebKit reports aborted image/audio decodes as CORS errors on reload.
-  await page.waitForTimeout(1600);
-  await page.waitForFunction(() => window.get_sfx_debug_state?.().buffers.loading === 0);
-  await page.waitForLoadState('networkidle');
-  // Network idle does not include blob image decoding. Wait for the actual image
-  // promises and map queues too, so reload does not abort WebKit's active decodes.
-  await page.waitForFunction(() => {
-    const queues = JSON.parse(window.render_game_to_text()).activeScene?.worldTiles?.queueDepths;
-    return window.__hapticPendingImageDecodes === 0
-      && (!queues || Object.values(queues).every(depth => depth === 0));
-  }, null, { timeout: 30000 });
-  await page.reload();
+  await capture('haptics-off', page);
+  // A fresh page reads the real saved localStorage value without aborting the
+  // first page's image decodes (WebKit can leave offscreen decode() pending).
+  const freshPage = await page.context().newPage();
+  await freshPage.goto(page.url(), { waitUntil: 'domcontentloaded' });
+  page = freshPage;
   await startRoom(page); await settings();
-  assert.equal(await page.locator('#settings-haptics').isChecked(), false, 'device preference survives reload');
+  assert.equal(await page.locator('#settings-haptics').isChecked(), false, 'device preference survives a fresh page load');
   await page.locator('#btn-settings-close').tap();
   await page.evaluate(() => { window.__hapticCalls.length = 0; });
   await jump(page);
@@ -88,16 +69,16 @@ export async function auditHapticSettings(page, capture = async () => {}) {
   const calls = await page.evaluate(() => window.__hapticCalls);
   assert(calls.some(c => c.pattern === 5), 'real touch jump requests the light pulse while SFX volume is zero');
   assert(calls.every(c => c.mode === 'play-world'), 'only gameplay requests vibration');
-  await capture('haptics-jump');
+  await capture('haptics-jump', page);
   await settings();
   await page.evaluate(() => Object.defineProperty(navigator, 'vibrate', { configurable: true, writable: true, value: undefined }));
   await page.locator('#btn-settings-close').tap();
   await settings();
   assert.equal(await page.locator('#settings-haptics-row').isVisible(), false, 'unsupported devices hide the switch');
-  await capture('haptics-unsupported');
+  await capture('haptics-unsupported', page);
   await page.locator('#btn-settings-close').tap();
   await jump(page); // Missing API is harmless during actual gameplay too.
-  return { cases: ['default on', 'off and reload', 'muted off jump', 'muted enabled touch jump', 'unsupported UI and gameplay'], calls };
+  return { cases: ['default on', 'off and fresh load', 'muted off jump', 'muted enabled touch jump', 'unsupported UI and gameplay'], calls };
 }
 
 export async function auditHapticClear(page, capture = async () => {}) {

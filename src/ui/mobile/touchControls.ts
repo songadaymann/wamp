@@ -1,3 +1,5 @@
+import { consumeMannCoolAction, readMannCoolInput } from '../../integrations/mannCoolInput';
+
 export type TouchActionName = 'jump' | 'slash' | 'shoot' | 'cameraToggle' | 'stop' | 'restart';
 
 export interface TouchInputState {
@@ -60,16 +62,22 @@ export function pressTouchAction(action: TouchActionName): void {
 }
 
 export function consumeTouchAction(action: TouchActionName): boolean {
-  if (!pressedActions[action]) {
-    return false;
-  }
-
+  const nativePressed = pressedActions[action];
   pressedActions[action] = false;
-  return true;
+  const parentPressed = consumeMannCoolAction(action);
+  return nativePressed || parentPressed;
 }
 
 export function getTouchInputState(): TouchInputState {
-  return { ...state };
+  const parent = readMannCoolInput();
+  return {
+    active: state.active || parent.active,
+    moveX: Math.max(-1, Math.min(1, state.moveX + parent.moveX)),
+    moveY: Math.max(-1, Math.min(1, state.moveY + parent.moveY)),
+    jumpHeld: state.jumpHeld || parent.jumpHeld,
+    slashHeld: state.slashHeld || parent.slashHeld,
+    shootHeld: state.shootHeld || parent.shootHeld,
+  };
 }
 
 export function resetTouchInputState(): void {
@@ -86,7 +94,7 @@ export function resetTouchInputState(): void {
 
 export function getTouchInputDebugState(): Record<string, unknown> {
   return {
-    ...state,
+    ...getTouchInputState(),
     pressed: { ...pressedActions },
   };
 }
