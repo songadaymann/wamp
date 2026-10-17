@@ -27,8 +27,8 @@ body[data-device-class='phone'] #world-hud {
   padding: 8px;
   gap: 6px;
   background: #0b0b0b;
-  border: 2px solid #fff3db;
-  box-shadow: 3px 3px 0 #18161c;
+  border: 2px solid var(--wamp-cream);
+  box-shadow: var(--shadow-3);
   transition: none;
 }
 
@@ -403,7 +403,7 @@ body[data-device-class='phone'] #global-chat .chat-panel-body {
   min-height: 0;
   max-height: 78vh;
   border-radius: 0;
-  background: #fff3db;
+  background: var(--wamp-cream);
   backdrop-filter: none;
 }
 
@@ -420,9 +420,9 @@ body[data-device-class='phone'] #global-chat .chat-panel-header {
   top: 0;
   z-index: 1;
   padding: 12px 12px 8px;
-  background: #fff3db;
+  background: var(--wamp-cream);
   backdrop-filter: none;
-  border-bottom: 2px solid #79ccde;
+  border-bottom: 2px solid var(--wamp-sky);
 }
 
 body[data-device-class='phone'] #global-chat .chat-messages {

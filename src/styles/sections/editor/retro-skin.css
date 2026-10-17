@@ -1,18 +1,18 @@
 /* ── Game Container ── */
 
 body[data-app-mode='editor'] {
-  --editor-retro-cream: #fff3db;
-  --editor-retro-paper: #fffaf0;
-  --editor-retro-blue: #79ccde;
-  --editor-retro-blue-deep: #2c5071;
-  --editor-retro-green: #277b30;
-  --editor-retro-yellow: #fcea7c;
-  --editor-retro-red: #ed5f4b;
-  --editor-retro-pink: #ee8bc4;
-  --editor-retro-shadow: #18161c;
-  --editor-retro-ink: #18161c;
-  --editor-ui-font: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
-  --editor-button-font: 'IBM Plex Mono', 'Courier New', monospace;
+  --editor-retro-cream: var(--wamp-cream);
+  --editor-retro-paper: var(--wamp-paper);
+  --editor-retro-blue: var(--wamp-sky);
+  --editor-retro-blue-deep: var(--wamp-sky-deep);
+  --editor-retro-green: var(--wamp-green);
+  --editor-retro-yellow: var(--wamp-yellow);
+  --editor-retro-red: var(--wamp-red);
+  --editor-retro-pink: var(--wamp-pink);
+  --editor-retro-shadow: var(--wamp-ink);
+  --editor-retro-ink: var(--wamp-ink);
+  --editor-ui-font: var(--font-ui);
+  --editor-button-font: var(--font-mono);
 }
 
 .editor-room-title-overlay {
@@ -66,7 +66,7 @@ body[data-app-mode='editor'] #room-title-section .room-title-input {
   font-size: 13px;
   line-height: 1.2;
   user-select: text;
-  box-shadow: inset 2px 2px 0 rgba(24, 22, 28, 0.12);
+  box-shadow: inset 2px 2px 0 rgba(var(--wamp-ink-rgb), 0.12);
 }
 
 body[data-app-mode='editor'] #room-title-section .room-title-input:focus {
@@ -75,7 +75,7 @@ body[data-app-mode='editor'] #room-title-section .room-title-input:focus {
 }
 
 body[data-app-mode='editor'] #room-title-section .room-title-input::placeholder {
-  color: rgba(44, 80, 113, 0.72);
+  color: rgba(var(--wamp-sky-deep-rgb), 0.72);
 }
 
 body[data-editor-music-mode='true'][data-app-mode='editor'] #room-title-section.editor-room-title-overlay {
@@ -146,7 +146,7 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge {
   border-radius: 0;
   background: var(--editor-retro-yellow);
   box-shadow: 4px 4px 0 var(--editor-retro-shadow);
-  color: #000;
+  color: var(--wamp-black);
   pointer-events: auto;
 }
 
@@ -164,7 +164,7 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge-kicker 
 body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge-text {
   min-width: 0;
   margin: 0;
-  color: #000;
+  color: var(--wamp-black);
   font-family: var(--editor-ui-font);
   font-size: 11px;
   line-height: 1.3;
@@ -364,7 +364,7 @@ body[data-app-mode='editor'] #sidebar .section-label {
 
 body[data-app-mode='editor'] #sidebar .editor-advanced-block-label {
   color: var(--editor-retro-blue-deep);
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 8px;
   letter-spacing: 0;
   line-height: 1.2;
@@ -382,7 +382,7 @@ body[data-app-mode='editor'] #sidebar .sidebar-section-toggle {
   height: 18px;
   border: 2px solid var(--editor-retro-shadow);
   background: var(--editor-retro-blue);
-  color: #000;
+  color: var(--wamp-black);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   font-family: var(--editor-pixel-font);
   font-size: 8px;
@@ -399,7 +399,7 @@ body[data-app-mode='editor'] #sidebar .sidebar-section-toggle:hover {
 
 body[data-app-mode='editor'] #sidebar .sidebar-section.is-collapsed .sidebar-section-toggle {
   background: var(--editor-retro-yellow);
-  color: #000;
+  color: var(--wamp-black);
 }
 
 body[data-app-mode='editor'] #sidebar .bar-btn,
@@ -426,7 +426,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn {
   background-color: var(--button-background, var(--editor-retro-blue)) !important;
   background-image: none !important;
   box-shadow: inset 0 0 0 999px var(--button-background, var(--editor-retro-blue)), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: var(--button-foreground, #000) !important;
+  color: var(--button-foreground, var(--wamp-black)) !important;
   font-family: var(--editor-ui-font);
   font-size: 10px;
   letter-spacing: 0.03em;
@@ -449,13 +449,13 @@ body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
 
 body[data-app-mode='editor'] #sidebar .bar-btn:disabled,
 body[data-app-mode='editor'] #sidebar .bar-btn[aria-disabled='true'] {
-  --button-background: #d2caba;
-  --button-foreground: #5f5a53;
+  --button-background: var(--wamp-disabled-surface);
+  --button-foreground: var(--wamp-disabled-text);
   opacity: 1;
-  background: #d2caba;
-  border-color: #8d877c;
-  color: #5f5a53;
-  box-shadow: inset 0 0 0 999px #d2caba !important;
+  background: var(--wamp-disabled-surface);
+  border-color: var(--wamp-disabled-border);
+  color: var(--wamp-disabled-text);
+  box-shadow: inset 0 0 0 999px var(--wamp-disabled-surface) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .bar-btn.active,
@@ -473,12 +473,12 @@ body[data-app-mode='editor'] #sidebar .object-item.active {
 
 body[data-app-mode='editor'] #sidebar .bar-btn.editor-shape-fill-button:disabled,
 body[data-app-mode='editor'] #sidebar .bar-btn.editor-shape-fill-button[aria-disabled='true'] {
-  background: #d2caba !important;
-  background-color: #d2caba !important;
+  background: var(--wamp-disabled-surface) !important;
+  background-color: var(--wamp-disabled-surface) !important;
   background-image: none !important;
-  border-color: #8d877c !important;
-  color: #5f5a53 !important;
-  box-shadow: inset 0 0 0 999px #d2caba !important;
+  border-color: var(--wamp-disabled-border) !important;
+  color: var(--wamp-disabled-text) !important;
+  box-shadow: inset 0 0 0 999px var(--wamp-disabled-surface) !important;
   cursor: not-allowed;
 }
 
@@ -564,7 +564,7 @@ body[data-app-mode='editor'] #sidebar .editor-feature-btn[data-editor-feature='g
   background: var(--editor-retro-blue) !important;
   background-color: var(--editor-retro-blue) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .editor-feature-btn[data-editor-feature='music'].active {
@@ -578,14 +578,14 @@ body[data-app-mode='editor'] #sidebar .editor-feature-btn[data-editor-feature='l
   background: var(--editor-retro-yellow) !important;
   background-color: var(--editor-retro-yellow) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .editor-feature-btn[data-editor-feature='sprite'].active {
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #18161c !important;
+  color: var(--wamp-ink) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .editor-feature-launcher-status {
@@ -631,7 +631,7 @@ body[data-app-mode='editor'] #sidebar .object-subcategory-tab.active {
   background-image: none !important;
   border-color: var(--editor-retro-shadow) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
 }
 
 body[data-app-mode='editor'] #sidebar .object-selection-details {
@@ -698,7 +698,7 @@ body[data-app-mode='editor'] #sidebar .layer-info-button {
   background-color: var(--editor-retro-blue) !important;
   background-image: none !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-blue), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
   font-family: var(--editor-ui-font);
 }
 
@@ -769,16 +769,16 @@ body[data-app-mode='editor'] #sidebar .object-search-input:focus,
 body[data-app-mode='editor'] #sidebar .editor-erase-brush-select:focus {
   outline: none;
   border-color: var(--editor-retro-blue);
-  box-shadow: 0 0 0 2px rgba(121, 204, 222, 0.2);
+  box-shadow: 0 0 0 2px rgba(var(--wamp-sky-rgb), 0.2);
 }
 
 body[data-app-mode='editor'] #sidebar select option {
-  background: #18161c;
+  background: var(--wamp-ink);
   color: var(--editor-retro-cream);
 }
 
 body[data-app-mode='editor'] #sidebar .object-search-input::placeholder {
-  color: rgba(255, 243, 219, 0.68);
+  color: rgba(var(--wamp-cream-rgb), 0.68);
 }
 
 body[data-app-mode='editor'] #sidebar #palette-container,
@@ -879,7 +879,7 @@ body[data-app-mode='editor'] #sidebar .goal-context-note {
   border: 2px solid var(--editor-retro-shadow);
   border-radius: 0;
   background: var(--editor-retro-blue);
-  color: #000;
+  color: var(--wamp-black);
   font-family: var(--editor-ui-font);
   font-size: 11px;
   line-height: 1.4;
@@ -891,7 +891,7 @@ body[data-app-mode='editor'] #sidebar .goal-placement-hint {
   border: 2px solid var(--editor-retro-shadow);
   border-radius: 0;
   background: var(--editor-retro-yellow);
-  color: #000;
+  color: var(--wamp-black);
   font-family: var(--editor-ui-font);
   font-size: 11px;
   line-height: 1.4;
@@ -917,7 +917,7 @@ body[data-app-mode='editor'] #sidebar #btn-mint-room {
   background: var(--editor-retro-red) !important;
   background-color: var(--editor-retro-red) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-red), 2px 2px 0 var(--editor-retro-shadow) !important;
-  color: #18161c !important;
+  color: var(--wamp-ink) !important;
 }
 
 body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {
@@ -1004,11 +1004,11 @@ body[data-app-mode='editor'] #sidebar .editor-music-status-note {
 
 body[data-app-mode='editor'] #sidebar .editor-music-workbench .section-label,
 body[data-app-mode='editor'] #sidebar .editor-music-workbench .editor-music-select-label {
-  color: #fff3db;
+  color: var(--wamp-cream);
 }
 
 body[data-app-mode='editor'] #sidebar #editor-music-phrase-name-row .goal-input {
-  border-color: #fff3db;
+  border-color: var(--wamp-cream);
 }
 
 body[data-app-mode='editor'] #sidebar #editor-music-phrase-action-row .bar-btn.active {
@@ -1016,6 +1016,6 @@ body[data-app-mode='editor'] #sidebar #editor-music-phrase-action-row .bar-btn.a
   background-color: var(--editor-retro-yellow) !important;
   background-image: none !important;
   border-color: var(--editor-retro-shadow) !important;
-  color: #000 !important;
+  color: var(--wamp-black) !important;
   box-shadow: inset 0 0 0 999px var(--editor-retro-yellow), 2px 2px 0 var(--editor-retro-shadow) !important;
 }

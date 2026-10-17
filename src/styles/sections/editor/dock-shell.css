@@ -78,7 +78,7 @@ body[data-editor-dock-shell='true'] button {
 }
 
 body[data-editor-dock-shell='true'] #bottom-bar :is(.world-online-pill, .world-footer-controls-btn) {
-  font-family: 'Early GameBoy', monospace !important;
+  font-family: var(--font-label) !important;
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
@@ -250,10 +250,10 @@ body[data-editor-dock-shell='true'] .editor-shell-square-button:focus-visible {
 
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button:disabled,
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button[aria-disabled='true'] {
-  border-color: #8d877c;
-  background: #d2caba;
-  color: #5f5a53;
-  box-shadow: 2px 2px 0 #5f5a53;
+  border-color: var(--wamp-disabled-border);
+  background: var(--wamp-disabled-surface);
+  color: var(--wamp-disabled-text);
+  box-shadow: 2px 2px 0 var(--wamp-disabled-text);
   cursor: not-allowed;
 }
 
@@ -455,7 +455,7 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker .editor-she
   padding: 0 10px;
   border-color: var(--editor-retro-shadow);
   background: var(--editor-retro-red);
-  color: #18161c;
+  color: var(--wamp-ink);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker button.active {
@@ -538,7 +538,7 @@ body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='hazards'] {
   background: var(--editor-retro-red);
-  color: #18161c;
+  color: var(--wamp-ink);
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button[data-editor-dock='deco'] {
@@ -639,7 +639,7 @@ body[data-editor-dock-shell='true'] .editor-shell-popover-heading {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -713,7 +713,7 @@ body[data-editor-dock-shell='true'] #editor-drawer-header {
 
 body[data-editor-dock-shell='true'] .editor-drawer-title {
   color: var(--editor-retro-ink);
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.2;
   font-synthesis: none;
@@ -1027,7 +1027,7 @@ body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #smart-palette
 body[data-editor-dock-shell='true'] .smart-visual-picker h3 {
   margin: 2px 0 0;
   color: var(--editor-retro-ink);
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.2;
   font-synthesis: none;
@@ -1058,7 +1058,7 @@ body[data-editor-dock-shell='true'] .smart-preview-canvas {
   height: auto;
   aspect-ratio: 5 / 3;
   border: 2px solid var(--editor-retro-shadow);
-  background: #18161c;
+  background: var(--wamp-ink);
   image-rendering: pixelated;
 }
 
@@ -1073,7 +1073,7 @@ body[data-editor-dock-shell='true'] .editor-workbench-heading {
 
 body[data-editor-dock-shell='true'] .editor-workbench-heading-title {
   color: var(--editor-retro-cream);
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1;
   font-synthesis: none;
@@ -1259,7 +1259,7 @@ body[data-editor-dock-shell='true'] #background-card-grid .background-card-art {
   aspect-ratio: 16 / 9;
   border: 2px solid var(--editor-retro-shadow);
   border-radius: 0;
-  background-color: var(--background-card-tint, #18161c);
+  background-color: var(--background-card-tint, var(--wamp-ink));
   background-image: var(--background-card-front), var(--background-card-back);
   background-size: contain, cover;
   background-position: center bottom, center;

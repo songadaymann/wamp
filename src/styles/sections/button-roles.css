@@ -1,11 +1,11 @@
 /* Shared action colors; layout stays with the owning room/editor surface. */
 :root {
-  --button-play: #277b30;
-  --button-build: #fcea7c;
-  --button-curate: #79ccde;
-  --button-neutral: #fff4df;
-  --button-danger: #ed5f4b;
-  --button-ink: #18161c;
+  --button-play: var(--wamp-green);
+  --button-build: var(--wamp-yellow);
+  --button-curate: var(--wamp-sky);
+  --button-neutral: var(--wamp-button-paper);
+  --button-danger: var(--wamp-red);
+  --button-ink: var(--wamp-ink);
 }
 [data-button-variant] {
   --button-background: var(--button-neutral);
@@ -34,9 +34,9 @@ body[data-editor-dock-shell='true'] .editor-shell-chunky-button[data-button-vari
 .bar-btn[data-button-variant]:is(:disabled, [aria-disabled='true']),
 #world-hud .bar-btn[data-button-variant]:is(:disabled, [aria-disabled='true']),
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button[data-button-variant]:disabled {
-  background: #d2caba;
-  color: #5f5a53;
-  border-color: #8d877c;
+  background: var(--wamp-disabled-surface);
+  color: var(--wamp-disabled-text);
+  border-color: var(--wamp-disabled-border);
   box-shadow: none;
   opacity: 1;
   cursor: not-allowed;
@@ -48,7 +48,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn[data-button-size='lg'] {
   min-height: 44px;
 }
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button[data-button-size='lg'] > span:last-child {
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   letter-spacing: 0;
   line-height: 1;

@@ -1,5 +1,7 @@
 # WAMP Checkup (October 2026)
 
+**October 17 shared palette:** [F113 implementation and verification](wamp-shared-palette-2026-10-17.md) centralizes the core UI values with exact stylesheet and browser comparisons. Final hosted and production delivery follows; master152/215. F114 is fully delivered in [PR231](https://github.com/songadaymann/wamp/pull/231), superseding its source-time pending notes.
+
 **October 17 button roles:** [F114 implementation and verification](wamp-button-roles-2026-10-17.md) gives main room actions and both editors consistent action colors and a clear Publish primary. Final hosted and production delivery follows. F112 is fully delivered in [PR229](https://github.com/songadaymann/wamp/pull/229) and [PR230](https://github.com/songadaymann/wamp/pull/230), superseding its pending source notes. Master is 151/215.
 
 **October 16 navigation:** [F112 implementation and source acceptance](wamp-navigation-2026-10-16.md) separates room actions, browse navigation and account/game settings. Final hosted and production delivery follows. F148 is fully delivered in [PR227](https://github.com/songadaymann/wamp/pull/227), superseding its source-time pending notes. Master is150/215.
@@ -12,7 +14,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 150 of 215 done.**
+**Progress: 152 of 215 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -238,7 +240,7 @@ WAMP's retro look is distinctive. These items make the main actions obvious, fin
 - [x] **F112** Menus are grouped by history, not by what players need next · medium impact · medium effort — **done 2026-10-16**: Explore, Worlds and global Leaderboards are in the browse footer; room cards keep room actions. The menu puts Profile/My Rooms or guest sign-in first, with universal game settings, separate Admin actions and Log out last. [Receipt](wamp-navigation-2026-10-16.md).
 - [x] **F114** No real primary/secondary/danger buttons: red means Build, Publish, Stop and Delete · medium impact · medium effort — **done 2026-10-17** (source verification; delivery follows): shared action roles, green Publish/Restart, yellow Build Here, blue Comments and neutral Back; solid disabled states and unclipped editor primary actions. [Receipt](wamp-button-roles-2026-10-17.md).
 - [x] **F117** Pixel fonts are drawn at in-between sizes, so they look blurry · low impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). Mario/Game Boy text uses pixel-grid sizes and whole-pixel spacing, including phone overrides; HomeVideo body sizes remain the readability compromise.
-- [ ] **F113** One retro palette, defined five times and hard-coded 1,433 times · low impact · medium effort
+- [x] **F113** One retro palette, defined five times and hard-coded 1,433 times · low impact · medium effort — **done 2026-10-17** (source acceptance; delivery follows): core palette, exact font stacks and hard shadows share one token file; old aliases and specialty colors retain their values. The quality guard prevents repeated shared values. [Receipt](wamp-shared-palette-2026-10-17.md).
 
 ### Onboarding, retention and community
 

@@ -163,7 +163,7 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
   border-radius: 3px;
   color: var(--text);
   font-size: 11px;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
   cursor: pointer;
   transition:
     background 0.1s,
@@ -171,7 +171,7 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
     color 0.1s,
     transform 0.06s ease,
     box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.3);
 }
 
 #world-hud .bar-btn,
@@ -183,9 +183,9 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
 #world-hud .bar-btn {
   border-radius: 0;
   border-width: 2px;
-  border-color: #18161c;
-  color: #fff;
-  box-shadow: 2px 2px 0 #18161c;
+  border-color: var(--wamp-ink);
+  color: var(--wamp-white);
+  box-shadow: var(--shadow-2);
 }
 
 #world-hud .bar-btn:hover {
@@ -204,12 +204,12 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
 #world-hud .bar-btn.active {
   background: var(--accent-cool-soft);
   border-color: var(--accent-cool);
-  color: #fff;
+  color: var(--wamp-white);
 }
 
 .bar-btn.is-pressed:not(:disabled):not([aria-disabled='true']) {
   transform: translateY(2px);
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0.18);
+  box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
 }
 
 .bar-btn-danger {
@@ -259,7 +259,7 @@ body[data-app-mode="play-world"] .world-only-control {
 
 #world-hud .world-btn-room-rush:not(:disabled) {
   background: #faaa39;
-  border-color: #18161c;
+  border-color: var(--wamp-ink);
   color: var(--hud-trial-ink-dark);
 }
 
@@ -270,7 +270,7 @@ body[data-app-mode="play-world"] .world-only-control {
 #world-hud .world-btn-room-rush.active {
   order: -1;
   background: var(--button-danger);
-  border-color: #18161c;
+  border-color: var(--wamp-ink);
   color: var(--button-ink);
 }
 

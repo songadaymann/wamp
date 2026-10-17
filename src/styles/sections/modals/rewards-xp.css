@@ -15,10 +15,10 @@
 }
 
 .reward-sting-card {
-  --reward-accent: #277b30;
-  --reward-accent-ink: #fff3db;
-  --reward-surface: #fff3db;
-  --reward-ink: #18161c;
+  --reward-accent: var(--wamp-green);
+  --reward-accent-ink: var(--wamp-cream);
+  --reward-surface: var(--wamp-cream);
+  --reward-ink: var(--wamp-ink);
   position: relative;
   width: min(520px, calc(100vw - 28px));
   display: grid;
@@ -29,7 +29,7 @@
   border: 4px solid var(--reward-accent);
   background: var(--reward-surface);
   color: var(--reward-ink);
-  box-shadow: 8px 8px 0 #18161c;
+  box-shadow: 8px 8px 0 var(--wamp-ink);
   opacity: 0;
   transform: translateY(-20px) scale(0.94);
   overflow: visible;
@@ -60,9 +60,9 @@
   height: 84px;
   display: grid;
   place-items: center;
-  border: 3px solid #18161c;
-  background: #fffaf0;
-  box-shadow: 4px 4px 0 #18161c;
+  border: 3px solid var(--wamp-ink);
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-4);
 }
 
 .reward-sting-card--hero .reward-sting-icon-frame {
@@ -94,21 +94,21 @@
 .reward-sting-kicker {
   width: fit-content;
   padding: 4px 8px 3px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   background: var(--reward-accent);
   color: var(--reward-accent-ink);
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.15;
   letter-spacing: 0px;
   text-transform: uppercase;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 .reward-sting-title {
-  font-family: 'Super Mario Bros. NES', monospace;
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.16;
   color: var(--reward-accent);
@@ -122,7 +122,7 @@
 }
 
 .reward-sting-subtitle {
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.35;
   letter-spacing: 0.02em;
@@ -133,9 +133,9 @@
   width: min(240px, 100%);
   height: 12px;
   padding: 2px;
-  border: 2px solid #fff3db;
-  background: #18161c;
-  box-shadow: 2px 2px 0 #18161c;
+  border: 2px solid var(--wamp-cream);
+  background: var(--wamp-ink);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 
@@ -157,10 +157,10 @@
 
 .reward-sting-detail {
   white-space: pre-line;
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.25;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
@@ -181,7 +181,7 @@
   width: 8px;
   height: 8px;
   background: var(--reward-accent);
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   opacity: 0;
 }
 
@@ -238,35 +238,35 @@
 }
 
 .reward-sting-card--player {
-  --reward-accent: #277b30;
-  --reward-accent-ink: #fff3db;
+  --reward-accent: var(--wamp-green);
+  --reward-accent-ink: var(--wamp-cream);
 }
 
 .reward-sting-card--builder {
-  --reward-accent: #fcea7c;
-  --reward-accent-ink: #000;
+  --reward-accent: var(--wamp-yellow);
+  --reward-accent-ink: var(--wamp-black);
 }
 
 .reward-sting-card--curator,
 .reward-sting-card--leaderboard {
-  --reward-accent: #79ccde;
-  --reward-accent-ink: #000;
+  --reward-accent: var(--wamp-sky);
+  --reward-accent-ink: var(--wamp-black);
 }
 
 .reward-sting-card--badge {
   --reward-accent: #f65699;
-  --reward-accent-ink: #fff3db;
+  --reward-accent-ink: var(--wamp-cream);
 }
 
 .reward-sting-card--trophy {
-  --reward-accent: #fcea7c;
-  --reward-accent-ink: #000;
+  --reward-accent: var(--wamp-yellow);
+  --reward-accent-ink: var(--wamp-black);
   --reward-surface: #fff9df;
 }
 
 .reward-sting-card--takeover {
-  --reward-accent: #ed5f4b;
-  --reward-accent-ink: #fff3db;
+  --reward-accent: var(--wamp-red);
+  --reward-accent-ink: var(--wamp-cream);
 }
 
 .reward-sting-card--takeover::before {
@@ -274,13 +274,13 @@
   position: absolute;
   inset: -12px;
   z-index: 0;
-  border: 3px solid rgba(237, 95, 75, 0.55);
+  border: 3px solid rgba(var(--wamp-red-rgb), 0.55);
   background:
     linear-gradient(
       135deg,
-      rgba(237, 95, 75, 0.18),
-      rgba(237, 95, 75, 0) 42%,
-      rgba(237, 95, 75, 0.18)
+      rgba(var(--wamp-red-rgb), 0.18),
+      rgba(var(--wamp-red-rgb), 0) 42%,
+      rgba(var(--wamp-red-rgb), 0.18)
     );
 }
 
@@ -356,8 +356,8 @@
 }
 
 .xp-receipt-card {
-  --xp-receipt-accent: #277b30;
-  --xp-receipt-accent-ink: #fff3db;
+  --xp-receipt-accent: var(--wamp-green);
+  --xp-receipt-accent-ink: var(--wamp-cream);
   position: fixed;
   top: calc(74px + var(--safe-top));
   left: 50%;
@@ -368,9 +368,9 @@
   align-items: center;
   padding: 10px 12px 11px 10px;
   border: 3px solid var(--xp-receipt-accent);
-  background: #fff3db;
-  color: #18161c;
-  box-shadow: 5px 5px 0 #18161c;
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  box-shadow: 5px 5px 0 var(--wamp-ink);
   opacity: 0;
   transform: translate(-50%, -18px) scale(0.9);
 }
@@ -384,18 +384,18 @@
 }
 
 .xp-receipt-card--player {
-  --xp-receipt-accent: #277b30;
-  --xp-receipt-accent-ink: #fff3db;
+  --xp-receipt-accent: var(--wamp-green);
+  --xp-receipt-accent-ink: var(--wamp-cream);
 }
 
 .xp-receipt-card--builder {
-  --xp-receipt-accent: #fcea7c;
-  --xp-receipt-accent-ink: #000;
+  --xp-receipt-accent: var(--wamp-yellow);
+  --xp-receipt-accent-ink: var(--wamp-black);
 }
 
 .xp-receipt-card--curator {
-  --xp-receipt-accent: #79ccde;
-  --xp-receipt-accent-ink: #000;
+  --xp-receipt-accent: var(--wamp-sky);
+  --xp-receipt-accent-ink: var(--wamp-black);
 }
 
 .xp-receipt-icon-frame {
@@ -403,9 +403,9 @@
   height: 52px;
   display: grid;
   place-items: center;
-  border: 3px solid #18161c;
-  background: #fffaf0;
-  box-shadow: 3px 3px 0 #18161c;
+  border: 3px solid var(--wamp-ink);
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-3);
 }
 
 .xp-receipt-icon {
@@ -424,7 +424,7 @@
 
 .xp-receipt-amount {
   color: var(--xp-receipt-accent);
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.15;
   letter-spacing: 0px;
@@ -434,8 +434,8 @@
 }
 
 .xp-receipt-reason {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.25;
   text-transform: uppercase;
@@ -449,8 +449,8 @@
 }
 
 .xp-receipt-level {
-  color: #2c5071;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.15;
   text-transform: uppercase;
@@ -459,8 +459,8 @@
 }
 
 .xp-receipt-detail {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 10px;
   line-height: 1.2;
   text-transform: uppercase;
@@ -470,9 +470,9 @@
   width: 100%;
   height: 12px;
   padding: 2px;
-  border: 2px solid #fff3db;
-  background: #18161c;
-  box-shadow: 2px 2px 0 #18161c;
+  border: 2px solid var(--wamp-cream);
+  background: var(--wamp-ink);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 
@@ -483,19 +483,19 @@
 }
 
 .xp-receipt-meter-fill--player {
-  background: #277b30;
+  background: var(--wamp-green);
 }
 
 .xp-receipt-meter-fill--builder {
-  background: #fcea7c;
+  background: var(--wamp-yellow);
 }
 
 .xp-receipt-meter-fill--curator {
-  background: #79ccde;
+  background: var(--wamp-sky);
 }
 
 .xp-receipt-impact {
-  --xp-impact-color: #277b30;
+  --xp-impact-color: var(--wamp-green);
   position: fixed;
   z-index: 71;
   width: 0;
@@ -506,15 +506,15 @@
 }
 
 .xp-receipt-impact--player {
-  --xp-impact-color: #277b30;
+  --xp-impact-color: var(--wamp-green);
 }
 
 .xp-receipt-impact--builder {
-  --xp-impact-color: #fcea7c;
+  --xp-impact-color: var(--wamp-yellow);
 }
 
 .xp-receipt-impact--curator {
-  --xp-impact-color: #79ccde;
+  --xp-impact-color: var(--wamp-sky);
 }
 
 .xp-receipt-impact--active {
@@ -528,7 +528,7 @@
   width: 8px;
   height: 8px;
   background: var(--xp-impact-color);
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   opacity: 0;
 }
 
@@ -638,14 +638,14 @@
     grid-template-columns: 68px minmax(0, 1fr);
     gap: 10px;
     padding: 10px 12px 10px 10px;
-    box-shadow: 5px 5px 0 #18161c;
+    box-shadow: 5px 5px 0 var(--wamp-ink);
   }
 
   .reward-sting-icon-frame,
   .reward-sting-card--hero .reward-sting-icon-frame {
     width: 68px;
     height: 68px;
-    box-shadow: 3px 3px 0 #18161c;
+    box-shadow: var(--shadow-3);
   }
 
   .reward-sting-icon,
@@ -679,13 +679,13 @@
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 10px;
     padding: 9px 10px 10px 9px;
-    box-shadow: 4px 4px 0 #18161c;
+    box-shadow: var(--shadow-4);
   }
 
   .xp-receipt-icon-frame {
     width: 44px;
     height: 44px;
-    box-shadow: 2px 2px 0 #18161c;
+    box-shadow: var(--shadow-2);
   }
 
   .xp-receipt-icon {

@@ -10,15 +10,15 @@
   padding: 18px;
   overflow: hidden;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 2px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 4px 4px 0 #18161c;
+  box-shadow: var(--shadow-4);
 }
 
 #guestbook-modal .history-modal-kicker {
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 1px;
   line-height: 1.3;
@@ -28,8 +28,8 @@
 
 #guestbook-modal .history-modal-title {
   margin-top: 6px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -39,8 +39,8 @@
 #guestbook-modal .history-modal-meta,
 #guestbook-modal .goal-control-label,
 #guestbook-modal .guestbook-empty {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -48,21 +48,21 @@
 #guestbook-modal #btn-guestbook-close,
 #guestbook-modal #btn-guestbook-submit {
   padding: 5px 10px 4px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 0px;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 #guestbook-modal #btn-guestbook-close:hover,
 #guestbook-modal #btn-guestbook-submit:hover {
-  background: #79ccde;
+  background: var(--wamp-sky);
   filter: brightness(1.06);
 }
 
@@ -93,8 +93,8 @@
 
 .guestbook-empty {
   padding: 12px;
-  background: rgba(121, 204, 222, 0.12);
-  border: 2px solid #79ccde;
+  background: rgba(var(--wamp-sky-rgb), 0.12);
+  border: 2px solid var(--wamp-sky);
 }
 
 .guestbook-entry {
@@ -102,9 +102,9 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  background: rgba(121, 204, 222, 0.12);
-  border: 2px solid #79ccde;
-  color: #18161c;
+  background: rgba(var(--wamp-sky-rgb), 0.12);
+  border: 2px solid var(--wamp-sky);
+  color: var(--wamp-ink);
 }
 
 .guestbook-entry-header {
@@ -117,8 +117,8 @@
 .guestbook-entry-name {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 0px;
   line-height: 1.35;
@@ -128,8 +128,8 @@
 
 .guestbook-entry-time {
   flex: 0 0 auto;
-  color: rgba(24, 22, 28, 0.72);
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: rgba(var(--wamp-ink-rgb), 0.72);
+  font-family: var(--font-ui);
   font-size: 10px;
   line-height: 1.3;
 }
@@ -137,8 +137,8 @@
 .guestbook-entry-message {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -149,18 +149,18 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(24, 22, 28, 0.08);
-  border: 2px solid #18161c;
+  background: rgba(var(--wamp-ink-rgb), 0.08);
+  border: 2px solid var(--wamp-ink);
 }
 
 #guestbook-modal .guestbook-input,
 #guestbook-modal .guestbook-message-input {
   width: 100%;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
   background: #f9f5ea;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -183,14 +183,14 @@
 }
 
 #guestbook-modal .history-modal-error {
-  color: #18161c;
+  color: var(--wamp-ink);
   background: rgba(214, 79, 62, 0.16);
   border: 2px solid #d64f3e;
 }
 
 #guestbook-modal .history-modal-error:not(.guestbook-status-error) {
-  background: rgba(121, 204, 222, 0.16);
-  border-color: #79ccde;
+  background: rgba(var(--wamp-sky-rgb), 0.16);
+  border-color: var(--wamp-sky);
 }
 
 @media (max-width: 720px) {

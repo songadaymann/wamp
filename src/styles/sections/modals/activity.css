@@ -6,11 +6,11 @@
   display: grid;
   place-items: center;
   pointer-events: auto;
-  color: #18161c;
-  background: #79ccde;
-  border: 2px solid #18161c;
+  color: var(--wamp-ink);
+  background: var(--wamp-sky);
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   cursor: pointer;
 }
 .activity-badge {
@@ -19,9 +19,9 @@
   top: -4px;
   min-width: 20px;
   padding: 2px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   font: 11px/1.2 'HomeVideo', 'IBM Plex Mono', monospace;
-  color: #18161c;
+  color: var(--wamp-ink);
   background: #ffe66b;
 }
 #activity-modal {
@@ -29,7 +29,7 @@
   height: 100dvh;
   right: auto;
   bottom: auto;
-  background: #18161c;
+  background: var(--wamp-ink);
 }
 #activity-modal .activity-panel {
   width: min(720px, calc(100vw - 24px));
@@ -38,12 +38,12 @@
   gap: 16px;
   padding: 20px;
   overflow: hidden;
-  background: #fff3db;
-  border: 3px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
   box-shadow: 6px 6px 0 #0b0b0b;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -55,8 +55,8 @@
 }
 #activity-modal .history-modal-title {
   margin: 0;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.5;
   font-synthesis: none;
@@ -66,16 +66,16 @@
   flex: 0 0 auto;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #18161c;
+  border-bottom: 2px solid var(--wamp-ink);
 }
 #activity-modal .bar-btn {
   min-height: 44px;
   padding: 10px 12px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  box-shadow: 2px 2px 0 #18161c;
-  background: #79ccde;
-  color: #18161c;
+  box-shadow: var(--shadow-2);
+  background: var(--wamp-sky);
+  color: var(--wamp-ink);
   font: 400 12px/1.35 'HomeVideo', 'IBM Plex Mono', monospace;
   text-transform: uppercase;
 }
@@ -83,8 +83,8 @@
 #activity-modal .activity-tabs .bar-btn.active { background: #ffe66b; }
 #activity-modal .bar-btn:disabled {
   opacity: 1;
-  background: #d2caba;
-  color: #5f5a53;
+  background: var(--wamp-disabled-surface);
+  color: var(--wamp-disabled-text);
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -93,7 +93,7 @@
 #activity-modal summary:focus-visible,
 #activity-modal input:focus-visible,
 .activity-bell:focus-visible {
-  outline: 3px solid #2c5071;
+  outline: 3px solid var(--wamp-sky-deep);
   outline-offset: 3px;
 }
 .activity-scroll {
@@ -104,7 +104,7 @@
 }
 #activity-modal .history-modal-meta {
   margin: 6px 0 0;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font: 11px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
 }
 #activity-status:empty { display: none; }
@@ -117,11 +117,11 @@
   overflow-wrap: anywhere;
 }
 .activity-row[data-kind='rating'] { border-left-color: #b07d12; }
-.activity-row[data-kind='comment'] { border-left-color: #2c5071; }
+.activity-row[data-kind='comment'] { border-left-color: var(--wamp-sky-deep); }
 .activity-row[data-kind='top1'],
 .activity-row[data-kind='dethroned'] { border-left-color: #c63d31; }
 .activity-row a {
-  color: #18161c;
+  color: var(--wamp-ink);
   font-size: 12px;
   line-height: 1.6;
   text-decoration: underline;
@@ -137,7 +137,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font: inherit;
   text-align: left;
   text-decoration: underline;
@@ -145,18 +145,18 @@
   overflow-wrap: anywhere;
   cursor: pointer;
 }
-.activity-actor-link:hover { color: #18161c; }
+.activity-actor-link:hover { color: var(--wamp-ink); }
 .activity-guest-header {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #18161c;
+  border-bottom: 2px solid var(--wamp-ink);
 }
 .activity-guest-name { margin: 0; min-width: 0; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
 .activity-email-options {
-  border-top: 2px solid #18161c;
+  border-top: 2px solid var(--wamp-ink);
   margin-top: 20px;
   padding-top: 12px;
 }
@@ -187,8 +187,8 @@
 #activity-modal #activity-preferences-status { margin-bottom: 12px; }
 .activity-catchup {
   font: 12px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
-  color: #18161c;
-  border: 2px solid #18161c;
+  color: var(--wamp-ink);
+  border: 2px solid var(--wamp-ink);
   background: #ffe66b;
   padding: 6px 10px;
   min-height: 44px;

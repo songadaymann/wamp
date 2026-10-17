@@ -14,15 +14,15 @@
   padding: 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 2px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 4px 4px 0 #18161c;
+  box-shadow: var(--shadow-4);
 }
 
 #controls-modal .history-modal-kicker {
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 1px;
   line-height: 1.3;
@@ -32,8 +32,8 @@
 
 #controls-modal .history-modal-title {
   margin-top: 6px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -41,28 +41,28 @@
 }
 
 #controls-modal .history-modal-meta {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.35;
 }
 
 #controls-modal #btn-controls-close {
   padding: 5px 10px 4px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 0px;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 #controls-modal #btn-controls-close:hover {
-  background: #79ccde;
+  background: var(--wamp-sky);
   filter: brightness(1.06);
 }
 
@@ -82,15 +82,15 @@
   padding: 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 2px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 4px 4px 0 #18161c;
+  box-shadow: var(--shadow-4);
 }
 
 #about-modal .history-modal-kicker {
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 1px;
   line-height: 1.3;
@@ -100,8 +100,8 @@
 
 #about-modal .history-modal-title {
   margin-top: 6px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -111,15 +111,15 @@
 #about-modal .history-modal-meta,
 #about-modal .about-copy-status,
 #about-modal .about-modal-note {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.35;
 }
 
 #about-modal .history-modal-meta a,
 #about-modal .about-section a {
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
 }
 
 #about-modal .history-modal-meta a:hover,
@@ -130,21 +130,21 @@
 #about-modal #btn-about-close,
 #about-modal .about-action-row .bar-btn {
   padding: 5px 10px 4px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 0px;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 #about-modal #btn-about-close:hover,
 #about-modal .about-action-row .bar-btn:hover {
-  background: #79ccde;
+  background: var(--wamp-sky);
   filter: brightness(1.06);
 }
 
@@ -176,8 +176,8 @@
 #about-modal .about-section {
   gap: 8px;
   padding: 12px;
-  background: rgba(121, 204, 222, 0.12);
-  border: 2px solid #79ccde;
+  background: rgba(var(--wamp-sky-rgb), 0.12);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
 }
 
@@ -189,8 +189,8 @@
 }
 
 #about-modal .about-section-title {
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 1px;
   font-synthesis: none;
@@ -205,15 +205,15 @@
 }
 
 #about-modal .about-section p {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
 
 #about-modal .about-list {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -279,7 +279,7 @@
   background: var(--field);
   color: var(--text);
   font-size: 12px;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
 }
 
 .chat-moderation-input:focus {
@@ -301,7 +301,7 @@
   padding: 10px 12px;
   border: 1px solid rgba(243, 238, 226, 0.08);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--wamp-white-rgb), 0.02);
 }
 
 .chat-moderation-item-text {
@@ -375,8 +375,8 @@
 #controls-modal .controls-section {
   gap: 10px;
   padding: 12px;
-  background: rgba(121, 204, 222, 0.12);
-  border: 2px solid #79ccde;
+  background: rgba(var(--wamp-sky-rgb), 0.12);
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
 }
 
@@ -388,8 +388,8 @@
 }
 
 #controls-modal .controls-section-title {
-  color: #18161c;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-label);
   font-size: 8px;
   letter-spacing: 1px;
   font-synthesis: none;
@@ -407,8 +407,8 @@
 
 #controls-modal .controls-row {
   align-items: flex-start;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.2;
 }
@@ -425,13 +425,13 @@
 #controls-modal .controls-key {
   padding: 4px 6px 3px;
   border-radius: 0;
-  border: 2px solid #18161c;
-  background: #79ccde;
-  color: #000;
-  font-family: 'Early GameBoy', monospace;
+  border: 2px solid var(--wamp-ink);
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.2;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }

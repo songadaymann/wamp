@@ -7,7 +7,7 @@
   max-width: calc(100% - 16px);
   transform: translateX(-50%);
   border: 2px solid #222;
-  background: #fff3db;
+  background: var(--wamp-cream);
 }
 
 #post-run-reminder.hidden {
@@ -19,14 +19,14 @@
   padding: 8px 12px;
   border: 0;
   border-radius: 0;
-  background: #fff3db;
+  background: var(--wamp-cream);
   color: #222;
   font-size: 12px;
 }
 
 #post-run-reminder .bar-btn:hover,
 #post-run-reminder .bar-btn:focus-visible {
-  background: #79ccde;
+  background: var(--wamp-sky);
 }
 
 #post-run-reminder .bar-btn:focus-visible {

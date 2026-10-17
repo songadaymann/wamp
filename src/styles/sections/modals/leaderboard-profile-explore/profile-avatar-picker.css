@@ -12,10 +12,10 @@
   gap: 14px;
   align-items: flex-start;
   padding: 14px;
-  border: 2px solid #79ccde;
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  background: #fffaf0;
-  box-shadow: 3px 3px 0 #18161c;
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-3);
 }
 
 #profile-modal .profile-avatar-shell {
@@ -32,21 +32,21 @@
 #profile-modal .profile-avatar-fallback {
   width: 82px;
   height: 96px;
-  border: 2px solid #79ccde;
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #profile-modal .profile-avatar-image {
-  background: #18161c;
+  background: var(--wamp-ink);
   object-fit: contain;
   image-rendering: pixelated;
 }
 
 #profile-modal .profile-avatar-fallback {
-  background: #fff3db;
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-cream);
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -55,15 +55,15 @@
 #profile-modal .profile-avatar-change-button {
   min-height: 30px;
   padding: 6px 4px 5px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
   background: #ff533f;
-  color: #fff3db;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-cream);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.25;
   text-align: center;
-  box-shadow: 2px 2px 0 #18161c;
+  box-shadow: var(--shadow-2);
   cursor: pointer;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -72,7 +72,7 @@
 #profile-modal .profile-avatar-change-button:hover,
 #profile-modal .profile-avatar-change-button:focus-visible {
   background: #1b84c2;
-  color: #fff3db;
+  color: var(--wamp-cream);
   outline: none;
 }
 
@@ -95,10 +95,10 @@
   gap: 12px;
   margin: 0 4px 14px 2px;
   padding: 12px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #fffaf0;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-2);
 }
 
 .profile-cryptopunk-preview {
@@ -109,7 +109,7 @@
   width: 92px;
   height: 92px;
   border: 2px solid #5f5fec;
-  background: #18161c;
+  background: var(--wamp-ink);
   overflow: hidden;
 }
 
@@ -127,8 +127,8 @@
   width: 100%;
   height: 100%;
   padding: 8px;
-  color: #fff3db;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-cream);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.4;
   text-align: center;
@@ -151,8 +151,8 @@
 }
 
 .profile-cryptopunk-title {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 15px;
   line-height: 1.15;
 }
@@ -160,8 +160,8 @@
 .profile-cryptopunk-unlock-meta,
 .profile-cryptopunk-status {
   min-width: 0;
-  color: #2c5071;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -194,29 +194,29 @@
 }
 
 .profile-avatar-option {
-  --profile-avatar-option-color: #79ccde;
+  --profile-avatar-option-color: var(--wamp-sky);
   display: grid;
   grid-template-rows: 80px auto auto;
   gap: 7px;
   min-width: 0;
   min-height: 148px;
   padding: 10px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #fffaf0;
-  color: #18161c;
-  box-shadow: 2px 2px 0 #18161c;
+  background: var(--wamp-paper);
+  color: var(--wamp-ink);
+  box-shadow: var(--shadow-2);
   cursor: pointer;
 }
 
 .profile-avatar-option[data-selected='true'] {
-  border-color: #277b30;
+  border-color: var(--wamp-green);
   background: #eef7dd;
 }
 
 .profile-avatar-option[data-locked='true'] {
   background: #d8e1e7;
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   cursor: default;
 }
 
@@ -225,7 +225,7 @@
   border-color: #ff533f;
   outline: none;
   transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 .profile-avatar-option-preview {
@@ -236,7 +236,7 @@
   width: 100%;
   height: 80px;
   border: 2px solid var(--profile-avatar-option-color);
-  background: #18161c;
+  background: var(--wamp-ink);
   overflow: hidden;
 }
 
@@ -254,7 +254,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Early GameBoy', monospace;
+  font-family: var(--font-label);
   font-size: 16px;
   line-height: 1;
   font-synthesis: none;
@@ -262,12 +262,12 @@
 }
 
 .profile-avatar-option-preview-fallback {
-  color: #fff3db;
+  color: var(--wamp-cream);
 }
 
 .profile-avatar-option-locked {
   background: #5e595e;
-  color: #fff3db;
+  color: var(--wamp-cream);
 }
 
 .profile-avatar-option-label,
@@ -278,15 +278,15 @@
 }
 
 .profile-avatar-option-label {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.25;
 }
 
 .profile-avatar-option-meta {
-  color: #2c5071;
-  font-family: 'Early GameBoy', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-label);
   font-size: 8px;
   line-height: 1.35;
   font-synthesis: none;

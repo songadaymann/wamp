@@ -1,3 +1,4 @@
+@import './tokens.css';
 @import './sections/base.css';
 @import './sections/editor.css';
 @import './sections/course-editor.css';

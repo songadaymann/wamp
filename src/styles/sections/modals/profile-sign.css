@@ -12,7 +12,7 @@
   padding: 12px;
   border: 1px solid rgba(243, 238, 226, 0.08);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--wamp-white-rgb), 0.03);
   text-align: left;
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
 }
@@ -21,7 +21,7 @@
 .profile-room-card:focus-visible {
   transform: translateY(-1px);
   border-color: rgba(167, 201, 87, 0.4);
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(var(--wamp-white-rgb), 0.045);
 }
 
 .profile-room-preview {
@@ -88,7 +88,7 @@
   padding: 10px 12px;
   border: 1px solid rgba(243, 238, 226, 0.08);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--wamp-white-rgb), 0.03);
 }
 
 .profile-stats-label {
@@ -151,7 +151,7 @@
 
 .sign-text-modal-counter {
   color: var(--text-muted);
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   white-space: nowrap;
 }

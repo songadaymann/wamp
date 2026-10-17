@@ -8,7 +8,7 @@
   border-radius: 3px;
   color: var(--text);
   font-size: 11px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   cursor: pointer;
 }
 
@@ -36,7 +36,7 @@
 
 .background-solid-color-value {
   color: var(--text);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   font-size: 11px;
   letter-spacing: 0;
 }
@@ -114,7 +114,7 @@
   border-radius: 0;
   background: var(--panel-2);
   color: var(--text);
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   font-size: 9px;
   line-height: 1.15;
   text-align: center;
@@ -130,7 +130,7 @@
 #background-photos-modal,
 #background-upload-modal {
   z-index: 66;
-  background: rgba(24, 22, 28, 0.8);
+  background: rgba(var(--wamp-ink-rgb), 0.8);
   backdrop-filter: none;
 }
 
@@ -140,10 +140,10 @@
   padding: 20px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff3db;
-  border: 3px solid #79ccde;
+  background: var(--wamp-cream);
+  border: 3px solid var(--wamp-sky);
   border-radius: 0;
-  box-shadow: 6px 6px 0 #18161c;
+  box-shadow: var(--shadow-6);
 }
 
 #background-photos-modal .background-photo-modal-panel {
@@ -158,8 +158,8 @@
 
 #background-photos-modal .background-photo-modal-kicker,
 #background-upload-modal .background-photo-modal-kicker {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.04em;
   line-height: 1.3;
@@ -169,8 +169,8 @@
 #background-photos-modal .background-photo-modal-title,
 #background-upload-modal .background-photo-modal-title {
   margin-top: 6px;
-  color: #18161c;
-  font-family: 'Super Mario Bros. NES', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-display);
   font-size: 16px;
   line-height: 1.25;
   font-synthesis: none;
@@ -179,31 +179,31 @@
 
 #background-photos-modal .background-photo-modal-meta,
 #background-upload-modal .background-photo-modal-meta {
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
   line-height: 1.45;
 }
 
 #background-photos-modal .background-photo-modal-error,
 #background-upload-modal .background-photo-modal-error {
-  color: #ed5f4b;
+  color: var(--wamp-red);
 }
 
 #background-photos-modal .background-photo-modal-close,
 #background-upload-modal .background-photo-modal-close {
   min-height: 34px;
   padding: 8px 12px 7px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #79ccde;
-  color: #000;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-sky);
+  color: var(--wamp-black);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 #background-photos-modal .background-photo-modal-close:hover,
@@ -219,8 +219,8 @@
 }
 
 .background-photos-sort-label {
-  color: #2c5071;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  color: var(--wamp-sky-deep);
+  font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -230,13 +230,13 @@
   min-width: 160px;
   min-height: 34px;
   padding: 7px 10px 6px;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #fffaf0;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-paper);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   font-size: 12px;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 .background-photos-grid {
@@ -252,27 +252,27 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 2px solid #79ccde;
+  border: 2px solid var(--wamp-sky);
   border-radius: 0;
-  background: #fffaf0;
-  color: #18161c;
-  font-family: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+  background: var(--wamp-paper);
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
   text-align: left;
   cursor: pointer;
-  box-shadow: 3px 3px 0 #18161c;
+  box-shadow: var(--shadow-3);
 }
 
 .background-photo-choice.active {
-  border-color: #18161c;
-  background: #fcea7c;
+  border-color: var(--wamp-ink);
+  background: var(--wamp-yellow);
 }
 
 .background-photo-choice-preview {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background-color: #18161c;
+  background-color: var(--wamp-ink);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -280,7 +280,7 @@
 
 .background-photo-choice-name {
   overflow: hidden;
-  color: #18161c;
+  color: var(--wamp-ink);
   font-size: 12px;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -288,7 +288,7 @@
 }
 
 .background-photo-choice-meta {
-  color: #2c5071;
+  color: var(--wamp-sky-deep);
   font-size: 11px;
   line-height: 1.25;
 }
@@ -298,17 +298,17 @@
   height: 14px;
   margin: 12px 0;
   overflow: hidden;
-  border: 2px solid #18161c;
+  border: 2px solid var(--wamp-ink);
   border-radius: 0;
-  background: #fffaf0;
-  box-shadow: 3px 3px 0 #18161c;
+  background: var(--wamp-paper);
+  box-shadow: var(--shadow-3);
 }
 
 .background-upload-progress-bar {
   width: 0%;
   height: 100%;
   border-radius: 0;
-  background: #277b30;
+  background: var(--wamp-green);
   transition: width 160ms ease;
 }
 
@@ -341,7 +341,7 @@
   border-radius: 3px;
   color: var(--text);
   font-size: 11px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-code);
   cursor: pointer;
 }
 
