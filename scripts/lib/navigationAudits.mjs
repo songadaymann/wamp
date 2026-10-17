@@ -1,3 +1,4 @@
+import { auditButtonRoles } from './buttonRoleAudits.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -56,6 +57,7 @@ export async function auditNavigation(page, { signed = true, editor = true, capt
     const r = e.getBoundingClientRect(); return { id: e.id, x: r.x, right: r.right, bottom: r.bottom, width: r.width, height: r.height, viewportWidth: innerWidth, viewportHeight: innerHeight };
   }));
   assert(bounds.every(r => r.x >= -1 && r.right <= r.viewportWidth + 1 && r.bottom <= r.viewportHeight + 1), JSON.stringify(bounds));
+  await auditButtonRoles(page, 'browse');
   await capture('browse-navigation');
   await destination('#btn-world-explore', '#explore-modal', '#btn-explore-close');
   await destination('#btn-world-worlds', '.worlds-modal', '[data-world-action="close"]');
@@ -111,6 +113,7 @@ export async function auditNavigation(page, { signed = true, editor = true, capt
   if (footer) {
     await visible('#btn-chat-toggle'); await hidden('#btn-world-zoom-out-footer'); await hidden('#btn-fit-screen');
   }
+  await auditButtonRoles(page, 'play');
   await openMenu(); await destination('#btn-world-controls', '#controls-modal', '#btn-controls-close');
   await mode('play-world'); await menuClosed(); await page.waitForTimeout(250); await capture('play-navigation');
   await stop();
@@ -129,7 +132,14 @@ export async function auditNavigation(page, { signed = true, editor = true, capt
     await page.locator('#menu-body').evaluate(e => { e.scrollTop = 0; });
     await destination('#btn-world-settings', '#settings-modal', '#btn-settings-close'); await mode('editor');
     await openMenu(); await destination('#btn-world-controls', '#controls-modal', '#btn-controls-close'); await mode('editor');
+    await auditButtonRoles(page, 'editor');
     await capture('editor-menu');
+    await page.locator('[data-editor-shell-action="test"]').click();
+    await mode('play-world'); await page.waitForTimeout(150); await intro();
+    await auditButtonRoles(page, 'editor-test'); await capture('editor-test-actions');
+    await page.locator(await page.locator('#btn-world-play').isVisible() ? '#btn-world-play' : '#btn-mobile-world-stop').click();
+    await mode('editor');
+    await auditButtonRoles(page, 'editor');
   }
-  return { bounds, signed, editor: signed && editor, cases: ['browse destinations', 'global vs room leaderboard', 'account menu', 'guestbook', 'settings', 'controls', 'quiet play footer', 'play menu', ...(signed ? ['profile vs rooms', 'cached rooms tab', 'profile refresh'] : []), ...(signed && editor ? ['editor menu'] : [])] };
+  return { bounds, signed, editor: signed && editor, cases: ['action roles and contrast', 'browse destinations', 'global vs room leaderboard', 'account menu', 'guestbook', 'settings', 'controls', 'quiet play footer', 'play menu', ...(signed ? ['profile vs rooms', 'cached rooms tab', 'profile refresh'] : []), ...(signed && editor ? ['editor menu', 'test and back to editor'] : [])] };
 }

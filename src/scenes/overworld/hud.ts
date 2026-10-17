@@ -609,6 +609,12 @@ export class OverworldHudBridge {
     this.setText(this.doc.getElementById('btn-mobile-world-stop'), viewModel.playButtonText === 'Back to Editor' ? 'Back to Editor' : 'Stop');
     this.playButton?.classList.toggle('hidden', viewModel.playButtonHidden);
     this.setActive(this.playButton, viewModel.playButtonActive);
+    const returnToEditor = viewModel.playButtonText === 'Back to Editor';
+    const playVariant = returnToEditor ? 'neutral' : viewModel.playButtonActive ? 'danger' : 'play';
+    if (this.playButton && this.playButton.dataset.buttonVariant !== playVariant) this.playButton.dataset.buttonVariant = playVariant;
+    const mobileStop = this.doc.getElementById('btn-mobile-world-stop');
+    const stopVariant = returnToEditor ? 'neutral' : 'danger';
+    if (mobileStop && mobileStop.dataset.buttonVariant !== stopVariant) mobileStop.dataset.buttonVariant = stopVariant;
     this.setButton(this.shareButton, 'Share', viewModel.shareButtonDisabled);
     this.setActive(this.shareButton, viewModel.playButtonActive);
     this.shareButton?.classList.toggle('hidden', viewModel.shareButtonHidden);

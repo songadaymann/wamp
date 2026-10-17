@@ -99,7 +99,7 @@ body[data-editor-dock-shell='true'] .editor-shell-top {
   align-items: center;
   gap: 9px;
   min-width: 0;
-  padding: 10px 78px 10px 16px;
+  padding: 10px 112px 10px 16px;
   border-bottom: 2px solid var(--editor-retro-cream);
   background: #0b0b0b;
   color: var(--editor-retro-cream);
@@ -260,20 +260,6 @@ body[data-editor-dock-shell='true'] .editor-shell-chunky-button[aria-disabled='t
 body[data-editor-dock-shell='true'] .editor-shell-chunky-button.active {
   background: var(--editor-retro-green);
   color: var(--editor-retro-cream);
-}
-
-body[data-editor-dock-shell='true'] .editor-shell-back-button {
-  background: var(--editor-retro-blue);
-}
-
-body[data-editor-dock-shell='true'] .editor-shell-test-button {
-  background: var(--editor-retro-green);
-  color: var(--editor-retro-cream);
-}
-
-body[data-editor-dock-shell='true'] .editor-shell-publish-button {
-  background: var(--editor-retro-red);
-  color: #18161c;
 }
 
 body[data-editor-dock-shell='true'] .editor-shell-title-slot {
@@ -1328,7 +1314,8 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
   grid-column: 1;
 }
 
-@media (max-width: 1250px) {
+/* Allow for the widest drawer before room actions run out of space. */
+@media (max-width: 1680px) {
   body[data-editor-dock-shell='true'] {
     --editor-shell-top-height: 210px;
   }
@@ -1358,7 +1345,9 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
   body[data-editor-dock-shell='true'] .editor-shell-action-grid {
     grid-template-columns: repeat(4, minmax(58px, 1fr));
   }
+}
 
+@media (max-width: 1250px) {
   body[data-editor-dock-shell='true'] .editor-music-strip {
     flex-wrap: wrap;
     overflow-x: visible;

@@ -112,10 +112,6 @@
   gap: 8px;
 }
 
-.room-sequence-hud #btn-room-sequence-stop {
-  background: #79ccde;
-}
-
 #world-hud .room-sequence-hud .bar-btn {
   color: #000;
 }
