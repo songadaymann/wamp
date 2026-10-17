@@ -48,6 +48,17 @@ export class MannCoolControllerInput {
     this.held.clear(); this.pressed.clear(); this.state = EMPTY;
   }
 
+  /** Parent touch taps can finish before Chrome sends the iframe's blur event. */
+  releaseHeld(): void {
+    for (const key of this.held) {
+      const action = KEYS[key];
+      if (action === 'up') this.pressed.delete('jump');
+      else if (action !== 'left' && action !== 'right' && action !== 'down') this.pressed.delete(action);
+      this.blocked.add(key);
+    }
+    this.held.clear(); this.state = EMPTY;
+  }
+
   handle(data: unknown): void {
     const event = parseMannCoolKeyMessage(data);
     if (!event) return;

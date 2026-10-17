@@ -13,7 +13,8 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
     if (request.method() === 'POST') reports.push({ body: request.postDataJSON(), headers: request.headers() });
     await route.fulfill({ status: request.method() === 'OPTIONS' ? 204 : 200, headers: { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'Content-Type' }, body: request.method() === 'OPTIONS' ? '' : '{}' });
   });
-  const parentHtml = `<meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{display:block;width:100%;height:calc(100% - 56px);border:0}button{height:50px;width:80px}</style><iframe id="game" src="https://wamp.land/?x=0&y=0&welcome=0"></iframe><button id="right">Right</button><button id="jump">Jump</button><script>function send(key,eventType){game.contentWindow.postMessage({type:'keyEvent',key,eventType},'https://wamp.land')}for(const [id,key] of [['right','ArrowRight'],['jump',' ']]){document.getElementById(id).addEventListener('pointerdown',()=>send(key,'keydown'));document.getElementById(id).addEventListener('pointerup',()=>send(key,'keyup'))}</script>`;
+  await context.route('https://mann.cool/controller-empty', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Controller fixture transition</title>' }));
+  const parentHtml = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{display:block;width:100%;height:calc(100% - 56px);border:0}button{height:50px;width:80px}</style><iframe id="game" src="https://wamp.land/?x=0&y=0&welcome=0"></iframe><button id="right">Right</button><button id="jump">Jump</button><script>function send(key,eventType){game.contentWindow.postMessage({type:'keyEvent',key,eventType},'https://wamp.land')}for(const [id,key] of [['right','ArrowRight'],['jump',' ']]){document.getElementById(id).addEventListener('pointerdown',()=>send(key,'keydown'));document.getElementById(id).addEventListener('pointerup',()=>send(key,'keyup'))}</script>`;
   await context.route(url => ['https://mann.cool', 'https://untrusted.example'].includes(url.origin) && url.pathname === '/controller-fixture', route => route.fulfill({ contentType: 'text/html', body: parentHtml }));
   const open = async origin => {
     await page.goto(origin + '/controller-fixture');
@@ -42,8 +43,13 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
   await frame.locator('#game-container > canvas').click();
   await frame.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.player.coyoteMs > 0);
   const y = (await read(frame)).activeScene.player.y;
+  await frame.evaluate(y => {
+    window.__mannCoolJumpMinY = y; window.__mannCoolObserveJump = true;
+    const tick = () => { if (!window.__mannCoolObserveJump) return; window.__mannCoolJumpMinY = Math.min(window.__mannCoolJumpMinY, JSON.parse(window.render_game_to_text()).activeScene.player.y); requestAnimationFrame(tick); }; tick();
+  }, y);
   await page.locator('#jump').tap();
-  await frame.waitForFunction(y => JSON.parse(window.render_game_to_text()).activeScene.player.y < y - 4, y);
+  await frame.waitForFunction(y => window.__mannCoolJumpMinY < y - 4, y);
+  await frame.evaluate(() => { window.__mannCoolObserveJump = false; });
   await capture('mann-cool-parent-jump');
   await send('r'); await send('r', 'keyup');
   await frame.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.player.coyoteMs > 0);
@@ -103,6 +109,8 @@ export async function auditMannCool(page, capture = async () => {}, assetOrigin 
   await send('ArrowRight'); assert.equal((await read(frame)).mannCool.controller.active, false, 'browse mode ignores parent controls');
   assert.equal(reports.length, 1, 'menus and mode changes never report another visit');
   const trusted = await read(frame);
+  await page.goto('https://mann.cool/controller-empty');
+  await page.waitForTimeout(250); // Let the previous iframe renderer release its resources.
   const evil = await open('https://untrusted.example');
   await send('ArrowRight'); assert.equal((await read(evil)).mannCool.controller.active, false, 'wrong-origin parent rejected');
   await evil.waitForFunction(() => JSON.parse(window.render_game_to_text()).mannCool.playReport === 'sent');

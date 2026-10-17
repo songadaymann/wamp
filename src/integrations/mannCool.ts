@@ -23,6 +23,7 @@ export function installMannCoolIntegration(): () => void {
     refresh(); controller.handle(event.data);
   };
   const release = () => controller?.clear();
+  const blur = () => controller?.releaseHeld();
   const observer = controller ? new MutationObserver(refresh) : null;
   if (observer) {
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-app-mode'] });
@@ -30,7 +31,7 @@ export function installMannCoolIntegration(): () => void {
       observer.observe(modal, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
     }
     window.addEventListener('message', message);
-    window.addEventListener('blur', release);
+    window.addEventListener('blur', blur);
     window.addEventListener('pagehide', release);
     window.addEventListener('pageshow', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -42,7 +43,7 @@ export function installMannCoolIntegration(): () => void {
     if (installedCleanup !== cleanup) return;
     observer?.disconnect(); release(); setMannCoolInputSource(null);
     window.removeEventListener('wamp:app-ready', report);
-    window.removeEventListener('message', message); window.removeEventListener('blur', release);
+    window.removeEventListener('message', message); window.removeEventListener('blur', blur);
     window.removeEventListener('pagehide', release); window.removeEventListener('pageshow', refresh);
     document.removeEventListener('visibilitychange', refresh);
     document.removeEventListener('focusin', refresh); document.removeEventListener('focusout', refresh);

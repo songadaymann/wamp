@@ -38,6 +38,16 @@ describe('mann.cool controller', () => {
     s.setEnabled(false); s.handle(event('q')); s.setEnabled(true); s.handle(event('q')); expect(s.consume('slash')).toBe(false);
     s.handle(event('q', 'keyup')); s.handle(event('q')); expect(s.consume('slash')).toBe(true);
   });
+  it('preserves a completed parent tap across Chrome touch focus ordering', () => {
+    const s = input(); s.handle(event(' ')); s.handle(event(' ', 'keyup')); s.releaseHeld();
+    expect(s.read().active).toBe(false); expect(s.consume('jump')).toBe(true); expect(s.consume('jump')).toBe(false);
+  });
+  it('blur drops held actions and directions while menus also drop completed taps', () => {
+    const s = input(); s.handle(event('d')); s.handle(event('q')); s.releaseHeld();
+    expect(s.read().active).toBe(false); expect(s.consume('slash')).toBe(false);
+    s.handle(event('d')); expect(s.read().active).toBe(false); s.handle(event('d', 'keyup')); s.handle(event('d')); expect(s.read().moveX).toBe(1);
+    s.handle(event(' ')); s.handle(event(' ', 'keyup')); s.setEnabled(false); expect(s.consume('jump')).toBe(false);
+  });
   it('composes native and remote holds without either release stealing ownership', () => {
     const s = input(); setMannCoolInputSource(s); setTouchControlsActive(true); setTouchMove(1, 0); setTouchActionHeld('jump', true);
     s.handle(event('ArrowRight')); s.handle(event(' ')); s.handle(event('ArrowRight', 'keyup')); s.handle(event(' ', 'keyup'));
