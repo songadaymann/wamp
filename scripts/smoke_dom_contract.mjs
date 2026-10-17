@@ -175,8 +175,6 @@ const requiredIdsByController = {
     'btn-world-explore',
     'btn-world-leaderboard',
     'btn-world-rate-room',
-    'btn-world-settings',
-    'btn-world-controls',
     'world-zoom-label',
     'room-coords',
     'cursor-coords',

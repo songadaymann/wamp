@@ -23,13 +23,11 @@ interface OverworldHudRuntimeConfig {
   onOpenRoomRush: () => void | Promise<void>;
   onOpenRoomComment: () => void | Promise<void>;
   onToggleRoomComments: () => void | Promise<void>;
-  onOpenSettings: () => void | Promise<void>;
   onOpenMultiplayer: () => boolean | Promise<boolean>;
   onInviteMultiplayer: (
     modeId: MultiplayerModeId,
     entry: OverworldOnlineRosterViewEntry,
   ) => void | Promise<void>;
-  onOpenControls: () => void | Promise<void>;
   onFitWorld: () => void;
 }
 
@@ -49,10 +47,8 @@ const runtimeConfig: OverworldHudRuntimeConfig = {
   onOpenRoomRush: () => {},
   onOpenRoomComment: () => {},
   onToggleRoomComments: () => {},
-  onOpenSettings: () => {},
   onOpenMultiplayer: () => true,
   onInviteMultiplayer: () => {},
-  onOpenControls: () => {},
   onFitWorld: () => {},
 };
 
@@ -102,17 +98,11 @@ export function configureOverworldHudBridgeRuntime(
   if (config.onToggleRoomComments) {
     runtimeConfig.onToggleRoomComments = config.onToggleRoomComments;
   }
-  if (config.onOpenSettings) {
-    runtimeConfig.onOpenSettings = config.onOpenSettings;
-  }
   if (config.onOpenMultiplayer) {
     runtimeConfig.onOpenMultiplayer = config.onOpenMultiplayer;
   }
   if (config.onInviteMultiplayer) {
     runtimeConfig.onInviteMultiplayer = config.onInviteMultiplayer;
-  }
-  if (config.onOpenControls) {
-    runtimeConfig.onOpenControls = config.onOpenControls;
   }
   if (config.onFitWorld) {
     runtimeConfig.onFitWorld = config.onFitWorld;
@@ -257,8 +247,6 @@ export class OverworldHudBridge {
   private readonly leaderboardButton: HTMLButtonElement | null;
   private readonly exploreButton: HTMLButtonElement | null;
   private readonly rateRoomButton: HTMLButtonElement | null;
-  private readonly settingsButton: HTMLButtonElement | null;
-  private readonly controlsButton: HTMLButtonElement | null;
   private readonly zoomLabelEl: HTMLElement | null;
   private readonly roomCoordinatesEl: HTMLElement | null;
   private readonly separatorEl: HTMLElement | null;
@@ -410,10 +398,6 @@ export class OverworldHudBridge {
     void runtimeConfig.onToggleRoomComments();
   };
 
-  private readonly handleSettingsClick = (): void => {
-    void runtimeConfig.onOpenSettings();
-  };
-
   private readonly handleEditRoomClick = (): void => {
     void runtimeConfig.onEditRoom();
   };
@@ -440,10 +424,6 @@ export class OverworldHudBridge {
 
   private readonly handleExploreClick = (): void => {
     void runtimeConfig.onOpenExplore();
-  };
-
-  private readonly handleControlsClick = (): void => {
-    void runtimeConfig.onOpenControls();
   };
 
   private readonly handleFitWorldClick = (): void => {
@@ -513,8 +493,6 @@ export class OverworldHudBridge {
     this.exploreButton = this.doc.getElementById('btn-world-explore') as HTMLButtonElement | null;
     this.leaderboardButton = this.doc.getElementById('btn-world-leaderboard') as HTMLButtonElement | null;
     this.rateRoomButton = this.doc.getElementById('btn-world-rate-room') as HTMLButtonElement | null;
-    this.settingsButton = this.doc.getElementById('btn-world-settings') as HTMLButtonElement | null;
-    this.controlsButton = this.doc.getElementById('btn-world-controls') as HTMLButtonElement | null;
     this.zoomLabelEl = this.doc.getElementById('world-zoom-label');
     this.roomCoordinatesEl = this.doc.getElementById('room-coords');
     this.separatorEl = this.doc.querySelector('#bottom-bar .separator');
@@ -569,8 +547,6 @@ export class OverworldHudBridge {
     this.exploreButton?.addEventListener('click', this.handleExploreClick);
     this.leaderboardButton?.addEventListener('click', this.handleLeaderboardClick);
     this.rateRoomButton?.addEventListener('click', this.handleLeaderboardClick);
-    this.settingsButton?.addEventListener('click', this.handleSettingsClick);
-    this.controlsButton?.addEventListener('click', this.handleControlsClick);
     this.fitButton?.addEventListener('click', this.handleFitWorldClick);
     this.doc.addEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.addEventListener('keydown', this.handleDocumentKeyDown, true);
@@ -725,8 +701,6 @@ export class OverworldHudBridge {
     this.exploreButton?.removeEventListener('click', this.handleExploreClick);
     this.leaderboardButton?.removeEventListener('click', this.handleLeaderboardClick);
     this.rateRoomButton?.removeEventListener('click', this.handleLeaderboardClick);
-    this.settingsButton?.removeEventListener('click', this.handleSettingsClick);
-    this.controlsButton?.removeEventListener('click', this.handleControlsClick);
     this.fitButton?.removeEventListener('click', this.handleFitWorldClick);
     this.doc.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
     this.doc.removeEventListener('keydown', this.handleDocumentKeyDown, true);

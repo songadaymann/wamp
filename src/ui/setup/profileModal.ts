@@ -185,7 +185,7 @@ export class ProfileModalController {
       return;
     }
 
-    void this.open(detail.userId);
+    void this.open(detail.userId, detail.tab);
   };
 
   private readonly handleAuthStateChanged = (event: Event) => {
@@ -209,7 +209,7 @@ export class ProfileModalController {
 
     this.profileCache.delete(detail.userId);
     if (this.currentProfileUserId === detail.userId && !this.loading) {
-      void this.open(detail.userId);
+      void this.open(detail.userId, this.activeTab === 'rooms' ? 'rooms' : undefined);
     }
   };
 
@@ -406,14 +406,14 @@ export class ProfileModalController {
     }
   }
 
-  async open(userId: string): Promise<void> {
+  async open(userId: string, initialTab?: 'rooms'): Promise<void> {
     if (!this.elements.modal) {
       return;
     }
 
     this.currentProfileUserId = userId;
     this.activeTab = 'rooms';
-    this.activeTabAutoSelected = false;
+    this.activeTabAutoSelected = initialTab === 'rooms';
     this.loading = true;
     this.avatarPreviewBroken = false;
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;

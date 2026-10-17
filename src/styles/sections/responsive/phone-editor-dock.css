@@ -276,7 +276,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #auth-panel {
-  top: calc(var(--editor-phone-bar-height) + 4px);
+  --auth-panel-top: calc(var(--editor-phone-bar-height) + 4px);
   right: calc(4px + var(--safe-right));
 }
 

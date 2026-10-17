@@ -3,6 +3,7 @@ export const PROFILE_INVALIDATED_EVENT = 'profile-invalidated';
 
 export interface ProfileOpenRequestDetail {
   userId: string;
+  tab?: 'rooms';
 }
 
 export interface ProfileInvalidatedDetail {
@@ -17,14 +18,14 @@ export function isOpenableProfileUserId(userId: string | null | undefined): user
   );
 }
 
-export function requestProfileOpen(userId: string | null | undefined): boolean {
+export function requestProfileOpen(userId: string | null | undefined, tab?: 'rooms'): boolean {
   if (!isOpenableProfileUserId(userId)) {
     return false;
   }
 
   window.dispatchEvent(
     new CustomEvent<ProfileOpenRequestDetail>(PROFILE_OPEN_REQUEST_EVENT, {
-      detail: { userId },
+      detail: tab ? { userId, tab } : { userId },
     })
   );
   return true;

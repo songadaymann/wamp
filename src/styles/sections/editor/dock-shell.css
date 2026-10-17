@@ -47,7 +47,7 @@ body[data-editor-dock-shell='true'] #bottom-bar {
 
 body[data-editor-dock-shell='true'] #bottom-bar .bar-left,
 body[data-editor-dock-shell='true'] #bottom-bar #room-save-status,
-body[data-editor-dock-shell='true'] #auth-identity {
+body[data-editor-dock-shell='true'] #auth-panel:not(.menu-open) #auth-identity {
   display: none !important;
 }
 

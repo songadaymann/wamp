@@ -1,3 +1,4 @@
+import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
 import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -145,6 +146,7 @@ const scenarios = [
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
+  { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
   { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
   { name: 'phone-narrow-signed-room-controls', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
@@ -278,6 +280,7 @@ async function runScenario(browserInstance, scenario) {
     localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
     localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
   });
+  if (scenario.navigationFixture) await installNavigationFixtures(context);
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() !== 'error') {
@@ -441,14 +444,13 @@ async function runPhoneTapTargets(page, summary, directory) {
   await page.locator('#btn-mobile-world-hud-details').tap(); await assertPhoneTapTargets(page, summary, 'Room details'); await page.locator('#btn-mobile-world-hud-details').tap();
   await page.locator('#menu-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Menu');
   await page.locator('#menu-body').evaluate(element => { element.scrollTop = element.scrollHeight; }); await assertPhoneTapTargets(page, summary, 'Menu bottom');
-  await page.locator('#menu-toggle').tap();
   await page.locator('#btn-world-settings').tap(); await assertPhoneTapTargets(page, summary, 'Settings'); await page.locator('#btn-settings-close').tap();
   await page.locator('#btn-chat-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Chat'); await page.locator('#btn-chat-close').tap();
   await captureScenarioScreenshot(page, summary, directory, 'browse-targets');
   await selectEditableRoom(page); await runPreviewSmokeAction(page, 'playSelectedRoom'); await closeBlockingOverlaysUntilClear(page);
   await assertPhoneTapTargets(page, summary, 'Play');
   await page.locator('#menu-toggle').tap(); await assertPhoneTapTargets(page, summary, 'Play menu');
-  await page.locator('#btn-menu-settings').tap(); await assertVisible(page, '#settings-modal', 'Settings reachable during landscape play'); await page.locator('#btn-settings-close').tap();
+  await page.locator('#btn-world-settings').tap(); await assertVisible(page, '#settings-modal', 'Settings reachable during landscape play'); await page.locator('#btn-settings-close').tap();
   await page.locator('#menu-toggle').tap(); await page.locator('#btn-menu-chat').tap(); await assertVisible(page, '#global-chat-body', 'Chat reachable during landscape play'); await page.locator('#btn-chat-close').tap();
   await captureScenarioScreenshot(page, summary, directory, 'play-targets');
 }
@@ -771,7 +773,7 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
   await assertVisible(page, '#btn-mobile-world-hud-details', 'portrait focused room More disclosure');
   await assertVisible(page, '#btn-mobile-world-hud-minimize', 'portrait focused room collapse button');
   await assertHidden(page, '#btn-world-course-builder', 'portrait focused room Course Builder by default');
-  await assertHidden(page, '#btn-world-explore', 'portrait focused room Explore by default');
+  await assertVisible(page, '#btn-world-explore', 'Explore is always in the browse footer');
   await assertHidden(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard by default');
   await assertHidden(page, '#btn-world-chat', 'portrait focused room Chat by default');
   await assertVisible(page, '#btn-world-jump-sheet', 'portrait focused room Warp on the card');
@@ -837,13 +839,13 @@ async function runPhonePortraitDeepLinkBottomHud(page, scenarioSummary, scenario
   await assertHidden(page, '#btn-world-course-builder', 'locked room has no unusable Course Builder after More');
   await assertHidden(page, '#btn-world-edit', 'locked room Edit stays hidden after More');
   await assertHidden(page, '#btn-world-build', 'published room Build stays hidden after More');
-  await assertVisible(page, '#btn-world-explore', 'portrait focused room Explore after More');
+  await assertVisible(page, '#btn-world-explore', 'Explore stays in the footer after More');
   await assertVisible(page, '#btn-world-leaderboard', 'portrait focused room Leaderboard after More');
   await assertVisible(page, '#btn-world-chat', 'portrait focused room Chat after More');
   await assertVisible(page, '#btn-world-jump-sheet', 'portrait focused room Warp after More');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'portrait-more-actions');
   await clickElement(page, '#btn-mobile-world-hud-details');
-  await assertHidden(page, '#btn-world-explore', 'portrait focused room Explore after closing More');
+  await assertVisible(page, '#btn-world-explore', 'Explore stays in the footer after closing More');
 
   await clickElement(page, '#btn-mobile-world-hud-minimize');
   await assertHidden(page, '#world-hud', 'portrait focused room collapsed HUD');
@@ -1745,7 +1747,6 @@ async function readPortraitFocusedWorldHudLayout(page) {
       '#btn-world-edit',
       '#btn-world-build',
       '#btn-world-course-builder',
-      '#btn-world-explore',
       '#btn-world-leaderboard',
       '#btn-world-chat',
       '#btn-world-jump-sheet',
@@ -1975,4 +1976,9 @@ async function runGamepadControls(page, scenarioSummary, scenarioDir) {
   const result = await auditGamepadControls(page,
     label => captureScenarioScreenshot(page, scenarioSummary, scenarioDir, label));
   scenarioSummary.assertions.push({ label: 'standard Gamepad API and R route existing gameplay actions safely', ...result });
+}
+
+async function runNavigation(page, summary, directory) {
+  const result = await auditNavigation(page, { capture: label => captureScenarioScreenshot(page, summary, directory, label) });
+  summary.assertions.push({ label: 'browse, account, play and editor navigation destinations', ...result });
 }

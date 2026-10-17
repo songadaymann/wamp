@@ -17,7 +17,6 @@
 #bug-report-modal input[type='checkbox'] { accent-color: #006c82; }
 #bug-report-status { font-weight: bold; margin: 0; font-size: 12px; }
 #bug-report-screenshot { max-height: 120px; }
-body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-report-bug { min-height: 20px; padding: 3px 7px; font-size: 7px; }
 @media (max-width: 540px) {
   #bug-report-modal .history-modal-panel { padding: 12px; max-height: calc(100dvh - 24px); }
   #bug-report-modal .history-modal-title { font-size: 16px; }
