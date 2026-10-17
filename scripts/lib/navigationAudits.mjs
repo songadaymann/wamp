@@ -119,6 +119,14 @@ export async function auditNavigation(page, { signed = true, editor = true, capt
     await openMenu();
     for (const id of ['#btn-world-settings', '#btn-world-controls', '#btn-guestbook-open']) assert.match(await page.locator(id).evaluate(e => getComputedStyle(e).fontFamily), /Early GameBoy/i);
     await capture('editor-account-menu');
+    await page.locator('#menu-body').evaluate(e => { e.scrollTop = e.scrollHeight; });
+    const logoutTap = await page.locator('#btn-auth-logout').evaluate(e => {
+      const r = e.getBoundingClientRect();
+      return { bottom: r.bottom, reachable: e.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) };
+    });
+    assert(logoutTap.reachable, `editor toolbar must not intercept the final menu action: ${JSON.stringify(logoutTap)}`);
+    await capture('editor-menu-bottom');
+    await page.locator('#menu-body').evaluate(e => { e.scrollTop = 0; });
     await destination('#btn-world-settings', '#settings-modal', '#btn-settings-close'); await mode('editor');
     await openMenu(); await destination('#btn-world-controls', '#controls-modal', '#btn-controls-close'); await mode('editor');
     await capture('editor-menu');
