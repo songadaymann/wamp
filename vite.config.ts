@@ -1,5 +1,6 @@
 import { createPublicAssetHashes } from './src/build/publicAssetHashes';
 import { audioSourceExclusionPlugin } from './src/build/audioSourceExclusion';
+import { bootModulePreloadPlugin } from './src/build/bootModulePreload';
 import { publicAssetCssVersions, publicAssetVersionPlugin } from './src/build/publicAssetVersionPlugin';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -49,6 +50,7 @@ export default defineConfig(({ mode }) => {
       audioSourceExclusionPlugin(),
       publicAssetVersionPlugin(publicAssetHashes),
       earlyWorldTileBootstrapPlugin(roomApiBaseUrl),
+      bootModulePreloadPlugin(),
       bootBundleReportPlugin(),
       cloudflareWebAnalyticsPlugin(cloudflareWebAnalyticsToken),
       authoringDocumentsPlugin(),
