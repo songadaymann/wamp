@@ -20,7 +20,7 @@ function fixture(id: string | null = null, rank = 99) {
   const elements = new Map<string, Element>(); const get = (key: string) => { if (!elements.has(key)) elements.set(key, new Element()); return elements.get(key)!; };
   const doc = Object.assign(new EventTarget(), { hidden: false, getElementById: get, createElement: () => new Element() });
   const win = new EventTarget(); let userId = id;
-  const repository = { loadGlobalLeaderboard: vi.fn(async (_limit: number, window = 'all', _signal?: AbortSignal): Promise<GlobalLeaderboardResponse> => window === 'week' ? response() : { entries: [], viewerEntry: userId ? { ...entry, rank } : null }) };
+  const repository = { loadGlobalLeaderboard: vi.fn(async (_limit: number, window = 'all', _signal?: AbortSignal, _fresh?: boolean): Promise<GlobalLeaderboardResponse> => window === 'week' ? response() : { entries: [], viewerEntry: userId ? { ...entry, rank } : null }) };
   const controller = new GlobalLeaderboardPanelController(repository, doc as unknown as Document, win, () => userId);
   controllers.push(controller); return { controller, repository, get, doc, win, account: (id: string | null) => { userId = id; win.dispatchEvent(new Event('auth')); } };
 }
@@ -28,6 +28,12 @@ const tick = async () => { for (let n = 0; n < 12; n++) await Promise.resolve();
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-05T18:00:00.000Z')); });
 afterEach(() => { for (const controller of controllers.splice(0)) controller.destroy(); vi.useRealTimers(); });
 describe('global leaderboard window lifecycle', () => {
+  it('requests a complete fresh snapshot when the visible Refresh button is clicked', async () => {
+    const f = fixture('actor', 1); f.controller.setActive(true); await tick();
+    expect(f.repository.loadGlobalLeaderboard.mock.calls.at(-1)?.[3]).toBe(false);
+    f.get('btn-leaderboard-global-refresh').click(); await tick();
+    expect(f.repository.loadGlobalLeaderboard.mock.calls.at(-1)?.[3]).toBe(true);
+  });
   it('defaults guests and outside-top-50 viewers to weekly points, retaining the lifetime default for top 50', async () => {
     const guest = fixture(); guest.controller.setActive(true); await tick();
     expect(guest.repository.loadGlobalLeaderboard.mock.calls.map(call => call[1])).toEqual(['week']);

@@ -45,7 +45,7 @@ export class GlobalLeaderboardPanelController {
 
   private readonly selectWeek = () => this.select('week');
   private readonly selectAll = () => this.select('all');
-  private readonly handleRefresh = () => { void this.refresh(); };
+  private readonly handleRefresh = () => { void this.refresh(true); };
   private readonly handleWake = () => {
     if (this.visible && !this.doc.hidden && this.rolloverAt !== null && Date.now() >= this.rolloverAt) {
       void this.refresh();
@@ -105,7 +105,7 @@ export class GlobalLeaderboardPanelController {
     this.rolloverAt = null;
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(fresh: boolean = false): Promise<void> {
     this.cancel();
     if (!this.visible) return;
     const generation = this.generation;
@@ -121,13 +121,13 @@ export class GlobalLeaderboardPanelController {
       let initial: GlobalLeaderboardResponse | null = null;
       if (this.selected === null) {
         if (userId !== null) {
-          initial = await this.repository.loadGlobalLeaderboard(25, 'all', abort.signal);
+          initial = await this.repository.loadGlobalLeaderboard(25, 'all', abort.signal, fresh);
           if (!current()) return;
         }
         this.selected = initial?.viewerEntry && initial.viewerEntry.rank <= 50 ? 'all' : 'week';
       }
       const response = this.selected === 'all' && initial ? initial
-        : await this.repository.loadGlobalLeaderboard(25, this.selected, abort.signal);
+        : await this.repository.loadGlobalLeaderboard(25, this.selected, abort.signal, fresh);
       if (!current()) return;
       this.response = response;
       if (this.selected === 'week' && response.period && response.serverTime) {

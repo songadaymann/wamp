@@ -41,7 +41,7 @@ export async function loadViewerRankedGlobalLeaderboardRow(
     .bind(viewerUserId).first<RankedGlobalLeaderboardRow>();
 }
 
-function entry(row: RankedGlobalLeaderboardRow): GlobalLeaderboardEntry {
+export function mapRankedGlobalLeaderboardEntry(row: RankedGlobalLeaderboardRow): GlobalLeaderboardEntry {
   return {
     rank: Number(row.overall_rank), userId: row.user_id, userDisplayName: row.user_display_name,
     pointsInWindow: Number(row.points_in_window), totalPoints: row.total_points,
@@ -66,9 +66,9 @@ export async function buildGlobalLeaderboardResponse(
     ) ORDER BY overall_rank`)
     .bind(...(period ? [period.startsAt, period.endsAt, serverTime] : []), boundedLimit, viewerUserId, viewerUserId)
     .all<RankedGlobalLeaderboardRow>();
-  const entries = rows.results.filter(row => Number(row.overall_rank) <= boundedLimit).map(entry);
+  const entries = rows.results.filter(row => Number(row.overall_rank) <= boundedLimit).map(mapRankedGlobalLeaderboardEntry);
   const viewerRow = viewerUserId === null ? null : rows.results.find(row => row.user_id === viewerUserId) ?? null;
-  const viewerEntry = viewerRow ? entry(viewerRow) : null;
+  const viewerEntry = viewerRow ? mapRankedGlobalLeaderboardEntry(viewerRow) : null;
   const next = viewerEntry ? rows.results.find(row => Number(row.overall_rank) === viewerEntry.rank - 1) : null;
   return {
     window, period, serverTime, entries, viewerEntry,

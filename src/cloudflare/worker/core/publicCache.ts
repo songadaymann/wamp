@@ -13,6 +13,10 @@ interface WorkerCacheStorage extends CacheStorage {
  */
 const STORED_CACHE_CONTROL_HEADER = 'X-WAMP-Stored-Cache-Control';
 
+export function hasPublicCache(context: WorkerExecutionContextLike | undefined): boolean {
+  return Boolean(context && (globalThis.caches as WorkerCacheStorage | undefined)?.default);
+}
+
 export async function loadAnonymousPublicCache(
   request: Request,
   context: WorkerExecutionContextLike | undefined,

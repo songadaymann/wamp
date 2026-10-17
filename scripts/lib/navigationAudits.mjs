@@ -63,6 +63,17 @@ export async function auditNavigation(page, { signed = true, editor = true, capt
   await destination('#btn-world-worlds', '.worlds-modal', '[data-world-action="close"]');
   await page.locator('#btn-auth-leaderboard').click(); await visible('#leaderboard-modal');
   assert.equal(await page.locator('#btn-leaderboard-tab-global').evaluate(e => e.classList.contains('active')), true);
+  await page.locator('#btn-leaderboard-global-all').click();
+  await page.waitForFunction(() => !document.getElementById('btn-leaderboard-global-refresh').disabled
+    && document.getElementById('leaderboard-global-summary').textContent.includes('All-time'));
+  const freshRead = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/leaderboards/global' && url.searchParams.get('window') === 'all'
+      && url.searchParams.get('fresh') === '1';
+  });
+  await page.locator('#btn-leaderboard-global-refresh').click(); await freshRead;
+  await page.waitForFunction(() => !document.getElementById('btn-leaderboard-global-refresh').disabled);
+  await capture('global-refresh');
   await page.locator('#btn-leaderboard-close').click();
   const revealRoomActions = !await page.locator('#btn-world-leaderboard').isVisible();
   if (revealRoomActions) await page.locator('#btn-mobile-world-hud-details').click();

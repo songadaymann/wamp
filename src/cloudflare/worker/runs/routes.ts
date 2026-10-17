@@ -1,4 +1,6 @@
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
+import { canReuseGlobalLeaderboardBase, loadGlobalLeaderboardViewer } from './globalLeaderboardViewer';
+import type { GlobalLeaderboardResponse } from '../../../runs/model';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
@@ -28,7 +30,7 @@ import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import { scheduleRunRewards } from './deferredRewards';
-import { loadAnonymousPublicCache } from '../core/publicCache';
+import { hasPublicCache, loadAnonymousPublicCache } from '../core/publicCache';
 import {
   refreshPlayableContentIndexForRoom,
   schedulePlayableContentIndexRefresh,
@@ -760,21 +762,33 @@ export async function handleGlobalLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read global leaderboards');
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const leaderboard = await timing.measure(
-      'leaderboard',
-      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window),
-    );
-    const cache = window === 'week' ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20';
-    timing.setDiagnostic('cache', window === 'week' ? 'no-store' : authenticated ? 'private-20' : 'public-20');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const loadFullResponse = async () => {
+    const leaderboard = await timing.measure('leaderboard', () =>
+      buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window));
+    timing.setDiagnostic('cache', 'fresh');
     return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': cache },
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   };
-  if (window === 'week') return loadResponse();
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  // Weekly rollovers, explicit refreshes and unavailable caches retain one fresh snapshot.
+  if (window === 'week' || fresh || (auth && !hasPublicCache(context))) return loadFullResponse();
+  const publicResponse = await loadAnonymousPublicCache(request, context, async () => {
+    const leaderboard = await timing.measure('leaderboard', () => buildGlobalLeaderboardResponse(env, limit, null, window));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, leaderboard, timing, { headers: { 'Cache-Control': 'public, max-age=20' } });
+  });
+  if (!auth) return publicResponse;
+  const base = await publicResponse.json() as GlobalLeaderboardResponse;
+  const viewer = await timing.measure('viewer', () => loadGlobalLeaderboardViewer(env, auth.user.id));
+  // A new score/rank or changed adjacent player must not contradict a stale top list.
+  if (!canReuseGlobalLeaderboardBase(base, viewer, auth.user.id, limit)) return loadFullResponse();
+  const cache = publicResponse.headers.get('X-WAMP-Cache') ?? 'bypass';
+  timing.setDiagnostic('cache', `public-${cache}-private-viewer`);
+  return timedJsonResponse(request, { ...base, ...viewer }, timing, {
+    headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': cache },
+  });
 }
 
 export function resolveRoomSnapshotForVersion(
