@@ -78,6 +78,7 @@ import { getContainedLiveObjectKey } from './liveObjects/indexing';
 import {
   JIMOTHY_ANIMATION_KEYS,
 } from '../../npcs/model';
+import { attachNpcNameLabel } from './liveObjects/npcNameLabel';
 import {
   LiveObjectNpcController,
   type NpcRuntimeStateSnapshot,
@@ -826,21 +827,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         npcBody.setMaxVelocity(140, 500);
       }
       if (liveObject.npcName) {
-        const label = this.options.scene.add.text(
-          sprite.x,
-          sprite.y - 19,
-          liveObject.npcName,
-          {
-            fontFamily: '"Press Start 2P", monospace',
-            fontSize: '6px',
-            color: '#ffffff',
-            stroke: '#101522',
-            strokeThickness: 2,
-            align: 'center',
-          },
-        );
-        label.setOrigin(0.5, 1);
-        label.setDepth(sprite.depth + 0.05);
+        const label = attachNpcNameLabel(this.options.scene, sprite, liveObject.npcName);
         liveObject.npcNameLabel = label;
         liveObject.helpers.push(label);
       }
