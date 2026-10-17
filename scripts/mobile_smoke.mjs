@@ -157,6 +157,9 @@ const scenarios = [
   { name: 'phone-mann-cool', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin, { renderer: process.env.MOBILE_SMOKE_IFRAME_RENDERER || (engineName === 'webkit' && process.platform === 'linux' ? 'canvas' : 'auto') }));
   } },
+  { name: 'phone-mann-cool-untrusted', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditMannCool(page, label => captureScenarioScreenshot(page, row, dir, label), new URL(targetUrl).origin, { trusted: false, renderer: process.env.MOBILE_SMOKE_IFRAME_RENDERER || (engineName === 'webkit' && process.platform === 'linux' ? 'canvas' : 'auto') }));
+  } },
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
