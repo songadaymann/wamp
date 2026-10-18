@@ -1,3 +1,5 @@
+import { beginPendingDialog } from '../pendingDialog';
+
 /** What other UI needs from a pop-up: open it and close it. */
 export interface ModalController {
   init(): void;
@@ -15,6 +17,7 @@ export class LazyModal<T extends ModalController> {
   private loading: Promise<T> | null = null;
   private openGeneration = 0;
   private destroyed = false;
+  private pendingOpens = new Set<() => void>();
 
   constructor(
     private readonly load: () => Promise<T>,
@@ -29,13 +32,26 @@ export class LazyModal<T extends ModalController> {
   async open(...args: Parameters<T['open']>): Promise<void> {
     if (this.destroyed) return;
     const generation = ++this.openGeneration;
-    const modal = await this.ensure();
-    if (generation !== this.openGeneration) return;
-    await (modal.open as (...openArgs: Parameters<T['open']>) => void | Promise<void>)(...args);
+    const release = beginPendingDialog();
+    this.pendingOpens.add(release);
+    try {
+      const modal = await this.ensure();
+      if (generation !== this.openGeneration) return;
+      const opening = (modal.open as (...openArgs: Parameters<T['open']>) => void | Promise<void>)(...args);
+      // The visible dialog now owns the pause. Its later API work must not hold
+      // an invisible pause after its own Close button has hidden the dialog.
+      release();
+      await opening;
+    } finally {
+      this.pendingOpens.delete(release);
+      release();
+    }
   }
 
   close(): void {
     this.openGeneration++;
+    for (const release of this.pendingOpens) release();
+    this.pendingOpens.clear();
     this.instance?.close();
   }
 

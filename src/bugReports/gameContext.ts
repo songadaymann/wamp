@@ -10,6 +10,8 @@ type ContextGame = { scene: {
 type BugScene = {
   getBugReportContext?: () => Record<string, unknown>;
   canCaptureBugReportImages?: () => boolean;
+  hasRequestedScenePause?: () => boolean;
+  getGameplayPauseContext?: () => { liveReason: string | null };
 };
 function contextScene(game: ContextGame): BugScene | null {
   // An editor stays paused during Test; the running play scene owns that report.
@@ -35,11 +37,14 @@ export function canCaptureBugReportImages(game: ContextGame): boolean {
   return true;
 }
 export function pauseForBugReport(game: Phaser.Game): () => void {
-  const paused = game.scene.getScenes(true).map(scene => scene.sys.settings.key);
+  const paused = game.scene.getScenes(true)
+    .filter(scene => !(scene as unknown as BugScene).getGameplayPauseContext?.().liveReason)
+    .map(scene => scene.sys.settings.key);
   for (const key of paused) { game.scene.getScene(key).input.keyboard?.resetKeys(); game.scene.pause(key); }
   return () => {
     for (const key of paused) {
       if (!game.scene.isPaused(key)) continue;
+      if ((game.scene.getScene(key) as BugScene).hasRequestedScenePause?.()) continue;
       game.scene.getScene(key).input.keyboard?.resetKeys(); game.scene.resume(key);
     }
   };

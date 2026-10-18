@@ -30,7 +30,7 @@ let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
   exitCode = 0;
-  for (const browserEngine of args.has('--expanded-only') ? [] : engines) {
+  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') ? [] : engines) {
     const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
       stdio: 'inherit',
       env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
@@ -46,6 +46,12 @@ try {
     if (leaderboards.status !== 0) exitCode = leaderboards.status ?? 1;
   }
 
+  if (mode === 'replay' && args.has('--pause-only') && exitCode === 0) {
+    const pause = spawnSync(process.execPath, ['scripts/smoke_gameplay_pause.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/gameplay-pause`],
+    { stdio: 'inherit', env: process.env });
+    if (pause.status !== 0) exitCode = pause.status ?? 1;
+  }
 } finally {
   preview.kill();
 }
