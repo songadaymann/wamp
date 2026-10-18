@@ -19,14 +19,14 @@
 
 .history-modal-kicker {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 1px;
   text-transform: uppercase;
 }
 
 .history-modal-title {
   margin-top: 4px;
-  font-size: 20px;
+  font-size: var(--ui-text-title, 20px);
   font-weight: 400;
   color: var(--text);
 }
@@ -34,7 +34,7 @@
 .history-modal-meta {
   margin-top: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.5;
 }
 
@@ -54,7 +54,7 @@
   border: 1px solid rgba(255, 107, 107, 0.35);
   border-radius: 4px;
   color: #ffd7d7;
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
@@ -71,7 +71,7 @@
 .history-version-empty {
   padding: 16px 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .history-version-row {
@@ -105,7 +105,7 @@
 
 .history-version-label {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
 }
 
 .history-version-badge {
@@ -113,7 +113,7 @@
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   color: var(--accent-warm);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
@@ -121,6 +121,6 @@
 .history-version-meta {
   margin-top: 4px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }

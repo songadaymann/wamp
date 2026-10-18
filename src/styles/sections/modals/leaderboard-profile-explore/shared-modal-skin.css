@@ -61,7 +61,7 @@
 #editor-music-phrase-save-modal .history-modal-kicker {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.3;
   text-transform: uppercase;
@@ -79,7 +79,7 @@
   margin-top: 6px;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.25;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -99,7 +99,7 @@
 #profile-modal .leaderboard-secondary {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -118,7 +118,7 @@
   background: var(--wamp-red);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
   box-shadow: var(--shadow-3);
 }
@@ -152,7 +152,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -285,7 +285,7 @@
 #sign-text-modal .sign-text-modal-label {
   color: var(--wamp-sky-deep);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 0px;
   line-height: 1.35;
   text-transform: uppercase;
@@ -307,7 +307,7 @@
   background: var(--wamp-cream);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   box-shadow: inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.22);
 }
 
@@ -378,7 +378,7 @@
 #leaderboard-modal .leaderboard-rating-label {
   color: var(--wamp-sky-deep);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.35;
   text-transform: uppercase;
   font-synthesis: none;

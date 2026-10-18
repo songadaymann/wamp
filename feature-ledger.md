@@ -981,3 +981,13 @@ F170 locally complete on `codex/wamp-pause-2026-10-18`: solo menus/dialogs and h
 
 
 F170 release is now explicitly authorized by the user (push, merge and deploy). This supersedes the local-only boundary above. Final source/main hosted gates, guarded Pages-only delivery and actual-domain proof follow on the same canonical branch. Preserve unrelated primary files and the selected animation.
+
+
+## 2026-10-18 — F171 readable text in progress
+
+Canonical `codex/wamp-readable-text-2026-10-18` from delivered F170/main044dedbd. Plain-font and larger-text Settings, shared optional size tiers, account/local persistence and canvas labels. Local verification and review pending; master160/216. F170/PR245 is fully merged, deployed and verified, superseding its source-time pending notes.
+
+
+## 2026-10-18 — F171 source accepted locally
+
+Canonical `codex/wamp-readable-text-2026-10-18`, base delivered PR245/main044dedbd.3,998 tests,66 clean mobile cases, seven production layout profiles, both ordinary/Expanded Room editor variants, actual brush-option clicks, default-style parity and API Worker dry run pass. Source receipt: `docs/review/wamp-readable-text-2026-10-18.md`. Master161/216 at local acceptance. Await Jonathan's review before push/merge/deploy; deliver Worker+Pages together to retain account fields, with no migration or presence/renderer update. Primary dirty lane, selected animation and TAS lab preserved.

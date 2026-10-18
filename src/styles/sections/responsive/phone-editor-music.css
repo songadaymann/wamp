@@ -186,11 +186,11 @@ body[data-editor-music-touch='true'] .editor-music-touch {
 
 .editor-music-touch-navigation,
 .editor-music-touch-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.editor-music-touch-navigation output { flex: 1; text-align: center; font-family: var(--editor-pixel-font); font-size: 8px; color: var(--wamp-cream); white-space: nowrap;   font-synthesis: none;
+.editor-music-touch-navigation output { flex: 1; text-align: center; font-family: var(--editor-pixel-font); font-size: var(--ui-text-small, 8px); color: var(--wamp-cream); white-space: nowrap;   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
-.editor-music-touch-actions select { flex: 1; width: 0; font-size: 11px; padding: 4px; }
-body[data-editor-music-touch='true'] #editor-music-touch-hint { border: 0; padding: 0; background: #050505; color: #d7d2c4; font-size: 11px; }
+.editor-music-touch-actions select { flex: 1; width: 0; font-size: var(--ui-text-small, 11px); padding: 4px; }
+body[data-editor-music-touch='true'] #editor-music-touch-hint { border: 0; padding: 0; background: #050505; color: #d7d2c4; font-size: var(--ui-text-small, 11px); }
 
 .editor-music-touch-viewport {
   flex: 1;
@@ -243,7 +243,7 @@ body[data-editor-music-touch='true'] #editor-music-touch-hint { border: 0; paddi
   color: var(--wamp-cream);
   background: #090909;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   position: sticky;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -261,7 +261,7 @@ body[data-editor-music-touch='true'][data-editor-music-touch-tools='true'] .edit
 body[data-editor-music-touch='true'][data-editor-music-touch-tools='true'] .editor-music-swing-controls:not(.hidden) { display: flex !important; grid-column: 1 / -1; }
 body[data-editor-music-touch='true'][data-editor-music-touch-tools='true'] .editor-music-workbench:not(.hidden) { display: grid !important; min-height: 240px; flex-shrink: 0; }
 body[data-editor-music-touch='true'][data-editor-music-touch-tools='true'] .editor-music-touch-mix { display: grid; gap: 6px; flex-shrink: 0; }
-.editor-music-touch-mix label { display: flex; align-items: center; gap: 8px; color: var(--wamp-cream); font-family: var(--editor-pixel-font); font-size: 8px;   font-synthesis: none;
+.editor-music-touch-mix label { display: flex; align-items: center; gap: 8px; color: var(--wamp-cream); font-family: var(--editor-pixel-font); font-size: var(--ui-text-small, 8px);   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 .editor-music-touch-mix input { flex: 1; min-height: 44px; accent-color: var(--wamp-cream); }

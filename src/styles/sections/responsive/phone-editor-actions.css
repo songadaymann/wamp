@@ -74,7 +74,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-ca
 
 body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-label {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -82,7 +82,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-la
 body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value {
   min-width: 0;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.45;
   word-break: break-word;
 }
@@ -114,7 +114,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-read
   border-radius: 10px;
   background: rgba(243, 238, 226, 0.03);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   text-align: center;
 }
 
@@ -185,7 +185,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .background-solid-contro
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .background-card-label {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   text-align: left;
 }
 

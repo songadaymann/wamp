@@ -18,7 +18,7 @@ body[data-app-mode='play-world'] #bottom-bar :is(.bar-left, .bar-right) {
 }
 #auth-signin-reason {
   margin: 0;
-  font-family: 'HomeVideo', monospace;
+  font-family: var(--font-home-short);
   line-height: 1.4;
   order: -1;
 }
@@ -39,7 +39,7 @@ body[data-app-mode='play-world'] #bottom-bar :is(.bar-left, .bar-right) {
   grid-column: 1 / -1;
   gap: 8px;
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   text-transform: uppercase;
 }
 .game-menu-admin:not(:has(button:not(.hidden))) {
@@ -74,10 +74,10 @@ body[data-device-class='phone'] #world-navigation .bar-btn {
 
 #menu-body {
   --editor-button-font: var(--font-label);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 #menu-body :is(input, .auth-status, .auth-display-name-status, .auth-email-code-help, .auth-debug-link) {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 #account-signin-options > summary {
   min-height: 44px;

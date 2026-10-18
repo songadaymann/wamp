@@ -22,7 +22,7 @@
 
 .editor-music-select-label {
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   color: var(--accent-warm);
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -136,7 +136,7 @@
   background: #1c0911;
   color: var(--wamp-cream);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
   box-shadow: none;
 }
@@ -165,7 +165,7 @@
   justify-content: flex-start;
   min-height: 58px;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   color: var(--editor-music-instrument-accent, var(--text-dim));
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -248,7 +248,7 @@
 
 .editor-music-arrangement-slot-index {
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   color: inherit;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -262,7 +262,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1;
   color: inherit;
 }
@@ -325,7 +325,7 @@
   border-radius: 0;
   background: #0b0b0b;
   color: var(--editor-music-instrument-accent, var(--wamp-cream));
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1;
   transition: border-color 0.08s ease, background 0.08s ease, color 0.08s ease;
   box-shadow: none;
@@ -360,14 +360,14 @@
 .editor-music-library-item-icon {
   flex: 0 0 auto;
   color: var(--editor-music-instrument-accent, #f6e8c9);
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1;
 }
 
 .editor-music-library-item-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.35;
   color: var(--editor-music-instrument-accent, #f6e8c9);
 }
@@ -375,7 +375,7 @@
 .editor-music-library-item-detail {
   flex: 0 0 auto;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.2;
   color: var(--wamp-cream);
   letter-spacing: 1px;
@@ -386,7 +386,7 @@
 
 .editor-music-library-item-meta,
 .editor-music-library-empty {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
   color: var(--text-dim);
 }
@@ -403,7 +403,7 @@
   background: #1c0911;
   color: var(--wamp-cream);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
   transform: translate(-50%, calc(-100% - 10px));
   box-shadow: var(--shadow-3);
@@ -585,7 +585,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   border-bottom-width: 0;
   border-color: var(--wamp-cream);
   color: var(--editor-music-instrument-accent, #f6e8c9);
-  font-size: 18px;
+  font-size: var(--ui-text-title, 18px);
   line-height: 1;
   box-shadow: none;
 }
@@ -627,7 +627,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 .editor-music-chip-button {
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -637,7 +637,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   min-width: 34px;
   min-height: 34px;
   padding: 0 8px;
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1;
 }
 
@@ -655,7 +655,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
   padding: 0 4px;
   color: var(--wamp-cream);
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   text-align: center;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -680,7 +680,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 
 .editor-music-legacy-text {
   color: var(--accent-cool);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -688,7 +688,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 .editor-music-arrangement-overlay .bar-btn {
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -705,7 +705,7 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 .editor-music-shell .section-label,
 .editor-music-workbench-header .section-label {
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   color: var(--wamp-cream);
   letter-spacing: 1px;
   font-synthesis: none;
@@ -714,6 +714,6 @@ body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
 
 .editor-music-shell .editor-music-icon-button {
   font-family: var(--editor-ui-font);
-  font-size: 18px;
+  font-size: var(--ui-text-title, 18px);
   letter-spacing: 0;
 }

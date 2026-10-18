@@ -85,7 +85,7 @@
 
 .profile-overview-bio {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.6;
   white-space: pre-wrap;
 }

@@ -23,7 +23,7 @@
   }
 
   #profile-modal .profile-display-name {
-    font-size: 16px;
+    font-size: var(--ui-text-title, 16px);
   }
 
   #profile-modal .profile-hero-lane {

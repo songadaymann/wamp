@@ -20,7 +20,7 @@
   min-width: 20px;
   padding: 2px;
   border: 2px solid var(--wamp-ink);
-  font: 11px/1.2 'HomeVideo', 'IBM Plex Mono', monospace;
+  font: var(--ui-text-small, 11px)/1.2 var(--font-activity);
   color: var(--wamp-ink);
   background: #ffe66b;
 }
@@ -44,7 +44,7 @@
   box-shadow: 6px 6px 0 #0b0b0b;
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.5;
 }
 #activity-modal .history-modal-header {
@@ -57,7 +57,7 @@
   margin: 0;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.5;
   font-synthesis: none;
 }
@@ -76,7 +76,7 @@
   box-shadow: var(--shadow-2);
   background: var(--wamp-sky);
   color: var(--wamp-ink);
-  font: 400 12px/1.35 'HomeVideo', 'IBM Plex Mono', monospace;
+  font: 400 var(--ui-text-body, 12px)/1.35 var(--font-activity);
   text-transform: uppercase;
 }
 #activity-modal .activity-tabs .bar-btn { background: #fffaee; }
@@ -105,7 +105,7 @@
 #activity-modal .history-modal-meta {
   margin: 6px 0 0;
   color: var(--wamp-sky-deep);
-  font: 11px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
+  font: var(--ui-text-small, 11px)/1.5 var(--font-activity);
 }
 #activity-status:empty { display: none; }
 .activity-list { list-style: none; padding: 0; margin: 0 0 16px; }
@@ -122,7 +122,7 @@
 .activity-row[data-kind='dethroned'] { border-left-color: #c63d31; }
 .activity-row a {
   color: var(--wamp-ink);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.6;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -154,7 +154,7 @@
   padding-bottom: 12px;
   border-bottom: 2px solid var(--wamp-ink);
 }
-.activity-guest-name { margin: 0; min-width: 0; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.activity-guest-name { margin: 0; min-width: 0; font-size: var(--ui-text-body, 12px); font-weight: 400; overflow-wrap: anywhere; }
 .activity-email-options {
   border-top: 2px solid var(--wamp-ink);
   margin-top: 20px;
@@ -180,13 +180,13 @@
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.5;
 }
 .activity-preferences input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: #2e7d32; }
 #activity-modal #activity-preferences-status { margin-bottom: 12px; }
 .activity-catchup {
-  font: 12px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
+  font: var(--ui-text-body, 12px)/1.5 var(--font-activity);
   color: var(--wamp-ink);
   border: 2px solid var(--wamp-ink);
   background: #ffe66b;

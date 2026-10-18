@@ -46,6 +46,8 @@
   --font-display: 'Super Mario Bros. NES', monospace;
   --font-room-title: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
   --font-code: 'Courier New', monospace;
+  --font-activity: 'HomeVideo', 'IBM Plex Mono', monospace;
+  --font-home-short: 'HomeVideo', monospace;
 
   --shadow-2: 2px 2px 0 var(--wamp-ink);
   --shadow-3: 3px 3px 0 var(--wamp-ink);
@@ -84,4 +86,27 @@
   --editor-ui-font: var(--font-mono);
   --hud-ui-font: var(--font-ui);
   --hud-room-title-font: var(--font-room-title);
+}
+
+/* Optional UI tiers preserve every original size through its declaration fallback. */
+body[data-text-style='readable'] {
+  --font-ui: var(--font-mono);
+  --font-label: var(--font-mono);
+  --font-display: var(--font-mono);
+  --font-room-title: var(--font-mono);
+  --font-activity: var(--font-mono);
+  --font-home-short: var(--font-mono);
+  --editor-pixel-font: var(--font-mono);
+  --editor-ui-font: var(--font-mono);
+  --hud-ui-font: var(--font-mono);
+  --hud-room-title-font: var(--font-mono);
+  --ui-text-small: 12px;
+  --ui-text-body: 16px;
+  --ui-text-title: 20px;
+}
+
+body[data-text-size='large'] {
+  --ui-text-small: 16px;
+  --ui-text-body: 16px;
+  --ui-text-title: 20px;
 }

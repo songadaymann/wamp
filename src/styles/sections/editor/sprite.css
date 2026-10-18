@@ -115,7 +115,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   flex: 0 0 auto;
   color: var(--wamp-cream);
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -132,7 +132,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   background: #090909;
   color: var(--wamp-cream);
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 .editor-sprite-name-input {
@@ -198,7 +198,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   background: #07131a;
   color: var(--wamp-cream);
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.25;
   text-align: center;
 }
@@ -230,7 +230,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-kind-help-title,
 .editor-sprite-kind-choice-title {
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.2;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -241,7 +241,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-kind-help-text,
 .editor-sprite-kind-choice-text {
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.25;
 }
 
@@ -375,7 +375,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
   background: transparent;
   color: inherit;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -420,7 +420,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-library-meta,
 .editor-sprite-library-empty {
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.25;
 }
 
@@ -446,7 +446,7 @@ body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-ed
 .editor-sprite-shell .bar-btn {
   border-radius: 3px;
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   font-synthesis: none;
   -webkit-font-smoothing: none;

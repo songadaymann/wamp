@@ -60,7 +60,7 @@
   background: #ff533f;
   color: var(--wamp-cream);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.25;
   text-align: center;
   box-shadow: var(--shadow-2);
@@ -129,7 +129,7 @@
   padding: 8px;
   color: var(--wamp-cream);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.4;
   text-align: center;
   overflow-wrap: anywhere;
@@ -153,7 +153,7 @@
 .profile-cryptopunk-title {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: var(--ui-text-body, 15px);
   line-height: 1.15;
 }
 
@@ -162,7 +162,7 @@
   min-width: 0;
   color: var(--wamp-sky-deep);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.45;
   overflow-wrap: anywhere;
   font-synthesis: none;
@@ -255,7 +255,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-label);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -280,14 +280,14 @@
 .profile-avatar-option-label {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.25;
 }
 
 .profile-avatar-option-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.35;
   font-synthesis: none;
   -webkit-font-smoothing: none;

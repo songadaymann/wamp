@@ -46,6 +46,7 @@ import {
   installWebglRecoveryMonitor,
 } from './main/webglRecovery';
 import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
+import { applyTextPreferences } from './settings/textPreferences';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import { getComfortSettings } from './settings/comfortSettings';
 import {
@@ -202,6 +203,7 @@ if (new URLSearchParams(window.location.search).has('audiodebug')) {
 installDialogEscapeGuard();
 installModalStackBackdrops();
 const applyRuntimeSettings = (settings: GameSettings) => {
+  applyTextPreferences(settings, document);
   globalSfxController.setVolume(settings.sfxVolume);
   globalRoomMusicController.setVolume(settings.musicVolume);
 };

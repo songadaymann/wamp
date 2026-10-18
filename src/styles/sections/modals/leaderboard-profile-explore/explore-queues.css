@@ -22,7 +22,7 @@
   background: var(--wamp-yellow);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -39,7 +39,7 @@
 #explore-modal .explore-queue-actions-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.35;
 }
 
@@ -83,7 +83,7 @@
 
 .room-sequence-kicker {
   color: var(--wamp-sky-deep);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -91,14 +91,14 @@
 .room-sequence-title {
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
 
 .room-sequence-meta {
   color: var(--wamp-sky-deep);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .room-sequence-hud[data-sequence-tone='error'] .room-sequence-meta {
@@ -144,7 +144,7 @@ body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions
 #first-steps-summary-modal .history-modal-title {
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
@@ -152,7 +152,7 @@ body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions
 #first-steps-summary-modal .history-modal-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.5;
 }
 
@@ -165,7 +165,7 @@ body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions
   border-radius: 0;
   box-shadow: var(--shadow-3);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .room-sequence-hud[data-sequence-kind='welcome'] .room-sequence-kicker {
@@ -199,7 +199,7 @@ body[data-coarse-pointer='true'][data-mobile-world-hud-collapsed='true'][data-ap
   border-radius: 0;
   box-shadow: var(--shadow-3);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-room-sequence-next:not(.hidden) {

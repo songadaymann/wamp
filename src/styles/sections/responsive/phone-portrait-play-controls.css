@@ -37,7 +37,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .world-goal-panel-goal {
   grid-column: 1;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .world-goal-panel-row {
@@ -51,7 +51,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .world-goal-panel-timer {
   grid-column: 2;
   grid-row: 1;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-play-controls {
@@ -167,7 +167,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   top: 16px;
   color: var(--wamp-ink);
   font-family: var(--hud-ui-font);
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1;
   text-transform: lowercase;
 }
@@ -223,7 +223,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   z-index: 2;
   padding: 0;
   pointer-events: auto;
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1;
 }
 
@@ -282,7 +282,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   color: var(--button-foreground);
   box-shadow: 2px 2px 0 var(--mobile-portrait-console-ink);
   font-family: var(--hud-ui-font);
-  font-size: 9px;
+  font-size: var(--ui-text-small, 9px);
   line-height: 1;
   letter-spacing: 0;
 }
@@ -322,14 +322,14 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-camera-tuner-title {
   color: #006c82;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1;
   text-transform: uppercase;
 }
 
 body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .mobile-camera-tuner-value {
   color: var(--mobile-portrait-console-line);
-  font-size: 7px;
+  font-size: var(--ui-text-small, 7px);
   line-height: 1.25;
 }
 
@@ -349,7 +349,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   color: var(--mobile-portrait-console-ink);
   box-shadow: 1px 1px 0 var(--mobile-portrait-console-ink);
   font-family: var(--hud-ui-font);
-  font-size: 7px;
+  font-size: var(--ui-text-small, 7px);
   line-height: 1.05;
   letter-spacing: 0;
   text-transform: uppercase;

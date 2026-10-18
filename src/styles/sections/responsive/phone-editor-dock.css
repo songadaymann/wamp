@@ -49,13 +49,13 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
   min-height: 44px;
   height: 44px;
   padding: 2px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   border-radius: 0;
   box-shadow: none;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-shell-phone-bar > button > span:first-child {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1;
 }
 
@@ -136,12 +136,12 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools .tool-btn {
   flex: 0 0 60px;
   min-height: 44px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   box-shadow: none;
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools .tool-btn > span:first-child {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-shell-dock {
@@ -172,7 +172,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
   flex-direction: row;
   gap: 4px;
   padding: 4px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   box-shadow: none;
 }
 
@@ -201,7 +201,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-menu button {
   min-height: 44px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   box-shadow: none;
 }
 
@@ -215,7 +215,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #room-title-input,
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #sidebar :is(input, select, textarea) {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-course-mode='true']) #editor-phone-menu [data-editor-shell-action='save'],
@@ -309,7 +309,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #palette-mode-section :is([data-builder-mode-choice], .palette-tab) {
   min-height: 44px;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] :is(.smart-theme-button-grid, .smart-brush-button-grid) {
@@ -321,7 +321,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .smart-visual-picker h3 {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #object-palette-section {
@@ -427,7 +427,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-phone-inspec
   justify-content: space-between;
   flex: 0 0 auto;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'][data-editor-phone-inspector='true'] #sidebar,
@@ -451,7 +451,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .goal-
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .goal-control-label,
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .goal-input-help,
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .npc-checkbox-row {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   color: #111;
 }
 
@@ -466,7 +466,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .npc-c
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector select,
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector input:not([type='checkbox']),
 body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector textarea {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   width: 100%;
   max-width: 100%;
   border-radius: 0;
@@ -490,7 +490,7 @@ body[data-device-class='phone'][data-app-mode='editor'][data-editor-phone-linkin
   background: #fff5dc;
   color: #111;
   border: 2px solid #111;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   z-index: 23;
 }
 
@@ -498,7 +498,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #btn-editor-inspector-do
 body[data-device-class='phone'][data-app-mode='editor'] #btn-editor-link-cancel {
   min-width: 64px;
   min-height: 44px;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   border-radius: 0;
 }
 
