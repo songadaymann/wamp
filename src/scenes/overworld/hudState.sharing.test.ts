@@ -3,6 +3,14 @@ vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated:
 import { OverworldHudStateController } from './hudState';
 
 describe('selected room share titles', () => {
+  it('does not advertise public rankings for a draft preview rendered over published cells', () => {
+    const controller = new OverworldHudStateController({ getMode: () => 'play',
+      getSelectedCoordinates: () => ({ x: 1, y: 0 }), getCellStateAt: () => 'published',
+      getRoomSnapshotForCoordinates: () => ({ version: 12 }),
+      getActiveCourseRun: () => ({ course: { id: 'draft', status: 'draft', version: 1,
+        roomRefs: [{ roomId: '1,0' }], goal: { type: 'reach_exit' } } }) } as never);
+    expect(controller.getSelectedRoomContext().state).toBe('draft');
+  });
   it.each(['browse', 'play'])('retains native leaderboard identity and goal on a nonentry cell in %s', mode => {
     const controller = new OverworldHudStateController({ getMode: () => mode,
       getActiveCourseRun: () => null, getSelectedCoordinates: () => ({ x: 181, y: 99 }),

@@ -170,7 +170,7 @@ export class OverworldHudStateController {
       coordinates: { ...selectedCoordinates },
       shareTitle: playingTitle ?? this.selectedSummary?.expandedRoom?.title ?? selectedCourse?.courseTitle
         ?? this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.title ?? this.selectedSummary?.title ?? null,
-      state: this.host.getCellStateAt(selectedCoordinates),
+      state: playingRun?.course.status === 'draft' ? 'draft' : this.host.getCellStateAt(selectedCoordinates),
       courseId: playingRun?.course.id ?? selectedCourse?.courseId ?? null,
       courseTitle: playingTitle ?? expandedRoom?.title ?? selectedCourse?.courseTitle ?? null,
       courseGoalType: playingRun ? playingRun.course.goal?.type ?? null

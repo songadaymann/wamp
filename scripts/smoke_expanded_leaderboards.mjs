@@ -80,16 +80,19 @@ for (const [device, engine, width, height, touch] of [
         return reply(r, result === 'error' ? { error: 'Temporary fixture outage' } : board(), result === 'error' ? 503 : 200);
       });
       await context.route('https://mann.cool/api/v1/plays', r => reply(r, { success: true }));
+      await context.route('https://cloudflareinsights.com/cdn-cgi/rum', r => r.fulfill({ status: 204, headers: cors(r) }));
       await context.route(u => u.pathname.startsWith('/api/'), r => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: cors(r) }) : r.fallback());
       await context.addInitScript(() => {
         localStorage.setItem('wamp_welcome_modal_seen_v1', '1'); localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
       });
       const page = await context.newPage(), errors = [], expected = [];
+      let policy = '';
+      page.on('response', response => { if (response.request().resourceType() === 'document') policy = response.headers()['content-security-policy-report-only'] || ''; });
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', m => { if (m.type() === 'error') {
         if (errorExpected && (/Temporary fixture outage|Failed to load expanded room leaderboard|503/.test(m.text()))) expected.push(m.text());
-        else if (!/\[Report Only\]|report-only/i.test(m.text())) errors.push(m.text());
+        else if (!(/\[Report Only\]|report-only/i.test(m.text()) && policy.includes('csp-reporting.cloudflare.com/cdn-cgi/script_monitor/report') && policy.includes("connect-src 'none'"))) errors.push(m.text());
       } });
       const click = selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
       const close = () => click('#btn-leaderboard-close');
@@ -105,6 +108,18 @@ for (const [device, engine, width, height, touch] of [
           await click('#btn-world-jump-sheet'); await page.locator('#mobile-world-jump-input').fill('1,0'); await click('#btn-mobile-world-jump-go');
         } else { await page.locator('#world-jump-input').fill('1,0'); await click('#btn-world-jump'); }
         await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.selected.x === 1);
+        if (kind !== 'no-goal') {
+          assert.equal(await page.locator('#leaderboard-modal').count(), 0, 'Leaderboard must still be deferred');
+          await click('#btn-world-play');
+          if (await page.locator('#room-goal-intro-modal').isVisible()) await click('#btn-room-goal-intro-start');
+          await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.mode === 'play');
+          await openFromMenu();
+          await page.waitForFunction(() => document.getElementById('leaderboard-course-list').textContent.includes('Whole Room Runner'));
+          assert(reads.at(-1).includes('version=4'));
+          await close();
+          await click(touch ? '#btn-mobile-world-stop' : '#btn-world-play');
+          await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.mode === 'browse');
+        }
         const more = page.locator('#btn-mobile-world-hud-details');
         if (await more.isVisible()) await click('#btn-mobile-world-hud-details');
         await click('#btn-world-leaderboard');
@@ -115,7 +130,8 @@ for (const [device, engine, width, height, touch] of [
           assert.equal(reads.length, 0);
         } else {
           await page.waitForFunction(() => document.getElementById('leaderboard-course-list').textContent.includes('Whole Room Runner'));
-          assert(reads.every(path => path.includes(kind === 'legacy' ? '/courses/leaderboard-fixture' : '/expanded-rooms/course%3Aleaderboard-fixture')));
+          assert(reads.some(path => path.includes(kind === 'legacy' ? '/courses/leaderboard-fixture' : '/expanded-rooms/course%3Aleaderboard-fixture')));
+          assert(reads.every(path => path.includes('/courses/leaderboard-fixture') || path.includes('/expanded-rooms/course%3Aleaderboard-fixture')));
           assert(reads.every(path => !path.includes('version=12')));
           result = 'empty'; await click('#btn-leaderboard-course-refresh');
           await page.waitForFunction(() => document.getElementById('leaderboard-course-list').textContent.includes('No ranked clears yet'));
