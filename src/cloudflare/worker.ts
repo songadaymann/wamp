@@ -1,3 +1,5 @@
+export { PresenceDurableObject } from './presence/durableObject';
+import { handleCloudflarePresence } from './presence/durableObject';
 import { handleRoomGhosts } from './worker/runs/ghosts';
 import { handleBuildPrompts } from './worker/buildPrompts/routes';
 import { settleExpiredBuildPrompts } from './worker/buildPrompts/store';
@@ -361,6 +363,7 @@ export default {
   },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/parties/')) return handleCloudflarePresence(request, env);
 
     if (url.pathname === '/jam/' && (request.method === 'GET' || request.method === 'HEAD')) {
       url.pathname = '/jam';

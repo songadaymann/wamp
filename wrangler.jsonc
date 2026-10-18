@@ -3,20 +3,22 @@
   "name": "everybodys-platformer",
   "main": "src/cloudflare/worker.ts",
   "keep_vars": true,
+  "durable_objects": { "bindings": [{ "name": "PRESENCE_ROOMS", "class_name": "PresenceDurableObject" }] },
+  "migrations": [{ "tag": "presence-v1", "new_sqlite_classes": ["PresenceDurableObject"] }],
   "triggers": { "crons": ["17 * * * *", "7,22,37,52 * * * *"] },
   "compatibility_date": "2026-03-08",
   "compatibility_flags": ["global_fetch_strictly_public"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"],
+    "run_worker_first": ["/api/*", "/parties/*"],
     "not_found_handling": "single-page-application"
   },
   "observability": {
     "enabled": true,
     "logs": {
       "enabled": true,
-      "head_sampling_rate": 1
+      "head_sampling_rate": 0.01
     },
     "traces": {
       "enabled": true,
@@ -29,7 +31,7 @@
     "RUN_GHOST_BILLING_CYCLE_DAY": "5",
     "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
     "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
-    "PARTYKIT_HOST": "everybodys-platformer-presence.songadaymann.partykit.dev",
+    "PARTYKIT_HOST": "api.wamp.land",
     "PARTYKIT_PARTY": "main",
     "ROOM_DAILY_CLAIM_LIMIT": "",
     "PLAYABLE_CONTENT_INDEX_READS": "1",
@@ -77,6 +79,7 @@
     "safety": {
       "name": "everybodys-platformer-safety",
       "preview_urls": true,
+      "durable_objects": { "bindings": [{ "name": "PRESENCE_ROOMS", "class_name": "PresenceDurableObject" }] },
       "vars": {
         "ENABLE_TEST_RESET": "0",
         "RUN_GHOST_COST_ALERTS_ENABLED": "0",
@@ -84,7 +87,7 @@
         "ENABLE_SNAPSHOT_ADMIN": "1",
         "JAM_SUBMISSIONS_OPEN_AT": "2026-07-20T04:00:00.000Z",
         "JAM_SUBMISSIONS_CLOSE_AT": "2026-07-28T12:00:00.000Z",
-        "PARTYKIT_HOST": "everybodys-platformer-presence-safety.songadaymann.partykit.dev",
+        "PARTYKIT_HOST": "everybodys-platformer-safety.novox-robot.workers.dev",
         "PARTYKIT_PARTY": "main",
         "ROOM_MINT_DISABLED": "1",
         "ROOM_DAILY_CLAIM_LIMIT": "",
