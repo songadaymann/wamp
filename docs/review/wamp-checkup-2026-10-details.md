@@ -1696,6 +1696,8 @@ There is a cheaper quick win than multiplexing. RoomChatClient should subscribe 
 
 The core finding stands: there is no server-side interest filter in flushPresenceUpserts, and all arrivals funnel into chunk (-2,-1). This was recommended before as §2.3 and is still not built.
 
+**2026-10-18 F037 current-state audit:** F095/PR199 already multiplexed chat and capped subscriptions at nine nearby chunks. The remaining F037 target is server-side movement bandwidth/JSON fan-out, including crowded rooms; do not change arrival destinations or separate friends into different instances. Retain snapshots, populations, preview deltas, chat permissions and PvP correctness.
+
 ### F095: Each idle visitor holds 50 PartyKit websockets (25 presence + 25 chat), even in a background tab
 
 **Completed 2026-10-14:** PR #199 / main `bebc8140`, Pages `10049caa`, Worker `3a61d6e1`, matching PartyKit. Negotiated shared presence/chat, legacy fallback, startup-gated identity/avatar refresh and nine nearby realtime chunks preserve existing signed permissions, preview/PvP behavior and terrain loading. Pinned-runtime close handshakes now complete. Fixture 50 → 9 sockets and 2 → 1 token requests; native/live closure, hidden visibility/return, UI chat, permissions and gameplay pass, with full 3,600-test/mobile/hosted gates and exact live asset hashes. Far-map/lobby coverage and physical-device OS checks remain separate. [Receipt](wamp-shared-realtime-2026-10-14.md).
@@ -8067,3 +8069,15 @@ Minor additions, not reversals:
 ## October 14 F062 required scene capabilities
 
 [Delivered receipt](wamp-required-scene-capabilities-2026-10-14.md): PR #202 / main `8c590fa0`, Pages `e84dc8c1`; required capabilities, checked lookup and one music coordinator. Full quality/mobile/hosted/live acceptance and exact files pass; portrait-entry and signed header overlap reproduce on the prior release and remain a separately recorded follow-up. Master 145/215.
+
+
+### F250: Expanded Rooms appear to have no leaderboards
+
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** bug / verification · **impact:** high · **effort:** medium
+- **Added:** 2026-10-18 at Jonathan's request
+- **Status:** open; Jonathan reports that basically none of the Expanded Rooms he sees have leaderboards.
+
+Existing run routes and a modal tab are implementation evidence, not proof that players can reach a working whole-room leaderboard. Diagnose the reported absence using published Expanded Rooms, distinguishing native Expanded Room IDs, legacy course aliases and independent cell leaderboards. Check selection at entry and non-entry cells, Browse and Play, desktop and phones, goal eligibility and clear empty/no-goal states. Verify accepted whole-room clears, exact ranking, post-clear refresh, reload, republished versions and account/guest behavior using isolated local fixtures and read-only production checks. Avoid adding testing runs to public production statistics. Preserve intentionally goal-less rooms; do not invent goals or silently rank practice runs.
+
+Acceptance: eligible published Expanded Rooms expose the correct whole-room leaderboard through ordinary UI; a completed valid run appears with the expected rank and persists on reload; no-goal, empty, failed and loading states are clear. Add maintained regression coverage for any actual defect. This is separate from F026/F036 performance work and does not reopen their completed scope.

@@ -193,6 +193,7 @@ export class WorldPresenceClient {
   private hiddenTabPaused = false;
   private readonly removeHiddenTabPause: () => void;
   private localPresence: WorldPresencePayload | null = null;
+  private interestRoomKey: string | null = null;
   private localRoomPreview: PresencePreviewPayload | null = null;
   private publishedShardId: string | null = null;
   private previewShardId: string | null = null;
@@ -277,6 +278,11 @@ export class WorldPresenceClient {
     }
 
     this.localPresence = nextPresence;
+    const interestRoomKey = nextPresence ? roomIdFromCoordinates(nextPresence.roomCoordinates) : null;
+    if (this.interestRoomKey !== interestRoomKey) {
+      this.interestRoomKey = interestRoomKey;
+      for (const { socket } of this.socketsByShardId.values()) this.sendInterest(socket);
+    }
     if (!nextPresence || !nextShardId) {
       this.emitSnapshot();
       return;
@@ -474,6 +480,7 @@ export class WorldPresenceClient {
 
     socket.addEventListener('open', () => {
       this.connectedShards.add(shardId);
+      this.sendInterest(socket);
       if (this.localPresence && this.resolveLocalShardId() === shardId) {
         this.lastPublishedPayloadJson = null;
         this.lastPublishedPresenceSignature = null;
@@ -523,11 +530,17 @@ export class WorldPresenceClient {
     });
   }
 
-  private async getSocketQuery(): Promise<{ identityToken: string; previewDeltas: string; roomChat: string }> {
+  private sendInterest(socket: PartySocket): void {
+    if (socket.readyState !== PartySocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'presence:interest', roomCoordinates: this.localPresence?.roomCoordinates ?? null }));
+  }
+
+  private async getSocketQuery(): Promise<Record<string, string>> {
     return {
       identityToken: await this.identityTokenProvider.getToken(),
       previewDeltas: '1',
       roomChat: '1',
+      presenceInterest: '1',
     };
   }
 

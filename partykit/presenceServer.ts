@@ -1,5 +1,6 @@
 import type * as Party from 'partykit/server';
 import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
+import { normalizeInterestRoom, PresenceInterestBroadcast, PRESENCE_FAR_FLUSH_MS } from '../src/partykit/presenceInterest';
 import type { PartyKitShardHeartbeat } from '../src/admin/model';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
@@ -153,6 +154,8 @@ export default class PresenceServer implements Party.Server {
   private readonly previewBroadcast = new RoomPreviewBroadcast();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
   private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly presenceInterest = new PresenceInterestBroadcast();
+  private farPresenceFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private populationBroadcastFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private pvpMatchState: PvpMatchState | null = null;
   private pvpStartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -237,6 +240,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'snapshot',
           roomChat: identity.roomChat === true,
+          ...(identity.presenceInterest ? { presenceInterest: true } : {}),
           peers: this.listPeers(connection),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
@@ -259,6 +263,17 @@ export default class PresenceServer implements Party.Server {
 
     if (this.isPvpRoom()) {
       this.handlePvpMessage(parsed as unknown as PvpMatchClientMessage, sender);
+      return;
+    }
+
+    if (parsed.type === 'presence:interest') {
+      const current = sender.state;
+      if (current?.channel !== 'presence' || !current.presenceInterest) return;
+      const interestRoom = normalizeInterestRoom(parsed.roomCoordinates);
+      if (parsed.roomCoordinates !== null && !interestRoom) return;
+      if (current.interestRoom?.x === interestRoom?.x && current.interestRoom?.y === interestRoom?.y) return;
+      sender.setState({ ...current, interestRoom });
+      this.presenceInterest.sendFocusBaseline(sender, this.listPeers(null));
       return;
     }
 
@@ -336,6 +351,8 @@ export default class PresenceServer implements Party.Server {
 
     if (current.channel === 'presence') {
       if (isVisiblePresence(previousPresence) && !isVisiblePresence(presence)) {
+        this.pendingPresenceUpsertsByConnectionId.delete(sender.id);
+        this.presenceInterest.forget(sender.id);
         this.sendPresenceMessage(
           {
             type: 'remove',
@@ -369,6 +386,7 @@ export default class PresenceServer implements Party.Server {
     const presence = connection.state?.presence;
     const preview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
+    this.presenceInterest.forget(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     this.clearStoredPreviewForPayload(preview);
     if (connection.state?.channel === 'presence' && isVisiblePresence(presence)) {
@@ -390,6 +408,7 @@ export default class PresenceServer implements Party.Server {
     const previousPresence = current?.presence ?? null;
     const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
+    this.presenceInterest.forget(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     this.clearStoredPreviewForPayload(previousPreview);
     if (!previousPresence) {
@@ -855,6 +874,7 @@ export default class PresenceServer implements Party.Server {
       channel,
       previewDeltas: url.searchParams.get('previewDeltas') === '1',
       roomChat: channel === 'presence' && url.searchParams.get('roomChat') === '1',
+      presenceInterest: channel === 'presence' && url.searchParams.get('presenceInterest') === '1',
       canSendRoomChat: canSendRoomChat(claims),
       canReceiveRoomChat: canReceiveRoomChat(claims),
       school: claims.roomChat === 'school',
@@ -1397,7 +1417,16 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.sendPresenceMessage({ type: 'upserts', peers });
+    this.presenceInterest.sendFast(presenceConnections, peers, this.listPeers(null));
+    if (this.farPresenceFlushTimer === null && this.presenceInterest.hasPending) {
+      this.farPresenceFlushTimer = setTimeout(() => {
+        this.farPresenceFlushTimer = null;
+        this.presenceInterest.flushFar(
+          Array.from(this.room.getConnections<ConnectionPresenceState>()).filter(c => c.state?.channel === 'presence'),
+          this.listPeers(null)
+        );
+      }, PRESENCE_FAR_FLUSH_MS);
+    }
   }
 
   private sendPresenceMessage(
