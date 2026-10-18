@@ -15,6 +15,8 @@ const reports = [];
 for (const [device, engine, width, height, touch] of [
   ['desktop', chromium, 1280, 800, false], ['phone', chromium, 390, 844, true], ['safari-phone', webkit, 390, 844, true],
 ]) {
+  // Match mobile_smoke's WebKit fallback on Linux runners without a stable GL driver.
+  const renderer = process.env.EXPANDED_LEADERBOARD_RENDERER || (engine === webkit && process.platform === 'linux' ? 'canvas' : 'webgl');
   const browser = await engine.launch({ args: engine === chromium ? ['--mute-audio'] : [] });
   try {
     for (const kind of ['native', 'legacy', 'no-goal']) {
@@ -99,7 +101,7 @@ for (const [device, engine, width, height, touch] of [
       const openFromMenu = async () => { await click('#menu-toggle'); await click('#btn-menu-room-leaderboard'); };
       try {
         // Warp in Browse to the nonentry cell through the real desktop/phone controls.
-        await page.goto(`${base}/?welcome=0&renderer=webgl`);
+        await page.goto(`${base}/?welcome=0&renderer=${renderer}`);
         await page.waitForFunction(() => document.body.dataset.appReady === 'true');
         if (await page.locator('#room-goal-intro-modal').isVisible()) await click('#btn-room-goal-intro-start');
         if (await page.locator('#btn-mobile-world-stop').isVisible()) await click('#btn-mobile-world-stop');
@@ -169,7 +171,7 @@ for (const [device, engine, width, height, touch] of [
         }
         assert.deepEqual(errors, []);
         assert.deepEqual(fixtures.report().misses, {});
-        reports.push({ name, reads, errors, expectedErrors: expected.length, fixtureMisses: fixtures.report().misses });
+        reports.push({ name, renderer, reads, errors, expectedErrors: expected.length, fixtureMisses: fixtures.report().misses });
         console.log(`${name} passed`);
       } catch (e) {
         await page.screenshot({ path: `${output}/${name}-failure.png` });
