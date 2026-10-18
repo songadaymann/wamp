@@ -26,6 +26,11 @@ function card(overrides: Partial<BuildOverworldHudViewModelOptions> = {}) {
 }
 
 describe('room card available actions', () => {
+  it('does not present an individual cell record as the Expanded Room record', () => {
+    const record = { roomTop: { userDisplayName: 'Cell Runner', elapsedMs: 1000 } as never, rankingMode: 'time' as const };
+    expect(card(record).leaderboardText).toBe('Best: Cell Runner · 1.00s');
+    expect(card({ ...record, selectedCourse: { courseId: 'whole', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2 } }).leaderboardText).toBe('');
+  });
   it('offers play and edit on a public room, without irrelevant build/expand actions', () => {
     expect(card()).toMatchObject({ playButtonHidden: false, editButtonHidden: false,
       buildButtonHidden: true, courseBuilderButtonHidden: true, selectedActionReasonText: '' });

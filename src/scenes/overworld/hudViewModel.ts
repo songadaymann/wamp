@@ -395,7 +395,7 @@ export function buildOverworldHudViewModel(
   }
 
   let leaderboardText = '';
-  if (!activeCourseRun && mode !== 'play' && roomTop && rankingMode) {
+  if (!selectedExpandedRoom && !activeCourseRun && mode !== 'play' && roomTop && rankingMode) {
     const metric =
       rankingMode === 'time'
         ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`

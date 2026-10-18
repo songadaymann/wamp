@@ -49,6 +49,7 @@ export interface SelectedRoomContext {
   roomId: string;
   publishedVersion?: number | null;
   expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: SelectedCellState;
@@ -158,18 +159,23 @@ export class OverworldHudStateController {
     const selectedCourse = this.getSelectedCourseContext();
     const activeCourse = this.host.getMode() === 'play' ? this.host.getActiveCourseRun()?.course : null;
     const playingTitle = activeCourse?.roomRefs.some(ref => ref.roomId === selectedRoomId) ? activeCourse.title : null;
+    const playingRun = activeCourse?.roomRefs.some(ref => ref.roomId === selectedRoomId)
+      ? this.host.getActiveCourseRun() : null;
+    const expandedRoom = this.selectedSummary?.expandedRoom;
     return {
       roomId: selectedRoomId,
       publishedVersion: this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.version ?? null,
-      expandedRoomId: this.selectedSummary?.expandedRoom?.expandedRoomId ?? null,
+      expandedRoomId: playingRun?.expandedRoomId ?? expandedRoom?.expandedRoomId ?? null,
+      expandedRoomVersion: playingRun?.expandedRoomVersion ?? playingRun?.course.version ?? null,
       coordinates: { ...selectedCoordinates },
       shareTitle: playingTitle ?? this.selectedSummary?.expandedRoom?.title ?? selectedCourse?.courseTitle
         ?? this.host.getRoomSnapshotForCoordinates(selectedCoordinates)?.title ?? this.selectedSummary?.title ?? null,
-      state: this.host.getCellStateAt(selectedCoordinates),
-      courseId: selectedCourse?.courseId ?? null,
-      courseTitle: selectedCourse?.courseTitle ?? null,
-      courseGoalType: selectedCourse?.goalType ?? null,
-      courseRoomCount: selectedCourse?.roomCount ?? null,
+      state: playingRun?.course.status === 'draft' ? 'draft' : this.host.getCellStateAt(selectedCoordinates),
+      courseId: playingRun?.course.id ?? selectedCourse?.courseId ?? null,
+      courseTitle: playingTitle ?? expandedRoom?.title ?? selectedCourse?.courseTitle ?? null,
+      courseGoalType: playingRun ? playingRun.course.goal?.type ?? null
+        : expandedRoom ? toCourseGoalType(expandedRoom.goalType) : selectedCourse?.goalType ?? null,
+      courseRoomCount: playingRun?.course.roomRefs.length ?? expandedRoom?.cellCount ?? selectedCourse?.roomCount ?? null,
     };
   }
 

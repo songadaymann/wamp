@@ -259,4 +259,9 @@ function setupLazyModalTriggers(controllers: UiControllers): void {
     document.getElementById('auth-panel')?.classList.remove('menu-open');
     void controllers.leaderboardModal.open('global');
   });
+  document.getElementById('btn-menu-room-leaderboard')?.addEventListener('click', () => {
+    if (controllers.leaderboardModal.loaded) return;
+    document.getElementById('auth-panel')?.classList.remove('menu-open');
+    void controllers.leaderboardModal.open();
+  });
 }

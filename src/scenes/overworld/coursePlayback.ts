@@ -570,6 +570,7 @@ export class OverworldCoursePlaybackController {
           runState.expandedRoomId,
           runState.expandedRoomVersion ?? course.version,
           5,
+          true,
         );
       } catch (error) {
         console.warn('Failed to refresh expanded-room leaderboard after clear', error);
@@ -577,7 +578,7 @@ export class OverworldCoursePlaybackController {
     }
 
     try {
-      return await this.courseRepository.loadCourseLeaderboard(course.id, course.version, 5);
+      return await this.courseRepository.loadCourseLeaderboard(course.id, course.version, 5, true);
     } catch (error) {
       console.warn('Failed to refresh leaderboard after expanded room clear', error);
       return null;

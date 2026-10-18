@@ -27,6 +27,7 @@ export interface ExpandedRoomRepository {
     expandedRoomId: string,
     version?: number | null,
     limit?: number,
+    fresh?: boolean,
   ): Promise<ExpandedRoomLeaderboardResponse>;
   submitExpandedRoomRating(
     expandedRoomId: string,
@@ -86,6 +87,7 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     expandedRoomId: string,
     version: number | null = null,
     limit: number = 10,
+    fresh: boolean = false,
   ): Promise<ExpandedRoomLeaderboardResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -96,9 +98,10 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     }
 
     const path = `/api/leaderboards/expanded-rooms/${encodeURIComponent(expandedRoomId)}?${params.toString()}`;
-    const response = await loadWithStaleWhileRevalidate(
-      `leaderboard:${this.baseUrl}${path}`,
-      () => this.request<ExpandedRoomLeaderboardResponse>(path),
+    const load = () => this.request<ExpandedRoomLeaderboardResponse>(path, fresh ? { cache: 'no-store' } : undefined);
+    if (fresh) this.invalidateLeaderboards();
+    const response = fresh ? await load() : await loadWithStaleWhileRevalidate(
+      `leaderboard:${this.baseUrl}${path}`, load,
     );
     return filterCourseLeaderboardForCurrentSurface(response) as ExpandedRoomLeaderboardResponse;
   }
