@@ -401,7 +401,9 @@ function simulateWander(seed: number, startX: number, directionX: 1 | -1): Wande
     resetDynamicObjectIfOutOfBounds: () => false,
     getRoomWorldBounds: () => ({ left: 0, right: ROOM_PX_WIDTH, top: 0, bottom: FLOOR_TOP + TILE_SIZE * 4 }),
     applyDirectionalFacing: () => {},
-    hasSolidTerrainAtWorldPoint: (candidate, worldX, worldY) => hasSolid(candidate, worldX, worldY),
+    hasSolidTerrainAtWorldPoint: (candidate: RoomSnapshot, worldX: number, worldY: number) => (
+      hasSolid(candidate, worldX, worldY)
+    ),
     playBounceFx: () => {},
     bouncePadVelocity: -320,
     bouncePadCooldownMs: 180,
