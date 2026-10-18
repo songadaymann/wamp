@@ -821,7 +821,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       if (npcBody) {
         npcBody.setAllowGravity(normalizedLayer === 'terrain' && npcIsMovable);
         npcBody.setImmovable(!npcIsMovable);
-        npcBody.pushable = npcIsMovable;
+        // Arcade's push moves the body after terrain separation and can embed him in tiles.
+        npcBody.pushable = false;
         npcBody.setBounce(0, 0);
         npcBody.setDragX(npcIsMovable ? 550 : 0);
         npcBody.setMaxVelocity(140, 500);
@@ -985,6 +986,29 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.stabilizePushableStacks(rooms);
     this.triggerController.updatePressurePlates(rooms);
     this.interactionCoordinator.refreshWorldColliderReach();
+  }
+
+  pushNpcsFromPlayer(): void {
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody) {
+      return;
+    }
+
+    for (const loadedRoom of this.options.getLoadedFullRooms()) {
+      if (loadedRoom.runtimeSuspended === true) {
+        continue;
+      }
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (liveObject.config.category !== 'npc' || !liveObject.sprite.active) {
+          continue;
+        }
+        const body = this.getDynamicBody(liveObject.sprite);
+        if (!body?.enable) {
+          continue;
+        }
+        this.npcController.applyPlayerPush(liveObject, body, playerBody);
+      }
+    }
   }
 
   /** Behaviors and settings are constant, so each flying behavior's motion is worked out once (F012). */

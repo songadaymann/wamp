@@ -3604,6 +3604,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       ? this.mobilePerformanceControllerProfileSlot : -1;
     const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
     const movement = this.movementController.updateMovement(delta, this.quicksandController.isActive(), input);
+    this.liveObjectController.pushNpcsFromPlayer();
     this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
     if (movement.downHeld && movement.jumpPressed) this.specialTilesController.beginOneWayDropThrough();
     if (this.isPvpCountdownActive()) {

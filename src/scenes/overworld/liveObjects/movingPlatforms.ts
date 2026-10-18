@@ -45,7 +45,7 @@ export function carryMovingPlatformRiders(
   }
 }
 
-function carryPlayerOnMovingPlatform(
+export function carryPlayerOnMovingPlatform(
   playerBody: Phaser.Physics.Arcade.Body | null,
   platformBody: Phaser.Physics.Arcade.Body,
   deltaX: number,

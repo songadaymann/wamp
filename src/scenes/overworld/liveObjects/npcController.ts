@@ -9,6 +9,7 @@ import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
 import { getArcadeBodyBounds } from './bodies';
+import { carryPlayerOnMovingPlatform } from './movingPlatforms';
 import {
   resolveNpcHorizontalVelocity,
   resolveNpcRoomBoundaryCorrection,
@@ -82,6 +83,8 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       return;
     }
 
+    this.carryRidingPlayer(liveObject, body);
+
     const mode = liveObject.runtime.npcMode ?? 'idle';
     const terrainActor = liveObject.layer === 'terrain';
     const movable = mode !== 'idle' || liveObject.runtime.npcPushable;
@@ -102,7 +105,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
     body.setAllowGravity(terrainActor && movable && !restingOnRoomBottom);
     body.setImmovable(!movable);
-    body.pushable = movable;
+    body.pushable = false;
     body.setDragX(
       movable
         ? liveObject.runtime.specialTileOnIce
@@ -148,6 +151,41 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       this.containNpcInRoom(loadedRoom.room, liveObject, body, mode);
     }
     this.syncNameLabel(liveObject);
+  }
+
+  applyPlayerPush(
+    liveObject: LoadedRoomObject,
+    npcBody: Phaser.Physics.Arcade.Body,
+    playerBody: Phaser.Physics.Arcade.Body,
+  ): void {
+    const mode = liveObject.runtime.npcMode ?? 'idle';
+    const movable = mode !== 'idle' || liveObject.runtime.npcPushable;
+    if (!movable) {
+      return;
+    }
+
+    const verticalOverlap =
+      Math.min(npcBody.bottom, playerBody.bottom) -
+      Math.max(npcBody.top, playerBody.top);
+    if (verticalOverlap < 8 || playerBody.bottom <= npcBody.top + 10) {
+      return;
+    }
+
+    const npcCenterX = (npcBody.left + npcBody.right) * 0.5;
+    const playerCenterX = (playerBody.left + playerBody.right) * 0.5;
+    const pushingRight =
+      playerCenterX < npcCenterX &&
+      playerBody.velocity.x > 20 &&
+      playerBody.right > npcBody.left - 4;
+    const pushingLeft =
+      playerCenterX > npcCenterX &&
+      playerBody.velocity.x < -20 &&
+      playerBody.left < npcBody.right + 4;
+    if (pushingRight && !npcBody.blocked.right && !npcBody.touching.right) {
+      npcBody.setVelocityX(Math.max(npcBody.velocity.x, playerBody.velocity.x));
+    } else if (pushingLeft && !npcBody.blocked.left && !npcBody.touching.left) {
+      npcBody.setVelocityX(Math.min(npcBody.velocity.x, playerBody.velocity.x));
+    }
   }
 
   touchQuicksand(liveObject: LoadedRoomObject): void {
@@ -510,6 +548,19 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         return;
       }
     }
+  }
+
+  private carryRidingPlayer(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): void {
+    const deltaX = liveObject.sprite.x - liveObject.runtime.previousX;
+    const deltaY = liveObject.sprite.y - liveObject.runtime.previousY;
+    if (!liveObject.runtime.npcFriendlyFire) {
+      carryPlayerOnMovingPlatform(this.options.getPlayerBody(), body, deltaX, deltaY);
+    }
+    liveObject.runtime.previousX = liveObject.sprite.x;
+    liveObject.runtime.previousY = liveObject.sprite.y;
   }
 
   private getStepJumpDirection(

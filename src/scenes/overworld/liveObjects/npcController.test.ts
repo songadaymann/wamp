@@ -217,6 +217,115 @@ describe('NPC path handling', () => {
   });
 });
 
+describe('NPC wander', () => {
+  it('starts walking in the placed facing direction instead of turning around at the spawn point', () => {
+    const applyDirectionalFacing = vi.fn();
+    const controller = new LiveObjectNpcController({
+      scene: { anims: { exists: () => false } },
+      getCurrentTime: () => 1_000,
+      getPlayerBody: () => null,
+      resetDynamicObjectIfOutOfBounds: () => false,
+      getRoomWorldBounds: () => ({ left: 0, right: 640, top: 0, bottom: 352 }),
+      applyDirectionalFacing,
+      hasSolidTerrainAtWorldPoint: () => false,
+      playBounceFx: () => {},
+      bouncePadVelocity: -320,
+      bouncePadCooldownMs: 180,
+    } as never);
+    const liveObject = {
+      runtime: {
+        directionX: -1,
+        npcCanJumpFall: false,
+        npcWalking: false,
+        nextActionAt: 0,
+        npcBounceCooldownUntil: 0,
+        npcQuicksandUntil: 0,
+        specialTileOnIce: false,
+        specialTileOnSticky: false,
+        specialTileWindX: 0,
+      },
+      sprite: { anims: { currentAnim: null } },
+      config: { facingDirection: 'right' },
+    };
+    const body = {
+      left: 20,
+      right: 44,
+      top: 40,
+      bottom: 56,
+      velocity: { x: 0, y: 0 },
+      blocked: { left: false, right: false, down: true },
+      touching: { left: false, right: false, down: true },
+      setVelocityX: vi.fn(),
+    };
+    const updateWander = (
+      controller as unknown as {
+        updateWander(
+          room: object,
+          candidate: typeof liveObject,
+          candidateBody: typeof body,
+          terrainActor: boolean,
+          delta: number,
+        ): void;
+      }
+    ).updateWander.bind(controller);
+
+    updateWander({}, liveObject, body, true, 16);
+
+    expect(liveObject.runtime.directionX).toBe(-1);
+    expect(liveObject.runtime.npcWalking).toBe(true);
+    expect(body.setVelocityX).toHaveBeenCalledWith(-70);
+    expect(applyDirectionalFacing).toHaveBeenCalledWith(
+      liveObject.sprite,
+      liveObject.config,
+      -1,
+    );
+  });
+});
+
+describe('NPC player push', () => {
+  it('pushes a free NPC and refuses to push one that is already against a tile', () => {
+    const controller = new LiveObjectNpcController({
+      scene: { anims: { exists: () => false } },
+      getCurrentTime: () => 0,
+      getPlayerBody: () => null,
+      resetDynamicObjectIfOutOfBounds: () => false,
+      applyDirectionalFacing: () => {},
+      hasSolidTerrainAtWorldPoint: () => false,
+      playBounceFx: () => {},
+      bouncePadVelocity: -320,
+      bouncePadCooldownMs: 180,
+    } as never);
+    const liveObject = {
+      runtime: { npcMode: 'wander', npcPushable: false },
+    };
+    const npcBody = {
+      left: 40,
+      right: 64,
+      top: 40,
+      bottom: 56,
+      velocity: { x: 70, y: 0 },
+      blocked: { left: false, right: false },
+      touching: { left: false, right: false },
+      setVelocityX: vi.fn(),
+    };
+    const playerBody = {
+      left: 20,
+      right: 42,
+      top: 40,
+      bottom: 56,
+      velocity: { x: 150, y: 0 },
+    };
+
+    controller.applyPlayerPush(liveObject as never, npcBody as never, playerBody as never);
+    expect(npcBody.setVelocityX).toHaveBeenCalledWith(150);
+
+    npcBody.setVelocityX.mockClear();
+    npcBody.blocked.right = true;
+    controller.applyPlayerPush(liveObject as never, npcBody as never, playerBody as never);
+    expect(npcBody.setVelocityX).not.toHaveBeenCalled();
+  });
+});
+
 describe('NPC room containment', () => {
   function createController() {
     return new LiveObjectNpcController({
