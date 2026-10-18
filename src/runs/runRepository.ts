@@ -205,15 +205,11 @@ class ApiRunRepository implements RunRepository {
       params.set('cursor', cursor);
     }
 
+    const fresh = Date.now() < this.bypassLeaderboardCacheUntil;
+    if (fresh) params.set('fresh', '1');
     const path = `/api/leaderboards/rooms/discover?${params.toString()}`;
-    // Personal lists must follow the current session, including an account switch in this tab.
-    if (sort === 'unrated' || sort === 'unbeaten' || sort === 'unvisited') {
-      return this.request<RoomDiscoveryResponse>(path);
-    }
-    return loadWithStaleWhileRevalidate(
-      `discovery:${this.baseUrl}${path}`,
-      () => this.request<RoomDiscoveryResponse>(path),
-    );
+    // Shared public reads live at the edge; viewer history must follow the current session.
+    return this.request<RoomDiscoveryResponse>(path, { cache: 'no-store' });
   }
 
   async loadBuilderDiscovery(

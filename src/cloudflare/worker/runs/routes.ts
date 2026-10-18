@@ -1,3 +1,4 @@
+import { DiscoveryPublicCache } from './discoveryPublicCache';
 import { loadCachedRoomStandings } from './roomLeaderboardCache';
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
 import { canReuseGlobalLeaderboardBase, loadGlobalLeaderboardViewer } from './globalLeaderboardViewer';
@@ -685,24 +686,18 @@ export async function handleRoomDiscovery(
     difficultyFilter === null
     && sort === 'newest'
     && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
-      env,
-      difficultyFilter,
-      limit,
-      sort,
-      includeGoalLessRooms,
-      auth?.user.id ?? null,
-      timing,
-      cursorOffset,
-    ));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const publicCache = new DiscoveryPublicCache(request, env, context, fresh);
+  const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
+    env, difficultyFilter, limit, sort, includeGoalLessRooms, auth?.user.id ?? null, timing, cursorOffset, publicCache,
+  ));
+  timing.setDiagnostic('cache', fresh ? 'fresh' : publicCache.status);
+  return timedJsonResponse(request, response, timing, {
+    headers: {
+      'Cache-Control': auth || fresh ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': publicCache.status,
+    },
+  });
 }
 
 function decodeRoomDiscoveryCursor(value: string | null, sort: RoomDiscoverySort): number {

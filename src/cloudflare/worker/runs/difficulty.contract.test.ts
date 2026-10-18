@@ -117,8 +117,8 @@ describe('T14 discovery and difficulty route source contracts', () => {
       "parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200)",
       "? parseRoomDiscoverySortOrThrow(rawSort) : 'featured'",
       "? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet'",
-      "headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' }",
-      'loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse)',
+      'new DiscoveryPublicCache(request, env, context, fresh)',
+      "'Cache-Control': auth || fresh ? 'private, no-store' : 'public, max-age=20'",
     ]) {
       expect(runRouteClosure).toContain(sourceContract);
     }
