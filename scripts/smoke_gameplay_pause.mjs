@@ -48,7 +48,7 @@ for (const [device, engine, width, height, touch] of [
         localStorage.setItem('wamp_welcome_modal_seen_v1', '1'); localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
       });
-      const page = await context.newPage(), errors = [];
+      const page = await context.newPage(), errors = []; let resumeProof = null;
       page.on('pageerror', e => errors.push(e.message));
       page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
       const click = selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
@@ -98,9 +98,24 @@ for (const [device, engine, width, height, touch] of [
           await page.keyboard.press('Escape'); await waitPaused(true);
           assert(await page.locator('#controls-modal').isVisible());
           await page.screenshot({ path: `${output}/${name}-dialog.png` });
+          // Capture the first resumed frame in the browser. A CI automation round trip
+          // can take longer than the bullet's entire 720ms lifetime after Close.
+          await page.evaluate(() => {
+            window.__pauseResumeProof = null;
+            const sample = () => {
+              const scene = JSON.parse(window.render_game_to_text()).activeScene;
+              if (!scene.displayHealth.scene.paused) {
+                window.__pauseResumeProof = { elapsedMs: scene.goalRun.elapsedMs, projectileCount: scene.combat.projectileCount };
+              } else requestAnimationFrame(sample);
+            };
+            requestAnimationFrame(sample);
+          });
           await click('#btn-controls-close'); await waitPaused(false);
+          await page.waitForFunction(() => window.__pauseResumeProof !== null);
+          resumeProof = { beforeElapsedMs: before.elapsedMs, ...await page.evaluate(() => window.__pauseResumeProof) };
+          assert(resumeProof.projectileCount > 0, 'A paused projectile must survive the first resumed frame');
+          assert(resumeProof.elapsedMs - before.elapsedMs <= 250, 'Resume must not add the menu break to simulation time');
           const resumed = await state();
-          assert(resumed.combat.projectileCount > 0, 'A paused projectile must retain its remaining lifetime after resume');
           await page.waitForFunction(min => JSON.parse(window.render_game_to_text()).activeScene.goalRun.elapsedMs > min, resumed.goalRun.elapsedMs + 100);
           await click('#menu-toggle'); await waitPaused(true); await click('#menu-toggle'); await waitPaused(false);
           // Actual gameplay still responds after repeated pause/resume.
@@ -127,11 +142,11 @@ for (const [device, engine, width, height, touch] of [
         await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.mode === 'browse');
         assert.equal((await state()).displayHealth.scene.paused, false);
         assert.deepEqual(errors, []); assert.deepEqual(fixtures.report().misses, {});
-        reports.push({ name, renderer, errors, fixtureMisses: fixtures.report().misses, accepted: true });
+        reports.push({ name, renderer, resumeProof, errors, fixtureMisses: fixtures.report().misses, accepted: true });
         console.log(`${name} passed`);
       } catch (error) {
         await page.screenshot({ path: `${output}/${name}-failure.png` });
-        writeFileSync(`${output}/${name}-failure.json`, JSON.stringify({ error: error.stack, errors, fixtures: fixtures.report(), state: await state() }, null, 2));
+        writeFileSync(`${output}/${name}-failure.json`, JSON.stringify({ error: error.stack, resumeProof, errors, fixtures: fixtures.report(), state: await state() }, null, 2));
         throw error;
       } finally { await context.close(); }
     }

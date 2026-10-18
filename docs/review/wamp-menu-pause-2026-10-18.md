@@ -37,3 +37,5 @@ Accepted evidence: `complete-check.log`, `accepted-browser/report.json`, `accept
 ## Authorized release
 
 Jonathan authorized push, merge and deployment after local acceptance. Delivery proceeds through exact-source/main hosted quality, mobile, Expanded Room, pause and both Pages gates, followed by guarded Pages-only deployment from clean main and actual-domain verification. This supersedes the earlier local-only boundary. Final delivery details are recorded in the linked pull request and ignored release evidence.
+
+Hosted runner follow-up: the first pause job checked a720ms projectile only after a slow automation round trip, allowing it to expire naturally after Close. The maintained check now captures the first resumed frame in the browser, asserts retained projectile/simulation time, and saves both elapsed values in its report. All six native cases pass; the gameplay implementation is unchanged. Fresh hosted gates are required on this observation fix.
