@@ -50,6 +50,46 @@ function setup(chunks = [{ x: 0, y: 0 }]) {
 function openShared(): void { for (const socket of [...fixtures.sockets]) { socket.open();socket.message(baseline(true)); } }
 
 describe('chat leases the presence transport', () => {
+  it('publishes room, mode and PvP action changes immediately during an idle window', async () => {
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    const updates = () => socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:update');
+    world.updateLocalPresence(presence()); await vi.advanceTimersByTimeAsync(1);
+    world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 2, y: 2 } }); expect(updates()).toHaveLength(2);
+    world.updateLocalPresence({ ...presence(), mode: 'edit' }); expect(updates()).toHaveLength(3);
+    world.updateLocalPresence({ ...presence(), pvp: { matchId: 'arena', action: 'sword', actionUntil: Date.now() + 200 } });
+    expect(updates()).toHaveLength(4);
+  });
+
+  it.each([false, true])('keeps movement throttling with PvP=%s while suppressing timestamp-only updates', async (pvp) => {
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    const payload = { ...presence(), ...(pvp ? { pvp: { matchId: 'arena', action: null, actionUntil: 0 } } : {}) };
+    const updates = () => socket.sent.filter(raw => JSON.parse(raw).type === 'presence:update');
+    world.updateLocalPresence(payload); await vi.advanceTimersByTimeAsync(25);
+    world.updateLocalPresence({ ...payload, x: 1101 }); expect(updates()).toHaveLength(pvp ? 2 : 1);
+    await vi.advanceTimersByTimeAsync(175);
+    world.updateLocalPresence({ ...payload, x: 1102 }); expect(updates()).toHaveLength(pvp ? 3 : 2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    world.updateLocalPresence({ ...payload, x: 1102, timestamp: Date.now() }); expect(updates()).toHaveLength(pvp ? 3 : 2);
+  });
+
+  it('coalesces idle refreshes while retaining movement and reconnect baselines', async () => {
+    vi.setSystemTime(120_000);
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    world.updateLocalPresence(presence());
+    const updates = () => socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:update');
+    for (let i = 0; i < 23; i++) {
+      await vi.advanceTimersByTimeAsync(500); world.updateLocalPresence(presence());
+    }
+    expect(updates()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(500); world.updateLocalPresence(presence()); expect(updates()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(200);
+    world.updateLocalPresence({ ...presence(), x: 1101 }); expect(updates()).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(200);
+    world.updateLocalPresence({ ...presence(), facing: -1 }); expect(updates()).toHaveLength(4);
+    socket.disconnect(); socket.open(); expect(updates()).toHaveLength(5);
+    expect(updates().at(-1).presence).toMatchObject({ facing: -1, x: 1100 });
+  });
+
   it('uses nine physical connections and one token request with no speculative chat sockets', async () => {
     const chunks = Array.from({ length: 9 }, (_, i) => ({ x: i % 3 - 1, y: Math.floor(i / 3) - 1 }));
     const { snapshots } = setup(chunks);

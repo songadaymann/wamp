@@ -1,3 +1,4 @@
+import { ShardHeartbeatScheduler } from '../src/partykit/shardHeartbeatScheduler';
 import type * as Party from 'partykit/server';
 import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
 import { normalizeInterestRoom, PresenceInterestBroadcast, PRESENCE_FAR_FLUSH_MS } from '../src/partykit/presenceInterest';
@@ -98,17 +99,13 @@ import {
   type PvpRoomStateEventMessage,
 } from '../src/pvp/model';
 
-const HEARTBEAT_INTERVAL_MS = 15_000;
-/**
- * Joins, leaves and room changes force a heartbeat to the shared metrics room, but each shard
- * sends at most one this often; a change inside the interval is reported when it ends (F035).
- */
-const FORCED_HEARTBEAT_MIN_INTERVAL_MS = 3_000;
 /** The metrics room prunes stale shard heartbeats at most this often, not on every heartbeat. */
 const HEARTBEAT_PRUNE_INTERVAL_MS = 60_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
+const PVP_STORAGE_KEY = 'pvp:match';
+interface StoredPvpMatch { match: PvpMatchState; finalizeAt: number | null }
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -145,9 +142,7 @@ export default class PresenceServer implements Party.Server {
     hibernate: true,
   } satisfies Party.ServerOptions;
 
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private lastHeartbeatAt = 0;
-  private forcedHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly heartbeat: ShardHeartbeatScheduler;
   private lastHeartbeatPruneAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
@@ -158,15 +153,60 @@ export default class PresenceServer implements Party.Server {
   private farPresenceFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private populationBroadcastFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private pvpMatchState: PvpMatchState | null = null;
-  private pvpStartTimer: ReturnType<typeof setTimeout> | null = null;
-  private pvpFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pvpFinalizeAt: number | null = null;
+  private pvpStorageWork: Promise<void> = Promise.resolve();
 
-  constructor(readonly room: Party.Room) {}
+  constructor(readonly room: Party.Room, private readonly runtime: { waitUntil?: (work: Promise<void>) => void } = {}) {
+    this.heartbeat = new ShardHeartbeatScheduler({
+      storage: room.storage,
+      enabled: () => !this.isMetricsRoom() && !this.isPvpRoom() && this.getInternalToken() !== null,
+      snapshot: () => this.computeShardHeartbeat() ?? {
+        shardId: this.room.id, totalConnections: 0, playConnections: 0, editConnections: 0,
+        updatedAt: new Date().toISOString(),
+      },
+      send: async (heartbeat) => {
+        const response = await this.room.context.parties[this.room.name].get(METRICS_ROOM_ID).fetch('/heartbeat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', [INTERNAL_TOKEN_HEADER]: this.getInternalToken() ?? '' },
+          body: JSON.stringify(heartbeat),
+        });
+        // Drain this bounded internal response so no unfinished body keeps the object awake.
+        await response.text();
+      },
+    });
+  }
 
-  async onStart(): Promise<void> {
-    if (this.isMetricsRoom() || this.isPvpRoom()) {
+  async onAlarm(): Promise<void> {
+    if (this.isPvpRoom()) {
+      const match = this.pvpMatchState;
+      if (match?.status === 'countdown' && match.countdownEndsAt !== null && match.countdownEndsAt <= Date.now()) this.startPvpMatch();
+      if (match?.status === 'finalizing' && this.pvpFinalizeAt !== null && this.pvpFinalizeAt <= Date.now()) this.finalizePvpMatch();
+      await this.pvpStorageWork;
       return;
     }
+    await this.heartbeat.alarm();
+  }
+
+  private runBackground(work: Promise<void>): void {
+    const handled = work.catch((error) => { console.warn('Presence background work failed.', error); });
+    if (this.runtime.waitUntil) this.runtime.waitUntil(handled);
+    else void handled;
+  }
+
+  private reportShardChange(): void {
+    this.runBackground(this.heartbeat.changed());
+  }
+
+  async onStart(): Promise<void> {
+    if (this.isPvpRoom()) {
+      const stored = await this.room.storage.get<StoredPvpMatch>(PVP_STORAGE_KEY);
+      if (stored) {
+        this.pvpMatchState = stored.match;
+        this.pvpFinalizeAt = stored.finalizeAt;
+      }
+      return;
+    }
+    if (this.isMetricsRoom()) return;
 
     const entries = await this.room.storage.list<SharedRoomPreview>({
       prefix: ROOM_PREVIEW_STORAGE_PREFIX,
@@ -251,8 +291,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     this.broadcastPopulations();
-    this.syncHeartbeatTimer();
-    void this.maybeSendShardHeartbeat(true);
+    await this.heartbeat.changed().catch((error) => { console.warn('Presence metrics unavailable.', error); });
   }
 
   onMessage(message: string, sender: Party.Connection<ConnectionPresenceState>): void {
@@ -308,9 +347,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (parsed.type === 'presence:preview:update') {
-      void this.updatePreview(sender, parsed.preview).catch((error) => {
-        console.warn('Failed to update construction preview.', error);
-      });
+      this.runBackground(this.updatePreview(sender, parsed.preview));
       return;
     }
 
@@ -370,7 +407,7 @@ export default class PresenceServer implements Party.Server {
       const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
       if (shouldBroadcast || previewChanged) {
         this.broadcastPopulations();
-        void this.maybeSendShardHeartbeat(true);
+        this.reportShardChange();
       }
     }
   }
@@ -380,6 +417,11 @@ export default class PresenceServer implements Party.Server {
     if (connection.readyState === WebSocket.CLOSING) connection.close(1000, 'peer-disconnected');
     if (this.isPvpRoom()) {
       this.handlePvpClose(connection);
+      if (![...this.room.getConnections()].length) {
+        this.pvpMatchState = null;
+        this.pvpFinalizeAt = null;
+        this.persistPvpMatch();
+      }
       return;
     }
 
@@ -399,8 +441,7 @@ export default class PresenceServer implements Party.Server {
     if (connection.state?.channel === 'presence') {
       this.broadcastPopulations();
     }
-    this.syncHeartbeatTimer();
-    void this.maybeSendShardHeartbeat(true);
+    this.reportShardChange();
   }
 
   private clearPresence(connection: Party.Connection<ConnectionPresenceState>): void {
@@ -422,7 +463,7 @@ export default class PresenceServer implements Party.Server {
       );
       if (current?.channel === 'presence' && previousPreview !== null) {
         this.broadcastPopulations();
-        void this.maybeSendShardHeartbeat(true);
+        this.reportShardChange();
       }
       return;
     }
@@ -451,7 +492,7 @@ export default class PresenceServer implements Party.Server {
       (this.shouldBroadcastPopulations(previousPresence, null) || previousPreview !== null)
     ) {
       this.broadcastPopulations();
-      void this.maybeSendShardHeartbeat(true);
+      this.reportShardChange();
     }
   }
 
@@ -696,90 +737,12 @@ export default class PresenceServer implements Party.Server {
     return pruned;
   }
 
-  private async maybeSendShardHeartbeat(force = false): Promise<void> {
-    if (this.isMetricsRoom()) {
-      return;
-    }
-
-    const token = this.getInternalToken();
-    if (!token) {
-      return;
-    }
-
-    const now = Date.now();
-    if (!force && now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
-      return;
-    }
-    if (force && now - this.lastHeartbeatAt < FORCED_HEARTBEAT_MIN_INTERVAL_MS) {
-      this.forcedHeartbeatTimer ??= setTimeout(() => {
-        this.forcedHeartbeatTimer = null;
-        void this.maybeSendShardHeartbeat(true);
-      }, this.lastHeartbeatAt + FORCED_HEARTBEAT_MIN_INTERVAL_MS - now);
-      return;
-    }
-
-    const heartbeat = this.computeShardHeartbeat();
-    if (!heartbeat) {
-      return;
-    }
-
-    this.lastHeartbeatAt = now;
-
-    try {
-      await this.room.context.parties[this.room.name].get(METRICS_ROOM_ID).fetch('/heartbeat', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          [INTERNAL_TOKEN_HEADER]: token,
-        },
-        body: JSON.stringify(heartbeat),
-      });
-    } catch {
-      // Metrics are best-effort and should not affect live ghost traffic.
-    }
-  }
-
   private computeShardHeartbeat(): PartyKitShardHeartbeat | null {
     return computeShardHeartbeat(
       this.room.id,
       Array.from(this.room.getConnections<ConnectionPresenceState>(), ({ state }) => state),
       Date.now(),
     );
-  }
-
-  private syncHeartbeatTimer(): void {
-    if (this.isMetricsRoom()) {
-      if (this.heartbeatTimer !== null) {
-        clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = null;
-      }
-      return;
-    }
-
-    const hasConnections = this.hasAnyPresenceConnections();
-    if (!hasConnections) {
-      if (this.heartbeatTimer !== null) {
-        clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = null;
-      }
-      return;
-    }
-
-    if (this.heartbeatTimer === null) {
-      this.heartbeatTimer = setInterval(() => {
-        void this.maybeSendShardHeartbeat();
-      }, HEARTBEAT_INTERVAL_MS);
-    }
-  }
-
-  private hasAnyPresenceConnections(): boolean {
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      if (connection.state?.channel === 'presence') {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private async handleHeartbeat(req: Party.Request): Promise<Response> {
@@ -793,7 +756,8 @@ export default class PresenceServer implements Party.Server {
       this.lastHeartbeatPruneAt = now;
       await this.pruneStaleHeartbeats();
     }
-    await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
+    if (heartbeat.totalConnections === 0) await this.room.storage.delete(heartbeatStorageKey(heartbeat.shardId));
+    else await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
 
     return this.json({
       ok: true,
@@ -1161,22 +1125,7 @@ export default class PresenceServer implements Party.Server {
 
   private maybeActivatePvpMatch(): void {
     const match = this.pvpMatchState;
-    if (match && activatePvpMatchIfReady(match, Date.now())) this.schedulePvpStart();
-  }
-
-  private schedulePvpStart(): void {
-    const match = this.pvpMatchState;
-    if (!match || match.status !== 'countdown' || !match.countdownEndsAt) {
-      return;
-    }
-    if (this.pvpStartTimer !== null) {
-      return;
-    }
-
-    this.pvpStartTimer = setTimeout(() => {
-      this.pvpStartTimer = null;
-      this.startPvpMatch();
-    }, Math.max(0, match.countdownEndsAt - Date.now()));
+    if (match) activatePvpMatchIfReady(match, Date.now());
   }
 
   private startPvpMatch(): void {
@@ -1289,30 +1238,26 @@ export default class PresenceServer implements Party.Server {
 
   private schedulePvpFinalize(): void {
     const match = this.pvpMatchState;
-    if (!match || this.pvpFinalizeTimer !== null) {
-      return;
+    if (match && this.pvpFinalizeAt === null) {
+      this.pvpFinalizeAt = Date.now() + getMultiplayerModeDefinition(match.mode).finalizeDrawWindowMs;
     }
-
-    this.pvpFinalizeTimer = setTimeout(() => {
-      this.pvpFinalizeTimer = null;
-      this.finalizePvpMatch();
-    }, getMultiplayerModeDefinition(match.mode).finalizeDrawWindowMs);
   }
 
-  private clearPvpStartTimer(): void {
-    if (this.pvpStartTimer === null) {
-      return;
-    }
-    clearTimeout(this.pvpStartTimer);
-    this.pvpStartTimer = null;
-  }
-
-  private clearPvpFinalizeTimer(): void {
-    if (this.pvpFinalizeTimer === null) {
-      return;
-    }
-    clearTimeout(this.pvpFinalizeTimer);
-    this.pvpFinalizeTimer = null;
+  /** Persist score/phase changes only; high-frequency movement and relays do not write storage. */
+  private persistPvpMatch(): void {
+    const stored = this.pvpMatchState
+      ? structuredClone({ match: this.pvpMatchState, finalizeAt: this.pvpFinalizeAt }) : null;
+    const deadline = stored?.match.status === 'countdown' ? stored.match.countdownEndsAt
+      : stored?.match.status === 'finalizing' ? stored.finalizeAt : null;
+    const work = this.pvpStorageWork.catch(() => undefined).then(async () => {
+      // Issue both mutations without yielding so native storage commits phase and deadline together.
+      await Promise.all([
+        stored ? this.room.storage.put(PVP_STORAGE_KEY, stored) : this.room.storage.delete(PVP_STORAGE_KEY),
+        deadline !== null ? this.room.storage.setAlarm(deadline) : this.room.storage.deleteAlarm(),
+      ]);
+    });
+    this.pvpStorageWork = work;
+    this.runBackground(work);
   }
 
   private finalizePvpForfeit(participant: PvpParticipantSnapshot): void {
@@ -1321,8 +1266,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.clearPvpStartTimer();
-    this.clearPvpFinalizeTimer();
+    this.pvpFinalizeAt = null;
     markPvpForfeit(match, participant, Date.now());
     this.finalizePvpMatch();
   }
@@ -1333,13 +1277,13 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.clearPvpStartTimer();
-    this.clearPvpFinalizeTimer();
+    this.pvpFinalizeAt = null;
     finalizePvpMatchState(match, Date.now());
     this.broadcastPvpSnapshot();
   }
 
   private broadcastPvpSnapshot(): void {
+    this.persistPvpMatch();
     const snapshot = this.getPvpSnapshot();
     if (!snapshot) {
       return;

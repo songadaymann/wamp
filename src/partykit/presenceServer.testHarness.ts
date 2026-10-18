@@ -46,6 +46,11 @@ export type FakePresenceStorageOperation =
     };
 
 export class FakePresenceStorage {
+  alarmAt: number | null = null;
+  async get<T>(key: string): Promise<T | undefined> { return structuredClone(this.values.get(key)) as T | undefined; }
+  async getAlarm(): Promise<number | null> { return this.alarmAt; }
+  async setAlarm(at: number): Promise<void> { this.alarmAt = at; }
+  async deleteAlarm(): Promise<void> { this.alarmAt = null; }
   private readonly values = new Map<string, unknown>();
   private readonly pendingMutationReleases: Array<() => void> = [];
   private deferMutations = false;
@@ -301,7 +306,14 @@ export class PresenceServerHarness {
   }
 
   async advance(ms: number): Promise<void> {
-    await vi.advanceTimersByTimeAsync(ms);
+    const target = Date.now() + ms;
+    await vi.advanceTimersByTimeAsync(0);
+    while (this.room.storage.alarmAt !== null && this.room.storage.alarmAt <= target) {
+      await vi.advanceTimersByTimeAsync(Math.max(0, this.room.storage.alarmAt - Date.now()));
+      this.room.storage.alarmAt = null;
+      await this.server.onAlarm();
+    }
+    await vi.advanceTimersByTimeAsync(Math.max(0, target - Date.now()));
   }
 
   async settleAsyncWork(): Promise<void> {

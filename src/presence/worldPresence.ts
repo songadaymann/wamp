@@ -27,13 +27,13 @@ import {
 } from '../persistence/worldModel';
 import { createRandomUuid } from '../utils/randomId';
 import { installHiddenTabPause } from './hiddenTabPause';
+import { isIdlePresenceRefreshDue } from './presenceCadence';
 
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
 const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
 const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
-const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
 let volatileGuestIdentity: WorldPresenceIdentity | null = null;
@@ -266,6 +266,7 @@ export class WorldPresenceClient {
   }
 
   updateLocalPresence(nextPresence: WorldPresencePayload | null): void {
+    const previousPresence = this.localPresence;
     const nextShardId = nextPresence
       ? chunkIdFromCoordinates(roomToChunkCoordinates(nextPresence.roomCoordinates))
       : null;
@@ -299,13 +300,19 @@ export class WorldPresenceClient {
     const presenceSignature = getPresencePublishSignature(nextPresence);
     const changed = presenceSignature !== this.lastPublishedPresenceSignature;
     const isInitialPublish = this.lastPublishedPayloadJson === null;
-    const publishInterval = changed
-      ? nextPresence.pvp?.matchId
-        ? PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS
-        : PRESENCE_MOVING_PUBLISH_INTERVAL_MS
-      : PRESENCE_IDLE_KEEPALIVE_MS;
-    const enoughTimeElapsed = now - this.lastPublishedAt >= publishInterval;
-    if (!isInitialPublish && !enoughTimeElapsed) {
+    const structuralChange = previousPresence?.roomCoordinates.x !== nextPresence.roomCoordinates.x
+      || previousPresence?.roomCoordinates.y !== nextPresence.roomCoordinates.y
+      || previousPresence?.mode !== nextPresence.mode
+      || previousPresence?.pvp?.matchId !== nextPresence.pvp?.matchId
+      || previousPresence?.pvp?.action !== nextPresence.pvp?.action
+      || Math.round((previousPresence?.pvp?.actionUntil ?? 0) / 50) !== Math.round((nextPresence.pvp?.actionUntil ?? 0) / 50);
+    const publishInterval = nextPresence.pvp?.matchId
+      ? PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS
+      : PRESENCE_MOVING_PUBLISH_INTERVAL_MS;
+    const enoughTimeElapsed = changed
+      ? now - this.lastPublishedAt >= publishInterval
+      : isIdlePresenceRefreshDue(this.lastPublishedAt, now);
+    if (!isInitialPublish && !structuralChange && !enoughTimeElapsed) {
       return;
     }
 

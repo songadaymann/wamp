@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getFreshCoopPlatePlayers } from '../../presence/coopPlateActors';
+import { isIdlePresenceRefreshDue } from '../../presence/presenceCadence';
 import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
@@ -429,8 +430,9 @@ export class OverworldPresenceController {
       || Math.round(input.velocityY) !== previous.velocityY
       || input.facing !== previous.facing
       || input.animationState !== previous.animationState;
-    const interval = changed ? (pvpMatchId ? 25 : 200) : 5_000;
-    return now - this.lastLocalPresenceForwardedAt >= interval;
+    return changed
+      ? now - this.lastLocalPresenceForwardedAt >= (pvpMatchId ? 25 : 200)
+      : isIdlePresenceRefreshDue(this.lastLocalPresenceForwardedAt, now);
   }
 
   updateLocalPresence(input: LocalPresenceInput | null, now = Date.now()): void {
