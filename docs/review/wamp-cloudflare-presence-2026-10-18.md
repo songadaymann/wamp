@@ -1,6 +1,6 @@
 # Cloudflare presence: idle fixes and pre-deployment verification
 
-**October 18, 2026: sleep and cost fixes verified locally. Deployment remains on hold.** The migration and these changes have not been pushed, merged or deployed. This receipt supersedes the earlier failed visible-idle audit; F037 delivery remains incomplete and F250 remains open.
+**October 18, 2026: sleep and cost fixes verified locally; the user has now authorized the remaining checks and production release.** Delivery is pending the gates below. This receipt supersedes the earlier failed visible-idle audit; F037 delivery remains incomplete and F250 remains open.
 
 ## Changes
 
@@ -14,7 +14,7 @@ Cloudflare stops charging duration once an object is eligible to hibernate, incl
 
 ## Verification
 
-- Full checks: **535 files / 3,959 tests**, lint, typecheck, DOM contract, generated bindings, production frontend build, size and asset checks pass. The focused presence/controller set passes **123 cases**. Worker build dry run passes; it did not deploy anything.
+- Full checks: **535 files / 3,960 tests**, lint, typecheck, DOM contract, generated bindings, production frontend build, size and asset checks pass. The focused presence/controller set passes **123 cases**. Worker build dry run passes; it did not deploy anything.
 - Real local workerd recreates all nine subscribed shards while sockets remain connected during the foreground idle window. Actual constructor/instance identifiers establish hibernation beyond simulated rehydration. Empty test shards have no recurring alarms after their bounded departure drain.
 - The full game sends **8 idle updates in 95.25 seconds**, with no reconnect or interest-message churn in that window. Before this work it sent 7 updates in 35 seconds (about 19 over a comparable 95 seconds).
 - A stationary second player remains rendered and eligible for cooperative plates in all **19 five-second samples**. Its departure removes the ghost promptly. Both the idle screenshot showing the helper and the resumed gameplay screenshot were inspected.
@@ -53,4 +53,15 @@ Ignored evidence: `output/presence-sleep-fix-2026-10-18/` — `summary.json`, `b
 
 The selected animation retains SHA-256 `0ef66e862b4a83d5db1df88655a140ba39c5f77858c45ff7eba884bec185ed26`. Unrelated primary checkouts, the user's TAS lab and decision-gated work were left untouched.
 
-Before production delivery, finish any remaining migration-specific real-runtime preview/PvP checks, then the source/main release gates and guarded deployment with actual-domain verification. This request authorized local fixes and verification; it did not lift the deployment hold. The existing PartyKit host and canonical D1 data remain untouched. The old hosted service retirement is documented in the [official migration guide](https://docs.partykit.io/guides/migrate-to-partyserver/).
+The latest request lifts the earlier hold and authorizes push, merge and deployment after native preview/PvP acceptance and source/main gates. The existing PartyKit host and canonical D1 data remain untouched. The old hosted service retirement is documented in the [official migration guide](https://docs.partykit.io/guides/migrate-to-partyserver/).
+
+
+## Preview/PvP release follow-up
+
+The native-runtime audit exposed private match state held only in memory. Scores, phase and applied hit identifiers now checkpoint on match changes, with countdown/final-result deadlines stored as native alarms. Movement/combat/room-event relays add no storage writes. Final departure deletes the private checkpoint and cancels its alarm. This replaces the existing PvP lifecycle timers in place, retaining the extracted match rules. PvP checkpoint/alarm writes are outside the idle-presence cost examples above; they happen on configuration, score/phase and departure changes rather than every movement frame. Source acceptance and delivery receipts follow below.
+
+
+Final local quality passes 535 files / 3,960 tests, with 30 focused adapter/preview/PvP cases and a separate final-file lint pass after grouping the native phase/deadline mutations. Worker dry run and OSS scan pass (zero blockers or warnings). The installed game client completes two movement/action iterations with nine local presence shards, inspected screenshots and no application error files. The images show grounded movement. Superseded probes retain their own diagnostics: an active editor refreshes its preview lease, and real hit probes must wait for acknowledgement plus the 1,800 ms invulnerability interval. Earlier browser attempts outlived their temporary runtime and are excluded from acceptance.
+
+
+Final-source native workerd acceptance passes all 10 preview/PvP checks: real object recreation with connected sockets; signed-owner preview authorization, full/delta delivery, token exclusion, cold-start restore/clear/expiry; countdown and result alarms; restored scores/hit deduplication; player/combat/room-event relays; death-result restoration and disconnect forfeit. Full535 files/3,960 tests,30 focused cases, final-file lint, Worker dry run and OSS0/0 pass. Two installed-client movement/action iterations retain9 connected shards, with inspected screenshots and no application errors. Native probes wait for death acknowledgement plus invulnerability rather than assuming cross-event wall-clock spacing. Source/main hosted gates and production delivery follow; F250 remains open and prior hold is explicitly lifted.

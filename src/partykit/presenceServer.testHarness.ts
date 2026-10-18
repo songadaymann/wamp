@@ -47,6 +47,7 @@ export type FakePresenceStorageOperation =
 
 export class FakePresenceStorage {
   alarmAt: number | null = null;
+  async get<T>(key: string): Promise<T | undefined> { return structuredClone(this.values.get(key)) as T | undefined; }
   async getAlarm(): Promise<number | null> { return this.alarmAt; }
   async setAlarm(at: number): Promise<void> { this.alarmAt = at; }
   async deleteAlarm(): Promise<void> { this.alarmAt = null; }
