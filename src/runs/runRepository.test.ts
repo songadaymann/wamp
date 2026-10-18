@@ -71,3 +71,35 @@ describe('post-clear room leaderboard freshness', () => {
     expect(fetch.mock.calls[2][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
   });
 });
+
+
+describe('private discovery history and public-base freshness', () => {
+  it.each(['newest', 'unrated'] as const)('reads the current account on each %s lookup', async sort => {
+    let account = 'first';
+    const fetch = vi.fn(async (_url: string, _options?: RequestInit) => Response.json({ sort, results: [{ viewerState: { account } }] }));
+    vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+    expect((await repo.loadRoomDiscovery(null, sort)).results[0].viewerState).toEqual({ account: 'first' });
+    account = 'second';
+    expect((await repo.loadRoomDiscovery(null, sort)).results[0].viewerState).toEqual({ account: 'second' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+  });
+  it('bypasses the public discovery base immediately after a saved run or rating, then restores sharing', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(async (_url: string, options?: RequestInit) => options?.method === 'POST'
+        ? Response.json({}) : Response.json({ sort: 'newest', results: [] }));
+      vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+      await repo.loadRoomDiscovery(null, 'newest'); expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      await repo.finishRun('clear', { result: 'completed', elapsedMs: 1000, deaths: 0, collectiblesCollected: 0,
+        enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: '2026-10-18T12:00:00Z', enemyCollectiblesCollected: 0 });
+      await repo.loadRoomDiscovery(null, 'newest'); expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      vi.advanceTimersByTime(20_001); await repo.loadRoomDiscovery(null, 'unrated');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      await repo.submitRoomRating('0,0', { roomCoordinates: { x: 0, y: 0 }, roomVersion: 1, qualityStars: 4,
+        difficultyChoice: 'easy', autoSuggestedDifficulty: 'easy' });
+      await repo.loadRoomDiscovery(null, 'unrated'); expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+    } finally { vi.useRealTimers(); }
+  });
+});

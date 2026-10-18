@@ -918,3 +918,8 @@ F09164-case hosted run: all integration probes clean; sole failure is the old ha
 Canonical branch `codex/wamp-first-paint-2026-10-17`, base0d31e476. Full-coverage WOFF2, deferred editor styles with shared phone overrides retained, five lazy modal roots. Source in progress; baseline parity/full quality/hosted and guarded release pending. Evidence `output/f025-2026-10-17/`; primary dirty files, chosen animation and prior decisions preserved.
 
 F025 source accepted locally:528 files/3864 tests/full quality,42-view exact style parity, fonts/deferred-menu/retry production probes pass. Master156/215; approved exact-source/main hosted gates, guarded Pages-only release and actual-domain proof remain. Source-time notes are not a claim of completed delivery.
+
+
+## 2026-10-18 — F036 personalized discovery
+
+User request: finish personalized discovery caching, verify, push, merge and deploy. Start from fully delivered PR239/main b2a6447b; all earlier source-time pending notes are superseded by its final receipt. Plan: share only public index/candidate/enrichment reads for20 seconds; query private history freshly and keep history filters before sorting/pagination, preserving legacy/Expanded Room/version and unrated-owner semantics. Add explicit/post-write freshness and maintain account isolation. Verify real migrated DB/cache parity, pagination/history changes, browser filters, full/source/main gates and OSS; guarded API+Pages release from clean main plus actual-domain cache/auth/expiry/assets proof. Preserve dirty primary checkouts, selected animation, closed overnight run and decision-gated work. Diagnostics: ignored output/f036-discovery-2026-10-18/. Source in progress; F036 stays partial until acceptance.
