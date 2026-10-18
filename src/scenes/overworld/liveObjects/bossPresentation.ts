@@ -1,3 +1,4 @@
+import { gameplayNow } from '../gameplayClock';
 import type Phaser from 'phaser';
 import { bossPhase } from '../../../enemies/boss';
 import type { LoadedRoomObject } from './model';
@@ -18,7 +19,7 @@ export function createBossPresentation(scene: Phaser.Scene, liveObject: LoadedRo
   if (!liveObject.runtime.boss) return;
   liveObject.bossHealthBar = scene.add.graphics().setDepth(liveObject.sprite.depth + 0.1);
   liveObject.helpers.push(liveObject.bossHealthBar);
-  syncBossPresentation(liveObject, scene.time.now);
+  syncBossPresentation(liveObject, gameplayNow(scene));
 }
 
 export function syncBossPresentation(liveObject: LoadedRoomObject, now: number): void {

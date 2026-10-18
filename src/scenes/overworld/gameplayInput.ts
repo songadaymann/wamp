@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { TouchInputState } from '../../ui/mobile/touchControls';
 import type { GamepadControls } from './gamepadInput';
 import type { OverworldMovementInput } from './physicsCadence';
 export type { GamepadControls } from './gamepadInput';
@@ -33,4 +34,17 @@ export function createOverworldGameplayKeys(keyboard: Phaser.Input.Keyboard.Keyb
     },
     cameraToggleKey: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE),
   };
+}
+
+/** Shared held-input check keeps presentation prompts out of active movement/combat. */
+export function hasGameplayInputHeld(
+  keys: readonly ({ isDown: boolean } | undefined)[],
+  gamepadHeld: boolean,
+  movement: { horizontalInput: number; verticalInput: number },
+  touch: Pick<TouchInputState, 'moveX' | 'moveY' | 'jumpHeld' | 'slashHeld' | 'shootHeld'>,
+): boolean {
+  return keys.some(key => key?.isDown) || gamepadHeld
+    || Math.abs(movement.horizontalInput) > 0.001 || Math.abs(movement.verticalInput) > 0.001
+    || Math.abs(touch.moveX) > 0.001 || Math.abs(touch.moveY) > 0.001
+    || touch.jumpHeld || touch.slashHeld || touch.shootHeld;
 }

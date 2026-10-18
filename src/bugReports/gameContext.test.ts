@@ -1,5 +1,5 @@
-import { expect, it } from 'vitest';
-import { canCaptureBugReportImages, readBugGameContext } from './gameContext';
+import { expect, it, vi } from 'vitest';
+import { canCaptureBugReportImages, pauseForBugReport, readBugGameContext } from './gameContext';
 
 function game(active: string[], paused: string[], blocked: string[] = []) {
   return { scene: {
@@ -39,4 +39,22 @@ it('also blocks chat in a paused scene because paused scenes can still render', 
 
 it('ignores chat in a stopped scene which cannot render', () => {
   expect(canCaptureBugReportImages(game(['EditorScene'], [], ['OverworldPlayScene']))).toBe(true);
+});
+
+it('report cleanup leaves a remaining menu or dialog pause owned by the game', () => {
+  let requested = true;
+  const scene = { sys: { settings: { key: 'OverworldPlayScene' } }, input: { keyboard: { resetKeys: vi.fn() } },
+    hasRequestedScenePause: () => requested };
+  const resume = vi.fn();
+  const host = { scene: { getScenes: () => [scene], getScene: () => scene,
+    isPaused: () => true, pause: vi.fn(), resume } } as never;
+  const release = pauseForBugReport(host); release(); expect(resume).not.toHaveBeenCalled();
+  requested = false; release(); expect(resume).toHaveBeenCalledExactlyOnceWith('OverworldPlayScene');
+});
+
+it.each(['multiplayer', 'weekly-rush'])('report capture never pauses a live %s scene', liveReason => {
+  const scene = { sys: { settings: { key: 'OverworldPlayScene' } }, getGameplayPauseContext: () => ({ liveReason }) };
+  const pause = vi.fn(), resume = vi.fn();
+  pauseForBugReport({ scene: { getScenes: () => [scene], pause, resume } } as never)();
+  expect(pause).not.toHaveBeenCalled(); expect(resume).not.toHaveBeenCalled();
 });

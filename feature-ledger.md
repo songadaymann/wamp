@@ -970,3 +970,14 @@ F250 source acceptance:whole-room native/legacy identity selection replaces the 
 F250 review follow-up:Play menu first lazy load is now included in the maintained nine-browser matrix. Guard draft Expanded Room previews from public leaderboard targeting despite renderer overrides reporting published cells; one added regression makes3,975 tests. Earlier first-menu harness expectation incorrectly assumed legacy Play always uses the old endpoint; canonical expanded aliases during Play are valid. Pre-ready Pages preview404 is retained separately and excluded. Delivery status:PR244; source gates rerun on this final follow-up before merge.
 
 Hosted source81b87982:quality/3,975 tests and both Pages builds pass;all64 maintained browser cases pass with zero errors/misses. The new WebKit/Linux case then fails only on an ANGLE texture-driver error, preserved in the downloaded artifact. Match the established mobile_smoke Canvas renderer for Linux WebKit, retain real WebGL Safari coverage on macOS/hosted previews, and report the nine new cases in a separate parallel CI job. No application change or ignored graphics error. Final source gates rerun; PR244 remains unmerged/undeployed.
+
+
+## 2026-10-18 — F170 menu pause
+
+Canonical branch `codex/wamp-pause-2026-10-18`, based on merged PR244/main f89160a8. User accepted implementation and verification of solo menu/dialog pausing, preserving ranked simulation time and live multiplayer/weekly Rush. Plan and pending checks in progress.md. Prior F250 delivery complete through PR244 (supersedes source-time pending notes above).
+
+
+F170 locally complete on `codex/wamp-pause-2026-10-18`: solo menus/dialogs and hidden tabs pause simulation; live PvP/co-op/weekly Rush continue with honest menu status. Preserve existing ranked room wall-time scoring and guest/regular Rush simulation timing. Pending dialog downloads, nested owners, projectile lifetimes, delayed respawns and paused menu commands are covered. Final542-file/3,993-test run and six new native-browser cases/nine Expanded Room cases pass; prior64-case phone/tablet regression is clean. See docs/review/wamp-menu-pause-2026-10-18.md. Master160/216 at source acceptance. Local release pending; no push/merge/deployment performed.
+
+
+F170 release is now explicitly authorized by the user (push, merge and deploy). This supersedes the local-only boundary above. Final source/main hosted gates, guarded Pages-only delivery and actual-domain proof follow on the same canonical branch. Preserve unrelated primary files and the selected animation.

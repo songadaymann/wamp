@@ -1,4 +1,7 @@
-import { createOverworldGameplayKeys } from './overworld/gameplayInput';
+import { gameplayNow, installGameplayClock } from './overworld/gameplayClock';
+import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
+import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
+import { createOverworldGameplayKeys, hasGameplayInputHeld } from './overworld/gameplayInput';
 import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadInput';
 import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
 import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
@@ -433,6 +436,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private forceRoomGoalIntroFromOverworldPending = false;
   private roomGoalIntroPauseRequested = false;
   private scenePauseApplied = false;
+  private menuPauseRequested = false;
+  private destroyGameplayClock: (() => void) | null = null;
+  private destroyGameplayPause: (() => void) | null = null;
 
   private player: Phaser.GameObjects.Rectangle | null = null;
   private playerBody: Phaser.Physics.Arcade.Body | null = null;
@@ -648,7 +654,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       isLightingActive: () => this.mode === 'play',
     });
     this.quicksandController = new OverworldQuicksandController({
-      getCurrentTime: () => this.time.now,
+      getCurrentTime: () => gameplayNow(this),
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     const thisScene = this;
@@ -681,7 +687,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       isActive: () => this.mode === 'play' && !this.activeRoomRushRun && !this.isPvpArenaActive(),
       isPvpActive: () => this.isPvpArenaActive(),
       isDeathPending: () => this.gameFeelController.isDeathPending(),
-      getCurrentTime: () => this.time.now,
+      getCurrentTime: () => gameplayNow(this),
       getPlayerBody: () => this.playerBody,
       getPlayerSprite: () => this.playerSprite,
       onHurt: () => {
@@ -821,7 +827,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
       handlePlayerButtStompImpact: (bounceVelocity) =>
         this.movementController.handleButtStompImpact(bounceVelocity),
-      getCurrentTime: () => this.time.now,
+      getCurrentTime: () => gameplayNow(this),
       addScore: (delta) => {
         this.score += delta;
       },
@@ -847,7 +853,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       grantExternalLaunchGrace: (durationMs) => {
         this.externalLaunchGraceUntil = Math.max(
           this.externalLaunchGraceUntil,
-          this.time.now + durationMs
+          gameplayNow(this) + durationMs
         );
       },
       getPlayerGravityDirection: () => this.specialTilesController.getPlayerEnvironment().gravityDirection,
@@ -908,7 +914,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     });
     this.portalObjectController = new OverworldPortalObjectController({
       getMode: () => this.mode,
-      getCurrentTime: () => this.time.now,
+      getCurrentTime: () => gameplayNow(this),
       getPlayerBody: () => this.playerBody,
       getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
       getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
@@ -926,7 +932,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     });
     this.specialTilesController = new OverworldSpecialTilesController(this, {
       getMode: () => this.mode,
-      getCurrentTime: () => this.time.now,
+      getCurrentTime: () => gameplayNow(this),
       getPlayerBody: () => this.playerBody,
       isBodyInSwimmableWater: (body) => this.liveObjectController.isBodyInSwimmableWater(body),
       getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
@@ -936,7 +942,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       grantExternalLaunchGrace: (durationMs) => {
         this.externalLaunchGraceUntil = Math.max(
           this.externalLaunchGraceUntil,
-          this.time.now + durationMs
+          gameplayNow(this) + durationMs
         );
       },
       isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
@@ -1141,6 +1147,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     });
     this.combatPresentationController = new OverworldCombatPresentationController({
       scene: this,
+      getLocalTime: () => gameplayNow(this),
       playSwordSlashFx: (x, y, facing, downward) =>
         this.fxController?.playSwordSlashFx(x, y, facing, downward),
       playMuzzleFlashFx: (x, y, facing) =>
@@ -1358,7 +1365,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       hideLoadingText: () => {
         this.loadingText.setVisible(false);
       },
-      getTimeNow: () => this.time.now,
+      getTimeNow: () => gameplayNow(this),
       getBrowseRefreshIntervalMs: () => BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
       getPlayRefreshIntervalMs: () => PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
     });
@@ -1663,7 +1670,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.playerPresentationController = new OverworldPlayerPresentationController(
       {
         state: playerPresentationState,
-        getCurrentTime: () => this.time.now,
+        getCurrentTime: () => gameplayNow(this),
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
         getPlayerSprite: () => this.playerSprite,
@@ -1690,7 +1697,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     );
     this.movementController = new OverworldMovementController(
       {
-        getCurrentTime: () => this.time.now,
+        getCurrentTime: () => gameplayNow(this),
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
         getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
@@ -1747,7 +1754,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     );
     this.combatController = new OverworldCombatController(
       {
-        getCurrentTime: () => this.time.now,
+        getCurrentTime: () => gameplayNow(this),
         getPlayer: () => this.player,
         getPlayerBody: () => this.playerBody,
         getPlayerFacing: () => this.playerFacing as -1 | 1,
@@ -2328,6 +2335,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   create(data?: OverworldPlaySceneData): void {
+    this.destroyGameplayClock = installGameplayClock(this);
     this.runtimeContext.setLifecycle('initializing');
     this.resetRuntimeState();
     this.resetPerformanceAdvisorSceneState();
@@ -2396,9 +2404,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this,
     );
     this.events.on(Phaser.Scenes.Events.PAUSE, this.handlePerformanceAdvisorScenePause, this);
-    this.events.on(Phaser.Scenes.Events.RESUME, this.handlePerformanceAdvisorSceneResume, this);
+    this.events.on(Phaser.Scenes.Events.RESUME, this.handlePerformanceAdvisorScenePause, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.initializePerformanceAdvisorMonitoring();
+    this.destroyGameplayPause = installGameplayPause(this.game.events, () => this.getGameplayPauseContext(), requested => {
+      this.menuPauseRequested = requested;
+      this.syncScenePauseState();
+    });
 
     const deepLinkedInitialFocus =
       !data?.centerCoordinates && !data?.roomCoordinates && hasFocusedCoordinatesInUrl();
@@ -3064,10 +3076,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.syncPerformanceAdvisorEligibility(performance.now());
   };
 
-  private readonly handlePerformanceAdvisorSceneResume = (): void => {
-    this.syncPerformanceAdvisorEligibility(performance.now());
-  };
-
   private syncPerformanceAdvisorEligibility(atMs: number): void {
     const eligible = Boolean(
       this.performanceAdvisorSceneActive
@@ -3223,7 +3231,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
   private showTransientStatus(message: string): void {
     this.transientStatusMessage = message;
-    this.transientStatusExpiresAt = this.time.now + 4200;
+    this.transientStatusExpiresAt = gameplayNow(this) + 4200;
   }
 
   private getTransientStatusMessage(): string | null {
@@ -3231,7 +3239,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       return null;
     }
 
-    if (this.time.now > this.transientStatusExpiresAt) {
+    if (gameplayNow(this) > this.transientStatusExpiresAt) {
       this.transientStatusMessage = null;
       this.transientStatusExpiresAt = 0;
       return null;
@@ -3342,7 +3350,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this.mode !== 'play'
       || this.worldStreamingController.isWithinLoadedRoomBounds(neighborCoordinates)
       || this.unknownNeighborWindowRefresh
-      || this.time.now < this.nextUnknownNeighborWindowRefreshAt
+      || gameplayNow(this) < this.nextUnknownNeighborWindowRefreshAt
     ) {
       return;
     }
@@ -3354,7 +3362,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         if (this.unknownNeighborWindowRefresh !== request) {
           return;
         }
-        this.nextUnknownNeighborWindowRefreshAt = this.time.now + (refreshed ? 250 : 50);
+        this.nextUnknownNeighborWindowRefreshAt = gameplayNow(this) + (refreshed ? 250 : 50);
       })
       .finally(() => {
         if (this.unknownNeighborWindowRefresh === request) {
@@ -3443,7 +3451,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       return;
     }
 
-    const now = this.time.now;
+    const now = gameplayNow(this);
     const sequence = this.pvpCombatCoordinator.beginInstanceStateSend(now, force);
     if (sequence === null) {
       return;
@@ -4026,20 +4034,28 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     dispatchSignal(window, COURSE_COMPOSER_STATE_CHANGED_EVENT);
   }
 
+  getGameplayPauseContext(): GameplayPauseContext {
+    return {
+      available: this.sys.isActive() || this.sys.isPaused(),
+      playing: this.mode === 'play',
+      ranked: getAuthDebugState().authenticated && !this.activeRoomRushRun
+        && Boolean(this.activeCourseRun?.leaderboardEligible || this.currentGoalRun?.leaderboardEligible),
+      liveReason: this.isPvpArenaActive() || this.isPvpMatchActive()
+        || this.activeCourseRun?.cooperative
+        || (!getActiveWorldId() && !this.activeRoomRushRun && hasCoopPressurePlates(
+          this.loadedFullRoomsById.get(roomIdFromCoordinates(this.currentRoomCoordinates))?.room.placedObjects ?? []))
+        ? 'multiplayer' : this.activeRoomRushRun?.startRule === 'weekly' ? 'weekly-rush' : null,
+    };
+  }
+
+  hasRequestedScenePause(): boolean {
+    return this.roomGoalIntroPauseRequested || this.performanceSuggestionPauseRequested || this.menuPauseRequested;
+  }
+
   private syncScenePauseState(): void {
-    const shouldPause =
-      this.roomGoalIntroPauseRequested || this.performanceSuggestionPauseRequested;
-    if (shouldPause === this.scenePauseApplied) {
-      return;
-    }
-
-    this.scenePauseApplied = shouldPause;
-    if (shouldPause) {
-      this.scene.pause();
-      return;
-    }
-
-    this.scene.resume();
+    this.scenePauseApplied = applyGameplayPause(this.scene, this.gameFeelController,
+      this.hasRequestedScenePause(),
+      this.scenePauseApplied);
   }
 
 
@@ -5398,7 +5414,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private maybeStompPvpPeer(): void {
-    if (!this.playerBody || !this.isPvpDamageActive() || !this.pvpCombatCoordinator.isStompReady(this.time.now)) {
+    if (!this.playerBody || !this.isPvpDamageActive() || !this.pvpCombatCoordinator.isStompReady(gameplayNow(this))) {
       return;
     }
 
@@ -5431,7 +5447,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       return;
     }
 
-    this.pvpCombatCoordinator.recordStomp(this.time.now);
+    this.pvpCombatCoordinator.recordStomp(gameplayNow(this));
     playHaptic('hit');
     this.playerBody.setVelocityY(this.JUMP_VELOCITY * 0.58);
     const instanceCenter = this.pvpInstanceRenderer.getOpponentCenter();
@@ -5454,7 +5470,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       matchId: this.activePvpMatch?.matchId ?? null,
       targetUserId,
       source,
-      monotonicNow: this.time.now,
+      monotonicNow: gameplayNow(this),
       epochNow: Date.now(),
       randomSuffix: Math.random().toString(36).slice(2, 8),
       report: (reportedTargetUserId, reportedSource, hitId) =>
@@ -6143,11 +6159,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.measureMobilePerformance('hud.render', () => {
       this.hudStateController.renderHud(statusOverride);
     });
-    this.nextFrameHudRenderAt = this.time.now + FRAME_HUD_RENDER_INTERVAL_MS;
+    this.nextFrameHudRenderAt = gameplayNow(this) + FRAME_HUD_RENDER_INTERVAL_MS;
   }
 
   private renderFrameHud(): void {
-    if (this.time.now < this.nextFrameHudRenderAt) {
+    if (gameplayNow(this) < this.nextFrameHudRenderAt) {
       return;
     }
 
@@ -6234,9 +6250,15 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private handleShutdown = (): void => {
+    this.destroyGameplayPause?.();
+    this.destroyGameplayPause = null;
+    this.destroyGameplayClock?.();
+    this.destroyGameplayClock = null;
+    this.menuPauseRequested = false;
     this.playerHealthController.destroy();
     this.ghostRaceController.clear();
     this.gameFeelController.reset();
+    this.gameFeelController.setScenePaused(false);
     this.runtimeContext.setLifecycle('shutting-down');
     this.performanceAdvisorSceneActive = false;
     this.performanceSuggestionPauseRequested = false;
@@ -6278,7 +6300,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     );
     this.events.off(
       Phaser.Scenes.Events.RESUME,
-      this.handlePerformanceAdvisorSceneResume,
+      this.handlePerformanceAdvisorScenePause,
       this,
     );
     this.inspectInputController.destroy();
@@ -6385,32 +6407,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private isPerformanceAdvisorInputHeld(): boolean {
-    const keyboardHeld = Boolean(
-      this.cursors?.left?.isDown
-      || this.cursors?.right?.isDown
-      || this.cursors?.up?.isDown
-      || this.cursors?.down?.isDown
-      || this.cursors?.space?.isDown
-      || this.wasd?.W?.isDown
-      || this.wasd?.A?.isDown
-      || this.wasd?.S?.isDown
-      || this.wasd?.D?.isDown
-      || this.attackKeys?.Q?.isDown
-      || this.attackKeys?.E?.isDown
-      || this.cameraToggleKey?.isDown
-    );
-    if (keyboardHeld || this.gamepadInput.hasHeldInput()) return true;
-
-    const touchInput = getTouchInputState();
-    return Boolean(
-      Math.abs(this.lastMovementInput.horizontalInput) > 0.001
-      || Math.abs(this.lastMovementInput.verticalInput) > 0.001
-      || Math.abs(touchInput.moveX) > 0.001
-      || Math.abs(touchInput.moveY) > 0.001
-      || touchInput.jumpHeld
-      || touchInput.slashHeld
-      || touchInput.shootHeld
-    );
+    return hasGameplayInputHeld([
+      this.cursors?.left, this.cursors?.right, this.cursors?.up, this.cursors?.down, this.cursors?.space,
+      this.wasd?.W, this.wasd?.A, this.wasd?.S, this.wasd?.D,
+      this.attackKeys?.Q, this.attackKeys?.E, this.cameraToggleKey,
+    ], this.gamepadInput.hasHeldInput(), this.lastMovementInput, getTouchInputState());
   }
 
   getRuntimeTransitionProbe(
@@ -6533,8 +6534,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
               health: liveObject.runtime.boss.health,
               maximum: liveObject.runtime.boss.maximum,
               phase: liveObject.runtime.boss.health <= liveObject.runtime.boss.maximum / 2 ? 2 : 1,
-              invulnerableMs: Math.max(0, Math.round(liveObject.runtime.boss.protectedUntil - this.time.now)),
-              hurtMs: Math.max(0, Math.round(liveObject.runtime.boss.hurtUntil - this.time.now)),
+              invulnerableMs: Math.max(0, Math.round(liveObject.runtime.boss.protectedUntil - gameplayNow(this))),
+              hurtMs: Math.max(0, Math.round(liveObject.runtime.boss.hurtUntil - gameplayNow(this))),
               healthBarVisible: liveObject.bossHealthBar?.visible ?? false,
             } : null,
             aiIntent: liveObject.runtime.aiIntent,
@@ -6561,14 +6562,14 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
             aiPlannedTraversalTargetNodeId: liveObject.runtime.aiPlannedTraversalTargetNodeId,
             aiPlannedTraversalExpiresMs: Math.max(
               0,
-              Math.round(liveObject.runtime.aiPlannedTraversalExpiresAt - this.time.now),
+              Math.round(liveObject.runtime.aiPlannedTraversalExpiresAt - gameplayNow(this)),
             ),
             aiPlannedTraversalReason: liveObject.runtime.aiPlannedTraversalReason,
             aiCollectState: liveObject.runtime.aiCollectState,
             aiCollectRouteTargetNodeId: liveObject.runtime.aiCollectRouteTargetNodeId,
             aiCollectRouteExpiresMs: Math.max(
               0,
-              Math.round(liveObject.runtime.aiCollectRouteExpiresAt - this.time.now),
+              Math.round(liveObject.runtime.aiCollectRouteExpiresAt - gameplayNow(this)),
             ),
             aiCollectRouteScore: liveObject.runtime.aiCollectRouteScore === null
               ? null
@@ -6588,11 +6589,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
             npcWalking: liveObject.runtime.npcWalking,
             npcQuicksandMs: Math.max(
               0,
-              Math.round(liveObject.runtime.npcQuicksandUntil - this.time.now),
+              Math.round(liveObject.runtime.npcQuicksandUntil - gameplayNow(this)),
             ),
             npcBounceCooldownMs: Math.max(
               0,
-              Math.round(liveObject.runtime.npcBounceCooldownUntil - this.time.now),
+              Math.round(liveObject.runtime.npcBounceCooldownUntil - gameplayNow(this)),
             ),
             specialTiles: {
               windX: liveObject.runtime.specialTileWindX,
@@ -6673,6 +6674,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         localPlayPressureRoomCount: streamingMetrics.localPlayPressureRoomCount,
       },
       worldTiles: streamingMetrics.worldTiles,
+      menuPauseRequested: this.menuPauseRequested,
       displayHealth: {
         scene: {
           active: this.sys.isActive(),
@@ -6742,11 +6744,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         buttStompFlipMs: movementDebug.buttStompFlipMs,
         buttStompImpactGraceMs: movementDebug.buttStompImpactGraceMs,
         activeAttackAnimation: this.combatController.getActiveAttackAnimation(),
-        swordSwing: this.combatController.getSwordSwingState(this.time.now),
+        swordSwing: this.combatController.getSwordSwingState(gameplayNow(this)),
         crateInteractionMode: movementDebug.crateInteractionMode,
         crateInteractionFacing: movementDebug.crateInteractionFacing,
-        meleeCooldownMs: this.combatController.getMeleeCooldownRemainingMs(this.time.now),
-        rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(this.time.now),
+        meleeCooldownMs: this.combatController.getMeleeCooldownRemainingMs(gameplayNow(this)),
+        rangedCooldownMs: this.combatController.getRangedCooldownRemainingMs(gameplayNow(this)),
         projectileCount: this.combatController.getProjectileCount(),
       },
       specialTiles: this.specialTilesController.getPlayerEnvironment(),

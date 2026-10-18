@@ -18,6 +18,10 @@ export class OverworldGameFeelController {
   private phase: 'none' | 'hitstop' | 'death' = 'none';
   private timer: ReturnType<typeof setTimeout> | null = null;
   private ownsPhysicsPause = false;
+  private scenePaused = false;
+  private timerDeadline = 0;
+  private remainingMs = 0;
+  private pendingCallback: (() => void) | null = null;
   private pendingFade = false;
   private suppressNextRespawnCue = false;
   private generation = 0;
@@ -26,6 +30,18 @@ export class OverworldGameFeelController {
   private lastHitstop: { startedAt: number; completedAt: number | null; heldMs: number | null } | null = null;
 
   constructor(private readonly host: GameFeelHost) {}
+
+  setScenePaused(paused: boolean): void {
+    if (paused === this.scenePaused) return;
+    this.scenePaused = paused;
+    if (paused && this.timer !== null) {
+      this.remainingMs = Math.max(0, this.timerDeadline - performance.now());
+      clearTimeout(this.timer);
+      this.timer = null;
+    } else if (!paused && this.pendingCallback) {
+      this.schedule(this.remainingMs, this.pendingCallback);
+    }
+  }
 
   isHoldingPhysics(): boolean { return this.phase !== 'none'; }
   isDeathPending(): boolean { return this.phase === 'death'; }
@@ -125,13 +141,19 @@ export class OverworldGameFeelController {
     this.generation += 1;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
+    this.pendingCallback = null;
   }
 
   private schedule(delay: number, callback: () => void): void {
+    this.pendingCallback = callback;
+    this.remainingMs = delay;
+    if (this.scenePaused) return;
+    this.timerDeadline = performance.now() + delay;
     const generation = this.generation;
     this.timer = setTimeout(() => {
       if (generation !== this.generation) return;
       this.timer = null;
+      this.pendingCallback = null;
       callback();
     }, delay);
   }

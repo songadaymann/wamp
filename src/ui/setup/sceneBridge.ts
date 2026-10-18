@@ -335,7 +335,7 @@ export function getActiveEditorScene(game: Phaser.Game): EditorSceneBridge | nul
 }
 
 export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
-  if (!game.scene.isActive('OverworldPlayScene')) {
+  if (!game.scene.isActive('OverworldPlayScene') && !game.scene.isPaused?.('OverworldPlayScene')) {
     return null;
   }
 

@@ -47,6 +47,7 @@ interface PresentedSwordBlade {
 
 interface OverworldCombatPresentationControllerHost {
   scene: Phaser.Scene;
+  getLocalTime?: () => number;
   playSwordSlashFx(x: number, y: number, facing: -1 | 1, downward: boolean): void;
   playMuzzleFlashFx(x: number, y: number, facing: -1 | 1): void;
 }
@@ -78,7 +79,8 @@ export class OverworldCombatPresentationController {
 
   update(now = Date.now()): void {
     for (const projectile of [...this.projectiles.values()]) {
-      if (!projectile.rect.active || now >= projectile.expiresAt) {
+      const projectileNow = projectile.owner === 'local' ? this.host.getLocalTime?.() ?? now : now;
+      if (!projectile.rect.active || projectileNow >= projectile.expiresAt) {
         this.destroyProjectile(projectile);
         continue;
       }
@@ -87,7 +89,7 @@ export class OverworldCombatPresentationController {
         continue;
       }
 
-      const elapsedSeconds = Math.max(0, now - projectile.createdAt) / 1000;
+      const elapsedSeconds = Math.max(0, projectileNow - projectile.createdAt) / 1000;
       projectile.rect.setPosition(
         projectile.startX + projectile.velocityX * elapsedSeconds,
         projectile.startY,
@@ -242,6 +244,7 @@ export class OverworldCombatPresentationController {
     );
     rect.setDepth(event.owner === 'remote' ? 28 : 27);
 
+    const createdAt = event.owner === 'local' ? this.host.getLocalTime?.() ?? event.startedAt : event.startedAt;
     const projectile: PresentedProjectile = {
       id: projectileId,
       owner: event.owner,
@@ -249,8 +252,8 @@ export class OverworldCombatPresentationController {
       startX: projectilePayload.x,
       startY: projectilePayload.y,
       velocityX: projectilePayload.velocityX,
-      createdAt: event.startedAt,
-      expiresAt: event.startedAt + projectilePayload.lifetimeMs,
+      createdAt,
+      expiresAt: createdAt + projectilePayload.lifetimeMs,
       autoUpdate,
     };
     this.projectiles.set(projectile.id, projectile);
