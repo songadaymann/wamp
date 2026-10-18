@@ -66,9 +66,20 @@ for (const [device, engine, width, height, touch] of [
         await waitPaused(false);
         await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.goalRun?.elapsedMs > 200);
         await page.locator('#game-container > canvas').click();
+        // Open the real menu handler in the first frame containing a projectile.
+        // Remote automation latency can exceed the bullet's 720ms lifetime.
+        await page.evaluate(() => {
+          window.__pauseShotObserved = false;
+          const sample = () => {
+            if (JSON.parse(window.render_game_to_text()).activeScene.combat.projectileCount > 0) {
+              document.getElementById('menu-toggle').click();
+              window.__pauseShotObserved = true;
+            } else requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        });
         if (touch) await click('#btn-mobile-shoot'); else await page.keyboard.press('e');
-        await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.combat.projectileCount > 0);
-        await click('#menu-toggle');
+        await page.waitForFunction(() => window.__pauseShotObserved);
         if (kind === 'cooperative') {
           assert.equal((await state()).displayHealth.scene.paused, false);
           assert.equal(await page.locator('#game-pause-status').textContent(), 'Multiplayer keeps running');
@@ -121,7 +132,10 @@ for (const [device, engine, width, height, touch] of [
           // Actual gameplay still responds after repeated pause/resume.
           await page.locator('#game-container > canvas').click();
           const x = (await state()).player.x;
-          await page.keyboard.down('ArrowRight'); await page.waitForTimeout(160); await page.keyboard.up('ArrowRight');
+          await page.keyboard.down('ArrowRight');
+          try {
+            await page.waitForFunction(startX => JSON.parse(window.render_game_to_text()).activeScene.player.x > startX + 5, x);
+          } finally { await page.keyboard.up('ArrowRight'); }
           assert((await state()).player.x > x + 5, 'Movement must work after resume');
           // Observe the new run inside the browser so a slow automation round trip
           // cannot miss the reset timer, just as for the first resumed frame above.
