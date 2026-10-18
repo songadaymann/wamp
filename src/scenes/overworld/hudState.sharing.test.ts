@@ -3,6 +3,25 @@ vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated:
 import { OverworldHudStateController } from './hudState';
 
 describe('selected room share titles', () => {
+  it.each(['browse', 'play'])('retains native leaderboard identity and goal on a nonentry cell in %s', mode => {
+    const controller = new OverworldHudStateController({ getMode: () => mode,
+      getActiveCourseRun: () => null, getSelectedCoordinates: () => ({ x: 181, y: 99 }),
+      getCellStateAt: () => 'published', getRoomSnapshotForCoordinates: () => ({ version: 12 }),
+      getRoomSummary: () => ({ expandedRoom: { expandedRoomId: 'native', title: 'Adventure',
+        goalType: 'reach_exit', cellCount: 2, legacyCourseId: null } }) } as never);
+    controller.refreshSelectedSummary();
+    expect(controller.getSelectedRoomContext()).toMatchObject({ expandedRoomId: 'native',
+      expandedRoomVersion: null, publishedVersion: 12, courseTitle: 'Adventure', courseGoalType: 'reach_exit', courseRoomCount: 2 });
+  });
+  it('retains the playing version after republishing or unloading summary metadata', () => {
+    const controller = new OverworldHudStateController({ getMode: () => 'play',
+      getSelectedCoordinates: () => ({ x: 181, y: 99 }), getCellStateAt: () => 'published',
+      getRoomSnapshotForCoordinates: () => ({ version: 12 }),
+      getActiveCourseRun: () => ({ expandedRoomId: 'native', expandedRoomVersion: 3,
+        course: { id: 'compatibility', version: 3, title: 'Playing Adventure', goal: { type: 'reach_exit' }, roomRefs: [{ roomId: '181,99' }] } }) } as never);
+    expect(controller.getSelectedRoomContext()).toMatchObject({ expandedRoomId: 'native',
+      expandedRoomVersion: 3, courseGoalType: 'reach_exit', courseTitle: 'Playing Adventure' });
+  });
   it('uses an already loaded snapshot while the map summary has no title', () => {
     const controller = new OverworldHudStateController({ getMode: () => 'browse', getSelectedCoordinates: () => ({ x: -11, y: -6 }),
       getCellStateAt: () => 'published', getRoomSnapshotForCoordinates: () => ({ title: 'De Ja Vu' }) } as never);

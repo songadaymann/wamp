@@ -1,3 +1,5 @@
+import { createExpandedRoomRepository, type ExpandedRoomRepository } from '../../expandedRooms/repository';
+import { hasExpandedRoomLeaderboardTarget, loadSelectedExpandedRoomLeaderboard } from './expandedRoomLeaderboardTarget';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
 import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
@@ -94,6 +96,8 @@ export class LeaderboardModalController {
   private roomLoaded = false;
   private courseLoading = false;
   private courseLoaded = false;
+  private courseRequest = 0;
+  private courseFailed = false;
   private roomRushLoading = false;
   private readonly roomRushLoadedModes = new Set<RoomRushLeaderboardModeKey>();
   private readonly roomRushFailedModes = new Set<RoomRushLeaderboardModeKey>();
@@ -113,6 +117,11 @@ export class LeaderboardModalController {
   private readonly handleMenuOpen = () => {
     this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
     void this.open('global');
+  };
+
+  private readonly handleRoomMenuOpen = () => {
+    this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
+    void this.open();
   };
 
   private readonly handleCloseClick = () => {
@@ -162,7 +171,7 @@ export class LeaderboardModalController {
       return;
     }
 
-    if (this.courseLoaded && this.courseLeaderboard?.courseId === detail.contentId) {
+    if (this.courseLoaded && (this.courseLeaderboard?.courseId === detail.contentId || this.roomContext?.expandedRoomId === detail.contentId)) {
       void this.loadCourseLeaderboard();
     }
   };
@@ -173,6 +182,7 @@ export class LeaderboardModalController {
     private readonly courseRepository: CourseRepository = createCourseRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly doc: Document = document,
+    private readonly expandedRoomRepository: ExpandedRoomRepository = createExpandedRoomRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('leaderboard-modal'),
@@ -218,6 +228,7 @@ export class LeaderboardModalController {
     this.doc.defaultView?.visualViewport?.addEventListener('scroll', this.syncVisualViewport);
     this.doc.defaultView?.visualViewport?.addEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.addEventListener('click', this.handleMenuOpen);
+    this.doc.getElementById('btn-menu-room-leaderboard')?.addEventListener('click', this.handleRoomMenuOpen);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -237,6 +248,9 @@ export class LeaderboardModalController {
     });
     this.elements.globalTabButton?.addEventListener('click', () => {
       void this.activateTab('global');
+    });
+    this.doc.getElementById('btn-leaderboard-course-refresh')?.addEventListener('click', () => {
+      void this.loadCourseLeaderboard();
     });
     this.elements.versionSelect?.addEventListener('change', () => {
       const nextVersion = Number.parseInt(this.elements.versionSelect?.value ?? '', 10);
@@ -279,6 +293,7 @@ export class LeaderboardModalController {
     this.doc.defaultView?.visualViewport?.removeEventListener('scroll', this.syncVisualViewport);
     this.doc.defaultView?.visualViewport?.removeEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.removeEventListener('click', this.handleMenuOpen);
+    this.doc.getElementById('btn-menu-room-leaderboard')?.removeEventListener('click', this.handleRoomMenuOpen);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -304,6 +319,8 @@ export class LeaderboardModalController {
     this.roomLoaded = false;
     this.courseLoading = false;
     this.courseLoaded = false;
+    this.courseFailed = false;
+    this.courseRequest += 1;
     this.roomRushLoading = false;
     this.globalController.close();
     this.voteSubmitting = false;
@@ -326,6 +343,7 @@ export class LeaderboardModalController {
       return;
     }
 
+    this.courseRequest += 1;
     const wasOpen = !this.elements.modal.classList.contains('hidden');
     this.globalController.close();
     this.elements.modal.classList.add('hidden');
@@ -428,7 +446,7 @@ export class LeaderboardModalController {
   }
 
   private async loadCourseLeaderboard(): Promise<void> {
-    if (!this.roomContext?.courseId) {
+    if (!hasExpandedRoomLeaderboardTarget(this.roomContext)) {
       this.courseLeaderboard = null;
       this.courseLoading = false;
       this.courseLoaded = true;
@@ -436,24 +454,30 @@ export class LeaderboardModalController {
       return;
     }
 
+    const request = ++this.courseRequest;
+    this.courseFailed = false;
     this.courseLoading = true;
     this.courseLoaded = false;
     this.render();
     try {
-      this.courseLeaderboard = await this.courseRepository.loadCourseLeaderboard(
-        this.roomContext.courseId,
-        null,
-        25
+      const response = await loadSelectedExpandedRoomLeaderboard(
+        this.roomContext!, this.expandedRoomRepository, this.courseRepository,
       );
+      if (request !== this.courseRequest) return;
+      this.courseLeaderboard = response;
       this.setError(null);
     } catch (error) {
+      if (request !== this.courseRequest) return;
+      this.courseFailed = true;
       console.error('Failed to load expanded room leaderboard', error);
       this.courseLeaderboard = null;
       this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard());
     } finally {
-      this.courseLoading = false;
-      this.courseLoaded = true;
-      this.render();
+      if (request === this.courseRequest) {
+        this.courseLoading = false;
+        this.courseLoaded = true;
+        this.render();
+      }
     }
   }
 
@@ -594,8 +618,8 @@ export class LeaderboardModalController {
   private render(): void {
     this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
     this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
-    const roomAvailable = this.roomContext?.state === 'published';
-    const courseAvailable = Boolean(this.roomContext?.courseId);
+    const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
+    const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
     this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
     this.elements.courseTabButton?.classList.toggle('active', this.activeTab === 'course');
     this.elements.roomRushTabButton?.classList.toggle('active', this.activeTab === 'roomRush');
@@ -662,7 +686,7 @@ export class LeaderboardModalController {
     if (this.activeTab === 'course') {
       const courseLabel = this.courseLeaderboard
         ? `${this.courseLeaderboard.courseTitle?.trim() || 'Expanded Room'} · ${this.courseLeaderboard.goalType.replace('_', ' ')} · v${this.courseLeaderboard.courseVersion}`
-        : 'No published expanded room selected.';
+        : this.roomContext?.courseTitle?.trim() || 'Expanded Room';
       this.elements.meta.textContent = courseLabel;
       return;
     }
@@ -798,6 +822,8 @@ export class LeaderboardModalController {
       return;
     }
 
+    const refresh = this.doc.getElementById('btn-leaderboard-course-refresh') as HTMLButtonElement | null;
+    if (refresh) refresh.disabled = this.courseLoading || this.loading;
     const coursePending =
       this.loading || this.courseLoading || (this.activeTab === 'course' && !this.courseLoaded);
     this.elements.courseList.replaceChildren();
@@ -805,7 +831,9 @@ export class LeaderboardModalController {
       ? 'Loading expanded room leaderboard...'
       : this.courseLeaderboard
         ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'} · ${this.formatQualitySummary(this.courseLeaderboard.quality)} · ${this.formatDifficultyConsensus(this.courseLeaderboard.difficulty)}${this.formatTrophySuffix(this.courseLeaderboard.trophy)}`
-        : 'No published expanded room leaderboard available.';
+        : this.courseFailed ? 'Expanded Room leaderboard unavailable. Try Refresh.'
+          : !this.roomContext?.courseGoalType ? 'This Expanded Room has no goal, so clears are not ranked.'
+          : 'Whole Expanded Room rankings.';
 
     const viewer = this.courseLeaderboard?.viewerBest ?? null;
     this.elements.courseViewer.classList.toggle('hidden', coursePending || viewer === null);
@@ -827,9 +855,9 @@ export class LeaderboardModalController {
     if (!this.courseLeaderboard || this.courseLeaderboard.entries.length === 0) {
       const empty = this.doc.createElement('div');
       empty.className = 'leaderboard-empty';
-      empty.textContent = this.roomContext?.courseId
-        ? 'No completed ranked expanded room runs yet.'
-        : 'Select a published expanded room cell to view expanded room rankings.';
+      empty.textContent = this.courseFailed ? 'Could not load rankings. Try Refresh.'
+        : !this.roomContext?.courseGoalType ? 'Explore freely, or ask the builder to add a goal.'
+        : 'No ranked clears yet. Complete the whole Expanded Room solo while signed in to rank.';
       this.elements.courseList.appendChild(empty);
       return;
     }
@@ -1161,8 +1189,8 @@ export class LeaderboardModalController {
   private resolveInitialTab(): LeaderboardTab {
     const requested = this.preferredInitialTab;
     this.preferredInitialTab = null;
-    const roomAvailable = this.roomContext?.state === 'published';
-    const courseAvailable = Boolean(this.roomContext?.courseId);
+    const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
+    const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
 
     if (requested === 'global') {
       return 'global';

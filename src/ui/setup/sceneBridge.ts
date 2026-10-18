@@ -195,6 +195,7 @@ export type OverworldSelectedRoomContext = {
   roomId: string;
   publishedVersion?: number | null;
   expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
