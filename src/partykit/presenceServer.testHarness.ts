@@ -260,6 +260,7 @@ export interface ConnectOptions {
   channel?: string;
   previewDeltas?: boolean;
   sharedRoomChat?: boolean;
+  presenceInterest?: boolean;
   identity?: PartyKitIdentity;
   source?: PartyKitIdentityTokenSource;
   roomChat?: RoomChatPermission;
@@ -289,6 +290,7 @@ export class PresenceServerHarness {
     }
     if (options.previewDeltas) url.searchParams.set('previewDeltas', '1');
     if (options.sharedRoomChat) url.searchParams.set('roomChat', '1');
+    if (options.presenceInterest) url.searchParams.set('presenceInterest', '1');
 
     const connection = new FakePresenceConnection(id, url.toString());
     this.room.addConnection(connection);

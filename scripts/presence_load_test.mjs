@@ -36,6 +36,7 @@ const zoomDuring = getBooleanArg('zoom-during', false);
 const zoomEveryMs = getNumberArg('zoom-every-ms', 650, 100, 10_000);
 const headless = getBooleanArg('headless', true);
 const noObserver = getBooleanArg('no-observer', false);
+const presenceInterest = getBooleanArg('presence-interest', true);
 const screenshot = getBooleanArg('screenshot', true);
 const outputDir = path.resolve(
   getStringArg(
@@ -53,6 +54,7 @@ const summary = {
   party,
   protocol,
   identityTokenConfigured: Boolean(identityTokenSecret),
+  presenceInterest,
   observerUrl: noObserver ? null : observerUrl,
   originRoom,
   counts,
@@ -230,6 +232,8 @@ async function runPresenceLoadCase({ scenario, count }) {
       connectedBots,
       sentMessages,
       incomingMessages,
+      incomingBytes: bots.reduce((n, bot) => n + bot.incomingBytes, 0),
+      incomingPeerUpdates: bots.reduce((n, bot) => n + bot.incomingPeerUpdates, 0),
       tickCount,
       zoomActionCount,
       observerBefore,
@@ -265,6 +269,8 @@ class PresenceBot {
     this.connected = false;
     this.sentMessages = 0;
     this.incomingMessages = 0;
+    this.incomingBytes = 0;
+    this.incomingPeerUpdates = 0;
     this.errors = [];
   }
 
@@ -291,13 +297,17 @@ class PresenceBot {
       WebSocket,
       query: {
         identityToken,
+        ...(presenceInterest ? { presenceInterest: '1' } : {}),
       },
       maxRetries: 0,
       connectionTimeout: 3000,
     });
 
-    this.socket.addEventListener('message', () => {
+    this.socket.addEventListener('message', (event) => {
       this.incomingMessages += 1;
+      this.incomingBytes += Buffer.byteLength(String(event.data));
+      const data = JSON.parse(String(event.data));
+      if (data.type === 'upserts') this.incomingPeerUpdates += data.peers.length;
     });
     this.socket.addEventListener('error', (event) => {
       this.errors.push(`socket error on ${nextShardId}: ${String(event?.message ?? event?.type ?? 'unknown')}`);
@@ -308,6 +318,7 @@ class PresenceBot {
 
     await waitForSocketOpen(this.socket, 5000);
     this.connected = true;
+    if (presenceInterest) this.socket.send(JSON.stringify({ type: 'presence:interest', roomCoordinates: this.state.room }));
     this.sendPresence();
   }
 

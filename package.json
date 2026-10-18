@@ -61,6 +61,7 @@
     "smoke:worlds:local": "npx --yes --quiet tsx scripts/smoke_worlds_pilot.ts",
     "stress:presence": "node scripts/presence_load_test.mjs",
     "stress:presence:48": "node scripts/presence_load_test.mjs --counts=48 --no-observer=true",
+    "stress:presence:300": "node scripts/presence_load_test.mjs --counts=300 --duration-ms=30000 --no-observer=true",
     "stress:presence:150": "node scripts/presence_load_test.mjs --counts=150 --duration-ms=30000 --no-observer=true",
     "perf:api": "node scripts/api_performance_probe.mjs",
     "perf:runtime:mobile": "node scripts/runtime_performance_trace.mjs",

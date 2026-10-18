@@ -61,6 +61,30 @@ describe('chat leases the presence transport', () => {
     expect(snapshots.at(-1)?.connectedShards).toHaveLength(9);
   });
 
+  it('sends focus to every shard only on room changes and restores it on reconnect', async () => {
+    const { world } = setup([{ x: 0, y: 0 }, { x: 1, y: 0 }]);openShared();
+    expect((await Promise.all(fixtures.sockets.map(s => s.options.query()))).every(q => q.presenceInterest === '1')).toBe(true);
+    world.updateLocalPresence(presence());
+    for (const socket of fixtures.sockets) {
+      expect(socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:interest').at(-1))
+        .toEqual({ type: 'presence:interest', roomCoordinates: { x: 1, y: 2 } });
+    }
+    const before = fixtures.sockets.map(s => s.sent.filter(raw => JSON.parse(raw).type === 'presence:interest').length);
+    for (let i = 0; i < 30; i++) world.updateLocalPresence({ ...presence(), x: 1100 + i });
+    expect(fixtures.sockets.map(s => s.sent.filter(raw => JSON.parse(raw).type === 'presence:interest').length)).toEqual(before);
+    world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 8, y: 2 } });
+    const socket = fixtures.sockets[0]!;socket.disconnect();socket.open();
+    expect(socket.sent.map(raw => JSON.parse(raw)).at(-1)).toEqual({ type: 'presence:interest', roomCoordinates: { x: 8, y: 2 } });
+    world.pauseForHiddenTab();world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 9, y: 2 } });world.resumeAfterHiddenTab();
+    for (const fresh of fixtures.sockets.filter(s => !s.closed)) {
+      fresh.open();expect(fresh.sent.map(raw => JSON.parse(raw)).find(m => m.type === 'presence:interest'))
+        .toEqual({ type: 'presence:interest', roomCoordinates: { x: 9, y: 2 } });
+    }
+    world.updateLocalPresence(null);
+    for (const fresh of fixtures.sockets.filter(s => !s.closed)) expect(fresh.sent.map(raw => JSON.parse(raw)).at(-1))
+      .toEqual({ type: 'presence:interest', roomCoordinates: null });
+  });
+
   it('publishes one presence context, receives bubbles, and chat teardown leaves presence alive', () => {
     const { world, chat, snapshots } = setup();openShared();
     world.updateLocalPresence(presence());chat.updateLocalPresence(presence());
