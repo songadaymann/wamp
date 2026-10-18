@@ -26,7 +26,7 @@ body:has(#auth-panel.menu-open) #daily-room-chip {
   border-radius: 0;
   background: var(--wamp-cream);
   color: #222;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 #daily-room-chip #btn-daily-dismiss {
   min-width: 44px;
@@ -57,14 +57,14 @@ body:has(#auth-panel.menu-open) #daily-room-chip {
   box-shadow: none;
 }
 #daily-room-modal .history-modal-header { flex-direction: row; align-items: center; gap: 12px; }
-#daily-room-modal .history-modal-title { font-size: 16px; color: var(--wamp-ink); }
+#daily-room-modal .history-modal-title { font-size: var(--ui-text-title, 16px); color: var(--wamp-ink); }
 #daily-room-modal .history-modal-meta { color: var(--wamp-ink); }
 .daily-room-content > * { flex-shrink: 0; }
-.daily-room-content h3 { margin: 0; font-size: 16px; }
+.daily-room-content h3 { margin: 0; font-size: var(--ui-text-title, 16px); }
 .daily-room-content p,
 .daily-room-content li,
 .daily-room-content a,
-.daily-room-content button { margin: 0; font-size: 12px; line-height: 1.5; }
+.daily-room-content button { margin: 0; font-size: var(--ui-text-body, 12px); line-height: 1.5; }
 .daily-room-content a { color: #005a78; touch-action: manipulation; }
 .daily-room-content ol { padding: 0; list-style: none; }
 .daily-room-content li { padding: 8px 0; border-bottom: 1px solid #222; }

@@ -54,7 +54,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   background: var(--wamp-sky);
   color: var(--wamp-ink);
   font-family: var(--hud-ui-font);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   box-shadow: var(--shadow-3);
 }
 
@@ -99,7 +99,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   user-select: none;
   color: #f6ead2;
   font-family: var(--hud-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1.05;
@@ -139,7 +139,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   width: 106px;
   height: 106px;
   color: #eaffea;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   letter-spacing: 0.05em;
 }
 
@@ -242,20 +242,20 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
 
 .mobile-goal-footer-goal {
   color: var(--accent-warm);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-weight: 600;
   line-height: 1.2;
 }
 
 .mobile-goal-footer-progress {
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   line-height: 1.3;
 }
 
 .mobile-goal-footer-timer {
   color: #ffcf4c;
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -278,6 +278,6 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
   }
 
   .world-sign-panel-text {
-    font-size: 16px;
+    font-size: var(--ui-text-title, 16px);
   }
 }

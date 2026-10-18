@@ -14,6 +14,8 @@ const SFX_VOLUME_STORAGE_KEY = 'wamp.settings.sfxVolume';
 const PANNING_STYLE_STORAGE_KEY = 'wamp.settings.panningStyle';
 const BUILDER_MODE_STORAGE_KEY = 'wamp.settings.builderMode';
 const SMART_THEME_STORAGE_KEY = 'wamp.settings.lastSmartTheme';
+const TEXT_STYLE_STORAGE_KEY = 'wamp.settings.textStyle';
+const TEXT_SIZE_STORAGE_KEY = 'wamp.settings.textSize';
 
 let cachedSettings = readSettingsFromStorage();
 const listeners = new Set<GameSettingsListener>();
@@ -66,6 +68,8 @@ function readSettingsFromStorage(): GameSettings {
 
   try {
     return normalizeGameSettings({
+      textStyle: window.localStorage.getItem(TEXT_STYLE_STORAGE_KEY) === 'readable' ? 'readable' : 'pixel',
+      textSize: window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY) === 'large' ? 'large' : 'normal',
       roomCommentsVisible:
         window.localStorage.getItem(ROOM_COMMENTS_VISIBLE_STORAGE_KEY) !== 'false',
       musicVolume: readStoredVolume(MUSIC_VOLUME_STORAGE_KEY, DEFAULT_GAME_SETTINGS.musicVolume),
@@ -94,6 +98,8 @@ function writeSettingsToStorage(settings: GameSettings): void {
     window.localStorage.setItem(PANNING_STYLE_STORAGE_KEY, settings.panningStyle);
     window.localStorage.setItem(BUILDER_MODE_STORAGE_KEY, settings.builderMode);
     window.localStorage.setItem(SMART_THEME_STORAGE_KEY, settings.lastSmartTheme);
+    window.localStorage.setItem(TEXT_STYLE_STORAGE_KEY, settings.textStyle);
+    window.localStorage.setItem(TEXT_SIZE_STORAGE_KEY, settings.textSize);
   } catch {
     // Settings still apply for the current session if storage is unavailable.
   }
@@ -128,7 +134,9 @@ function readStoredPanningStyle(): GameSettings['panningStyle'] {
 
 function settingsEqual(left: GameSettings, right: GameSettings): boolean {
   return (
-    left.roomCommentsVisible === right.roomCommentsVisible
+    left.textStyle === right.textStyle
+    && left.textSize === right.textSize
+    && left.roomCommentsVisible === right.roomCommentsVisible
     && left.musicVolume === right.musicVolume
     && left.sfxVolume === right.sfxVolume
     && left.panningStyle === right.panningStyle

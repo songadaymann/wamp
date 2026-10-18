@@ -23,7 +23,7 @@
 #controls-modal .history-modal-kicker {
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   line-height: 1.3;
   font-synthesis: none;
@@ -34,7 +34,7 @@
   margin-top: 6px;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.25;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -43,7 +43,7 @@
 #controls-modal .history-modal-meta {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
 }
 
@@ -54,7 +54,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 0px;
   box-shadow: var(--shadow-2);
   font-synthesis: none;
@@ -91,7 +91,7 @@
 #about-modal .history-modal-kicker {
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   line-height: 1.3;
   font-synthesis: none;
@@ -102,7 +102,7 @@
   margin-top: 6px;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.25;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -113,7 +113,7 @@
 #about-modal .about-modal-note {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
 }
 
@@ -135,7 +135,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 0px;
   box-shadow: var(--shadow-2);
   font-synthesis: none;
@@ -183,7 +183,7 @@
 
 .about-section-title {
   color: var(--accent-warm);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -191,7 +191,7 @@
 #about-modal .about-section-title {
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -200,21 +200,21 @@
 .about-section p {
   margin: 0;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.6;
 }
 
 #about-modal .about-section p {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
 #about-modal .about-list {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -237,7 +237,7 @@
 .about-copy-status {
   min-height: 15px;
   color: var(--accent-cool);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
@@ -278,7 +278,7 @@
   border-radius: 4px;
   background: var(--field);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   font-family: var(--font-mono);
 }
 
@@ -313,13 +313,13 @@
 
 .chat-moderation-item-title {
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   font-weight: 600;
 }
 
 .chat-moderation-item-meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
@@ -328,7 +328,7 @@
   border: 1px dashed rgba(243, 238, 226, 0.12);
   border-radius: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.5;
 }
 
@@ -354,7 +354,7 @@
   margin: 0;
   padding-left: 18px;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.6;
 }
 
@@ -382,7 +382,7 @@
 
 .controls-section-title {
   color: var(--accent-warm);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -390,7 +390,7 @@
 #controls-modal .controls-section-title {
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 1px;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -402,14 +402,14 @@
   justify-content: space-between;
   gap: 12px;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 #controls-modal .controls-row {
   align-items: flex-start;
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.2;
 }
 
@@ -429,7 +429,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.2;
   box-shadow: var(--shadow-2);
   font-synthesis: none;

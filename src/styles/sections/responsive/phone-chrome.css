@@ -66,7 +66,7 @@ body[data-device-class='phone'][data-app-mode='world'] #bottom-bar #world-online
   min-height: 30px;
   padding: 4px 5px;
   border-radius: 0;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   white-space: nowrap;
 }
 
@@ -106,7 +106,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .bar-right {
 
 body[data-device-class='phone'] .world-ghost-race {
   max-width: min(60vw, 280px);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] #btn-world-zoom-out-footer,
@@ -123,7 +123,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] #room-save-status {
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] #world-online-count {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-online-popover {

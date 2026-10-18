@@ -1,3 +1,4 @@
+import { auditReadableText } from './lib/textAudits.mjs';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
@@ -163,6 +164,9 @@ const scenarios = [
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
+  } },
+  { name: 'phone-readable-text', profile: profiles.phonePortrait, navigationFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditReadableText(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));
   } },
   { name: 'phone-haptic-settings', profile: profiles.phonePortrait, navigationFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditHapticSettings(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));

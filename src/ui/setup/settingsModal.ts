@@ -27,6 +27,8 @@ type SettingsModalElements = {
   performanceModeInputs: HTMLInputElement[];
   frameRateInputs: HTMLInputElement[];
   builderModeInputs: HTMLInputElement[];
+  textStyleSelect: HTMLSelectElement | null;
+  textSizeSelect: HTMLSelectElement | null;
   motionSelect: HTMLSelectElement | null;
   cameraStyleInputs: HTMLInputElement[];
   hapticsRow: HTMLElement | null;
@@ -111,6 +113,13 @@ export class SettingsModalController {
     updateGameSettings({ builderMode: target.value === 'advanced' ? 'advanced' : 'beginner' });
   };
 
+  private readonly handleTextStyleChange = () => {
+    updateGameSettings({ textStyle: this.elements.textStyleSelect?.value === 'readable' ? 'readable' : 'pixel' });
+  };
+  private readonly handleTextSizeChange = () => {
+    updateGameSettings({ textSize: this.elements.textSizeSelect?.value === 'large' ? 'large' : 'normal' });
+  };
+
   private readonly handleMotionChange = () => {
     const value = this.elements.motionSelect?.value;
     updateComfortSettings({ reduceMotion: value === 'on' || value === 'off' ? value : 'system' });
@@ -129,6 +138,8 @@ export class SettingsModalController {
   ) {
     this.elements = {
       modal: this.doc.getElementById('settings-modal'),
+      textStyleSelect: this.doc.getElementById('settings-text-style') as HTMLSelectElement | null,
+      textSizeSelect: this.doc.getElementById('settings-text-size') as HTMLSelectElement | null,
       motionSelect: this.doc.getElementById('settings-reduce-motion') as HTMLSelectElement | null,
       hapticsRow: this.doc.getElementById('settings-haptics-row'),
       hapticsCheckbox: this.doc.getElementById('settings-haptics') as HTMLInputElement | null,
@@ -153,6 +164,8 @@ export class SettingsModalController {
   }
 
   init(): void {
+    this.elements.textStyleSelect?.addEventListener('change', this.handleTextStyleChange);
+    this.elements.textSizeSelect?.addEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.addEventListener('change', this.handleMotionChange);
     this.elements.hapticsCheckbox?.addEventListener('change', this.handleHapticsChange);
@@ -185,6 +198,8 @@ export class SettingsModalController {
   }
 
   destroy(): void {
+    this.elements.textStyleSelect?.removeEventListener('change', this.handleTextStyleChange);
+    this.elements.textSizeSelect?.removeEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.removeEventListener('change', this.handleMotionChange);
     this.elements.hapticsCheckbox?.removeEventListener('change', this.handleHapticsChange);
@@ -236,6 +251,8 @@ export class SettingsModalController {
   }
 
   private render(settings: GameSettings): void {
+    if (this.elements.textStyleSelect) this.elements.textStyleSelect.value = settings.textStyle;
+    if (this.elements.textSizeSelect) this.elements.textSizeSelect.value = settings.textSize;
     this.doc.body.dataset.builderMode = settings.builderMode === 'advanced' ? 'advanced' : 'beginner';
     if (this.elements.commentsCheckbox) {
       this.elements.commentsCheckbox.checked = settings.roomCommentsVisible;

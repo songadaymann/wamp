@@ -60,7 +60,7 @@ body[data-device-class='phone'] #world-hud .world-hud-mobile-actions {
 body[data-device-class='phone'] #world-hud .world-hud-mobile-actions .bar-btn {
   min-height: 28px;
   padding: 4px 6px;
-  font-size: 7px;
+  font-size: var(--ui-text-small, 7px);
   line-height: 1;
   border-radius: 0;
 }
@@ -83,7 +83,7 @@ body[data-device-class='phone'] #world-hud .world-state-pill {
   padding: 2px 4px 1px;
   border-width: 1px;
   box-shadow: none;
-  font-size: 6px;
+  font-size: var(--ui-text-small, 6px);
   letter-spacing: 0.04em;
 }
 
@@ -107,7 +107,7 @@ body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-bod
 
 body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-byline,
 body[data-device-class='phone'] #world-hud .world-creator-card .mini-profile-name {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1;
 }
 
@@ -124,7 +124,7 @@ body[data-device-class='phone'] #world-hud .world-hud-row-primary-actions .bar-b
   min-width: 0;
   min-height: 34px;
   padding: 4px 3px;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.05;
   letter-spacing: 0;
   white-space: normal;
@@ -152,7 +152,7 @@ body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud
   min-width: 0;
   min-height: 30px;
   padding: 4px 3px;
-  font-size: 7px;
+  font-size: var(--ui-text-small, 7px);
   line-height: 1.05;
   letter-spacing: 0;
   white-space: normal;
@@ -174,11 +174,11 @@ body[data-device-class='phone'] .world-goal-panel {
 
 body[data-device-class='phone'] .world-goal-panel-goal,
 body[data-device-class='phone'] .world-goal-panel-timer {
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
 }
 
 body[data-device-class='phone'] .world-goal-panel-progress {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel {
@@ -195,7 +195,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ro
 }
 
 body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-goal {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,7 +208,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-ro
 
 body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-progress {
   min-width: 0;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -216,7 +216,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-pr
 
 body[data-device-class='phone'][data-app-mode='play-world'] .world-goal-panel-timer {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-coarse-pointer='true']:not([data-device-class='desktop'])[data-mobile-world-hud-collapsed='true'] #world-hud {
@@ -255,28 +255,28 @@ body[data-device-class='phone'] #menu-body .bar-btn {
 }
 
 body[data-device-class='phone'] .auth-session-summary-value {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-room-title {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.05;
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='compact'] {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-room-title[data-title-size='tiny'] {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-room-subtitle {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-device-class='phone'] .world-hud-title {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-hud-title-wrap {
@@ -285,7 +285,7 @@ body[data-device-class='phone'] .world-hud-title-wrap {
 
 body[data-device-class='phone'] .world-hud-beta {
   padding: 2px 6px;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 body[data-device-class='phone'] .world-hud-row {
@@ -308,11 +308,11 @@ body[data-device-class='phone'] .mini-profile-avatar {
 }
 
 body[data-device-class='phone'] .mini-profile-name {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-device-class='phone'] .mini-profile-byline {
-  font-size: 9px;
+  font-size: var(--ui-text-small, 9px);
 }
 
 body[data-device-class='phone'] .mini-profile-stats {
@@ -325,7 +325,7 @@ body[data-device-class='phone'] .mini-profile-stat-level-icon {
 }
 
 body[data-device-class='phone'] .mini-profile-stat-level-label {
-  font-size: 6px;
+  font-size: var(--ui-text-small, 6px);
 }
 
 body[data-device-class='phone'] .mini-profile-progress {
@@ -477,7 +477,7 @@ body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-
 }
 
 body[data-device-class='phone'][data-app-mode='world'] #world-hud :is(#world-selected-goal, #world-leaderboard, #world-selected-meta, #world-selected-action-reason) {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }

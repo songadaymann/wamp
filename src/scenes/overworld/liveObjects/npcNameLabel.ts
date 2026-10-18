@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { bindCanvasTextPreferences } from '../../../settings/textPreferences';
+import { getGameSettings } from '../../../settings/userSettings';
 
 /** Early GameBoy is an 8px bitmap. Any other size rasterizes with grey edges. */
 export const NPC_NAME_FONT_SIZE_PX = 8;
@@ -74,7 +76,7 @@ export function installNpcNameLabelSharpness(label: NpcNameText): void {
   const updateText = label.updateText.bind(label);
   label.updateText = () => {
     const result = updateText();
-    sharpenNpcNameLabelCanvas(label);
+    if (getGameSettings().textStyle !== 'readable') sharpenNpcNameLabelCanvas(label);
     return result;
   };
 }
@@ -142,6 +144,7 @@ export function attachNpcNameLabel(
   if (!syncNpcNameLabelResolution(label, scene.cameras.main.zoom)) {
     label.updateText();
   }
+  bindCanvasTextPreferences(label, NPC_NAME_LABEL_STYLE.fontFamily, NPC_NAME_FONT_SIZE_PX);
   refreshNpcNameLabelWhenFontReady(label);
   return label;
 }

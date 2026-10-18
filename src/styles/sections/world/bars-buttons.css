@@ -38,7 +38,7 @@
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .bar-center {
@@ -56,7 +56,7 @@
   min-width: 0;
   max-width: min(30vw, 280px);
   color: #70e5ff;
-  font-size: 9px;
+  font-size: var(--ui-text-small, 9px);
   line-height: 1.4;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -69,7 +69,7 @@
 
 .world-lost-songs {
   color: #f4cc55;
-  font-size: 9px;
+  font-size: var(--ui-text-small, 9px);
   white-space: nowrap;
 }
 body:not([data-app-mode='world']) #world-lost-songs { display: none; }
@@ -162,7 +162,7 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
   border: 1px solid var(--border-strong);
   border-radius: 3px;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-family: var(--font-mono);
   cursor: pointer;
   transition:
@@ -241,7 +241,7 @@ body:not([data-app-mode='world']) #world-lost-songs { display: none; }
 
 .bar-btn-small {
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
 }
 
 .bar-btn.hidden {

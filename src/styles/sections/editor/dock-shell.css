@@ -173,7 +173,7 @@ body[data-editor-dock-shell='true'] .editor-shell-square-button {
   color: var(--editor-retro-ink);
   box-shadow: 3px 3px 0 var(--editor-retro-shadow);
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   line-height: 1.15;
   cursor: pointer;
@@ -199,7 +199,7 @@ body[data-editor-dock-shell='true'][data-builder-mode='beginner'] .editor-shell-
 
 body[data-editor-dock-shell='true'] .editor-shell-tools [data-tool='randomize'] .tool-label,
 body[data-editor-dock-shell='true'] .editor-shell-tools [data-tool='rect'] .tool-label {
-  font-size: 7px;
+  font-size: var(--ui-text-small, 7px);
   letter-spacing: 0;
   white-space: nowrap;
 }
@@ -431,7 +431,7 @@ body[data-editor-dock-shell='true'] .editor-shell-eraser-danger-actions {
 body[data-editor-dock-shell='true'] .editor-shell-eraser-size-label {
   color: var(--editor-retro-ink);
   font-family: var(--editor-button-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -483,7 +483,7 @@ body[data-editor-dock-shell='true'] .editor-pencil-spray-rate {
 body[data-editor-dock-shell='true'] .editor-pencil-spray-rate-bound {
   color: var(--editor-retro-ink);
   font-family: var(--editor-button-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -623,7 +623,7 @@ body[data-editor-dock-shell='true'] .editor-shell-popover-status {
   grid-column: 1 / -1;
   min-height: 16px;
   color: var(--editor-retro-blue-deep);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
 }
 
@@ -640,7 +640,7 @@ body[data-editor-dock-shell='true'] .editor-shell-popover-heading {
   justify-content: space-between;
   gap: 12px;
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   font-synthesis: none;
   -webkit-font-smoothing: none;
 }
@@ -669,7 +669,7 @@ body[data-editor-dock-shell='true'] .editor-markers-actions button {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
 }
 
 body[data-editor-dock-shell='true'] .editor-markers-actions button[data-editor-marker-action='spawn'] {
@@ -714,7 +714,7 @@ body[data-editor-dock-shell='true'] #editor-drawer-header {
 body[data-editor-dock-shell='true'] .editor-drawer-title {
   color: var(--editor-retro-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.2;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -838,7 +838,7 @@ body[data-editor-dock-shell='true'] #tileset-section > .section-label {
   margin: 11px 0 0;
   align-self: start;
   font-family: var(--editor-button-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
 }
 
@@ -854,7 +854,7 @@ body[data-editor-dock-shell='true'] #tileset-section > .sidebar-section-body {
 
 body[data-editor-dock-shell='true'] #tile-controls-section > .section-label {
   font-family: var(--editor-button-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
   margin-bottom: 8px;
 }
@@ -877,7 +877,7 @@ body[data-editor-dock-shell='true'] #layers-section > .section-label {
   margin: 11px 0 0;
   align-self: start;
   font-family: var(--editor-button-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
 }
 
@@ -911,7 +911,7 @@ body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
   width: 40px;
   min-width: 40px;
   font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
-  font-size: 18px;
+  font-size: var(--ui-text-title, 18px);
 }
 
 body[data-editor-dock-shell='true'] #layers-section .layer-btn-summary,
@@ -1003,7 +1003,7 @@ body[data-editor-dock-shell='true'][data-editor-shell-panel='terrain'] #palette-
 body[data-editor-dock-shell='true'] #palette-mode-section [data-builder-mode-choice],
 body[data-editor-dock-shell='true'] #palette-mode-section .palette-tab {
   min-height: 50px;
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-editor-dock-shell='true'][data-builder-mode='beginner'] #palette-mode-section .palette-tabs,
@@ -1028,7 +1028,7 @@ body[data-editor-dock-shell='true'] .smart-visual-picker h3 {
   margin: 2px 0 0;
   color: var(--editor-retro-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.2;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -1074,7 +1074,7 @@ body[data-editor-dock-shell='true'] .editor-workbench-heading {
 body[data-editor-dock-shell='true'] .editor-workbench-heading-title {
   color: var(--editor-retro-cream);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -1094,7 +1094,7 @@ body[data-editor-dock-shell='true'] .editor-workbench-close-button {
   color: var(--editor-retro-ink);
   box-shadow: 3px 3px 0 var(--editor-retro-shadow);
   font-family: var(--editor-ui-font);
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1;
   pointer-events: auto;
 }
@@ -1137,7 +1137,7 @@ body[data-editor-dock-shell='true'] #object-palette-section .obj-cat-tab {
   display: none;
   min-height: 48px;
   padding: 7px;
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section .obj-cat-tab[data-category='custom'],
@@ -1207,7 +1207,7 @@ body[data-editor-dock-shell='true'] .goal-type-instructions {
   color: var(--editor-retro-blue-deep);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
@@ -1276,7 +1276,7 @@ body[data-editor-dock-shell='true'] #background-card-grid .background-card-solid
 }
 
 body[data-editor-dock-shell='true'] #background-card-grid .background-card-label {
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   text-align: center;
 }
 
@@ -1380,7 +1380,7 @@ body[data-editor-dock-shell='true'][data-editor-sprite-mode='true'] #game-contai
 
   body[data-editor-dock-shell='true'] .editor-shell-chunky-button,
   body[data-editor-dock-shell='true'] .editor-shell-dock-grid > button {
-    font-size: 9px;
+    font-size: var(--ui-text-small, 9px);
   }
 
   body[data-editor-dock-shell='true'] .editor-shell-dock-grid {

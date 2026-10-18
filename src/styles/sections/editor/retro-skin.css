@@ -47,7 +47,7 @@ body[data-app-mode='editor'] .editor-room-title-label {
   flex: 0 0 auto;
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   line-height: 1.2;
   text-transform: uppercase;
@@ -63,7 +63,7 @@ body[data-app-mode='editor'] #room-title-section .room-title-input {
   background: var(--editor-retro-paper);
   color: var(--editor-retro-ink);
   font-family: var(--editor-ui-font);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.2;
   user-select: text;
   box-shadow: inset 2px 2px 0 rgba(var(--wamp-ink-rgb), 0.12);
@@ -117,7 +117,7 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-top-save-status {
   box-shadow: 4px 4px 0 var(--editor-retro-shadow);
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.25;
   text-align: center;
   overflow-wrap: anywhere;
@@ -153,7 +153,7 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge {
 body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge-kicker {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0;
@@ -166,7 +166,7 @@ body[data-app-mode='editor'] #editor-room-feedback .editor-publish-nudge-text {
   margin: 0;
   color: var(--wamp-black);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
@@ -187,7 +187,7 @@ body[data-app-mode='editor'] #editor-room-feedback #btn-editor-publish-nudge {
   box-shadow: inset 0 0 0 999px var(--button-background), 2px 2px 0 var(--editor-retro-shadow) !important;
   color: var(--button-foreground) !important;
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0;
 }
 
@@ -352,7 +352,7 @@ body[data-app-mode='editor'] #sidebar .background-solid-color-row,
 body[data-app-mode='editor'] #sidebar .lighting-slider-label {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.04em;
   line-height: 1.3;
   text-transform: uppercase;
@@ -365,7 +365,7 @@ body[data-app-mode='editor'] #sidebar .section-label {
 body[data-app-mode='editor'] #sidebar .editor-advanced-block-label {
   color: var(--editor-retro-blue-deep);
   font-family: var(--font-display);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   letter-spacing: 0;
   line-height: 1.2;
   text-transform: none;
@@ -385,7 +385,7 @@ body[data-app-mode='editor'] #sidebar .sidebar-section-toggle {
   color: var(--wamp-black);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   font-family: var(--editor-pixel-font);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1;
   letter-spacing: 0;
   font-synthesis: none;
@@ -428,7 +428,7 @@ body[data-app-mode='editor'] #sidebar .bar-btn {
   box-shadow: inset 0 0 0 999px var(--button-background, var(--editor-retro-blue)), 2px 2px 0 var(--editor-retro-shadow) !important;
   color: var(--button-foreground, var(--wamp-black)) !important;
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -523,7 +523,7 @@ body[data-app-mode='editor'] #sidebar .palette-tab,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab,
 body[data-app-mode='editor'] #sidebar .object-subcategory-tab {
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
 }
 
@@ -596,7 +596,7 @@ body[data-app-mode='editor'] #sidebar .editor-feature-launcher-status {
   color: var(--editor-retro-blue-deep);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.35;
 }
 
@@ -613,12 +613,12 @@ body[data-app-mode='editor'] #sidebar #editor-lighting-feature-panel {
 }
 
 body[data-app-mode='editor'] #sidebar .tool-icon {
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
 }
 
 body[data-app-mode='editor'] #sidebar .tool-label {
   font-family: var(--editor-ui-font);
-  font-size: 9px;
+  font-size: var(--ui-text-small, 9px);
   letter-spacing: 0.03em;
   line-height: 1.25;
 }
@@ -685,7 +685,7 @@ body[data-app-mode='editor'] #sidebar .layer-btn.active[data-layer='background']
 body[data-app-mode='editor'] #sidebar .layer-btn-summary {
   color: inherit;
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.25;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -704,7 +704,7 @@ body[data-app-mode='editor'] #sidebar .layer-info-button {
 
 body[data-app-mode='editor'] #sidebar .layer-visibility-button {
   font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif !important;
-  font-size: 18px;
+  font-size: var(--ui-text-title, 18px);
 }
 
 body[data-app-mode='editor'] #sidebar .layer-visibility-button[data-layer-visibility='foreground'] {
@@ -759,7 +759,7 @@ body[data-app-mode='editor'] #sidebar .editor-erase-brush-select {
   background: #0b0b0b;
   color: var(--editor-retro-cream);
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   box-shadow: none;
 }
 
@@ -797,7 +797,7 @@ body[data-app-mode='editor'] #sidebar .object-grid-empty {
   border-radius: 0;
   color: var(--editor-retro-blue);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-app-mode='editor'] #sidebar .editor-layer-chip {
@@ -809,7 +809,7 @@ body[data-app-mode='editor'] #sidebar .editor-layer-chip {
   color: var(--editor-retro-blue-deep);
   box-shadow: none;
   font-family: var(--editor-ui-font);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -837,7 +837,7 @@ body[data-app-mode='editor'] #sidebar .background-solid-color-value,
 body[data-app-mode='editor'] #sidebar .lighting-slider-value {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 body[data-app-mode='editor'] #sidebar .palette-hint,
@@ -851,7 +851,7 @@ body[data-app-mode='editor'] #sidebar .editor-top-save-status,
 body[data-app-mode='editor'] #sidebar .editor-publish-nudge-text {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.5;
 }
 
@@ -881,7 +881,7 @@ body[data-app-mode='editor'] #sidebar .goal-context-note {
   background: var(--editor-retro-blue);
   color: var(--wamp-black);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
 }
@@ -893,14 +893,14 @@ body[data-app-mode='editor'] #sidebar .goal-placement-hint {
   background: var(--editor-retro-yellow);
   color: var(--wamp-black);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
 body[data-app-mode='editor'] #sidebar .goal-input-help {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.4;
 }
 
@@ -928,14 +928,14 @@ body[data-app-mode='editor'] #sidebar #btn-wamp-o-gram {
 }
 
 body[data-app-mode='editor'] #sidebar #btn-publish-room .tool-label {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   letter-spacing: 0;
   line-height: 1.05;
 }
 
 body[data-app-mode='editor'] #sidebar #btn-editor-publish-nudge {
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
 }
 
@@ -956,7 +956,7 @@ body[data-app-mode='editor'] #sidebar .editor-publish-nudge {
 body[data-app-mode='editor'] #sidebar .editor-publish-nudge-kicker {
   color: var(--editor-retro-blue-deep);
   font-family: var(--editor-ui-font);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

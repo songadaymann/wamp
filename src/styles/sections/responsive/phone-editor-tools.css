@@ -88,7 +88,7 @@ body[data-device-class='phone'][data-app-mode='editor'] .object-category-tabs {
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] .object-search-input {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
 }
 
 body[data-device-class='phone'][data-app-mode='editor'] #object-grid {

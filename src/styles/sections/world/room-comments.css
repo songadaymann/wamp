@@ -46,7 +46,7 @@
 .room-comment-counter {
   margin-right: auto;
   color: #6d5a34;
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 

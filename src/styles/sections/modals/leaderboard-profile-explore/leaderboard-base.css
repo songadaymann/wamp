@@ -84,7 +84,7 @@
 
 .leaderboard-secondary {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .leaderboard-viewer {
@@ -166,7 +166,7 @@ body[data-device-class='phone'] .leaderboard-row.leaderboard-week-row > :nth-chi
 }
 
 #leaderboard-modal .leaderboard-week-row .leaderboard-rank {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 body[data-device-class='phone'] #leaderboard-modal {

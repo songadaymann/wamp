@@ -98,7 +98,7 @@
   background: var(--reward-accent);
   color: var(--reward-accent-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.15;
   letter-spacing: 0px;
   text-transform: uppercase;
@@ -109,7 +109,7 @@
 
 .reward-sting-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.16;
   color: var(--reward-accent);
   text-transform: uppercase;
@@ -123,7 +123,7 @@
 
 .reward-sting-subtitle {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.35;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -158,7 +158,7 @@
 .reward-sting-detail {
   white-space: pre-line;
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.25;
   color: var(--wamp-sky-deep);
   font-synthesis: none;
@@ -172,7 +172,7 @@
 }
 
 .reward-sting-card--guest-clear .reward-sting-detail {
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.5;
 }
 
@@ -425,7 +425,7 @@
 .xp-receipt-amount {
   color: var(--xp-receipt-accent);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.15;
   letter-spacing: 0px;
   text-transform: uppercase;
@@ -436,7 +436,7 @@
 .xp-receipt-reason {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.25;
   text-transform: uppercase;
 }
@@ -451,7 +451,7 @@
 .xp-receipt-level {
   color: var(--wamp-sky-deep);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.15;
   text-transform: uppercase;
   font-synthesis: none;
@@ -461,7 +461,7 @@
 .xp-receipt-detail {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -656,7 +656,7 @@
 
   .reward-sting-title,
   .reward-sting-card--hero .reward-sting-title {
-    font-size: 16px;
+    font-size: var(--ui-text-title, 16px);
   }
 
   .reward-sting-meter,
@@ -666,11 +666,11 @@
   }
 
   .reward-sting-subtitle {
-    font-size: 11px;
+    font-size: var(--ui-text-small, 11px);
   }
 
   .reward-sting-detail {
-    font-size: 8px;
+    font-size: var(--ui-text-small, 8px);
   }
 
   .xp-receipt-card {
@@ -694,15 +694,15 @@
   }
 
   .xp-receipt-amount {
-    font-size: 8px;
+    font-size: var(--ui-text-small, 8px);
   }
 
   .xp-receipt-reason {
-    font-size: 11px;
+    font-size: var(--ui-text-small, 11px);
   }
 
   .xp-receipt-detail {
-    font-size: 9px;
+    font-size: var(--ui-text-small, 9px);
   }
 
   .xp-receipt-meter {

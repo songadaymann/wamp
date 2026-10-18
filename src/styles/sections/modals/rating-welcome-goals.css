@@ -21,7 +21,7 @@
   margin-top: 0;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.25;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -31,7 +31,7 @@
 #run-rating-modal .leaderboard-secondary {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -44,7 +44,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -59,7 +59,7 @@
   background: var(--wamp-green);
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -87,7 +87,7 @@
   background: rgba(var(--wamp-red-rgb), 0.18);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -113,14 +113,14 @@
 }
 
 #run-rating-modal #run-rating-batch-title {
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1.35;
 }
 
 #run-rating-modal #run-rating-batch-progress {
   flex: 0 0 auto;
   color: var(--wamp-sky-deep);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-weight: 700;
   letter-spacing: 0.04em;
   line-height: 1.35;
@@ -148,7 +148,7 @@
   background: var(--wamp-paper);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.3;
 }
 
@@ -173,7 +173,7 @@
 }
 
 #run-rating-modal .run-rating-batch-item-status {
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -202,7 +202,7 @@
   background: rgba(var(--wamp-sky-rgb), 0.14);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: var(--ui-text-body, 15px);
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.45;
@@ -210,7 +210,7 @@
 
 .run-rating-result {
   color: var(--text);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -222,7 +222,7 @@
   background: var(--wamp-cream);
   box-shadow: none;
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   font-weight: 400;
   line-height: 1.5;
   font-synthesis: none;
@@ -303,7 +303,7 @@
 #run-rating-modal .run-guest-claim-copy {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.45;
   text-align: center;
 }
@@ -323,7 +323,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -338,7 +338,7 @@
   background: var(--wamp-green);
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -371,7 +371,7 @@
 #guest-builder-claim-modal .history-modal-kicker {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.3;
   text-transform: uppercase;
@@ -391,7 +391,7 @@
 #guest-builder-claim-modal .guest-builder-claim-copy {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.45;
 }
 
@@ -430,7 +430,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -445,7 +445,7 @@
   background: var(--wamp-green);
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -480,7 +480,7 @@
 #guest-room-recovery-modal .history-modal-kicker {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.3;
   text-transform: uppercase;
@@ -501,7 +501,7 @@
 #guest-room-recovery-modal .guest-room-recovery-benefits {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.45;
 }
 
@@ -538,7 +538,7 @@
   place-items: center;
   color: var(--wamp-cream);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.25;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -593,7 +593,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -612,7 +612,7 @@
   background: var(--wamp-green);
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -666,7 +666,7 @@
   padding: 12px;
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.4;
   text-align: center;
@@ -684,7 +684,7 @@
 #run-rating-modal .run-share-message {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   font-weight: 700;
   line-height: 1.45;
 }
@@ -708,7 +708,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -729,7 +729,7 @@
   background: var(--wamp-black);
   color: var(--wamp-cream);
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   font-weight: 900;
   line-height: 1;
   text-transform: none;
@@ -763,7 +763,7 @@
 #run-rating-modal .run-rating-section-label {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.08em;
   line-height: 1.2;
   text-transform: uppercase;
@@ -771,7 +771,7 @@
 
 .run-rating-section-label {
   color: var(--accent-warm);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -791,7 +791,7 @@
   border: 2px solid var(--wamp-ink);
   border-radius: 0;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -853,7 +853,7 @@
   margin-top: 8px;
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.2;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -862,7 +862,7 @@
 #welcome-modal .history-modal-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.5;
 }
 
@@ -878,7 +878,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -900,7 +900,7 @@
 }
 
 #welcome-modal .welcome-builder-choice-title {
-  font-size: 18px;
+  font-size: var(--ui-text-title, 18px);
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -979,14 +979,14 @@
 
 #welcome-modal .welcome-lane-copy {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   line-height: 1.58;
   color: var(--wamp-ink);
 }
 
 #welcome-modal .welcome-lane-subcopy {
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.45;
   color: var(--wamp-ink);
   margin-top: auto;
@@ -1002,7 +1002,7 @@
   border: 2px solid var(--wamp-ink);
   border-radius: 0;
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.1;
   box-shadow: var(--shadow-3);
   font-synthesis: none;
@@ -1058,7 +1058,7 @@
   background: var(--wamp-sky);
   color: var(--wamp-black);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.3;
   box-shadow: var(--shadow-3);
   font-synthesis: none;
@@ -1075,7 +1075,7 @@
 #room-goal-intro-modal .room-goal-intro-body {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.6;
 }
 
@@ -1092,7 +1092,7 @@
   border-top: 2px solid var(--wamp-sky-deep);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.5;
 }
 
@@ -1118,7 +1118,7 @@
   background: var(--wamp-green);
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   letter-spacing: 0.04em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -1137,7 +1137,7 @@
   }
 
   #welcome-modal .history-modal-title {
-    font-size: 16px;
+    font-size: var(--ui-text-title, 16px);
   }
 
   #welcome-modal .welcome-modal-body {
@@ -1154,11 +1154,11 @@
   }
 
   #room-goal-intro-modal .history-modal-title {
-    font-size: 16px;
+    font-size: var(--ui-text-title, 16px);
   }
 
   #room-goal-intro-modal .room-goal-intro-body {
-    font-size: 14px;
+    font-size: var(--ui-text-body, 14px);
   }
 
   #run-rating-modal .run-share-card {
@@ -1198,14 +1198,14 @@ body[data-device-class='phone'] #welcome-modal .history-modal-title-group {
 }
 
 body[data-device-class='phone'] #welcome-modal .history-modal-kicker {
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   letter-spacing: 0;
   line-height: 1.1;
 }
 
 body[data-device-class='phone'] #welcome-modal .history-modal-title {
   margin-top: 4px;
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   overflow-wrap: anywhere;
 }
 
@@ -1216,7 +1216,7 @@ body[data-device-class='phone'] #welcome-modal .history-modal-header-actions {
 body[data-device-class='phone'] #welcome-modal .history-modal-header-actions .bar-btn {
   min-height: 32px;
   padding: 7px 10px 6px;
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0;
   box-shadow: var(--shadow-2);
 }
@@ -1253,13 +1253,13 @@ body[data-device-class='phone'] #welcome-modal .welcome-lane-icon {
 
 body[data-device-class='phone'] #welcome-modal .welcome-lane-title {
   grid-area: title;
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.1;
 }
 
 body[data-device-class='phone'] #welcome-modal .welcome-lane-copy {
   grid-area: copy;
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   line-height: 1.28;
 }
 
@@ -1274,7 +1274,7 @@ body[data-device-class='phone'] #welcome-modal .welcome-lane-button {
   min-height: 34px;
   margin-top: 0;
   padding: 8px 10px 7px;
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   box-shadow: var(--shadow-2);
 }
 
@@ -1341,7 +1341,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'] #welcome-moda
   max-height: calc(100dvh - 32px);
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.5;
 }
 
@@ -1384,6 +1384,6 @@ body[data-device-class='phone'][data-orientation-state='portrait'] #welcome-moda
 }
 
 .room-ghost-race { display: grid; gap: 8px; color: var(--wamp-ink); }
-.room-ghost-race label { font-family: 'HomeVideo', monospace; font-size: 16px; }
-.room-ghost-race select { width: 100%; min-height: 44px; border: 2px solid var(--wamp-sky-deep); border-radius: 0; padding: 8px; background: var(--wamp-paper); color: var(--wamp-ink); font: 16px 'HomeVideo', monospace; }
-#room-ghost-race-status { font: 12px/1.4 'IBM Plex Mono', monospace; }
+.room-ghost-race label { font-family: var(--font-home-short); font-size: var(--ui-text-title, 16px); }
+.room-ghost-race select { width: 100%; min-height: 44px; border: 2px solid var(--wamp-sky-deep); border-radius: 0; padding: 8px; background: var(--wamp-paper); color: var(--wamp-ink); font: var(--ui-text-title, 16px) var(--font-home-short); }
+#room-ghost-race-status { font: var(--ui-text-body, 12px)/1.4 'IBM Plex Mono', monospace; }

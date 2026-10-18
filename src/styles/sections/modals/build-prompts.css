@@ -8,9 +8,9 @@
   background: var(--wamp-cream); color: var(--wamp-ink); border: 2px solid var(--wamp-ink); border-radius: 0; box-shadow: none;
 }
 .build-prompt-content > * { flex-shrink: 0; }
-.build-prompt-content h2, .build-prompt-content h3 { margin: 0; font-size: 16px; color: var(--wamp-ink); }
+.build-prompt-content h2, .build-prompt-content h3 { margin: 0; font-size: var(--ui-text-title, 16px); color: var(--wamp-ink); }
 .build-prompt-content p, .build-prompt-content li, .build-prompt-content button, .build-prompt-content select, .build-prompt-content label,
-#build-prompt-result p, #build-prompt-result button { font-size: 12px; line-height: 1.5; }
+#build-prompt-result p, #build-prompt-result button { font-size: var(--ui-text-body, 12px); line-height: 1.5; }
 .build-prompt-content p { margin: 0; }
 .build-prompt-content ol { margin: 0; padding: 0; list-style: none; }
 .build-prompt-content li { padding: 12px 0; border-bottom: 1px solid var(--wamp-ink); }

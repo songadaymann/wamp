@@ -10,7 +10,7 @@
   border: 2px solid var(--wamp-ink);
   border-radius: 0;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-family: var(--hud-ui-font);
   box-shadow: var(--shadow-2);
 }
@@ -49,7 +49,7 @@
   border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
   color: var(--wamp-ink);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   font-family: var(--font-ui);
 }
 
@@ -71,7 +71,7 @@
   background: var(--wamp-green) !important;
   color: var(--wamp-cream) !important;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -112,7 +112,7 @@ body[data-app-mode='editor'] #global-chat.is-open {
   background: var(--wamp-sky) !important;
   color: var(--wamp-black) !important;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -171,7 +171,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
 .chat-panel-title {
   color: var(--wamp-ink);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.2;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -186,7 +186,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   background: var(--wamp-sky) !important;
   color: var(--wamp-black) !important;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -213,7 +213,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   background: var(--wamp-cream);
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -271,12 +271,12 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
 }
 
 .chat-mention-name {
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 .chat-mention-handle {
   color: var(--wamp-sky-deep);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
 }
 
 .chat-input {
@@ -287,7 +287,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   border: 2px solid var(--wamp-sky-deep);
   border-radius: 0;
   color: var(--wamp-ink);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   font-family: var(--font-ui);
 }
 
@@ -309,7 +309,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   background: var(--wamp-red);
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.2;
   text-align: center;
   box-shadow: var(--shadow-2);
@@ -341,20 +341,20 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
 .chat-message-author {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
 }
 
 .chat-message-time {
   color: #6d6768;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   white-space: nowrap;
 }
 
 .chat-message-body {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
@@ -379,7 +379,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   background: var(--wamp-sky) !important;
   color: var(--wamp-black) !important;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -399,7 +399,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   background: var(--wamp-green) !important;
   color: var(--wamp-cream) !important;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -411,7 +411,7 @@ body[data-device-class='phone'][data-app-mode='editor'] #global-chat:not(.is-ope
   padding: 1px 4px 0;
   border-width: 1px;
   box-shadow: none;
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 /* In the desktop/tablet editor a tall chat window used to run up under the editor toolbar and

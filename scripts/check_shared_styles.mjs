@@ -18,6 +18,7 @@ const normalizeHex = value => {
 const palette = new Map([...tokens.matchAll(/(--wamp-[\w-]+):\s*(#[a-f\d]+);/gi)]
   .map(([, name, hex]) => [normalizeHex(hex), name]));
 const fonts = new Map([...tokens.matchAll(/(--font-[\w-]+):\s*([^;]+);/g)]
+  .filter(([, , stack]) => !stack.trim().startsWith('var('))
   .map(([, name, stack]) => [normalizeFont(stack), name]));
 const sharedNames = new Set([...tokens.matchAll(/(--(?:wamp|font|shadow)-[\w-]+):/g)].map(([, name]) => name));
 const errors = [];

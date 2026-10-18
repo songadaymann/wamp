@@ -27,7 +27,7 @@ body[data-device-class='phone'] #menu-body .auth-menu-action-btn {
 body[data-device-class='phone'] #world-hud :is(.world-hud-mobile-actions .bar-btn, .world-hud-row-tertiary-actions .bar-btn, .world-state-pill),
 body[data-device-class='phone'] #bottom-bar :is(.bar-btn, #world-online-count),
 body[data-device-class='phone'] .mini-profile-stat-level-label {
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 /* The author's target extends into the non-interactive title area, not the Play row. */
@@ -80,7 +80,7 @@ body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode
 
 body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions .bar-btn {
   min-height: var(--tap-min);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
 }
 
 /* Expanded details can use another row; the default card still stays compact. */

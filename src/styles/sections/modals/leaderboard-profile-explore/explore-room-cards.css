@@ -89,7 +89,7 @@
   padding: 10px;
   color: var(--wamp-cream);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   text-align: center;
 }
 
@@ -113,7 +113,7 @@
   overflow-wrap: anywhere;
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: var(--ui-text-body, 14px);
   line-height: 1.3;
 }
 
@@ -126,7 +126,7 @@
 #explore-modal .explore-builder-name {
   color: var(--wamp-ink);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: var(--ui-text-body, 15px);
   line-height: 1.25;
 }
 
@@ -134,7 +134,7 @@
 #explore-modal .explore-builder-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.35;
 }
 
@@ -144,7 +144,7 @@
   background: var(--wamp-yellow);
   color: var(--wamp-ink);
   font-family: var(--font-label);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.35;
   text-transform: uppercase;
   box-shadow: var(--shadow-2);
@@ -165,7 +165,7 @@
 #explore-modal .explore-room-builder-name {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.3;
 }
 
@@ -194,7 +194,7 @@
   padding: 4px 8px;
   border: 2px solid var(--wamp-ink);
   box-shadow: var(--shadow-2);
-  font-size: 8px;
+  font-size: var(--ui-text-small, 8px);
   line-height: 1.3;
   text-transform: uppercase;
 }
@@ -267,7 +267,7 @@
 
 #explore-modal .explore-room-star {
   color: rgba(var(--wamp-sky-deep-rgb), 0.22);
-  font-size: 15px;
+  font-size: var(--ui-text-body, 15px);
   line-height: 1;
 }
 
@@ -278,14 +278,14 @@
 #explore-modal .explore-room-quality-label {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
 #explore-modal .explore-room-area-meta {
   color: var(--wamp-sky-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.35;
 }
 

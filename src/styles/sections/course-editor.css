@@ -97,7 +97,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   background: var(--course-editor-paper);
   color: var(--course-editor-blue-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.15;
   box-shadow: 2px 2px 0 var(--course-editor-shadow);
 }
@@ -131,7 +131,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 .course-editor-checkpoint-title {
   color: var(--course-editor-shadow);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--ui-text-body, 13px);
   font-weight: 400;
   line-height: 1.25;
 }
@@ -141,7 +141,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 .course-editor-empty {
   color: var(--course-editor-blue-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.4;
 }
 
@@ -163,7 +163,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .history-modal-kicker {
   color: var(--course-editor-blue-deep);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.25;
   text-transform: uppercase;
@@ -172,7 +172,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .history-modal-title {
   color: var(--course-editor-shadow);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: var(--ui-text-title, 16px);
   line-height: 1.2;
   font-synthesis: none;
   -webkit-font-smoothing: none;
@@ -182,7 +182,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .goal-summary {
   color: var(--course-editor-blue-deep);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
 }
 
@@ -200,7 +200,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
 #course-editor-shell .about-section-title {
   color: var(--course-editor-blue-deep);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.04em;
   line-height: 1.25;
   text-transform: uppercase;
@@ -213,7 +213,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   background: var(--course-editor-cream);
   color: var(--course-editor-shadow);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   box-shadow: inset 0 0 0 1px rgba(var(--wamp-sky-rgb), 0.22);
 }
 
@@ -251,7 +251,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   background: var(--course-editor-cream);
   color: var(--course-editor-shadow);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--ui-text-body, 12px);
   line-height: 1.45;
   box-shadow: none;
 }
@@ -288,7 +288,7 @@ body[data-app-mode='course-composer'] #course-editor-shell {
   border: 2px solid var(--course-editor-shadow);
   border-radius: 0;
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   letter-spacing: 0.03em;
   line-height: 1.1;
   text-transform: uppercase;

@@ -84,7 +84,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
   border: 1px solid rgba(243, 238, 226, 0.18);
   background: rgba(18, 17, 9, 0.9);
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -111,7 +111,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-family: var(--font-code);
   cursor: pointer;
   text-align: center;
@@ -182,7 +182,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-family: var(--font-code);
   cursor: pointer;
 }
@@ -216,7 +216,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--ui-text-small, 11px);
   font-family: var(--font-code);
 }
 
@@ -233,7 +233,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
 
 .goal-control-label {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -246,7 +246,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
 
 .goal-inline-suffix {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   text-transform: uppercase;
 }
 
@@ -257,7 +257,7 @@ body[data-app-mode='editor'][data-builder-mode='beginner'] [data-editor-feature=
 
 .goal-input-help {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   line-height: 1.35;
 }
 
@@ -291,7 +291,7 @@ body[data-reduce-motion="on"] .goal-marker-controls .goal-marker-required { anim
 .goal-summary {
   margin-top: 8px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   line-height: 1.35;
 }
 
@@ -302,7 +302,7 @@ body[data-reduce-motion="on"] .goal-marker-controls .goal-marker-required { anim
   border-radius: 10px;
   color: #bde5ff;
   background: rgba(48, 108, 149, 0.18);
-  font-size: 10px;
+  font-size: var(--ui-text-small, 10px);
   line-height: 1.35;
 }
 

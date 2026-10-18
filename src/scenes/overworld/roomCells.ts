@@ -1,3 +1,4 @@
+import { bindCanvasTextPreferences } from '../../settings/textPreferences';
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { type RoomCoordinates } from '../../persistence/roomModel';
@@ -257,6 +258,7 @@ export class OverworldRoomCellController {
         color: '#fff3db',
         align: 'center',
       });
+      bindCanvasTextPreferences(label, 'Early GameBoy', 16);
       label.setOrigin(0.5, 0.5);
       label.setDepth(8);
       label.setLineSpacing(10);
