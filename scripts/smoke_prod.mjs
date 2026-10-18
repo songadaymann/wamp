@@ -4,7 +4,7 @@ const FRONTEND_URL = getUrlFromEnv('PROD_FRONTEND_URL', 'https://wamp.land');
 const API_BASE_URL = getBaseUrlFromEnv('PROD_API_BASE_URL', 'https://api.wamp.land');
 const EXPECTED_PARTYKIT_HOST =
   process.env.PROD_PARTYKIT_HOST?.trim() ||
-  'everybodys-platformer-presence.songadaymann.partykit.dev';
+  'api.wamp.land';
 
 const frontendResponse = await fetch(FRONTEND_URL, {
   headers: {
