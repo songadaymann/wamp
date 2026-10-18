@@ -978,3 +978,6 @@ Canonical branch `codex/wamp-pause-2026-10-18`, based on merged PR244/main f8916
 
 
 F170 locally complete on `codex/wamp-pause-2026-10-18`: solo menus/dialogs and hidden tabs pause simulation; live PvP/co-op/weekly Rush continue with honest menu status. Preserve existing ranked room wall-time scoring and guest/regular Rush simulation timing. Pending dialog downloads, nested owners, projectile lifetimes, delayed respawns and paused menu commands are covered. Final542-file/3,993-test run and six new native-browser cases/nine Expanded Room cases pass; prior64-case phone/tablet regression is clean. See docs/review/wamp-menu-pause-2026-10-18.md. Master160/216 at source acceptance. Local release pending; no push/merge/deployment performed.
+
+
+F170 release is now explicitly authorized by the user (push, merge and deploy). This supersedes the local-only boundary above. Final source/main hosted gates, guarded Pages-only delivery and actual-domain proof follow on the same canonical branch. Preserve unrelated primary files and the selected animation.

@@ -2092,3 +2092,8 @@ F170 final source acceptance:542 files/3,993 tests; all six strengthened Chrome/
 
 
 F170 final quality check exits0 (complete-check.log), including542 files/3,993 tests, types, generated bindings, production build and641.9KB brotli boot budget. Final six strengthened pause cases and nine Expanded Room cases pass on the final immutable local preview; installed client x348→368, inspected and0 errors. OSS scan0 blockers/0 warnings. Local commit and cleanup completed below; release remains pending.
+
+
+## 2026-10-18 — F170 authorized release
+
+User explicitly authorizes push, merge and deployment of the locally accepted pause changes. Plan: OSS scan, push final source and attach PR; require quality, mobile, Expanded Room, new pause and both Pages checks on the exact source; merge and require the same main checks; deliver from clean literal main with the guarded Pages-only workflow; verify custom-domain pause/resume, live-mode exceptions, immutable/custom-domain bundle parity, unchanged API/presence and preserved primary files/background. Local acceptance commit8ec7fb07 passes3,993 tests and native browser checks. Release in progress; no additional product scope.

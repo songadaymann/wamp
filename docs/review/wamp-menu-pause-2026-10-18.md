@@ -33,3 +33,7 @@ Local source acceptance is complete; release is pending. Evidence is kept in ign
 No API, database, presence, ranking rule or map-renderer deployment is required. Release remains pending; no commit from this branch has been pushed, merged or deployed.
 
 Accepted evidence: `complete-check.log`, `accepted-browser/report.json`, `accepted-expanded/report.json`, `mobile-proof.json`, `installed-accepted/`, and `preservation.json`. Earlier diagnostic attempts are retained separately. They include a synthetic stacked-dialog setup, absent neighbor fixtures, keyboard Restart while a menu button retained keyboard focus, a development reload/build-readiness race, and an installed-client intro-readiness race. The stronger projectile check caught and fixed both local wall-clock expiry and the deferred-dialog loading gap; phone WebKit now uses the actual touch Shoot control. A test-only TypeScript inference error was fixed before final acceptance.
+
+## Authorized release
+
+Jonathan authorized push, merge and deployment after local acceptance. Delivery proceeds through exact-source/main hosted quality, mobile, Expanded Room, pause and both Pages gates, followed by guarded Pages-only deployment from clean main and actual-domain verification. This supersedes the earlier local-only boundary. Final delivery details are recorded in the linked pull request and ignored release evidence.
