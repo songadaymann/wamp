@@ -64,6 +64,8 @@ export interface NpcRuntimeStateSnapshot {
 export class LiveObjectNpcController<TEdgeWall = unknown> {
   private readonly roomBottomedNpcY = new WeakMap<LoadedRoomObject, number>();
   private readonly stepJumpDirectionX = new WeakMap<LoadedRoomObject, -1 | 1>();
+  /** Obstacle turns already picked the next facing, so the pause that follows must not turn again. */
+  private readonly wanderResumeWithoutTurn = new WeakSet<LoadedRoomObject>();
 
   constructor(private readonly options: NpcControllerOptions) {}
 
@@ -292,7 +294,9 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
           now + Phaser.Math.Between(NPC_WANDER_PAUSE_MIN_MS, NPC_WANDER_PAUSE_MAX_MS);
       } else {
         liveObject.runtime.npcWalking = true;
-        liveObject.runtime.directionX *= -1;
+        if (!this.wanderResumeWithoutTurn.delete(liveObject)) {
+          liveObject.runtime.directionX *= -1;
+        }
         liveObject.runtime.nextActionAt =
           now + Phaser.Math.Between(NPC_WANDER_WALK_MIN_MS, NPC_WANDER_WALK_MAX_MS);
       }
@@ -394,11 +398,17 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
     liveObject.runtime.directionX *= -1;
     if (mode === 'wander') {
+      this.wanderResumeWithoutTurn.add(liveObject);
       liveObject.runtime.npcWalking = false;
       liveObject.runtime.nextActionAt =
         this.options.getCurrentTime() +
         Phaser.Math.Between(NPC_WANDER_PAUSE_MIN_MS, NPC_WANDER_PAUSE_MAX_MS);
       body.setVelocityX(0);
+      this.options.applyDirectionalFacing(
+        liveObject.sprite,
+        liveObject.config,
+        liveObject.runtime.directionX,
+      );
       this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
       return true;
     }
