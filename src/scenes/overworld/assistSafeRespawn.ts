@@ -14,7 +14,7 @@ export function isSafeAssistGround(room: RoomSnapshot, point: Point, width: numb
   if (left < TILE_SIZE || right > ROOM_PX_WIDTH - TILE_SIZE || top < TILE_SIZE || point.y > ROOM_PX_HEIGHT - TILE_SIZE) return false;
   const firstX = Math.floor(left / TILE_SIZE), lastX = Math.floor((right - 0.1) / TILE_SIZE);
   const supportY = Math.floor((point.y + 2) / TILE_SIZE);
-  for (let x = firstX; x <= lastX; x += 1) {
+  for (let x = firstX - 1; x <= lastX + 1; x += 1) {
     const support = getTerrainTileCollisionProfile(room, x, supportY);
     if (!support.hasCollision || Math.abs(supportY * TILE_SIZE + support.topInset - point.y) > 3) return false;
   }

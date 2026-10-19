@@ -128,6 +128,7 @@ for (const [device, engine, width, height, touch] of [ ['desktop', chromium, 128
     });
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const respawned = await state(); assert(respawned.player.x > 328, 'Last safe ground must beat the authored spawn');
+    assert(respawned.assist.checkpoint && respawned.assist.checkpoint.x + respawned.player.bodyWidth / 2 <= 400.1, 'Safe anchor must retain a tile before the pit at416px');
     assert.equal(respawned.assist.speed, 0.8); await page.screenshot({ path: `${output}/${name}-respawn.png` });
     assert(writes.every(p => !p.endsWith('/finish')), 'No assisted completion may be uploaded');
     assert.deepEqual(errors, []); assert.deepEqual(api.report().misses, {});

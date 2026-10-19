@@ -37,3 +37,11 @@ it('revalidates anchors against scope, room replacement and new hazards before r
   active = false; controller.capture(); expect(controller.describe()).toEqual({ checkpoint: null, protected: false });
   updateAssistSettings({ safeRespawn: false });
 });
+
+
+it('keeps a full supporting tile between the respawn body and a pit edge', () => {
+  const r = room(); r.tileData.terrain[19][8] = -1;
+  // Both points fit on solid floor; the later one lacks a tile of edge clearance.
+  expect(isSafeAssistGround(r, { x: 100, y: 304 }, 10, 40, [])).toBe(true);
+  expect(isSafeAssistGround(r, { x: 116, y: 304 }, 10, 40, [])).toBe(false);
+});
