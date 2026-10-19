@@ -1,28 +1,19 @@
-import { createOverworldKeyboardInput, type OverworldKeyboardInput } from './overworld/keyboardInput';
-import { createLostSongContext } from './overworld/lostSongContext';
-import { createOverworldAssist } from './overworld/assistSetup';
-import { gameplayNow } from './overworld/gameplayClock';
-import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
-import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
-import { hasGameplayInputHeld } from './overworld/gameplayInput';
-import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadInput';
-import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
-import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
-import { OverworldGhostRaceController } from './overworld/ghostRace';
-import { OverworldLostSongController } from './overworld/lostSongs';
-import { getLostSongService } from '../lostSongs/service';
-import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
-import { realtimeChunkBounds } from './overworld/realtimeChunkBounds';
-import { getPlayableMaximumHearts } from '../player/hearts';
-import { PLAYER_BASE_HEIGHT, PLAYER_STANDING_HEIGHT, PLAYER_BODY_WIDTH } from '../player/geometry';
-import { createDailyRepository } from '../daily/repository';
-import { dailyEntryReady } from '../daily/entry';
-import { playSfx } from '../audio/sfx';
-import { playHaptic } from '../feedback/haptics';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
+import {
+  canPlacedObjectUseObjectLink,
+  getObjectById,
+  getObjectDisplayOffset,
+  isMovingPlatformObjectId,
+  placedObjectContributesToCategory,
+  ROOM_HEIGHT,
+  ROOM_PX_HEIGHT,
+  ROOM_PX_WIDTH,
+  ROOM_WIDTH,
+  TILE_SIZE,
+  type GameObjectConfig,
+} from '../config';
 import { createCourseRepository } from '../courses/courseRepository';
-import { globalRoomMusicController } from '../music/controller';
-import { getCourseObjectLink } from '../courses/objectLinks';
 import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
@@ -32,68 +23,37 @@ import {
   type CourseMarkerPoint,
   type CourseSnapshot,
 } from '../courses/model';
+import { getCourseObjectLink } from '../courses/objectLinks';
+import { dailyEntryReady } from '../daily/entry';
+import { createDailyRepository } from '../daily/repository';
+import {
+  createMobilePerformanceProfiler,
+  type MobilePerformanceContext,
+  type MobilePerformanceProfiler,
+} from '../debug/mobilePerformanceProfiler';
+import {
+  type SwordsmanTraversalPlannerMode,
+} from '../enemies/swordsmanRobustPlanner';
+import { dispatchSignal } from '../events/typedEvent';
+import { playHaptic } from '../feedback/haptics';
 import { SceneFxController } from '../fx/controller';
-import {
-  canPlacedObjectUseObjectLink,
-  getObjectById,
-  getObjectDisplayOffset,
-  isMovingPlatformObjectId,
-  placedObjectContributesToCategory,
-  type GameObjectConfig,
-  ROOM_HEIGHT,
-  ROOM_PX_HEIGHT,
-  ROOM_PX_WIDTH,
-  ROOM_WIDTH,
-  TILE_SIZE,
-} from '../config';
-import {
-  getFocusedCoordinatesFromUrl,
-  hasFocusedCoordinatesInUrl,
-  setFocusedCoordinatesInUrl,
-} from '../navigation/worldNavigation';
-import {
-  DEFAULT_ROOM_COORDINATES,
-  parseRoomId,
-  roomIdFromCoordinates,
-  type RoomCoordinates,
-  type RoomSnapshot,
-  type RoomSnapshotView,
-} from '../persistence/roomModel';
-import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
-import { createRoomRepository } from '../persistence/roomRepository';
-import { createWorldRepository } from '../persistence/worldRepository';
-import {
-  type WorldChunkBounds,
-  type WorldChunkWindow,
-  type WorldRoomSummary,
-  type WorldWindow,
-} from '../persistence/worldModel';
-import { canBuildInActiveWorld, getActiveWorldId } from '../worlds/clientContext';
-import { RETRO_COLORS } from '../visuals/starfield';
-import type { RoomRushOverworldCapture } from '../social/roomRushShare';
-import { RoomLightingController } from '../lighting/controller';
-import { roomLightingUsesDynamicOverlay, type RoomLightingEmitter } from '../lighting/model';
-import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
-import { RoomWeatherController } from '../weather/controller';
-import { getCachedRoomWeatherSurfaceSegments } from '../weather/surfaces';
-import {
-  DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-  type DefaultPlayerAnimationState,
-} from '../player/defaultPlayer';
-import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
-import {
-  ensureSceneAvatarPackLoaded,
-  isSceneAvatarPackLoaded,
-  isDynamicPlayerAvatarId,
-} from '../player/avatar/dynamic';
-import { PLAYER_AVATAR_CHANGED_EVENT } from '../player/avatar/storage';
+import { goalIsTimed } from '../goals/goalSafety';
 import {
   formatRoomGoalShortText,
   resolveRoomGoalIntroText,
   type GoalMarkerPoint,
 } from '../goals/roomGoals';
-import { setAppMode } from '../ui/appMode';
-import { getDeviceLayoutState, prefersReducedMotion } from '../ui/deviceLayout';
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../guestRooms/runService';
+import { RoomLightingController } from '../lighting/controller';
+import { roomLightingUsesDynamicOverlay, type RoomLightingEmitter } from '../lighting/model';
+import { resolvePlayerAuraDarkAuraDiameter } from '../lighting/presets';
+import type { MultiplayerInstanceClient } from '../multiplayer/instanceClient';
+import type { MultiplayerModeDefinition, MultiplayerModeId } from '../multiplayer/model';
+import {
+  getFocusedCoordinatesFromUrl,
+  hasFocusedCoordinatesInUrl,
+  setFocusedCoordinatesInUrl,
+} from '../navigation/worldNavigation';
 import {
   getDevicePerformanceMode,
   subscribeDevicePerformanceMode,
@@ -105,17 +65,37 @@ import {
   type PerformanceAdvisorTransitionBlockReason,
 } from '../performance/performanceAdvisor';
 import { performanceAdvisorRuntime } from '../performance/performanceAdvisorRuntime';
-import { createProfileRepository } from '../profiles/profileRepository';
 import {
-  COURSE_COMPOSER_STATE_CHANGED_EVENT,
-  type MobilePortraitCameraTuningAdjustment,
-  type MobilePortraitCameraTuningInput,
-  type MobilePortraitCameraTuningSnapshot, type OverworldSceneBridge,
-} from '../ui/setup/sceneBridge';
-import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
-import { createRunRepository } from '../runs/runRepository';
-import type { MultiplayerInstanceClient } from '../multiplayer/instanceClient';
-import type { MultiplayerModeDefinition, MultiplayerModeId } from '../multiplayer/model';
+  DEFAULT_ROOM_COORDINATES,
+  parseRoomId,
+  roomIdFromCoordinates,
+  type RoomCoordinates,
+  type RoomSnapshot,
+  type RoomSnapshotView,
+} from '../persistence/roomModel';
+import { createRoomRepository } from '../persistence/roomRepository';
+import {
+  type WorldChunkBounds,
+  type WorldChunkWindow,
+  type WorldRoomSummary,
+  type WorldWindow,
+} from '../persistence/worldModel';
+import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
+import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
+import {
+  ensureSceneAvatarPackLoaded,
+  isDynamicPlayerAvatarId,
+  isSceneAvatarPackLoaded,
+} from '../player/avatar/dynamic';
+import { resolveActivePlayerAvatarId } from '../player/avatar/runtime';
+import { PLAYER_AVATAR_CHANGED_EVENT } from '../player/avatar/storage';
+import {
+  DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
+  type DefaultPlayerAnimationState,
+} from '../player/defaultPlayer';
+import { PLAYER_BASE_HEIGHT, PLAYER_BODY_WIDTH, PLAYER_STANDING_HEIGHT } from '../player/geometry';
+import type { WorldPresencePvpAction } from '../presence/worldPresence';
+import { createProfileRepository } from '../profiles/profileRepository';
 import {
   type PvpHitSource,
   type PvpInviteOffer,
@@ -124,52 +104,185 @@ import {
   type PvpParticipantIdentity,
   type PvpRoomStateEvent,
 } from '../pvp/model';
-import type { WorldPresencePvpAction } from '../presence/worldPresence';
+import { supportsGhostRace } from '../runs/ghostRace';
+import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
+import type { RoomRushOverworldCapture } from '../social/roomRushShare';
+import { setAppMode } from '../ui/appMode';
+import { getDeviceLayoutState, prefersReducedMotion } from '../ui/deviceLayout';
+import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
+import {
+  consumeTouchAction,
+  getTouchInputState,
+} from '../ui/mobile/touchControls';
+import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
+import {
+  COURSE_COMPOSER_STATE_CHANGED_EVENT,
+  type MobilePortraitCameraTuningAdjustment,
+  type MobilePortraitCameraTuningInput,
+  type MobilePortraitCameraTuningSnapshot,
+  type OverworldSceneBridge,
+} from '../ui/setup/sceneBridge';
+import { RETRO_COLORS } from '../visuals/starfield';
+import { RoomWeatherController } from '../weather/controller';
+import { getCachedRoomWeatherSurfaceSegments } from '../weather/surfaces';
+import { canBuildInActiveWorld, getActiveWorldId } from '../worlds/clientContext';
+import { createOverworldAssist } from './overworld/assistSetup';
+import { OverworldBackdropController } from './overworld/backdropController';
+import {
+  OverworldBrowseOverlayController,
+} from './overworld/browseOverlays';
+import { BrowseRealtimeStartupGate } from './overworld/browseRealtimeStartup';
+import {
+  getScrollForScreenAnchor,
+  type CameraMode,
+} from './overworld/camera';
+import {
+  OverworldCameraController,
+} from './overworld/cameraController';
+import {
+  OverworldCombatController,
+} from './overworld/combatController';
+import {
+  OverworldCombatPresentationController,
+  type CombatPresentationEvent,
+} from './overworld/combatPresentation';
+import {
+  createCombatController,
+  createCombatPresentationController,
+  createCoursePlaybackController,
+  createGameFeelController,
+  createGhostRaceController,
+  createGoalRunController,
+  createGuestRunPlaybackController,
+  createLostSongController,
+  createMovementController,
+  createObjectiveController,
+  createPlayerDeathPresentation,
+  createPlayerHealthController,
+  createPlayerLifecycleController,
+  createPlayerPresentationController,
+  createQuicksandController,
+  createRespawnCheckpointController,
+  createRespawnController,
+  createSessionResetController,
+} from './overworld/composition/player';
+import { createPvpArenaController, createPvpInstanceRenderer, createPvpLocalPresentationController } from './overworld/composition/pvp';
+import { createRoomRushModeController, createRoomRushResultController } from './overworld/composition/roomRush';
+import { MAX_ZOOM, MIN_ZOOM, RESPAWN_FALL_DISTANCE } from './overworld/composition/settings';
+import {
+  createBrowseRealtimeStartupGate,
+  createPresenceController,
+  createPresenceOverlayController,
+  createRoomChatController,
+  createRoomCommentsController,
+} from './overworld/composition/social';
+import {
+  createBrowseOverlayController,
+  createCameraController,
+  createGoalMarkerController,
+  createGridOverlayController,
+  createHudStateController,
+  createInspectInputController,
+  createRoomCellController,
+  createViewportController,
+} from './overworld/composition/ui';
+import {
+  createBackdropController,
+  createFlowController,
+  createLightingController,
+  createLiveObjectController,
+  createPortalObjectController,
+  createRoomAudioController,
+  createRoomMusicPlaybackController,
+  createRoomTransitionController,
+  createRuntimeContext,
+  createRuntimeController,
+  createSelectionController,
+  createSignController,
+  createSpecialTilesController,
+  createWeatherController,
+  createWindowController,
+  createWorldStreamingController,
+} from './overworld/composition/world';
+import {
+  OverworldCoursePlaybackController,
+} from './overworld/coursePlayback';
+import {
+  type ActiveExpandedRoomRunState
+} from './overworld/expandedRoomRuns';
+import { OverworldSceneFlowController } from './overworld/flow';
+import type { RunFrameWorkResult } from './overworld/frameWorkCoordinator';
+import { OverworldGameFeelController } from './overworld/gameFeel';
+import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadInput';
+import { gameplayNow } from './overworld/gameplayClock';
+import { hasGameplayInputHeld } from './overworld/gameplayInput';
+import { OverworldGhostRaceController } from './overworld/ghostRace';
+import {
+  OverworldGoalMarkerController,
+} from './overworld/goalMarkers';
 import {
   OverworldGoalRunController,
   type GoalRunState,
 } from './overworld/goalRuns';
-import { OverworldSceneFlowController } from './overworld/flow';
-import { OverworldInspectInputController } from './overworld/inspectInput';
-import {
-  OverworldBrowseOverlayController,
-} from './overworld/browseOverlays';
 import {
   OverworldGridOverlayController,
 } from './overworld/gridOverlay';
+import { GuestRunPlaybackController } from './overworld/guestRunPlayback';
 import {
   OverworldHudBridge,
 } from './overworld/hud';
-import {
-  type SelectedCellState,
-} from './overworld/hudViewModel';
 import {
   OverworldHudStateController,
   type SelectedRoomContext,
 } from './overworld/hudState';
 import {
-  OverworldLiveObjectController,
+  type SelectedCellState,
+} from './overworld/hudViewModel';
+import { OverworldInspectInputController } from './overworld/inspectInput';
+import { createOverworldKeyboardInput, type OverworldKeyboardInput } from './overworld/keyboardInput';
+import { buildAmbientRoomLightingBounds } from './overworld/lighting';
+import {
   isDynamicArcadeBody,
+  OverworldLiveObjectController,
   type ArcadeObjectBody,
-  type LoadedRoomObject,
   type LiveObjectRemovedEvent,
   type LiveObjectSwitchStateChangedEvent,
+  type LoadedRoomObject,
   type WeaponHitResult,
 } from './overworld/liveObjects';
 import { getContainedLiveObjectKey } from './overworld/liveObjects/indexing';
+import { OverworldLostSongController } from './overworld/lostSongs';
 import {
-  type SwordsmanTraversalPlannerMode,
-} from '../enemies/swordsmanRobustPlanner';
-import { buildAmbientRoomLightingBounds } from './overworld/lighting';
+  OverworldMovementController,
+} from './overworld/movementController';
+import { MultiplayerRemotePlayerRenderer } from './overworld/multiplayerRemotePlayerRenderer';
+import {
+  OverworldObjectiveController,
+} from './overworld/objectiveController';
+import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
+import { OverworldPlayerDeathPresentation } from './overworld/playerDeathPresentation';
+import { OverworldPlayerHealthController } from './overworld/playerHealth';
+import {
+  OverworldPlayerLifecycleController,
+  type OverworldPlayerEntities,
+} from './overworld/playerLifecycle';
+import {
+  OverworldPlayerPresentationController
+} from './overworld/playerPresentation';
+import {
+  OverworldPortalObjectController
+} from './overworld/portalObjects';
 import {
   OverworldPresenceController,
   type LocalPresenceInput,
   type OnlineRosterEntry,
   type RenderedGhost,
 } from './overworld/presence';
+import {
+  OverworldPresenceOverlayController,
+} from './overworld/presenceOverlays';
 import { OverworldPvpArenaController } from './overworld/pvpArenaController';
 import { OverworldPvpCombatCoordinator } from './overworld/pvpCombatCoordinator';
-import { OverworldPvpLocalPresentationController } from './overworld/pvpLocalPresentationController';
 import {
   createPvpGhostBodyRect,
   createPvpGhostHitRect,
@@ -183,161 +296,84 @@ import {
   resolvePvpPeerCollision as resolvePvpPeerCollisionGeometry,
   type PvpCombatRect,
 } from './overworld/pvpCombatGeometry';
-import { MultiplayerRemotePlayerRenderer } from './overworld/multiplayerRemotePlayerRenderer';
+import { OverworldPvpLocalPresentationController } from './overworld/pvpLocalPresentationController';
+import {
+  isPvpDangerousObjectConfig,
+  isPvpSolidObjectConfig,
+  resolvePvpSpawnPoint as resolvePvpArenaSpawnPoint,
+} from './overworld/pvpSpawn';
+import { OverworldQuicksandController } from './overworld/quicksandController';
+import {
+  RankedRunTraceRecorder,
+  type RankedRunTraceBinding,
+  type RankedRunTraceFrameInput,
+} from './overworld/rankedRunTraceRecorder';
+import { realtimeChunkBounds } from './overworld/realtimeChunkBounds';
+import { OverworldRespawnCheckpointController } from './overworld/respawnCheckpoints';
+import { OverworldRespawnController } from './overworld/respawnController';
+import { OverworldRoomAudioController } from './overworld/roomAudio';
+import {
+  OverworldRoomCellController,
+} from './overworld/roomCells';
 import {
   OverworldRoomChatController,
 } from './overworld/roomChat';
 import {
   OverworldRoomCommentsController,
 } from './overworld/roomComments';
-import { OverworldRoomAudioController } from './overworld/roomAudio';
 import { OverworldRoomMusicPlaybackController, type OverworldRoomMusicPlaybackSyncInput } from './overworld/roomMusicPlaybackController';
 import {
-  OverworldCoursePlaybackController,
-} from './overworld/coursePlayback';
+  OverworldRoomRushModeController,
+} from './overworld/roomRushMode';
 import {
-  OverworldGoalMarkerController,
-} from './overworld/goalMarkers';
-import {
-  OverworldCameraController,
-} from './overworld/cameraController';
-import {
-  OverworldRuntimeController,
-  type OverworldRoomEdgeWall,
-} from './overworld/runtimeController';
-import {
-  OverworldPlayerLifecycleController,
-  type OverworldPlayerEntities,
-} from './overworld/playerLifecycle';
-import { OverworldRespawnCheckpointController } from './overworld/respawnCheckpoints';
-import { OverworldRespawnController } from './overworld/respawnController';
-import {
-  OverworldCombatPresentationController,
-  type CombatPresentationEvent,
-} from './overworld/combatPresentation';
-import {
-  OverworldCombatController,
-} from './overworld/combatController';
-import {
-  OverworldMovementController,
-} from './overworld/movementController';
-import { OverworldPhysicsCadence, type OverworldMovementInput } from './overworld/physicsCadence';
-import { OverworldGameFeelController } from './overworld/gameFeel';
-import { OverworldPlayerDeathPresentation } from './overworld/playerDeathPresentation';
-import { OverworldPlayerHealthController } from './overworld/playerHealth';
-import { OverworldQuicksandController } from './overworld/quicksandController';
-import {
-  OverworldPlayerPresentationController,
-  type OverworldPlayerPresentationControllerState,
-} from './overworld/playerPresentation';
-import {
-  OverworldObjectiveController,
-} from './overworld/objectiveController';
-import {
-  OverworldSessionResetController,
-} from './overworld/sessionReset';
-import {
-  OverworldRoomTransitionController,
-} from './overworld/roomTransition';
-import {
-  OverworldWindowController,
-} from './overworld/windowController';
-import {
-  OverworldViewportController,
-} from './overworld/viewportController';
-import {
-  OverworldPresenceOverlayController,
-} from './overworld/presenceOverlays';
-import {
-  OverworldSelectionController,
-} from './overworld/selection';
-import { OverworldSignController } from './overworld/signPosts';
-import { getBodyVelocityAlongVector, getGravityVector, OverworldSpecialTilesController } from './overworld/specialTiles';
-import {
-  createPortalTargetRoomPreparationAdapter,
-  OverworldPortalObjectController,
-} from './overworld/portalObjects';
-import {
-  OverworldRoomCellController,
-} from './overworld/roomCells';
-import {
-  OverworldWorldStreamingController,
-  type LoadedFullRoom,
-} from './overworld/worldStreaming';
-import { BrowseRealtimeStartupGate } from './overworld/browseRealtimeStartup';
-import {
-  recordExpandedRoomRunDeath,
-  type ActiveExpandedRoomRunState,
-} from './overworld/expandedRoomRuns';
+  OverworldRoomRushResultController,
+  type RoomRushOverviewCameraState,
+} from './overworld/roomRushResults';
 import {
   type ActiveRoomRushRunState,
   type RoomRushDifficulty,
   type RoomRushStartRule,
 } from './overworld/roomRushRuns';
 import {
-  OverworldRoomRushResultController,
-  type RoomRushOverviewCameraState,
-} from './overworld/roomRushResults';
-import {
-  OverworldRoomRushModeController,
-} from './overworld/roomRushMode';
+  OverworldRoomTransitionController,
+} from './overworld/roomTransition';
 import { OverworldRuntimeContext } from './overworld/runtimeContext';
-import { OverworldBackdropController } from './overworld/backdropController';
-import { dispatchSignal } from '../events/typedEvent';
 import {
-  RankedRunTraceRecorder,
-  type RankedRunTraceBinding,
-  type RankedRunTraceFrameInput,
-} from './overworld/rankedRunTraceRecorder';
-import type { RankedRunVerificationTrace } from '../runs/verificationTrace';
-import { GuestRunPlaybackController } from './overworld/guestRunPlayback';
-import { GUEST_RUN_PROGRESS_CHANGED_EVENT, type GuestRunSaveResult } from '../guestRooms/runService';
+  OverworldRuntimeController,
+  type OverworldRoomEdgeWall,
+} from './overworld/runtimeController';
 import {
-  getScrollForScreenAnchor,
-  type CameraMode,
-} from './overworld/camera';
+  OverworldSelectionController,
+} from './overworld/selection';
+import {
+  OverworldSessionResetController,
+} from './overworld/sessionReset';
+import { OverworldSignController } from './overworld/signPosts';
+import { OverworldSpecialTilesController } from './overworld/specialTiles';
 import {
   terrainTileCollidesAtLocalPixel,
 } from './overworld/terrainCollision';
 import {
-  isPvpDangerousObjectConfig,
-  isPvpSolidObjectConfig,
-  resolvePvpSpawnPoint as resolvePvpArenaSpawnPoint,
-} from './overworld/pvpSpawn';
+  OverworldViewportController,
+} from './overworld/viewportController';
+import {
+  OverworldWindowController,
+} from './overworld/windowController';
+import {
+  OverworldWorldStreamingController,
+  type LoadedFullRoom,
+} from './overworld/worldStreaming';
 import type {
   EditorCourseEditData,
   OverworldMode,
   OverworldPlaySceneData,
 } from './sceneData';
-import {
-  consumeTouchAction,
-  getTouchInputState,
-} from '../ui/mobile/touchControls';
-import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
-import { getPerformanceSuggestionModalController } from '../ui/setup/performanceSuggestionModal';
-import {
-  createMobilePerformanceProfiler,
-  type MobilePerformanceContext,
-  type MobilePerformanceProfiler,
-} from '../debug/mobilePerformanceProfiler';
-import type { RunFrameWorkResult } from './overworld/frameWorkCoordinator';
 
-const MIN_ZOOM = 0.08;
-const MAX_ZOOM = 2.5;
 const DEFAULT_ZOOM = 0.18;
-const BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 15000;
-const PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS = 8000;
 const FRAME_HUD_RENDER_INTERVAL_MS = 100;
 const PRESENCE_SNAPSHOT_SYNC_INTERVAL_MS = 200;
 const PERFORMANCE_ADVISOR_PRESENTATION_STABLE_MS = 1_000;
 const PERFORMANCE_ADVISOR_DEFAULT_FRAME_TARGET_MS = 1_000 / 60;
-const BUTTON_ZOOM_FACTOR = 1.12;
-const WHEEL_ZOOM_SENSITIVITY = 0.003;
-const PLAY_ROOM_FIT_PADDING = 16;
-const EDGE_WALL_THICKNESS = 12;
-const RESPAWN_FALL_DISTANCE = ROOM_PX_HEIGHT * 2;
-const FOLLOW_CAMERA_LERP = 0.12;
-const MOBILE_PLAY_CAMERA_TARGET_Y = 0.75;
 // The canvas ends at the portrait console, so this is a share of the visible play area
 // (0.34 of the old full-height canvas put the player at the same spot).
 const MOBILE_PORTRAIT_PLAY_CAMERA_TARGET_Y = 0.53;
@@ -626,1569 +662,486 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
   constructor() {
     super({ key: 'OverworldPlayScene' });
-    this.backdropController = new OverworldBackdropController({
-      scene: this,
-      updateWorldBackgrounds: (camera) =>
-        this.worldStreamingController.updateFullRoomBackgrounds(camera),
-    });
-    this.runtimeContext = new OverworldRuntimeContext({
-      getPlayer: () => this.player,
-      getPlayerBody: () => this.playerBody,
-      getPlayerSprite: () => this.playerSprite,
-      getPlayerPickupSensor: () => this.playerPickupSensor,
-      getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
-      getMode: () => this.mode,
-      setMode: (mode) => { this.mode = mode; },
-      getCameraMode: () => this.cameraMode,
-      setCameraMode: (mode) => { this.cameraMode = mode; },
-      getSelectedCoordinates: () => this.selectedCoordinates,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-      isPvpArenaActive: () => this.pvpArenaController?.isArenaActive() ?? false,
-      isPvpMatchActive: () => this.pvpArenaController?.isMatchActive() ?? false,
-      isRoomRushActive: () => Boolean(this.roomRushModeController?.getCurrentRun()),
-      isBackdropCameraActive: () => this.backdropController.isCameraActive(),
-      getBackdropLayerCount: () => this.backdropController.getLayerCount(),
-      isLightingActive: () => this.mode === 'play',
-    });
-    this.quicksandController = new OverworldQuicksandController({
-      getCurrentTime: () => gameplayNow(this),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-    });
-    const thisScene = this;
-    this.playerDeathPresentation = new OverworldPlayerDeathPresentation(this, () => this.playerSprite);
-    this.gameFeelController = new OverworldGameFeelController({
-      canApplyFeedback: () => this.mode === 'play' && this.playerBody !== null,
-      isPvpActive: () => this.isPvpMatchActive(),
-      isPhysicsPaused: () => this.physics.world.isPaused,
-      pausePhysics: () => this.physics.world.pause(),
-      resumePhysics: () => this.physics.world.resume(),
-      hidePlayer: () => this.playerDeathPresentation.hide(),
-      restorePlayerVisual: () => this.playerDeathPresentation.restore(),
-      fadeInPlayer: duration => this.playerDeathPresentation.fadeIn(duration),
-    });
-    this.ghostRaceController = new OverworldGhostRaceController({
-      runtime: this.runtimeContext,
-      scene: this, getRun: () => this.goalRunController?.getCurrentRun() ?? null,
-      getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
-      getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
-      onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
-      showStatus: message => this.showTransientStatus(message),
-    });
-    this.playerHealthController = new OverworldPlayerHealthController({
-      runtime: this.runtimeContext,
-      scene: this,
-      getMaximumHearts: () => getPlayableMaximumHearts({
-        course: this.activeCourseSnapshot,
-        expandedRoom: this.roomSummariesById.get(roomIdFromCoordinates(this.currentRoomCoordinates))?.expandedRoom ?? null,
-        room: this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates),
-      }),
-      isActive: () => this.mode === 'play' && !this.activeRoomRushRun && !this.isPvpArenaActive(),
-      isPvpActive: () => this.isPvpArenaActive(),
-      isDeathPending: () => this.gameFeelController.isDeathPending(),
-      getCurrentTime: () => gameplayNow(this),
-      onHurt: () => {
-        this.combatController.clearAttackAnimation();
-        this.movementController.applyHurtKnockback(this.playerFacing as -1 | 1);
-        playSfx('player-hurt');
-        this.showTransientStatus('You lost a heart.');
-      },
-    });
-    const guestRuns = this.guestRunPlaybackController = new GuestRunPlaybackController({
-      getCurrentRun: kind => kind === 'room' ? this.goalRunController?.getCurrentRun() ?? null : this.activeCourseRun,
-      startTrace: (kind, binding) => this.startRankedRunTrace(kind, binding),
-      clearTrace: () => this.clearRankedRunTrace(),
-      renderHud: () => this.renderHud(),
-      onSaved: run => this.ghostRaceController.confirmGuest(run),
-    });
-    this.goalRunController = new OverworldGoalRunController({
-      playerHeight: this.PLAYER_HEIGHT,
-      isAssistActive: () => this.assist?.requestedForRun() ?? false,
-      runRepository: createRunRepository(),
-      guestRuns,
-      getScore: () => this.score,
-      getAuthenticated: () => getAuthDebugState().authenticated,
-      getAuthSource: () => getAuthDebugState().source ?? null,
-      getAuthDisplayName: () => getAuthDebugState().user?.displayName ?? null,
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      countRoomObjectsByCategory: (room, category) =>
-        this.countRoomObjectsByCategory(room, category),
-      onRankedRunPreparing: kind => this.prepareRankedRunTrace(kind),
-      onRankedRunStarted: (binding) => {
-        this.startRankedRunTrace(binding.kind, binding);
-      },
-      buildVerificationTrace: (runState, result) =>
-        this.buildRankedRunVerificationTrace('room', runState.elapsedMs, result),
-      clearVerificationTrace: () => {
-        this.clearRankedRunTrace();
-      },
-      onDraftGoalCompleted: run => { recordEditorDraftClear(this.editorPlaytestReturnTarget?.clearCheck, run); },
-    });
-    this.roomAudioController = new OverworldRoomAudioController({
-      runtime: this.runtimeContext,
-      scene: this,
-    });
-    this.lightingController = new RoomLightingController({
-      scene: this,
-      overlayDepth: 35,
-    });
-    this.weatherController = new RoomWeatherController({
-      scene: this,
-      depth: 34,
-    });
-    this.respawnCheckpointController = new OverworldRespawnCheckpointController({
-      getScope: () => {
-        if (this.mode !== 'play' || this.activeRoomRushRun || this.isPvpArenaActive()) return null;
-        if (this.activeCourseRun) return goalEndsOnDeath(this.activeCourseRun.course.goal) ? null
-          : { owner: this.activeCourseRun, roomIds: this.activeCourseRun.course.roomRefs.map(ref => ref.roomId) };
-        const roomId = roomIdFromCoordinates(this.currentRoomCoordinates);
-        const run = this.currentGoalRun?.roomId === roomId ? this.currentGoalRun : null;
-        if (goalEndsOnDeath(run?.goal)) return null;
-        return { owner: run ?? `room:${roomId}`, phase: run?.qualificationState, roomIds: [roomId] };
-      },
-      onActivated: checkpoint => {
-        if (checkpoint.kind !== 'object') return;
-        this.recordRankedGoalEvent({ type: 'respawn_checkpoint', ...checkpoint });
-        const origin = this.getRoomOrigin(checkpoint.roomCoordinates);
-        this.fxController?.playGoalFx('checkpoint', origin.x + checkpoint.x, origin.y + checkpoint.y);
-        this.showTransientStatus('Checkpoint reached.');
-      },
-      onChanged: () => {
-        this.liveObjectController?.syncRespawnCheckpointPresentation();
-      },
-    });
-    this.lostSongController = new OverworldLostSongController({
-      getContext: createLostSongContext({
-        canPlay: () => this.mode === 'play' && Boolean(this.playerBody) && !this.gameFeelController.isDeathPending(),
-        getCoordinates: () => this.currentRoomCoordinates, getRoom: coordinates => this.getRoomSnapshotViewForCoordinates(coordinates),
-        getCourse: () => this.activeCourseRun, isAssisted: () => this.assist?.isPracticeFind() ?? false,
-        getCreator: id => this.roomSummariesById.get(id)?.creatorUserId ?? null, getOrigin: coordinates => this.getRoomOrigin(coordinates),
-        getPosition: () => this.playerBody!.center,
-      }),
-      showStatus: message => this.showTransientStatus(message),
-      onFoundChanged: () => {
-        this.liveObjectController?.syncLostSongPresentation();
-        this.roomCellController?.redraw();
-      },
-    });
-    this.liveObjectController = new OverworldLiveObjectController({
-      scene: this,
-      settings: {
-        bouncePadVelocity: this.BOUNCE_PAD_VELOCITY,
-        bouncePadCooldownMs: this.BOUNCE_PAD_COOLDOWN_MS,
-        bouncePadActiveMs: this.BOUNCE_PAD_ACTIVE_MS,
-        batSpeed: this.BAT_SPEED,
-        batWaveAmplitude: this.BAT_WAVE_AMPLITUDE,
-        batWaveSpeed: this.BAT_WAVE_SPEED,
-        birdSpeed: this.BIRD_SPEED,
-        birdWaveAmplitude: this.BIRD_WAVE_AMPLITUDE,
-        birdWaveSpeed: this.BIRD_WAVE_SPEED,
-        crabSpeed: this.CRAB_SPEED,
-        snakeSpeed: this.SNAKE_SPEED,
-        slimeSpeed: this.SLIME_SPEED,
-        penguinSpeed: this.PENGUIN_SPEED,
-        frogHopSpeed: this.FROG_HOP_SPEED,
-        frogHopVelocity: this.FROG_HOP_VELOCITY,
-        frogHopDelayMs: this.FROG_HOP_DELAY_MS,
-        cannonFireDelayMs: this.CANNON_FIRE_DELAY_MS,
-        cannonBulletSpeed: this.CANNON_BULLET_SPEED,
-        cannonBulletLifetimeMs: this.CANNON_BULLET_LIFETIME_MS,
-        tornadoLiftVelocity: this.TORNADO_LIFT_VELOCITY,
-        tornadoSideVelocity: this.TORNADO_SIDE_VELOCITY,
-        tornadoCooldownMs: this.TORNADO_COOLDOWN_MS,
-        respawnFallDistance: RESPAWN_FALL_DISTANCE,
-        enemyStompBounceVelocity: this.JUMP_VELOCITY * 0.58,
-      },
-      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getPlacedObjectRuntimeKey: (roomId, placedObject, placedIndex) =>
-        this.getPlacedObjectRuntimeKey(roomId, placedObject, placedIndex),
-      isCollectedObjectKey: (key) =>
-        this.collectedObjectKeys.has(key) || this.multiplayerRemovedObjectKeys.has(key),
-      markCollectedObjectKey: (key) => {
-        this.collectedObjectKeys.add(key);
-      },
-      getPlayer: () => this.gameFeelController.isDeathPending() ? null : this.player,
-      getPlayerPickupSensor: () => this.gameFeelController.isDeathPending() ? null : this.playerPickupSensor,
-      getPlayerBody: () => this.gameFeelController.isDeathPending() ? null : this.playerBody,
-      getCoopPlateActors: () => Boolean(getActiveWorldId()) || this.roomRushModeController.isActive()
-        || (this.activePvpMatch && this.activePvpMatch.status !== 'complete') ? []
-        : this.presenceController.getCoopPlatePlayers().map(ghost => ({
-          roomId: ghost.roomId, x: ghost.x, feetY: ghost.y - DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-        })),
-      getEnemyStompBounceVelocity: () => {
-        const jumpHeld = this.gameplayKeyboard.held('up') || this.gameplayKeyboard.held('jump') || getTouchInputState().jumpHeld
-          || this.gamepadInput.held('jump') || this.gamepadInput.held('up');
-        return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
-      },
-      playEnemyStompImpact: () => { if (!prefersReducedMotion()) this.cameras.main.shake(50, 0.002); },
-      ...createSpecialTileCallbacks(() => this.specialTilesController),
-      swordsmanTraversalPlannerMode: this.getSwordsmanTraversalPlannerMode(),
-      isPlayerClimbingLadder: () => this.movementController.isClimbingLadder(),
-      isLadderDropRequested: () => this.isLadderDropRequested(),
-      isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
-      handlePlayerButtStompImpact: (bounceVelocity) =>
-        this.movementController.handleButtStompImpact(bounceVelocity),
-      getCurrentTime: () => gameplayNow(this),
-      addScore: (delta) => {
-        this.score += delta;
-      },
-      onKeyCollected: () => {
-        this.heldKeyCount += 1;
-      },
-      onHealingCollected: () => this.playerHealthController.heal(),
-      onLostSongCollected: roomId => this.lostSongController.collect(roomId),
-      isLostSongGhosted: roomId => this.lostSongController.isGhosted(roomId),
-      onRespawnCheckpointTouched: checkpoint => { this.respawnCheckpointController.activate(checkpoint); },
-      isRespawnCheckpointReached: (roomId, instanceId) => this.respawnCheckpointController.isObjectReached(roomId, instanceId),
-      tryConsumeHeldKey: () => {
-        if (this.heldKeyCount <= 0) {
-          return false;
-        }
-
-        this.heldKeyCount -= 1;
-        return true;
-      },
-      touchQuicksand: () => {
-        this.quicksandController.touch();
-      },
-      grantExternalLaunchGrace: (durationMs) => {
-        this.externalLaunchGraceUntil = Math.max(
-          this.externalLaunchGraceUntil,
-          gameplayNow(this) + durationMs
-        );
-      },
-      getPlayerGravityDirection: () => this.specialTilesController.getPlayerEnvironment().gravityDirection,
-      launchPlayerFromSpring: (x, y, durationMs) => this.movementController.launchFromSpring(x, y, durationMs),
-      grantPlayerAirJump: () => this.movementController.grantAirJump(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
-      onEnemyDefeated: (event) => this.handleEnemyDefeated(event),
-      onNpcDefeated: (event) => this.handleNpcDefeated(event),
-      onCollectibleCollected: (event) => this.handleCollectibleCollected(event),
-      onEnemyCollectibleCollected: (event) => this.handleEnemyCollectibleCollected(event),
-      onLiveObjectRemoved: (event) => this.handleLiveObjectRemovedForMultiplayer(event),
-      onRoomSwitchStateChanged: (event) =>
-        this.handleRoomSwitchStateChangedForMultiplayer(event),
-      playRoomSfx: (cue, roomCoordinates) =>
-        this.roomAudioController.playRoomSfx(cue, roomCoordinates),
-      playEnemyKillFx: (x, y, roomCoordinates) => {
-        this.fxController?.playEnemyKillFx(
-          x,
-          y,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
-        );
-        this.gameFeelController.hitstop();
-      },
-      playCollectFx: (x, y, scoreDelta, roomCoordinates, cue) =>
-        this.fxController?.playCollectFx(
-          x,
-          y,
-          scoreDelta,
-          cue,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
-        ),
-      playBounceFx: (x, y, roomCoordinates, cue) =>
-        this.fxController?.playBounceFx(
-          x,
-          y,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates),
-          cue
-        ),
-      playBombExplosionFx: (x, y, roomCoordinates) =>
-        this.fxController?.playBombExplosionFx(
-          x,
-          y,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates)
-        ),
-    });
-    this.signController = new OverworldSignController({
-      getMode: () => this.mode,
-      getPlayerBody: () => this.playerBody,
-      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
-    });
-    const portalTargetRoomPreparation = createPortalTargetRoomPreparationAdapter({
-      resolveRoomCoordinates: parseRoomId,
-      preparePortalTargetRoomForTransition: (coordinates) =>
-        this.worldStreamingController.preparePortalTargetRoomForTransition(coordinates),
-      clearPortalTargetRoomPreparation: (roomId) =>
-        this.worldStreamingController.clearPortalTargetRoomPreparation(roomId),
-    });
-    this.portalObjectController = new OverworldPortalObjectController({
-      getMode: () => this.mode,
-      getCurrentTime: () => gameplayNow(this),
-      getPlayerBody: () => this.playerBody,
-      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
-      getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
-      requestPortalTargetRoomPreparation: (roomId) =>
-        portalTargetRoomPreparation.request(roomId),
-      clearPortalTargetRoomPreparation: (roomId) =>
-        portalTargetRoomPreparation.clear(roomId),
-      authorizeRoomTransition: (coordinates) =>
-        this.roomTransitionController.authorizeTeleportTransition(coordinates),
-      teleportPlayerTo: (x, y, velocity) =>
-        this.teleportPlayerToPortalObject(x, y, velocity),
-      playPortalFx: () => {
-        playSfx('warp');
-      },
-    });
-    this.specialTilesController = new OverworldSpecialTilesController(this, {
-      getMode: () => this.mode,
-      getCurrentTime: () => gameplayNow(this),
-      getPlayerBody: () => this.playerBody,
-      isBodyInSwimmableWater: (body) => this.liveObjectController.isBodyInSwimmableWater(body),
-      getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
-      getLoadedFullRoomById: (roomId) => this.getCollisionReadyLoadedFullRoomById(roomId),
-      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      grantExternalLaunchGrace: (durationMs) => {
-        this.externalLaunchGraceUntil = Math.max(
-          this.externalLaunchGraceUntil,
-          gameplayNow(this) + durationMs
-        );
-      },
-      isPlayerButtStomping: () => this.movementController.isButtStompImpactActive(),
-      handlePlayerButtStompImpact: (bounceVelocity) =>
-        this.movementController.handleButtStompImpact(bounceVelocity),
-      handlePlayerDeath: (reason) => this.sessionResetController.handlePlayerDeath(reason),
-      playBounceFx: (x, y, roomCoordinates, cue) =>
-        this.fxController?.playBounceFx(
-          x,
-          y,
-          this.roomAudioController.getPlaybackOptionsForRoom(roomCoordinates),
-          cue
-        ),
-    });
-    this.worldStreamingController = new OverworldWorldStreamingController({
-      scene: this,
-      worldRepository: createWorldRepository(),
-      getMode: () => this.mode,
-      getPerformanceProfile: () => getDeviceLayoutState().performanceProfile,
-      getDevicePerformanceMode: () => getDevicePerformanceMode(),
-      getSelectedCoordinates: () => this.selectedCoordinates,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-      refreshRoomSummariesForTransition: (centerCoordinates) =>
-        this.refreshAround(centerCoordinates, { forceChunkReload: true }),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getPlayer: () => this.player,
-      shouldCollidePlayerWithTerrainTile: (tile) =>
-        this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
-      createLiveObjects: (loadedRoom) => this.createLiveObjects(loadedRoom),
-      createLiveObjectsBatch: (loadedRoom, startIndex, endIndex, dormant) =>
-        this.liveObjectController.createLiveObjectsBatch(
-          loadedRoom,
-          startIndex,
-          endIndex,
-          dormant,
-        ),
-      finalizeLiveObjectCreation: (loadedRoom, dormant) =>
-        this.liveObjectController.finalizeLiveObjectCreation(loadedRoom, dormant),
-      onPreparedLiveObjectsReady: (loadedRoom) =>
-        this.syncActiveCourseObjectLinks([loadedRoom]),
-      setLiveObjectsDormant: (loadedRoom, dormant) =>
-        this.liveObjectController.setLoadedRoomLiveObjectsDormant(loadedRoom, dormant),
-      destroyLiveObjects: (loadedRoom, options) => this.destroyLiveObjects(loadedRoom, options),
-      destroyLiveObjectsBatch: (loadedRoom, maxObjectCount, options) =>
-        this.liveObjectController.destroyLiveObjectsBatch(
-          loadedRoom,
-          maxObjectCount,
-          options,
-        ),
-      destroyEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
-      syncLiveObjectWorldColliders: (loadedRooms) =>
-        this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
-      setLiveObjectWorldCollisionTargetDormant: (loadedRoom, dormant) =>
-        this.liveObjectController.setLoadedRoomWorldCollisionTargetDormant(
-          loadedRoom,
-          dormant,
-        ),
-      getLiveObjectPhysicsReconciliationGeneration: () =>
-        this.liveObjectController.getPhysicsReconciliationGeneration(),
-      syncLiveObjectInteractions: (loadedRooms) =>
-        this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
-      getProtectedFullRoomIds: (targetFullRoomIds) =>
-        this.getProtectedMovingPlatformSourceRoomIds(targetFullRoomIds),
-      onFullRoomVisibilityChanged: () => this.syncGhostVisibility(),
-      onFullRoomSetChanged: (coordinates) => {
-        this.syncGhostVisibility();
-        this.runtimeController?.syncEdgeWallsForCoordinates(coordinates);
-      },
-      onFullRoomCollisionReady: (loadedRoom) => {
-        if (
-          this.mode === 'play'
-          && loadedRoom.room.id === roomIdFromCoordinates(this.currentRoomCoordinates)
-          && (!this.player || this.shouldRespawnPlayer)
-        ) {
-          this.runtimeController?.syncModeRuntime();
-        }
-      },
-      onFullRoomDestroyed: (loadedRoom) => {
-        this.specialTilesController.handleFullRoomDestroyed(loadedRoom.room.id);
-        this.portalObjectController.handleFullRoomDestroyed(loadedRoom.room.id);
-      },
-      onFullRoomReplaced: (loadedRoom) => this.handleFullRoomReplaced(loadedRoom),
-      onSelectedExactRoomSnapshotReady: () => {
-        this.updateSelectedSummary();
-        void this.refreshLeaderboardForSelection();
-        this.renderHud();
-      },
-      onPerformanceAdvisorExactSnapshotEvent: (event) => {
-        performanceAdvisorRuntime.advisor.recordExactSnapshot(event);
-      },
-      onPerformanceAdvisorDestinationProgress: (
-        roomId,
-        generation,
-        progressRevision,
-        atMs,
-      ) => {
-        performanceAdvisorRuntime.advisor.recordDestinationProgress(
-          roomId,
-          generation,
-          progressRevision,
-          atMs,
-        );
-      },
-      measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
-    });
-    this.roomRushResultController = new OverworldRoomRushResultController(this, {
-      getMode: () => this.mode,
-      returnToWorld: () => this.returnToWorld(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      applyOverviewCameraState: (state) => this.applyRoomRushResultOverviewCameraState(state),
-      refreshAround: (coordinates) => this.worldStreamingController.refreshAround(coordinates),
-      setWindowCenterCoordinates: (coordinates) => {
-        this.windowCenterCoordinates = { ...coordinates };
-      },
-      syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
-      updateCameraBounds: () => this.updateCameraBounds(),
-      flushPendingPreviewTextureBuilds: () =>
-        this.worldStreamingController.flushPendingPreviewTextureBuilds(),
-      syncPreviewVisibility: () => this.syncPreviewVisibility(),
-      updateBackdrop: () => this.updateBackdrop(),
-      redrawWorld: () => this.redrawWorld(),
-      renderHud: () => this.renderHud(),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-    }, {
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-    });
-    this.roomRushModeController = new OverworldRoomRushModeController({
-      getMode: () => this.mode,
-      setMode: (mode) => {
-        this.mode = mode;
-      },
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      getInspectZoom: () => this.inspectZoom,
-      setInspectZoom: (zoom) => {
-        this.inspectZoom = zoom;
-      },
-      setBrowseInspectZoom: (zoom) => {
-        this.browseInspectZoom = zoom;
-      },
-      getFitZoomForRoom: () => this.getFitZoomForRoom(),
-      setShouldCenterCamera: (value) => {
-        this.shouldCenterCamera = value;
-      },
-      setShouldRespawnPlayer: (value) => {
-        this.shouldRespawnPlayer = value;
-      },
-      isWithinLoadedRoomBounds: (coordinates) =>
-        this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
-      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
-      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
-        this.refreshAroundIfNeededOrFromCache(coordinates, options),
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotForCoordinates(coordinates),
-      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
-      isMultiCellExpandedRoomAt: (coordinates) => this.isMultiCellExpandedRoomAt(coordinates),
-      resetPlaySession: () => {
-        this.sessionResetController.resetPlaySession();
-      },
-      clearTouchGestureState: () => this.clearTouchGestureState(),
-      clearCurrentGoalRun: () => {
-        this.goalRunController.clearCurrentRun();
-      },
-      clearRoomGoalIntroState: () => this.clearRoomGoalIntroState(),
-      syncScenePauseState: () => this.syncScenePauseState(),
-      syncModeRuntime: () => this.runtimeController.syncModeRuntime(),
-      syncAppMode: () => this.syncAppMode(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      renderHud: () => this.renderHud(),
-    }, this.roomRushResultController);
-    this.presenceController = new OverworldPresenceController({
-      scene: this,
-      isFullRoomLoaded: (roomId) => this.loadedFullRoomsById.has(roomId),
-      isConstructionRoomLoaded: (roomId) =>
-        this.loadedFullRoomsById.get(roomId)?.room.status === 'draft',
-      getMode: () => this.mode,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-      getSelectedCoordinates: () => this.selectedCoordinates,
-      getZoom: () => this.cameras.main.zoom,
-      onSnapshotUpdated: () => {
-        this.queuePresenceSnapshotSync();
-      },
-      onRoomActivityChanged: () => this.redrawWorld(),
-      onPvpInvite: (invite) => {
-        void this.handlePvpInvite(invite);
-      },
-      onPvpInviteAccepted: (message) => {
-        void this.handlePvpInviteAccepted(message.matchId, message.acceptedBy);
-      },
-      onPvpInviteDeclined: (message) => {
-        this.showTransientStatus(`${message.declinedBy.displayName} declined the duel.`);
-      },
-    });
-    this.combatPresentationController = new OverworldCombatPresentationController({
-      scene: this,
-      getLocalTime: () => gameplayNow(this),
-      playSwordSlashFx: (x, y, facing, downward) =>
-        this.fxController?.playSwordSlashFx(x, y, facing, downward),
-      playMuzzleFlashFx: (x, y, facing) =>
-        this.fxController?.playMuzzleFlashFx(x, y, facing),
-    });
-    this.pvpInstanceRenderer = new MultiplayerRemotePlayerRenderer({
-      scene: this,
-      playerWidth: this.PLAYER_WIDTH,
-      playerHeight: this.PLAYER_HEIGHT,
-      playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
-      presentCombatEvent: (event, receivedAt) => this.presentRemotePvpCombatEvent(event, receivedAt),
-    });
-    this.pvpLocalPresentationController = new OverworldPvpLocalPresentationController({
-      scene: this,
-      playerWidth: this.PLAYER_WIDTH,
-      playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
-      getPlayerSprite: () => this.playerSprite,
-    });
-    this.pvpArenaController = new OverworldPvpArenaController({
-      getIdentity: () => this.presenceController.getIdentity(),
-      getSelectedCoordinates: () => this.selectedCoordinates,
-      getSelectedRoom: () => this.getRoomSnapshotForCoordinates(this.selectedCoordinates),
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotForCoordinates(coordinates),
-      getPvpOpponentIdentity: (connectionId) => this.getPvpOpponentIdentity(connectionId),
-      sendPvpInvite: (targetConnectionId, invite) =>
-        this.presenceController.sendPvpInvite(targetConnectionId, invite),
-      acceptPvpInvite: (invite) => this.presenceController.acceptPvpInvite(invite),
-      declinePvpInvite: (invite) => {
-        this.presenceController.declinePvpInvite(invite);
-      },
-      isWithinLoadedRoomBounds: (coordinates) =>
-        this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
-      refreshAround: (coordinates) => this.refreshAround(coordinates),
-      prepareArenaDuel: (roomCoordinates, opponentUserId, modeDefinition) =>
-        this.preparePvpArenaDuel(roomCoordinates, opponentUserId, modeDefinition),
-      refreshPlayerHitbox: () => this.movementController.refreshPlayerHitbox(),
-      syncPresenceMatchSnapshot: (snapshot, localUserId, opponentUserId) => {
-        this.presenceController.setPvpMatchSnapshot(snapshot, localUserId);
-        this.presenceController.setPvpInstanceOpponentUserId(opponentUserId);
-      },
-      syncInstanceMatchSnapshot: (snapshot, localUserId) =>
-        this.pvpInstanceRenderer.syncMatchSnapshot(snapshot, localUserId),
-      handlePeerState: (state) => this.pvpInstanceRenderer.handlePeerState(state),
-      handlePeerCombatEvent: (event) => this.pvpInstanceRenderer.handleCombatEvent(event),
-      handlePeerRoomStateEvent: (event) => this.handlePeerRoomStateEvent(event),
-      destroyCombatProjectiles: () => this.combatPresentationController.destroyProjectiles(),
-      maybeApplyStartingPosition: (snapshot) => this.maybeApplyPvpStartingPosition(snapshot),
-      applyCameraLock: () => this.applyPvpArenaCameraLock(),
-      syncLocalHeartLabel: () => this.syncPvpLocalHeartLabel(),
-      playLocalDamageFeedback: (previousHearts, nextHearts) =>
-        this.playPvpLocalDamageFeedback(previousHearts, nextHearts),
-      clearSceneRuntime: () => this.clearPvpSceneRuntime(),
-      returnToWorld: () => this.returnToWorld(),
-      renderHud: () => this.renderHud(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      onSetupStateChanged: (inProgress) => {
-        getPerformanceSuggestionModalController()?.handlePvpSetupStateChanged(inProgress);
-      },
-    });
-    this.roomChatController = new OverworldRoomChatController({
-      scene: this,
-      getMode: () => this.mode,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-      getPlayerAnchor: () =>
-        this.player && this.playerBody
-          ? {
-              x: this.player.x,
-              y: this.playerBody.bottom + DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-            }
-          : null,
-      getPresenceClient: () => this.presenceController.getClient(),
-      getRenderedGhostsByConnectionId: () => this.presenceController.getRenderedGhostsByConnectionId(),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-    });
-    this.browseRealtimeStartupGate = new BrowseRealtimeStartupGate({
-      runtime: this.runtimeContext,
-      waitForBrowseReady: (signal) =>
-        this.worldStreamingController.waitForBrowseSecondaryStartupReady(signal),
-      applySubscriptions: () => this.applyPresenceSubscriptions(),
-      onWaitError: (error) => {
-        console.warn('Failed to wait for browse imagery before realtime startup', error);
-      },
-    });
-    this.roomCommentsController = new OverworldRoomCommentsController({
-      scene: this,
-      getMode: () => this.mode,
-      getCurrentRoomSnapshot: () =>
-        this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates) as RoomSnapshot | null,
-      isCurrentRoomPublished: () => this.getCellStateAt(this.currentRoomCoordinates) === 'published',
-      getWorldWindow: () => this.worldWindow,
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getPlayerCommentPosition: () => this.getPlayerCommentPosition(),
-      getZoom: () => this.cameras.main.zoom,
-      selectRoomCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
-      jumpToRoomCoordinates: (coordinates) => this.jumpToCoordinates(coordinates),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      waitForBrowseDiscoveryReady: (signal) =>
-        this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
-    });
-    this.coursePlaybackController = new OverworldCoursePlaybackController({
-      isAssistActive: () => this.assist?.requestedForRun() ?? false,
-      guestRuns,
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getActiveCourseRun: () => this.activeCourseRun,
-      setActiveCourseRun: (runState) => {
-        this.setActiveCourseRun(runState);
-      },
-      clearTransientRoomOverride: (roomId) => {
-        this.worldStreamingController.clearTransientRoomOverride(roomId);
-      },
-      clearTransientRoomOverrides: (roomIds) => {
-        this.worldStreamingController.clearTransientRoomOverrides(roomIds);
-      },
-      setTransientRoomOverride: (snapshot) => {
-        this.worldStreamingController.setTransientRoomOverride(snapshot);
-      },
-      setTransientRoomOverrides: (snapshots) => {
-        this.worldStreamingController.setTransientRoomOverrides(snapshots);
-      },
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotForCoordinates(coordinates),
-      countRoomObjectsByCategory: (room, category) =>
-        this.countRoomObjectsByCategory(room, category),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      renderHud: () => this.renderHud(),
-      onRankedRunPreparing: kind => this.prepareRankedRunTrace(kind),
-      onRankedRunStarted: (binding) => {
-        this.startRankedRunTrace(binding.kind, binding);
-      },
-      buildVerificationTrace: (runState, result) =>
-        this.buildRankedRunVerificationTrace('course', runState.elapsedMs, result),
-      clearVerificationTrace: () => {
-        this.clearRankedRunTrace();
-      },
-    });
-    this.roomMusicPlaybackController = new OverworldRoomMusicPlaybackController(
-      {
-        getRoomSnapshotViewForCoordinates: (coordinates) =>
-          this.getRoomSnapshotViewForCoordinates(coordinates),
-        getRoomSummaryById: (roomId) => this.roomSummariesById.get(roomId) ?? null,
-        getRoomSummaries: () => this.roomSummariesById.values(),
-        getRoomSummariesRevision: () => this.worldStreamingController.getRoomSummariesRevision(),
-        getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
-        getCourseStartRoomRef: (course, lockedStartRoomId) =>
-          this.coursePlaybackController.getCourseStartRoomRef(course, lockedStartRoomId),
-      },
-      globalRoomMusicController,
-    );
-    this.windowController = new OverworldWindowController(this, {
-      worldStreamingController: this.worldStreamingController,
-      getMode: () => this.mode,
-      setMode: (mode) => {
-        this.mode = mode;
-      },
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      getInspectZoom: () => this.inspectZoom,
-      setInspectZoom: (zoom) => {
-        this.inspectZoom = zoom;
-      },
-      getBrowseInspectZoom: () => this.browseInspectZoom,
-      setBrowseInspectZoom: (zoom) => {
-        this.browseInspectZoom = zoom;
-      },
-      getFitZoomForRoom: () => this.getFitZoomForRoom(),
-      getRefreshCenterCoordinates: () => this.getZoomFocusCoordinates(),
-      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
-      setWindowCenterCoordinates: (coordinates) => {
-        this.windowCenterCoordinates = { ...coordinates };
-      },
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      setShouldCenterCamera: (value) => {
-        this.shouldCenterCamera = value;
-      },
-      setShouldRespawnPlayer: (value) => {
-        this.shouldRespawnPlayer = value;
-      },
-      syncAppMode: () => this.syncAppMode(),
-      resetPlaySession: () => {
-        this.sessionResetController.resetPlaySession();
-      },
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      setCourseEditorReturnTarget: (target) => {
-        this.courseEditorReturnTarget = target;
-      },
-      setEditorPlaytestReturnTarget: (target) => {
-        this.editorPlaytestReturnTarget = target
-          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
-          : null;
-      },
-      activateDraftCoursePreview: (snapshot, draftRoom) =>
-        this.coursePlaybackController.activateDraftCoursePreview(snapshot, draftRoom),
-      startPublishedCoursePlayback: snapshot => this.flowController.startCoursePlayback(snapshot, 'published'),
-      updateSelectedSummary: () => this.updateSelectedSummary(),
-      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
-      updateCameraBounds: () => this.updateCameraBounds(),
-      syncModeRuntime: () => this.syncModeRuntime(),
-      syncFocusedRoomRuntime: (previousCoordinates, currentCoordinates) =>
-        this.runtimeController.syncFocusedRoomRuntime(previousCoordinates, currentCoordinates),
-      syncFocusedRoomVisuals: () => this.syncFocusedRoomVisuals(),
-      syncPreviewVisibility: () => this.syncPreviewVisibility(),
-      syncPresenceSubscriptions: () => this.syncPresenceSubscriptions(),
-      syncGhostVisibility: () => this.syncGhostVisibility(),
-      syncRoomComments: () => this.roomCommentsController.update(),
-      redrawWorld: () => this.redrawWorld(),
-      renderHud: (statusOverride) => this.renderHud(statusOverride),
-      hideLoadingText: () => {
-        this.loadingText.setVisible(false);
-      },
-      getTimeNow: () => gameplayNow(this),
-      getBrowseRefreshIntervalMs: () => BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
-      getPlayRefreshIntervalMs: () => PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS,
-    });
-    this.objectiveController = new OverworldObjectiveController(
-      {
-        goalRunController: this.goalRunController,
-        getActiveCourseRun: () => this.activeCourseRun,
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-        getPlayerEffectOrigin: () => this.getPlayerEffectOrigin(),
-        toWorldGoalPoint: (roomCoordinates, point) =>
-          this.toWorldGoalPoint(roomCoordinates, point),
-        toWorldCoursePoint: (point) => this.toWorldCoursePoint(point),
-        resetChallengeStateForCurrentRun: () =>
-          this.sessionResetController.resetChallengeStateForCurrentRun(),
-        getRoomNpcState: (roomId, requestedInstanceId) =>
-          this.liveObjectController.getRoomNpcState(roomId, requestedInstanceId),
-        setRoomNpcsVictorious: (roomId, victorious) =>
-          this.liveObjectController.setRoomNpcsVictorious(roomId, victorious),
-        showTransientStatus: (message) => this.showTransientStatus(message),
-        redrawGoalMarkers: () => this.redrawGoalMarkers(),
-        playGoalFx: (effect, x, y, cue) => this.fxController?.playGoalFx(effect, x, y, cue),
-        activateRespawnCheckpoint: (point, checkpointIndex) => {
-          const roomCoordinates = parseRoomId(point.roomId);
-          if (roomCoordinates) this.respawnCheckpointController.activate({ ...point, roomCoordinates,
-            kind: 'goal', instanceId: null, checkpointIndex });
-        },
-        finalizeActiveCourseRun: (result) => {
-          void this.coursePlaybackController.finalizeActiveCourseRun(result);
-        },
-        recordRankedGoalEvent: (event) => {
-          this.recordRankedGoalEvent(event);
-        },
-      },
-      {
-        goalTouchRadius: 18,
-      },
-    );
-    this.gridOverlayController = new OverworldGridOverlayController({
-      scene: this,
-      getWorldWindow: () => this.worldWindow,
-      getZoom: () => this.cameras.main.zoom,
-      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
-    });
-    this.browseOverlayController = new OverworldBrowseOverlayController({
-      scene: this,
-      getWorldWindow: () => this.worldWindow,
-      getMode: () => this.mode,
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getZoom: () => this.cameras.main.zoom,
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-      getRoomSummaryForCoordinates: (coordinates) =>
-        this.roomSummariesById.get(roomIdFromCoordinates(coordinates)) ?? null,
-      getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
-      isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
-      canWarpToSelectedRoom: () => this.canWarpToSelectedRoom(),
-      playSelectedRoom: () => { void this.playSelectedRoom(); },
-      warpToSelectedRoom: () => {
-        void this.warpToSelectedRoom();
-      },
-      truncateOverlayText: (value, maxLength) =>
-        this.truncateOverlayText(value, maxLength),
-    });
-    this.roomCellController = new OverworldRoomCellController({
-      scene: this,
-      getWorldWindow: () => this.worldWindow,
-      getZoom: () => this.cameras.main.zoom,
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-      getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getMode: () => this.mode,
-      isRoomInActiveCourse: (coordinates) => this.isRoomInActiveCourse(coordinates),
-      getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
-      hasFoundLostSong: coordinates => !getActiveWorldId() && getLostSongService().hasFound(roomIdFromCoordinates(coordinates)),
-    });
-    this.goalMarkerController = new OverworldGoalMarkerController({
-      scene: this,
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-    });
-    this.cameraController = new OverworldCameraController(
-      {
-        scene: this,
-        getCurrentRoom: () => this.getRoomSnapshotViewForCoordinates(this.currentRoomCoordinates),
-        getWorldWindow: () => this.worldWindow,
-        getMode: () => this.mode,
-        getCameraMode: () => this.cameraMode,
-        setCameraMode: (mode) => {
-          this.cameraMode = mode;
-        },
-        getInspectZoom: () => this.inspectZoom,
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        isPlayerGrounded: () => Boolean(this.playerBody && this.physicsCadence?.getMovement().grounded
-          && getBodyVelocityAlongVector(this.playerBody,
-            getGravityVector(this.specialTilesController.getPlayerEnvironment().gravityDirection)) >= 0),
-        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-        renderHud: () => this.renderHud(),
-      },
-      {
-        minZoom: MIN_ZOOM,
-        maxZoom: MAX_ZOOM,
-        playRoomFitPadding: PLAY_ROOM_FIT_PADDING,
-        followCameraLerp: FOLLOW_CAMERA_LERP,
-        mobilePlayCameraTargetY: MOBILE_PLAY_CAMERA_TARGET_Y,
-        getMobilePortraitPlayCameraTargetY: () => this.mobilePortraitCameraTargetY,
-      },
-    );
-    this.viewportController = new OverworldViewportController(
-      {
-        scene: this,
-        isRoomCameraFixed: () => this.cameraController.isRoomCameraFixed(),
-        getMode: () => this.mode,
-        getCameraMode: () => this.cameraMode,
-        getPlayer: () => this.player,
-        getInspectZoom: () => this.inspectZoom,
-        setInspectZoom: (zoom) => {
-          this.inspectZoom = zoom;
-        },
-        getBrowseInspectZoom: () => this.browseInspectZoom,
-        setBrowseInspectZoom: (zoom) => {
-          this.browseInspectZoom = zoom;
-        },
-        getZoomFocusCoordinates: () => this.getZoomFocusCoordinates(),
-        centerCameraOnCoordinates: (coordinates) => this.centerCameraOnCoordinates(coordinates),
-        startFollowCamera: (camera) => this.startFollowCamera(camera),
-        constrainInspectCamera: () => this.constrainInspectCamera(),
-        refreshChunkWindowIfNeeded: (centerCoordinates) =>
-          this.refreshChunkWindowIfNeeded(centerCoordinates),
-        updateBackdrop: () => this.updateBackdrop(),
-        redrawWorldCells: () => this.roomCellController.redrawForZoom(),
-        redrawGridOverlay: () => this.gridOverlayController.redraw(),
-        renderHud: () => this.renderHud(),
-        getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-        getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      },
-      {
-        minZoom: MIN_ZOOM,
-        maxZoom: MAX_ZOOM,
-        buttonZoomFactor: BUTTON_ZOOM_FACTOR,
-        wheelZoomSensitivity: WHEEL_ZOOM_SENSITIVITY,
-        measurePerformance: (label, callback) => this.measureMobilePerformance(label, callback),
-      },
-    );
-    this.runtimeController = new OverworldRuntimeController(
-      {
-        scene: this,
-        getLoadedFullRooms: () => this.getCollisionReadyLoadedFullRooms(),
-        getMode: () => this.mode,
-        setMode: (mode) => {
-          this.mode = mode;
-        },
-        getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-        getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-        getCurrentRoomSnapshot: () =>
-          this.worldStreamingController.getPlayableRoomSnapshotViewForCoordinates(
-            this.currentRoomCoordinates,
-          ) as RoomSnapshot | null,
-        getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-        getActiveCourseRun: () => this.activeCourseRun,
-        getActiveRoomRushRun: () => this.activeRoomRushRun,
-        isRoomTransitionLocked: () => this.isPvpArenaActive(),
-        getShouldRespawnPlayer: () => this.shouldRespawnPlayer,
-        setShouldRespawnPlayer: (value) => {
-          this.shouldRespawnPlayer = value;
-        },
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        shouldCollidePlayerWithTerrainTile: (tile) =>
-          this.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
-        createPlayer: (room) => this.createPlayer(room),
-        afterCoursePlayerSpawn: () => this.coursePlaybackController.startRunAfterSpawn(),
-        destroyPlayer: () => this.destroyPlayer(),
-        syncAppMode: () => this.syncAppMode(),
-        setCameraMode: (mode) => {
-          this.cameraMode = mode;
-        },
-        clearCurrentGoalRun: () => {
-          this.goalRunController.clearCurrentRun();
-        },
-        syncGoalRunForRoom: (room, entryContext) => {
-          this.syncGoalRunForRoomWithIntro(room, entryContext);
-        },
-        redrawGoalMarkers: () => this.redrawGoalMarkers(),
-        syncCameraBoundsUsage: () => this.syncCameraBoundsUsage(),
-        syncGhostVisibility: () => this.syncGhostVisibility(),
-        getShouldCenterCamera: () => this.shouldCenterCamera,
-        setShouldCenterCamera: (value) => {
-          this.shouldCenterCamera = value;
-        },
-        centerCameraOnCoordinates: (coordinates) =>
-          this.centerCameraOnCoordinates(coordinates),
-        constrainInspectCamera: () => this.constrainInspectCamera(),
-        applyCameraMode: (forceCenter) => this.applyCameraMode(forceCenter),
-        syncLiveObjectWorldColliders: (loadedRooms) =>
-          this.liveObjectController.syncLoadedWorldColliders(loadedRooms),
-        syncLiveObjectInteractions: (loadedRooms) =>
-          this.liveObjectController.syncLiveObjectInteractions(loadedRooms),
-        clearRoomInteractions: (loadedRoom) =>
-          this.liveObjectController.clearRoomInteractions(loadedRoom),
-        destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
-        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-        getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-        isWithinLoadedRoomBounds: (coordinates) =>
-          this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
-        requestWindowRefreshForUnknownNeighbor: (roomCoordinates, neighborCoordinates) =>
-          this.requestWindowRefreshForUnknownNeighbor(roomCoordinates, neighborCoordinates),
-        getExpandedRoomIdAt: (coordinates) => this.getExpandedRoomIdAt(coordinates),
-        getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
-        isPlayableRoomCollisionReady: (coordinates) =>
-          this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
-      },
-      {
-        edgeWallThickness: EDGE_WALL_THICKNESS,
-      },
-    );
-    this.playerLifecycleController = new OverworldPlayerLifecycleController(
-      {
-        scene: this,
-        getRespawnCheckpointForRoom: room => {
-          const checkpoint = this.assist?.safe.getCheckpoint() ?? this.respawnCheckpointController.getCheckpoint();
-          return checkpoint?.roomId === room.id ? checkpoint : null;
-        },
-        getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-        clearRoomInteractions: (loadedRoom) =>
-          this.liveObjectController.clearRoomInteractions(loadedRoom),
-        destroyRoomEdgeWalls: (loadedRoom) => this.destroyEdgeWalls(loadedRoom),
-      },
-      {
-        playerWidth: this.PLAYER_WIDTH,
-        playerHeight: this.PLAYER_HEIGHT,
-        playerBodyAnchorHeight: this.PLAYER_STANDING_HEIGHT,
-        playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
-      },
-    );
-    this.respawnController = new OverworldRespawnController({
-      getCheckpoint: () => this.assist?.safe.getCheckpoint() ?? this.respawnCheckpointController.getCheckpoint(),
-      getCourseStartRoom: () => this.activeCourseRun
-        ? this.coursePlaybackController.getCourseStartRoomRef(this.activeCourseRun.course, this.activeCourseRun.startRoomId) : null,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-      getRoomSnapshot: coordinates => this.getRoomSnapshotForCoordinates(coordinates),
-      getPlayerEntities: () => this.getPlayerEntities(),
-      clearTransientPlayerState: () => {
-        this.combatController.clearAttackAnimation(); this.externalLaunchGraceUntil = 0;
-        this.physicsCadence?.reset(); this.movementController.handleRespawnReset(); this.combatController.destroyProjectiles();
-      },
-      focusRoom: coordinates => {
-        this.currentRoomCoordinates = { ...coordinates }; this.selectedCoordinates = { ...coordinates };
-        this.updateSelectedSummary(); this.shouldCenterCamera = true; setFocusedCoordinatesInUrl(coordinates);
-      },
-      respawnPlayerToRoom: (room, entities) => this.playerLifecycleController.respawnPlayerToRoom(room, entities),
-      presentRespawn: () => {
-        this.cameraController.resetFollowAnchor();
-        this.playerPresentationController.handleRespawned();
-        this.playerHealthController.refillForSpawn();
-        this.assist?.safe.grantProtection();
-        this.gameFeelController.playerAvailable();
-      },
-      recordRespawn: reference => {
-        const frame = this.getCurrentRankedRunTraceFrame();
-        if (frame) this.rankedRunTraceRecorder.recordRespawn(frame, reference);
-      },
-      refreshAroundFromCache: coordinates => this.refreshAroundIfNeededOrFromCache(coordinates, { refreshLeaderboards: false }),
-      destroyPlayer: () => this.destroyPlayer(),
-      requestPlayerCreation: () => { this.shouldRespawnPlayer = true; },
-      refreshAround: coordinates => this.refreshAround(coordinates, { forceChunkReload: true }),
-      playRespawnSound: () => {
-        if (this.gameFeelController.shouldPlayRespawnCue()) playSfx('respawn');
-      },
-    });
-    const playerPresentationState: OverworldPlayerPresentationControllerState = {
-      get animationState() {
-        return thisScene.playerAnimationState;
-      },
-      set animationState(value: DefaultPlayerAnimationState) {
-        thisScene.playerAnimationState = value;
-      },
-      get facing() {
-        return thisScene.playerFacing as -1 | 1;
-      },
-      set facing(value: -1 | 1) {
-        thisScene.playerFacing = value;
-      },
-      get wasGrounded() {
-        return thisScene.playerWasGrounded;
-      },
-      set wasGrounded(value: boolean) {
-        thisScene.playerWasGrounded = value;
-      },
-      get landAnimationUntil() {
-        return thisScene.playerLandAnimationUntil;
-      },
-      set landAnimationUntil(value: number) {
-        thisScene.playerLandAnimationUntil = value;
-      },
-    };
-    this.playerPresentationController = new OverworldPlayerPresentationController(
-      {
-        runtime: this.runtimeContext,
-        state: playerPresentationState,
-        getCurrentTime: () => gameplayNow(this),
-        getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
-        getLastMovementInput: () => this.lastMovementInput,
-        getQuicksandVisualSink: () => this.quicksandController.getVisualSink(),
-        getMovementPresentationState: () =>
-          this.movementController.getPresentationState(),
-        getGroundedOverride: () => this.playerPresentationGroundedOverride,
-        getCurrentAttackAnimation: (now) => this.combatController.getCurrentAttackAnimation(now),
-        playLandingDustFx: (x, y, facing) => this.fxController?.playLandingDustFx(x, y, facing),
-      },
-      {
-        playerPickupSensorExtraHeight: this.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT,
-        playerVisualFeetOffset: DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
-        landingAnimationMs: 120,
-        facingVelocityThreshold: 8,
-        jumpRiseVelocityThreshold: -10,
-        crouchMoveVelocityThreshold: 8,
-        runVelocityThreshold: 12,
-      },
-    );
-    this.movementController = new OverworldMovementController(
-      {
-        getCurrentTime: () => gameplayNow(this),
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
-        getPlayerFacing: () => this.playerFacing as -1 | 1,
-        getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
-        getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-        getRoomSnapshotForCoordinates: (coordinates) =>
-          this.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
-        isSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
-          this.isSolidTerrainAtWorldPoint(room, worldX, worldY),
-        getExternalLaunchGraceUntil: () => this.externalLaunchGraceUntil,
-        shouldForceFullBodyHitbox: () => this.isPvpArenaActive(),
-        getPushableLiveObjectsInBounds: (bounds, paddingX, paddingY) =>
-          this.liveObjectController.getPushableLiveObjectsInBounds(bounds, paddingX, paddingY),
-        getRuntimeSolidLiveObjectsInBounds: (bounds, paddingX, paddingY) =>
-          this.liveObjectController.getRuntimeSolidLiveObjectsInBounds(
-            bounds,
-            paddingX,
-            paddingY,
-          ),
-        getArcadeBodyBounds: (body) => this.getArcadeBodyBounds(body),
-        getKeyboardInput: () => this.gameplayKeyboard,
-        getGamepadInput: () => this.gamepadInput,
-        findOverlappingLadder: () => this.findOverlappingLadder(),
-        playJumpDustFx: (x, y, facing) => this.fxController?.playJumpDustFx(x, y, facing),
-        syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
-      },
-      {
-        playerWidth: this.PLAYER_WIDTH,
-        playerHeight: this.PLAYER_HEIGHT,
-        playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
-        playerCrouchHeight: this.PLAYER_CROUCH_HEIGHT,
-        playerPushHeight: this.PLAYER_PUSH_HEIGHT,
-        playerSpeed: this.PLAYER_SPEED,
-        crawlSpeed: this.CRAWL_SPEED,
-        cratePushSpeed: this.CRATE_PUSH_SPEED,
-        cratePullSpeed: this.CRATE_PULL_SPEED,
-        crateInteractionMaxGap: this.CRATE_INTERACTION_MAX_GAP,
-        coyoteMs: this.COYOTE_MS,
-        jumpBufferMs: this.JUMP_BUFFER_MS,
-        wallJumpBufferMs: this.WALL_JUMP_BUFFER_MS,
-        wallContactGraceMs: this.WALL_CONTACT_GRACE_MS,
-        jumpVelocity: this.JUMP_VELOCITY,
-        wallSlideMaxFallSpeed: this.WALL_SLIDE_MAX_FALL_SPEED,
-        wallJumpVelocityX: this.WALL_JUMP_VELOCITY_X,
-        wallJumpVelocityY: this.WALL_JUMP_VELOCITY_Y,
-        wallJumpInputLockMs: this.WALL_JUMP_INPUT_LOCK_MS,
-        ladderClimbSpeed: this.LADDER_CLIMB_SPEED,
-        quicksandMoveFactor: this.QUICKSAND_MOVE_FACTOR,
-        quicksandJumpFactor: this.QUICKSAND_JUMP_FACTOR,
-        weaponKnockbackMs: this.WEAPON_KNOCKBACK_MS,
-      },
-    );
-    this.combatController = new OverworldCombatController(
-      {
-        getCurrentTime: () => gameplayNow(this),
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        getPlayerFacing: () => this.playerFacing as -1 | 1,
-        isPlayerCrouching: () => this.movementController.isCrouching(),
-        attackEnemiesInRect: (attackRect, maxHits, hitKeys) =>
-          this.liveObjectController.attackEnemiesInRect(
-            this.loadedFullRoomsById.values(),
-            attackRect,
-            maxHits,
-            hitKeys,
-          ),
-        attackEnemyAtPoint: (worldX, worldY, radius) =>
-          this.liveObjectController.attackEnemyAtPoint(
-            this.loadedFullRoomsById.values(),
-            worldX,
-            worldY,
-            radius,
-          ),
-        attackPeerInRect: (attackRect, source) => this.attackPvpPeerInRect(attackRect, source),
-        attackPeerAtPoint: (worldX, worldY, source) => this.attackPvpPeerAtPoint(worldX, worldY, source),
-        isProjectileBlocked: (worldX, worldY) => this.isProjectileBlocked(worldX, worldY),
-        applyWeaponKnockback: (velocityX) => this.movementController.applyWeaponKnockback(velocityX),
-        presentCombatEvent: (event, options) =>
-          this.combatPresentationController.present(event, options),
-        destroyPresentedProjectile: (projectile) =>
-          this.combatPresentationController.destroyProjectile(projectile),
-        playBulletImpactFx: (x, y) => this.fxController?.playBulletImpactFx(x, y),
-        playPeerHitFx: (x, y) => this.fxController?.playEnemyKillFx(x, y),
-        shakeCamera: (durationMs, intensity) => { if (!prefersReducedMotion()) this.cameras.main.shake(durationMs, intensity); },
-        publishCombatAction: (event) => this.publishPvpCombatAction(event),
-      },
-      {
-        playerStandingHeight: this.PLAYER_STANDING_HEIGHT,
-        swordCooldownMs: this.SWORD_COOLDOWN_MS,
-        swordAttackMs: this.SWORD_ATTACK_MS,
-        swordActiveMs: this.SWORD_ACTIVE_MS,
-        swordMaxHitsPerSwing: 3,
-        swordHitLungeVelocity: this.SWORD_HIT_LUNGE_VELOCITY,
-        downwardSlashBounceVelocity: this.DOWNWARD_SLASH_BOUNCE_VELOCITY,
-        gunCooldownMs: this.GUN_COOLDOWN_MS,
-        gunAttackMs: this.GUN_ATTACK_MS,
-        gunHitRadius: 5,
-        gunRecoilVelocity: this.GUN_RECOIL_VELOCITY,
-        projectileSpeed: this.PROJECTILE_SPEED,
-        projectileLifetimeMs: this.PROJECTILE_LIFETIME_MS,
-        playerSpeed: this.PLAYER_SPEED,
-      },
-    );
-    this.sessionResetController = new OverworldSessionResetController({
-      getCurrentGoalRun: () => this.currentGoalRun,
-      getActiveCourseRun: () => this.activeCourseRun,
-      getActiveRoomRushRun: () => this.activeRoomRushRun,
-      hasActivePvpMatch: () => this.isPvpMatchActive(),
-      isPvpDamageActive: () => this.isPvpDamageActive(),
-      isAssistProtected: () => this.assist?.safe.isProtected() ?? false,
-      tryAbsorbPlayerDamage: () => this.playerHealthController.absorbDamage(),
-      onPlayerDeath: () => this.playerHealthController.die(),
-      cancelPlayerAttack: () => this.combatController.clearAttackAnimation(),
-      setActiveCourseRun: (runState) => {
-        this.setActiveCourseRun(runState);
-      },
-      recordRunDeathLocation: () => {
-        const run = this.goalRunController.getCurrentRun();
-        if (this.activeCourseRun && this.activeCourseRun.result !== 'active') return;
-        if (!this.activeCourseRun && (run?.result !== 'active' || run.qualificationState !== 'qualified')) return;
-        const frame = this.getCurrentRankedRunTraceFrame();
-        if (frame) this.rankedRunTraceRecorder.recordDeath(frame);
-      },
-      recordGoalRunDeath: () => {
-        this.goalRunController.recordDeath();
-      },
-      recordExpandedRoomRunDeath: () => {
-        recordExpandedRoomRunDeath(this.activeCourseRun);
-      },
-      recordRoomRushDeath: (reason) => this.recordRoomRushDeath(reason),
-      recordPvpSelfDeath: (reason) => this.recordPvpSelfDeath(reason),
-      playPlayerFailFx: () => {
-        if (this.player && this.playerBody) {
-          this.fxController?.playPlayerDeathFx(this.player.x, this.playerBody.bottom - 10);
-        }
-      },
-      isPlayerDeathPending: () => this.gameFeelController.isDeathPending(),
-      runDeathBeat: respawn => this.gameFeelController.deathBeat(respawn),
-      respawnPlayerToCurrentRoom: () => this.respawnPlayerToCurrentRoom(),
-      clearRespawnCheckpoints: () => {
-        this.respawnCheckpointController.clear(); this.respawnController.reset();
-      },
-      failCourseRun: (message) => this.objectiveController.failCourseRun(message),
-      failGoalRun: (message) => this.objectiveController.failGoalRun(message),
-      showTransientStatus: (message) => this.showTransientStatus(message),
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotForCoordinates(coordinates),
-      restartGoalRunForRoom: (room) => {
-        this.objectiveController.restartGoalRunForRoom(room, 'respawn');
-      },
-      refreshLeaderboardForSelection: () => {
-        void this.refreshLeaderboardForSelection();
-      },
-      abandonGoalRun: () => {
-        this.goalRunController.abandonActiveRun();
-      },
-      abandonRoomRushRun: () => {
-        this.roomRushModeController.abandonActiveRun();
-      },
-      finalizeActiveCourseRun: (result) => {
-        void this.coursePlaybackController.finalizeActiveCourseRun(result);
-      },
-      clearActiveCourseRoomOverrides: () => {
-        this.coursePlaybackController.clearActiveCourseRoomOverrides();
-      },
-      resetRoomChallengeState: (room) => this.resetRoomChallengeState(room),
-      resetBossChallenges: alreadyResetRoomId => this.liveObjectController.resetBossChallenges(
-        room => this.resetRoomChallengeState(room), alreadyResetRoomId,
-      ),
-      resetTransientPlayState: () => this.resetTransientPlayState(),
-      resetGoalRunController: () => {
-        this.goalRunController.reset();
-      },
-      resetRoomRushController: () => {
-        this.roomRushModeController.resetRun();
-      },
-      redrawGoalMarkers: () => this.redrawGoalMarkers(),
-    });
-    this.hudStateController = new OverworldHudStateController({
-      isEditorPlaytest: () => Boolean(this.editorPlaytestReturnTarget?.clearCheck),
-      getMode: () => this.mode,
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-      getRoomSummary: (roomId) => this.roomSummariesById.get(roomId),
-      getDraftRoom: (roomId) => this.draftRoomsById.get(roomId) ?? null,
-      getRoomPopulation: (coordinates) => this.getRoomPopulation(coordinates),
-      getRoomEditorCount: (coordinates) => this.getRoomEditorCount(coordinates),
-      getRoomEditorDisplayNames: (coordinates) => this.getRoomEditorDisplayNames(coordinates),
-      getActiveCourseRun: () => this.activeCourseRun,
-      getActiveRoomRushRun: () => this.activeRoomRushRun,
-      getCurrentGoalRun: () => this.currentGoalRun,
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotViewForCoordinates(coordinates),
-      getCurrentRoomLeaderboard: () => this.currentRoomLeaderboard,
-      getGoalPersistentStatusText: () =>
-        this.getPvpPersistentStatusText() ?? this.goalRunController.getPersistentStatusText() ?? null,
-      getTotalPlayerCount: () => this.presenceController.getTotalPlayerCount(),
-      getOnlineRosterEntries: () => {
-        const identity = this.presenceController.getIdentity();
-        const localGuest = !identity || identity.userId.startsWith('guest-');
-        return this.presenceController.getOnlineRoster().map((entry) => ({
-          key: entry.key,
-          userId: entry.userId,
-          displayName: entry.displayName,
-          roomText: this.formatOnlineRosterRoomText(entry),
-          roomCoordinates: entry.roomCoordinates,
-          mode: entry.mode,
-          isSelf: entry.isSelf,
-          multiplayerInviteDisabled:
-            entry.isSelf ||
-            this.isPvpMatchActive() ||
-            localGuest ||
-            !entry.userId ||
-            entry.userId.startsWith('guest-'),
-        }));
-      },
-      getActiveSignState: () => this.signController.getActiveSign(),
-      loadRoomOwnershipDetails: async (roomId, coordinates) => {
-        const summary = await this.roomRepository.loadRoomSummary(roomId, coordinates);
-        return {
-          claimerUserId: summary.claimerUserId,
-          isMinted:
-            summary.mintedChainId !== null &&
-            summary.mintedContractAddress !== null &&
-            summary.mintedTokenId !== null,
-          mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
-        };
-      },
-      loadPublicProfileSummary: async (userId) => {
-        const profile = await this.profileRepository.loadProfileSummary(userId);
-        return {
-          displayName: profile.displayName,
-          playerLevel: profile.progression.player.level,
-          playerProgressFraction: profile.progression.player.progressFraction,
-          curatorLevel: profile.progression.curator.level,
-          curatorProgressFraction: profile.progression.curator.progressFraction,
-          builderLevel: profile.progression.builder.level,
-          builderProgressFraction: profile.progression.builder.progressFraction,
-        };
-      },
-      loadPublishedCourseSnapshot: async (courseId) => {
-        return this.loadPublishedCourseSnapshot(courseId);
-      },
-      countRoomEnemies: (room) => this.countRoomObjectsByCategory(room, 'enemy'),
-      getScore: () => this.score,
-      areRoomCommentsVisible: () => this.roomCommentsController.areCommentsVisible(),
-      getZoom: () => this.cameras.main.zoom,
-      getTransientStatusMessage: () => this.getTransientStatusMessage(),
-      renderHudViewModel: (viewModel) => {
-        this.hudBridge?.render(viewModel);
-      },
-      syncOverlayScale: () => this.syncGoalOverlayScale(),
-    });
-    this.selectionController = new OverworldSelectionController({
-      getMode: () => this.mode,
-      setMode: (mode) => {
-        this.mode = mode;
-      },
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      getFitZoomForRoom: () => this.getFitZoomForRoom(),
-      setInspectZoom: (zoom) => {
-        this.inspectZoom = zoom;
-      },
-      setBrowseInspectZoom: (zoom) => {
-        this.browseInspectZoom = zoom;
-      },
-      syncAppMode: () => this.syncAppMode(),
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      setWindowCenterCoordinates: (coordinates) => {
-        this.windowCenterCoordinates = { ...coordinates };
-      },
-      setShouldCenterCamera: (value) => {
-        this.shouldCenterCamera = value;
-      },
-      setShouldRespawnPlayer: (value) => {
-        this.shouldRespawnPlayer = value;
-      },
-      updateSelectedSummary: () => this.updateSelectedSummary(),
-      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
-      redrawWorld: () => this.redrawWorld(),
-      renderHud: () => this.renderHud(),
-      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
-      getRoomSummary: (roomId) => this.roomSummariesById.get(roomId),
-      hasDraftRoom: (roomId) => this.draftRoomsById.has(roomId),
-      hasActiveCourseRoomOverride: (roomId) =>
-        this.coursePlaybackController.hasActiveCourseRoomOverride(roomId),
-      isRoomInActiveCourse: (coordinates) =>
-        Boolean(this.activeCourseSnapshot?.roomRefs.some((roomRef) => roomRef.roomId === roomIdFromCoordinates(coordinates))),
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.worldStreamingController.getRoomSnapshotForCoordinates(coordinates),
-      isWithinLoadedRoomBounds: (coordinates) =>
-        this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
-      getMainCamera: () => this.cameras.main,
-      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
-      refreshChunkWindowIfNeeded: (coordinates) => this.refreshChunkWindowIfNeeded(coordinates),
-    });
-    this.roomTransitionController = new OverworldRoomTransitionController({
-      getMode: () => this.mode,
-      getPlayer: () => this.player,
-      getPlayerBody: () => this.playerBody,
-      getPlayerFacing: () => this.playerFacing < 0 ? -1 : 1,
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      getWindowCenterCoordinates: () => ({ ...this.windowCenterCoordinates }),
-      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
-      isNeighborReachable: (roomCoordinates, neighborCoordinates) =>
-        this.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
-      prefetchPlayableRoomForTransition: (coordinates) =>
-        this.worldStreamingController.prefetchPlayableRoomForTransition(coordinates),
-      clearPredictedPlayableRoomForTransition: () =>
-        this.worldStreamingController.clearPredictedPlayableRoomForTransition(),
-      preparePlayableRoomForTransition: (coordinates, portalDestination) =>
-        this.worldStreamingController.preparePlayableRoomForTransition(
-          coordinates,
-          portalDestination,
-        ),
-      setTransitionPreparationSeamUrgent: (urgent) =>
-        this.worldStreamingController.setTransitionPreparationSeamUrgent(urgent),
-      recordPerformanceTransitionGate: (reason, currentCoordinates, nextCoordinates) =>
-        this.recordPerformanceTransitionGate(reason, currentCoordinates, nextCoordinates),
-      clearPerformanceTransitionGate: () => {
-        performanceAdvisorRuntime.advisor.clearTransitionGate(performance.now());
-      },
-      onRoomTransitionCompleted: () => this.handlePerformanceRoomTransitionCompleted(),
-      isRoomTransitionLocked: () => this.isPvpArenaActive(),
-      resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
-        this.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
-      },
-      updateSelectedSummary: () => this.updateSelectedSummary(),
-      getActiveCourseRun: () => this.activeCourseRun,
-      getActiveCourseSnapshot: () => this.activeCourseSnapshot,
-      getExpandedRoomMembershipAt: (coordinates) => this.roomSummariesById.get(roomIdFromCoordinates(coordinates))?.expandedRoom ?? null,
-      handlePlayerDeath: (reason, bypassHealth) => this.sessionResetController.handlePlayerDeath(reason, bypassHealth),
-      getActiveRoomRushRun: () => this.activeRoomRushRun,
-      recordRoomRushVisit: (room) => this.recordRoomRushVisit(room),
-      syncGoalRunForRoom: (room, entryContext) => {
-        this.syncGoalRunForRoomWithIntro(room, entryContext);
-      },
-      getRoomSnapshotForCoordinates: (coordinates) =>
-        this.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
-      refreshLeaderboardForSelection: () => this.refreshLeaderboardForSelection(),
-      setFocusedCoordinates: (coordinates) => {
-        setFocusedCoordinatesInUrl(coordinates);
-      },
-      refreshAround: (coordinates) => this.refreshAround(coordinates),
-      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
-        this.refreshAroundIfNeededOrFromCache(coordinates, options),
-      redrawWorld: () => this.redrawWorld(),
-      renderHud: () => this.renderHud(),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      clearLadderState: () => {
-        this.movementController.clearLadderState();
-      },
-      syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
-      getTransitionDebugContext: (coordinates) => ({
-        cellState: this.getCellStateAt(coordinates),
-        summaryLoaded: this.worldStreamingController
-          .getRoomSummariesById()
-          .has(roomIdFromCoordinates(coordinates)),
-        withinLoadedBounds: this.worldStreamingController.isWithinLoadedRoomBounds(coordinates),
-        collisionReady: this.worldStreamingController.isPlayableRoomCollisionReady(coordinates),
-        windowCenter: { ...this.windowCenterCoordinates },
-        needsWindowRefresh: this.worldStreamingController.needsRefreshAround(
-          this.currentRoomCoordinates,
-        ),
-      }),
-    });
-    this.presenceOverlayController = new OverworldPresenceOverlayController({
-      scene: this,
-      getWorldWindow: () => this.worldWindow,
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      getRoomOrigin: (coordinates) => this.getRoomOrigin(coordinates),
-      getZoom: () => this.cameras.main.zoom,
-      getSampledBrowsePresenceDots: (visibleRooms) =>
-        this.presenceController.getSampledBrowsePresenceDots(visibleRooms),
-      getPlayRoomPresenceMarkers: (visibleRooms, currentRoomCoordinates) =>
-        this.presenceController.getPlayRoomPresenceMarkers(visibleRooms, currentRoomCoordinates),
-    });
-    this.flowController = new OverworldSceneFlowController(this, {
-      getMode: () => this.mode,
-      setMode: (mode) => {
-        this.mode = mode;
-      },
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
-      setSelectedCoordinates: (coordinates) => {
-        this.selectedCoordinates = { ...coordinates };
-      },
-      getCurrentRoomCoordinates: () => ({ ...this.currentRoomCoordinates }),
-      setCurrentRoomCoordinates: (coordinates) => {
-        this.currentRoomCoordinates = { ...coordinates };
-      },
-      getSelectedPublishedCourseId: () => this.getSelectedCourseContext()?.courseId ?? null,
-      loadPublishedCourseSnapshot: (courseId) => this.loadPublishedCourseSnapshot(courseId),
-      getCourseEditorReturnTarget: () => this.courseEditorReturnTarget ?? null,
-      setCourseEditorReturnTarget: (target) => {
-        this.courseEditorReturnTarget = target;
-      },
-      getEditorPlaytestReturnTarget: () =>
-        this.editorPlaytestReturnTarget
-          ? { ...this.editorPlaytestReturnTarget, roomCoordinates: { ...this.editorPlaytestReturnTarget.roomCoordinates }, clearCheck: this.editorPlaytestReturnTarget.clearCheck ? { ...this.editorPlaytestReturnTarget.clearCheck } : undefined }
-          : null,
-      setEditorPlaytestReturnTarget: (target) => {
-        this.editorPlaytestReturnTarget = target
-          ? { ...target, roomCoordinates: { ...target.roomCoordinates }, clearCheck: target.clearCheck ? { ...target.clearCheck } : undefined }
-          : null;
-      },
-      getCellStateAt: (coordinates) => this.getCellStateAt(coordinates),
-      isFrontierBuildBlockedByClaimLimit: () => this.isFrontierBuildBlockedByClaimLimit(),
-      getSelectedRoomSnapshot: (coordinates) => this.getRoomSnapshotForCoordinates(coordinates),
-      getActiveCourseEditContext: (roomId) => this.getActiveCourseDraftSessionContextForRoom(roomId),
-      resetPlaySession: () => this.sessionResetController.resetPlaySession(),
-      clearTouchGestureState: () => this.clearTouchGestureState(),
-      requestRoomGoalIntroForNextOverworldEntry: (options) => {
-        this.roomGoalIntroFromOverworldPending = true;
-        this.forceRoomGoalIntroFromOverworldPending = options?.force === true;
-      },
-      clearGoalRun: () => {
-        this.goalRunController.clearCurrentRun();
-      },
-      getInspectZoom: () => this.inspectZoom,
-      setInspectZoom: (zoom) => {
-        this.inspectZoom = zoom;
-      },
-      getBrowseInspectZoom: () => this.browseInspectZoom,
-      setBrowseInspectZoom: (zoom) => {
-        this.browseInspectZoom = zoom;
-      },
-      getFitZoomForRoom: () => this.getFitZoomForRoom(),
-      syncAppMode: () => this.syncAppMode(),
-      syncModeRuntime: () => this.syncModeRuntime(),
-      setShouldCenterCamera: (value) => {
-        this.shouldCenterCamera = value;
-      },
-      setShouldRespawnPlayer: (value) => {
-        this.shouldRespawnPlayer = value;
-      },
-      setPendingWarpSpawnCoordinates: (coordinates) => {
-        this.pendingWarpSpawnRoomCoordinates = coordinates ? { ...coordinates } : null;
-      },
-      refreshAround: (coordinates, options) => this.refreshAround(coordinates, options),
-      refreshAroundIfNeededOrFromCache: (coordinates, options) =>
-        this.refreshAroundIfNeededOrFromCache(coordinates, options),
-      prepareActiveCourseRoomOverrides: (snapshot, options) =>
-        this.coursePlaybackController.prepareActiveCourseRoomOverrides(snapshot, options),
-      createCourseRunState: (snapshot, options) =>
-        this.coursePlaybackController.createCourseRunState(snapshot, options),
-      getCourseStartRoomRef: (course, lockedStartRoomId) =>
-        this.coursePlaybackController.getCourseStartRoomRef(course, lockedStartRoomId),
-      getActiveCourseRun: () => this.activeCourseRun,
-      getActiveRoomRushRun: () => this.activeRoomRushRun,
-      setActiveCourseRun: (runState) => {
-        this.setActiveCourseRun(runState);
-      },
-      emitCourseComposerStateChanged: () => this.emitCourseComposerStateChanged(),
-      renderHud: () => this.renderHud(),
-    });
-    this.inspectInputController = new OverworldInspectInputController(this, {
-      isRoomCameraFixed: () => this.cameraController.isRoomCameraFixed(),
-      getMode: () => this.mode,
-      getCameraMode: () => this.cameraMode,
-      setCameraMode: (mode) => {
-        this.cameraMode = mode;
-      },
-      applyCameraMode: () => this.applyCameraMode(),
-      fitLoadedWorld: () => this.fitLoadedWorld(),
-      returnToWorld: () => this.returnToWorld(),
-      adjustZoomByFactor: (factor, screenX, screenY) =>
-        this.viewportController.adjustZoomByFactor(factor, screenX, screenY),
-      constrainInspectCamera: () => this.constrainInspectCamera(),
-      getRoomCoordinatesForPoint: (x, y) => this.getRoomCoordinatesForPoint(x, y),
-      isWithinLoadedRoomBounds: (coordinates) => this.isWithinLoadedRoomBounds(coordinates),
-      onSelectCoordinates: (coordinates) => this.selectRoomCoordinates(coordinates),
-      syncBrowseWindowToCamera: (panStartPointer, panCurrentPointer) =>
-        this.syncBrowseWindowToCamera(panStartPointer, panCurrentPointer),
-    });
+    const host = OverworldPlayScene.createCompositionPorts(this);
+    this.backdropController = createBackdropController(host);
+    this.runtimeContext = createRuntimeContext(host);
+    this.quicksandController = createQuicksandController(host);
+    this.playerDeathPresentation = createPlayerDeathPresentation(host);
+    this.gameFeelController = createGameFeelController(host);
+    this.ghostRaceController = createGhostRaceController(host);
+    this.playerHealthController = createPlayerHealthController(host);
+    const guestRuns = this.guestRunPlaybackController = createGuestRunPlaybackController(host);
+    this.goalRunController = createGoalRunController(host, guestRuns);
+    this.roomAudioController = createRoomAudioController(host);
+    this.lightingController = createLightingController(host);
+    this.weatherController = createWeatherController(host);
+    this.respawnCheckpointController = createRespawnCheckpointController(host);
+    this.lostSongController = createLostSongController(host);
+    this.liveObjectController = createLiveObjectController(host);
+    this.signController = createSignController(host);
+    this.portalObjectController = createPortalObjectController(host);
+    this.specialTilesController = createSpecialTilesController(host);
+    this.worldStreamingController = createWorldStreamingController(host);
+    this.roomRushResultController = createRoomRushResultController(host);
+    this.roomRushModeController = createRoomRushModeController(host);
+    this.presenceController = createPresenceController(host);
+    this.combatPresentationController = createCombatPresentationController(host);
+    this.pvpInstanceRenderer = createPvpInstanceRenderer(host);
+    this.pvpLocalPresentationController = createPvpLocalPresentationController(host);
+    this.pvpArenaController = createPvpArenaController(host);
+    this.roomChatController = createRoomChatController(host);
+    this.browseRealtimeStartupGate = createBrowseRealtimeStartupGate(host);
+    this.roomCommentsController = createRoomCommentsController(host);
+    this.coursePlaybackController = createCoursePlaybackController(host, guestRuns);
+    this.roomMusicPlaybackController = createRoomMusicPlaybackController(host);
+    this.windowController = createWindowController(host);
+    this.objectiveController = createObjectiveController(host);
+    this.gridOverlayController = createGridOverlayController(host);
+    this.browseOverlayController = createBrowseOverlayController(host);
+    this.roomCellController = createRoomCellController(host);
+    this.goalMarkerController = createGoalMarkerController(host);
+    this.cameraController = createCameraController(host);
+    this.viewportController = createViewportController(host);
+    this.runtimeController = createRuntimeController(host);
+    this.playerLifecycleController = createPlayerLifecycleController(host);
+    this.respawnController = createRespawnController(host);
+    this.playerPresentationController = createPlayerPresentationController(host);
+    this.movementController = createMovementController(host);
+    this.combatController = createCombatController(host);
+    this.sessionResetController = createSessionResetController(host);
+    this.hudStateController = createHudStateController(host);
+    this.selectionController = createSelectionController(host);
+    this.roomTransitionController = createRoomTransitionController(host);
+    this.presenceOverlayController = createPresenceOverlayController(host);
+    this.flowController = createFlowController(host);
+    this.inspectInputController = createInspectInputController(host);
   }
+  /** @internal Typed live capabilities used only by controller composition modules. */
+  static createCompositionPorts(owner: OverworldPlayScene) {
+    const scene: Phaser.Scene = owner;
+    const getCollisionReadyLoadedFullRooms: typeof owner.getCollisionReadyLoadedFullRooms = (...args) => owner.getCollisionReadyLoadedFullRooms(...args);
+    const getRoomOrigin: typeof owner.getRoomOrigin = (...args) => owner.getRoomOrigin(...args);
+    const getPlacedObjectRuntimeKey: typeof owner.getPlacedObjectRuntimeKey = (...args) => owner.getPlacedObjectRuntimeKey(...args);
+    const getSwordsmanTraversalPlannerMode: typeof owner.getSwordsmanTraversalPlannerMode = (...args) => owner.getSwordsmanTraversalPlannerMode(...args);
+    const isLadderDropRequested: typeof owner.isLadderDropRequested = (...args) => owner.isLadderDropRequested(...args);
+    const showTransientStatus: typeof owner.showTransientStatus = (...args) => owner.showTransientStatus(...args);
+    const handleEnemyDefeated: typeof owner.handleEnemyDefeated = (...args) => owner.handleEnemyDefeated(...args);
+    const handleNpcDefeated: typeof owner.handleNpcDefeated = (...args) => owner.handleNpcDefeated(...args);
+    const handleCollectibleCollected: typeof owner.handleCollectibleCollected = (...args) => owner.handleCollectibleCollected(...args);
+    const handleEnemyCollectibleCollected: typeof owner.handleEnemyCollectibleCollected = (...args) => owner.handleEnemyCollectibleCollected(...args);
+    const handleLiveObjectRemovedForMultiplayer: typeof owner.handleLiveObjectRemovedForMultiplayer = (...args) => owner.handleLiveObjectRemovedForMultiplayer(...args);
+    const handleRoomSwitchStateChangedForMultiplayer: typeof owner.handleRoomSwitchStateChangedForMultiplayer = (...args) => owner.handleRoomSwitchStateChangedForMultiplayer(...args);
+    const getCollisionReadyLoadedFullRoomById: typeof owner.getCollisionReadyLoadedFullRoomById = (...args) => owner.getCollisionReadyLoadedFullRoomById(...args);
+    const teleportPlayerToPortalObject: typeof owner.teleportPlayerToPortalObject = (...args) => owner.teleportPlayerToPortalObject(...args);
+    const getRoomCoordinatesForPoint: typeof owner.getRoomCoordinatesForPoint = (...args) => owner.getRoomCoordinatesForPoint(...args);
+    const refreshAround: typeof owner.refreshAround = (...args) => owner.refreshAround(...args);
+    const createLiveObjects: typeof owner.createLiveObjects = (...args) => owner.createLiveObjects(...args);
+    const syncActiveCourseObjectLinks: typeof owner.syncActiveCourseObjectLinks = (...args) => owner.syncActiveCourseObjectLinks(...args);
+    const destroyLiveObjects: typeof owner.destroyLiveObjects = (...args) => owner.destroyLiveObjects(...args);
+    const destroyEdgeWalls: typeof owner.destroyEdgeWalls = (...args) => owner.destroyEdgeWalls(...args);
+    const getProtectedMovingPlatformSourceRoomIds: typeof owner.getProtectedMovingPlatformSourceRoomIds = (...args) => owner.getProtectedMovingPlatformSourceRoomIds(...args);
+    const syncGhostVisibility: typeof owner.syncGhostVisibility = (...args) => owner.syncGhostVisibility(...args);
+    const handleFullRoomReplaced: typeof owner.handleFullRoomReplaced = (...args) => owner.handleFullRoomReplaced(...args);
+    const updateSelectedSummary: typeof owner.updateSelectedSummary = (...args) => owner.updateSelectedSummary(...args);
+    const refreshLeaderboardForSelection: typeof owner.refreshLeaderboardForSelection = (...args) => owner.refreshLeaderboardForSelection(...args);
+    const renderHud: typeof owner.renderHud = (...args) => owner.renderHud(...args);
+    const measureMobilePerformance: typeof owner.measureMobilePerformance = (label, callback) => owner.measureMobilePerformance(label, callback);
+    const getRoomSnapshotViewForCoordinates: typeof owner.getRoomSnapshotViewForCoordinates = (...args) => owner.getRoomSnapshotViewForCoordinates(...args);
+    const getExpandedRoomIdAt: typeof owner.getExpandedRoomIdAt = (...args) => owner.getExpandedRoomIdAt(...args);
+    const getFitZoomForRoom: typeof owner.getFitZoomForRoom = (...args) => owner.getFitZoomForRoom(...args);
+    const getZoomFocusCoordinates: typeof owner.getZoomFocusCoordinates = (...args) => owner.getZoomFocusCoordinates(...args);
+    const syncAppMode: typeof owner.syncAppMode = (...args) => owner.syncAppMode(...args);
+    const updateCameraBounds: typeof owner.updateCameraBounds = (...args) => owner.updateCameraBounds(...args);
+    const syncModeRuntime: typeof owner.syncModeRuntime = (...args) => owner.syncModeRuntime(...args);
+    const syncFocusedRoomVisuals: typeof owner.syncFocusedRoomVisuals = (...args) => owner.syncFocusedRoomVisuals(...args);
+    const syncPreviewVisibility: typeof owner.syncPreviewVisibility = (...args) => owner.syncPreviewVisibility(...args);
+    const syncPresenceSubscriptions: typeof owner.syncPresenceSubscriptions = (...args) => owner.syncPresenceSubscriptions(...args);
+    const redrawWorld: typeof owner.redrawWorld = (...args) => owner.redrawWorld(...args);
+    const isPvpArenaActive: typeof owner.isPvpArenaActive = (...args) => owner.isPvpArenaActive(...args);
+    const createPlayer: typeof owner.createPlayer = (...args) => owner.createPlayer(...args);
+    const destroyPlayer: typeof owner.destroyPlayer = (...args) => owner.destroyPlayer(...args);
+    const syncGoalRunForRoomWithIntro: typeof owner.syncGoalRunForRoomWithIntro = (...args) => owner.syncGoalRunForRoomWithIntro(...args);
+    const redrawGoalMarkers: typeof owner.redrawGoalMarkers = (...args) => owner.redrawGoalMarkers(...args);
+    const syncCameraBoundsUsage: typeof owner.syncCameraBoundsUsage = (...args) => owner.syncCameraBoundsUsage(...args);
+    const centerCameraOnCoordinates: typeof owner.centerCameraOnCoordinates = (...args) => owner.centerCameraOnCoordinates(...args);
+    const constrainInspectCamera: typeof owner.constrainInspectCamera = (...args) => owner.constrainInspectCamera(...args);
+    const applyCameraMode: typeof owner.applyCameraMode = (...args) => owner.applyCameraMode(...args);
+    const getCellStateAt: typeof owner.getCellStateAt = (...args) => owner.getCellStateAt(...args);
+    const requestWindowRefreshForUnknownNeighbor: typeof owner.requestWindowRefreshForUnknownNeighbor = (...args) => owner.requestWindowRefreshForUnknownNeighbor(...args);
+    const refreshChunkWindowIfNeeded: typeof owner.refreshChunkWindowIfNeeded = (...args) => owner.refreshChunkWindowIfNeeded(...args);
+    const recordPerformanceTransitionGate: typeof owner.recordPerformanceTransitionGate = (...args) => owner.recordPerformanceTransitionGate(...args);
+    const handlePerformanceRoomTransitionCompleted: typeof owner.handlePerformanceRoomTransitionCompleted = (...args) => owner.handlePerformanceRoomTransitionCompleted(...args);
+    const recordRoomRushVisit: typeof owner.recordRoomRushVisit = (...args) => owner.recordRoomRushVisit(...args);
+    const refreshAroundIfNeededOrFromCache: typeof owner.refreshAroundIfNeededOrFromCache = (...args) => owner.refreshAroundIfNeededOrFromCache(...args);
+    const getSelectedCourseContext: typeof owner.getSelectedCourseContext = (...args) => owner.getSelectedCourseContext(...args);
+    const loadPublishedCourseSnapshot: typeof owner.loadPublishedCourseSnapshot = (...args) => owner.loadPublishedCourseSnapshot(...args);
+    const isFrontierBuildBlockedByClaimLimit: typeof owner.isFrontierBuildBlockedByClaimLimit = (...args) => owner.isFrontierBuildBlockedByClaimLimit(...args);
+    const getRoomSnapshotForCoordinates: typeof owner.getRoomSnapshotForCoordinates = (...args) => owner.getRoomSnapshotForCoordinates(...args);
+    const getActiveCourseDraftSessionContextForRoom: typeof owner.getActiveCourseDraftSessionContextForRoom = (...args) => owner.getActiveCourseDraftSessionContextForRoom(...args);
+    const clearTouchGestureState: typeof owner.clearTouchGestureState = (...args) => owner.clearTouchGestureState(...args);
+    const setActiveCourseRun: typeof owner.setActiveCourseRun = (...args) => owner.setActiveCourseRun(...args);
+    const emitCourseComposerStateChanged: typeof owner.emitCourseComposerStateChanged = (...args) => owner.emitCourseComposerStateChanged(...args);
+    const isPvpMatchActive: typeof owner.isPvpMatchActive = (...args) => owner.isPvpMatchActive(...args);
+    const startRankedRunTrace: typeof owner.startRankedRunTrace = (...args) => owner.startRankedRunTrace(...args);
+    const clearRankedRunTrace: typeof owner.clearRankedRunTrace = (...args) => owner.clearRankedRunTrace(...args);
+    const countRoomObjectsByCategory: typeof owner.countRoomObjectsByCategory = (...args) => owner.countRoomObjectsByCategory(...args);
+    const prepareRankedRunTrace: typeof owner.prepareRankedRunTrace = (...args) => owner.prepareRankedRunTrace(...args);
+    const buildRankedRunVerificationTrace: typeof owner.buildRankedRunVerificationTrace = (...args) => owner.buildRankedRunVerificationTrace(...args);
+    const recordRankedGoalEvent: typeof owner.recordRankedGoalEvent = (...args) => owner.recordRankedGoalEvent(...args);
+    const getPlayerEffectOrigin: typeof owner.getPlayerEffectOrigin = (...args) => owner.getPlayerEffectOrigin(...args);
+    const toWorldGoalPoint: typeof owner.toWorldGoalPoint = (...args) => owner.toWorldGoalPoint(...args);
+    const toWorldCoursePoint: typeof owner.toWorldCoursePoint = (...args) => owner.toWorldCoursePoint(...args);
+    const getPlayerEntities: typeof owner.getPlayerEntities = (...args) => owner.getPlayerEntities(...args);
+    const getCurrentRankedRunTraceFrame: typeof owner.getCurrentRankedRunTraceFrame = (...args) => owner.getCurrentRankedRunTraceFrame(...args);
+    const isSolidTerrainAtWorldPoint: typeof owner.isSolidTerrainAtWorldPoint = (...args) => owner.isSolidTerrainAtWorldPoint(...args);
+    const getArcadeBodyBounds: typeof owner.getArcadeBodyBounds = (...args) => owner.getArcadeBodyBounds(...args);
+    const findOverlappingLadder: typeof owner.findOverlappingLadder = (...args) => owner.findOverlappingLadder(...args);
+    const attackPvpPeerInRect: typeof owner.attackPvpPeerInRect = (...args) => owner.attackPvpPeerInRect(...args);
+    const attackPvpPeerAtPoint: typeof owner.attackPvpPeerAtPoint = (...args) => owner.attackPvpPeerAtPoint(...args);
+    const isProjectileBlocked: typeof owner.isProjectileBlocked = (...args) => owner.isProjectileBlocked(...args);
+    const publishPvpCombatAction: typeof owner.publishPvpCombatAction = (...args) => owner.publishPvpCombatAction(...args);
+    const isPvpDamageActive: typeof owner.isPvpDamageActive = (...args) => owner.isPvpDamageActive(...args);
+    const recordRoomRushDeath: typeof owner.recordRoomRushDeath = (...args) => owner.recordRoomRushDeath(...args);
+    const recordPvpSelfDeath: typeof owner.recordPvpSelfDeath = (...args) => owner.recordPvpSelfDeath(...args);
+    const respawnPlayerToCurrentRoom: typeof owner.respawnPlayerToCurrentRoom = (...args) => owner.respawnPlayerToCurrentRoom(...args);
+    const resetRoomChallengeState: typeof owner.resetRoomChallengeState = (...args) => owner.resetRoomChallengeState(...args);
+    const resetTransientPlayState: typeof owner.resetTransientPlayState = (...args) => owner.resetTransientPlayState(...args);
+    const returnToWorld: typeof owner.returnToWorld = (...args) => owner.returnToWorld(...args);
+    const applyRoomRushResultOverviewCameraState: typeof owner.applyRoomRushResultOverviewCameraState = (...args) => owner.applyRoomRushResultOverviewCameraState(...args);
+    const updateBackdrop: typeof owner.updateBackdrop = (...args) => owner.updateBackdrop(...args);
+    const isMultiCellExpandedRoomAt: typeof owner.isMultiCellExpandedRoomAt = (...args) => owner.isMultiCellExpandedRoomAt(...args);
+    const clearRoomGoalIntroState: typeof owner.clearRoomGoalIntroState = (...args) => owner.clearRoomGoalIntroState(...args);
+    const syncScenePauseState: typeof owner.syncScenePauseState = (...args) => owner.syncScenePauseState(...args);
+    const presentRemotePvpCombatEvent: typeof owner.presentRemotePvpCombatEvent = (...args) => owner.presentRemotePvpCombatEvent(...args);
+    const getPvpOpponentIdentity: typeof owner.getPvpOpponentIdentity = (...args) => owner.getPvpOpponentIdentity(...args);
+    const preparePvpArenaDuel: typeof owner.preparePvpArenaDuel = (...args) => owner.preparePvpArenaDuel(...args);
+    const handlePeerRoomStateEvent: typeof owner.handlePeerRoomStateEvent = (...args) => owner.handlePeerRoomStateEvent(...args);
+    const maybeApplyPvpStartingPosition: typeof owner.maybeApplyPvpStartingPosition = (...args) => owner.maybeApplyPvpStartingPosition(...args);
+    const applyPvpArenaCameraLock: typeof owner.applyPvpArenaCameraLock = (...args) => owner.applyPvpArenaCameraLock(...args);
+    const syncPvpLocalHeartLabel: typeof owner.syncPvpLocalHeartLabel = (...args) => owner.syncPvpLocalHeartLabel(...args);
+    const playPvpLocalDamageFeedback: typeof owner.playPvpLocalDamageFeedback = (...args) => owner.playPvpLocalDamageFeedback(...args);
+    const clearPvpSceneRuntime: typeof owner.clearPvpSceneRuntime = (...args) => owner.clearPvpSceneRuntime(...args);
+    const queuePresenceSnapshotSync: typeof owner.queuePresenceSnapshotSync = (...args) => owner.queuePresenceSnapshotSync(...args);
+    const handlePvpInvite: typeof owner.handlePvpInvite = (...args) => owner.handlePvpInvite(...args);
+    const handlePvpInviteAccepted: typeof owner.handlePvpInviteAccepted = (...args) => owner.handlePvpInviteAccepted(...args);
+    const applyPresenceSubscriptions: typeof owner.applyPresenceSubscriptions = (...args) => owner.applyPresenceSubscriptions(...args);
+    const getPlayerCommentPosition: typeof owner.getPlayerCommentPosition = (...args) => owner.getPlayerCommentPosition(...args);
+    const selectRoomCoordinates: typeof owner.selectRoomCoordinates = (...args) => owner.selectRoomCoordinates(...args);
+    const jumpToCoordinates: typeof owner.jumpToCoordinates = (...args) => owner.jumpToCoordinates(...args);
+    const getRoomEditorCount: typeof owner.getRoomEditorCount = (...args) => owner.getRoomEditorCount(...args);
+    const isWithinLoadedRoomBounds: typeof owner.isWithinLoadedRoomBounds = (...args) => owner.isWithinLoadedRoomBounds(...args);
+    const canWarpToSelectedRoom: typeof owner.canWarpToSelectedRoom = (...args) => owner.canWarpToSelectedRoom(...args);
+    const playSelectedRoom: typeof owner.playSelectedRoom = (...args) => owner.playSelectedRoom(...args);
+    const warpToSelectedRoom: typeof owner.warpToSelectedRoom = (...args) => owner.warpToSelectedRoom(...args);
+    const truncateOverlayText: typeof owner.truncateOverlayText = (...args) => owner.truncateOverlayText(...args);
+    const isRoomInActiveCourse: typeof owner.isRoomInActiveCourse = (...args) => owner.isRoomInActiveCourse(...args);
+    const startFollowCamera: typeof owner.startFollowCamera = (...args) => owner.startFollowCamera(...args);
+    const getRoomPopulation: typeof owner.getRoomPopulation = (...args) => owner.getRoomPopulation(...args);
+    const getRoomEditorDisplayNames: typeof owner.getRoomEditorDisplayNames = (...args) => owner.getRoomEditorDisplayNames(...args);
+    const getPvpPersistentStatusText: typeof owner.getPvpPersistentStatusText = (...args) => owner.getPvpPersistentStatusText(...args);
+    const formatOnlineRosterRoomText: typeof owner.formatOnlineRosterRoomText = (...args) => owner.formatOnlineRosterRoomText(...args);
+    const getTransientStatusMessage: typeof owner.getTransientStatusMessage = (...args) => owner.getTransientStatusMessage(...args);
+    const syncGoalOverlayScale: typeof owner.syncGoalOverlayScale = (...args) => owner.syncGoalOverlayScale(...args);
+    const fitLoadedWorld: typeof owner.fitLoadedWorld = (...args) => owner.fitLoadedWorld(...args);
+    const syncBrowseWindowToCamera: typeof owner.syncBrowseWindowToCamera = (...args) => owner.syncBrowseWindowToCamera(...args);
+    return {
+      scene,
+      get worldStreamingController() { return owner.worldStreamingController; },
+      get player() { return owner.player; },
+      get playerBody() { return owner.playerBody; },
+      get playerSprite() { return owner.playerSprite; },
+      get playerPickupSensor() { return owner.playerPickupSensor; },
+      get playerPickupSensorBody() { return owner.playerPickupSensorBody; },
+      get mode() { return owner.mode; },
+      set mode(value: typeof owner.mode) { owner.mode = value; },
+      get cameraMode() { return owner.cameraMode; },
+      set cameraMode(value: typeof owner.cameraMode) { owner.cameraMode = value; },
+      get selectedCoordinates() { return owner.selectedCoordinates; },
+      set selectedCoordinates(value: typeof owner.selectedCoordinates) { owner.selectedCoordinates = value; },
+      get currentRoomCoordinates() { return owner.currentRoomCoordinates; },
+      set currentRoomCoordinates(value: typeof owner.currentRoomCoordinates) { owner.currentRoomCoordinates = value; },
+      get pvpArenaController() { return owner.pvpArenaController; },
+      get roomRushModeController() { return owner.roomRushModeController; },
+      get backdropController() { return owner.backdropController; },
+      get runtimeContext() { return owner.runtimeContext; },
+      get BOUNCE_PAD_VELOCITY() { return owner.BOUNCE_PAD_VELOCITY; },
+      get BOUNCE_PAD_COOLDOWN_MS() { return owner.BOUNCE_PAD_COOLDOWN_MS; },
+      get BOUNCE_PAD_ACTIVE_MS() { return owner.BOUNCE_PAD_ACTIVE_MS; },
+      get BAT_SPEED() { return owner.BAT_SPEED; },
+      get BAT_WAVE_AMPLITUDE() { return owner.BAT_WAVE_AMPLITUDE; },
+      get BAT_WAVE_SPEED() { return owner.BAT_WAVE_SPEED; },
+      get BIRD_SPEED() { return owner.BIRD_SPEED; },
+      get BIRD_WAVE_AMPLITUDE() { return owner.BIRD_WAVE_AMPLITUDE; },
+      get BIRD_WAVE_SPEED() { return owner.BIRD_WAVE_SPEED; },
+      get CRAB_SPEED() { return owner.CRAB_SPEED; },
+      get SNAKE_SPEED() { return owner.SNAKE_SPEED; },
+      get SLIME_SPEED() { return owner.SLIME_SPEED; },
+      get PENGUIN_SPEED() { return owner.PENGUIN_SPEED; },
+      get FROG_HOP_SPEED() { return owner.FROG_HOP_SPEED; },
+      get FROG_HOP_VELOCITY() { return owner.FROG_HOP_VELOCITY; },
+      get FROG_HOP_DELAY_MS() { return owner.FROG_HOP_DELAY_MS; },
+      get CANNON_FIRE_DELAY_MS() { return owner.CANNON_FIRE_DELAY_MS; },
+      get CANNON_BULLET_SPEED() { return owner.CANNON_BULLET_SPEED; },
+      get CANNON_BULLET_LIFETIME_MS() { return owner.CANNON_BULLET_LIFETIME_MS; },
+      get TORNADO_LIFT_VELOCITY() { return owner.TORNADO_LIFT_VELOCITY; },
+      get TORNADO_SIDE_VELOCITY() { return owner.TORNADO_SIDE_VELOCITY; },
+      get TORNADO_COOLDOWN_MS() { return owner.TORNADO_COOLDOWN_MS; },
+      get JUMP_VELOCITY() { return owner.JUMP_VELOCITY; },
+      getCollisionReadyLoadedFullRooms,
+      getRoomOrigin,
+      getPlacedObjectRuntimeKey,
+      get collectedObjectKeys() { return owner.collectedObjectKeys; },
+      get multiplayerRemovedObjectKeys() { return owner.multiplayerRemovedObjectKeys; },
+      get gameFeelController() { return owner.gameFeelController; },
+      get activePvpMatch() { return owner.activePvpMatch; },
+      get presenceController() { return owner.presenceController; },
+      get gameplayKeyboard() { return owner.gameplayKeyboard; },
+      get gamepadInput() { return owner.gamepadInput; },
+      get cameras() { return owner.cameras; },
+      get specialTilesController() { return owner.specialTilesController; },
+      getSwordsmanTraversalPlannerMode,
+      get movementController() { return owner.movementController; },
+      isLadderDropRequested,
+      get score() { return owner.score; },
+      set score(value: typeof owner.score) { owner.score = value; },
+      get heldKeyCount() { return owner.heldKeyCount; },
+      set heldKeyCount(value: typeof owner.heldKeyCount) { owner.heldKeyCount = value; },
+      get playerHealthController() { return owner.playerHealthController; },
+      get lostSongController() { return owner.lostSongController; },
+      get respawnCheckpointController() { return owner.respawnCheckpointController; },
+      get quicksandController() { return owner.quicksandController; },
+      get externalLaunchGraceUntil() { return owner.externalLaunchGraceUntil; },
+      set externalLaunchGraceUntil(value: typeof owner.externalLaunchGraceUntil) { owner.externalLaunchGraceUntil = value; },
+      showTransientStatus,
+      get sessionResetController() { return owner.sessionResetController; },
+      handleEnemyDefeated,
+      handleNpcDefeated,
+      handleCollectibleCollected,
+      handleEnemyCollectibleCollected,
+      handleLiveObjectRemovedForMultiplayer,
+      handleRoomSwitchStateChangedForMultiplayer,
+      get roomAudioController() { return owner.roomAudioController; },
+      get fxController() { return owner.fxController; },
+      getCollisionReadyLoadedFullRoomById,
+      get roomTransitionController() { return owner.roomTransitionController; },
+      teleportPlayerToPortalObject,
+      get liveObjectController() { return owner.liveObjectController; },
+      getRoomCoordinatesForPoint,
+      refreshAround,
+      createLiveObjects,
+      syncActiveCourseObjectLinks,
+      destroyLiveObjects,
+      destroyEdgeWalls,
+      getProtectedMovingPlatformSourceRoomIds,
+      syncGhostVisibility,
+      get runtimeController() { return owner.runtimeController; },
+      get shouldRespawnPlayer() { return owner.shouldRespawnPlayer; },
+      set shouldRespawnPlayer(value: typeof owner.shouldRespawnPlayer) { owner.shouldRespawnPlayer = value; },
+      get portalObjectController() { return owner.portalObjectController; },
+      handleFullRoomReplaced,
+      updateSelectedSummary,
+      refreshLeaderboardForSelection,
+      renderHud,
+      measureMobilePerformance,
+      getRoomSnapshotViewForCoordinates,
+      get roomSummariesById() { return owner.roomSummariesById; },
+      getExpandedRoomIdAt,
+      get coursePlaybackController() { return owner.coursePlaybackController; },
+      get inspectZoom() { return owner.inspectZoom; },
+      set inspectZoom(value: typeof owner.inspectZoom) { owner.inspectZoom = value; },
+      get browseInspectZoom() { return owner.browseInspectZoom; },
+      set browseInspectZoom(value: typeof owner.browseInspectZoom) { owner.browseInspectZoom = value; },
+      getFitZoomForRoom,
+      getZoomFocusCoordinates,
+      get windowCenterCoordinates() { return owner.windowCenterCoordinates; },
+      set windowCenterCoordinates(value: typeof owner.windowCenterCoordinates) { owner.windowCenterCoordinates = value; },
+      get shouldCenterCamera() { return owner.shouldCenterCamera; },
+      set shouldCenterCamera(value: typeof owner.shouldCenterCamera) { owner.shouldCenterCamera = value; },
+      syncAppMode,
+      get courseEditorReturnTarget() { return owner.courseEditorReturnTarget; },
+      set courseEditorReturnTarget(value: typeof owner.courseEditorReturnTarget) { owner.courseEditorReturnTarget = value; },
+      get editorPlaytestReturnTarget() { return owner.editorPlaytestReturnTarget; },
+      set editorPlaytestReturnTarget(value: typeof owner.editorPlaytestReturnTarget) { owner.editorPlaytestReturnTarget = value; },
+      get flowController() { return owner.flowController; },
+      updateCameraBounds,
+      syncModeRuntime,
+      syncFocusedRoomVisuals,
+      syncPreviewVisibility,
+      syncPresenceSubscriptions,
+      get roomCommentsController() { return owner.roomCommentsController; },
+      redrawWorld,
+      get loadingText() { return owner.loadingText; },
+      get activeCourseSnapshot() { return owner.activeCourseSnapshot; },
+      get activeCourseRun() { return owner.activeCourseRun; },
+      get activeRoomRushRun() { return owner.activeRoomRushRun; },
+      isPvpArenaActive,
+      createPlayer,
+      destroyPlayer,
+      get goalRunController() { return owner.goalRunController; },
+      syncGoalRunForRoomWithIntro,
+      redrawGoalMarkers,
+      syncCameraBoundsUsage,
+      centerCameraOnCoordinates,
+      constrainInspectCamera,
+      applyCameraMode,
+      getCellStateAt,
+      requestWindowRefreshForUnknownNeighbor,
+      get draftRoomsById() { return owner.draftRoomsById; },
+      refreshChunkWindowIfNeeded,
+      get playerFacing() { return owner.playerFacing; },
+      set playerFacing(value: typeof owner.playerFacing) { owner.playerFacing = value; },
+      recordPerformanceTransitionGate,
+      handlePerformanceRoomTransitionCompleted,
+      recordRoomRushVisit,
+      refreshAroundIfNeededOrFromCache,
+      get playerPresentationController() { return owner.playerPresentationController; },
+      getSelectedCourseContext,
+      loadPublishedCourseSnapshot,
+      isFrontierBuildBlockedByClaimLimit,
+      getRoomSnapshotForCoordinates,
+      getActiveCourseDraftSessionContextForRoom,
+      clearTouchGestureState,
+      get roomGoalIntroFromOverworldPending() { return owner.roomGoalIntroFromOverworldPending; },
+      set roomGoalIntroFromOverworldPending(value: typeof owner.roomGoalIntroFromOverworldPending) { owner.roomGoalIntroFromOverworldPending = value; },
+      get forceRoomGoalIntroFromOverworldPending() { return owner.forceRoomGoalIntroFromOverworldPending; },
+      set forceRoomGoalIntroFromOverworldPending(value: typeof owner.forceRoomGoalIntroFromOverworldPending) { owner.forceRoomGoalIntroFromOverworldPending = value; },
+      get pendingWarpSpawnRoomCoordinates() { return owner.pendingWarpSpawnRoomCoordinates; },
+      set pendingWarpSpawnRoomCoordinates(value: typeof owner.pendingWarpSpawnRoomCoordinates) { owner.pendingWarpSpawnRoomCoordinates = value; },
+      setActiveCourseRun,
+      emitCourseComposerStateChanged,
+      isPvpMatchActive,
+      get physics() { return owner.physics; },
+      get playerDeathPresentation() { return owner.playerDeathPresentation; },
+      get hudBridge() { return owner.hudBridge; },
+      get combatController() { return owner.combatController; },
+      startRankedRunTrace,
+      clearRankedRunTrace,
+      get ghostRaceController() { return owner.ghostRaceController; },
+      get PLAYER_HEIGHT() { return owner.PLAYER_HEIGHT; },
+      get assist() { return owner.assist; },
+      countRoomObjectsByCategory,
+      prepareRankedRunTrace,
+      buildRankedRunVerificationTrace,
+      get currentGoalRun() { return owner.currentGoalRun; },
+      recordRankedGoalEvent,
+      get roomCellController() { return owner.roomCellController; },
+      getPlayerEffectOrigin,
+      toWorldGoalPoint,
+      toWorldCoursePoint,
+      get PLAYER_WIDTH() { return owner.PLAYER_WIDTH; },
+      get PLAYER_STANDING_HEIGHT() { return owner.PLAYER_STANDING_HEIGHT; },
+      get PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT() { return owner.PLAYER_PICKUP_SENSOR_EXTRA_HEIGHT; },
+      getPlayerEntities,
+      get physicsCadence() { return owner.physicsCadence; },
+      get playerLifecycleController() { return owner.playerLifecycleController; },
+      get cameraController() { return owner.cameraController; },
+      getCurrentRankedRunTraceFrame,
+      get rankedRunTraceRecorder() { return owner.rankedRunTraceRecorder; },
+      get playerAnimationState() { return owner.playerAnimationState; },
+      set playerAnimationState(value: typeof owner.playerAnimationState) { owner.playerAnimationState = value; },
+      get playerWasGrounded() { return owner.playerWasGrounded; },
+      set playerWasGrounded(value: typeof owner.playerWasGrounded) { owner.playerWasGrounded = value; },
+      get playerLandAnimationUntil() { return owner.playerLandAnimationUntil; },
+      set playerLandAnimationUntil(value: typeof owner.playerLandAnimationUntil) { owner.playerLandAnimationUntil = value; },
+      get lastMovementInput() { return owner.lastMovementInput; },
+      get playerPresentationGroundedOverride() { return owner.playerPresentationGroundedOverride; },
+      isSolidTerrainAtWorldPoint,
+      getArcadeBodyBounds,
+      findOverlappingLadder,
+      get PLAYER_CROUCH_HEIGHT() { return owner.PLAYER_CROUCH_HEIGHT; },
+      get PLAYER_PUSH_HEIGHT() { return owner.PLAYER_PUSH_HEIGHT; },
+      get PLAYER_SPEED() { return owner.PLAYER_SPEED; },
+      get CRAWL_SPEED() { return owner.CRAWL_SPEED; },
+      get CRATE_PUSH_SPEED() { return owner.CRATE_PUSH_SPEED; },
+      get CRATE_PULL_SPEED() { return owner.CRATE_PULL_SPEED; },
+      get CRATE_INTERACTION_MAX_GAP() { return owner.CRATE_INTERACTION_MAX_GAP; },
+      get COYOTE_MS() { return owner.COYOTE_MS; },
+      get JUMP_BUFFER_MS() { return owner.JUMP_BUFFER_MS; },
+      get WALL_JUMP_BUFFER_MS() { return owner.WALL_JUMP_BUFFER_MS; },
+      get WALL_CONTACT_GRACE_MS() { return owner.WALL_CONTACT_GRACE_MS; },
+      get WALL_SLIDE_MAX_FALL_SPEED() { return owner.WALL_SLIDE_MAX_FALL_SPEED; },
+      get WALL_JUMP_VELOCITY_X() { return owner.WALL_JUMP_VELOCITY_X; },
+      get WALL_JUMP_VELOCITY_Y() { return owner.WALL_JUMP_VELOCITY_Y; },
+      get WALL_JUMP_INPUT_LOCK_MS() { return owner.WALL_JUMP_INPUT_LOCK_MS; },
+      get LADDER_CLIMB_SPEED() { return owner.LADDER_CLIMB_SPEED; },
+      get QUICKSAND_MOVE_FACTOR() { return owner.QUICKSAND_MOVE_FACTOR; },
+      get QUICKSAND_JUMP_FACTOR() { return owner.QUICKSAND_JUMP_FACTOR; },
+      get WEAPON_KNOCKBACK_MS() { return owner.WEAPON_KNOCKBACK_MS; },
+      get loadedFullRoomsById() { return owner.loadedFullRoomsById; },
+      attackPvpPeerInRect,
+      attackPvpPeerAtPoint,
+      isProjectileBlocked,
+      get combatPresentationController() { return owner.combatPresentationController; },
+      publishPvpCombatAction,
+      get SWORD_COOLDOWN_MS() { return owner.SWORD_COOLDOWN_MS; },
+      get SWORD_ATTACK_MS() { return owner.SWORD_ATTACK_MS; },
+      get SWORD_ACTIVE_MS() { return owner.SWORD_ACTIVE_MS; },
+      get SWORD_HIT_LUNGE_VELOCITY() { return owner.SWORD_HIT_LUNGE_VELOCITY; },
+      get DOWNWARD_SLASH_BOUNCE_VELOCITY() { return owner.DOWNWARD_SLASH_BOUNCE_VELOCITY; },
+      get GUN_COOLDOWN_MS() { return owner.GUN_COOLDOWN_MS; },
+      get GUN_ATTACK_MS() { return owner.GUN_ATTACK_MS; },
+      get GUN_RECOIL_VELOCITY() { return owner.GUN_RECOIL_VELOCITY; },
+      get PROJECTILE_SPEED() { return owner.PROJECTILE_SPEED; },
+      get PROJECTILE_LIFETIME_MS() { return owner.PROJECTILE_LIFETIME_MS; },
+      isPvpDamageActive,
+      recordRoomRushDeath,
+      recordPvpSelfDeath,
+      respawnPlayerToCurrentRoom,
+      get respawnController() { return owner.respawnController; },
+      get objectiveController() { return owner.objectiveController; },
+      resetRoomChallengeState,
+      resetTransientPlayState,
+      returnToWorld,
+      applyRoomRushResultOverviewCameraState,
+      updateBackdrop,
+      isMultiCellExpandedRoomAt,
+      clearRoomGoalIntroState,
+      syncScenePauseState,
+      get roomRushResultController() { return owner.roomRushResultController; },
+      presentRemotePvpCombatEvent,
+      getPvpOpponentIdentity,
+      preparePvpArenaDuel,
+      get pvpInstanceRenderer() { return owner.pvpInstanceRenderer; },
+      handlePeerRoomStateEvent,
+      maybeApplyPvpStartingPosition,
+      applyPvpArenaCameraLock,
+      syncPvpLocalHeartLabel,
+      playPvpLocalDamageFeedback,
+      clearPvpSceneRuntime,
+      queuePresenceSnapshotSync,
+      handlePvpInvite,
+      handlePvpInviteAccepted,
+      applyPresenceSubscriptions,
+      get worldWindow() { return owner.worldWindow; },
+      getPlayerCommentPosition,
+      selectRoomCoordinates,
+      jumpToCoordinates,
+      getRoomEditorCount,
+      isWithinLoadedRoomBounds,
+      canWarpToSelectedRoom,
+      playSelectedRoom,
+      warpToSelectedRoom,
+      truncateOverlayText,
+      isRoomInActiveCourse,
+      get mobilePortraitCameraTargetY() { return owner.mobilePortraitCameraTargetY; },
+      startFollowCamera,
+      get gridOverlayController() { return owner.gridOverlayController; },
+      getRoomPopulation,
+      getRoomEditorDisplayNames,
+      get currentRoomLeaderboard() { return owner.currentRoomLeaderboard; },
+      getPvpPersistentStatusText,
+      formatOnlineRosterRoomText,
+      get signController() { return owner.signController; },
+      get roomRepository() { return owner.roomRepository; },
+      get profileRepository() { return owner.profileRepository; },
+      getTransientStatusMessage,
+      syncGoalOverlayScale,
+      fitLoadedWorld,
+      get viewportController() { return owner.viewportController; },
+      syncBrowseWindowToCamera,
+    };
+  }
+
 
   private get currentGoalRun(): GoalRunState | null {
     return this.goalRunController.getCurrentRun();
@@ -6845,4 +5798,3 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     };
   }
 }
-import { recordEditorDraftClear } from './editor/clearCheck';
