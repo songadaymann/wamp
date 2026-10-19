@@ -28,38 +28,15 @@ import {
   isTestResetEnabled,
   resolvePartykitConfig,
   resolveWalletProjectId,
-  type AuthConfigSource,
-  type RoomStorageBackend,
 } from './runtimeConfig';
+import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQueryStatus,
+  isGenericSignedInStatus, normalizeChatModerationViewer, type AuthDebugState } from './sessionState';
+export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
 
-export interface AuthDebugState {
-  loading: boolean;
-  authenticated: boolean;
-  user: AuthUser | null;
-  source: AuthSessionResponse['source'] | null;
-  schoolManaged: boolean;
-  school: AuthSessionResponse['school'] | null;
-  roomDailyClaimLimit: number | null;
-  roomClaimsUsedToday: number;
-  roomClaimsRemainingToday: number | null;
-  status: string;
-  debugMagicLink: string | null;
-  walletConnected: boolean;
-  walletAddress: string | null;
-  walletProjectConfigured: boolean;
-  walletProjectSource: AuthConfigSource;
-  partykitConfigured: boolean;
-  partykitHost: string | null;
-  partykitParty: string | null;
-  partykitSource: AuthConfigSource;
-  storageBackend: RoomStorageBackend;
-  testResetEnabled: boolean;
-  chatModeration: ChatModerationViewer;
-}
 
 interface TestResetResponse {
   ok: true;
@@ -95,33 +72,7 @@ interface AuthIdentityProfileView {
   builderProgressFraction: number | null;
 }
 
-const state: AuthDebugState = {
-  loading: false,
-  authenticated: false,
-  user: null,
-  source: null,
-  schoolManaged: false,
-  school: null,
-  roomDailyClaimLimit: null,
-  roomClaimsUsedToday: 0,
-  roomClaimsRemainingToday: null,
-  status: 'Use email or wallet.',
-  debugMagicLink: null,
-  walletConnected: false,
-  walletAddress: null,
-  walletProjectConfigured: false,
-  walletProjectSource: 'missing',
-  partykitConfigured: false,
-  partykitHost: null,
-  partykitParty: null,
-  partykitSource: 'missing',
-  storageBackend: getStorageBackend(),
-  testResetEnabled: isTestResetEnabled(),
-  chatModeration: {
-    role: 'none',
-    banned: false,
-  },
-};
+let state = createAuthState({ storageBackend: getStorageBackend(), testResetEnabled: isTestResetEnabled() });
 
 let authPanel: HTMLElement | null = null;
 let authIdentity: HTMLButtonElement | null = null;
@@ -173,7 +124,6 @@ const FEATURED_REOWN_WALLET_IDS = [
   'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
 ] as const;
 
-const DEFAULT_GUEST_STATUS = 'Use email or wallet.';
 const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
 const WALLET_NOT_CONFIGURED_MESSAGE = 'Wallet sign-in is not configured on this deployment.';
 
@@ -289,11 +239,7 @@ export async function setupAuthUi(): Promise<void> {
 }
 
 export function getAuthDebugState(): AuthDebugState {
-  return {
-    ...state,
-    school: state.school ? { ...state.school } : null,
-    chatModeration: { ...state.chatModeration },
-  };
+  return getAuthStateSnapshot(state);
 }
 
 export async function refreshAuthSession(): Promise<void> {
@@ -309,7 +255,7 @@ export function syncChatModerationState(viewer: ChatModerationViewer): void {
     return;
   }
 
-  state.chatModeration = normalized;
+  state = transitionAuthState(state, { type: 'moderation', viewer: normalized });
   renderAuthUi();
 }
 
@@ -371,23 +317,12 @@ async function refreshSession(): Promise<void> {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
     setRuntimeWalletProjectId(session.walletProjectId);
     setRuntimePartykitConfig(session.partykitHost, session.partykitParty);
-    state.authenticated = session.authenticated;
-    state.user = session.user;
-    state.source = session.source ?? null;
-    state.schoolManaged = session.schoolManaged === true;
-    state.school = session.school ?? null;
-    state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
-    state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
-    state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
-    state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
+    state = transitionAuthState(state, { type: 'session', session, preserveGuestStatus: window.location.search.includes('auth=') });
 
     if (session.authenticated) {
       setStoredPlayerAvatarId(session.user?.selectedAvatarId ?? null);
       syncAuthIdentityProfileFromSession(session.user);
       void ensureAuthIdentityProfileLoaded();
-      if (state.status.length === 0 || state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)) {
-        state.status = '';
-      }
       lastCheckedDisplayName = session.user?.displayName ?? '';
       lastDisplayNameAvailability = session.user
         ? {
@@ -395,21 +330,7 @@ async function refreshSession(): Promise<void> {
             claimedByCurrentUser: true,
           }
         : null;
-    } else if (window.location.search.includes('auth=')) {
-      // Preserve status set from query params.
-      state.source = null;
-      state.schoolManaged = false;
-      state.school = null;
-      authIdentityProfile = null;
-      authIdentityProfileLoadingUserId = null;
-      rememberBuilderTrustTier(null);
-      lastCheckedDisplayName = '';
-      lastDisplayNameAvailability = null;
     } else {
-      state.source = null;
-      state.schoolManaged = false;
-      state.school = null;
-      state.status = DEFAULT_GUEST_STATUS;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
       rememberBuilderTrustTier(null);
@@ -418,17 +339,7 @@ async function refreshSession(): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to load auth session', error);
-    state.status = 'Failed to load account session.';
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.roomDailyClaimLimit = null;
-    state.roomClaimsUsedToday = 0;
-    state.roomClaimsRemainingToday = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
+    state = transitionAuthState(state, { type: 'session-failed' });
     authIdentityProfile = null;
     authIdentityProfileLoadingUserId = null;
     rememberBuilderTrustTier(null);
@@ -585,14 +496,8 @@ async function requestMagicLink(): Promise<void> {
       body: JSON.stringify({ email }),
     });
 
-    state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
+    state = transitionAuthState(state, { type: 'email-requested', response, debugMagicLink: normalizeDebugMagicLink(response.debugMagicLink) });
     showEmailCodeEntry(email, response.debugCode);
-    state.status =
-      response.delivery === 'email'
-        ? ''
-        : response.purpose === 'link_email'
-          ? 'Debug email verification link generated below.'
-          : 'Debug sign-in link generated below.';
   } catch (error) {
     console.error('Failed to request magic link', error);
     state.status = getErrorMessage(error, 'Failed to send sign-in link.');
@@ -633,8 +538,7 @@ async function verifyEmailCode(): Promise<void> {
       body: JSON.stringify({ email: pendingEmailCodeAddress, code }),
     });
     hideEmailCodeEntry();
-    state.debugMagicLink = null;
-    state.status = 'Signed in with email.';
+    state = transitionAuthState(state, { type: 'email-verified' });
     await refreshSession();
   } catch (error) {
     if (emailCodeStatus) emailCodeStatus.textContent = getErrorMessage(error, 'Could not verify code.');
@@ -659,17 +563,7 @@ async function logout(): Promise<void> {
       return;
     }
 
-    state.authenticated = false;
-    state.user = null;
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.debugMagicLink = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
-    state.status = 'Signed out.';
+    state = transitionAuthState(state, { type: 'signed-out' });
   } catch (error) {
     console.error('Failed to sign out', error);
     state.status = getErrorMessage(error, 'Failed to sign out.');
@@ -708,17 +602,7 @@ async function resetTestData(): Promise<void> {
     });
 
     const clearedLocalRooms = clearLocalRoomStorage();
-    state.authenticated = false;
-    state.user = null;
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.debugMagicLink = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
-    state.status = `Reset complete. Cleared ${response.deleted.rooms} rooms and ${clearedLocalRooms} local cached room entries. Reloading...`;
+    state = transitionAuthState(state, { type: 'signed-out', status: `Reset complete. Cleared ${response.deleted.rooms} rooms and ${clearedLocalRooms} local cached room entries. Reloading...` });
     renderAuthUi();
 
     window.setTimeout(() => {
@@ -762,8 +646,7 @@ async function updateDisplayName(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ displayName }),
     });
-    state.user = response.user;
-    state.status = 'Display name saved.';
+    state = transitionAuthState(state, { type: 'display-name', user: response.user });
     lastCheckedDisplayName = response.user.displayName;
     lastDisplayNameAvailability = {
       available: true,
@@ -878,13 +761,7 @@ async function authenticateWithWallet(): Promise<void> {
       }),
     });
 
-    state.authenticated = true;
-    state.user = response.user;
-    state.source = 'session';
-    state.status = response.linkedWallet
-      ? 'Wallet linked.'
-      : 'Wallet sign-in complete.';
-    state.debugMagicLink = null;
+    state = transitionAuthState(state, { type: 'wallet-verified', response });
   } catch (error) {
     console.error('Wallet authentication failed', error);
     state.status = getErrorMessage(error, 'Wallet sign-in failed.');
@@ -1302,15 +1179,6 @@ function getAuthStatusText(): string {
   return state.status;
 }
 
-function isGenericSignedInStatus(status: string): boolean {
-  return (
-    status.length === 0
-    || status.startsWith('Signed in as ')
-    || status.startsWith('Signed in with wallet ')
-    || status.startsWith('Wallet linked to ')
-  );
-}
-
 function buildSessionSummaryValue(user: AuthUser | null): string {
   if (!user) {
     return '';
@@ -1345,27 +1213,8 @@ function getWalletButtonLabel(): string {
 }
 
 function setLoading(loading: boolean, status?: string): void {
-  state.loading = loading;
-  if (status) {
-    state.status = status;
-  }
+  state = transitionAuthState(state, { type: 'loading', loading, status });
   renderAuthUi();
-}
-
-function normalizeChatModerationViewer(
-  viewer: ChatModerationViewer | null | undefined
-): ChatModerationViewer {
-  if (!viewer || (viewer.role !== 'none' && viewer.role !== 'admin' && viewer.role !== 'owner')) {
-    return {
-      role: 'none',
-      banned: false,
-    };
-  }
-
-  return {
-    role: viewer.role,
-    banned: viewer.banned === true,
-  };
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1400,17 +1249,8 @@ function initializeStatusFromQuery(): void {
   const url = new URL(window.location.href);
   const authResult = url.searchParams.get('auth');
 
-  if (authResult === 'email') {
-    state.status = 'Email sign-in complete.';
-  } else if (authResult === 'email-linked') {
-    state.status = 'Email added to your account.';
-  } else if (authResult === 'school') {
-    state.status = 'Classroom sign-in complete.';
-  } else if (authResult === 'invalid') {
-    state.status = 'That sign-in link is invalid or expired.';
-  } else {
-    return;
-  }
+  if (getAuthQueryStatus(authResult) === null) return;
+  state = transitionAuthState(state, { type: 'query', result: authResult });
 
   url.searchParams.delete('auth');
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
