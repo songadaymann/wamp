@@ -87,3 +87,22 @@ jobs:
           name: gameplay-pause
           path: output/web-game/mobile-smoke-ci/gameplay-pause
           retention-days: 7
+
+  assist-mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --assist-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assist-mode
+          path: output/web-game/mobile-smoke-ci/assist
+          retention-days: 7

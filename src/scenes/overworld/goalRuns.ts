@@ -1,3 +1,4 @@
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { formatGoalRoomLeaderboardMetric, formatGoalRunStatus, GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
 import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
 import { initializeRoomGoalTargets, roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
@@ -74,6 +75,7 @@ export interface GoalRunState {
   submittedScore: number | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
@@ -102,6 +104,7 @@ interface OverworldGoalRunControllerOptions {
   playerHeight: number;
   runRepository: RunRepository;
   guestRuns?: GuestRunPlaybackController;
+  isAssistActive?: () => boolean;
   getScore: () => number;
   getAuthenticated: () => boolean;
   getAuthSource: () => SurfaceAuthSource;
@@ -200,8 +203,9 @@ export class OverworldGoalRunController {
 
     this.clearRunForRoomExit();
     const cooperative = hasCoopPressurePlates(room.placedObjects);
+    const assisted = !cooperative && Boolean(this.options.isAssistActive?.());
     const leaderboardEligible =
-      !cooperative &&
+      !assisted && !cooperative &&
       room.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         this.options.getAuthenticated(),
@@ -242,13 +246,14 @@ export class OverworldGoalRunController {
             ? 'starting'
             : 'local-only',
       submissionMessage:
-        cooperative ? COOP_ROOM_PRACTICE_MESSAGE : qualificationState === 'practice'
+        assisted ? ASSIST_RUN_MESSAGE : cooperative ? COOP_ROOM_PRACTICE_MESSAGE : qualificationState === 'practice'
           ? this.getPracticeStatusMessage(room.status, leaderboardEligible)
           : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible),
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
       cooperative,
+      assisted,
       verificationSchemaVersion: null,
       verificationNonce: null,
       snapshotHash: null,
@@ -503,7 +508,7 @@ export class OverworldGoalRunController {
     runState.result = 'completed';
     runState.completionMessage = message;
     runState.pendingResult = 'completed';
-    if (runState.roomStatus === 'draft') this.options.onDraftGoalCompleted?.(runState);
+    if (runState.roomStatus === 'draft' && !runState.assisted) this.options.onDraftGoalCompleted?.(runState);
     this.maybeSubmitGoalRunResult(runState);
     this.maybePromptGuestClaimForLocalClear(runState);
     return {
@@ -621,6 +626,7 @@ export class OverworldGoalRunController {
   }
 
   getLeaderboardSummaryText(): string | null {
+    if (this.currentGoalRun?.assisted) return ASSIST_RUN_MESSAGE;
     if (this.currentGoalRun?.qualificationState === 'practice') {
       return this.currentGoalRun.submissionMessage;
     }
@@ -655,6 +661,7 @@ export class OverworldGoalRunController {
   }
 
   getPersistentStatusText(): string | null {
+    if (this.currentGoalRun?.assisted) return ASSIST_RUN_MESSAGE;
     if (this.currentGoalRun?.qualificationState === 'practice') {
       return this.currentGoalRun.submissionMessage;
     }
@@ -709,6 +716,7 @@ export class OverworldGoalRunController {
             submittedScore: this.currentGoalRun.submittedScore,
             leaderboardEligible: this.currentGoalRun.leaderboardEligible,
             cooperative: this.currentGoalRun.cooperative ?? false,
+            assisted: this.currentGoalRun.assisted ?? false,
             verificationSchemaVersion: this.currentGoalRun.verificationSchemaVersion,
             verificationNonce: this.currentGoalRun.verificationNonce,
             snapshotHash: this.currentGoalRun.snapshotHash,
@@ -815,7 +823,7 @@ export class OverworldGoalRunController {
         startedAt: this.nowIso(),
       });
 
-      if (this.currentGoalRun !== runState) return;
+      if (this.currentGoalRun !== runState || runState.assisted) return;
 
       runState.attemptId = response.attemptId;
       runState.verificationSchemaVersion = response.verificationSchemaVersion;
@@ -838,6 +846,7 @@ export class OverworldGoalRunController {
       } as RoomSnapshot);
       this.maybeSubmitGoalRunResult(runState);
     } catch (error) {
+      if (runState.assisted) return;
       console.error('Failed to start ranked run', error);
       if (isRunApiError(error) && error.status === 401) {
         runState.submissionState = 'local-only';
@@ -853,6 +862,7 @@ export class OverworldGoalRunController {
   }
 
   private maybeSubmitGoalRunResult(runState: GoalRunState): void {
+    if (runState.assisted) { runState.submissionMessage = ASSIST_RUN_MESSAGE; return; }
     if (runState.pendingResult === null) {
       return;
     }
@@ -928,7 +938,7 @@ export class OverworldGoalRunController {
   }
 
   private shouldPromptGuestClaimForLocalClear(runState: GoalRunState): boolean {
-    if (runState.cooperative) return false;
+    if (runState.cooperative || runState.assisted) return false;
     return (
       runState.result === 'completed' &&
       runState.roomStatus === 'published' &&
@@ -945,7 +955,7 @@ export class OverworldGoalRunController {
     this.resetRunProgress(runState);
     runState.qualificationState = 'qualified';
     runState.submissionState = runState.leaderboardEligible ? 'starting' : 'local-only';
-    runState.submissionMessage = this.getQualifiedSubmissionMessage(
+    runState.submissionMessage = runState.assisted ? ASSIST_RUN_MESSAGE : this.getQualifiedSubmissionMessage(
       runState.roomStatus,
       runState.leaderboardEligible,
       runState.cooperative,
@@ -953,7 +963,7 @@ export class OverworldGoalRunController {
 
     if (runState.leaderboardEligible) {
       void this.startRemoteGoalRun(runState);
-    } else if (!runState.cooperative && runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
+    } else if (!runState.assisted && !runState.cooperative && runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
       this.options.guestRuns?.begin(runState, 'room', {
         contentType: 'room', contentId: runState.roomId, version: runState.roomVersion,
       });
@@ -981,7 +991,7 @@ export class OverworldGoalRunController {
     runState: GoalRunState,
     result: Exclude<RunResult, 'active'>
   ): Promise<void> {
-    if (!runState.attemptId) {
+    if (!runState.attemptId || runState.assisted) {
       return;
     }
 

@@ -1,3 +1,4 @@
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { expandedRoomGoalTargets, tickExpandedRoomGoal, expandedRoomGoalMarkersReady } from './expandedRoomGoalRules';
 import { NOOP_MUTATION_RESULT, createTerminalMutation, recordExpandedRoomTargetEvent } from './expandedRoomRunMutations';
 import type { ExpandedRoomRunMutationResult } from './expandedRoomRunMutations';
@@ -39,6 +40,7 @@ export interface ActiveExpandedRoomRunState {
   submittedScore: number | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   hadPreviousCompletion: boolean;
   previousViewerRank: number | null;
   verificationSchemaVersion: number | null;
@@ -55,6 +57,7 @@ export interface CreateActiveExpandedRoomRunStateOptions {
   startRoomId?: string | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   hadPreviousCompletion?: boolean;
   previousViewerRank?: number | null;
   enemyTarget: number | null;
@@ -77,13 +80,15 @@ export function createActiveExpandedRoomRunState(
     expandedRoomVersion = null,
     returnCoordinates,
     startRoomId = null,
-    leaderboardEligible,
+    leaderboardEligible: requestedLeaderboardEligible,
     cooperative = false,
+    assisted = false,
     hadPreviousCompletion = false,
     previousViewerRank = null,
     enemyTarget,
     localOnlyMessage,
   } = options;
+  const leaderboardEligible = requestedLeaderboardEligible && !assisted;
   const targets = expandedRoomGoalTargets(course.goal);
   return {
     course,
@@ -107,11 +112,12 @@ export function createActiveExpandedRoomRunState(
     submissionState: leaderboardEligible ? 'starting' : 'local-only',
     submissionMessage: leaderboardEligible
       ? 'Starting ranked expanded room run...'
-      : localOnlyMessage ?? 'Expanded room run stays local.',
+      : assisted ? ASSIST_RUN_MESSAGE : localOnlyMessage ?? 'Expanded room run stays local.',
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
     cooperative,
+    assisted,
     hadPreviousCompletion,
     previousViewerRank,
     verificationSchemaVersion: null,

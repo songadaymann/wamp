@@ -204,3 +204,15 @@ describe('course and expanded guest playback', () => {
     expect(h.guests.has(old)).toBe(true);
   });
 });
+
+it('does not revive an assisted attempt when its guest start arrives late', async () => {
+  const { markRunAssisted } = await import('./assistedRun');
+  const h = harness(), ready = deferred<GuestRunStartResponse>();
+  vi.mocked(h.repo.start).mockReturnValueOnce(ready.promise);
+  h.goals.syncRunForRoom(room(), 'spawn'); const run = h.goals.getCurrentRun()!;
+  markRunAssisted(run); h.recorder.clear();
+  const body = vi.mocked(h.repo.start).mock.calls[0][0]; ready.resolve(startResponse(body)); await settle();
+  expect(run).toMatchObject({ assisted: true, attemptId: null, submissionState: 'local-only' });
+  h.goals.markCompleted('Exit reached.'); await settle();
+  expect(h.repo.finish).not.toHaveBeenCalled(); expect(requestPostRunGuestClaim).not.toHaveBeenCalled(); expect(notifyRewardStings).not.toHaveBeenCalled();
+});

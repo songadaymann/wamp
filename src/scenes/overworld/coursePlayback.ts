@@ -1,3 +1,4 @@
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { COURSE_SERVER_RULES } from '../../courses/goalServerRules';
 import { getAuthDebugState } from '../../auth/client';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
@@ -87,6 +88,7 @@ interface OverworldCoursePlaybackHost {
   ) => RankedRunVerificationTrace | null;
   clearVerificationTrace?: () => void;
   guestRuns?: GuestRunPlaybackController;
+  isAssistActive?: () => boolean;
 }
 
 export class OverworldCoursePlaybackController {
@@ -107,7 +109,7 @@ export class OverworldCoursePlaybackController {
       elapsedMs: Math.round(run.elapsedMs), deaths: run.deaths, checkpointsReached: run.checkpointsReached,
       nextCheckpointIndex: run.nextCheckpointIndex, result: run.result, attemptId: run.attemptId,
       submissionState: run.submissionState, submissionMessage: run.submissionMessage,
-      cooperative: run.cooperative ?? false, leaderboardEligible: run.leaderboardEligible,
+      assisted: run.assisted ?? false, cooperative: run.cooperative ?? false, leaderboardEligible: run.leaderboardEligible,
       guestProgress: run.guestProgress ?? null } : null;
   }
 
@@ -188,8 +190,9 @@ export class OverworldCoursePlaybackController {
     const startRoomRef = this.getCourseStartRoomRef(course);
     const cooperative = course.roomRefs.some(ref =>
       hasCoopPressurePlates(this.host.getRoomSnapshotForCoordinates(ref.coordinates)?.placedObjects ?? []));
+    const assisted = !cooperative && Boolean(this.host.isAssistActive?.());
     const leaderboardEligible =
-      !cooperative &&
+      !assisted && !cooperative &&
       course.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         authState.authenticated,
@@ -197,7 +200,7 @@ export class OverworldCoursePlaybackController {
         authState.user?.displayName ?? null
       );
     const localOnlyMessage =
-      cooperative ? COOP_ROOM_PRACTICE_MESSAGE : course.status !== 'published'
+      assisted ? ASSIST_RUN_MESSAGE : cooperative ? COOP_ROOM_PRACTICE_MESSAGE : course.status !== 'published'
         ? 'Draft expanded room run stays local.'
         : authState.authenticated
           ? 'Ranked expanded room submission unavailable.'
@@ -215,6 +218,7 @@ export class OverworldCoursePlaybackController {
           : null,
       leaderboardEligible,
       cooperative,
+      assisted,
       hadPreviousCompletion: options?.hadPreviousCompletion ?? false,
       previousViewerRank: options?.previousViewerRank ?? null,
       localOnlyMessage,
@@ -226,11 +230,12 @@ export class OverworldCoursePlaybackController {
   }
 
   async startRemoteCourseRun(runState: ActiveExpandedRoomRunState): Promise<void> {
+    if (runState.assisted) return;
     this.host.onRankedRunPreparing?.('course');
     try {
       const { response, submissionTarget } = await this.startRankedCourseRun(runState);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun !== runState) {
+      if (activeCourseRun !== runState || runState.assisted) {
         return;
       }
 
@@ -252,9 +257,10 @@ export class OverworldCoursePlaybackController {
         await this.finalizeActiveCourseRun(pendingResult);
       }
     } catch (error) {
+      if (runState.assisted) return;
       console.error('Failed to start ranked expanded room run', error);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun !== runState) {
+      if (activeCourseRun !== runState || runState.assisted) {
         return;
       }
 
@@ -281,6 +287,10 @@ export class OverworldCoursePlaybackController {
       return;
     }
 
+    if (activeCourseRun.assisted) {
+      activeCourseRun.submissionState = 'local-only'; activeCourseRun.submissionMessage = ASSIST_RUN_MESSAGE;
+      this.host.clearVerificationTrace?.(); this.host.renderHud(); return;
+    }
     activeCourseRun.pendingResult = result;
     if (this.host.guestRuns?.has(activeCourseRun)) {
       const body: RunFinishRequestBody = { result, elapsedMs: Math.round(activeCourseRun.elapsedMs), deaths: activeCourseRun.deaths,
@@ -472,7 +482,7 @@ export class OverworldCoursePlaybackController {
   }
 
   private shouldPromptGuestClaimForLocalCourseClear(runState: ActiveExpandedRoomRunState): boolean {
-    if (runState.cooperative) return false;
+    if (runState.cooperative || runState.assisted) return false;
     const authState = getAuthDebugState();
     return (
       runState.course.status === 'published' &&
@@ -496,7 +506,7 @@ export class OverworldCoursePlaybackController {
 
   startGuestRunAfterSpawn(): void {
     const run = this.host.getActiveCourseRun();
-    if (!run || run.cooperative || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published' || run.leaderboardEligible || getAuthDebugState().authenticated
+    if (!run || run.assisted || run.cooperative || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published' || run.leaderboardEligible || getAuthDebugState().authenticated
       || run.result !== 'active' || run.pendingResult || this.host.guestRuns?.has(run)) return;
     this.host.guestRuns?.begin(run, 'course', run.expandedRoomId
       ? { contentType: 'expanded_room', contentId: run.expandedRoomId, version: run.expandedRoomVersion ?? run.course.version }

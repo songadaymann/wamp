@@ -1,4 +1,6 @@
-import { gameplayNow, installGameplayClock } from './overworld/gameplayClock';
+import { createLostSongContext } from './overworld/lostSongContext';
+import { createOverworldAssist } from './overworld/assistSetup';
+import { gameplayNow } from './overworld/gameplayClock';
 import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
 import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
 import { createOverworldGameplayKeys, hasGameplayInputHeld } from './overworld/gameplayInput';
@@ -6,7 +8,7 @@ import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadIn
 import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
 import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
 import { OverworldGhostRaceController } from './overworld/ghostRace';
-import { OverworldLostSongController, type LostSongPlayContext } from './overworld/lostSongs';
+import { OverworldLostSongController } from './overworld/lostSongs';
 import { getLostSongService } from '../lostSongs/service';
 import { supportsGhostRace } from '../runs/ghostRace';
 import Phaser from 'phaser';
@@ -437,7 +439,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private roomGoalIntroPauseRequested = false;
   private scenePauseApplied = false;
   private menuPauseRequested = false;
-  private destroyGameplayClock: (() => void) | null = null;
+  private assist: ReturnType<typeof createOverworldAssist> | null = null;
   private destroyGameplayPause: (() => void) | null = null;
 
   private player: Phaser.GameObjects.Rectangle | null = null;
@@ -706,6 +708,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     });
     this.goalRunController = new OverworldGoalRunController({
       playerHeight: this.PLAYER_HEIGHT,
+      isAssistActive: () => this.assist?.requestedForRun() ?? false,
       runRepository: createRunRepository(),
       guestRuns,
       getScore: () => this.score,
@@ -761,7 +764,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       },
     });
     this.lostSongController = new OverworldLostSongController({
-      getContext: roomId => this.getLostSongPlayContext(roomId),
+      getContext: createLostSongContext({
+        canPlay: () => this.mode === 'play' && Boolean(this.playerBody) && !this.gameFeelController.isDeathPending(),
+        getCoordinates: () => this.currentRoomCoordinates, getRoom: coordinates => this.getRoomSnapshotViewForCoordinates(coordinates),
+        getCourse: () => this.activeCourseRun, isAssisted: () => this.assist?.isPracticeFind() ?? false,
+        getCreator: id => this.roomSummariesById.get(id)?.creatorUserId ?? null, getOrigin: coordinates => this.getRoomOrigin(coordinates),
+        getPosition: () => this.playerBody!.center,
+      }),
       showStatus: message => this.showTransientStatus(message),
       onFoundChanged: () => {
         this.liveObjectController?.syncLostSongPresentation();
@@ -1250,6 +1259,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
     });
     this.coursePlaybackController = new OverworldCoursePlaybackController({
+      isAssistActive: () => this.assist?.requestedForRun() ?? false,
       guestRuns,
       getSelectedCoordinates: () => ({ ...this.selectedCoordinates }),
       getActiveCourseRun: () => this.activeCourseRun,
@@ -1591,7 +1601,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       {
         scene: this,
         getRespawnCheckpointForRoom: room => {
-          const checkpoint = this.respawnCheckpointController.getCheckpoint();
+          const checkpoint = this.assist?.safe.getCheckpoint() ?? this.respawnCheckpointController.getCheckpoint();
           return checkpoint?.roomId === room.id ? checkpoint : null;
         },
         getActiveCourseSnapshot: () => this.activeCourseSnapshot,
@@ -1608,7 +1618,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       },
     );
     this.respawnController = new OverworldRespawnController({
-      getCheckpoint: () => this.respawnCheckpointController.getCheckpoint(),
+      getCheckpoint: () => this.assist?.safe.getCheckpoint() ?? this.respawnCheckpointController.getCheckpoint(),
       getCourseStartRoom: () => this.activeCourseRun
         ? this.coursePlaybackController.getCourseStartRoomRef(this.activeCourseRun.course, this.activeCourseRun.startRoomId) : null,
       getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
@@ -1627,6 +1637,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.cameraController.resetFollowAnchor();
         this.playerPresentationController.handleRespawned();
         this.playerHealthController.refillForSpawn();
+        this.assist?.safe.grantProtection();
         this.gameFeelController.playerAvailable();
       },
       recordRespawn: reference => {
@@ -1809,6 +1820,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       getActiveRoomRushRun: () => this.activeRoomRushRun,
       hasActivePvpMatch: () => this.isPvpMatchActive(),
       isPvpDamageActive: () => this.isPvpDamageActive(),
+      isAssistProtected: () => this.assist?.safe.isProtected() ?? false,
       tryAbsorbPlayerDamage: () => this.playerHealthController.absorbDamage(),
       onPlayerDeath: () => this.playerHealthController.die(),
       cancelPlayerAttack: () => this.combatController.clearAttackAnimation(),
@@ -2335,7 +2347,14 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   create(data?: OverworldPlaySceneData): void {
-    this.destroyGameplayClock = installGameplayClock(this);
+    this.assist = createOverworldAssist(this, {
+      isPlaying: () => this.mode === 'play', hasLiveMode: () => Boolean(this.activeRoomRushRun) || this.isPvpArenaActive() || this.isPvpMatchActive(),
+      getRoomRun: () => this.currentGoalRun, getExpandedRun: () => this.activeCourseRun,
+      getRoom: () => this.loadedFullRoomsById.get(roomIdFromCoordinates(this.currentRoomCoordinates)) ?? null,
+      findRoom: id => this.loadedFullRoomsById.get(id) ?? null, allRooms: () => this.loadedFullRoomsById.values(),
+      getBody: () => this.playerBody, getOrigin: room => this.getRoomOrigin(room.coordinates), standingHeight: this.PLAYER_STANDING_HEIGHT,
+      clearTrace: () => this.clearRankedRunTrace(), renderHud: () => this.renderHud(),
+    });
     this.runtimeContext.setLifecycle('initializing');
     this.resetRuntimeState();
     this.resetPerformanceAdvisorSceneState();
@@ -2447,6 +2466,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   override update(_time: number, delta: number): void {
+    const gameplayDelta = delta * (this.assist?.runtime.speed ?? 1);
     // Arcade Physics runs on the Scene UPDATE event before Scene.update.
     // PRE_UPDATE captures that work so discretionary streaming sees the real
     // simulation headroom instead of only timing this method's body.
@@ -2581,8 +2601,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot') || this.gamepadInput.pressed('shoot');
       if (this.gameFeelController.isHoldingPhysics()) {
         this.gameFeelController.bufferCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
-        this.recordRankedRunTraceFrame(delta, this.physicsCadence!.getMovement());
-        this.objectiveController.update(delta, this.gameFeelController.isDeathPending());
+        this.recordRankedRunTraceFrame(gameplayDelta, this.physicsCadence!.getMovement());
+        this.objectiveController.update(gameplayDelta, this.gameFeelController.isDeathPending());
         this.tickRoomRushRun(delta);
         this.renderFrameHud();
         return;
@@ -2604,7 +2624,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       });
       this.quicksandController.updateVisualSink();
       this.combatController.updateSwordSwing();
-      this.combatController.updateProjectiles(delta);
+      this.combatController.updateProjectiles(gameplayDelta);
       this.maybeApplyRemotePvpActionHit();
       this.maybeStompPvpPeer();
       this.resolvePvpPeerCollision();
@@ -2616,7 +2636,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this.cameraController.syncRoomCamera();
       this.cameraController.updateFollowPacing(this.physicsCadence!.getStepsThisFrame());
       this.updateMobilePortraitRoomFraming();
-      this.recordRankedRunTraceFrame(delta, movement);
+      this.recordRankedRunTraceFrame(gameplayDelta, movement);
       if (roomTransitionStartedAt !== undefined) {
         profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
       }
@@ -2643,7 +2663,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         profiler?.endSegment('controller.environment', environmentStartedAt);
       }
       const objectiveStartedAt = controllerProfileSlot === 19 ? profiler?.beginSegment() : undefined;
-      this.objectiveController.update(delta, this.gameFeelController.isDeathPending());
+      this.objectiveController.update(gameplayDelta, this.gameFeelController.isDeathPending());
       this.tickRoomRushRun(delta);
       if (objectiveStartedAt !== undefined) {
         profiler?.endSegment('controller.objectiveRoomRush', objectiveStartedAt);
@@ -2672,26 +2692,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     }
   }
 
-  private getLostSongPlayContext(roomId = roomIdFromCoordinates(this.currentRoomCoordinates)): LostSongPlayContext | null {
-    if (this.mode !== 'play' || !this.playerBody || this.gameFeelController.isDeathPending()) return null;
-    const coordinates = parseRoomId(roomId);
-    if (!coordinates) return null;
-    const room = this.getRoomSnapshotViewForCoordinates(coordinates);
-    if (!room?.placedObjects.some(object => object.id === 'lost_song')) return null;
-    const origin = this.getRoomOrigin(coordinates), course = this.activeCourseRun;
-    const summary = this.roomSummariesById.get(roomId);
-    const userId = getAuthDebugState().user?.id ?? null;
-    return {
-      target: { roomId, roomVersion: room.version,
-        ...(course?.expandedRoomId && course.expandedRoomVersion ? {
-          expandedRoomId: course.expandedRoomId, expandedRoomVersion: course.expandedRoomVersion,
-        } : {}) },
-      practice: Boolean(getActiveWorldId()) || room.status !== 'published'
-        || Boolean(course && course.course.status !== 'published')
-        || Boolean(userId && summary?.creatorUserId === userId),
-      position: { x: this.playerBody.center.x - origin.x, y: this.playerBody.center.y - origin.y },
-    };
-  }
 
   private updateRoomLighting(): void {
     const currentRoom = this.mode === 'play' && this.player && this.playerBody
@@ -3613,6 +3613,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       ? this.mobilePerformanceControllerProfileSlot : -1;
     const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
     const movement = this.movementController.updateMovement(delta, this.quicksandController.isActive(), input);
+    this.assist?.safe.capture();
     this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
     if (movement.downHeld && movement.jumpPressed) this.specialTilesController.beginOneWayDropThrough();
     if (this.isPvpCountdownActive()) {
@@ -6252,8 +6253,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private handleShutdown = (): void => {
     this.destroyGameplayPause?.();
     this.destroyGameplayPause = null;
-    this.destroyGameplayClock?.();
-    this.destroyGameplayClock = null;
+    this.assist?.destroy(); this.assist = null;
     this.menuPauseRequested = false;
     this.playerHealthController.destroy();
     this.ghostRaceController.clear();
@@ -6738,6 +6738,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       crumblingTiles: this.specialTilesController.describeCrumblingTiles(),
       hazards: this.countLiveObjectsByCategory('hazard'),
       enemies: this.countLiveObjectsByCategory('enemy'),
+      assist: { ...this.assist?.runtime.describe(), ...this.assist?.safe.describe() },
       combat: {
         crouching: movementDebug.crouching,
         buttStomping: movementDebug.buttStomping,
