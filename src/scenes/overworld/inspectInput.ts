@@ -60,7 +60,6 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.on('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.on('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.on('keydown-ESC', this.handleReturnToWorldKeydown);
       keyboard.on('keyup-ALT', this.handleAltKeyup);
       keyboard.on('keydown-SPACE', this.handleSpaceKeydown);
@@ -79,7 +78,6 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.off('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.off('keydown-P', this.handleReturnToWorldKeydown);
       keyboard.off('keydown-ESC', this.handleReturnToWorldKeydown);
       keyboard.off('keyup-ALT', this.handleAltKeyup);
       keyboard.off('keydown-SPACE', this.handleSpaceKeydown);
@@ -116,8 +114,9 @@ export class OverworldInspectInputController {
     this.host.fitLoadedWorld();
   };
 
-  private readonly handleReturnToWorldKeydown = (): void => {
-    // P (and Escape) leave the room only when no dialog is open.
+  private readonly handleReturnToWorldKeydown = (event: KeyboardEvent): void => {
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    // Escape remains a fixed way out, independent of custom command bindings.
     if (this.host.getMode() === 'play' && !hasBlockingModalOpen()) {
       this.host.returnToWorld();
     }

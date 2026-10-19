@@ -440,3 +440,88 @@
 body[data-coarse-pointer='true'] .controls-section-mobile {
   order: -1;
 }
+
+#controls-modal .controls-section-keyboard {
+  grid-column: 1 / -1;
+  background: var(--wamp-cream);
+}
+
+.keyboard-binding-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding-block: 6px;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
+  font-size: var(--ui-text-body, 12px);
+  border-bottom: 1px solid var(--wamp-sky);
+}
+
+#controls-modal .keyboard-binding-row .controls-key {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
+#controls-modal .keyboard-binding-change,
+#controls-modal #btn-keyboard-reset {
+  background: var(--wamp-cream);
+  color: var(--wamp-ink);
+  border: 2px solid var(--wamp-ink);
+  border-radius: 0;
+  box-shadow: var(--shadow-2);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  min-height: 44px;
+  padding: 6px;
+  font-size: var(--ui-text-body, 12px);
+}
+
+.keyboard-binding-row > span {
+  overflow-wrap: anywhere;
+}
+
+.keyboard-binding-note,
+.keyboard-binding-status {
+  margin: 0;
+  color: var(--wamp-ink);
+  font-family: var(--font-ui);
+  font-size: var(--ui-text-body, 12px);
+  line-height: 1.4;
+}
+
+.keyboard-binding-status:empty {
+  display: none;
+}
+
+#btn-keyboard-reset {
+  align-self: flex-start;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 520px) {
+  .keyboard-binding-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .keyboard-binding-row > span {
+    grid-column: 1 / -1;
+  }
+
+  #controls-modal .controls-row {
+    flex-wrap: wrap;
+  }
+
+  #controls-modal .controls-key {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #controls-modal .controls-row > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

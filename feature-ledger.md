@@ -1001,3 +1001,10 @@ F172 source acceptance: full548-file/4,015-test quality and11 strict production 
 F172 final pit-edge hardening:548 files/4,016 tests and11 browser cases pass with a full supporting tile on both sides of the anchor. PR247's initial2c20feca checks passed; updated exact-head checks follow. Worker/presence/schema/renderer remain unchanged.
 
 F172 final reward-scope revision:4,017 tests and11 production cases pass, including strict pit clearance and goal-free assisted-find taint. Fresh-page/preflight harness hardening addresses the prior interrupted-fetch diagnostic. PR247 remains unmerged pending the final exact-head hosted gates, then guarded Pages-only release and live proof.
+
+
+## 2026-10-19 — F177 custom keyboard controls
+
+Canonical branch `codex/wamp-keyboard-controls-2026-10-19`, from delivered PR247/main5a187380. F172 is fully merged/deployed/verified, superseding its source-time pending notes. Plan: physical-code movement/action input, device-local remapping in Controls with conflict handling/reset, shared intro hints and restart/return commands; focused lifecycle/layout/regression tests and native/installed-client browser flows; full quality, hosted source/main gates, guarded Pages-only release and actual-domain proof. No Worker/schema/presence/renderer changes. Preserve primary dirty work, TAS lab and selected animation. F177 is in progress; master162/216 until accepted.
+
+F177 source acceptance:550 files/4,028 tests and full quality pass; six complete ordinary/Expanded Room desktop/320px/WebKit scenarios pass with ten remapped actions each, zero errors/misses and inspected captures. Two installed-client movement/jump iterations use a custom jump binding. Startup645.6KB Brotli; scene guard unchanged. Master163/216 at local acceptance. New executable/browser coverage is registered in hosted checks. Source/main gates, authorized merge, guarded Pages-only release and actual-domain proof remain. Unrelated primary/mann.cool work and selected animation are preserved.

@@ -1,9 +1,10 @@
+import { createOverworldKeyboardInput, type OverworldKeyboardInput } from './overworld/keyboardInput';
 import { createLostSongContext } from './overworld/lostSongContext';
 import { createOverworldAssist } from './overworld/assistSetup';
 import { gameplayNow } from './overworld/gameplayClock';
 import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
 import { hasCoopPressurePlates } from '../placedObjects/coopPressurePlates';
-import { createOverworldGameplayKeys, hasGameplayInputHeld } from './overworld/gameplayInput';
+import { hasGameplayInputHeld } from './overworld/gameplayInput';
 import { attachGamepadInput, OverworldGamepadInput } from './overworld/gamepadInput';
 import { goalEndsOnDeath, goalIsTimed } from '../goals/goalSafety';
 import { createSpecialTileCallbacks } from './overworld/specialTileCallbacks';
@@ -452,20 +453,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private playerWasGrounded = false;
   private playerLandAnimationUntil = 0;
   private playerPresentationGroundedOverride: boolean | null = null;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: {
-    W: Phaser.Input.Keyboard.Key;
-    A: Phaser.Input.Keyboard.Key;
-    S: Phaser.Input.Keyboard.Key;
-    D: Phaser.Input.Keyboard.Key;
-  };
-  private attackKeys!: {
-    Q: Phaser.Input.Keyboard.Key;
-    E: Phaser.Input.Keyboard.Key;
-  };
+  private gameplayKeyboard!: OverworldKeyboardInput;
   private readonly gamepadInput = new OverworldGamepadInput();
   private restartInProgress = false;
-  private cameraToggleKey!: Phaser.Input.Keyboard.Key;
   private externalLaunchGraceUntil = 0;
 
   private loadingText!: Phaser.GameObjects.Text;
@@ -823,8 +813,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
           roomId: ghost.roomId, x: ghost.x, feetY: ghost.y - DEFAULT_PLAYER_VISUAL_FEET_OFFSET,
         })),
       getEnemyStompBounceVelocity: () => {
-        const jumpHeld = this.cursors.up.isDown || this.cursors.space.isDown
-          || this.wasd.W.isDown || getTouchInputState().jumpHeld
+        const jumpHeld = this.gameplayKeyboard.held('up') || this.gameplayKeyboard.held('jump') || getTouchInputState().jumpHeld
           || this.gamepadInput.held('jump') || this.gamepadInput.held('up');
         return this.JUMP_VELOCITY * (jumpHeld ? 1 : 0.58);
       },
@@ -1730,9 +1719,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
             paddingY,
           ),
         getArcadeBodyBounds: (body) => this.getArcadeBodyBounds(body),
-        getCursors: () => this.cursors,
+        getKeyboardInput: () => this.gameplayKeyboard,
         getGamepadInput: () => this.gamepadInput,
-        getWasd: () => this.wasd,
         findOverlappingLadder: () => this.findOverlappingLadder(),
         playJumpDustFx: (x, y, facing) => this.fxController?.playJumpDustFx(x, y, facing),
         syncPlayerPickupSensor: () => this.playerPresentationController.syncPlayerPickupSensor(),
@@ -2543,7 +2531,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       if (
         this.mode === 'play' &&
         !this.isPvpMatchActive() &&
-        (Phaser.Input.Keyboard.JustDown(this.cameraToggleKey) || consumeTouchAction('cameraToggle') || this.gamepadInput.pressed('camera'))
+        (this.gameplayKeyboard.pressed('camera') || consumeTouchAction('cameraToggle') || this.gamepadInput.pressed('camera'))
       ) {
         this.toggleCameraMode();
       }
@@ -2597,8 +2585,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       }
 
       const pvpCountdownLocked = this.isPvpCountdownActive();
-      const swordInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.Q) || consumeTouchAction('slash') || this.gamepadInput.pressed('slash');
-      const gunInputPressed = Phaser.Input.Keyboard.JustDown(this.attackKeys.E) || consumeTouchAction('shoot') || this.gamepadInput.pressed('shoot');
+      const swordInputPressed = this.gameplayKeyboard.pressed('slash') || consumeTouchAction('slash') || this.gamepadInput.pressed('slash');
+      const gunInputPressed = this.gameplayKeyboard.pressed('shoot') || consumeTouchAction('shoot') || this.gamepadInput.pressed('shoot');
       if (this.gameFeelController.isHoldingPhysics()) {
         this.gameFeelController.bufferCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
         this.recordRankedRunTraceFrame(gameplayDelta, this.physicsCadence!.getMovement());
@@ -2878,9 +2866,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private setupGameplayKeys(): void {
     const keyboard = this.input.keyboard!;
 
-    const keys = createOverworldGameplayKeys(keyboard);
-    this.cursors = keys.cursors; this.wasd = keys.wasd;
-    this.attackKeys = keys.attackKeys; this.cameraToggleKey = keys.cameraToggleKey;
+    this.gameplayKeyboard = createOverworldKeyboardInput(this, () => this.mode === 'play');
     keyboard.on('keydown-ESC', () => {
       if (this.roomCommentsController.handleEscapeKey()) {
         return;
@@ -4601,8 +4587,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private isLadderDropRequested(): boolean {
     const touchInput = getTouchInputState();
     return (
-      this.cursors.down.isDown ||
-      this.wasd.S.isDown ||
+      this.gameplayKeyboard.held('down') ||
       (touchInput.active && touchInput.moveY >= 0.42)
     );
   }
@@ -6251,6 +6236,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private handleShutdown = (): void => {
+    this.gameplayKeyboard?.destroy();
     this.destroyGameplayPause?.();
     this.destroyGameplayPause = null;
     this.assist?.destroy(); this.assist = null;
@@ -6407,11 +6393,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private isPerformanceAdvisorInputHeld(): boolean {
-    return hasGameplayInputHeld([
-      this.cursors?.left, this.cursors?.right, this.cursors?.up, this.cursors?.down, this.cursors?.space,
-      this.wasd?.W, this.wasd?.A, this.wasd?.S, this.wasd?.D,
-      this.attackKeys?.Q, this.attackKeys?.E, this.cameraToggleKey,
-    ], this.gamepadInput.hasHeldInput(), this.lastMovementInput, getTouchInputState());
+    return hasGameplayInputHeld([{ isDown: this.gameplayKeyboard?.hasHeldInput() ?? false }],
+      this.gamepadInput.hasHeldInput(), this.lastMovementInput, getTouchInputState());
   }
 
   getRuntimeTransitionProbe(

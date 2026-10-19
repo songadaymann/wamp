@@ -240,8 +240,12 @@ function createHarness(environment: SpecialTilePlayerEnvironment = {
     getRuntimeSolidLiveObjectsInBounds: () => [],
     getArcadeBodyBounds: (target: FakeBody) =>
       new MockRectangle(target.left, target.top, target.width, target.height),
-    getCursors: () => cursors,
-    getWasd: () => wasd,
+    getKeyboardInput: () => ({
+      held: (action: string) => ({ left: cursors.left.isDown || wasd.A.isDown, right: cursors.right.isDown || wasd.D.isDown,
+        up: cursors.up.isDown || wasd.W.isDown, down: cursors.down.isDown || wasd.S.isDown, jump: cursors.space.isDown }[action] ?? false),
+      pressed: (action: string) => ({ left: cursors.left.justDown || wasd.A.justDown, right: cursors.right.justDown || wasd.D.justDown,
+        up: cursors.up.justDown || wasd.W.justDown, down: cursors.down.justDown || wasd.S.justDown, jump: cursors.space.justDown }[action] ?? false),
+    }),
     findOverlappingLadder: () => null,
     playJumpDustFx: vi.fn(),
     syncPlayerPickupSensor: vi.fn(),
