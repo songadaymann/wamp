@@ -147,7 +147,11 @@ it('keeps production callers on the command boundary instead of naked global wri
       const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), url);
       if (entry.isDirectory()) { await visitDirectory(child); continue; }
       if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
-      const source = await fs.readFile(child, 'utf8'), sf = ts.createSourceFile(child.pathname, source, ts.ScriptTarget.Latest, true);
+      const source = await fs.readFile(child, 'utf8');
+      // A matching identifier must be literal or contain a Unicode escape. Keep the
+      // same whole-source audit without parsing unrelated gameplay/server modules.
+      if (!source.includes('editorState') && !source.includes('\\u')) continue;
+      const sf = ts.createSourceFile(child.pathname, source, ts.ScriptTarget.Latest, true);
       const rootedInState = (node: import('typescript').Node): boolean => {
         if (ts.isIdentifier(node)) return node.text === 'editorState';
         if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) return rootedInState(node.expression);
