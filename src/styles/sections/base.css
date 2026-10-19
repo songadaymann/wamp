@@ -417,7 +417,8 @@ body[data-coarse-pointer='true'] {
 }
 
 /* Native clicks remain available even inside a scrollable editor sheet. */
-body[data-coarse-pointer='true'] button {
+body[data-coarse-pointer='true'] button,
+body[data-coarse-pointer='true'] summary {
   touch-action: manipulation;
 }
 

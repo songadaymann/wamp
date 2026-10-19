@@ -25,7 +25,8 @@ for (const [name, engine, width, height, touch] of [
     const user = { id: 'auth-smoke-account', email: 'player@example.invalid', walletAddress: null, displayName: 'Auth player' };
     const guest = () => ({ authenticated: false, user: null, source: null, partykitHost: '', walletProjectId: null });
     let session = guest(), sessionFailed = false, rejectLink = true, rejectLogout = true;
-    const writes = [], reads = [], expected = [], errors = [], failedRequests = [];
+    const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [];
+    let schoolNavigationStarted = false, schoolRedirectPending = false;
     const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin,
       'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type',
       'access-control-allow-methods': 'GET,POST,OPTIONS' });
@@ -68,6 +69,14 @@ for (const [name, engine, width, height, touch] of [
     await context.route('**/school-login.html?*', r => r.fulfill({ contentType: 'text/html', body: '<title>Classroom sign-in target</title>' }));
     await context.addInitScript(() => {
       window.__authState = null;
+      window.__summaryTouches = [];
+      let lastTouchEndAt = 0;
+      document.addEventListener('touchend', event => {
+        if (event.target instanceof Element && event.target.closest('#account-signin-options > summary')) {
+          window.__summaryTouches.push({ prevented: event.defaultPrevented, interval: event.timeStamp - lastTouchEndAt });
+        }
+        lastTouchEndAt = event.timeStamp;
+      });
       window.addEventListener('auth-state-changed', e => { window.__authState = structuredClone(e.detail); });
       localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
       localStorage.setItem('wamp_replay_opt_out', '1');
@@ -81,14 +90,28 @@ for (const [name, engine, width, height, touch] of [
     console.log(`${name}: opening`);
     const click = async selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
     const expectedMessages = ['Failed to request magic link', 'Failed to sign out', 'Failed to load auth session'];
+    page.on('request', r => {
+      if (r.isNavigationRequest() && new URL(r.url()).pathname === '/school-login.html') schoolNavigationStarted = true;
+    });
+    // The inert school target replaces the app. WebKit reports cancelled
+    // old-document resources through either console or pageerror. Keep these
+    // bounded reports only for this redirect; earlier and other errors are fatal.
+    const collectTeardownReport = (text, channel) => {
+      const oldOriginPath = text.split(new URL(base).host + '/')[1] || '';
+      const oldResource = oldOriginPath.startsWith('assets/sfx/') || text.includes('tiles.wamp.land/world-tiles/')
+        || /^[0-9a-f]{8}-[0-9a-f-]{27}\s/i.test(oldOriginPath);
+      if (!schoolRedirectPending || !oldResource || !text.endsWith('due to access control checks.')) return false;
+      unloadResourceReports.push({ channel, text }); return true;
+    };
     page.on('console', message => {
       if (message.type() !== 'error') return;
       const text = message.text(), url = message.location().url;
+      if (collectTeardownReport(text, 'console')) return;
       if (expectedMessages.some(prefix => text.startsWith(prefix)) ||
           (text.startsWith('Failed to load resource:') && url.includes('/api/auth/'))) expected.push(text);
       else errors.push(text);
     });
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', error => { if (!collectTeardownReport(error.message, 'pageerror')) errors.push(error.message); });
     page.on('response', r => { if (r.status() >= 400) failedRequests.push({ status: r.status(), url: r.url() }); });
     const waitState = async predicate => {
       try { await page.waitForFunction(predicate, undefined, { timeout: 30_000 }); }
@@ -160,6 +183,23 @@ for (const [name, engine, width, height, touch] of [
     await sendCode(); await verifyCode('654321');
     await waitState(() => window.__authState.user?.email === 'player@example.invalid');
     assert.equal(await page.evaluate(() => window.__authState.user.walletAddress), '0x1234567890123456789012345678901234567890');
+    // Rapid native summary taps must keep their generated click. The game's
+    // double-tap zoom guard used to cancel touchend here on WebKit.
+    const summary = page.locator('#account-signin-options > summary');
+    await summary.scrollIntoViewIfNeeded();
+    const rect = await summary.boundingBox(); assert.ok(rect);
+    // Use the already-visible target directly: locator actionability checks can
+    // consume the entire rapid-tap interval on a slow software renderer.
+    const toggle = async () => touch ? page.touchscreen.tap(rect.x + rect.width / 2, rect.y + rect.height / 2) : summary.click();
+    await toggle();
+    await page.waitForFunction(() => !document.getElementById('account-signin-options').open);
+    await toggle();
+    await page.waitForFunction(() => document.getElementById('account-signin-options').open);
+    const summaryTouches = await page.evaluate(() => window.__summaryTouches);
+    if (touch) {
+      assert.ok(summaryTouches.some(t => t.interval > 0 && t.interval < 320), JSON.stringify(summaryTouches));
+      assert.ok(summaryTouches.every(t => !t.prevented), JSON.stringify(summaryTouches));
+    }
     await page.screenshot({ path: `${output}/${name}-linked.png` });
     session = guest(); await refresh(); await waitState(() => !window.__authState.authenticated && window.__authState.user === null);
     session = { ...guest(), authenticated: true, user: { ...user, email: null }, source: 'session', schoolManaged: true,
@@ -168,16 +208,21 @@ for (const [name, engine, width, height, touch] of [
     await menu(); assert.equal(await page.locator('#auth-email-row').isVisible(), false);
     assert.equal(await page.locator('#btn-auth-wallet').isVisible(), false);
     await page.screenshot({ path: `${output}/${name}-classroom.png` });
+    assert.deepEqual(errors, [], 'No application errors before the school redirect');
+    // WebKit can cancel media before emitting the navigation request. Bound
+    // teardown collection to this action, then require the actual target request.
+    schoolRedirectPending = true;
     await click('#btn-auth-logout'); await page.waitForURL('**/school-login.html?classroom=music%20class');
+    assert.equal(schoolNavigationStarted, true);
     const fixtures = api.report();
-    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected }, null, 2));
+    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, schoolNavigationStarted }, null, 2));
     assert.equal(errors.length, 0, JSON.stringify(errors)); assert.deepEqual(fixtures.misses, {});
     assert.ok(expected.some(e => e.startsWith('Failed to request magic link')));
     assert.ok(expected.some(e => e.startsWith('Failed to sign out')));
     assert.ok(expected.some(e => e.startsWith('Failed to load auth session')));
     reports.push({ name, ok: true, emailSignIn: true, linkEmail: true, expiry: true, networkRecovery: true,
-      failedAndSuccessfulLogout: true, schoolRedirect: true, writes: writes.length, sessionReads: reads.length,
-      errors, fixtureMisses: fixtures.misses, expectedFailureReports: expected.length });
+      failedAndSuccessfulLogout: true, schoolRedirect: true, summaryTouches, writes: writes.length, sessionReads: reads.length,
+      errors, unloadResourceReports, fixtureMisses: fixtures.misses, expectedFailureReports: expected.length });
     console.log(`${name}: auth state flows passed`);
     await context.close();
   } catch (error) {
