@@ -1,3 +1,5 @@
+**October18 Assist mode:** F172 is locally verified on `codex/wamp-assist-mode-2026-10-18`; master162/216 at source acceptance. Hosted checks and Pages delivery follow. [Plan and acceptance](wamp-assist-mode-2026-10-18.md). F171/PR246 is fully merged, deployed and verified, superseding its source-time pending notes below.
+
 **October 18 readable text:** F171 is locally verified on `codex/wamp-readable-text-2026-10-18`: Readable/Retro and Large/Normal Settings persist locally and through account sync, with bounded UI tiers, live labels and phone/editor layouts. Master161/216 at source acceptance. [Receipt](wamp-readable-text-2026-10-18.md). Release pending. F170/PR245 is fully merged, deployed and verified; its source-time pending notes below are superseded.
 
 **October 18 solo pause:** F170 is locally verified on `codex/wamp-pause-2026-10-18`: menus/dialogs freeze solo simulation through deferred loading and nested dialogs, preserving projectiles, respawn delays and replay timing. Live co-op/PvP and weekly Rush remain live; ranked room results retain server wall time. Master160/216 at source acceptance. [Receipt](wamp-menu-pause-2026-10-18.md). Release pending.
@@ -36,7 +38,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 161 of 216 done.**
+**Progress: 162 of 216 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -403,7 +405,7 @@ Dialog markup is good. Players who rely on the keyboard, need to pause, read sma
 - [x] **F171** Readable font and larger text · medium impact · medium effort — **locally done 2026-10-18** ([receipt](wamp-readable-text-2026-10-18.md)): Settings adds Readable/Retro and Large/Normal with local/account persistence, optional UI tiers and responsive run/editor controls. Default styles are retained exactly. 3,998 tests,66 mobile cases, seven production layout profiles and both editor variants pass. API+Pages release pending.
 - [x] **F174** The signature red buttons (Build, Publish, Mint, errors, chat badge) fail text contrast at about 3:1 · medium impact · small effort — **done 2026-10-13** (`c2e55528`, [PR #187](https://github.com/songadaymann/wamp/pull/187)). Dark ink on the existing signature red now passes text contrast for controls, badges and error banners.
 - [x] **F173** Comfort settings and a remembered play camera · low impact · small effort — _Done 2026-10-13: [receipt](wamp-comfort-settings-2026-10-13.md), [PR #193](https://github.com/songadaymann/wamp/pull/193), main `c949c360`, Pages `f185351c`. System/On/Off motion and Follow/Whole room are saved on the device; authored fixed rooms keep their framing. Native desktop/Chromium phone/WebKit phone and live keyboard/touch/reload checks pass._
-- [ ] **F172** Add an Assist mode (slower game speed, safe respawn) that plays as practice so leaderboards stay clean · medium impact · medium effort
+- [x] **F172** Optional Assist mode · medium impact · medium effort — **locally verified 2026-10-18** ([receipt](wamp-assist-mode-2026-10-18.md)):100/80/60% speed and last safe-ground respawn; ordinary/Expanded attempts remain local for their whole lifetime, with no records, XP, saved clears or clear-check credit. Co-op/PvP/Rush keep normal play.4,015 tests and11 strict production browser cases pass. Hosted checks and Pages release pending.
 - [ ] **F177** Controls are hard-coded: no remapping, WASD breaks on AZERTY keyboards, and there's no Z/X layout · low impact · medium effort
 - [x] **F179** Checkpoint flags change only red to green, which colour-blind players can barely tell apart · low impact · small effort — **done 2026-10-11** (`82c34488`, [PR #159](https://github.com/songadaymann/wamp/pull/159)). Reached checkpoint flags also fade to 55% opacity (rooms and Expanded Rooms), so reached and pending differ by more than colour; the number stays bright. Not done: a distinct reached-flag sprite.
 - [x] **F180** Unlabeled form fields, '+'/'−' buttons and div-based palette items · low impact · small effort — **done 2026-10-11** (`b983a6ba`, [PR #146](https://github.com/songadaymann/wamp/pull/146)). 18 fields and 12 symbol buttons have accessible names (Warp inputs, lighting and weather sliders, "Zoom in", "Tempo up"…), and object palette tiles are focusable `role=button` tiles with `aria-pressed` that Enter or Space selects.

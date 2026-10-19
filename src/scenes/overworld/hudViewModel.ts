@@ -570,11 +570,11 @@ export function buildOverworldHudViewModel(
           )
         : '',
     goalPanelGoalText: activeCourseRun
-      ? getExpandedRoomGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
+      ? (activeCourseRun.assisted ? 'ASSIST · ' : '') + getExpandedRoomGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
       : activeRoomRushRun
         ? getRoomRushGoalBadgeText(activeRoomRushRun).toUpperCase()
       : activeRoomGoalRun
-        ? getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
+        ? (activeRoomGoalRun.assisted ? 'ASSIST · ' : '') + getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
         : '',
     goalPanelTimerText: activeCourseRun
       ? getExpandedRoomGoalTimerText(activeCourseRun)

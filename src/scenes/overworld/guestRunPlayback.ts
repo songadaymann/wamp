@@ -7,6 +7,7 @@ import { createPostRunClearReward, notifyRewardStings } from '../../progression/
 import type { RankedRunTraceBinding } from './rankedRunTraceRecorder';
 
 export interface GuestPlaybackRunState {
+  assisted?: boolean;
   attemptId: string | null;
   pendingResult: RunFinishRequestBody['result'] | null;
   submissionState: 'waiting' | 'local-only' | 'starting' | 'active' | 'finishing' | 'submitted' | 'error';
@@ -44,7 +45,7 @@ export class GuestRunPlaybackController {
   }
 
   begin(run: GuestPlaybackRunState, kind: 'room' | 'course', target: Omit<GuestRunStartBody, 'clientRunId'>): void {
-    if (this.has(run)) return;
+    if (run.assisted || this.has(run)) return;
     const session = this.service.begin(target);
     const entry = { session, finished: false, kind };
     this.entries.set(run, entry);
@@ -54,7 +55,7 @@ export class GuestRunPlaybackController {
     this.traceOwner = run;
     this.options.startTrace(kind, session.initialBinding);
     void session.ready.then(binding => {
-      if (this.options.getCurrentRun(kind) !== run || this.entries.get(run) !== entry || entry.finished) return;
+      if (run.assisted || this.options.getCurrentRun(kind) !== run || this.entries.get(run) !== entry || entry.finished) return;
       if (binding) {
         run.attemptId = binding.attemptId; run.verificationSchemaVersion = binding.verificationSchemaVersion;
         run.verificationNonce = binding.verificationNonce; run.snapshotHash = binding.snapshotHash;
@@ -69,7 +70,7 @@ export class GuestRunPlaybackController {
 
   finish(run: GuestPlaybackRunState, body: RunFinishRequestBody, detail?: PostRunRatingRequestDetail): void {
     const entry = this.entries.get(run);
-    if (!entry || entry.finished) return;
+    if (run.assisted || !entry || entry.finished) return;
     entry.finished = true; entry.result = body.result; run.pendingResult = null; run.submissionState = 'finishing'; run.submissionMessage = 'Verifying guest clear...';
     const pending = entry.session.finish(body);
     run.guestProgress = entry.session.progress;

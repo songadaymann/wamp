@@ -92,6 +92,7 @@
     "scripts/smoke_expanded_leaderboards.mjs",
     "scripts/smoke_gameplay_pause.mjs",
     "scripts/smoke_readable_text.mjs",
+    "scripts/smoke_assist.mjs",
     "scripts/smoke_builder_activity.mjs",
     "scripts/smoke_launch_admin_game_jams.mjs",
     "scripts/smoke_police_enemies.mjs",

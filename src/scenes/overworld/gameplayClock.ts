@@ -9,10 +9,10 @@ interface ClockScene {
 const clocks = new WeakMap<object, { now: number }>();
 
 /** Phaser Clock.now is absolute frame time and jumps over scene pauses. Mechanics use delta time. */
-export function installGameplayClock(scene: ClockScene): () => void {
+export function installGameplayClock(scene: ClockScene, getSpeed: () => number = () => 1): () => void {
   const clock = { now: scene.time.now };
   clocks.set(scene, clock);
-  const tick = (_time: number, delta: number): void => { clock.now += Math.max(0, delta); };
+  const tick = (_time: number, delta: number): void => { clock.now += Math.max(0, delta) * getSpeed(); };
   scene.events.on('preupdate', tick);
   return () => { scene.events.off('preupdate', tick); clocks.delete(scene); };
 }

@@ -37,3 +37,10 @@ describe('capturing expanded and course clear destinations', () => {
     expect(requestPostRunGuestClaim).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'course', expandedRoomId: 'course:legacy', shareCoordinates: { x: 11, y: 20 } }));
   });
 });
+
+it.each(['native-expanded', 'course:legacy'])('keeps assisted %s clears out of guest finish and claim paths', async id => {
+  vi.mocked(requestPostRunGuestClaim).mockClear(); const f = fixture(id); f.run.assisted = true;
+  await f.controller.finalizeActiveCourseRun('completed');
+  expect(f.guestRuns.finish).not.toHaveBeenCalled(); expect(requestPostRunGuestClaim).not.toHaveBeenCalled();
+  expect(f.run.submissionState).toBe('local-only');
+});

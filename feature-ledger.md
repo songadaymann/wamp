@@ -991,3 +991,9 @@ Canonical `codex/wamp-readable-text-2026-10-18` from delivered F170/main044dedbd
 ## 2026-10-18 — F171 source accepted locally
 
 Canonical `codex/wamp-readable-text-2026-10-18`, base delivered PR245/main044dedbd.3,998 tests,66 clean mobile cases, seven production layout profiles, both ordinary/Expanded Room editor variants, actual brush-option clicks, default-style parity and API Worker dry run pass. Source receipt: `docs/review/wamp-readable-text-2026-10-18.md`. Master161/216 at local acceptance. Await Jonathan's review before push/merge/deploy; deliver Worker+Pages together to retain account fields, with no migration or presence/renderer update. Primary dirty lane, selected animation and TAS lab preserved.
+
+## 2026-10-18 — F172 Assist mode started
+
+Canonical `codex/wamp-assist-mode-2026-10-18` from delivered PR246/main45d3b6f4. Optional solo speed/safe respawn, sticky local-only assisted attempts across ordinary/Expanded Rooms, full gameplay and release verification. No F172 release yet; master161/216. Previous F171 pending notes are superseded by fully delivered PR246 (Workercca96be2/Pages9ecd4fe5; all source/main/mobile/live proofs pass). Primary dirty work and chosen animation preserved. See `docs/review/wamp-assist-mode-2026-10-18.md`.
+
+F172 source acceptance: full548-file/4,015-test quality and11 strict production browser cases pass; settings, sticky local-only completion, grounded protected safe respawns and reloads are verified. Installed client movement/jumps and inspected captures pass. Master162/216 at local source acceptance. Source/main hosted66 mobile +9 Assist gates and Pages-only delivery follow; Worker/schema/presence/renderer remain unchanged. Evidence: ignored `output/f172-assist-2026-10-18/`.
