@@ -2226,3 +2226,23 @@ F066 composition source acceptance: full555-file/4,083-test quality passes, star
 The prior PR251 source run39284490152 and merged-main run39285426902 have now completed successfully after GitHub recovered. Both exact-head hosted matrices pass all99 browser scenarios and4,076 tests; both source Cloudflare checks are successful. Their earlier pending outage notes are historical and superseded by this recovered proof. The current composition revision will use the normal hosted gates before merge. F066 remains open/master164/216.
 
 Native composition acceptance: all six ordinary/Expanded Room desktop,320px phone and WebKit control scenarios pass with zero application errors and fixture misses. Ten remapped actions, physical-key behavior, combat, restart/Stop, focus release, persistence and reset remain intact. Hosted source/main gates, normal guarded Pages delivery and actual-domain verification follow.
+
+
+## 2026-10-19 — F066 controller composition production delivery complete
+
+F066 controller composition is delivered through PR252/main ba02037f, production Pages4913a164 / https://wamp.land. All52 constructions now live in six composition owners. Constructor1,565→56 lines; scene6,849→5,801. Required narrow live ports retain lazy fields,21 mutable writers, original generic types and command receiver/argument/result identity. All52 executable factory ASTs, order, alias arguments, constants and100 import bindings match frozen main; all498 existing scene fields/getters/methods outside the constructor remain unchanged.
+
+All nine exact-source and merged-main checks pass, each with555 files/4,083 tests and99 browser scenarios. Local39 focused cases, six complete controls and six pause/cooperative scenarios pass; two installed-client movement/jump captures are inspected. Full guarded clean-main Pages-only retry exits0 with648.9KB Brotli startup /670KB budget. The initial successful upload's transient post-upload main-bundle404 is retained separately; unchanged smoke recheck and27-file custom/immutable comparison passed before the full accepted retry. No check or assertion was skipped or weakened.
+
+Final27 assets match both custom and immutable domains. Actual published room -11,-6/version11 passes pause, cold Controls, resume and custom-V jump (-1821→-1851), with zero application/platform errors. The probe reads15 API paths and blocks6 test writes. API Worker remains cca96be2-13d7-42a2-841e-987b4e65630a at100%; no backend/schema/presence/renderer deployment. Unrelated work, TAS lab and chosen animated background are preserved.
+
+F066 remains open/master164/216. Next: declarative frame/profiling stages with exact branch/order/timing semantics, then full-room Phaser presentation separated from streaming scheduling/lifecycle. A frozen526-case frame/profiling baseline covers all20 controller-profile slots, inputs, missing/replaced players, live mode changes, Assist delta, held/death branches and exceptions; it is baseline characterization only and requires comparison to the future candidate. Resource ownership boundaries are audited separately. The broader goal remains active.
+
+Final browser resource check confirms execution of both current published main bundles: /assets/cache-v2/main-DQT7oWv7.js, /assets/cache-v2/main-r7ydrCOd.js. A fresh actual-API pause/Controls/resume/custom-V probe passes with observed jump -1821 to -1834, zero application/platform errors, and inspected airborne capture.
+
+
+## 2026-10-19 — F066 frame update pipeline
+
+Canonical branch `codex/wamp-frame-pipeline-2026-10-19` starts from delivered PR252/main ba02037f. The frame planner now owns explicit ordered world, command and actor phases, with named stages, all20 existing profile slots, early returns and finalization. Runtime ports stay lazy, pre-update physics timing remains in the scene, music input is reused, Assist scales only gameplay delta, and nested frames use independent reusable storage with released temporary references. The scene delegates update to the planner; all other existing scene members outside construction/adapter/update remain unchanged.
+
+Frozen old-main comparison matches all526 ordered frame traces, arguments and identity tags, profiling clocks, state writes and exception paths. Permanent529 regression cases include those frozen traces plus pure construction, reentrant/repeated frames and profile-slot rotation. Existing seven composition lifecycle contracts now include the pure frame planner last and24 owned writers. Full quality, native browser verification, hosted exact-source/main gates and guarded Pages-only release follow. F066 remains open/master164/216: full-room presentation ownership separation is still pending.

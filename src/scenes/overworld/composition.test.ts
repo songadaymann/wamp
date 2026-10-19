@@ -75,7 +75,9 @@ const constructionOrder = [
   "roomTransitionController",
   "presenceOverlayController",
   "flowController",
-  "inspectInputController"
+  "inspectInputController",
+  // The frame planner is pure and is installed after every controller it uses.
+  "framePipeline"
 ];
 
 describe('overworld composition lifecycle', () => {
@@ -97,7 +99,7 @@ describe('overworld composition lifecycle', () => {
     }
     expect(actual).toEqual(constructionOrder);
     expect(directConstructions).toBe(0);
-    expect(constructor.body!.statements.length).toBe(54);
+    expect(constructor.body!.statements.length).toBe(55);
   });
 
   it('creates the adapter without reading any uninitialized controller or player state', () => {
@@ -132,7 +134,7 @@ describe('overworld composition lifecycle', () => {
       const value = { name }; ports[name] = value;
       expect(owner[name]).toBe(value); expect(owner.unrelated).toBe(7); writers++;
     }
-    expect(writers).toBe(21);
+    expect(writers).toBe(24);
     for (const name of ['player', 'playerBody', 'worldStreamingController', 'activeRoomRushRun', 'PLAYER_WIDTH']) {
       expect(Object.getOwnPropertyDescriptor(ports, name)?.set).toBeUndefined();
     }
