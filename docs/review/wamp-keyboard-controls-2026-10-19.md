@@ -12,7 +12,7 @@ The active checklist goal authorizes implementation, verification and deployment
 - Keep command actions at the existing HUD command bridge and collect gameplay separately. Observe releases while inactive; clear held and pending input on remapping, window blur, scene pause/sleep, hidden tabs, lost keyboard ownership and shutdown. Native text/forms/dialogs keep their keys. Preserve abstract ranked traces, touch and gamepad input.
 - Verify default/physical AZERTY and remapped keys, all ten actions, conflicts/cancel, local persistence/reset, focus/blur/lifecycle, ordinary/Expanded Room flows, narrow Readable/Large layouts and Safari. Run full quality, native/installed-client checks, hosted source/main gates, public-source scan, guarded clean-main Pages-only release and actual-domain proof.
 
-Local source acceptance is complete. Hosted source/main gates and production delivery are pending; no F177 push, merge or deployment is claimed. Master is163/216 at source acceptance. Worker/schema/presence/renderer and the chosen background remain unchanged; preserve the unrelated primary checkout and TAS lab.
+F177 is fully delivered through PR248 and PR249, final main `1d0a6aca3f2704ff7258c979492cfa9895d0d977`, production Pages `515ad1db`. All eight exact-source/main checks,551 files/4,029 tests,96 hosted browser scenarios and six strict live desktop/phone/Safari remapping cases pass.27 assets match both domains; actual published-room custom jump and Controls pause/resume pass. No Worker/schema/presence/renderer changes; unrelated work and selected animation preserved. This supersedes the source-time pending delivery notes. Master163/216; the broader checklist remains active.
 
 ## Delivery of the previous item
 
@@ -36,3 +36,8 @@ PR248's first source run39256905685 passed quality,66 mobile cases, Expanded Roo
 Canvas clicks now explicitly blur the previous menu/form control and synchronize keyboard ownership. A focused unit case preserves other canvases' focus. The six native pause scenarios and six remapping scenarios pass with this source fix; two additional desktop cases and all six pause cases explicitly force menu focus before clicking back into gameplay. Probes now wait for actual physics progress, observe transient jump/combat actions inside the browser frame, and require a real restart clock reset. The final strengthened six-case replay and exact-head hosted gates follow.
 
 Full follow-up quality passes551 files/4,029 tests and all existing gates, with startup645.6KB Brotli. No production release is claimed yet.
+
+
+## Final delivery
+
+F177 is fully delivered through PR248 and PR249, final main `1d0a6aca3f2704ff7258c979492cfa9895d0d977`, production Pages `515ad1db`. All eight exact-source/main checks,551 files/4,029 tests,96 hosted browser scenarios and six strict live desktop/phone/Safari remapping cases pass.27 assets match both domains; actual published-room custom jump and Controls pause/resume pass. No Worker/schema/presence/renderer changes; unrelated work and selected animation preserved. This supersedes the source-time pending delivery notes. Master163/216; the broader checklist remains active.
