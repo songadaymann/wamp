@@ -59,15 +59,15 @@ try {
           }
           const { editorState, resetEditorPaletteSelection } = await import('/src/config.ts');
           resetEditorPaletteSelection();
-          editorState.paletteMode = extra.objects ? 'objects' : extra.smart ? 'smart' : 'tiles';
-          editorState.activeTool = tool;
-          editorState.selectedObjectId = extra.spawn ? 'spawn_point' : 'coin_gold';
-          editorState.lineCurve = Boolean(extra.curve);
-          editorState.pencilSprayMode = Boolean(extra.spray);
-          editorState.selectedLightingMode = 'off';
-          editorState.activeLayer = 'terrain';
-          editorState.rectOutline = false;
-          editorState.ellipseOutline = false;
+          updateEditorState({ paletteMode: extra.objects ? 'objects' : extra.smart ? 'smart' : 'tiles' });
+          updateEditorState({ activeTool: tool });
+          updateEditorState({ selectedObjectId: extra.spawn ? 'spawn_point' : 'coin_gold' });
+          updateEditorState({ lineCurve: Boolean(extra.curve) });
+          updateEditorState({ pencilSprayMode: Boolean(extra.spray) });
+          updateEditorState({ selectedLightingMode: 'off' });
+          updateEditorState({ activeLayer: 'terrain' });
+          updateEditorState({ rectOutline: false });
+          updateEditorState({ ellipseOutline: false });
           const scene = game.scene.keys[expanded ? 'CourseEditorScene' : 'EditorScene'];
           const runtime = expanded ? scene.getSelectedSlice().runtime : scene.editRuntime;
           if (expanded) {
@@ -97,19 +97,19 @@ try {
           }
           // A pre-existing Redo branch must survive every cancelled gesture.
           const savedTool = editorState.activeTool;
-          editorState.activeTool = 'pencil';
+          updateEditorState({ activeTool: 'pencil' });
           runtime.beginTileBatch();
           runtime.placeTileAt((expanded ? scene.getSelectedSlice().origin.x : 0) + 30 * 16,
             (expanded ? scene.getSelectedSlice().origin.y : 0) + 15 * 16);
           runtime.commitTileBatch();
           runtime.undo();
-          editorState.activeTool = savedTool;
+          updateEditorState({ activeTool: savedTool });
           if (extra.marker && !expanded && runtime.currentGoalPlacementMode !== 'exit') runtime.startGoalMarkerPlacement('exit');
           const camera = scene.cameras.main;
           const origin = expanded ? scene.getSelectedSlice().origin : { x: 0, y: 0 };
           camera.setZoom(Math.min(camera.width / 640, camera.height / 352) * 0.85);
           if (expanded) { scene.inspectZoom = camera.zoom; scene.syncCameraBounds(); }
-          else editorState.zoom = camera.zoom;
+          else updateEditorState({ zoom: camera.zoom });
           camera.centerOn(origin.x + 320, origin.y + 176);
           window.__touchScene = scene;
           window.__touchRuntime = runtime;
@@ -296,11 +296,11 @@ try {
       assert.deepEqual(await inspect(), before);
       record('focus loss cancels preview');
       await touch('touchStart', [start]);
-      await page.evaluate(async () => { (await import('/src/config.ts')).editorState.activeTool = 'fill'; });
+      await page.evaluate(async () => { (await import('/src/config.ts')).updateEditorState({ activeTool: 'fill' }); });
       await touch('touchEnd', []);
       assert.deepEqual(await inspect(), before);
       record('tool change cancels preview');
-      await page.evaluate(async () => { (await import('/src/config.ts')).editorState.activeTool = 'pencil'; });
+      await page.evaluate(async () => { (await import('/src/config.ts')).updateEditorState({ activeTool: 'pencil' }); });
       await touch('touchStart', [start]);
       await touch('touchEnd', []);
       assert.notDeepEqual((await inspect()).rooms[0].snapshot.tileData, before.rooms[0].snapshot.tileData);

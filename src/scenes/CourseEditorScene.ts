@@ -33,7 +33,7 @@ import {
   ROOM_WIDTH,
   TILESETS,
   TILE_SIZE,
-  editorState,
+  editorState, updateEditorState,
   resetEditorLayerVisibility,
   type PlacedObject,
 } from '../config';
@@ -116,7 +116,7 @@ import {
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
 import {
-  EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
+  requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
 import { clampRandomizeBrushSize } from './editor/randomizeTiles';
@@ -424,9 +424,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         return;
       }
       const shellEscapeDetail: EditorShellEscapeRequestedDetail = { handled: false };
-      window.dispatchEvent(new CustomEvent(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, {
-        detail: shellEscapeDetail,
-      }));
+      requestEditorShellEscape(window, shellEscapeDetail);
       if (shellEscapeDetail.handled) return;
       void this.returnToCourseBuilder();
       return;
@@ -462,14 +460,14 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     if (event.code === 'Digit1') {
       event.preventDefault();
-      editorState.activeTool = 'pencil';
+      updateEditorState({ activeTool: 'pencil' });
       this.updateToolUi();
       return;
     }
 
     if (event.code === 'Digit2') {
       event.preventDefault();
-      editorState.activeTool = 'eraser';
+      updateEditorState({ activeTool: 'eraser' });
       this.updateToolUi();
       return;
     }
@@ -759,17 +757,17 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.statusText = `Cleared all objects in ${this.getSliceLabel(slice)}.`;
         this.renderUi();
       },
-      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
-      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
-      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
+      onSetSmartTheme: (theme) => { updateEditorState({ smartTheme: theme }); },
+      onSetSmartMaterial: (material) => { updateEditorState({ smartMaterial: material }); },
+      onSetSmartStyle: (style) => { updateEditorState({ smartStyle: style }); },
       onSetSmartDetailsEnabled: (enabled) => this.getSelectedSlice()?.runtime.setSmartDetailsEnabled(enabled),
       onFillCaveTerrain: () => this.getSelectedSlice()?.runtime.fillCaveTerrain(),
       onSelectBackground: (backgroundId) => {
-        editorState.selectedBackground = backgroundId;
+        updateEditorState({ selectedBackground: backgroundId });
         this.handleBackgroundChanged();
       },
       onSelectLighting: (mode) => {
-        editorState.selectedLightingMode = mode;
+        updateEditorState({ selectedLightingMode: mode });
         const slice = this.getSelectedSlice();
         if (slice) {
           slice.lighting = cloneRoomLightingSettings({
@@ -780,7 +778,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.renderUi();
       },
       onSetLightingDarkness: (darkness) => {
-        editorState.selectedLightingDarkness = darkness;
+        updateEditorState({ selectedLightingDarkness: darkness });
         const slice = this.getSelectedSlice();
         if (slice) {
           slice.lighting = cloneRoomLightingSettings({
@@ -791,7 +789,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.renderUi();
       },
       onSetLightingRadius: (radius) => {
-        editorState.selectedLightingRadius = radius;
+        updateEditorState({ selectedLightingRadius: radius });
         const slice = this.getSelectedSlice();
         if (slice) {
           slice.lighting = cloneRoomLightingSettings({
@@ -802,7 +800,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.renderUi();
       },
       onSelectWeather: (mode) => {
-        editorState.selectedWeatherMode = mode;
+        updateEditorState({ selectedWeatherMode: mode });
         const slice = this.getSelectedSlice();
         if (slice) {
           slice.weather = cloneRoomWeatherSettings({
@@ -813,7 +811,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.renderUi();
       },
       onSetWeatherIntensity: (intensity) => {
-        editorState.selectedWeatherIntensity = intensity;
+        updateEditorState({ selectedWeatherIntensity: intensity });
         const slice = this.getSelectedSlice();
         if (slice) {
           slice.weather = cloneRoomWeatherSettings({
@@ -1854,10 +1852,10 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         getSelectedBackground: () => slice.backgroundId,
         setSelectedBackground: (backgroundId) => {
           slice.backgroundId = backgroundId;
-          editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+          updateEditorState({ selectedSolidBackgroundColor: getSolidColorFromBackgroundValue(
             backgroundId,
             editorState.selectedSolidBackgroundColor,
-          );
+          ) });
         },
         getSelectedLightingSettings: () => cloneRoomLightingSettings(slice.lighting),
         setSelectedLightingSettings: (lighting) => {
@@ -2230,16 +2228,16 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     setActiveCourseDraftSessionSelectedRoom(nextRoomId);
     const slice = this.getSelectedSlice();
     if (slice) {
-      editorState.selectedBackground = slice.backgroundId;
-      editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+      updateEditorState({ selectedBackground: slice.backgroundId });
+      updateEditorState({ selectedSolidBackgroundColor: getSolidColorFromBackgroundValue(
         slice.backgroundId,
         editorState.selectedSolidBackgroundColor,
-      );
-      editorState.selectedLightingMode = slice.lighting.mode;
-      editorState.selectedLightingDarkness = slice.lighting.darkness;
-      editorState.selectedLightingRadius = slice.lighting.radius;
-      editorState.selectedWeatherMode = slice.weather.mode;
-      editorState.selectedWeatherIntensity = slice.weather.intensity;
+      ) });
+      updateEditorState({ selectedLightingMode: slice.lighting.mode });
+      updateEditorState({ selectedLightingDarkness: slice.lighting.darkness });
+      updateEditorState({ selectedLightingRadius: slice.lighting.radius });
+      updateEditorState({ selectedWeatherMode: slice.weather.mode });
+      updateEditorState({ selectedWeatherIntensity: slice.weather.intensity });
       const select = document.getElementById('background-select') as HTMLSelectElement | null;
       if (select) {
         select.value = getBackgroundSelectionValue(slice.backgroundId);
@@ -3081,7 +3079,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
     this.clipboardPastePreviewActive = true;
-    editorState.activeTool = 'copy';
+    updateEditorState({ activeTool: 'copy' });
     this.statusText = 'Click an expanded room cell to paste the copied tiles.';
     this.renderUi();
   }

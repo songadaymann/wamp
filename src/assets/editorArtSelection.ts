@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { editorState } from '../config';
-import { EDITOR_UI_STATE_CHANGED_EVENT } from '../scenes/editor/uiEvents';
+import { subscribeEditorUi } from '../scenes/editor/uiEvents';
 import { ensureSceneObjectTexturesLoaded } from './sceneArt';
 
 const boundScenes = new WeakSet<Phaser.Scene>();
@@ -16,12 +16,12 @@ export function bindEditorArtSelection(scene: Phaser.Scene): void {
       .catch(error => console.warn('Failed to load selected decoration art.', error));
   };
   const cleanup = () => {
-    windowObject.removeEventListener(EDITOR_UI_STATE_CHANGED_EVENT, preload);
+    stop();
     scene.events.off('shutdown', cleanup);
     scene.events.off('destroy', cleanup);
     boundScenes.delete(scene);
   };
-  windowObject.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT, preload);
+  const stop = subscribeEditorUi(windowObject, preload, ['selectedObjectId', 'paletteMode']);
   scene.events.once('shutdown', cleanup);
   scene.events.once('destroy', cleanup);
   boundScenes.add(scene);

@@ -1,3 +1,13 @@
+## 2026-10-19 — F069 final item before stopping
+
+Canonical branch `codex/wamp-editor-state-2026-10-19`, baseline969b5f83. F066 is fully delivered/master165/216. Finish centralized observable editor state, typed UI signals and orphaned palette listener cleanup; then focused/full/native/hosted verification, OSS, push/merge, guarded Pages release and actual-domain proof. Stop after F069; no next-item implementation is authorized in this run. Detailed plan: `docs/review/wamp-editor-state-2026-10-19.md`. F061/F118 remain declined.
+
+## 2026-10-19 — F066 complete and live
+
+PR254/main `969b5f83` is deployed to https://wamp.land / Pages `4b2ce789`. All four accepted F066 stages are complete through PRs251–254: required live runtime views, six composition owners, declarative frame/profiling stages and actual full-room Phaser resource ownership. Full557-file/4,652-test quality, all nine exact-source/main checks and99 browser cases per head pass. Local21 native cases, three animated-background profiles and five functional cold/warm crossings pass. The normal clean-main guard exits0 after automatic builds;27 assets match both domains and actual published-room pause/Controls/resume/custom-V jump passes with zero errors. API stays cca96be2 at100%.
+
+Both unchanged-main and candidate broader performance benchmarks still fail existing timing/clone/long-job targets; no FPS improvement is claimed. The paired reports are retained as a separate performance follow-up. All712 original lifecycle assertions and frozen ownership/order comparisons remain intact. F066 is checked complete; master165/216. Unrelated dirty work and selected animation are preserved. Detailed proof: `output/f066-presentation-2026-10-19/release-receipt.md` and `feature-completion-audit.json`. The broader checklist remains open.
+
 Original prompt: "ok let's do the next!"
 
 ## 2026-10-17 — F036 personal global leaderboard cache

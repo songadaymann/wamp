@@ -29,7 +29,7 @@ try {
    const snapshot=()=>page.evaluate(()=>window.__inspectorFixture.runtime.exportRoomSnapshot());
    const get=async id=>(await snapshot()).placedObjects.find(p=>p.id===id);
    const frame=async()=>{
-    await page.evaluate(async()=>{const f=window.__inspectorFixture,c=f.scene.cameras.main;const {editorState}=await import('/src/config.ts');c.setZoom(Math.min(c.width/640,c.height/352)*.85);if(f.expanded){f.scene.inspectZoom=c.zoom;f.scene.syncCameraBounds();}else editorState.zoom=c.zoom;c.centerOn(f.origin.x+320,f.origin.y+176);});
+    await page.evaluate(async()=>{const f=window.__inspectorFixture,c=f.scene.cameras.main;const {updateEditorState}=await import('/src/config.ts');c.setZoom(Math.min(c.width/640,c.height/352)*.85);if(f.expanded){f.scene.inspectZoom=c.zoom;f.scene.syncCameraBounds();}else updateEditorState({zoom:c.zoom});c.centerOn(f.origin.x+320,f.origin.y+176);});
     await page.waitForTimeout(180);
    };
    const canvasTap=async(x,y)=>{

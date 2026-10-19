@@ -1,4 +1,4 @@
-import { editorState } from '../../config';
+import { editorState, updateEditorState } from '../../config';
 import { createRoomRepository, roomIdFromCoordinates, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_TEMPLATE_DEFINITIONS, type RoomTemplateDefinition, type RoomTemplateId } from '../../templates/roomTemplateDefinitions';
 import type { EditorEditRuntime } from './editRuntime';
@@ -105,10 +105,10 @@ export async function openRoomTemplatePicker(context: RoomTemplatePickerContext)
       if (context.expandedCell) { next.goal = base.goal; next.goalIntroText = base.goalIntroText; next.spawnPoint = base.spawnPoint; }
       if (!runtime.replaceRoomLayout(next)) return;
       const style = builder!.getRoomTemplateStyles().find(candidate => candidate.id === styleSelect.value)!;
-      editorState.paletteMode = 'smart'; editorState.activeLayer = 'terrain';
-      editorState.smartStyle = style.id; editorState.smartTheme = style.themeId;
-      editorState.smartMaterial = builder!.getRoomTemplateDefaultBrush(style.id);
-      editorState.activeTool = 'pencil';
+      updateEditorState({ paletteMode: 'smart' }); updateEditorState({ activeLayer: 'terrain' });
+      updateEditorState({ smartStyle: style.id }); updateEditorState({ smartTheme: style.themeId });
+      updateEditorState({ smartMaterial: builder!.getRoomTemplateDefaultBrush(style.id) });
+      updateEditorState({ activeTool: 'pencil' });
       close(); context.onApplied();
     } catch { status.textContent = 'Could not apply this layout. Your current layout is unchanged; close and try again.'; }
   };
