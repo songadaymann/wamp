@@ -3,6 +3,7 @@ import {
   type RoomCoordinates,
 } from '../../../persistence/roomModel';
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
+import type { TrustTier } from '../../../progression/model';
 import type {
   AdminRoomCommentRecord,
   BrowseRoomCommentSummary,
@@ -313,6 +314,7 @@ export async function createRoomComment(
     ipHash: string | null;
     userAgent: string | null;
     createdAt: string;
+    autoApproval?: { trustTier: Exclude<TrustTier, 'T0'> };
   },
 ): Promise<RoomCommentRecord> {
   const id = crypto.randomUUID();
@@ -339,7 +341,7 @@ export async function createRoomComment(
         ip_hash,
         user_agent
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, NULL, NULL, NULL, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
     `,
   )
     .bind(
@@ -353,7 +355,11 @@ export async function createRoomComment(
       input.authorDisplayName,
       input.target.builderUserId,
       input.target.builderDisplayName,
+      input.autoApproval ? 'approved' : 'pending_review',
       input.createdAt,
+      input.autoApproval ? input.createdAt : null,
+      input.autoApproval ? 'Automatic trust approval' : null,
+      input.autoApproval ? `Effective trust tier ${input.autoApproval.trustTier}` : null,
       input.ipHash,
       input.userAgent,
     )

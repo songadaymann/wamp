@@ -7,6 +7,7 @@ import {
   ROOM_COMMENT_MAX_LENGTH,
   ROOM_COMMENT_MAX_LIMIT,
   type AdminRoomCommentListResponse,
+  type AdminRoomCommentRecord,
   type BrowseRoomCommentSummaryResponse,
   type AdminRoomCommentReviewRequestBody,
   type AdminRoomCommentReviewResponse,
@@ -29,6 +30,7 @@ import {
 } from '../auth/request';
 import { resolveChatModerationViewer } from '../chat/moderation';
 import { assertNotSchoolRestricted } from '../school/restrictions';
+import { loadEffectiveTrustTier } from '../progression/trustCaps';
 import {
   getCoordinatesFromRequest,
   HttpError,
@@ -167,6 +169,8 @@ export async function handleRoomCommentCreate(
     nowMs: now.getTime(),
   });
 
+  const trustTier = await loadEffectiveTrustTier(env, auth.user.id);
+  const autoApproved = trustTier !== 'T0';
   const comment = await createRoomComment(env, {
     target,
     localX: position.x,
@@ -177,14 +181,20 @@ export async function handleRoomCommentCreate(
     ipHash: await hashRoomCommentIp(env, getRequestIp(request)),
     userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
     createdAt: now.toISOString(),
+    ...(trustTier !== 'T0' ? { autoApproval: { trustTier } } : {}),
   });
 
-  await sendRoomCommentAdminReviewNotification(request, env, comment, target);
+  if (autoApproved) {
+    const approved = await loadAdminRoomComment(env, comment.id);
+    if (approved) await notifyRoomCommentBuilder(request, env, approved);
+  } else {
+    await sendRoomCommentAdminReviewNotification(request, env, comment, target);
+  }
 
   const response: RoomCommentCreateResponse = {
     comment,
-    status: 'pending_review',
-    message: 'Comment submitted for review.',
+    status: autoApproved ? 'approved' : 'pending_review',
+    message: autoApproved ? 'Comment posted.' : 'Comment submitted for review.',
     commentArea: getRoomCommentAreaContext(target),
   };
   return jsonResponse(request, response, { status: 201 });
@@ -288,14 +298,8 @@ async function handleAdminRoomCommentReview(
     error: null as string | null,
   };
   if (decision === 'approved' && !reviewed.notifiedAt) {
-    email = await sendRoomCommentApprovedEmail(request, env, reviewed);
-    if (email.sent) {
-      await markRoomCommentNotificationSent(env, commentId, new Date().toISOString());
-      reviewed = (await loadAdminRoomComment(env, commentId)) ?? reviewed;
-    } else if (email.error) {
-      await markRoomCommentNotificationError(env, commentId, email.error);
-      reviewed = (await loadAdminRoomComment(env, commentId)) ?? reviewed;
-    }
+    email = await notifyRoomCommentBuilder(request, env, reviewed);
+    reviewed = (await loadAdminRoomComment(env, commentId)) ?? reviewed;
   }
 
   const response: AdminRoomCommentReviewResponse = {
@@ -304,6 +308,20 @@ async function handleAdminRoomCommentReview(
     email,
   };
   return jsonResponse(request, response);
+}
+
+async function notifyRoomCommentBuilder(
+  request: Request,
+  env: Env,
+  comment: AdminRoomCommentRecord,
+) {
+  const email = await sendRoomCommentApprovedEmail(request, env, comment);
+  if (email.sent) {
+    await markRoomCommentNotificationSent(env, comment.id, new Date().toISOString());
+  } else if (email.error) {
+    await markRoomCommentNotificationError(env, comment.id, email.error);
+  }
+  return email;
 }
 
 function normalizeRoomCommentBody(value: unknown): string {
