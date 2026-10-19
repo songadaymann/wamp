@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -23,7 +24,7 @@ describe('world streaming loaded-room lifecycle', () => {
     });
     const worldTileController = { update: vi.fn() };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         frameWorkCoordinator,
         worldTileController,
@@ -61,7 +62,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const camera = { zoom: 0.08 };
     const update = vi.fn(() => false);
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         frameWorkCoordinator,
         worldTileController: {
@@ -92,7 +93,7 @@ describe('world streaming loaded-room lifecycle', () => {
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         frameWorkCoordinator: {
           hasQueuedWorkAtPriority: vi.fn(() => false),
@@ -141,7 +142,7 @@ describe('world streaming loaded-room lifecycle', () => {
     });
     const frameWorkCoordinator = { runFrame: vi.fn() };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         destroyed: false,
         roomArtifactCacheProfile: 'normal',
@@ -176,7 +177,7 @@ describe('world streaming loaded-room lifecycle', () => {
       onFullRoomSetChanged: vi.fn(),
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[room.id, loadedRoom]]),
         ensurePlayerTerrainColliders,
@@ -209,7 +210,7 @@ describe('world streaming loaded-room lifecycle', () => {
       source: 'published' as const,
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[v1.id, loadedRuntime]]),
         options: {
@@ -260,7 +261,7 @@ describe('world streaming loaded-room lifecycle', () => {
     };
     const frameWorkCoordinator = new FrameWorkCoordinator();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomPreparationsById: new Map(),
@@ -331,7 +332,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const setLiveObjectsDormant = vi.fn();
     const destroyFullRoom = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[room.id, loadedRoom]]),
         pendingFullRoomPreparationsById: new Map(),
@@ -388,7 +389,7 @@ describe('world streaming loaded-room lifecycle', () => {
       syncLiveObjectInteractions: vi.fn(),
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[room.id, loadedRoom]]),
         pendingFullRoomPreparationsById: new Map(),
@@ -429,7 +430,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const syncLiveObjectInteractions = vi.fn();
     const setLiveObjectWorldCollisionTargetDormant = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         // Queue B first so restoring A leaves B in the pending/suspended set.
         loadedFullRoomsById: new Map([
@@ -484,7 +485,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const syncLiveObjectInteractions = vi.fn();
     let reconciliationGeneration = 11;
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomPreparationsById: new Map(),
@@ -644,7 +645,7 @@ describe('world streaming loaded-room lifecycle', () => {
         syncLiveObjectInteractions: vi.fn(),
       };
       const harness = Object.assign(
-        Object.create(OverworldWorldStreamingController.prototype),
+        createWorldStreamingHarness(),
         {
           loadedFullRoomsById: new Map([[room.id, loadedRoom]]),
           pendingFullRoomPreparationsById: new Map(),
@@ -682,7 +683,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const predicted = createDefaultRoomSnapshot('5,7', { x: 5, y: 7 });
     const destroyFullRoom = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([
           [current.id, { room: current, collisionReady: true }],
@@ -724,7 +725,7 @@ describe('world streaming loaded-room lifecycle', () => {
     });
     const frameWorkCoordinator = new FrameWorkCoordinator();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         fullRoomReleaseAtById: new Map(),
@@ -762,7 +763,7 @@ describe('world streaming loaded-room lifecycle', () => {
 
   it('protects distant portal and dormant preparation snapshots from pruning', () => {
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([['0,0', {}]]),
         pendingFullRoomPreparationsById: new Map([['40,-12', {}]]),
@@ -798,7 +799,7 @@ describe('world streaming loaded-room lifecycle', () => {
       body: { velocity: { x: 0, y: -180 } },
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         predictedPreparationRoomId: '1,0',
         predictedPreparationCoordinates: right,
@@ -815,7 +816,7 @@ describe('world streaming loaded-room lifecycle', () => {
 
   it('keeps exact prediction ties stable across repeated frames', () => {
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         predictedPreparationRoomId: '1,0',
         predictedPreparationCoordinates: { x: 1, y: 0 },
@@ -835,7 +836,7 @@ describe('world streaming loaded-room lifecycle', () => {
       body: { velocity: { x: 0, y: -180 } },
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         predictedPreparationRoomId: '1,0',
         predictedPreparationCoordinates: { x: 1, y: 0 },
@@ -856,7 +857,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const teardownJob = { cancel: vi.fn() };
     const delayedCall = vi.fn(() => ({ remove: vi.fn() }));
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[room.id, loadedRoom]]),
         pendingFullRoomPreparationsById: new Map(),
@@ -900,7 +901,7 @@ describe('world streaming loaded-room lifecycle', () => {
     const clock = { now: 0 };
     const frameWorkCoordinator = new FrameWorkCoordinator();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById: new Map([[predicted.id, loadedRoom]]),
         pendingFullRoomPreparationsById: new Map(),
@@ -1117,7 +1118,7 @@ function createIncrementalTeardownHarness(
     setBudgetBytes: vi.fn(),
   };
   const harness = Object.assign(
-    Object.create(OverworldWorldStreamingController.prototype),
+    createWorldStreamingHarness(),
     {
       loadedFullRoomsById,
       pendingFullRoomPreparationsById: new Map(),

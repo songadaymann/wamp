@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '../../persistence/roomModel';
 import { OverworldWorldStreamingController } from './worldStreaming';
@@ -81,7 +82,7 @@ function createHarness(input: {
   tiledCutover?: boolean;
 }): Record<string, unknown> {
   return Object.assign(
-    Object.create(OverworldWorldStreamingController.prototype) as Record<string, unknown>,
+    createWorldStreamingHarness() as Record<string, unknown>,
     {
       destroyed: false,
       loadGeneration: 4,
