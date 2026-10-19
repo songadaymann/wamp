@@ -21,9 +21,18 @@ F172 is fully delivered through PR247/main `5a187380`, production Pages `91fa163
 
 ## Local source acceptance
 
-- Full quality passes550 files/4,028 tests, lint, shared styles, typing, generated bindings, DOM contracts, production build and PNG/tree/audio checks. Startup is645.6KB Brotli under670KB. The scene-size guard is unchanged.
+- Full quality passes551 files/4,029 tests, lint, shared styles, typing, generated bindings, DOM contracts, production build and PNG/tree/audio checks. Startup is645.6KB Brotli under670KB. The scene-size guard is unchanged.
 - Six strict browser scenarios pass: ordinary and Expanded Rooms on desktop Chromium,320px Chromium and390px WebKit, all with Readable/Large text. Each changes and exercises all ten actions, default Z/X, physical AZERTY movement without accidental slash, conflict/cancel, intro hints, reload persistence, restore defaults, blur release and fixed Escape. Zero application errors or fixture misses; captures were inspected.
 - Focused model/input/command cases prove atomic corrupt-map fallback, storage denial, layout labels, alias consumption, modifier/native ownership, pending-input reset and complete scene lifecycle cleanup. Touch/gamepad movement and physics tests remain intact.
 - The installed game client completed two movement/jump iterations using a custom jump binding, with inspected captures and no captured application errors. An additional inspected airborne capture confirms the custom B jump; a further desktop Expanded Room case explicitly proves the restart clock resets as the player respawns. Exact hosted source/main/mobile checks follow.
 - Retained diagnostics are excluded from acceptance: initial narrow large-text clipping was fixed in the Controls layout; the desktop restart timeout came from replaying an unrelated negative-coordinate window and was resolved by serving the exact requested rectangle, without changing the production restart path; the new executable smoke root is registered in the existing audit configuration.
 - Both unrelated dirty checkouts and the selected animated background match their preservation snapshot. Evidence is ignored under `output/f177-keyboard-2026-10-19/` with quality logs in `output/f177-*.log`.
+
+
+## Hosted verification follow-up
+
+PR248's first source run39256905685 passed quality,66 mobile cases, Expanded Room leaderboards, Assist and both Pages builds. Its two failures are retained in ignored diagnostics: a140ms wall-clock AZERTY hold moved only two pixels on the slow hosted browser, and the pause probe found native menu focus could remain after Phaser cancelled the canvas pointer's normal focus change.
+
+Canvas clicks now explicitly blur the previous menu/form control and synchronize keyboard ownership. A focused unit case preserves other canvases' focus. The six native pause scenarios and six remapping scenarios pass with this source fix; two additional desktop cases and all six pause cases explicitly force menu focus before clicking back into gameplay. Probes now wait for actual physics progress, observe transient jump/combat actions inside the browser frame, and require a real restart clock reset. The final strengthened six-case replay and exact-head hosted gates follow.
+
+Full follow-up quality passes551 files/4,029 tests and all existing gates, with startup645.6KB Brotli. No production release is claimed yet.

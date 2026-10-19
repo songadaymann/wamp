@@ -76,6 +76,10 @@ for (const [device, engine, width, height, touch] of [
       let page = await context.newPage(); context.setDefaultTimeout(60000); const errors = [];
       const watch = p => { p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); }; watch(page);
       const state = () => page.evaluate(() => JSON.parse(window.render_game_to_text()).activeScene);
+      const focusCanvas = async () => {
+        await page.locator('#menu-toggle').focus(); await page.locator('#game-container > canvas').click();
+        assert(await page.evaluate(() => document.activeElement?.id !== 'menu-toggle'));
+      };
       const ready = async (custom = false) => {
         await page.waitForFunction(() => document.body.dataset.appReady === 'true');
         await page.waitForFunction(() => {
@@ -87,21 +91,55 @@ for (const [device, engine, width, height, touch] of [
           await page.locator('#btn-room-goal-intro-start').click();
         }
         await page.waitForFunction(() => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s.mode === 'play' && s.currentCollisionReady && !s.displayHealth.scene.paused; });
-        await page.locator('#game-container > canvas').click(); await page.waitForTimeout(200);
+        await focusCanvas(); await page.waitForTimeout(200);
       };
       const controls = async () => { await page.locator('#menu-toggle').click(); await page.locator('#btn-world-controls').click(); await page.locator('#controls-modal').waitFor({ state: 'visible' }); };
-      const hold = async (key, duration = 140) => { await page.keyboard.down(key); await page.waitForTimeout(duration); await page.keyboard.up(key); };
+      const physicsTime = async ms => {
+        const before = (await state()).physicsCadence.totalSteps;
+        await page.waitForFunction(target => JSON.parse(window.render_game_to_text()).activeScene.physicsCadence.totalSteps >= target,
+          before + Math.ceil(ms / (1000 / 60)));
+      };
+      const hold = async (key, duration = 140) => {
+        await page.keyboard.down(key); try { await physicsTime(duration); } finally { await page.keyboard.up(key); }
+      };
+      const jump = async key => {
+        const y = (await state()).player.y;
+        await page.evaluate(y => {
+          window.__keyboardJumpObserved = null;
+          const sample = () => {
+            const p = JSON.parse(window.render_game_to_text()).activeScene.player;
+            if (p && p.y < y - 4 && p.animation.startsWith('jump')) window.__keyboardJumpObserved = p;
+            else requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        }, y);
+        await page.keyboard.down(key);
+        try { await page.waitForFunction(() => window.__keyboardJumpObserved !== null); }
+        finally { await page.keyboard.up(key); }
+      };
+      const combatAction = async (key, field) => {
+        await page.evaluate(field => {
+          window.__keyboardCombatObserved = null;
+          const sample = () => {
+            const value = JSON.parse(window.render_game_to_text()).activeScene.combat[field];
+            if (value > 0) window.__keyboardCombatObserved = { field, value };
+            else requestAnimationFrame(sample);
+          };
+          requestAnimationFrame(sample);
+        }, field);
+        await page.keyboard.press(key); await page.waitForFunction(() => window.__keyboardCombatObserved !== null);
+      };
       const edit = async (action, key) => { await page.locator(`[data-binding-action="${action}"]`).click(); await page.keyboard.press(key); assert.equal(await page.locator(`[data-binding-action="${action}"]`).textContent(), 'Change'); };
       const renderer = engine === webkit && process.platform === 'linux' ? 'canvas' : 'webgl';
       try {
         await page.goto(`${base}/?welcome=0&x=0&y=0&renderer=${renderer}`); await ready(); console.log(name + ' ready');
         const initial = await state();
         await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', code: 'KeyA', keyCode: 81, bubbles: true, cancelable: true })));
-        await page.waitForTimeout(140);
+        await page.waitForFunction(x => JSON.parse(window.render_game_to_text()).activeScene.player.x < x - 4, initial.player.x);
         await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { key: 'q', code: 'KeyA', keyCode: 81, bubbles: true })));
         const azerty = await state(); assert(azerty.player.x < initial.player.x - 2); assert.equal(azerty.combat.meleeCooldownMs, 0);
-        await hold('z', 70); assert((await state()).player.y < azerty.player.y - 2); await page.waitForTimeout(700);
-        await hold('x', 30); assert((await state()).combat.meleeCooldownMs > 0); await page.waitForTimeout(500);
+        await jump('z'); await physicsTime(700);
+        await combatAction('x', 'meleeCooldownMs'); await physicsTime(500);
         await controls(); console.log(name + ' controls open');
         await page.locator('[data-binding-action="jump"]').focus(); await page.keyboard.press('Enter'); await page.keyboard.press('a');
         assert((await page.locator('#keyboard-binding-status').textContent()).includes('used for Move left'));
@@ -114,19 +152,19 @@ for (const [device, engine, width, height, touch] of [
         assert(await page.locator('#controls-modal .controls-modal-panel').evaluate(e => e.scrollWidth <= e.clientWidth + 1));
         for (const button of await page.locator('.keyboard-binding-change').all()) assert(await button.evaluate(e => e.getBoundingClientRect().height >= 44));
         await page.locator('[data-binding-action="jump"]').scrollIntoViewIfNeeded(); await page.screenshot({ path: `${output}/${name}-controls.png` });
-        await page.locator('#btn-controls-close').click(); await page.locator('#game-container > canvas').click();
+        await page.locator('#btn-controls-close').click(); await focusCanvas();
         console.log(name + ' gameplay');
         const before = await state(); await hold('l'); const right = await state(); assert(right.player.x > before.player.x + 2);
         await hold('h'); assert((await state()).player.x < right.player.x - 2);
         await page.keyboard.down('k'); await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.combat.crouching); await page.keyboard.up('k');
-        await hold('v', 65); assert((await state()).player.y < before.player.y - 2); await page.waitForTimeout(700);
-        await hold('i', 65); assert((await state()).player.y < before.player.y - 2); await page.waitForTimeout(700);
-        await hold('b', 30); assert((await state()).combat.meleeCooldownMs > 0); await page.waitForTimeout(500);
-        await hold('n', 30); assert((await state()).combat.rangedCooldownMs > 0);
+        await jump('v'); await physicsTime(700);
+        await jump('i'); await physicsTime(700);
+        await combatAction('b', 'meleeCooldownMs'); await physicsTime(500);
+        await combatAction('n', 'rangedCooldownMs');
         const camera = (await state()).cameraMode; await page.keyboard.press('o'); await page.waitForFunction(c => JSON.parse(window.render_game_to_text()).activeScene.cameraMode !== c, camera);
         await page.keyboard.press('o'); await page.waitForFunction(c => JSON.parse(window.render_game_to_text()).activeScene.cameraMode === c, camera);
-        await page.keyboard.down('l'); await page.waitForTimeout(80); await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.keyboard.up('l');
-        await page.waitForTimeout(150); const stopped = await state(); await page.waitForTimeout(150); assert(Math.abs((await state()).player.x - stopped.player.x) <= 1);
+        await page.keyboard.down('l'); await physicsTime(80); await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.keyboard.up('l');
+        await physicsTime(150); const stopped = await state(); await physicsTime(150); assert(Math.abs((await state()).player.x - stopped.player.x) <= 1);
         const elapsedBeforeRestart = ((await state()).goalRun || (await state()).courseRun).elapsedMs;
         await page.keyboard.press('u'); await page.waitForFunction(previous => {
           const s = JSON.parse(window.render_game_to_text()).activeScene;
@@ -138,7 +176,7 @@ for (const [device, engine, width, height, touch] of [
         const persisted = await state(); await hold('l'); assert((await state()).player.x > persisted.player.x + 2);
         await controls(); assert.equal(await page.locator('[data-binding-keys="jump"]').textContent(), 'V');
         await page.locator('#btn-keyboard-reset').click(); assert((await page.locator('[data-binding-keys="jump"]').textContent()).includes('Space'));
-        await page.locator('#btn-controls-close').click(); await page.locator('#game-container > canvas').click();
+        await page.locator('#btn-controls-close').click(); await focusCanvas();
         const reset = await state(); await hold('ArrowRight'); assert((await state()).player.x > reset.player.x + 2);
         await page.keyboard.press('Escape'); await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.mode === 'browse');
         assert.deepEqual(errors, []); assert.deepEqual(api.report().misses, {});

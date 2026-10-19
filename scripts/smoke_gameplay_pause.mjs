@@ -129,8 +129,11 @@ for (const [device, engine, width, height, touch] of [
           const resumed = await state();
           await page.waitForFunction(min => JSON.parse(window.render_game_to_text()).activeScene.goalRun.elapsedMs > min, resumed.goalRun.elapsedMs + 100);
           await click('#menu-toggle'); await waitPaused(true); await click('#menu-toggle'); await waitPaused(false);
+          // A native menu focus must be released even when Phaser cancels the canvas pointer's default focus change.
+          await page.locator('#menu-toggle').focus();
           // Actual gameplay still responds after repeated pause/resume.
           await page.locator('#game-container > canvas').click();
+          assert(await page.evaluate(() => document.activeElement?.id !== 'menu-toggle'));
           const x = (await state()).player.x;
           await page.keyboard.down('ArrowRight');
           try {
