@@ -3423,18 +3423,14 @@
           <div class="controls-row"><span class="controls-key">Warp field</span><span>Go to coordinates</span></div>
           <div class="controls-row"><span class="controls-key">0</span><span>Fit loaded world</span></div>
         </div>
-        <div class="controls-section">
-          <div class="controls-section-title">Play</div>
-          <div class="controls-row"><span class="controls-key">WASD / Arrows</span><span>Move</span></div>
-          <div class="controls-row"><span class="controls-key">Space / Up</span><span>Jump</span></div>
-          <div class="controls-row"><span class="controls-key">Down</span><span>Crouch / crawl</span></div>
-          <div class="controls-row"><span class="controls-key">Down + move</span><span>Pull crate</span></div>
-          <div class="controls-row"><span class="controls-key">Q</span><span>Slash</span></div>
-          <div class="controls-row"><span class="controls-key">E</span><span>Shoot</span></div>
-          <div class="controls-row"><span class="controls-key">T</span><span>Chat in room</span></div>
-          <div class="controls-row"><span class="controls-key">R</span><span>Restart run</span></div>
-          <div class="controls-row"><span class="controls-key">9</span><span>Toggle follow cam</span></div>
-          <div class="controls-row"><span class="controls-key">P / Esc</span><span>Return to browse</span></div>
+        <div class="controls-section controls-section-keyboard">
+          <div class="controls-section-title">Keyboard</div>
+          <p class="keyboard-binding-note">Physical key positions · Saved on this device</p>
+          <div id="keyboard-bindings"></div>
+          <div class="controls-row"><span class="controls-key">T / C</span><span>Chat / comment in room</span></div>
+          <div class="controls-row"><span class="controls-key">Esc</span><span>Return to browse / close dialog</span></div>
+          <button id="btn-keyboard-reset" class="pixel-btn" type="button">Restore default keys</button>
+          <div id="keyboard-binding-status" class="keyboard-binding-status" role="status" aria-live="polite"></div>
         </div>
         <div class="controls-section">
           <div class="controls-section-title">Standard gamepad</div>

@@ -1,4 +1,5 @@
 import { getDeviceLayoutState } from '../deviceLayout';
+import { keyboardActionLabel } from '../../settings/keyBindings';
 
 const PLAY_CONTROLS_SEEN_PREFIX = 'wamp:play-controls-seen:v1:';
 const seenInDocument = new WeakMap<Document, Set<string>>();
@@ -42,7 +43,9 @@ export function renderPlayControlHints(element: HTMLElement | null, doc: Documen
   const mode = inputMode();
   const hints = mode === 'touch'
     ? [['Left stick', 'Move'], ['Jump', 'Jump'], ['Sword', 'Slash'], ['Shoot', 'Shoot']]
-    : [['A D / ← →', 'Move'], ['Space / W / ↑', 'Jump'], ['Q', 'Slash'], ['E', 'Shoot']];
+    : [[`${keyboardActionLabel('left')} · ${keyboardActionLabel('right')}`, 'Move'],
+      [`${keyboardActionLabel('jump')} / ${keyboardActionLabel('up')}`, 'Jump'],
+      [keyboardActionLabel('slash'), 'Slash'], [keyboardActionLabel('shoot'), 'Shoot']];
   element.dataset.playControlsInput = mode;
   element.replaceChildren(...hints.map(([input, action]) => {
     const row = doc.createElement('div');

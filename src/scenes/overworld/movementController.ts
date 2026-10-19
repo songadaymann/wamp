@@ -1,5 +1,6 @@
+import type { GameplayKeyboard } from './keyboardInput';
 import Phaser from 'phaser';
-import { consumePressedAliases, mergeGamepadMovement, type GamepadControls } from './gameplayInput';
+import { mergeGamepadMovement, type GamepadControls } from './gameplayInput';
 import type { OverworldMovementInput } from './physicsCadence';
 import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
 import { OverworldTraversalMovementState } from './traversalMovement';
@@ -120,14 +121,8 @@ interface OverworldMovementControllerHost {
     paddingY?: number,
   ): Iterable<LoadedRoomObject>;
   getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle;
-  getCursors(): Phaser.Types.Input.Keyboard.CursorKeys;
+  getKeyboardInput(): GameplayKeyboard;
   getGamepadInput?(): GamepadControls;
-  getWasd(): {
-    W: Phaser.Input.Keyboard.Key;
-    A: Phaser.Input.Keyboard.Key;
-    S: Phaser.Input.Keyboard.Key;
-    D: Phaser.Input.Keyboard.Key;
-  };
   findOverlappingLadder(): LoadedRoomObject | null;
   playJumpDustFx(x: number, y: number, facing: -1 | 1): void;
   syncPlayerPickupSensor(): void;
@@ -457,24 +452,23 @@ export class OverworldMovementController {
 
   captureInput(): OverworldMovementInput {
     const touch = getTouchInputState();
-    const cursors = this.host.getCursors();
-    const wasd = this.host.getWasd();
+    const keyboard = this.host.getKeyboardInput();
     const touchLeft = touch.active && touch.moveX <= -0.28;
     const touchRight = touch.active && touch.moveX >= 0.28;
     const touchUp = touch.active && touch.moveY <= -0.42;
     const touchDown = touch.active && touch.moveY >= 0.42;
-    const upPressed = consumePressedAliases(cursors.up, wasd.W);
-    const downPressed = consumePressedAliases(cursors.down, wasd.S);
-    const leftPressed = consumePressedAliases(cursors.left, wasd.A);
-    const rightPressed = consumePressedAliases(cursors.right, wasd.D);
-    const spacePressed = Phaser.Input.Keyboard.JustDown(cursors.space!);
+    const upPressed = keyboard.pressed('up');
+    const downPressed = keyboard.pressed('down');
+    const leftPressed = keyboard.pressed('left');
+    const rightPressed = keyboard.pressed('right');
+    const spacePressed = keyboard.pressed('jump');
     const touchJumpPressed = consumeTouchAction('jump');
     return mergeGamepadMovement({
-      left: cursors.left.isDown || wasd.A.isDown || touchLeft,
-      right: cursors.right.isDown || wasd.D.isDown || touchRight,
-      upKeyHeld: cursors.up.isDown || wasd.W.isDown,
-      downHeld: cursors.down.isDown || wasd.S.isDown || touchDown,
-      spaceHeld: cursors.space!.isDown || touch.jumpHeld,
+      left: keyboard.held('left') || touchLeft,
+      right: keyboard.held('right') || touchRight,
+      upKeyHeld: keyboard.held('up'),
+      downHeld: keyboard.held('down') || touchDown,
+      spaceHeld: keyboard.held('jump') || touch.jumpHeld,
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed,
       spacePressed: spacePressed || touchJumpPressed,

@@ -1,15 +1,7 @@
-import Phaser from 'phaser';
 import type { TouchInputState } from '../../ui/mobile/touchControls';
 import type { GamepadControls } from './gamepadInput';
 import type { OverworldMovementInput } from './physicsCadence';
 export type { GamepadControls } from './gamepadInput';
-
-export function consumePressedAliases(first: Phaser.Input.Keyboard.Key, second: Phaser.Input.Keyboard.Key): boolean {
-  // Consume both aliases even when the first is pressed, so the second cannot replay next frame.
-  const firstPressed = Phaser.Input.Keyboard.JustDown(first);
-  const secondPressed = Phaser.Input.Keyboard.JustDown(second);
-  return firstPressed || secondPressed;
-}
 
 export function mergeGamepadMovement(input: OverworldMovementInput, pad: GamepadControls | undefined): OverworldMovementInput {
   if (!pad) return input;
@@ -20,20 +12,6 @@ export function mergeGamepadMovement(input: OverworldMovementInput, pad: Gamepad
   input.leftPressed ||= pad.pressed('left'); input.rightPressed ||= pad.pressed('right');
   input.spacePressed ||= pad.pressed('jump');
   return input;
-}
-
-export function createOverworldGameplayKeys(keyboard: Phaser.Input.Keyboard.KeyboardPlugin) {
-  return {
-    cursors: keyboard.createCursorKeys(),
-    wasd: {
-      W: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W), A: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S), D: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    },
-    attackKeys: {
-      Q: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q), E: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-    },
-    cameraToggleKey: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.NINE),
-  };
 }
 
 /** Shared held-input check keeps presentation prompts out of active movement/combat. */
