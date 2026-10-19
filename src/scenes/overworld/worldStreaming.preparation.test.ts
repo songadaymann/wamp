@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -16,7 +17,7 @@ describe('world streaming prepared-room activation', () => {
       backgroundPrepared: true,
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         pendingFullRoomPreparationsById: new Map([[room.id, preparation]]),
       },
@@ -61,7 +62,7 @@ describe('world streaming prepared-room activation', () => {
     const activationChecks: string[] = [];
     const onFullRoomSetChanged = vi.fn(() => activationChecks.push('seams'));
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomPreparationsById,
@@ -82,9 +83,14 @@ describe('world streaming prepared-room activation', () => {
         },
         isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
         requirePreparedLoadedRoom: vi.fn(() => loadedRoom),
-        createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
-        setPreparedInsetBodiesActive: vi.fn(),
-        isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+        fullRoomPresenter: {
+          createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
+          setPreparedInsetBodiesActive: vi.fn(),
+          isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+          updateFullRoomBackground: vi.fn(),
+        },
+
+
         ensurePlayerTerrainColliders: vi.fn(() => {
           expect(loadedFullRoomsById.get(room.id)).toBe(loadedRoom);
           expect(loadedRoom.collisionReady).toBe(false);
@@ -95,7 +101,7 @@ describe('world streaming prepared-room activation', () => {
           expect(loadedRoom.collisionReady).toBe(false);
           activationChecks.push('world-colliders');
         }),
-        updateFullRoomBackground: vi.fn(),
+
         retainPreparedTransitionRoom: vi.fn(),
         previewRenderer: { syncPreviewVisibility: vi.fn() },
         syncRoomArtifactCachePolicy: vi.fn(),
@@ -114,7 +120,7 @@ describe('world streaming prepared-room activation', () => {
       'interactions',
       'seams',
     ]);
-    expect(harness.createRoomBackground).not.toHaveBeenCalled();
+    expect(harness.fullRoomPresenter.createRoomBackground).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -176,7 +182,7 @@ describe('world streaming prepared-room activation', () => {
       repairedInteractionRoomIds.push(Array.from(rooms, (candidate) => candidate.room.id));
     });
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomPreparationsById,
@@ -192,19 +198,25 @@ describe('world streaming prepared-room activation', () => {
         },
         isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
         requirePreparedLoadedRoom: vi.fn(() => loadedRoom),
-        createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
-        setPreparedInsetBodiesActive: vi.fn(),
+        fullRoomPresenter: {
+          createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
+          setPreparedInsetBodiesActive: vi.fn(),
+          isLoadedRoomCollisionInfrastructureReady: vi.fn(
+            () => failurePoint !== 'collision-ready',
+          ),
+          updateFullRoomBackground: vi.fn(() => {
+            if (failurePoint === 'background') throw failure;
+          }),
+          destroyLoadedRoomResources,
+        },
+
         ensurePlayerTerrainColliders: vi.fn(() => {
           if (failurePoint === 'terrain') throw failure;
         }),
-        isLoadedRoomCollisionInfrastructureReady: vi.fn(
-          () => failurePoint !== 'collision-ready',
-        ),
+
         syncLiveObjectWorldColliders,
-        updateFullRoomBackground: vi.fn(() => {
-          if (failurePoint === 'background') throw failure;
-        }),
-        destroyLoadedRoomResources,
+
+
         retainPreparedTransitionRoom: vi.fn(),
         previewRenderer: { syncPreviewVisibility: vi.fn() },
         syncRoomArtifactCachePolicy: vi.fn(),
@@ -290,7 +302,7 @@ describe('world streaming prepared-room activation', () => {
       const retainPreparedTransitionRoom = failOnceAt('retention');
       const destroyLoadedRoomResources = vi.fn();
       const harness = Object.assign(
-        Object.create(OverworldWorldStreamingController.prototype),
+        createWorldStreamingHarness(),
         {
           loadedFullRoomsById,
           pendingFullRoomPreparationsById,
@@ -307,13 +319,19 @@ describe('world streaming prepared-room activation', () => {
           isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
           isLoadedFullRoomCurrent: vi.fn(() => false),
           requirePreparedLoadedRoom: vi.fn(() => replacementRuntime),
-          createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
-          setPreparedInsetBodiesActive: vi.fn(),
-          isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+          fullRoomPresenter: {
+            createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
+            setPreparedInsetBodiesActive: vi.fn(),
+            isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+            updateFullRoomBackground: vi.fn(),
+            destroyLoadedRoomResources,
+          },
+
+
           ensurePlayerTerrainColliders: vi.fn(),
           syncLiveObjectWorldColliders: vi.fn(),
-          updateFullRoomBackground: vi.fn(),
-          destroyLoadedRoomResources,
+
+
           retainPreparedTransitionRoom,
           previewRenderer: { syncPreviewVisibility },
           scheduleFullRoomReleaseCleanup: vi.fn(),
@@ -385,7 +403,7 @@ describe('world streaming prepared-room activation', () => {
       expect(loadedFullRoomsById.get(previousRoom.id)).toBe(replacementRuntime);
     });
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomPreparationsById: new Map([[replacementRoom.id, preparation]]),
@@ -404,13 +422,19 @@ describe('world streaming prepared-room activation', () => {
         isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
         isLoadedFullRoomCurrent: vi.fn(() => false),
         requirePreparedLoadedRoom: vi.fn(() => replacementRuntime),
-        createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
-        setPreparedInsetBodiesActive: vi.fn(),
-        isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+        fullRoomPresenter: {
+          createRoomBackground: vi.fn(() => ({ colorRect: null, sprites: [] })),
+          setPreparedInsetBodiesActive: vi.fn(),
+          isLoadedRoomCollisionInfrastructureReady: vi.fn(() => true),
+          updateFullRoomBackground: vi.fn(),
+          destroyLoadedRoomResources,
+        },
+
+
         ensurePlayerTerrainColliders: vi.fn(),
         syncLiveObjectWorldColliders: vi.fn(),
-        updateFullRoomBackground: vi.fn(),
-        destroyLoadedRoomResources,
+
+
         retainPreparedTransitionRoom: vi.fn(),
         previewRenderer: { syncPreviewVisibility: vi.fn() },
         roomArtifactCache: { has: vi.fn(() => true), touch: vi.fn() },
@@ -438,7 +462,7 @@ describe('world streaming prepared-room activation', () => {
     const cancelFullRoomPreparation = vi.fn();
     const loadedFullRoomsById = new Map();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         isFullRoomPreparationSnapshotCurrent: vi.fn(() => false),
@@ -466,7 +490,7 @@ describe('world streaming prepared-room activation', () => {
     const releaseRoomArtifactResources = vi.fn();
     const loadedFullRoomsById = new Map([[room.id, loadedRoom]]);
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         loadedFullRoomsById,
         pendingFullRoomTeardownsById: new Map(),
@@ -480,7 +504,9 @@ describe('world streaming prepared-room activation', () => {
           onFullRoomDestroyed: vi.fn(),
         },
         cancelPendingFullRoomTeardown: vi.fn(),
-        destroyLoadedRoomResources,
+        fullRoomPresenter: {
+          destroyLoadedRoomResources,
+        },
         releaseRoomArtifactResources,
         syncRoomArtifactCachePolicy: vi.fn(),
       },
@@ -518,14 +544,16 @@ describe('world streaming prepared-room activation', () => {
     const destroyLoadedRoomResources = vi.fn();
     const releaseRoomArtifactResources = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         pendingFullRoomPreparationsById,
         predictedPreparationRoomId: room.id,
         frameWorkCoordinator: { cancelGeneration: vi.fn() },
         roomArtifactCache: { has: vi.fn(() => false) },
         getCustomRoomTileTextureKey: vi.fn(() => null),
-        destroyLoadedRoomResources,
+        fullRoomPresenter: {
+          destroyLoadedRoomResources,
+        },
         releaseRoomArtifactResources,
         syncRoomArtifactCachePolicy: vi.fn(),
       },
@@ -570,7 +598,7 @@ describe('world streaming prepared-room activation', () => {
     const queuePreparedRuntimeShell = vi.fn();
     const queuedLabels: string[] = [];
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: {
           scene: {
