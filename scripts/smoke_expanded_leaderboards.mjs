@@ -53,11 +53,20 @@ for (const [device, engine, width, height, touch] of [
         'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' });
       const reply = (r, json, status = 200) => r.fulfill({ status, json, headers: cors(r) });
       await context.route(u => /^\/api\/rooms\/[^/]+\/summary$/.test(u.pathname), r => reply(r, JSON.parse(source.entries.find(e => e.path === '/api/rooms/0%2C0/summary').text)));
-      await context.route('**/api/world/chunks?*', r => {
-        const entry = source.entries.find(e => e.path === '/api/world/chunks/summary');
-        const value = replace(JSON.parse(entry.text));
-        value.chunks = value.chunks.map(chunk => ({ ...chunk, previewRooms: [] }));
-        return reply(r, value);
+      // A warp must receive its requested window, rather than the recording's
+      // unrelated negative-coordinate bounds that can later evict the destination.
+      await context.route(u => /^\/api\/world\/chunks(?:\/summary)?$/.test(u.pathname), r => {
+        const params = new URL(r.request().url()).searchParams;
+        const bounds = Object.fromEntries(['minChunkX', 'maxChunkX', 'minChunkY', 'maxChunkY'].map(key => [key, Number(params.get(key))]));
+        const template = JSON.parse(source.entries.find(e => e.path === '/api/world/chunks/summary').text).chunks[0].rooms[0];
+        const chunks = [], cell = 8;
+        for (let y = bounds.minChunkY; y <= bounds.maxChunkY; y++) for (let x = bounds.minChunkX; x <= bounds.maxChunkX; x++) {
+          const rooms = [0, 1].filter(rx => Math.floor(rx / cell) === x && y === 0).map(rx => replace({ ...template, id: `${rx},0`, coordinates: { x: rx, y: 0 }, goalType: null }));
+          chunks.push({ id: `${x},${y}`, coordinates: { x, y }, roomBounds: { minX: x * cell, maxX: x * cell + cell - 1, minY: y * cell, maxY: y * cell + cell - 1 },
+            rooms, previewRooms: [], chunkPreviewHash: 'leaderboard-fixture' });
+        }
+        return reply(r, { chunkBounds: bounds, roomBounds: { minX: bounds.minChunkX * cell, maxX: (bounds.maxChunkX + 1) * cell - 1,
+          minY: bounds.minChunkY * cell, maxY: (bounds.maxChunkY + 1) * cell - 1 }, chunks });
       });
       await context.route('**/api/courses/leaderboard-fixture', r => reply(r, { published: snapshot, draft: null, versions: [], id: courseId }));
       await context.route(u => /^\/api\/rooms\/[^/]+\/published$/.test(u.pathname), r => reply(r, room(decodeURIComponent(new URL(r.request().url()).pathname.split('/')[3]))));
