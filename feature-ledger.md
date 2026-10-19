@@ -1048,3 +1048,22 @@ F064 final WebKit verification passes with rapid sub320ms summary touches uncanc
 
 
 F064 follow-up accepted locally: the final single production-build matrix passes all three desktop/320px/WebKit cases, with real sub320ms summary taps, zero account-flow errors and no fixture misses. Separate teardown reports are retained in the ignored result. All552 files/4,066 full tests and final lint pass; final installed-client captures were inspected. Full exact-source/main hosted gates, merge, guarded Pages-only release and actual-domain verification remain.
+
+
+## 2026-10-19 — F064 production delivery complete
+
+F064 is fully delivered through PR250, main `2cd27517`, production Pages `78327e8e`. All nine exact-source/main hosted checks,552 files/4,066 tests and99 browser scenarios pass. The full guarded clean-main Pages-only retry passes with supported two-worker concurrency and unchanged assertions/timeouts; the rejected discovery-cache timeout is retained. Three live desktop/320px/WebKit account flows pass, with real rapid native summary taps, zero unexpected errors, fixture misses or teardown reports.27 assets match both domains; actual published-room pause/resume/custom jump passes. Backend/schema/renderer unchanged; unrelated work and selected animation preserved. This supersedes the source-time pending delivery notes. Master164/216; the broader checklist goal remains active.
+
+
+## 2026-10-19 — F066 gameplay composition and runtime context
+
+Canonical branch `codex/wamp-runtime-context-2026-10-19` from fully delivered PR250/main2cd27517. F064 is complete; its older pending notes are superseded by the final receipt. F066 remains open/master164/216. Current audit: constructor627–2192 (1,566 lines),48 controller constructions, repeated mode/coordinate/player/body getters; only room audio receives a context getter, and controllers do not receive the context itself.
+
+Plan the complete F066 outcome across reviewable deliveries: (1) extend typed live runtime capabilities and migrate real controller consumers, preserving nullability/lazy access/lifecycle; (2) move world/player/PvP/room-rush/social/UI construction into composition owners with characterized initialization and dependency order, substantially reducing the constructor; (3) declarative frame/profiling stages with exact existing execution and branch semantics; (4) separate full-room Phaser presentation/create/destroy/background ownership from streaming scheduling/lifecycle. Keep F066 unchecked until the complete outcome is proven. Use existing extracted collaborators and frozen old/new behavior/order evidence, then focused/full tests, installed/native browser flows, all exact-source/main gates and guarded appropriate deployments with actual-domain proof. No product changes, optional compatibility end state, or weakened size guard is the intended result. Preserve user primary dirty work, TAS lab, chosen animation and private/decision-gated work. Only audit/plan has begun; implementation and all F066 verification/release remain pending.
+
+
+## 2026-10-19 — First runtime-context delivery
+
+Five existing controllers now require narrow live runtime capabilities: room audio, ghost races, browse realtime startup, player health and player presentation. The scene injects its single context; old duplicated getter ports are removed for these consumers. Raw player/body/avatar/sensor references stay lazy across creation, destruction and respawn; mode/room reads remain live and diagnostics retain their detached serializable shape. Death-masked interaction readers and coordinate-cloning consumers are unchanged.
+
+Local focused acceptance: 32 cases across six files and TypeScript pass. Frozen-main comparison proves all five executable controller classes unchanged after the explicit read mapping; an independent scene audit checks all eleven original provider expressions and required context wiring. Full quality, production-build browser scenarios, exact-source/main hosted gates and guarded Pages-only delivery follow. This is the first F066 delivery; composition ownership, declarative frame stages and room presentation separation remain pending. F066 remains unchecked, master164/216.
