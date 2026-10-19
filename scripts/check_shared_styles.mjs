@@ -20,7 +20,7 @@ const palette = new Map([...tokens.matchAll(/(--wamp-[\w-]+):\s*(#[a-f\d]+);/gi)
 const fonts = new Map([...tokens.matchAll(/(--font-[\w-]+):\s*([^;]+);/g)]
   .filter(([, , stack]) => !stack.trim().startsWith('var('))
   .map(([, name, stack]) => [normalizeFont(stack), name]));
-const sharedNames = new Set([...tokens.matchAll(/(--(?:wamp|font|shadow)-[\w-]+):/g)].map(([, name]) => name));
+const sharedNames = new Set([...tokens.matchAll(/(--(?:wamp|font|shadow|z)-[\w-]+):/g)].map(([, name]) => name));
 const errors = [];
 let checked = 0;
 function report(file, source, index, message) {
@@ -49,14 +49,14 @@ async function checkDirectory(directory) {
       const token = [...fonts].find(([stack]) => value === stack || value.endsWith(` ${stack}`))?.[1];
       if (token) report(file, source, match.index, `Use var(${token}) for this font stack.`);
     }
-    for (const match of values.matchAll(/(--(?:wamp|font|shadow)-[\w-]+)\s*:/g)) {
+    for (const match of values.matchAll(/(--(?:wamp|font|shadow|z)-[\w-]+)\s*:/g)) {
       if (sharedNames.has(match[1])) report(file, source, match.index, `Define ${match[1]} only in tokens.css.`);
     }
   }
 }
 
 const main = await fs.readFile(path.join(root, 'main.css'), 'utf8');
-if (!withoutComments(main).trimStart().startsWith("@import './tokens.css';")) errors.push('styles/main.css: Import tokens.css first.');
+if (!/^@layer base, components, editor-skin, responsive, overrides;\s*@import '\.\/tokens\.css';/.test(withoutComments(main).trimStart())) errors.push('styles/main.css: Import tokens.css first.');
 await checkDirectory(root);
 if (errors.length) {
   console.error(errors.join('\n'));

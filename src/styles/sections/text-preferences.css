@@ -1,145 +1,151 @@
-/* Text grows inside its surface. Canvas, safe areas and pointer targets do not zoom. */
-body:is([data-text-style='readable'], [data-text-size='large']) :is(button, label, legend) {
-  overflow-wrap: normal;
-}
+@layer overrides {
+  /* Text grows inside its surface. Canvas, safe areas and pointer targets do not zoom. */
 
-body:is([data-text-style='readable'], [data-text-size='large']) .settings-section {
-  background: var(--wamp-paper);
-}
-
-body:is([data-text-style='readable'], [data-text-size='large']) .settings-choice {
-  min-height: 44px;
-  height: auto;
-}
-
-body:is([data-text-style='readable'], [data-text-size='large']) :is(.history-modal-title-group, .settings-label-copy, .settings-choice-copy) {
-  min-width: 0;
-}
-
-body[data-text-style='readable'],
-body[data-text-style='readable'] * {
-  -webkit-font-smoothing: antialiased !important;
-  text-rendering: optimizeLegibility !important;
-}
-
-/* A second header row gives the goal and the two run actions their own space. */
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) {
-  --mobile-portrait-console-height: calc(clamp(294px, 36vh, 318px) + 48px);
-  --mobile-portrait-console-header-height: 96px;
-}
-
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) .world-goal-panel {
-  left: calc(8px + var(--safe-left));
-  bottom: calc(var(--safe-bottom) + var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height) + 52px);
-  min-height: 40px;
-}
-
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) :is(.mobile-world-stop, .mobile-world-restart) {
-  top: auto;
-  width: calc((100vw - var(--safe-left) - var(--safe-right) - 24px) / 2);
-  min-height: 44px;
-  bottom: calc(var(--safe-bottom) + var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height) + 2px);
-  white-space: nowrap;
-}
-
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) .mobile-world-restart {
-  left: auto;
-  right: calc(8px + var(--safe-right));
-}
-
-body[data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) .editor-shell-tools .tool-btn {
-  min-width: max-content;
-  padding-inline: 8px;
-  white-space: nowrap;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true']):is([data-text-style='readable'], [data-text-size='large']) {
-  --editor-phone-bar-height: calc(94px + var(--safe-top));
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: 44px 44px;
-  height: 92px;
-  gap: 4px;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button {
-  grid-row: 2;
-  white-space: normal;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > :is([data-editor-shell-action='test'], [data-editor-shell-action='publish']) {
-  grid-row: 1;
-  grid-column: span 2;
-  flex-direction: row;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button > [aria-hidden='true'] {
-  display: none;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid > button {
-  flex-basis: auto;
-  min-width: max-content;
-  padding-inline: 10px;
-  white-space: nowrap;
-}
-
-body[data-text-size='large'][data-text-style='pixel'] .game-menu-actions {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-tools {
-  grid-template-columns: repeat(5, max-content) 14px max-content;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-phone-tools .tool-btn {
-  flex: 0 0 auto;
-  width: max-content;
-  min-width: 64px;
-}
-
-/* Wide phones can keep all six editor actions on one row. */
-@media (min-width: 650px) {
-  body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true']):is([data-text-style='readable'], [data-text-size='large']) {
-    --editor-phone-bar-height: calc(48px + var(--safe-top));
+  body:is([data-text-style='readable'], [data-text-size='large']) :is(button, label, legend) {
+    overflow-wrap: normal;
   }
 
-  body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar {
-    height: 48px;
-    grid-template-columns: 52px 52px minmax(64px, 1fr) minmax(88px, 1.2fr) 52px 52px;
-    grid-template-rows: 44px;
+  body:is([data-text-style='readable'], [data-text-size='large']) .settings-section {
+    background: var(--wamp-paper);
   }
 
-  body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button {
+  body:is([data-text-style='readable'], [data-text-size='large']) .settings-choice {
+    min-height: 44px;
+    height: auto;
+  }
+
+  body:is([data-text-style='readable'], [data-text-size='large']) :is(.history-modal-title-group, .settings-label-copy, .settings-choice-copy) {
+    min-width: 0;
+  }
+
+  body[data-text-style='readable'],
+  body[data-text-style='readable'] * {
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+  }
+
+  /* A second header row gives the goal and the two run actions their own space. */
+
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) {
+    --mobile-portrait-console-height: calc(clamp(294px, 36vh, 318px) + 48px);
+    --mobile-portrait-console-header-height: 96px;
+  }
+
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) .world-goal-panel {
+    left: calc(8px + var(--safe-left));
+    bottom: calc(var(--safe-bottom) + var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height) + 52px);
+    min-height: 40px;
+  }
+
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) :is(.mobile-world-stop, .mobile-world-restart) {
+    top: auto;
+    width: calc((100vw - var(--safe-left) - var(--safe-right) - 24px) / 2);
+    min-height: 44px;
+    bottom: calc(var(--safe-bottom) + var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height) + 2px);
+    white-space: nowrap;
+  }
+
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world']:is([data-text-style='readable'], [data-text-size='large']) .mobile-world-restart {
+    left: auto;
+    right: calc(8px + var(--safe-right));
+  }
+
+  body[data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) .editor-shell-tools .tool-btn {
+    min-width: max-content;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true']):is([data-text-style='readable'], [data-text-size='large']) {
+    --editor-phone-bar-height: calc(94px + var(--safe-top));
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: 44px 44px;
+    height: 92px;
+    gap: 4px;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button {
+    grid-row: 2;
+    white-space: normal;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > :is([data-editor-shell-action='test'], [data-editor-shell-action='publish']) {
     grid-row: 1;
-    grid-column: auto;
+    grid-column: span 2;
+    flex-direction: row;
   }
-}
 
-/* Fixed option panels escape the desktop tool scroller's clipping boundary. */
-body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-eraser-size-picker {
-  position: fixed;
-  top: calc(var(--editor-shell-top-height) + 8px);
-  left: 16px;
-  max-height: calc(var(--visible-vh) - var(--editor-shell-top-height) - 24px);
-  overflow: auto;
-}
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button > [aria-hidden='true'] {
+    display: none;
+  }
 
-body[data-editor-dock-shell='true'][data-editor-drawer-open='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-eraser-size-picker {
-  left: calc(var(--app-sidebar-width) + 16px);
-  max-width: calc(100vw - var(--app-sidebar-width) - 32px);
-}
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid > button {
+    flex-basis: auto;
+    min-width: max-content;
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
 
-body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid {
-  grid-template-columns: repeat(7, max-content);
-}
+  body[data-text-size='large'][data-text-style='pixel'] .game-menu-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid > button {
-  min-width: 64px;
-  padding-inline: 8px;
-  white-space: nowrap;
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-tools {
+    grid-template-columns: repeat(5, max-content) 14px max-content;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-phone-tools .tool-btn {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 64px;
+  }
+
+  /* Wide phones can keep all six editor actions on one row. */
+
+  @media (min-width: 650px) {
+    body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true']):is([data-text-style='readable'], [data-text-size='large']) {
+      --editor-phone-bar-height: calc(48px + var(--safe-top));
+    }
+
+    body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar {
+      height: 48px;
+      grid-template-columns: 52px 52px minmax(64px, 1fr) minmax(88px, 1.2fr) 52px 52px;
+      grid-template-rows: 44px;
+    }
+
+    body[data-device-class='phone'][data-orientation-state='landscape'][data-app-mode='editor'][data-editor-dock-shell='true']:is([data-text-style='readable'], [data-text-size='large']) #editor-shell-phone-bar > button {
+      grid-row: 1;
+      grid-column: auto;
+    }
+  }
+
+  /* Fixed option panels escape the desktop tool scroller's clipping boundary. */
+
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-eraser-size-picker {
+    position: fixed;
+    top: calc(var(--editor-shell-top-height) + 8px);
+    left: 16px;
+    max-height: calc(var(--visible-vh) - var(--editor-shell-top-height) - 24px);
+    overflow: auto;
+  }
+
+  body[data-editor-dock-shell='true'][data-editor-drawer-open='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-eraser-size-picker {
+    left: calc(var(--app-sidebar-width) + 16px);
+    max-width: calc(100vw - var(--app-sidebar-width) - 32px);
+  }
+
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid {
+    grid-template-columns: repeat(7, max-content);
+  }
+
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']):is([data-text-style='readable'], [data-text-size='large']) .editor-shell-dock-grid > button {
+    min-width: 64px;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
 }
