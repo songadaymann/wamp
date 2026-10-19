@@ -1,3 +1,4 @@
+import type { RuntimeModeReader, RuntimeRoomReader } from './runtimeContext';
 import Phaser from 'phaser';
 import { playSfx, type SfxCue, type SfxPlaybackOptions } from '../../audio/sfx';
 import type { RoomCoordinates } from '../../persistence/roomModel';
@@ -5,8 +6,7 @@ import type { OverworldMode } from '../sceneData';
 
 interface OverworldRoomAudioControllerOptions {
   scene: Phaser.Scene;
-  getMode: () => OverworldMode;
-  getCurrentRoomCoordinates: () => RoomCoordinates;
+  runtime: RuntimeModeReader<OverworldMode> & Pick<RuntimeRoomReader, 'currentRoomCoordinates'>;
 }
 
 interface RoomAudioDebugSnapshot {
@@ -117,11 +117,11 @@ export class OverworldRoomAudioController {
   private getRouteForRoom(
     sourceRoom: RoomCoordinates
   ): 'default' | 'adjacent-bleed' | 'ignored' {
-    if (this.options.getMode() !== 'play') {
+    if (this.options.runtime.mode.get() !== 'play') {
       return 'default';
     }
 
-    const currentRoom = this.options.getCurrentRoomCoordinates();
+    const currentRoom = this.options.runtime.currentRoomCoordinates;
     const distance =
       Math.abs(currentRoom.x - sourceRoom.x) + Math.abs(currentRoom.y - sourceRoom.y);
     if (distance <= 0) {
@@ -138,7 +138,7 @@ export class OverworldRoomAudioController {
     sourceRoom: RoomCoordinates,
     route: 'default' | 'adjacent-bleed' | 'ignored'
   ): void {
-    const currentRoom = this.options.getCurrentRoomCoordinates();
+    const currentRoom = this.options.runtime.currentRoomCoordinates;
     this.lastCue = cue;
     this.lastSourceRoom = { ...sourceRoom };
     this.lastDistance =

@@ -632,6 +632,11 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         this.worldStreamingController.updateFullRoomBackgrounds(camera),
     });
     this.runtimeContext = new OverworldRuntimeContext({
+      getPlayer: () => this.player,
+      getPlayerBody: () => this.playerBody,
+      getPlayerSprite: () => this.playerSprite,
+      getPlayerPickupSensor: () => this.playerPickupSensor,
+      getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
       getMode: () => this.mode,
       setMode: (mode) => { this.mode = mode; },
       getCameraMode: () => this.cameraMode,
@@ -662,14 +667,15 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       fadeInPlayer: duration => this.playerDeathPresentation.fadeIn(duration),
     });
     this.ghostRaceController = new OverworldGhostRaceController({
+      runtime: this.runtimeContext,
       scene: this, getRun: () => this.goalRunController?.getCurrentRun() ?? null,
-      getMode: () => this.mode,
       getUserId: () => getAuthDebugState().authenticated ? getAuthDebugState().user?.id ?? null : null,
       getRoomOrigin: coordinates => this.getRoomOrigin(coordinates),
       onRaceInfoChanged: info => this.hudBridge?.setGhostRaceInfo(info),
       showStatus: message => this.showTransientStatus(message),
     });
     this.playerHealthController = new OverworldPlayerHealthController({
+      runtime: this.runtimeContext,
       scene: this,
       getMaximumHearts: () => getPlayableMaximumHearts({
         course: this.activeCourseSnapshot,
@@ -680,8 +686,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       isPvpActive: () => this.isPvpArenaActive(),
       isDeathPending: () => this.gameFeelController.isDeathPending(),
       getCurrentTime: () => gameplayNow(this),
-      getPlayerBody: () => this.playerBody,
-      getPlayerSprite: () => this.playerSprite,
       onHurt: () => {
         this.combatController.clearAttackAnimation();
         this.movementController.applyHurtKnockback(this.playerFacing as -1 | 1);
@@ -720,9 +724,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       onDraftGoalCompleted: run => { recordEditorDraftClear(this.editorPlaytestReturnTarget?.clearCheck, run); },
     });
     this.roomAudioController = new OverworldRoomAudioController({
+      runtime: this.runtimeContext,
       scene: this,
-      getMode: this.runtimeContext.mode.get,
-      getCurrentRoomCoordinates: () => this.currentRoomCoordinates,
     });
     this.lightingController = new RoomLightingController({
       scene: this,
@@ -1222,7 +1225,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       showTransientStatus: (message) => this.showTransientStatus(message),
     });
     this.browseRealtimeStartupGate = new BrowseRealtimeStartupGate({
-      getMode: () => this.mode,
+      runtime: this.runtimeContext,
       waitForBrowseReady: (signal) =>
         this.worldStreamingController.waitForBrowseSecondaryStartupReady(signal),
       applySubscriptions: () => this.applyPresenceSubscriptions(),
@@ -1669,13 +1672,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     };
     this.playerPresentationController = new OverworldPlayerPresentationController(
       {
+        runtime: this.runtimeContext,
         state: playerPresentationState,
         getCurrentTime: () => gameplayNow(this),
-        getPlayer: () => this.player,
-        getPlayerBody: () => this.playerBody,
-        getPlayerSprite: () => this.playerSprite,
-        getPlayerPickupSensor: () => this.playerPickupSensor,
-        getPlayerPickupSensorBody: () => this.playerPickupSensorBody,
         getSpecialTileEnvironment: () => this.specialTilesController.getPlayerEnvironment(),
         getLastMovementInput: () => this.lastMovementInput,
         getQuicksandVisualSink: () => this.quicksandController.getVisualSink(),

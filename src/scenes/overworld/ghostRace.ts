@@ -1,3 +1,4 @@
+import type { RuntimeModeReader } from './runtimeContext';
 import Phaser from 'phaser';
 import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { ensureSceneAvatarPackLoaded } from '../../player/avatar/dynamic';
@@ -17,7 +18,7 @@ export interface GhostRaceInfo {
 interface GhostRaceOptions {
   scene: Phaser.Scene;
   getRun(): GoalRunState | null;
-  getMode(): string;
+  runtime: RuntimeModeReader;
   getUserId(): string | null;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   onRaceInfoChanged(info: GhostRaceInfo | null): void;
@@ -70,7 +71,7 @@ export class OverworldGhostRaceController {
   update(): void {
     const run = this.options.getRun(), ghost = this.playback?.ghost;
     if (run?.cooperative) { this.clear(); return; }
-    if (this.options.getMode() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
+    if (this.options.runtime.mode.get() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
     const visible = Boolean(run && ghost && run.roomId === ghost.roomId && run.roomVersion === this.targetVersion
       && run.qualificationState === 'qualified');
     this.sprite?.setVisible(visible);
@@ -116,12 +117,12 @@ export class OverworldGhostRaceController {
   }
   private async refreshRecording(expectedRun?: GoalRunState): Promise<void> {
     const room = this.targetRoom, choice = this.choice;
-    if (!room || choice === 'off' || this.options.getMode() !== 'play') return;
+    if (!room || choice === 'off' || this.options.runtime.mode.get() !== 'play') return;
     this.refreshRequest?.abort();
     const request = this.refreshRequest = new AbortController(), generation = this.generation;
     const identity = this.options.getUserId();
     const current = () => this.refreshRequest === request && !request.signal.aborted && generation === this.generation
-      && this.options.getMode() === 'play' && (!expectedRun || this.options.getRun() === expectedRun)
+      && this.options.runtime.mode.get() === 'play' && (!expectedRun || this.options.getRun() === expectedRun)
       && this.options.getUserId() === identity && this.targetRoom === room;
     try {
       const ghost = choice === 'personal' && !identity

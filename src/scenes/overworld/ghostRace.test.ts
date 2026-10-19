@@ -32,7 +32,7 @@ function fixture() {
   const run = { roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, roomVersion: 2, goal: room.goal,
     qualificationState: 'qualified', elapsedMs: 0, deaths: 0, result: 'active' } as GoalRunState;
   const status = vi.fn(), raceInfo = vi.fn();
-  const controller = new OverworldGhostRaceController({ scene, getRun: () => run, getMode: () => mode,
+  const controller = new OverworldGhostRaceController({ scene, getRun: () => run, runtime: { mode: { get: () => mode } },
     getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }),
     onRaceInfoChanged: raceInfo, showStatus: status });
   controllers.add(controller);

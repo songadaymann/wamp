@@ -8,7 +8,7 @@ describe('BrowseRealtimeStartupGate', () => {
     const readiness = deferred<boolean>();
     const waitForBrowseReady = vi.fn((_signal: AbortSignal) => readiness.promise);
     const gate = new BrowseRealtimeStartupGate({
-      getMode: () => 'browse',
+      runtime: { mode: { get: () => 'browse' } },
       waitForBrowseReady,
       applySubscriptions: () => appliedBounds.push(latestBounds),
     });
@@ -40,7 +40,7 @@ describe('BrowseRealtimeStartupGate', () => {
       .mockReturnValueOnce(firstReadiness.promise)
       .mockReturnValueOnce(secondReadiness.promise);
     const gate = new BrowseRealtimeStartupGate({
-      getMode: () => 'browse',
+      runtime: { mode: { get: () => 'browse' } },
       waitForBrowseReady,
       applySubscriptions,
     });
@@ -68,7 +68,7 @@ describe('BrowseRealtimeStartupGate', () => {
     const applySubscriptions = vi.fn();
     const waitForBrowseReady = vi.fn((_signal: AbortSignal) => readiness.promise);
     const gate = new BrowseRealtimeStartupGate({
-      getMode: () => mode,
+      runtime: { mode: { get: () => mode } },
       waitForBrowseReady,
       applySubscriptions,
     });
@@ -95,7 +95,7 @@ describe('BrowseRealtimeStartupGate', () => {
     const applySubscriptions = vi.fn();
     const waitForBrowseReady = vi.fn((_signal: AbortSignal) => readiness.promise);
     const gate = new BrowseRealtimeStartupGate({
-      getMode: () => 'browse',
+      runtime: { mode: { get: () => 'browse' } },
       waitForBrowseReady,
       applySubscriptions,
     });

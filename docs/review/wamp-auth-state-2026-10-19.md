@@ -5,7 +5,7 @@
 
 Canonical branch `codex/wamp-auth-client-state-2026-10-19` from delivered PR249/main1d0a6aca. Finish F064 by extracting pure session/email/link-email/wallet/logout/display-name transitions, characterization and boundary tests, widening coverage to all source and recording the baseline here rather than adding the declined public AGENTS.md. Preserve temporary-refresh-failure behavior; clear stale claim quotas on sign-out and isolate debug snapshots. Plan: focused/full tests and coverage; real UI email/expiry/link-email/school/browser checks with isolated writes; installed-client gameplay; source/main hosted gates, clean guarded Pages-only release and actual-domain proof. No Worker/schema/wallet transaction format changes. F064 remains partial until accepted; master163/216. Preserve unrelated primary work, TAS lab, selected background and product/private decisions.
 
-Delivery pending; no F064 push, merge or deployment is claimed.
+F064 is fully delivered through PR250, main `2cd27517`, production Pages `78327e8e`. All nine exact-source/main hosted checks,552 files/4,066 tests and99 browser scenarios pass. The full guarded clean-main Pages-only retry passes with supported two-worker concurrency and unchanged assertions/timeouts; the rejected discovery-cache timeout is retained. Three live desktop/320px/WebKit account flows pass, with real rapid native summary taps, zero unexpected errors, fixture misses or teardown reports.27 assets match both domains; actual published-room pause/resume/custom jump passes. Backend/schema/renderer unchanged; unrelated work and selected animation preserved. This supersedes the source-time pending delivery notes. Master164/216; the broader checklist goal remains active.
 
 
 ## Validation baseline
@@ -32,3 +32,8 @@ F064 final WebKit verification passes with rapid sub320ms summary touches uncanc
 
 
 F064 follow-up accepted locally: the final single production-build matrix passes all three desktop/320px/WebKit cases, with real sub320ms summary taps, zero account-flow errors and no fixture misses. Separate teardown reports are retained in the ignored result. All552 files/4,066 full tests and final lint pass; final installed-client captures were inspected. Full exact-source/main hosted gates, merge, guarded Pages-only release and actual-domain verification remain.
+
+
+## Final delivery
+
+F064 is fully delivered through PR250, main `2cd27517`, production Pages `78327e8e`. All nine exact-source/main hosted checks,552 files/4,066 tests and99 browser scenarios pass. The full guarded clean-main Pages-only retry passes with supported two-worker concurrency and unchanged assertions/timeouts; the rejected discovery-cache timeout is retained. Three live desktop/320px/WebKit account flows pass, with real rapid native summary taps, zero unexpected errors, fixture misses or teardown reports.27 assets match both domains; actual published-room pause/resume/custom jump passes. Backend/schema/renderer unchanged; unrelated work and selected animation preserved. This supersedes the source-time pending delivery notes. Master164/216; the broader checklist goal remains active.
