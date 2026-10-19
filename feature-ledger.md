@@ -999,3 +999,5 @@ Canonical `codex/wamp-assist-mode-2026-10-18` from delivered PR246/main45d3b6f4.
 F172 source acceptance: full548-file/4,015-test quality and11 strict production browser cases pass; settings, sticky local-only completion, grounded protected safe respawns and reloads are verified. Installed client movement/jumps and inspected captures pass. Master162/216 at local source acceptance. Source/main hosted66 mobile +9 Assist gates and Pages-only delivery follow; Worker/schema/presence/renderer remain unchanged. Evidence: ignored `output/f172-assist-2026-10-18/`.
 
 F172 final pit-edge hardening:548 files/4,016 tests and11 browser cases pass with a full supporting tile on both sides of the anchor. PR247's initial2c20feca checks passed; updated exact-head checks follow. Worker/presence/schema/renderer remain unchanged.
+
+F172 final reward-scope revision:4,017 tests and11 production cases pass, including strict pit clearance and goal-free assisted-find taint. Fresh-page/preflight harness hardening addresses the prior interrupted-fetch diagnostic. PR247 remains unmerged pending the final exact-head hosted gates, then guarded Pages-only release and live proof.

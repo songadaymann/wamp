@@ -29,6 +29,7 @@ export function createOverworldAssist(scene: Phaser.Scene, host: AssistSetupHost
   const runtime = new OverworldAssistRuntime(scene, {
     available: () => host.isPlaying() && !host.hasLiveMode() && !host.getRoomRun()?.cooperative
       && !host.getExpandedRun()?.cooperative && !hasCoopPressurePlates(host.getRoom()?.room.placedObjects ?? noObjects),
+    isPlaying: host.isPlaying, getPlayScope: () => host.getExpandedRun() ?? host.getRoomRun() ?? host.getRoom()?.room.id ?? null,
     getRoomRun: host.getRoomRun, getExpandedRun: host.getExpandedRun, clearTrace: host.clearTrace, renderHud: host.renderHud,
   });
   const destroyClock = installGameplayClock(scene, () => runtime.speed);
@@ -36,5 +37,8 @@ export function createOverworldAssist(scene: Phaser.Scene, host: AssistSetupHost
     ...host, active: () => runtime.isActive(), now: () => gameplayNow(scene),
     owner: () => host.getExpandedRun() ?? host.getRoomRun() ?? host.getBody(),
   });
-  return { runtime, safe, requestedForRun: () => isAssistRequested() && !host.hasLiveMode(), destroy: () => { safe.reset(); runtime.destroy(); destroyClock(); } };
+  return { runtime, safe, isPracticeFind: () => {
+    const run = host.getExpandedRun() ?? host.getRoomRun();
+    return runtime.isActive() || Boolean(run ? run.assisted : runtime.wasAssisted());
+  }, requestedForRun: () => isAssistRequested() && !host.hasLiveMode(), destroy: () => { safe.reset(); runtime.destroy(); destroyClock(); } };
 }

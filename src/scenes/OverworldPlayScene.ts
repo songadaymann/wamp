@@ -767,7 +767,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       getContext: createLostSongContext({
         canPlay: () => this.mode === 'play' && Boolean(this.playerBody) && !this.gameFeelController.isDeathPending(),
         getCoordinates: () => this.currentRoomCoordinates, getRoom: coordinates => this.getRoomSnapshotViewForCoordinates(coordinates),
-        getCourse: () => this.activeCourseRun, isAssisted: () => Boolean(this.currentGoalRun?.assisted || this.activeCourseRun?.assisted || this.assist?.runtime.isActive()),
+        getCourse: () => this.activeCourseRun, isAssisted: () => this.assist?.isPracticeFind() ?? false,
         getCreator: id => this.roomSummariesById.get(id)?.creatorUserId ?? null, getOrigin: coordinates => this.getRoomOrigin(coordinates),
         getPosition: () => this.playerBody!.center,
       }),

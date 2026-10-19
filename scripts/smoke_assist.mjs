@@ -36,7 +36,7 @@ for (const [device, engine, width, height, touch] of [ ['desktop', chromium, 128
   const context = await browser.newContext({ viewport: { width: Number(process.env.ASSIST_WIDTH || width), height }, hasTouch: touch, isMobile: touch });
   const api = createApiFixtures({ mode: 'replay', file }); await api.install(context);
   await context.routeWebSocket(u => new URL(u).port === '4197' && new URL(u).pathname === '/', s => s.connectToServer());
-  const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin, 'access-control-allow-credentials': 'true' });
+  const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': r.request().headers()['access-control-request-headers'] || 'content-type', 'access-control-allow-methods': 'GET,POST,PUT,OPTIONS' });
   await context.route(u => /^\/api\/rooms\/[^/]+\/published$/.test(u.pathname), r => {
     const id = decodeURIComponent(new URL(r.request().url()).pathname.split('/')[3]), [x, y] = id.split(',').map(Number);
     return r.fulfill({ json: id === '0,0' ? (deathPhase ? { ...pitRoom, goal: room.goal, title: room.title, spawnPoint: room.spawnPoint } : room) : { ...room, id, coordinates: { x, y }, goal: null }, headers: cors(r) });
@@ -53,12 +53,16 @@ for (const [device, engine, width, height, touch] of [ ['desktop', chromium, 128
   await context.route(u => u.pathname === '/api/world', r => r.fulfill({ json: { center: { x: 0, y: 0 }, radius: 1, rooms: [] }, headers: cors(r) }));
   await context.route('https://mann.cool/api/v1/plays', r => r.fulfill({ json: { success: true }, headers: cors(r) }));
   const writes = [];
-  await context.route(u => u.pathname.startsWith('/api/'), r => { if (!['GET', 'OPTIONS'].includes(r.request().method())) writes.push(new URL(r.request().url()).pathname); return r.fallback(); });
+  await context.route(u => u.pathname.startsWith('/api/'), r => { if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors(r) }); if (r.request().method() !== 'GET') writes.push(new URL(r.request().url()).pathname); return r.fallback(); });
   await context.addInitScript(({ readable }) => { if (!['http:', 'https:'].includes(location.protocol)) return;
     if (readable) { localStorage.setItem('wamp.settings.textStyle', 'readable'); localStorage.setItem('wamp.settings.textSize', 'large'); }
     for (const [k, v] of Object.entries({ wamp_welcome_modal_seen_v1: '1', wamp_replay_opt_out: '1', 'wamp.settings.musicVolume': '0', 'wamp.settings.sfxVolume': '0', 'wamp.settings.assist': JSON.stringify({ speed: 0.6, safeRespawn: true }) })) { if (k !== 'wamp.settings.assist' || !localStorage.getItem(k)) localStorage.setItem(k, v); } }, { readable: process.env.ASSIST_READABLE === '1' });
-  const page = await context.newPage(), errors = []; context.setDefaultTimeout(60000);
-  page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  let page = await context.newPage(); const errors = []; context.setDefaultTimeout(60000);
+  const watch = p => { p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); }; watch(page);
+  const freshPage = async () => {
+    const previous = page; page = await context.newPage(); watch(page);
+    await page.goto(previous.url()); await page.waitForFunction(() => document.body.dataset.appReady === 'true'); await previous.close();
+  };
   const state = async () => { const s = await page.evaluate(() => JSON.parse(window.render_game_to_text()).activeScene); return { ...s, goalRun: kind === 'expanded' ? s.courseRun : s.goalRun }; };
   const startPlay = async () => {
     // A room link can enter Play before its deferred intro owns pause. Wait for
@@ -107,7 +111,7 @@ for (const [device, engine, width, height, touch] of [ ['desktop', chromium, 128
     assert(writes.every(p => !/guest-runs|\/runs\/start|\/runs\/[^/]+\/finish|lost-songs/.test(p)), JSON.stringify(writes));
     writes.length = 0;
     // A fresh run at normal settings can rank again; stored preferences survive a full reload.
-    await page.reload(); await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+    await freshPage();
     await startPlay();
     console.log(name + ' fresh normal run reached');
     assert.equal((await state()).goalRun.assisted, false); assert.equal((await state()).assist.speed, 1);
@@ -118,7 +122,7 @@ for (const [device, engine, width, height, touch] of [ ['desktop', chromium, 128
     assert(await page.locator('#settings-assist-speed').evaluate(e => e.getBoundingClientRect().height >= 44));
     await page.screenshot({ path: `${output}/${name}-settings.png` });
     await page.locator('#btn-settings-close').click(); const mid = await state(); assert.equal(mid.goalRun.assisted, true); assert.equal(mid.assist.speed, 0.8);
-    deathPhase = true; await page.reload(); await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+    deathPhase = true; await freshPage();
     await startPlay();
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene.assist?.checkpoint !== null);
     await page.keyboard.down('ArrowRight'); await page.waitForFunction(kind => { const s = JSON.parse(window.render_game_to_text()).activeScene; return (kind === 'expanded' ? s.courseRun : s.goalRun).deaths >= 1; }, kind); await page.keyboard.up('ArrowRight');
