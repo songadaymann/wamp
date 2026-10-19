@@ -1,3 +1,5 @@
+import { createFramePipeline } from './overworld/composition/frame';
+import type { OverworldFramePipeline } from './overworld/framePipeline';
 import Phaser from 'phaser';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
 import {
@@ -111,7 +113,6 @@ import { setAppMode } from '../ui/appMode';
 import { getDeviceLayoutState, prefersReducedMotion } from '../ui/deviceLayout';
 import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } from '../ui/gameplayPause';
 import {
-  consumeTouchAction,
   getTouchInputState,
 } from '../ui/mobile/touchControls';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
@@ -660,6 +661,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     return this.pvpArenaController.getActiveReturnCoordinates();
   }
 
+  private readonly framePipeline: OverworldFramePipeline;
+
   constructor() {
     super({ key: 'OverworldPlayScene' });
     const host = OverworldPlayScene.createCompositionPorts(this);
@@ -715,6 +718,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.presenceOverlayController = createPresenceOverlayController(host);
     this.flowController = createFlowController(host);
     this.inspectInputController = createInspectInputController(host);
+    this.framePipeline = createFramePipeline(host);
   }
   /** @internal Typed live capabilities used only by controller composition modules. */
   static createCompositionPorts(owner: OverworldPlayScene) {
@@ -844,6 +848,27 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const syncGoalOverlayScale: typeof owner.syncGoalOverlayScale = (...args) => owner.syncGoalOverlayScale(...args);
     const fitLoadedWorld: typeof owner.fitLoadedWorld = (...args) => owner.fitLoadedWorld(...args);
     const syncBrowseWindowToCamera: typeof owner.syncBrowseWindowToCamera = (...args) => owner.syncBrowseWindowToCamera(...args);
+    const updateGhosts: typeof owner.updateGhosts = (...args) => owner.updateGhosts(...args);
+    const syncLocalPresence: typeof owner.syncLocalPresence = (...args) => owner.syncLocalPresence(...args);
+    const syncPvpInstanceState: typeof owner.syncPvpInstanceState = (...args) => owner.syncPvpInstanceState(...args);
+    const updateRoomLighting: typeof owner.updateRoomLighting = (...args) => owner.updateRoomLighting(...args);
+    const updateRoomWeather: typeof owner.updateRoomWeather = (...args) => owner.updateRoomWeather(...args);
+    const recordRankedRunTraceFrame: typeof owner.recordRankedRunTraceFrame = (...args) => owner.recordRankedRunTraceFrame(...args);
+    const tickRoomRushRun: typeof owner.tickRoomRushRun = (...args) => owner.tickRoomRushRun(...args);
+    const renderFrameHud: typeof owner.renderFrameHud = (...args) => owner.renderFrameHud(...args);
+    const updatePortalObjects: typeof owner.updatePortalObjects = (...args) => owner.updatePortalObjects(...args);
+    const maybeApplyRemotePvpActionHit: typeof owner.maybeApplyRemotePvpActionHit = (...args) => owner.maybeApplyRemotePvpActionHit(...args);
+    const maybeStompPvpPeer: typeof owner.maybeStompPvpPeer = (...args) => owner.maybeStompPvpPeer(...args);
+    const resolvePvpPeerCollision: typeof owner.resolvePvpPeerCollision = (...args) => owner.resolvePvpPeerCollision(...args);
+    const maybeRespawnFromVoid: typeof owner.maybeRespawnFromVoid = (...args) => owner.maybeRespawnFromVoid(...args);
+    const updateMobilePortraitRoomFraming: typeof owner.updateMobilePortraitRoomFraming = (...args) => owner.updateMobilePortraitRoomFraming(...args);
+    const toggleCameraMode: typeof owner.toggleCameraMode = (...args) => owner.toggleCameraMode(...args);
+    const endRoomRushRun: typeof owner.endRoomRushRun = (...args) => owner.endRoomRushRun(...args);
+    const restartCurrentRun: typeof owner.restartCurrentRun = (...args) => owner.restartCurrentRun(...args);
+    const setLastMovementInput: typeof owner.setLastMovementInput = (...args) => owner.setLastMovementInput(...args);
+    const isPvpCountdownActive: typeof owner.isPvpCountdownActive = (...args) => owner.isPvpCountdownActive(...args);
+    const recordPerformanceAdvisorFrame: typeof owner.recordPerformanceAdvisorFrame = (...args) => owner.recordPerformanceAdvisorFrame(...args);
+    const buildMobilePerformanceContext: typeof owner.buildMobilePerformanceContext = (...args) => owner.buildMobilePerformanceContext(...args);
     return {
       scene,
       get worldStreamingController() { return owner.worldStreamingController; },
@@ -1139,6 +1164,39 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       fitLoadedWorld,
       get viewportController() { return owner.viewportController; },
       syncBrowseWindowToCamera,
+      get windowController() { return owner.windowController; },
+      updateGhosts,
+      get roomChatController() { return owner.roomChatController; },
+      get presenceOverlayController() { return owner.presenceOverlayController; },
+      get roomMusicSyncInput() { return owner.roomMusicSyncInput; },
+      get roomMusicPlaybackController() { return owner.roomMusicPlaybackController; },
+      syncLocalPresence,
+      syncPvpInstanceState,
+      updateRoomLighting,
+      updateRoomWeather,
+      recordRankedRunTraceFrame,
+      tickRoomRushRun,
+      renderFrameHud,
+      updatePortalObjects,
+      maybeApplyRemotePvpActionHit,
+      maybeStompPvpPeer,
+      resolvePvpPeerCollision,
+      maybeRespawnFromVoid,
+      updateMobilePortraitRoomFraming,
+      get criticalFrameStartedAtMs() { return owner.criticalFrameStartedAtMs; },
+      get mobilePerformanceProfiler() { return owner.mobilePerformanceProfiler; },
+      get mobilePerformanceControllerProfilingEnabled() { return owner.mobilePerformanceControllerProfilingEnabled; },
+      get mobilePerformanceControllerProfileSlot() { return owner.mobilePerformanceControllerProfileSlot; },
+      toggleCameraMode,
+      endRoomRushRun,
+      restartCurrentRun,
+      setLastMovementInput,
+      isPvpCountdownActive,
+      recordPerformanceAdvisorFrame,
+      buildMobilePerformanceContext,
+      set criticalFrameStartedAtMs(value: typeof owner.criticalFrameStartedAtMs) { owner.criticalFrameStartedAtMs = value; },
+      set mobilePerformanceControllerProfileSlot(value: typeof owner.mobilePerformanceControllerProfileSlot) { owner.mobilePerformanceControllerProfileSlot = value; },
+      set playerPresentationGroundedOverride(value: typeof owner.playerPresentationGroundedOverride) { owner.playerPresentationGroundedOverride = value; },
     };
   }
 
@@ -1406,230 +1464,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   override update(_time: number, delta: number): void {
-    const gameplayDelta = delta * (this.assist?.runtime.speed ?? 1);
-    // Arcade Physics runs on the Scene UPDATE event before Scene.update.
-    // PRE_UPDATE captures that work so discretionary streaming sees the real
-    // simulation headroom instead of only timing this method's body.
-    const criticalFrameStartedAt = this.criticalFrameStartedAtMs ?? performance.now();
-    this.criticalFrameStartedAtMs = null;
-    let criticalUpdateMs: number | null = null;
-    let frameWorkResult: RunFrameWorkResult | null = null;
-    let worldTileSharedBudgetConsumedMs = 0;
-    const profiler = this.mobilePerformanceProfiler;
-    const controllerProfileSlot = profiler && this.mobilePerformanceControllerProfilingEnabled
-      ? this.mobilePerformanceControllerProfileSlot
-      : -1;
-    if (controllerProfileSlot >= 0) {
-      this.mobilePerformanceControllerProfileSlot = (controllerProfileSlot + 1) % 20;
-    }
-    try {
-      const worldUpdateStartedAt = profiler?.beginSegment();
-      const streamingStartedAt = controllerProfileSlot === 0 ? profiler?.beginSegment() : undefined;
-      this.windowController.maybeRefreshVisibleChunks();
-      const worldTileWorkStartedAt = performance.now();
-      const worldTileWorkRan = this.worldStreamingController.updateWorldTiles();
-      worldTileSharedBudgetConsumedMs = worldTileWorkRan
-        ? performance.now() - worldTileWorkStartedAt
-        : 0;
-      if (streamingStartedAt !== undefined) {
-        profiler?.endSegment('controller.worldStreaming', streamingStartedAt);
-      }
-      const backdropStartedAt = controllerProfileSlot === 1 ? profiler?.beginSegment() : undefined;
-      this.updateBackdrop();
-      if (backdropStartedAt !== undefined) profiler?.endSegment('controller.backdrop', backdropStartedAt);
-      const gridOverlayStartedAt = controllerProfileSlot === 2 ? profiler?.beginSegment() : undefined;
-      this.gridOverlayController.redraw();
-      if (gridOverlayStartedAt !== undefined) {
-        profiler?.endSegment('controller.gridOverlay', gridOverlayStartedAt);
-      }
-      if (this.mode === 'play' && this.physicsCadence?.getStepsThisFrame() === 0) {
-        this.liveObjectController.syncLiveObjectPresentation(this.getCollisionReadyLoadedFullRooms());
-      }
-      const signStartedAt = controllerProfileSlot === 4 ? profiler?.beginSegment() : undefined;
-      this.signController.update();
-      if (signStartedAt !== undefined) profiler?.endSegment('controller.signs', signStartedAt);
-      const ghostsStartedAt = controllerProfileSlot === 5 ? profiler?.beginSegment() : undefined;
-      this.updateGhosts(delta);
-      if (ghostsStartedAt !== undefined) profiler?.endSegment('controller.ghosts', ghostsStartedAt);
-      const pvpPresentationStartedAt = controllerProfileSlot === 6 ? profiler?.beginSegment() : undefined;
-      this.pvpInstanceRenderer.update(delta);
-      this.combatPresentationController.update();
-      this.applyPvpArenaCameraLock();
-      if (pvpPresentationStartedAt !== undefined) {
-        profiler?.endSegment('controller.pvpPresentation', pvpPresentationStartedAt);
-      }
-      const roomChatStartedAt = controllerProfileSlot === 7 ? profiler?.beginSegment() : undefined;
-      this.roomChatController.update();
-      if (roomChatStartedAt !== undefined) profiler?.endSegment('controller.roomChat', roomChatStartedAt);
-      const roomCommentsStartedAt = controllerProfileSlot === 8 ? profiler?.beginSegment() : undefined;
-      this.roomCommentsController.update();
-      if (roomCommentsStartedAt !== undefined) {
-        profiler?.endSegment('controller.roomComments', roomCommentsStartedAt);
-      }
-      const browsePresenceStartedAt = controllerProfileSlot === 9 ? profiler?.beginSegment() : undefined;
-      this.presenceOverlayController.updateBrowseDots(delta);
-      if (browsePresenceStartedAt !== undefined) {
-        profiler?.endSegment('controller.presenceOverlay', browsePresenceStartedAt);
-      }
-      const roomMusicStartedAt = controllerProfileSlot === 10 ? profiler?.beginSegment() : undefined;
-      const musicInput = this.roomMusicSyncInput; // reused every frame (F012); sync doesn't keep it
-      musicInput.mode = this.mode; musicInput.currentRoomCoordinates = this.currentRoomCoordinates; musicInput.activeCourseRun = this.activeCourseRun;
-      this.roomMusicPlaybackController.sync(musicInput);
-      if (roomMusicStartedAt !== undefined) {
-        profiler?.endSegment('controller.roomMusic', roomMusicStartedAt);
-      }
-      if (worldUpdateStartedAt !== undefined) profiler?.endSegment('update.world', worldUpdateStartedAt);
-
-      if (
-        this.mode === 'play' &&
-        !this.isPvpMatchActive() &&
-        (this.gameplayKeyboard.pressed('camera') || consumeTouchAction('cameraToggle') || this.gamepadInput.pressed('camera'))
-      ) {
-        this.toggleCameraMode();
-      }
-
-      if (this.mode === 'play' && (consumeTouchAction('stop') || this.gamepadInput.pressed('stop'))) {
-        if (this.activeRoomRushRun) {
-          this.endRoomRushRun();
-        } else {
-          this.returnToWorld();
-        }
-        return;
-      }
-
-      if (this.mode === 'play' && (consumeTouchAction('restart') || this.gamepadInput.pressed('restart'))) {
-        void this.restartCurrentRun();
-        return;
-      }
-
-      if (!this.playerBody) {
-        this.setLastMovementInput(0, 0);
-        const noPlayerStartedAt = profiler?.beginSegment();
-        const noPlayerMovementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
-        this.movementController.handleNoPlayerRuntime();
-        if (noPlayerMovementStartedAt !== undefined) {
-          profiler?.endSegment('controller.movement', noPlayerMovementStartedAt);
-        }
-        const noPlayerPresenceStartedAt = controllerProfileSlot === 12 ? profiler?.beginSegment() : undefined;
-        this.syncLocalPresence();
-        this.syncPvpInstanceState();
-        this.syncPvpLocalHeartLabel();
-        if (noPlayerPresenceStartedAt !== undefined) {
-          profiler?.endSegment('controller.presencePvp', noPlayerPresenceStartedAt);
-        }
-        const noPlayerEnvironmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
-        this.updateRoomLighting();
-        this.updateRoomWeather();
-        if (noPlayerEnvironmentStartedAt !== undefined) {
-          profiler?.endSegment('controller.environment', noPlayerEnvironmentStartedAt);
-        }
-        if (noPlayerStartedAt !== undefined) profiler?.endSegment('update.noPlayer', noPlayerStartedAt);
-        this.renderFrameHud();
-        criticalUpdateMs = Math.max(
-          0,
-          performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
-        );
-        frameWorkResult = this.worldStreamingController.runDiscretionaryFrameWork(
-          performance.now() - criticalFrameStartedAt,
-          worldTileSharedBudgetConsumedMs,
-        );
-        return;
-      }
-
-      const pvpCountdownLocked = this.isPvpCountdownActive();
-      const swordInputPressed = this.gameplayKeyboard.pressed('slash') || consumeTouchAction('slash') || this.gamepadInput.pressed('slash');
-      const gunInputPressed = this.gameplayKeyboard.pressed('shoot') || consumeTouchAction('shoot') || this.gamepadInput.pressed('shoot');
-      if (this.gameFeelController.isHoldingPhysics()) {
-        this.gameFeelController.bufferCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
-        this.recordRankedRunTraceFrame(gameplayDelta, this.physicsCadence!.getMovement());
-        this.objectiveController.update(gameplayDelta, this.gameFeelController.isDeathPending());
-        this.tickRoomRushRun(delta);
-        this.renderFrameHud();
-        return;
-      }
-      const combatInput = this.gameFeelController.consumeCombatInput({ swordPressed: swordInputPressed, gunPressed: gunInputPressed });
-      const swordPressed = !pvpCountdownLocked && combatInput.swordPressed;
-      const gunPressed = !pvpCountdownLocked && combatInput.gunPressed;
-      const playerUpdateStartedAt = profiler?.beginSegment();
-      const portalsStartedAt = controllerProfileSlot === 15 ? profiler?.beginSegment() : undefined;
-      this.updatePortalObjects();
-      if (portalsStartedAt !== undefined) profiler?.endSegment('controller.portals', portalsStartedAt);
-      const movement = this.physicsCadence!.getMovement();
-      const combatStartedAt = controllerProfileSlot === 16 ? profiler?.beginSegment() : undefined;
-      this.combatController.handleCombatInput({
-        swordPressed,
-        gunPressed,
-        downHeld: movement.downHeld,
-        grounded: movement.grounded,
-      });
-      this.quicksandController.updateVisualSink();
-      this.combatController.updateSwordSwing();
-      this.combatController.updateProjectiles(gameplayDelta);
-      this.maybeApplyRemotePvpActionHit();
-      this.maybeStompPvpPeer();
-      this.resolvePvpPeerCollision();
-      this.movementController.syncLadderClimbSfx(movement.verticalInput);
-      this.maybeRespawnFromVoid();
-      if (combatStartedAt !== undefined) profiler?.endSegment('controller.combat', combatStartedAt);
-      const roomTransitionStartedAt = controllerProfileSlot === 17 ? profiler?.beginSegment() : undefined;
-      if (!this.gameFeelController.isDeathPending()) this.roomTransitionController.maybeAdvancePlayerRoom();
-      this.cameraController.syncRoomCamera();
-      this.cameraController.updateFollowPacing(this.physicsCadence!.getStepsThisFrame());
-      this.updateMobilePortraitRoomFraming();
-      this.recordRankedRunTraceFrame(gameplayDelta, movement);
-      if (roomTransitionStartedAt !== undefined) {
-        profiler?.endSegment('controller.roomTransition', roomTransitionStartedAt);
-      }
-      const playerPresentationStartedAt = controllerProfileSlot === 18 ? profiler?.beginSegment() : undefined;
-      try {
-        this.playerPresentationGroundedOverride = movement.grounded;
-        if (!this.gameFeelController.isDeathPending()) this.playerPresentationController.syncPlayerVisual();
-      } finally {
-        this.playerPresentationGroundedOverride = null;
-      }
-      if (playerPresentationStartedAt !== undefined) {
-        profiler?.endSegment('controller.playerPresentation', playerPresentationStartedAt);
-      }
-      const presenceStartedAt = controllerProfileSlot === 12 ? profiler?.beginSegment() : undefined;
-      this.syncLocalPresence();
-      this.syncPvpInstanceState();
-      this.syncPvpLocalHeartLabel();
-      this.playerHealthController.sync();
-      if (presenceStartedAt !== undefined) profiler?.endSegment('controller.presencePvp', presenceStartedAt);
-      const environmentStartedAt = controllerProfileSlot === 13 ? profiler?.beginSegment() : undefined;
-      this.updateRoomLighting();
-      this.updateRoomWeather();
-      if (environmentStartedAt !== undefined) {
-        profiler?.endSegment('controller.environment', environmentStartedAt);
-      }
-      const objectiveStartedAt = controllerProfileSlot === 19 ? profiler?.beginSegment() : undefined;
-      this.objectiveController.update(gameplayDelta, this.gameFeelController.isDeathPending());
-      this.tickRoomRushRun(delta);
-      if (objectiveStartedAt !== undefined) {
-        profiler?.endSegment('controller.objectiveRoomRush', objectiveStartedAt);
-      }
-      if (playerUpdateStartedAt !== undefined) profiler?.endSegment('update.player', playerUpdateStartedAt);
-      this.renderFrameHud();
-      criticalUpdateMs = Math.max(
-        0,
-        performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
-      );
-      frameWorkResult = this.worldStreamingController.runDiscretionaryFrameWork(
-        performance.now() - criticalFrameStartedAt,
-        worldTileSharedBudgetConsumedMs,
-      );
-    } finally {
-      if (this.lostSongController.update()) this.liveObjectController.syncLostSongPresentation();
-      this.ghostRaceController.update();
-      this.recordPerformanceAdvisorFrame(
-        criticalUpdateMs ?? Math.max(
-          0,
-          performance.now() - criticalFrameStartedAt - worldTileSharedBudgetConsumedMs,
-        ),
-        frameWorkResult,
-      );
-      profiler?.endFrame(this.buildMobilePerformanceContext());
-    }
+    this.framePipeline.update(delta);
   }
 
 

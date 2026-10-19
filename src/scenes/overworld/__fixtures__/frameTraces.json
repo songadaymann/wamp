@@ -1,0 +1,5780 @@
+{
+  "baseline": "ba02037f142a2f0bdb5e4b558b4e6c54c306bcaf",
+  "sourceBodySha256": "9b051040d59d5c9162ae09d917d1107188a71872a820d2e926d29d8780f48a0c",
+  "records": [
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "none"
+      },
+      "sha256": "9a5795fae5186042ae297a50132de2ec0980c62f242d32188b3f59c926fd8887"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "disabled"
+      },
+      "sha256": "d15b32e6923fb649601622c67cd94c2ac238f7bff562d3b7237e768e6787a66a"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "d7d200592638bc4b23b95f4650dd0ee77007ac3410ab8cf6e84a9d40b4b0e0e3"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "5f4a3157a4706a345f4e45b82877f5c7154bc37e27f265cb90804765320f99b3"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "ef58eb3b0d302b71317c1cfdaa5b38bb7d651aaac8dd76e4fe711c536b861f7f"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "d59257075690546a0aaeca1e00f1789cfda360eecb7b7a2dc15d9e67a72d25ec"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "15cb8e63a0fe93bbc20ef4112738617b2f695a47abea5bb15ee8c6adf2c4146b"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "b3f87238a8d15104bdc2bf07199d4574abace8943c4e672adfe71a95adee98f8"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "b6c0713b654fe9e6f46b55928bbb6e137a5fa509e42a2683d2c389d583304194"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "4a5572aebe37c8b0f1c607304d184efd4ff4b3cf4cd847a07920bfb07d9e1221"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "c0c49a0f818053515a48a0da380add1898f0d53261526a531f66e7f6995de033"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "c31563767680f5ccd7436bfa76d289c48009be7175794ae47c2982ce34a4ed37"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "0dc5aa6754eca1892a93195586a8e0ab604b39ab3dfce94e825bd4fcc1700fa3"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "ce3f9674ce84df8ed4491151c5e5372cf89e6315cce37e1986695e59a191b7b2"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "c80ffdc31a3602eda753ced57f2733028e7e712f6394e54a1a3739944651149d"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "43cd19a2dd33702b696c4fbabf431e822903349f4c66a4c1552d7fd149e18d3c"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "c87be094e22574dbfd4905443ec14c942b7e59db50c0ba4c193630ef3f8397a8"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "a864acc057d8ae5833e61c759ba61d304b75e42ea19688e756fb27910333c2b9"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "b0b3b3b9b13f658b93366a6c883cc6a428763532f75945e23926472376fe8b31"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "77329bb270b19353105ca2a1e11e1d3690cd2f552d3903c4410e5229ce5101e7"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "fc272fc72b2679d1b3a37f4cf9d9be1b29c6ff1855edcd619f8804aaff61edaa"
+    },
+    {
+      "spec": {
+        "name": "ordinary",
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "0e740c3777e70e8dd459242d7d618cd3f42596e057dea9975b8200c4a14e19de"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "none"
+      },
+      "sha256": "b291a7f3248f66bc807626a36c2ae2a207c1f7a2fbf6bdcf894bb40c4ea3ea78"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "disabled"
+      },
+      "sha256": "e1de430aa137e537dae6cd27ed2e5763070d088eb18b894ea8f2550031a5ee75"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "04ee11bd221d0c46faf7458aea89509f6d9e64989646b25e1d25fc4cb11ccaf9"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "3d123116fc1accf9a6abdc32e4e084a7675149362b61718aa22695f6bdfe1526"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "2d25a8b9e68e92bec993d018654e66c1ff3a28d189234424dfe1997e6985e1c4"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "a846b8a69da12ad868810ae7730468de92fa8de19847007fb9f10279ec14c510"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "2b94306c68ef8da121151db9639334c6de9286a12c23b85deac8488c16d40632"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "58e2fca87c57fbad5b595aad31674262c1b69d886baf96854f4be253ec6c6c11"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "e556b1d1a78351eb60b2c468fba71a90fb09bd586afc2f057c1891da54c4e128"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "99dbd03bc142f5e8dae17cc3b75a894d518bf4fb237655515bd7dba5979c445f"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "9e115650a51fd2315fea0b7bf02ce7674489f9d55fce4952fe3e71cd352dd698"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "a338404f7566acb1011f234da4992eb7e8a24d0e123e81212f7abcda45e3859d"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "3feb425c428c6b39dda7f1ef85f58857414936567b6bb5241aa8377b569a9e19"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "8be5c13229e7c861a9de92bfc98d802e84e290563c2a5f736e3bb8f99e71e0f0"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "848f59de83644ab4c944a94d89115e572354928f5d60c3c7a9ac3abdb44b3aa2"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "d983c4e2d383a3edf65c4d6b2d9f5b759172cca02b8e1b4069690a08ca29f6be"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "e11b376263ddd06c98618151dbdb7d3727752613772e9c8866fecc3438477eec"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "55b31187886860f82c65e059effa6112d82f807eddfd4e25ae1bcd5a29118e64"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "967894b8a45b5e49f760625903f2760d7f6d2b3b7b3d543493779f6cc2466875"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "7321f7f4d906a7550fef9edd2d59caea20f5de4126219d26852cb68445700805"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "6232a8acda827fef5f0414106a45c9fc15cfed0e70d87eb26635431a65a26979"
+    },
+    {
+      "spec": {
+        "name": "browse",
+        "mode": "browse",
+        "player": false,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "a40c1ff810d6b86bd3b9747527404f7ce13a9833def67784fed65cf2023e2687"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "none"
+      },
+      "sha256": "88fe359b9218343b5fcb149eca90dc1764b6fbd1b6500dae28aea2e7e8fdee03"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "disabled"
+      },
+      "sha256": "409a335ff19282e2834a77eccf4cdec256b8df6b0e35b774bb78c432e8606207"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "ca57871db765dcd973e65291b92515c530579f9c94b5f99cdfeb772dd92e0dc4"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "54bf5066d042530f981278a6de793295426f2ec548b325ad5549b7e2e9cf5fc3"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "b309ed1472c5e5d5e20021fc7685f4c08f74910a8e9fc086e4dbe1535363fdc9"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "27d34320530969f5912d182304f9e8829ee585cd371a220ea77edb98ab972576"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "8c9076495d76e8a325d5e917cc77e931ed9ec1775b097a2cce52883ed4218f8d"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "f915b70d12c177c1f602b1ee38809e939a552ad77dbe6aea456462404816eb91"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "98a827d699e9adcb48fa1ef1e799fffac05929f506bacd33f4dbf7cca6e1fd77"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "c20b4cf674c8d467aed079e137708cdc0b4e1f204b23590c1a82f3c3d2ff9948"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "498de6025b1a7f71d2dd68bea24bfe7c439fba68ddfdf953822d4064e58e0d75"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "77c181437fc0608d693fdbde41619beb233998d644e768c08cb2dfea8020a7c1"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "5ff3c104c127b025bf6a2cbe81ea9dd7b96d1023904ab921c9d5e40c306066bd"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "6d0cc803cab883f0ec3c16ed2f90bdfcb99ef50e9f2b81739130b1678a61258c"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "23ca4b615bbdbb6e9e0aaac4eefa3c593fe65a2a7f0807e9d5804cc4bb10096d"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "0fc853fefac84aea59383785dd37495b1c536988280fd66ef2cad7ff4b05b379"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "41a0148c38020a1fd95f38a77f976a8acf6ad63cd380ba4cc604ac4dcd07d387"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "d3eb4c6e5ae2ea526fd18f99ffc2796b2ee1249aaeb3404653c278631987edf5"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "8d82c9de1bb67d309d3079cc1780c8f82874b1ee269983df073e8916ade6999d"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "f2b96f6eb3fa10688b9b79285c343e2be9294953f6e7e17fd4437d035b554cda"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "e7b2038b66249e0bb7e9fa242d787fc4a0cd37baedbf5cf60e29602a48f96646"
+    },
+    {
+      "spec": {
+        "name": "play-without-player",
+        "player": false,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "b5a61f7003516f7c1d15d3e45b977f2831b7fd26e2a3196a5b2b70796337ec79"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "none"
+      },
+      "sha256": "76ca58cf1a3013c72a0641611674482079bda602cbe6cf7e9ce634308583639d"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "disabled"
+      },
+      "sha256": "fc38fd5fe88d18d7049e99894ce36fd40ddc9b29d91671ae23bc650e48ba947a"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "7bd5114d9590afeb33400527e50f3de2e9137d10a1db8b29bf35fd0fc4d5207f"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "06c1a4b8b1f549861720b9d46817b67b90d8ba1c080c075de4b7eb4552ac7206"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "33cd176e5ad2f4541987e9db6614440e7b9bb96209dd086ec118a6b710daeabd"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "4eea97addb95f918e56aafb32ad5d6a4247f62e38a19333dac82e2452e285578"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "8ae4aa59818944e555b48aa6442bc8e6a76a278d436dca7b55c7e98887af735e"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "04a59d665850731a6e2041daa6db7143ac18c2b4d384ae962fc3e05b62788fd3"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "acd0b16ae927d6bcaeb840f15a5aec7630ed77673d7f86286765544f5bca0e46"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "6d4b43eabdd084b1359167cae59c04ca5aee1c43e93a53377e1c8670666948cb"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "eaf46c53be05c6b4e083ed5cede0e0d2f114280b0e276151e0c360fb09ba37b7"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "53819a0cb2a2301b101c5b54cdff521fd989477c87281e18cfaedc98693eb6ef"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "cd3cd1f4a011f566a5954c9628243ae70ce984b14f07fc450f43c4fae217585c"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "dd1bf6bb5f79da6ca0789a8d40fb5f1568cc315f880ddf223ecea69fc552285e"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "aec777872996cd752261cb089f6d4659a9b5488c8e13840a89839acaf0ea49db"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "61020a680be60069c80de527e1b70658b05e6e1da925be6f2bf05443b5c815b0"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "54b8ad4409f9d3f3669601c5c22bd53d795e5e95a2e809d3a7761e84ba0ef22b"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "1889f5bfab153216bd7257ec1a2b444480f000d4086886d110274e7ffe340c89"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "b9d279ae3e7a9cbe4331135cd9234d4d84b9d58e933ea39f9818d605c3ca36f4"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "5a751c76631b045bc555f89bc3f6b9e28d1763bf6df9c272f2cf4d8d8e6b36d6"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "6138c6dc068918504568ddd4b1a4c36f5e0c340abce2f2b29aa451a703022f0e"
+    },
+    {
+      "spec": {
+        "name": "held",
+        "held": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "c90e835dcd38caa17a0dabd0bd6246cb372ab2135e83e671f92500fa2c06c312"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "none"
+      },
+      "sha256": "39f0d63cc532a3a84217fba49bc8351dc2b220c8b3ef71684e05b03315160afb"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "disabled"
+      },
+      "sha256": "7242ada3d2fd910228e33381d20410ec4c39ba6f6985ce5a8aa1f62ae6262035"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "6c8d08d0005cc83e3f068e6375c0094abd76b8f8ff70d987f06f2df914dd642f"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "d76b76ee7aee6502de7602bb9a27262202bb429d3820cf67164d742817d9076e"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "44e084f506cf36d7c1f1dd250c0393671966294986378496d072625a7e157752"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "23e2bed9e41d74ffeec5dcaf98ac0765e62288a878b0e7e6d661a5f4caf950e0"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "5c6f1df66f03d74ebf1f76d5f94d402fed2d11e35eeb9084bfd3cac081572126"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "9f541ef06ed4835cfbef9380c4d9afd1c61eaf28b945cff031a5bb95c9c6267d"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "9a32be08961e1b8251b749eecd30a2f05950d837e3af04117a88e91f3a4a874a"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "c84df3d44970dbd917fedd87614e30989c44f1a7ee8fe7e7c45e465107117974"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "4d8cd7cf8360ad37dc512567db1162cf5bc77953bdae08581f0e32acadfd3d31"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "4759753675c1463f9e0ee252244a243ff0caaf6486ff212cb8e185034df2a915"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "39730207d91ac674d7fa38f8fdab9b82b3c2239feaa742d682d90f96270ff3e4"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "67ff8c7b106a271074b20208c28037f4d29a1d4b001a3550a55b98580f678464"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "20281abe3ac3b9a08175f049a50f08b7f965a57e880329a5430ee7760035fae7"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "e7efbdbd12ceb59637995c07bb85b6218b83b7926bfd08ec729d5eef0048b408"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "cd99d9840fe79a558e4eaa51936cba8daa0784bb9bdcef0166ddb61edeedfcaa"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "b0522bbcd77080c423456d7410ccba10b064eecc1b17dc8355b5324b5a24c572"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "27ca66d10c2cad46a5246f220ba83c7ad546e3fe43fe357e1aa2c619fbeb2d48"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "17d82c98762e3ac1db73a80a28cee170a711694958ae74b6d0a645bbd4ece84e"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "b8e9b96229fb27a482bda0e4abe0da52ff57789cf76cfc61217e2c79ef64ceea"
+    },
+    {
+      "spec": {
+        "name": "death-held",
+        "held": true,
+        "dead": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "7081f486e627df1876a4a319902cc0b95d5cca4bfdd3cbee83296dd762607b0a"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "none"
+      },
+      "sha256": "3d17af50fb3ef849269f1539547cf3a3672946e877fbd052d885cd63c18c473c"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "disabled"
+      },
+      "sha256": "f0caad0141ecb503255b7c160d3bc24a09d65ee63ad81e0b8c2bba685c883f70"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "1aa5a83548ff830e9b15a4f87f32e6ceb0ec4167ddc8ffd2a9ebe11d2e41d787"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "d7a492e462d74909a1f5a3152321e1877e76c73fc010ee60458a7eb881ce6007"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "5dce99e454e4ed7ae2e0bbb196a6de01f07b685108730ce96bcd6779005e5027"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "e0f1c770c004654721df87c8497b8a34c27bed3d8e099884a60ff2651a193df5"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "c1f8ba8bc122a7ae4cb5e2c41abfde42a6d56c07f4145038a645dd9226bbf694"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "ea80f4eccdb4147ba7b2685347b214f91b2a514aa71ba5760eecf16dccd3fbb5"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "36daa8369f50e289b0d01db3ff934b3bc558032780cbe9ac998b9a9b64e3d752"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "d61a796b216b665b31c27541e7e4a8dcd9ebc3072065929de78178f22ba411da"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "57d6feb168c65d4845c85be98099d72f6ff99fb797302695c9f927b0ec99b3b4"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "317794f9613c4d37c695dbd339bd853ab0e21da3d142311219d1b2b003810625"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "3df1d568c03814ab592fdfc204ca17388f60ac68e92ab76ac63dbe1cb30d8cd4"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "59275bc0045d3aba97d40b9bc8d0fece17e1a70d99ea5fea647b87db2de6dd0b"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "8d69db25996d4db682c5645c59a7cb87c76a62f7e8a3bedc31b22444890abc6b"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "b7dfe8c859f5fba2e7ebdf213eef383df56f0b42165a4c043ca64f16727b404d"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "791ac293c330432230bd3e69acde93ed6f41154ca66691a84f4854fd05b8fbfd"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "bca6a65fde403d3dee48bab681bd0b2ffe8734ca1173e2bb4b72de50549b9371"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "51485aecce84fa592c4ed6f65d6f1a42dbb51335bd876a63ac0b8e1061554306"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "c4ce76e16f38ef7b9726d5ad23be65c941f6bff89b46604aa45adb08a69f1c76"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "f8327b3c7d646d7ec755169f36073adbb2134945bbc1fa6c4143b85ba59e2596"
+    },
+    {
+      "spec": {
+        "name": "death",
+        "dead": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "e7a5dc4ef55a2950561dfbb33e4056d46bdfda3529f1108b0b1cc4dbe0e6571d"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "none"
+      },
+      "sha256": "fed7953247d8b7dc1171798f8dede86bc649ef8ef95f62796985185bd29fbc5c"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "disabled"
+      },
+      "sha256": "eda2b9ad34965ef4109409b048a8f65d27593cf02ce1dcb26cd9e86868001633"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "7c9a7771d307d099a5ccdb230c3e914d37d498c49d1baa03562a0b181a54c0d1"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "0fd88dc1da8ec16adf12adbac634dbed89b68d7d76795f9c42ee069d04300577"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "1f6b34e01c5ed2a4dd43ebd0100fef372a2ad9c06b8177de74dbc8cc1ae954a0"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "bae1d7dbe33621c0f5afae73bfc0ea478727b47b7625479564d3773945639580"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "541b1f139433d7ccbe32c67caaa64abf00caf940a23f6a62f3b5184cdaa07c02"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "c2bb02c6639d223733360f9bab0adbb2a1774df80270021a80e8e3db7bcd9faf"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "741fc5c0b1144e93e6e31d4bab1b99fde504f5ab0841a0d08986f2f1ae84e55e"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "f86d672b09d47633823ed17e02d69d84a37dace70fbf69e69acfd074d50ee905"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "0ec4fd20857a85f85bf168c6ce2311432b6286dc32c6e9eac09f4eb04eadfc0e"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "40f73f241cc21db552232766855878b00ad7b3fe43a384c70e6605db194d8902"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "e94ea8f817732b44efb7e1e8664f6e45d96b87b53b16db32a2836101fcea42af"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "c95677d5fbc5611fe0ef140f0b31ad3a116740264274983a7fb18cc75673db5e"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "a0e369ef85b2dbc030d69d26852af7e2a555749c4e8875da5688abb9ce70e6ef"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "5cdd0cc07830cde4570f35eef81a111b84db6c68ebfa35b70ee279b51135f366"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "6ac848a46aa33a1dda0fba9eff82bdfb3797a3a50443a3daf2b081b8e350922b"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "8478f872f3f818f69a8246efd39296a34d45fd14714422b2a962ddf061d0cd5a"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "7cc8cc35cda6df08ea167963f1f737b16c35b584a2c2539e04d9f88be951b944"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "d91467c3b4bba47c2ab41b917f1c161a99799f639284297c6a08f58c1098fefc"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "6fc48d6de37dd1ff884aaf8b390302832173eca23f3650463aecc4eace0ba1ca"
+    },
+    {
+      "spec": {
+        "name": "browse-with-existing-player",
+        "mode": "browse",
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "1a9e53936329becfc909f27b89ba42ca87b63e86341a55b9d652820334c07e14"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "none"
+      },
+      "sha256": "5ff7cd3d4eafcbdb5f5d1a5075630b54e679989d8dc48b29343c6a6aeda61257"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "disabled"
+      },
+      "sha256": "b70b2c6126af620195531c77f5df0e930b44bcd3b595e962691cef49dbdc7923"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "de7ddb94323503877eccdcb350b361e1012d3e60f8c318e99d2a03e1c1a6ddbf"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "3e449f0e8ed2bdd3ff307aebded269b5134cf62d60b503fa6837d7d22840272a"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "af5cbb0c2d0262eb95bed1e2bf2cbbf44719fd072a57179361eb77d35feae785"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "727b5385c46a72dd1d3f9117416e28f9c2b057a23c3f4ab3e7480a03deb2143f"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "c2f93c1c5580822407359cce76d5f37491b02b8bf5943be02a6967350b714e51"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "8b6c1f389b9c01a4d05c09747036c2ba2a7c1fdd7c61bbe7fbed5e1ad3cfdf38"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "c89842eb8da77abcfc344b8befb6764e34f9825327fe0bfa1eea0cb5e14b765c"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "b26edbd4d0e1cf49fc15ad6be6c51e17104f9a3ea61b4853a5f9ccf9038af516"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "70526fd3abea636e38320492e1941270c2179158566683df78fb3150114de8f3"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "63e294f3c6449db66aea06c7539775323091000135266ba4ea5a65ddec53611c"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "52f52e1e84f6dd3ef06a7172577a3328119034823dd8775c05b9d7ff06e7ae1c"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "8c57c362ebe246be0a7c94a9d7154c9d3374fa0de9a87aeb0ae78dd66a2384dc"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "48bcd34e310c851533bc1a6f2fe43c51bf65a3be794e1b8a4fb29236ef31d934"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "e5ce4673f859120d5051feaffa50f7967a9c26ddc55a722e053551376e1556cd"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "c3bd1ade2c5a69251d1c51d38bed6d655f9d6babd57c5248d602a329ba43b939"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "d593bc51d2a30ca6c0d0ac2beaa4839b8d516de5e61034eb991677fc6854fb8d"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "6b3384ad6714abefd77f6aa1995bce4a9329dd0f45bb47433f19df07fac0709c"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "e623a7ad1bea861324cf0448cd26922e745bea89279ace916d5af1501f73bd49"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "bab966d630a14806cb6284440f9775f403f51a2ec1d9497cc7a50f390dd2a2e8"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-with-player",
+        "mutateAt": "signController.update",
+        "mutation": {
+          "mode": "browse"
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "5d835a6f84136492acad4052b9c5151cb218cc1dfb932ae4bcfb7f6460f007c1"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "none"
+      },
+      "sha256": "d00ff95fb59894d6b5bb644e530da696b43ddef11c7ace59587139c9c5dd6d23"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "disabled"
+      },
+      "sha256": "3bdf39e4806166ad281c377af5e5f734dc111f1cc4196229c4cf05e46e4f4c8a"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "15e49b88abd4abf3990a3375962cf5baaaa02a1ecd3b769c294636e36a57840b"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "730559cc406454a6557aa2311e35c95c5ca8b0caf4ff0f6a351e30fcabe43c9a"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "b0f9718851eb0cc4b2cdfed4cb023b7d327836d286e9c8a254c51694b76de3fc"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "d8da561ac096358afc68faa4ac311e34ba4b729ba367c894b631a0561b6969b9"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "ad62af87c6f435cb3ab3d5e5df9bb29445b291b52555a6a9bb43c5a686c8380e"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "08b9fd1c2161f0f6b6c7693ca24a1eca2d1a0aed8534bed3fc60db542a930975"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "26ce88bf1a1808926524c33aa240aeba0ed8b66232d604ce7ec5e43970d939ab"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "931f162be7edf3c5d2c4eb2afb61b0d614c2cb43b39b5bb58933463195c2d4ed"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "ebadf53183e1ea89ac2ffd1fe3d77c3cd893a61a80302891c302b414637487b4"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "4055e24a01508734d273848cacfa66b5a5c2e77f504d77a1fbc43885d1b6a1da"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "fc89ffb34caf2ec6c5b02474c22b32c68fc3b9e843dffc81cc542c52dbe3fad9"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "78bdb2004077dff304195e3fa76aabe5ceebb19eb14f28fee27a4faa37e54771"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "c3fcc24b333b734034f683fab3100b34e3cb7db4593238bb481598965ce50c85"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "abcdf7899864c725540454dca18e5cb81d7b512b7f082e897b4302bcc5aa4a35"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "4604767f28177641b2133bb2993ed84f979145f7d8c1112428a87e3f137d3cef"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "c35d4addc3bc2aa536b9da0b8ea149ead87d1b13d0a5457e5d57910a51d8a122"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "59ceeb08d5bccb1fab6949ab182f7f44d6ef28eb6b7eb30e8eef524f9077f7f1"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "8dd12c124c786a9d4b7d684b44b814be19f72ed04cc48574c40636c90e8bbddb"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "6a55695401193fc145a011863cca20e7fa61f10b27d51c38ad5a8f5e86ac14db"
+    },
+    {
+      "spec": {
+        "name": "body-appears-during-world",
+        "player": false,
+        "mutateAt": "signController.update",
+        "mutation": {
+          "playerBody": "PLAYER_NEW"
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "84d9e161de489392c8b754184803980e4f2e102544fc605d0867026b6f4e239c"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "none"
+      },
+      "sha256": "841f4415466b5cffd3472bc85650758fc5d8adeaa8505cebaa7a3b9ae7c4ebf9"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "disabled"
+      },
+      "sha256": "e41e0e96738ac5c5e1c5d604fe6415c6287c7fd90957b80883d681d608445a90"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "a9c248bae9d1a0bb54465fb576f79e28ae89c27290468579b7fc1f715a0cf1d5"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "0cd6f846a5284512e68547bb11f4af521dced4b57d398c44f42555ce4e052fb4"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "6657a0bef14a6ccef19ae69b30a21dfdeaf36d4dc5e35a9c48a2ef2e2bd9ab51"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "577f8e08dc866deb112152ce3a5ed499c5cd250e42fcc4a3509d623cc0882a81"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "7ef0ef6263442441c745e5dc393c07b095ff3cd1f1e90b1926ca39bd9c0195b0"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "cbdc5e435aba4572235d5d817b6360cba85d8678c7aa36f3ea9245ef95d1565a"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "475df84f5f0874a0631dbecc087d8e519f632caf34576721e3eaedf63601842e"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "cf5fc67a491c0ebdc4b4657d7deac695ea469ec5f3ddeb97155da0523142e8e6"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "9458fec52f32279c51edee5b9630e16b56ecca8c7ed50f26dd93239c52eb72c1"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "adeab309490d650a2c557c0582255e44a58b45e4a0dc47ac8997c55b5711e0d2"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "25beaf3ed9de5c2f8afe1a0c3e8a178868d4f12362cbf49e28454eb68ca257b2"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "3764bdd2a3cdbe0525427fb6b1f20eedca95abd7c7b804d4ba4166ec2191b8e7"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "ffc1aa58931bb20534340c6c228185ed3565011b4b16e426f4d87e0970a6b051"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "b814f41b483c62fb042cba37036b06bbf86f72ddb0d82e458ad02ac4fde746f8"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "a5b3ac950c0e7693c5dc96ab1884e8860758916f38df472d761f565c5eb8d3e0"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "95f73ec365259bca49a73d5085fd1023026fe0b06507e79567f53442205d5f4c"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "a49877bdb644fb3faa771c22b32228119584f2190e856137ddc27e47e5c2ce38"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "1bbc93069c6e617ef8b28c26b728279277849cb496cb8b7e10e5e1adcaf3b12a"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "9fae5099b6cecd155166e15207fd616617c3b00e14dd54e16b28ba6c4db24b83"
+    },
+    {
+      "spec": {
+        "name": "death-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "dead": true
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "beee67e141c3991326f4b139a73fd3ea56cfecfb4ce1596a82bacb280327be7a"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "none"
+      },
+      "sha256": "a28bf410a805cb6a8b712e2b1d02a9e08a3049ff383149852b858e1e5e9434e4"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "disabled"
+      },
+      "sha256": "b2dbef04cc436431b9b6db6d9ff49f4fb3e47d71c7abd4f1044a5e61bf9dfe19"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "bb4498a852d2e668f3aafff88700f9fe6cbe9913f05ac0a4f4a1ab46def9624c"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "c74834094f58dbf5e139df2dd3bcaea474a8d6ff0518d1ca3ae19c3fe8bf4dc0"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "626a01a41f5ad3b56c536facbc81836a2c614fbdd37af73961c7a964a997cdcc"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "35e39a325d42e8d75998757462a5bfb3921908df6f495f5c379a0c142fa41058"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "8218d46995da4b0537d840025963728c7953236629067fb5a26c90ed545b5fdc"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "793686a8b9562cff353e5900d16050073688a4290d728588eacacc8fdaf07e20"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "d936b2f3802e9f267f18e96af32f24a7dc6f04726285f43ed7fad37070b0d20e"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "8e5f4a66726a8214792abcca78b20b100e3b1c29005b6d2d1fc0db717d4012d0"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "f4b3da551834f311c1ac50e93c19bab8f629778c3df31e52e205e02c4b78a0d6"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "83d83899828cb828a3267cfc8f7f1864bee0b95e4b0b58c446a209a97b6bd132"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "f1ba320c515f02538e739c1c4e3fcdf3ee172e188af250672d5af3fd7fa67920"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "8f584ad07f16c8a0e7254965c450e5e9a7f4f31c07d7fa2ef6299447884447e1"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "db900e19db239c83d83b490096494d2bec3231d470587d8aa60d9424e86051e3"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "fe41a72adf5da7a9d11606fb3643c10ca854a1de031d9d4cb808b98b8ba095f2"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "7a5a825f640850359f99e5e03ba6378bc2bac550a84e70dfe150646d53a2f0e3"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "103f69230c8515199a064da58d08c224daa87c8f15f68a71b336be94380ce32d"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "e93991754abc0ba70150893e4370beda8de162c80221e928dcff1cce60642a5c"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "afad3205ebacffa34f585ce6389bd91c53e9e48bca104508c4349d5011504131"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "7a6f462effe5c95cbe2d5e717d8b3019fafe23466b6da24b658b9904daca39cd"
+    },
+    {
+      "spec": {
+        "name": "zero-physics",
+        "steps": 0,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "c3fc818bb69f02b73ab0105ee258bf1b88f218efe726d8e7c2a8ae29defc927c"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "none"
+      },
+      "sha256": "e81f9db91105826e5c45023f0fd7c9207cac8a7312240ae1209eadf15f8e2bcc"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "disabled"
+      },
+      "sha256": "730e658c28b3d09dccaaf88d95944d09a4cbf6107afab5e9cb001f44e7bb2b07"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "99f31f1fe71aec99d10069e830ba19d71c815a48ffea5e02a8b8bef3d0c24d98"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "85ae09d75b1adc667d3268137627d60504c3a3328d9ff0f1c0507e12c93fefb6"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "53b470f5e99517fd93a4437dcf32180c8b661d9fff508420c43a8664e5a65d12"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "7ffc3d40c57b9a8eb1e125161b009d30f82fda3949720f89655e1f8bcd7b64a4"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "1317ea3e1c066fb95f3d0e5b6ac61f4ba0ad01bc0158d2de4c06ea195cc893f0"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "1a0c1fdc3d080fc2cfc364bb1ab35f53ec7eb768408250722cf96c329cabe342"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "34684c7b3ca6cc74d28e90efc045e1d2c03bde2d499708d07198039e5804111e"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "af1c13666004653bc652a2aa66d3c2d5daadbecbbb6b28c74a2da81dace26459"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "1ee7d98ad209b771d7be36d8e292699d12625986f0a10519dfbc497056786e0c"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "c8f3ad0822b4de9dd9d2f10021c7ebc4a8f78bef4810a7204b0d716a38601cb6"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "a5948ebb332becf9bc89e0ebfa49858d29be12f2e0b3ffa13ba083df964c5f81"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "52914d657351f6cdb3d005d081667e5ce9ca9c506eb340c22b488e37d91d8a80"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "ed82b7b98ce7ad428f7ef545726f637f8e4fefca8db97a6f09a5875fd683fa05"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "fd8c6e4223a849db5601ac126adb78521ac1c8bd661f364aa939596dcb9ef5c3"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "551a0cc73ec32fb9779fa69c19593d3ba7925ed85d7218ba5e538238a102dbda"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "d205b3948a37b24d744f3d35deb2092c69f981b10653ee6f01dd399a272e1340"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "f5593c152cd46c70fa939b498c76cf555a801d683005fdd7002c9cfa709576c0"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "332ccbb15813aee6c25cbd1ce4d2db2797c29d3225a1fe8666b36abf0f592b1d"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "5810b5c6a1f9668dc532d1ea9c786c87e07d16ac7b7d50cc143d427dab7f3bc9"
+    },
+    {
+      "spec": {
+        "name": "room-rush-stop",
+        "touch": [
+          "stop"
+        ],
+        "rush": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "371d7dfdd71fbb902925e3837f61d71594a6530730eefff33d4cf5000d58ccd2"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "none"
+      },
+      "sha256": "32e2191b6af3b2314671896e8bd3f9017a5cefb5b02304b3e0c957790388c608"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "disabled"
+      },
+      "sha256": "67589524be6496be7a36503f42a5eaccc6422bd1b3b2d04096b95814945b634f"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "49e864205fb119a4893a1bc4e2317e1676cdab0d0aaff3049c2c83c2f4287c61"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "4b8dafc8c7ad2a20cb0704457ceecababb8dbf86e6466b7e7f6d335d4b5a2e67"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "ae586ec3f6096c8fdc7ca120dca392ce9bb6fff143e40fcdce968a09fcc2364e"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "c1505f16dc53447130e90c356ad6a082a7cbaf87dde8491e9b4f9549b373f189"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "c4aae5d913a3807b1a0c2eb056898310d16f44177ff14ecbc191be64453f5527"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "289a34d36cddebc20221df11722797f0d942358f9e41e2edc2b476d300f84c87"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "a65e4767114a3a68ec910e0500f8fd38cbf242d8739a66bc6491d25fa220d985"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "918734391b727b487017f5fc5981be4b70c6f50df06720cb7b5c64f448d818d7"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "29c762427871c39c5c6b1283e44642c849534015e08859d3a1a0696ffcd85a1e"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "be0c74b6461fc63a86e95602848855a35b345c8fe3f777a822f85f17d171a3c3"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "0c9a69b64dc1540ffba8b99d36ae8eff43541575995e6ff5b0c0dd16b943ffc0"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "292ac6b85a6d82d900bb88ab57be2db4765490d1efe684b43c120be660743bf6"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "869df03df01f5577c55835e4266135e5b1ded8b25fd738aaaea2373e0cdcfd07"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "099faa082b0c0d862f07618017f38dc64ee634283b2cdb9b04787b1e59685073"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "3f8d8f066cf94ed15171cd82b183c017dfcb2302629b8036a0d8ff752fc52c74"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "430451de7edd1e8ebddb7a5b2a6554c706ac680482111e9d31d25730414b9ba0"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "b451936d1c6f1944e596e6cf6f16fc2f4ef07fce2ff1ba5654a8a0870a256865"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "87e3996cb14171f9188d014bd88942bdf4868769f08dbfdee8977f8f55ea0235"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "02ccdc663a1db915805ae27c49e549b845db20c2634528e46dcb47bf7800f2bf"
+    },
+    {
+      "spec": {
+        "name": "stop",
+        "pad": [
+          "stop"
+        ],
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "283b9f8a298bdf3e07b49b6f5488c48a496ec32b5de2a3814223a7540fc896a4"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "none"
+      },
+      "sha256": "bde8737f42b875f8c6323f89b2727dc9c7057bd696604a38bf3f832a180410c5"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "disabled"
+      },
+      "sha256": "4ee2e8903f423b1ac2b3c44bfb385d2aee4ba824cd6d68485ce5539f4f43e72a"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "3f548fd5fd98c13b42e0292afca64ab5835db8ef274d4f8d9e8fa3bf1ddc760c"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "118686bd6995c496fb1a9c0640229f143d34ebf857b6c9f41eee6bd5eca016de"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "220b6db55c1fdf07a3782d70902cc58e1889c9df5207756f8c8a7b6bcf458e92"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "ea9e55b1c1839e3411c3f674bd9b32bc5a858ca3f1359c2c8b0efa82de67d563"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "fc8340c26931e739921faca2ab2019d893e1551d01770d9e709fecccd60ff5f1"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "6cdb93b9d62c0d08472662653c22bf58ad8d0d27a9981ae2aaaf195bbf608fc8"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "434d836773139ef534937afe30d92a1e7c0b8f14cbab7cc08bed0879421fa83c"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "73f46ec8945f1b87b85a3554d08e33aabbb444eba211f60a54c54e912e4af299"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "82b797d01387838fef2fd7340e42860baf3272c734b5dc03b771a1f5e7d8585a"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "bc725e4c8bcd196493a7d59ed6152746d804ffcd4e9db81646f03e425de55520"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "8629cabdd5eb7658df40f9d4c81e64446e8c3032bc8ae28da3d278dcb1d2d163"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "ac6f9de13649bdc5b2825e03bda45ba2980b82a9a4273b487e9a6323ca889de8"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "0b836273c20fa3910fbbdbcf3d79c8c7ccb3d55e6b621869bef1020e88170137"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "005a651006520539bb0a1bf57a075d77608365b09e2de7f52ff73a97450b1c62"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "2669c5ed1f347804aadab8db51100b31b18f93651fd71c49610001a1d7dfe737"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "d42786ce5485bb25443d233017fd9d4c8e44bf566a832a62cea8d9057ba28f46"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "94293a9758927513ce281c70fddf9f921f234f4528940f4b7964b8fec78e6308"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "903dcedbc1d8d8747c2bb4a75ef92244819e71402bf857396eb93ee643501dfc"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "fe84449ebd78a6f86f3af6693b5b33b917bea33d9d99e3666d39c92cd0f19cf9"
+    },
+    {
+      "spec": {
+        "name": "restart",
+        "touch": [
+          "restart"
+        ],
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "49fa9a8d84dbe260ed14e5bc1b53a6243713bec42ddf3cb7ac1d5c72262a6223"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "none"
+      },
+      "sha256": "6f1ca12ec7de82a955ba9c55d4506ba2e3a5b99bc2ea27957e472f9fde3bc161"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "disabled"
+      },
+      "sha256": "b60ebbce4263ff1605d3a77bdd5dbcb0111a1f6a315e5f938e594634c66d7030"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "50c45ebe0fb3a2353dc13a1e14210ecb502806c050ee1e7665962bf0a22fb810"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "2c7188ea16c076e0ccb9eed9a375d9cafc66110a4fc9634a22fe6a9be5d33452"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "89308e6518d35788ee83f7b729d309c09d2002b0e9371febc52711ed9bc75da2"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "8adc49b204eaa4748fd2cf4fa6f314754f6b8f9c8df572be5645d27fbae93fff"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "b42dbbbc269ee75210fbce7747130013275fe9205f662c0f2536ad7bc36dd2e9"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "ca9914a3ca7685e0c17c96c6774b6fd2ac22aed62f7c9d402be33e72b6fba95c"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "f1c0c830949151a0a5b91186f3629c6339e101d09722b1b4400928d004061b5d"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "a532d8806a032af713eacee66a946fbf9082fc18be7daba653b849bb1152f156"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "cf10adfc82b9b3d12f415f44685addb73765215afbbec23ef53dba04b1d56b27"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "be5f54d50a7ced241b22d4010699fd83aafded7383ccc2b4d3a9a74009a8548e"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "047eccc1054a8443f250ff1ed09030c0b0b69fe07d5faf4811d82d43e501f810"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "065f0330d475538010720d8df90f115e2efc1d8993f4d5279a23239599007c3b"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "5effecaa371ac8d242fb316ae116c389e2f681450283415aad2cab42491faec5"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "09a170a629bb57e399a1dc8e000d69f7a1d319ead879e796a0003e163739bbd9"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "a769067df7d270da3512f54360f4736622a5c64868bf5caaedb6c16f23a376c4"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "bf87b3119a9019e55c7dc79faf33cdca6d9314f42bf5e6f2f3fe7124e7f74b81"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "31cd150ac801d90ac7fd9e9313639335a1334166b966ac79294c3236ed98a5ac"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "1a68a91306cf235bbff796a4e5bf6f7d2842eb2bddeec62ef2a10f7ea63737d5"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "e3706d78af3d8a3b496771da32c30068dde41e74c54b33c3ebcc136243ef37e5"
+    },
+    {
+      "spec": {
+        "name": "camera-touch",
+        "touch": [
+          "cameraToggle"
+        ],
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "2a801ad76e190e13f80103b8002ad464ea02ea513cbc550bb0ed9b9524866e5d"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "none"
+      },
+      "sha256": "35f80621afa63f46989255568083dbb52f9bb36819fe4ca071697341a6c4bdfa"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "disabled"
+      },
+      "sha256": "373c26f6140c0910eedb86b893a7580fe1fdbe1fdc73b0bd4626f3420c59ae98"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "4c608d5ae03ab9084ea39dd30702cfcc3be2fb577e2e84e8750c90b77fd5976e"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "5a42ee650fb344a30b81cd961f9058f4ad4d1d1fa7d162d76c515f6c14fe3be8"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "0261f1daee06f9549fdd62946b0a59fdbabffba873315591eb3d01c792ccb9e9"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "d52660438e218af201f3443d25ad7c01546ac79555390a6d01df4d2718b245ea"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "6407a100485ef5324dc6e317b1eaaa9de404950e52ef38c3297490fad3cb81ca"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "c32ad6533ad5a6741d3cd1c91be7f5d4e49cabfdc2f1fc63dd53e38b8d63848e"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "4a38e647ebe06fce6760de794559ae398aa58f0b0277c494b35c99704d5ef471"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "68712927006eeace0ae24ee74445b43cb417eb075b057a52d3203b60504ae8ad"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "bf27d5dffabc98518e7059450f5c409f92267ae95fbb6a02f5ee92fa1afcd4ce"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "8edff488d3bcd20a7cf46c9141d68d9d2b44289fcdccd94f0ed917cbde91b63d"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "bd92cd4a7ab4383608149b85062e10cd3efc5521e8599c456a52b09e7d9ca0c3"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "98f6bc2d389d5db5faca671dc077581a813eed334b767f304c19c4d80a8aba19"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "a9ad87126458031c7c1aea8d2fd16d274c3fcb9b0c36fd7c4fb529fb51e4a4c7"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "5fd68693556dc18fa660d0ee225a7e6961c908a8d721b082593e2205bbc8ed5a"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "930433b1eacb074015ce0488bce7cc38a561a7dab780100218a2a972100a8bdf"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "7f6a8dc6ff2b0a5d7b342334d0f6921aafc97fa885e0a026e4da43a1935cd22a"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "bb5ee233185a890ca2aa14d7ee30690c6f41c65687fe671a5a8ba7a1fbf30ec4"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "8de649b1a7b44a5e838847ee64f2845976a28902e319c6f4b617b1e7d98fe862"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "489caa41f0a9c857c30f8b2c86790d9273d62997e490b555dd44544b00dc027a"
+    },
+    {
+      "spec": {
+        "name": "pvp-camera-suppressed",
+        "keys": [
+          "camera"
+        ],
+        "pvp": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "511dc5f8b7cbce852beefe6d4998f451e18552ca7f923e3a81e520a6e6edbbb9"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "none"
+      },
+      "sha256": "6c891babd1a36ea58c8137f21662033d32d974e0a3603686b058db91184f0af1"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "disabled"
+      },
+      "sha256": "bee4c9ff44f67963eb1c048179d227809e13c9254be238726aef63045859a625"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "f71f78669bc0972d9b32b059b75db139b1b3f3f9ca501fb6888dd2d5b731af18"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "38f4880ab483448256da4e9e4cf07867deeef0d4519a8d031ec4330953445c32"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "754dd04ab98ae1e8e535ef16b1dde6942d9a463e2316713cd16f3636d13b0211"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "644ff2d6c89a75b977fc12fe575e1412355c4f1f267df321da3e7cddb9462a36"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "cfb4650f94279c209ff73346c7e650ca5a54c81b911dcb3fb8e995666eb262b4"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "f5c9de51d398bcc842e710c9f7d52fabb0f85e2e47cf2f1ab1775aac264e90f9"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "dc8440374a0182a2027838f4ce4fdd7a33614c5e48aacef324e40d1d73cb543b"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "c6ce1ccc19864d884a954c21399b956cc3e6476ded5df72fdf4a2f42e82b7935"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "cc4bbbf49a8fe77fe3358fe10da18e1edfc463f1acd7653fd0314e9d91ba9193"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "78ec5a929f5e5d9f5f2acdf93088a1e01c5a134be6068bbbf9c19ace6ad468e4"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "05a5942420e658bdfe4f23d4607c48e3b41510fdfa4de8bf0e9015a516d7708e"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "297d8f393dd303f5438f5954e1d7c0fb6a999bc8d2b3b67dbdab087f46ae017c"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "d8ed2f5e7afcd07647ca40c627e717b62087480a016255664f43aa00b98016fb"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "0ce8e248e9e89f4f4cc8458550bada005d9d0e6ee88e0d2524aa5cf33db833e5"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "6f1c06ceb48f8d812aa31aeb339fc4114243e43b1fa2a71fa0e2df9469274172"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "c542980fc775da87fceb7f9256317c1b02664158fe29b9016a116cb3b900395f"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "ec478045ebd9fa426bd9a22744fc4f76ff25624bd902a7f159d51d07a526b8b1"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "6a6d612b3646b6132b4dff1405a5dd3338f4e2f4cc9c7098a22d8b2fe7d873a1"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "1f6046984247befde93440c3d9433e359fa417f2b396a8326b7136693b10806c"
+    },
+    {
+      "spec": {
+        "name": "combat",
+        "keys": [
+          "slash"
+        ],
+        "touch": [
+          "shoot"
+        ],
+        "bufferedSword": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "2a92ced925ec60df251a88a892dafc5c3307bb242beb6e278ced1b8ad5ff6d6a"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "none"
+      },
+      "sha256": "727ae26869cdeed52a39e8e47b74f530909e63f78ae640506c9ce12c368db1e3"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "disabled"
+      },
+      "sha256": "26e20dec57829c597ba649c2dc6602e6e1fa729bdc9b8585952b212f95dcac27"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "64319e3766cfdcc085db17c101314b95754b3ce738fa9d2e9a341825c112a00c"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "c94bcbc0bb7994928d5dc68df30ea70d89c2d29cf181eea1d599cfc26dce70ac"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "31f36069d971f7bf66b49c32defbe10f85db4979f846305123e991f09856a948"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "410a7ec822e7b2c0e2ecaea222e7310dccef760814b50cfd5982242e5997e64a"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "71d5a1801a7892e59f706aa015aa3d9fd2f6d9b54a4bc876bd9ed71c8ddb7179"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "1298ed75f36055902375d67f70dd561f1fafafc2d1e9f1a6737543cfb336e3e7"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "6c5b6fd8caf7defd0c0571287f8aeb4787087f14780ebe57ef0ecb1d159c09cf"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "18ce949e35be0b9f7dc6c77d0ca8f7a7f6a56eb71bb1a4670a173489651ba581"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "56bbd6b2f67e503e4976bcf4d322622295668da81d440387bae32d99ad7b474a"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "b20336d1eaefdc598ea322dbb93d1acfa82a1445d96f3a17cc1b6e13980f8ab4"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "101cee0627df7bc2bbced56b59945f89e6156191de51c0f61e4864e4b0b3b7d7"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "914a9f013e50fbf207e4b68c13f8b64f1a2fe42a12b395b3029f2ab46bd36bb8"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "af0c3b0345d0734f6377d853517e46e3c747fd0d67ba6d1d61c56976a546c543"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "c2026c83212924ad56c062147281f69037a22028a443d77ab629a0a2d44442e3"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "eb176fdf433ff524c5cb2d4a38fe9eece1a853649f58bb1d858e6a0d7405dd37"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "3c57f21ab4cc0c4a0596b23eb44e9e5f249b1bc5337779a924c25173447563b7"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "f8fca0504fba4f83d5c0ece6a7afc75937c15c62f8d415b7be004f13321261ac"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "4413af1dfb171a6619f69a48653b5d92f44771792556a6a95cf8093f59765ee5"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "82c887bd23e8a8228a70f78b87262f9568bf29f680056a3353b027627c621dc4"
+    },
+    {
+      "spec": {
+        "name": "countdown-combat",
+        "touch": [
+          "slash",
+          "shoot"
+        ],
+        "countdown": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "55922481264d98f92258620deac1a82a102407d76eafaa3db78d905beff5b35f"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "none"
+      },
+      "sha256": "7d5e532e8f4d4dcc0971993c66880c5ecd358405169edce414b2bc3da43c8e2e"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "disabled"
+      },
+      "sha256": "9435d74877b87b5a48261afa781c8eafa90d77e9ab51060614cd50a0ba330e69"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "5bef5c5e2b9840be734f3d3b4c907151ded99e5332738787855c8fd17e94372c"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "921483bb4ecebdd7777e817de93ae16e8e7bd817a9135d34d45a2fb6d35b4221"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "54060c7f9d99f1705942cb0f9bfaee262cc87134e204d82a4bd524b50a32ec51"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "b00bea9496b3757f2ea3a4956614b54c0580c8187b61ff3eca2af6c889ab7c57"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "0bd9b99c587c08a717b4604b6528407955ce8dd2851f6755a1e7dfcabf845c32"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "97bb67b635616dd15730aa0263985cf75b149a056a13a15d550e4ad3a9dd8eca"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "0f7d9ffbe970ff20e68e3531110f05c37657000a2a8579f87e4de52e13cb96e2"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "0428e13e640bb9f7c4c2c7bf84b8efcdfcb1407c92e6f2673d35e5eb4aaa8b99"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "df7f05aafc653b80e208dc3fa2ac2a475340b3a92ea6f5688f8319ea598cd74a"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "fa8c060d873b3b6d11e3f71b6bc0ffd241dbe07d11221b3ce9b75982c633efb0"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "82e9ca43a408a64e3f62d4e8770c10f84b4715a65ab131de7c1713534ef7b0a2"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "ba1dd506d07ac25fc452bbc2be1b0ab679f4ea5391bcfbfa121723291fbd0883"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "80ae203f140a5989af0b2366b152173dfcf382b735fe923b81b11927f2b2babd"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "a67834f9692018162efa1b5c12fe4ae0a6eff1c4119723729abc05d7a88e515f"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "99ae8f85b6e5538fcf950bced92f2e2c359109d6fff12ac6e764973761a4f931"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "fb05f7fc82b2f439579be0737cacf38a082c2bef381e9125fdb689ad616c005f"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "3dc9b6c40a986621eed67443b6bad48aed422ddc84d5d8a99246b0dbb69d1f30"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "3843464a13ab2959eb1b5576c98e5ebead4c15f613fa61a9bc19295e00229b48"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "79388406cea865347f988dc09a6e87b69b25a46678a334204191fc4119273f76"
+    },
+    {
+      "spec": {
+        "name": "mode-changes-live",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mode": "browse",
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "dadc7c193fea70c2cb7d5e50af7cd793265152297878c0996eaf4ba977867b02"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "none"
+      },
+      "sha256": "0b824da00d7c229b661515807ef5786595e6b21edd298f6cea2bc5ff120becee"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "disabled"
+      },
+      "sha256": "c2660b0bdd31b16be9f9b89b9185d49f579129273f03ad70b8307ba3e89e080c"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "2b29e0c41628802afd1dbc141d20cbb29b29faee497a88e9d9b1a5af1c638675"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "66e63b131287c57de548dbde31251cd5691ca164aac3bd981c5d9c9864d83611"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "c70187676abd3e8ca6187bbb0e09c629d1de73ea6e48cc24f561e4f369808868"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "a0c4d800f7e69e05e8c7e240494920cc93a058e7813e49d431ed11cdc353deb3"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "c6b557c067d0523c24db509a3cf85b2553135f0f06a91555a76d7000076bfdc5"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "0e7524189a51c9a2d5ed432a2cb35ef61ebf384afabbbcfc18852c23a45cea68"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "c22835948ae77d9893a7aff285dce5e1d18b78d7a20274885d0cb0e494659ee3"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "099e0e5bfb051ce0655156e231ce514bb45344f008d7c221dca2695b47695c8a"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "395f451e4b85f74a834738d1d0649ea972e6b8e4bcdf57d10fdba6f0e1f1547e"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "46af050f2f3436618355fadc7d8254a684c1f5f7cebe2ac27a152260141350ba"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "20591261f81bf4814a5af3fd14cacc43c31662197491cb299bd9797a94b19169"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "2af03281c50510b9630d08a9ad9966cb3d792caf615a16ab1c1a7861ba91d505"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "f1d300dea1e834cbfb808d4b5f51bf8dc350935f5a2b26889e4f8208ce8d6368"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "72482200134a04dc4fe1c74a73f6781a29497e57db76570a0a413e3deed8bae8"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "bc16bae17997257dae3d75cfd9c38f6a21a142d4a6830e37ddd8d58c15a1f468"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "1a4f4c6cde493ede02805100f62d24f05941e0bb6ea16eb8c35e60977a58e6dc"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "ddbff377719c3ced44b8bab36f499b70fe37806943b67e2ae81279e1f564a0ff"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "2784a747a395b56c5e768d5dd64a5fca3e387ef168115ee01375e6ae68363d41"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "68800647f1dbe0434007dc6a9fae259ad400dc519276b7417f447167260f92db"
+    },
+    {
+      "spec": {
+        "name": "body-destroyed-during-combat",
+        "mutateAt": "combatController.updateProjectiles",
+        "mutation": {
+          "playerBody": null
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "94bd8c8659d028fdb214eae2b88def84f2ba2e362666e6a335c07f3f9fca4b46"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "none"
+      },
+      "sha256": "1eb69996b627acc9e70fbb010611ac0a8e8668a18e067197bc4211019721161d"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "disabled"
+      },
+      "sha256": "dfcc50ce961101db0974a773b960143c8d9f9a75e80380474ba941aaf326f1ba"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "99713c9e3839007413d1f8a1478c504f482e849cf2a5e1f84b80696ab0838b00"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "d6ace393f776c5c7d4ce75fe3f10fb19d53054d80be8906c1ca91f9a7e50afd6"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "de3f6105d8b655653816771a1f642dc93cb26e5d5fe7e067bb04390fbb26050c"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "bdb7ca244de25b9e5f6bd0dc6e7e0a595035e3c165aaa97dd0c4aeb6d3515905"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "80c5594810f45597e5b8d673aace5ee2396e89eec4515c431db225602e36ba4d"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "19f89ef070ddfc270b6fb7a1a8ce23491d0027537aebd16e4b81fde953c4b923"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "ce35d060b10b9399c716b9532f4429952341595c3d8178713b96d0fe00335d9c"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "3fe10c99974a7c2f7618da87afb32fa984038ebcba9bef8dba1e045087a11799"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "22de8c836644b0589cacbb1f4136770281c8388e465f2e5b6b26c831db7faeaf"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "6c7cb9d627aba7b52dbe1b6744acc2550dc8c9c3d68027d621c8726c610284cc"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "ba40c35d0302fc29709dbe959c29b79eb7e24b3e5eb74959d66c1d8e8e9f9bda"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "e5a2de8aacde84d6fa9bd68b745e7fea3e8e90ab4b629fbfde4305f5de9f2fbc"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "02dca5624bee132cdc71459dcfebc6275a0df924b04b4fecc7bce2c4aa7e2e0b"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "0921f877b1b92fc3e2677ce77157f786cc5c2fcfd31433d10175f5db1ce825be"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "1e0b6329418c388e54572e698fc3405647386f0e28735c0c47ab3eb0fb260c43"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "e223775ff37ca93d7a4f8162385aa5f0652b8677d0b577242844ae7ab0ef4a5e"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "f455603af6093416cfbf717bbd89f7633bffbb277fa7c8ce56674a23e93e2ee8"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "03805897d4adc6ddd8fca77a6cdac6d951b583ffcd10d027d23269817b62447c"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "dae580154550877b0c3eea1b8477768d1d174eb3fabd1c6debe4453e071ca6f8"
+    },
+    {
+      "spec": {
+        "name": "profiler-replaced-mid-frame",
+        "mutateAt": "updateBackdrop",
+        "mutation": {
+          "mobilePerformanceProfiler": "PROFILE_OFF",
+          "mobilePerformanceControllerProfileSlot": 19
+        },
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "b6dabe9e46707c2df1c5264244dc319eb7c07a9cb243cf3cbb50f8f9a331ae80"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "none"
+      },
+      "sha256": "14466635fa5093481d6ed671a7d428ac45605426f5ef6c50cba33d6c1584605a"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "disabled"
+      },
+      "sha256": "c34172c21253da2dfa898dda3a8a358d60b407a179027fe5ab4117b1918ca1b2"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "cfd3cdb388a38a67f40449504e5be7a13c3fdb335d5c08663d910569b55b8c19"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "62ff2915d0a316dead3c0d3d8e1540a35bdfd086ba36ae640327f78bed5b3254"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "db87d65d882f7d5ec83ed359541d9f459c042708dd6bde6a6f40aba0c9b3e90b"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "d485420fd4f697932fdfa375cffdd12c7d5f199875a7d5ff39bcfee695b579c3"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "24f87dcd294430edaf93ef4fa37b38552af5a31ca799a05f23c2a78be1e70a52"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "6cc0229d68aee5228366601283a08dbcdf8fdbd766326448043f908557719732"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "ab3503f1578c6058445b5b0a7a9becefa33844f461c448650e232510c26d6221"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "045b89abdfe0150186fee9a3c08890e2da91b9235a696d8b50ecc584cea544a3"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "ae600adc204853deb6b5b897c23eec64fceb7e44e2e870511436ee6c6e1fb279"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "fd9696a169e75a9967f7236e5e22d7cfca25ca403d4909eded2d333ecec3a18f"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "3816399a22475eafaa4987205d31821c620719b72a21c45696c22016eae53007"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "4df92af6aba575ed46c1d65f13a9a3df768a86b172c53ea3271f0cfdba4c640c"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "a77706db165aa1cf62258467547cc4e3816014943a9445ae51c55def2e4c2ef5"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "d6c57e6b1863d2cfa47b7578695cef5e27d890036d1e3b4dfda595d703c5ee3c"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "52a33d2fd6e5f39ffc37748d4d7c182bd12da669f80c2a3058d996558eb6cb50"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "192a050bc9b313e702471c50872f317cd8169eec03e580b47723141079489087"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "cf348a385fc2d8f467bd159e122ce2dbe53d7c310a9caaa7c0580909d3a0d220"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "c0ef1128ac0e795f186d4bbbbad57bce205c43b76ff4be9411112c7189654d0c"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "43a15fbb10aaf1c88abf03e8f89b26b605cee7f94e940c6e4a0fdc752e70940c"
+    },
+    {
+      "spec": {
+        "name": "scaled-assist",
+        "speed": 0.6,
+        "criticalAt": null,
+        "lostSongChanged": true,
+        "tileWork": true,
+        "course": true,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "f73a2db4e3b72a4475b8972981c0da52cb18ce799eeed637cacc1ff223cb6b1f"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "none"
+      },
+      "sha256": "9a5795fae5186042ae297a50132de2ec0980c62f242d32188b3f59c926fd8887"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "disabled"
+      },
+      "sha256": "ea60737a2a85d9d6d86734c3138a4126690097ec5d524264120d52a9c35cfb18"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 0
+      },
+      "sha256": "7fa0e12e4398cd0d90f4ccc2b0836706b6ac4768de267dc4a659fd210251d72a"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 1
+      },
+      "sha256": "a4f9b7b602cefe2046890a732c1ca76afe0beef42e9cc163958e551382863cf6"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 2
+      },
+      "sha256": "c3abf95ec9e2fe3eba2fe6c67fc001b52b7c4b492f2408eac9f0842912c7c138"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 3
+      },
+      "sha256": "841a65886b30d61c7ab3ffe10487bcb6290d0537cb9ef4e0c3f03409ce0662ff"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 4
+      },
+      "sha256": "eb017063f67e0dce6d20852db9354a7a2953e052629cb4982d8ddb3b016f3da3"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 5
+      },
+      "sha256": "07aeeaf0f4844aa8e42fd4a141ee05e36c8bc9e79e0237a72195436415c32a41"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 6
+      },
+      "sha256": "26be967cd5cde3ae953043c9640699683c9e69ff9de4ce040fe253d6efdbd9e5"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 7
+      },
+      "sha256": "74c2d775ef66376ad9f5ec1025b40ee83b87f09f0161521f53be00bcf593329f"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 8
+      },
+      "sha256": "cf28b18d2c751c8d0dc6d93e0820bf60924a0ea20afcbb1d3d5298e8c49d72ed"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 9
+      },
+      "sha256": "5030da81b86227c60e38a5e7ada83f7ca88161002ce04b3607cc85173dd0c2ee"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 10
+      },
+      "sha256": "1df56ac0b046a3522cc327c219f0cd32937f427f0ca639ea1212f28176b99521"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 11
+      },
+      "sha256": "e5e2a646c02d8b6e4efc845759dd88922b40b10221daeab22389b3e4ee64e18f"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 12
+      },
+      "sha256": "5689ea5111bc25fa6d67a79fb0de80371b90e8798b4a467f2477974190ccb19a"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 13
+      },
+      "sha256": "5908d7f9778d0735e548c1758f83eb79602a75112218d949f231fabf1ca6b2d9"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 14
+      },
+      "sha256": "2de83468a644ca91dc44530d088225938dc9970db656917bf3f031721bb29eb1"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 15
+      },
+      "sha256": "f1552d5c0fd805058281e21aa3992dbf417eae42333f18f69d299d97b705fb50"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 16
+      },
+      "sha256": "a8c98a141f7dd09c025309953f87cf012ed29561868fe0d99710d1cf2ab9c013"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 17
+      },
+      "sha256": "0e03b879682660c6c492e7672be4bd91f43d33ad6c6453c63f7cf8b678755b90"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 18
+      },
+      "sha256": "2b2a46fc08bc7d9079f06de27d502a328dc0e0b2395b36ae3ac21b96b26c892e"
+    },
+    {
+      "spec": {
+        "name": "undefined-profile-stamp",
+        "undefinedSegment": 2,
+        "profile": "enabled",
+        "slot": 19
+      },
+      "sha256": "ae5a7b2166c1594dbd102ac98c67f42019e4b0bdca1cfdf726a6c2d1afe5823e"
+    },
+    {
+      "spec": {
+        "name": "failure:windowController.maybeRefreshVisibleChunks",
+        "profile": "disabled",
+        "throwAt": [
+          "windowController.maybeRefreshVisibleChunks"
+        ]
+      },
+      "sha256": "d8a1d80fbbe5c1fd5c3a25e45ac33d19ed4b132371b1eb546b103e7463a9a084"
+    },
+    {
+      "spec": {
+        "name": "failure:windowController.maybeRefreshVisibleChunks",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "windowController.maybeRefreshVisibleChunks"
+        ]
+      },
+      "sha256": "c2f0070e95b9b9c77eb33dc9efc340fd51ba55dd326da190e2c2457c40503edc"
+    },
+    {
+      "spec": {
+        "name": "failure:updateGhosts",
+        "profile": "disabled",
+        "throwAt": [
+          "updateGhosts"
+        ]
+      },
+      "sha256": "d31486c78836bbac1d83f3f9d38705b600e4832d67d3f71c023941e325a6cf9d"
+    },
+    {
+      "spec": {
+        "name": "failure:updateGhosts",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "updateGhosts"
+        ]
+      },
+      "sha256": "3dd29fd7535722ad2164b8b3fb0471d7a411789b54c394fe33d78c3db59cb64a"
+    },
+    {
+      "spec": {
+        "name": "failure:combatController.handleCombatInput",
+        "profile": "disabled",
+        "throwAt": [
+          "combatController.handleCombatInput"
+        ]
+      },
+      "sha256": "f6987f980b07d155ad675d7e7f418200371943f5e23d9deb5bdb737c065fe555"
+    },
+    {
+      "spec": {
+        "name": "failure:combatController.handleCombatInput",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "combatController.handleCombatInput"
+        ]
+      },
+      "sha256": "a947cc03a8a1c2498e2d0b60b6aa38315e2c71a676dfada90f763c4cd14d6da5"
+    },
+    {
+      "spec": {
+        "name": "failure:playerPresentationController.syncPlayerVisual",
+        "profile": "disabled",
+        "throwAt": [
+          "playerPresentationController.syncPlayerVisual"
+        ]
+      },
+      "sha256": "a42fc742f8965d4156eece0719c46e2ee304664913e8a8d56c0220f2a4768690"
+    },
+    {
+      "spec": {
+        "name": "failure:playerPresentationController.syncPlayerVisual",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "playerPresentationController.syncPlayerVisual"
+        ]
+      },
+      "sha256": "155698d551e1d3f92b58ad0f565b2719b73352fd19ad4b4ff6ff4fe5258e22db"
+    },
+    {
+      "spec": {
+        "name": "failure:lostSongController.update",
+        "profile": "disabled",
+        "throwAt": [
+          "lostSongController.update"
+        ]
+      },
+      "sha256": "528c0e43f3f53d8ca7f2b6f5c5250eed12037d1b3b26cde998c4f7ffe8b51ef3"
+    },
+    {
+      "spec": {
+        "name": "failure:lostSongController.update",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "lostSongController.update"
+        ]
+      },
+      "sha256": "adff9ceaf042784969c95fd7863583e58f75ea01537aff1f2ae55f5e0bb452f1"
+    },
+    {
+      "spec": {
+        "name": "failure:ghostRaceController.update",
+        "profile": "disabled",
+        "throwAt": [
+          "ghostRaceController.update"
+        ]
+      },
+      "sha256": "3bb0343e384a4a505d4b3c44d90ceb90bf10a83fd22fb9d003ae407ae23b78c0"
+    },
+    {
+      "spec": {
+        "name": "failure:ghostRaceController.update",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "ghostRaceController.update"
+        ]
+      },
+      "sha256": "cb92bfa7359421e708167eb0c6d53bc311fd915fdfeeddd4392fe6ce0d800322"
+    },
+    {
+      "spec": {
+        "name": "failure:recordPerformanceAdvisorFrame",
+        "profile": "disabled",
+        "throwAt": [
+          "recordPerformanceAdvisorFrame"
+        ]
+      },
+      "sha256": "078ae8999a9d6b4e78766e1abbd3fe62a702463b5aea2ddc09f1232c25519a3e"
+    },
+    {
+      "spec": {
+        "name": "failure:recordPerformanceAdvisorFrame",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "recordPerformanceAdvisorFrame"
+        ]
+      },
+      "sha256": "17162982848ebb973d0714c0cc8945426d14e172677d5843e00295d88211fe04"
+    },
+    {
+      "spec": {
+        "name": "failure:profiler.beginSegment",
+        "profile": "disabled",
+        "throwAt": [
+          "profiler.beginSegment"
+        ]
+      },
+      "sha256": "fc99b49c628a95ef23e6e0bbb4c2e2efeae262296ecfa418ab755863750ee610"
+    },
+    {
+      "spec": {
+        "name": "failure:profiler.beginSegment",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "profiler.beginSegment"
+        ]
+      },
+      "sha256": "e7bf8f7ea4be52aa6742faf167feadb0759ab01c55468737d7cd9e682099d876"
+    },
+    {
+      "spec": {
+        "name": "failure:profiler.endSegment",
+        "profile": "disabled",
+        "throwAt": [
+          "profiler.endSegment"
+        ]
+      },
+      "sha256": "e458ad946ad90910eb77f052ef629710fd515ff28da6c836f6d05e8e53b3ce03"
+    },
+    {
+      "spec": {
+        "name": "failure:profiler.endSegment",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "profiler.endSegment"
+        ]
+      },
+      "sha256": "b07f4ffc3e79814a475f5da0ed49dd0288c59dd230a91bd920ec74de0426c2fe"
+    },
+    {
+      "spec": {
+        "name": "failure:buildMobilePerformanceContext",
+        "profile": "disabled",
+        "throwAt": [
+          "buildMobilePerformanceContext"
+        ]
+      },
+      "sha256": "f888386a3ece0951fb89ad2890a0f31d45cb509f840d7f1f2bb694fe76104db4"
+    },
+    {
+      "spec": {
+        "name": "failure:buildMobilePerformanceContext",
+        "profile": "enabled",
+        "slot": 0,
+        "throwAt": [
+          "buildMobilePerformanceContext"
+        ]
+      },
+      "sha256": "090672916cf80d9a6e4bc27ba2615532fce9e8d3ddbac1c284c8dc3b112e2a67"
+    }
+  ]
+}
