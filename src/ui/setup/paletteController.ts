@@ -6,7 +6,7 @@ import {
   TILE_SIZE,
   colorNumberToCssHex,
   colorNumberToCssRgba,
-  editorState,
+  editorState, updateEditorState,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getTilesetByKey,
@@ -45,7 +45,7 @@ import {
   isLocalCustomSpriteId,
   registerCommunityCatalogSprites,
 } from '../../customSprites/registry';
-import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
+import { refreshEditorUi, EDITOR_AUTO_COLLAPSE_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 import { getTilesetPaletteAvailableWidth, getTilesetPaletteScale } from './paletteLayout';
 import {
@@ -282,7 +282,7 @@ export class PaletteController {
     if (!ts) {
       return;
     }
-    editorState.selectedTilesetKey = tilesetKey;
+    updateEditorState({ selectedTilesetKey: tilesetKey });
 
     const nextSelection = this.normalizeSelection(
       this.createSelection(
@@ -300,7 +300,7 @@ export class PaletteController {
   private beginPaletteMaskPaint(tilesetKey: string, col: number, row: number): void {
     let snapshot = editorState.selection;
     if (snapshot.tilesetKey !== tilesetKey) {
-      editorState.selectedTilesetKey = tilesetKey;
+      updateEditorState({ selectedTilesetKey: tilesetKey });
       snapshot = {
         tilesetKey,
         startCol: col,
@@ -343,7 +343,7 @@ export class PaletteController {
         : removePatternCells(this.paletteMaskPaint.snapshot.patternOrder ?? [], paintedCells),
     };
     if (!selectionHasOccupiedCells(nextSelection)) {
-      editorState.selection = nextSelection;
+      updateEditorState({ selection: nextSelection });
       this.ensureSelectionIsUsable();
       nextSelection = editorState.selection;
     }
@@ -355,13 +355,13 @@ export class PaletteController {
     if (!ts) {
       return;
     }
-    editorState.selectedTilesetKey = nextSelection.tilesetKey;
-    editorState.selection = nextSelection;
-    editorState.selectedTileGid = this.getPrimarySelectionGid(nextSelection, ts);
+    updateEditorState({ selectedTilesetKey: nextSelection.tilesetKey });
+    updateEditorState({ selection: nextSelection });
+    updateEditorState({ selectedTileGid: this.getPrimarySelectionGid(nextSelection, ts) });
 
     this.renderPalette();
     this.renderTilePreview();
-    this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    refreshEditorUi(this.doc.defaultView);
   }
 
   private observePaletteLayout(): void {
@@ -692,16 +692,16 @@ export class PaletteController {
       item.appendChild(img);
 
       item.addEventListener('click', () => {
-        editorState.selectedObjectId = objectConfig.id;
-        editorState.objectFacing = objectConfig.facingDirection ?? 'right';
+        updateEditorState({ selectedObjectId: objectConfig.id });
+        updateEditorState({ objectFacing: objectConfig.facingDirection ?? 'right' });
         this.doc.querySelectorAll('.object-item').forEach((element) => setObjectPaletteTilePressed(element, false));
         setObjectPaletteTilePressed(item, true);
 
-        editorState.activeTool = 'pencil';
+        updateEditorState({ activeTool: 'pencil' });
         this.renderObjectSelectionDetails();
         this.renderObjectFacingControls();
         this.renderTilePreview();
-        this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+        refreshEditorUi(this.doc.defaultView);
         this.requestPhoneEditorAutoCollapse();
         this.focusGameCanvasForShortcuts();
       });
@@ -935,7 +935,7 @@ export class PaletteController {
   }
 
   private requestPhoneEditorAutoCollapse(): void {
-    this.doc.defaultView?.dispatchEvent(new Event('mobile-editor-auto-collapse'));
+    this.doc.defaultView?.dispatchEvent(new Event(EDITOR_AUTO_COLLAPSE_EVENT));
   }
 
   private bindObjectFacingControls(): void {
@@ -945,7 +945,7 @@ export class PaletteController {
         return;
       }
 
-      editorState.objectFacing = facing;
+      updateEditorState({ objectFacing: facing });
       this.renderObjectFacingControls();
       this.renderTilePreview();
     };
@@ -1047,8 +1047,8 @@ export class PaletteController {
       return;
     }
 
-    editorState.selection = normalizedSelection;
-    editorState.selectedTileGid = this.getPrimarySelectionGid(normalizedSelection, ts);
+    updateEditorState({ selection: normalizedSelection });
+    updateEditorState({ selectedTileGid: this.getPrimarySelectionGid(normalizedSelection, ts) });
   }
 
   private getPaletteTooltip(): HTMLDivElement {
@@ -1226,21 +1226,17 @@ export class PaletteController {
     }
 
     this.hidePaletteTooltip();
-    editorState.paletteMode = 'objects';
-    editorState.selectedObjectId = MOVING_PLATFORM_OBJECT_ID;
-    editorState.objectFacing = 'right';
-    editorState.activeTool = 'pencil';
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ selectedObjectId: MOVING_PLATFORM_OBJECT_ID });
+    updateEditorState({ objectFacing: 'right' });
+    updateEditorState({ activeTool: 'pencil' });
     this.currentObjectCategory = 'all';
     this.currentCustomObjectSubcategory = 'all';
     this.setObjectSearch('moving platform');
     this.renderObjectGrid();
     this.renderObjectFacingControls();
     this.renderTilePreview();
-    this.doc.defaultView?.dispatchEvent(
-      new CustomEvent(EDITOR_UI_STATE_CHANGED_EVENT, {
-        detail: { objectCategory: 'all' },
-      }),
-    );
+    refreshEditorUi(this.doc.defaultView, { objectCategory: 'all' });
     this.doc.defaultView?.requestAnimationFrame(() => this.hidePaletteTooltip());
     return true;
   }

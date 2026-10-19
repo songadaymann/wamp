@@ -1,3 +1,4 @@
+import { EDITOR_AUTO_COLLAPSE_EVENT } from '../../scenes/editor/uiEvents';
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
 import { getActiveOverworldScene } from '../setup/sceneBridge';
@@ -90,7 +91,7 @@ export class MobileUiController {
     // Keep native defaults; allow releases through so canvas drags can finish outside it.
     this.doc.addEventListener('touchstart', this.handleHtmlPointerStart, { passive: true });
     this.doc.addEventListener('mousedown', this.handleHtmlPointerStart, { passive: true });
-    this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
+    this.windowObj.addEventListener(EDITOR_AUTO_COLLAPSE_EVENT, this.handleAutoCollapse as EventListener);
     this.render();
   }
 

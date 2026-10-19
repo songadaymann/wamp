@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ default: { Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) } } }));
 import { EditorMusicPatternController } from './musicPatternEditor';
-import { editorState } from '../../config';
+import { editorState, updateEditorState } from '../../config';
 import { createDefaultRoomPatternMusic, type RoomMusic, type RoomPatternMusic } from '../../music/model';
 
 function graphics() {
@@ -119,11 +119,11 @@ describe('music overlay redraws only what changed', () => {
 
     const before = f.clears();
     const previous = editorState.selectedTilesetKey;
-    editorState.selectedTilesetKey = `${previous}-other`;
+    updateEditorState({ selectedTilesetKey: `${previous}-other` });
     try {
       f.controller.updateOverlay(true);
     } finally {
-      editorState.selectedTilesetKey = previous;
+      updateEditorState({ selectedTilesetKey: previous });
     }
     expect(diff(f.clears(), before)).toEqual({ backdrop: 1, grid: 1, cells: 1, playhead: 1, mix: 1 });
   });

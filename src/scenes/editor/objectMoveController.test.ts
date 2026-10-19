@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { editorState, type PlacedObject } from '../../config';
+import { updateEditorState, type PlacedObject } from '../../config';
 import { EditorObjectMoveController } from './objectMoveController';
 import { buildMovedObjectDocument } from './objectMovement';
 
@@ -39,7 +39,7 @@ function pointer(x = 56, y = 304, options: { id?: number; touch?: boolean; event
 }
 
 describe('shared editor object move gesture', () => {
-  beforeEach(() => { editorState.activeTool = 'move'; });
+  beforeEach(() => { updateEditorState({ activeTool: 'move' }); });
 
   it('previews the sprite with an Expanded origin, leaves the draft unchanged until release, and commits once', () => {
     const h = harness();
@@ -57,7 +57,7 @@ describe('shared editor object move gesture', () => {
     if (kind === 'outside') h.controller.up(pointer(88, 272), true);
     if (kind === 'touchcancel') h.controller.up(pointer(88, 272, { touch: true, event: 'touchcancel' }));
     if (kind === 'second-touch') h.controller.down(pointer(100, 200, { id: 2, touch: true }));
-    if (kind === 'tool-change') { editorState.activeTool = 'pencil'; h.controller.validate(); }
+    if (kind === 'tool-change') { updateEditorState({ activeTool: 'pencil' }); h.controller.validate(); }
     if (kind === 'disabled') { h.setEnabled(false); h.controller.validate(); }
     if (kind === 'permission') { h.setEditable(false); h.controller.up(pointer(88, 272)); }
     expect(h.objects()[0].x).toBe(56); expect(h.runtime.movePlacedObject).not.toHaveBeenCalled();
@@ -105,8 +105,8 @@ describe('shared editor object move gesture', () => {
     const select = (h: ReturnType<typeof harness>) => { h.controller.down(pointer(166, 40)); h.controller.move(pointer(230, 90)); h.controller.up(pointer(230, 90)); };
     const h = harness(); select(h);
     expect(h.controller.cancel()).toBe(true); expect(h.controller.selectedArea).toBeNull(); expect(h.controller.cancel()).toBe(false);
-    select(h); editorState.activeTool = 'pencil'; h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
-    editorState.activeTool = 'move'; select(h); h.runtime.documentRevision += 1; h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
+    select(h); updateEditorState({ activeTool: 'pencil' }); h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
+    updateEditorState({ activeTool: 'move' }); select(h); h.runtime.documentRevision += 1; h.controller.validate(); expect(h.controller.selectedArea).toBeNull();
   });
 
   it('cancels an area drag without moving anything, and a second touch stops it', () => {

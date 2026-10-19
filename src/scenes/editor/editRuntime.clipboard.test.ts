@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LAYER_NAMES,
   TILE_SIZE,
-  editorState,
+  updateEditorState,
   encodeTileDataValue,
   getObjectById,
   type LayerName,
@@ -87,8 +87,8 @@ function storageStub() {
 
 beforeEach(() => {
   vi.stubGlobal('window', { localStorage: storageStub(), dispatchEvent: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
-  editorState.activeLayer = 'terrain';
-  editorState.paletteMode = 'tiles';
+  updateEditorState({ activeLayer: 'terrain' });
+  updateEditorState({ paletteMode: 'tiles' });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -181,7 +181,7 @@ describe('copy and paste with objects', () => {
   it('carries the clipboard to another room, recreating the custom tiles it uses', () => {
     const a = harness(room(0, 0, [at('coin_gold', 'coin', 1, 1)], [tile('art', '#aabbcc')]));
     const customGid = CUSTOM_ROOM_TILE_FIRST_GID;
-    editorState.selectedTileGid = customGid;
+    updateEditorState({ selectedTileGid: customGid });
     a.layers.get('terrain')!.putTileAt(customGid, 1, 2);
     expect(a.runtime.copyTilesToClipboard(0, 0, 2, 2)).toBe(true);
 

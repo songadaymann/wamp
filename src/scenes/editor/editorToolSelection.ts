@@ -4,7 +4,7 @@ import { countOccupiedSelectionTiles } from './selectionPattern';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import {
   TILE_FLIP_MODES,
-  editorState,
+  editorState, updateEditorState,
   isSolidCustomSpriteObjectConfig,
   type ShapeFillMode,
   type TileFlipMode,
@@ -161,9 +161,9 @@ export function ensureEditorToolAvailable(): ToolName {
     return editorState.activeTool;
   }
   const previous = editorState.activeTool;
-  editorState.activeTool = 'pencil';
+  updateEditorState({ activeTool: 'pencil' });
   if (previous !== 'pencil') {
-    editorState.pencilSprayMode = false;
+    updateEditorState({ pencilSprayMode: false });
   }
   return editorState.activeTool;
 }
@@ -199,25 +199,25 @@ export function applyEditorToolSelection(tool: ToolName): void {
     return;
   }
   if (editorState.activeTool === tool && tool === 'line') {
-    if (!getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
+    if (!getEditorLineAxis()) updateEditorState({ lineCurve: !editorState.lineCurve });
     return;
   }
   if (editorState.activeTool === tool && tool === 'pencil') {
-    editorState.pencilSprayMode = !editorState.pencilSprayMode;
+    updateEditorState({ pencilSprayMode: !editorState.pencilSprayMode });
     return;
   }
   if (tool === 'randomize') {
-    editorState.randomizeBrushSize = editorState.scrambleBrushSize;
+    updateEditorState({ randomizeBrushSize: editorState.scrambleBrushSize });
   }
-  editorState.activeTool = tool;
+  updateEditorState({ activeTool: tool });
 }
 
 export function toggleEditorShapeOutline(tool: 'rect' | 'ellipse'): void {
   if (tool === 'rect') {
-    editorState.rectOutline = !editorState.rectOutline;
+    updateEditorState({ rectOutline: !editorState.rectOutline });
     return;
   }
-  editorState.ellipseOutline = !editorState.ellipseOutline;
+  updateEditorState({ ellipseOutline: !editorState.ellipseOutline });
 }
 
 export function isEditorShapeOutline(tool: ToolName): boolean {

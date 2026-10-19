@@ -3,7 +3,7 @@ import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
-  editorState,
+  editorState, updateEditorState,
   type ToolName,
 } from '../../config';
 import type { RoomGoal } from '../../goals/roomGoals';
@@ -113,7 +113,7 @@ export class EditorToolController {
     }
 
     this.clipboardPastePreviewActive = true;
-    editorState.activeTool = 'copy';
+    updateEditorState({ activeTool: 'copy' });
     this.updateToolUi();
     this.persistenceController.setStatusText(
       'Copy preview active. Move the mouse and click to place tiles, or press Esc to cancel.'
