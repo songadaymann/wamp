@@ -71,7 +71,7 @@ for (const [device, engine, width, height, touch] of [
       await context.route('https://mann.cool/api/v1/plays', r => r.fulfill({ json: { success: true }, headers: cors(r) }));
       await context.route('https://cloudflareinsights.com/cdn-cgi/rum', r => r.fulfill({ status: 204, headers: cors(r) }));
       await context.addInitScript(() => {
-        for (const [key, value] of Object.entries({ wamp_welcome_modal_seen_v1: '1', wamp_replay_opt_out: '1', 'wamp.settings.musicVolume': '0', 'wamp.settings.sfxVolume': '0', 'wamp.settings.textStyle': 'readable', 'wamp.settings.textSize': 'large' })) localStorage.setItem(key, value);
+        for (const [key, value] of Object.entries({ wamp_welcome_modal_seen_v1: '1', wamp_replay_opt_out: '1', 'wamp.settings.musicVolume': '0', 'wamp.settings.sfxVolume': '0', 'wamp.settings.textStyle': 'readable', 'wamp.settings.textSize': 'large', 'wamp.devicePerformanceMode.v1': JSON.stringify({ version: 1, mode: 'full-quality' }) })) localStorage.setItem(key, value);
       });
       let page = await context.newPage(); context.setDefaultTimeout(60000); const errors = [];
       const watch = p => { p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); }); }; watch(page);
@@ -92,6 +92,7 @@ for (const [device, engine, width, height, touch] of [
         }
         await page.waitForFunction(() => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s.mode === 'play' && s.currentCollisionReady && !s.displayHealth.scene.paused; });
         await focusCanvas(); await page.waitForTimeout(200);
+        assert.equal((await state()).performancePolicy.selectedMode, 'full-quality');
       };
       const controls = async () => { await page.locator('#menu-toggle').click(); await page.locator('#btn-world-controls').click(); await page.locator('#controls-modal').waitFor({ state: 'visible' }); };
       const physicsTime = async ms => {
