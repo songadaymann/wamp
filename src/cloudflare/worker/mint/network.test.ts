@@ -48,7 +48,7 @@ describe('verified server reads', () => {
       () => loadRoomMintPriceWei(config), () => readRoomMintStateFromChain(config, { x: 0, y: 0 }),
       () => signRoomMintAuthorization({ ...environment(), ROOM_MINT_AUTH_PRIVATE_KEY: dummyKey }, config, { x: 0, y: 0 }, wallet, 1n),
       () => verifyMintTransactionForRoom(config, `0x${'ab'.repeat(32)}`, { x: 0, y: 0 }),
-      () => verifyRoomTokenMetadataTransaction(config, `0x${'ab'.repeat(32)}`, { ...createDefaultRoomRecord('0,0', { x: 0, y: 0 }), mintedTokenId: '42' }, 'fixture-metadata-hash'),
+      () => verifyRoomTokenMetadataTransaction(config, `0x${'ab'.repeat(32)}`, { ...createDefaultRoomRecord('0,0', { x: 0, y: 0 }), mintedTokenId: '42', mintedChainId: config.chainId, mintedContractAddress: config.contractAddress }, 'fixture-metadata-hash'),
     ];
     for (const operation of operations) await expect(operation()).rejects.toMatchObject({ status: 503 });
     expect(f.methods).toEqual(operations.map(() => 'eth_chainId'));

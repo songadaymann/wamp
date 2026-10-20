@@ -24,8 +24,10 @@ for (const [device, engine, width, height, touch] of [
   if (process.env.OWNERSHIP_PROFILES && !process.env.OWNERSHIP_PROFILES.split(',').includes(device)) continue;
   const browser = await engine.launch({ args: engine === chromium ? ['--mute-audio'] : [] });
   try {
-    for (const kind of ['buyer', 'seller', 'outsider', 'failure-retry', 'expanded-buyer', 'auth-cancel', 'unminted']) {
+    for (const kind of ['buyer', 'seller', 'outsider', 'failure-retry', 'expanded-buyer', 'auth-cancel', 'unminted', 'metadata-current', 'metadata-stale', 'metadata-unknown']) {
       if (process.env.OWNERSHIP_CASES && !process.env.OWNERSHIP_CASES.split(',').includes(kind)) continue;
+      const artworkCase = kind.startsWith('metadata-');
+      const roomSnapshot = artworkCase ? { ...snapshot, version: 8 } : snapshot;
       const name = `${device}-${kind}`, expanded = kind === 'expanded-buyer', minted = kind !== 'unminted';
       const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
       const api = createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/${name}-api.json.gz`);
@@ -41,7 +43,8 @@ for (const [device, engine, width, height, touch] of [
       const requests = [], errors = [], consoleErrors = [], failedResponses = [], groupWrites = [];
       const membership = { expandedRoomId: 'course:ownership-fixture', title: 'Ownership adventure', goalType: null, cellCount: 2, source: 'native_expanded_room', legacyCourseId: 'ownership-fixture' };
       const course = { id: 'ownership-fixture', title: membership.title, roomRefs: [0, 1].map(x => ({ roomId: `${x},0`, coordinates: { x, y: 0 }, roomVersion: snapshot.version, roomTitle: `Cell ${x}`, protectedMinted: x === 0 })), objectLinks: [], pressurePlateLinks: [], startPoint: { roomId: '0,0', x: 328, y: 304 }, goal: null, version: 1, status: 'published', createdAt: snapshot.createdAt, updatedAt: snapshot.updatedAt, publishedAt: snapshot.publishedAt };
-      const summary = () => ({ ...originalSummary, ...(minted ? {} : { claimerUserId: user.id }),
+      const summary = () => ({ ...originalSummary, draftVersion: roomSnapshot.version, publishedVersion: roomSnapshot.version,
+        ...(artworkCase ? { canonicalVersion: 8, mintedMetadataRoomVersion: fresh ? kind === 'metadata-current' ? 8 : kind === 'metadata-stale' ? 3 : null : null, mintedMetadataHash: fresh ? 'a'.repeat(64) : null, mintedMetadataUpdatedAt: fresh ? '2026-10-20T00:00:00Z' : null } : {}), ...(minted ? {} : { claimerUserId: user.id }),
         mintedChainId: minted ? 8453 : null, mintedContractAddress: minted ? seller : null, mintedTokenId: minted ? '42' : null,
         mintedOwnerWalletAddress: minted ? fresh ? buyer : seller : null,
         permissions: { canSaveDraft: !minted || wallet === (fresh ? buyer : seller), canPublish: !minted || wallet === (fresh ? buyer : seller), canRevert: false, canMint: false } });
@@ -50,7 +53,15 @@ for (const [device, engine, width, height, touch] of [
       await context.route(u => u.pathname === '/api/auth/session', r => reply(r, session));
       await context.route(u => u.pathname === `/api/profiles/${originalSummary.claimerUserId}/summary`, r => reply(r, { ...profileTemplate, userId: originalSummary.claimerUserId, displayName: originalSummary.claimerDisplayName }));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/summary', r => reply(r, summary()));
-      await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(), draft: snapshot, published: snapshot }));
+      await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(), draft: roomSnapshot, published: roomSnapshot }));
+      if (artworkCase) {
+        await context.route(u => u.pathname === '/api/rooms/0%2C0/versions', r => reply(r, { versions: [{ version: 8, title: roomSnapshot.title, createdAt: roomSnapshot.publishedAt || roomSnapshot.updatedAt, publishedByUserId: originalSummary.claimerUserId, publishedByPrincipalKind: 'user', publishedByAgentId: null, publishedByDisplayName: originalSummary.claimerDisplayName, revertedFromVersion: null, leaderboardSourceVersion: null }] }));
+        await context.route(u => u.pathname === '/api/rooms/snapshots/query', r => {
+          const references = r.request().postDataJSON()?.references;
+          if (!Array.isArray(references) || !references.length || !references.every(ref => ref.kind === 'version' && ref.roomId === '0,0' && ref.version === 8)) return r.fallback();
+          return reply(r, { snapshots: [{ key: 'version:0,0:8', snapshot: roomSnapshot }], missing: [] });
+        });
+      }
       await context.route(u => u.pathname === '/api/courses/ownership-fixture', r => reply(r, { published: course, draft: null, versions: [], ownerUserId: originalSummary.claimerUserId, permissions: { canSaveDraft: false, canPublish: false, canUnpublish: false } }));
       await context.route(u => /^\/api\/world\/chunks(?:\/summary)?$/.test(u.pathname), r => {
         const params = new URL(r.request().url()).searchParams;
@@ -114,7 +125,22 @@ for (const [device, engine, width, height, touch] of [
           assert.equal((await state()).scene, 'overworld-play'); await page.waitForTimeout(150); assert.equal((await state()).mode, 'browse');
           await page.locator('#btn-world-edit').waitFor({ state: 'hidden' });
         } else {
-          await page.waitForFunction(({ minted, buyer, version }) => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s?.scene === 'editor' && s.canSaveDraft === true && s.canPublish === true && s.roomVersion === version && s.publishedVersion === version && (!minted || s.mintedOwnerWalletAddress === buyer); }, { minted, buyer, version: snapshot.version });
+          await page.waitForFunction(({ minted, buyer, version }) => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s?.scene === 'editor' && s.canSaveDraft === true && s.canPublish === true && s.roomVersion === version && s.publishedVersion === version && (!minted || s.mintedOwnerWalletAddress === buyer); }, { minted, buyer, version: roomSnapshot.version });
+          if (artworkCase) {
+            const expected = kind === 'metadata-current' ? 'NFT metadata is current at v8.' : kind === 'metadata-stale' ? 'NFT metadata is stale (on-chain v3, room v8).' : 'Artwork status has not been recorded here.';
+            await page.waitForFunction(expected => document.body.textContent.includes(expected), expected);
+            const body = await page.locator('body').textContent(); assert(!body.includes('NFT metadata is not on-chain yet'));
+            if (!await page.locator('[data-editor-room-action="history"]').isVisible()) await click('[data-editor-shell-action="room"]');
+            await click('[data-editor-room-action="history"]');
+            await page.locator('#room-history-modal').waitFor({ state: 'visible' });
+            const historyExpected = kind === 'metadata-current' ? 'NFT metadata current at v8' : kind === 'metadata-stale' ? 'NFT metadata stale at v3' : 'Artwork status unknown';
+            const history = page.locator('#room-history-meta'); await history.waitFor({ state: 'visible' });
+            await page.waitForFunction(expected => document.getElementById('room-history-meta').textContent.includes(expected), historyExpected);
+            assert(!((await history.textContent()).includes('NFT metadata not set')));
+            assert(await history.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'Artwork details must wrap inside the dialog');
+            const box = await history.boundingBox(); assert(box && box.width > 0 && box.height > 0 && box.y >= 0 && box.y + box.height <= height);
+
+          }
           const editor = await state(); if (expanded) assert.equal(editor.courseEdit, null, 'A room token must not grant group editing');
         }
         assert.equal(requests.length, kind === 'unminted' ? 0 : kind === 'failure-retry' ? 2 : 1); assert.deepEqual(groupWrites, []); assert.deepEqual(errors, []); assert.deepEqual(api.report().misses, {});

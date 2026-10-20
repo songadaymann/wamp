@@ -1,6 +1,6 @@
 # F237: minting and room artwork
 
-Status: client implementation locally verified; source/release gates and existing-token execution pending on `codex/wamp-mint-artwork-2026-10-20`, from main9ba9670b plus F241 receipt50ba5178. F241 is fully delivered. Master172/216; F237 remains unchecked. The goal remains the full checklist.
+Status: software release verified on wamp.land; six legacy repair transactions remain unsigned. PR265/main3ad1f213. Master172/216; F237 remains unchecked. The goal remains the full checklist.
 
 ## Required outcome
 
@@ -63,3 +63,14 @@ The first mint-network job spent6m56s reaching the new28-case artwork step (depe
 
 
 The initial mint-network job is now authoritatively terminal: cancelled at10:09:09Z after its10-minute envelope. Its retained job log records all28 artwork cases passing, including the final tablet account roundtrip at10:09:07Z, followed by cancellation during completion/cleanup. This is not an accepted source gate; the new15-minute job must finish successfully on the new exact head. The corrected hosted harness completes all28 cases against preview2d245c65 with zero errors, fixture misses, unexpected external requests and real transactions. Keep the first hosted failure and cancelled job logs. No assertion or test was skipped. A new source commit is required for the analytics fixture and CI envelope; the old preview/worker proofs remain historical evidence, and the new head needs its own preview and checks.
+
+
+## Verified software delivery, 2026-10-20
+
+[PR265](https://github.com/songadaymann/wamp/pull/265) is merged as main `3ad1f2132451eb8e6d4bf19948705a58409aceb7`. Final source `ea3e03479a496c6e80a3156e4a2a375324e89872` and merged main each pass all12 checks, full quality587files/4,918tests and188 browser cases. The exact-source preview matches205 files and passes28 hosted artwork cases. The clean literal-main guarded Pages-only release completes without skipped quality/world-tile/smoke gates; immutable deployment is https://0dc3474e.wampland.pages.dev. API856fc5e6 and map099b18fd remain byte-for-byte unchanged.
+
+Actual-domain verification passes all28 artwork cases across desktop,320px phone,WebKit phone and tablet. All55 critical files match custom and immutable domains. Published-room startup executes the final main assets with zero browser errors. Representative captures are visually inspected, including both approval stages, phone partial success, WebKit artwork-only retry, tablet final controls and startup. External wallet/API responses are fixtures; application flow, sender, renderer and viem remain real. Play counting and Cloudflare telemetry are intercepted. No real transaction, account/comment mutation or play increment was used. Guard4517 and verification78584 are terminal0. Evidence: ignored output/f237-mint-artwork-2026-10-20/delivery.json and live-proof.json.
+
+The initial production harness runs exposed route precedence for the external play tracker, then unisolated Cloudflare script-monitor telemetry. Both failed runs are retained and were not counted as acceptance. Exact external fixture adapters fixed the isolation; no product code, assertion, action deadline or deployment changed. The earlier single hosted WebKit first-wallet stall remains an undiagnosed F239 observation; diagnostic and full unchanged-deadline rechecks pass.
+
+`softwareReleaseComplete=true` is distinct from full F237 completion. The six legacy repairs are unsigned and need explicit final transaction approval, execution and resulting URI verification. Their09:36:53Z gas estimate is historical. F237 stays unchecked. Before signing, inspect F244 image quality/external_url so final proposals avoid paying twice; F242 artwork-cache truth precedes F239 recovery. Unrelated checkouts, selected background and all existing decision gates remain preserved.

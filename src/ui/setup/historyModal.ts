@@ -352,7 +352,7 @@ export class RoomHistoryModalController {
         `Token #${state.mintedTokenId} · Owner ${state.mintedOwnerWalletAddress ?? 'unknown'}`
       );
       if (state.mintedMetadataRoomVersion === null) {
-        metaParts.push('NFT metadata not set');
+        metaParts.push('Artwork status unknown');
       } else if (state.mintedMetadataCurrent) {
         metaParts.push(`NFT metadata current at v${state.mintedMetadataRoomVersion}`);
       } else {

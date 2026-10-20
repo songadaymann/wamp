@@ -1,5 +1,19 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — F242 local acceptance; source gates next
+
+Canonical codex/wamp-metadata-reconcile-2026-10-20, base verified main3ad1f213. Fresh explicit ownership reads reconcile canonical URI/hash/version at one pinned block, with the existing finite deadline and no extra idle/tolerant-save reads. Confirmation uses the chain version; guarded metadata-only writes preserve identity/cache races. A keyless dry-run-first CLI revalidates plan digest, chain and old cache, checkpoints pending/acknowledged writes and checks the resulting chain/cache. All11 mappings read; five historical artwork-cache repairs proposed, none applied. No wallet key, signature, real transaction or production account/comment mutation.
+
+Local full quality589files/4,951tests and boot652.6KB/670KB pass. Native API26 cases and12 new visible History cases on desktop/narrow-phone/WebKit/tablet pass; captures and two official-client gameplay iterations inspected. Unknown History copy and phone long-address wrapping are corrected. Follow-up styles/build/UI and CLI guard checks pass after those final safeguards. Source/main/preview, actual five-row repair and full guarded API+Pages/live delivery remain pending. Plan: docs/review/wamp-metadata-reconcile-2026-10-20.md; ignored delivery.json. F242 unchecked/master172/216. F237 software release complete but six legacy transactions unsigned; F239/F244 and all existing gates/preservation remain separate.
+
+
+## 2026-10-20 — F237 software delivered; F242 reconciliation next
+
+PR265/main3ad1f213 is deployed and verified: source/main all12 checks and188 browser cases per head, full587files/4,918tests, matching205-file preview,28 hosted and28 actual-domain artwork cases. Clean-main guarded Pages-only release and real read-only startup pass;55 files match both domains and API/map remain exact and unchanged. Captures inspected. External telemetry/play counts are isolated, with no real transaction, production account/comment write or play increment. Initial harness isolation failures are retained, corrected and not waived. Evidence: docs/review/wamp-mint-artwork-2026-10-20.md and ignored delivery.json/softwareReleaseComplete=true. F237 remains unchecked because six unsigned legacy repairs still need approved execution and result verification. Master172/216.
+
+Next branch codex/wamp-metadata-reconcile-2026-10-20 starts at verified main3ad1f213. F242 canonical tokenURI/version/hash reconciliation is needed before F239 interrupted-wallet recovery; F244 quality/play links should be prepared before any final legacy signing proposal. Full checklist goal remains active; do not treat source-time pending entries below as current delivery status. Preserve unrelated dirty primary/mann.cool, user Chrome/TAS4208, selected animation, declined F061/F118, physical iOS F089 and decision-gated F145/F243/F167.
+
+
 
 ## 2026-10-20 — F237 hosted analytics fixture and expanded CI budget
 
