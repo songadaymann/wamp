@@ -1,5 +1,9 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — Check-again result race corrected; safety map fully ready
+
+Authb6c4e307 passes. Narrow-phone artwork-check exposed dismissal of the old hidden overlay before asynchronous confirmed UI appeared. Await canonical recovery before dismissing; keep all actual-control/history/error/deadline assertions. Four targeted narrow/WebKit mint/artwork checks pass, app src unchanged. Safety646/646 ready,445/445 published leaves, all ancestor/object parity and zero work/errors pass canonical readiness; DLQ metrics now0 with no explicit ack/deletion. Safety activation/parity/two probes pending, production candidate preview3f3c530d prepared from unchanged app source. F239 unchecked; source/main/production/live gates and all preservation/decision boundaries retained.
+
 ## 2026-10-20 — Isolate auth fixtures; withdraw ineffective cache experiment
 
 93b8f095 did not fix hosted Safari teardown; reversed its four src/test changes. Final application src exactly matches06c58f6e (597/5,055), not the experiment’s597/5,057. Auth fixtures explicitly use recorded compact-world data and reject live production tile requests; all auth flows/error/deadline assertions remain, with tiled-map gates separate and F089 follow-up recorded. Add one ECONNRESET retry only to the fixture’s immutable wallet-module GET, with HTTP success required; application/provider retries stay zero. Approved safety key reset is complete; safety migrations/API/renderer staged,445 leaves+ancestors building, DLQ/parity/two-probe gates pending. Temporary DLQ inspector removed/restored without ack/deletion. Production renderer preview53eed7a6 exists, no production mutation/deploy. Fresh source/main/canonical map/live proof required; F239 unchecked and all prior boundaries retained.

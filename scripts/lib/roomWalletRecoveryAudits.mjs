@@ -123,7 +123,8 @@ export async function auditRoomWalletRecovery(h) {
     await h.action(); await dismissResult(); await waitRecovered(artwork ? 'artwork' : 'mint');
   } else if (kind === 'mint-check' || kind === 'artwork-check') {
     // Chain approval completed, but the wallet has not returned its hash yet.
-    h.markChain(artwork); await h.click('#btn-busy-retry'); await dismissResult(); await waitRecovered(artwork ? 'artwork' : 'mint');
+    // Check again closes the waiting overlay before its asynchronous result is ready.
+    h.markChain(artwork); await h.click('#btn-busy-retry'); await waitRecovered(artwork ? 'artwork' : 'mint'); await dismissResult();
     await h.approve(true); // Late hash belongs to the captured operation, never a new approval.
     await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) || '[]').some(p => p.txHash), KEY);
     await returnToTab(); await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) || '[]').length === 0, KEY);
