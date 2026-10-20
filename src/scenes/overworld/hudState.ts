@@ -60,6 +60,7 @@ export interface SelectedRoomContext {
 }
 
 interface OverworldHudStateControllerHost {
+  isActive?: () => boolean;
   isEditorPlaytest?: () => boolean;
   getMode(): OverworldMode;
   getSelectedCoordinates(): RoomCoordinates;
@@ -94,6 +95,12 @@ interface OverworldHudStateControllerHost {
 }
 
 export class OverworldHudStateController {
+  private readonly ownershipEditInvalidations = new Set<() => void>();
+  private ownershipGeneration = 0;
+  private ownershipContextKey: string | null = null;
+  private editContextKey: string | null = null;
+  private editContextVersion = 0;
+  private readonly ownershipRevisions = new Map<string, number>();
   private selectedSummary: WorldRoomSummary | null = null;
   private readonly selectedOwnershipByRoomId = new Map<string, SelectedRoomOwnershipViewData>();
   private readonly selectedCreatorProfileByUserId = new Map<string, SelectedCreatorProfileViewData | null>();
@@ -105,6 +112,11 @@ export class OverworldHudStateController {
   constructor(private readonly host: OverworldHudStateControllerHost) {}
 
   reset(): void {
+    this.ownershipGeneration++;
+    this.invalidateOwnershipEdits();
+    this.ownershipContextKey = null;
+    this.editContextKey = null;
+    this.ownershipRevisions.clear();
     this.selectedSummary = null;
     this.selectedOwnershipByRoomId.clear();
     this.selectedCreatorProfileByUserId.clear();
@@ -112,6 +124,50 @@ export class OverworldHudStateController {
     this.loadingOwnershipRoomIds.clear();
     this.loadingCreatorProfileUserIds.clear();
     this.loadingCourseIds.clear();
+  }
+
+  onOwnershipEditInvalidation(callback: () => void): () => void {
+    this.ownershipEditInvalidations.add(callback);
+    return () => { this.ownershipEditInvalidations.delete(callback); };
+  }
+
+  private invalidateOwnershipEdits(): void {
+    this.editContextVersion++;
+    for (const callback of this.ownershipEditInvalidations) callback();
+  }
+
+  captureOwnershipEditContext(): () => boolean {
+    this.syncOwnershipContext();
+    const version = this.editContextVersion;
+    return () => { this.syncOwnershipContext(); return version === this.editContextVersion && (this.host.isActive?.() ?? true); };
+  }
+
+  setRoomOwnershipDetails(roomId: string, details: SelectedRoomOwnershipViewData): void {
+    this.syncOwnershipContext();
+    this.ownershipRevisions.set(roomId, (this.ownershipRevisions.get(roomId) ?? 0) + 1);
+    this.loadingOwnershipRoomIds.delete(roomId);
+    this.selectedOwnershipByRoomId.set(roomId, { ...details });
+    this.renderHud();
+  }
+
+  private syncOwnershipContext(): void {
+    const auth = getAuthDebugState(), worldId = getActiveWorldId();
+    const identity = JSON.stringify([worldId, worldId ? canBuildInActiveWorld(worldId) : false,
+      auth.authenticated, auth.user?.id, auth.user?.walletAddress?.toLowerCase(), auth.schoolManaged,
+      auth.source]);
+    if (identity !== this.ownershipContextKey) {
+      this.ownershipContextKey = identity;
+      this.ownershipGeneration++;
+      this.selectedOwnershipByRoomId.clear();
+      this.loadingOwnershipRoomIds.clear();
+      this.ownershipRevisions.clear();
+    }
+    const selected = this.host.getSelectedCoordinates();
+    const editKey = JSON.stringify([identity, selected.x, selected.y, this.host.getMode()]);
+    if (editKey !== this.editContextKey) {
+      this.editContextKey = editKey;
+      this.invalidateOwnershipEdits();
+    }
   }
 
   refreshSelectedSummary(): void {
@@ -180,6 +236,7 @@ export class OverworldHudStateController {
   }
 
   renderHud(statusOverride?: string): void {
+    this.syncOwnershipContext();
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedRoomId = roomIdFromCoordinates(selectedCoordinates);
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
@@ -297,10 +354,14 @@ export class OverworldHudStateController {
       return;
     }
 
+    const generation = this.ownershipGeneration, revision = this.ownershipRevisions.get(roomId) ?? 0;
+    const current = () => generation === this.ownershipGeneration && revision === (this.ownershipRevisions.get(roomId) ?? 0);
     this.loadingOwnershipRoomIds.add(roomId);
     void this.host
       .loadRoomOwnershipDetails(roomId, coordinates)
       .then((details) => {
+        this.syncOwnershipContext();
+        if (!current()) return;
         this.loadingOwnershipRoomIds.delete(roomId);
         this.selectedOwnershipByRoomId.set(roomId, details);
 
@@ -309,6 +370,7 @@ export class OverworldHudStateController {
         }
       })
       .catch((error) => {
+        if (!current()) return;
         this.loadingOwnershipRoomIds.delete(roomId);
         console.warn('Failed to load selected room ownership details', error);
       });

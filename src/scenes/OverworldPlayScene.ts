@@ -716,7 +716,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.selectionController = createSelectionController(host);
     this.roomTransitionController = createRoomTransitionController(host);
     this.presenceOverlayController = createPresenceOverlayController(host);
-    this.flowController = createFlowController(host);
+    this.flowController = createFlowController(host, this.hudStateController);
     this.inspectInputController = createInspectInputController(host);
     this.framePipeline = createFramePipeline(host);
   }

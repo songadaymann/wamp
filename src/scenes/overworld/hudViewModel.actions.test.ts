@@ -64,6 +64,13 @@ describe('room card available actions', () => {
     expect(card({ selectedOwnership, currentWalletAddress: '0xabc' }))
       .toMatchObject({ editButtonHidden: false, selectedActionReasonText: '' });
   });
+  it('offers an explicit check to a linked buyer whose cached token owner differs', () => {
+    expect(card({ selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xseller' },
+      currentUserId: 'buyer', currentWalletAddress: '0xbuyer' })).toMatchObject({
+      editButtonHidden: false, editButtonDisabled: false, editButtonText: 'Check ownership',
+      courseBuilderButtonHidden: true, selectedActionReasonText: '',
+    });
+  });
   it('keeps the owner’s expanded setup available and labels expanded play', () => {
     expect(card({ currentUserId: 'builder', selectedCourse: {
       courseId: 'expanded:room', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2,

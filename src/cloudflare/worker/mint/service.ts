@@ -80,9 +80,10 @@ export function requireRoomMintAuthAccount(env: Env) {
  * (minting and explicit ownership refreshes need the real chain state). 'use-stored'
  * keeps the ownership D1 last recorded, so an RPC outage or rate limit does not block
  * saves in every room: unminted rooms stay editable by their claimer, and minted rooms
- * stay with the last synced token owner until the next successful read.
+ * stay with the last synced token owner until the next successful read. 'require-fresh'
+ * also rejects disabled configuration and the local development fallback.
  */
-export type RoomChainSyncFailureMode = 'throw' | 'use-stored';
+export type RoomChainSyncFailureMode = 'throw' | 'use-stored' | 'require-fresh';
 
 // A tolerant sync gives up sooner: one retry and 5 s per call instead of viem's
 // 3 retries and 10 s, so a hanging RPC delays a save by seconds rather than ~40 s.
@@ -145,9 +146,9 @@ export async function syncRoomOwnershipFromChain(
 ): Promise<RoomRecord> {
   let config: RoomMintConfig | null;
   try {
-    config = getOptionalRoomMintConfig(env);
+    config = onChainError === 'require-fresh' ? requireRoomMintConfig(env) : getOptionalRoomMintConfig(env);
   } catch (error) {
-    if (onChainError === 'throw') throw error;
+    if (onChainError !== 'use-stored') throw error;
     return record;
   }
   if (!config) {
@@ -162,11 +163,14 @@ export async function syncRoomOwnershipFromChain(
       onChainError === 'use-stored' ? TOLERANT_CHAIN_READ_TRANSPORT : {}
     );
   } catch (error) {
-    if (shouldSkipLocalRoomMintSync(config, error)) {
+    if (onChainError !== 'require-fresh' && shouldSkipLocalRoomMintSync(config, error)) {
       console.warn('Skipping local room ownership sync because the local mint RPC is unavailable.', error);
       return record;
     }
 
+    if (onChainError === 'require-fresh') {
+      throw new HttpError(503, 'Could not check room ownership. Please try again.');
+    }
     if (onChainError === 'throw') {
       throw error;
     }
@@ -180,6 +184,9 @@ export async function syncRoomOwnershipFromChain(
   }
 
   if (!chainState) {
+    if (onChainError === 'require-fresh' && isRoomMinted(record)) {
+      throw new HttpError(409, 'This room token could not be verified on the configured network.');
+    }
     return record;
   }
 
