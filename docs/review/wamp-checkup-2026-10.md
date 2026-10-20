@@ -1,3 +1,5 @@
+**October19 F048 complete:** [PR259](https://github.com/songadaymann/wamp/pull/259), main ac2b8c89 / Pages c969b57e, is live:4,717 tests, all9 checks and99 browser cases per head, full guarded release, exact Worker/37 assets per domain and3 isolated actual-domain auth profiles. Master168/216. The full checklist remains active; next F045 identity selection is confirmed in an isolated actual-router reproduction. [Receipt](wamp-session-controls-2026-10-19.md).
+
 **October19 F243 technical fix delivered:** [PR258](https://github.com/songadaymann/wamp/pull/258), main bdd2c3ee / Pages b65d6ca3, is verified live:4,703 tests,99 hosted browser cases per head, exact deployed Worker and37 assets per domain. Only the conditional historical provider-key follow-up remains open. F048 session controls are in verification; F145 still awaits direction. [Receipt](wamp-wallet-network-info-2026-10-19.md).
 
 **October19 F145 audit:** All739 required published versions loaded, including125 Expanded cell versions. A paired runtime test confirms that the simple taller-air-body proposal blocks an existing16px passage. F145 stays open while Jonathan chooses collision versus visual-first direction; no physics/art change is deployed. [Compatibility evidence](wamp-player-hitbox-compatibility-2026-10-19.md).
@@ -237,7 +239,7 @@ Open items in this area are withheld from this public repo until fixed.
 - [x] **F051** Most mutating JSON endpoints parse request bodies with no size limit · low impact · small effort — **done 2026-10-11** (`ae6444d7`, [PR #151](https://github.com/songadaymann/wamp/pull/151), API Worker `174d2a23`). Every JSON body is read with a size cap (default 4 MB; 16 KB for guestbook, guest activity, chat and comments; 600 KB for guest drafts) and refused with 413 before parsing. Production: a 20 KB guest heartbeat gets 413.
 - [ ] **F050** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
 - [ ] **F045** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
-- [ ] **F048** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [x] **F048** All-device session logout, stale-response protection, classroom reset revocation and bounded session cleanup verified and released · low impact · small effort · [receipt](wamp-session-controls-2026-10-19.md)
 
 ### Bugs: lost work and broken moments
 

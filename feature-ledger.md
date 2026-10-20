@@ -1,3 +1,15 @@
+## 2026-10-19 — F048 delivered; F045 identity selection next
+
+PR259/main ac2b8c89 is live on wamp.land / Pages c969b57e. Full4,717 tests, all9 exact-source/main checks and99 hosted browser cases per head pass. The full clean-main guard exits0, deployed Worker 2b279ba8-6296-49e3-a5f2-f60c25a8b1a4 serves100% and matches bytes,37 assets match each domain, actual startup and all3 isolated actual-domain auth profiles pass. Both logout choices reject delayed old session responses. No real accounts logged out, new background task or credential changes. F048 checked; master168/216. Receipt: docs/review/wamp-session-controls-2026-10-19.md.
+
+The full goal remains active. F045's private correction is read and current source plus an isolated actual-router reproduction confirm ambiguous admin selection by shared displayName; ignored output/f045-identity-2026-10-19 contains the next acceptance plan. F243's historical provider-key question and F145's collision/art choice remain unanswered; no answer is inferred. Preserve unrelated dirty checkouts, TAS, selected animation, declined F061/F118 and all owner/physical-device decisions.
+
+## 2026-10-19 — F048 final release; F045 plan ready
+
+F048 PR259/main ac2b8c89 passes all9 exact-source/main checks and99 hosted browser cases per head,4,717 tests, local native/production auth flows and OSS0/0. Its full clean-main guarded API+Pages deployment is running separately; final live proof remains pending. No F045 code is part of that release.
+
+Canonical next branch codex/wamp-identity-selection-2026-10-19 starts from ac2b8c89. The full F045 correction was read and the ambiguity is confirmed with an actual-router/migrated-local-database reproduction, zero production role changes. The complete implementation/verification/release plan is docs/review/wamp-identity-selection-2026-10-19.md; implementation remains next, F045 stays unchecked. Whole checklist goal active; F243 provider-key/F145 collision choices unanswered; preserve unrelated lanes/TAS/selected animation and declined/physical-device/owner decisions.
+
 ## 2026-10-19 — F243 delivered; F048 native acceptance
 
 F243 PR258/main bdd2c3ee is live on wamp.land / Pages b65d6ca3. The full guard exits0, all9 exact-source/main checks and99 hosted browser cases per head pass, deployed Worker b3ce8a4f is100% and its bytes match clean main, all37 assets match both domains and actual startup has zero errors. Historical keyed-provider use remains unknown; an owner question is pending. F243 remains open for only that conditional follow-up. No credentials rotated or wallet transactions submitted.
