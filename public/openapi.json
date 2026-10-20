@@ -1853,7 +1853,7 @@
         "properties": {
           "chainId": { "type": "integer" },
           "name": { "type": "string" },
-          "rpcUrl": { "type": "string" },
+          "rpcUrl": { "type": "string", "description": "Public Base RPC endpoint for wallet network setup; independent of the backend's private RPC transport." },
           "blockExplorerUrl": { "type": ["string", "null"] },
           "nativeCurrency": {
             "type": "object",

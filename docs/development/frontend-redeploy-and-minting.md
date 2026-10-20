@@ -126,6 +126,8 @@ That means at least these env vars are missing remotely:
 - `ROOM_MINT_CONTRACT_ADDRESS`
 - `ROOM_MINT_AUTH_PRIVATE_KEY`
 
+`ROOM_MINT_RPC_URL` stays on the Worker. Mint and metadata preparation return the public Base mainnet or Base Sepolia endpoint for wallet network setup, according to `ROOM_MINT_CHAIN_ID`. There is no fallback to the server's transport for other chains. See [Base network details](https://docs.base.org/get-started/connect-to-base).
+
 Recommended remote values:
 
 - `ROOM_MINT_CHAIN_ID=84532`
