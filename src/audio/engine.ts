@@ -61,6 +61,7 @@ export class AudioEngine {
   private sfxBus: GainNode | null = null;
   private readonly hiddenListeners = new Set<() => void>();
   private readonly firstInteractionListeners = new Set<() => void>();
+  private readonly interactionListeners = new Set<() => void>();
   private readonly stateListeners = new Set<(state: string) => void>();
   private readonly lifecycleLog: AudioLifecycleLogEntry[] = [];
   private returnRetryTimers: number[] = [];
@@ -80,6 +81,7 @@ export class AudioEngine {
     this.lifecycleWindow = windowObj;
     this.audioSessionType = setAudioSessionType(windowObj.navigator as AudioSessionNavigator | undefined);
     const markInteracted = () => {
+      for (const listener of this.interactionListeners) listener();
       const first = !this.interacted;
       this.interacted = true;
       void this.resume('user-gesture');
@@ -126,6 +128,11 @@ export class AudioEngine {
   onFirstInteraction(listener: () => void): void {
     if (this.interacted) listener();
     else this.firstInteractionListeners.add(listener);
+  }
+
+  /** Reuses the engine's gesture listeners for work needed after a cancelled navigation. */
+  onInteraction(listener: () => void): void {
+    this.interactionListeners.add(listener);
   }
 
   /** Runs when the page is hidden, just before the context suspends. */

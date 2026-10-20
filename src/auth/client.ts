@@ -34,6 +34,7 @@ import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQuer
 export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
 import { WalletTransactionRevertedError } from './walletTransaction';
+import { waitForWalletReceipt } from './walletReceiptWait';
 import { applyWalletGate } from '../lib/wallet-gate.js';
 import { hasCryptoWallet } from '../mint/walletGate';
 
@@ -284,10 +285,13 @@ export async function sendPreparedWalletTransaction(
     expectedWalletAddress?: string;
     isCurrent?: () => boolean;
     onBeforeSend?: () => void;
+    signal?: AbortSignal;
     onSubmitted?: (transaction: { hash: string; from: string }) => void;
   } = {},
 ): Promise<{ hash: string; from: string }> {
-  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
+  const current = () => !options.signal?.aborted && options.isCurrent?.() !== false;
+  if (!current()) throw new Error('This room action is no longer current.');
+  if (transaction.chainId !== chain.chainId) throw new Error('The room approval network changed. Prepare this room action again.');
   if (!state.walletProjectConfigured) {
     throw new Error(WALLET_NOT_CONFIGURED_MESSAGE);
   }
@@ -296,11 +300,22 @@ export async function sendPreparedWalletTransaction(
   await ensureWalletConnection();
   const provider = getWalletProvider(walletModal);
 
-  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
+  if (!current()) throw new Error('This room action is no longer current.');
   await ensureWalletChain(provider, chain);
 
-  const { createPublicClient, createWalletClient, custom } = await import('viem');
-  const walletClient = createWalletClient({ transport: custom(provider) });
+  const { createPublicClient, createWalletClient, custom, TransactionReceiptNotFoundError, BaseError, ChainMismatchError } = await import('viem');
+  const sendProvider: Eip1193Provider = { request: args => {
+    if (args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction') {
+      if (!current()) throw new Error('This room action is no longer current.');
+      if (!Array.isArray(args.params) || !args.params[0] || typeof args.params[0] !== 'object') throw new Error('Invalid prepared room transaction.');
+      // The generic viem formatter omits this standard RPC field. Keep the prepared network explicit.
+      const params = [{ ...args.params[0], chainId: `0x${chain.chainId.toString(16)}` }];
+      options.onBeforeSend?.();
+      return provider.request({ ...args, params });
+    }
+    return provider.request(args);
+  } };
+  const walletClient = createWalletClient({ transport: custom(sendProvider, { retryCount: 0 }) });
   const [signerAddress] = await walletClient.getAddresses();
   if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
@@ -309,22 +324,29 @@ export async function sendPreparedWalletTransaction(
     throw new Error('Connected wallet does not match the linked account wallet.');
   }
 
-  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
+  if (!current()) throw new Error('This room action is no longer current.');
   if (options.expectedWalletAddress && options.expectedWalletAddress.trim().toLowerCase() !== signerAddress.toLowerCase()) {
     throw new Error('The connected wallet changed while preparing this room action.');
   }
 
-  options.onBeforeSend?.();
   const hash = await walletClient.sendTransaction({
     account: signerAddress,
-    chain: null,
+    chain: { id: chain.chainId, name: chain.name, nativeCurrency: chain.nativeCurrency,
+      rpcUrls: { default: { http: [chain.rpcUrl] } } },
     to: requireHexValue(transaction.to, 'transaction destination'),
     data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
+  }).catch(error => {
+    if (error instanceof BaseError && error.walk(cause => cause instanceof ChainMismatchError) instanceof ChainMismatchError) {
+      throw new Error(`Wallet network changed. Switch back to ${chain.name} and try again.`);
+    }
+    throw error;
   });
   options.onSubmitted?.({ hash, from: signerAddress });
-  const publicClient = createPublicClient({ transport: custom(provider) });
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  const publicClient = createPublicClient({ transport: custom(provider, { retryCount: 0 }) });
+  const receipt = options.signal
+    ? await waitForWalletReceipt(() => publicClient.getTransactionReceipt({ hash }), error => error instanceof TransactionReceiptNotFoundError, options.signal)
+    : await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status === 'reverted') throw new WalletTransactionRevertedError(hash);
 
   return {
@@ -409,7 +431,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
   const fallbackName =
     user.displayName?.trim()
     || user.email?.trim()
-    || (user.walletAddress ? shortenAddress(user.walletAddress) : 'Player');
+    || (hasCryptoWallet() && user.walletAddress ? shortenAddress(user.walletAddress) : 'Player');
 
   if (authIdentityProfile?.userId !== user.id) {
     authIdentityProfile = {

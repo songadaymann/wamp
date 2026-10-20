@@ -70,7 +70,8 @@ export class RoomWalletActions {
     return getPendingRoomWalletStore().list().find(p => p.roomId === this.host.roomId
       && (!kind || p.kind === kind && p.userId === account.userId && p.wallet === account.wallet));
   }
-  get hasPendingArtworkConfirmation(): boolean { return !!this.getPending('artwork'); }
+  get hasPendingArtworkConfirmation(): boolean { return !!this.getPending('artwork')?.txHash; }
+  get hasPendingWalletConfirmation(): boolean { return !!this.getPending(); }
   reset(): void { this.active?.controller.abort(); for (const check of this.checks) check.abort(); }
   ownsPending(id: string): boolean { return this.active?.pending?.id === id; }
 
@@ -186,7 +187,7 @@ export class RoomWalletActions {
       }
     };
     return sendPreparedWalletTransaction(transaction, chain, {
-      expectedWalletAddress: pending.wallet, isCurrent: run.current,
+      expectedWalletAddress: pending.wallet, isCurrent: run.current, signal: run.controller.signal,
       onBeforeSend: () => { if (!run.current()) throw new Error('This room action is no longer current.'); remember(); },
       onSubmitted: tx => remember(tx.hash),
     }).then(tx => { if (!pending.txHash) remember(tx.hash); return tx; }, error => {
@@ -228,7 +229,10 @@ export class RoomWalletActions {
       if (pending.kind === 'artwork') return this.confirmArtwork(run, pending);
       const record = await run.wait(this.roomRepository.confirmMint(pending.roomId, pending.coordinates, { txHash: pending.txHash }));
       if (!run.current()) return null;
-      this.acceptRecord(run, record); return record;
+      this.acceptRecord(run, record);
+      this.host.setStatusText(record.permissions.canSaveDraft
+        ? 'Your room is collected. Choose Add/update artwork to add its artwork.' : 'Room ownership checked. This room is protected.');
+      return record;
     }
     await this.checkPending(pending, run.controller.signal, run.current);
     return null;
@@ -335,8 +339,10 @@ export class RoomWalletActions {
           }
         } catch { /* Keep the durable hash for a fresh check. */ }
       }
-      if (current()) this.host.setStatusText(this.getPending()
-        ? `${run.durable ? 'The approval was submitted.' : 'Keep this tab open: recovery could not be saved on this device.'} Choose ${kind === 'mint' ? 'Collect room' : 'Add/update artwork'} to check it again without another wallet approval.`
+      const pending = this.getPending();
+      if (current()) this.host.setStatusText(pending
+        ? `${run.durable ? pending.txHash ? 'The approval was submitted.' : 'The wallet approval is not confirmed yet.'
+          : 'Keep this tab open: recovery could not be saved on this device.'} Choose ${kind === 'mint' ? 'Collect room' : 'Add/update artwork'} to check it again without another wallet approval.`
         : error instanceof Error ? error.message : 'Room approval was not completed.');
       return null;
     } finally {

@@ -27,14 +27,19 @@ for (const [profile, engine, width, height, touch] of [['desktop', chromium, 128
       return route.fulfill({ json: { jsonrpc: '2.0', id: q.id, result: encodeFunctionResult({ abi, functionName: 'tokenURI', result: tokenUri }) }, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' } });
     });
     await context.route(u => u.pathname.startsWith('/api/'), route => { unexpected.push(new URL(route.request().url()).pathname); return route.fulfill({ status: 503, body: 'Unexpected fixture request' }); });
-    for (const [name, chainId, host, label] of [['base', '8453', 'mainnet.base.org', 'Base'], ['sepolia', '84532', 'sepolia.base.org', 'Base Sepolia'], ['ethereum', '1', 'eth.merkle.io', 'Ethereum'], ['missing', null, null, null], ['invalid', '8453junk', null, null], ['unsupported', '999999', null, null]]) {
+    for (const [name, chainId, host, label] of [['base', '8453', 'mainnet.base.org', 'Base'], ['sepolia', '84532', 'sepolia.base.org', 'Base Sepolia'], ['ethereum', '1', 'eth.merkle.io', 'Ethereum'], ['missing', null, null, null], ['invalid', '8453junk', null, null], ['unsupported', '999999', null, null], ['no-wallet', '8453', 'mainnet.base.org', null]]) {
       page = await context.newPage(); const errors = [], consoleErrors = [], before = rpc.length;
       page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-      const query = new URLSearchParams({ contract: '0x1111111111111111111111111111111111111111', tokenId: '42' }); if (chainId !== null) query.set('chainId', chainId);
+      const query = new URLSearchParams({ crypto: name === 'no-wallet' ? '0' : '1', contract: '0x1111111111111111111111111111111111111111', tokenId: '42' }); if (chainId !== null) query.set('chainId', chainId);
       await page.goto(`${base}/minted-room.html?${query}`);
       if (host) {
-        await page.waitForFunction(() => document.querySelector('#minted-room-preview-status')?.textContent === 'Rendered from on-chain tokenURI metadata.');
-        assert.equal(await page.locator('#minted-room-title').textContent(), 'Network preview'); assert((await page.locator('#minted-room-meta').textContent()).includes('Chain ' + label));
+        await page.waitForFunction(expected => document.querySelector('#minted-room-preview-status')?.textContent === expected,
+          name === 'no-wallet' ? 'Room preview ready.' : 'Rendered from on-chain tokenURI metadata.');
+        assert.equal(await page.locator('#minted-room-title').textContent(), 'Network preview');
+        if (name === 'no-wallet') {
+          assert(!/Chain |Token|NFT|0x[\da-f]{8}|Explorer/i.test(await page.locator('body').innerText()));
+          assert.equal(await page.locator('[data-crypto]').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).length), 0);
+        } else assert((await page.locator('#minted-room-meta').textContent()).includes('Chain ' + label));
         const canvas = await page.locator('#minted-room-preview canvas').evaluate(c => ({ width: c.width, height: c.height })); assert.deepEqual(canvas, { width: 240, height: 132 });
         assert.equal(rpc.length, before + 1); assert.equal(rpc.at(-1).host, host); assert.deepEqual(consoleErrors, []);
       } else {
@@ -44,6 +49,24 @@ for (const [profile, engine, width, height, touch] of [['desktop', chromium, 128
       const layout = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: innerWidth })); assert(layout.scroll <= width + 1 && layout.inner <= width + 1, JSON.stringify(layout));
       assert.deepEqual(errors, []); await page.screenshot({ path: `${output}/${profile}-${name}.png`, fullPage: true });
       cases.push({ name, ok: true, rpcRequests: rpc.length - before, errors, expectedCaughtErrors: host ? 0 : consoleErrors.length }); console.log(`${profile}-${name}: mint network passed`); await page.close(); page = null;
+    }
+    await context.route(u => u.pathname === '/api/jam', r => r.fulfill({ json: { openAt: '2026-07-20T00:00:00Z', closeAt: '2026-07-27T00:00:00Z',
+      registrationOpen: false, submissionsOpen: false, turnstileSiteKey: null, turnstileRequired: false },
+      headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,OPTIONS' } }));
+    await context.route(u => u.pathname === '/api/auth/session', r => r.fulfill({ json: { authenticated: false, user: null },
+      headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,OPTIONS' } }));
+    for (const force of ['0', '1']) {
+      page = await context.newPage(); const errors = [], before = rpc.length;
+      page.on('pageerror', error => errors.push(error.message));
+      await page.goto(`${base}/jam.html?crypto=${force}`);
+      await page.waitForFunction(expected => document.documentElement.dataset.wallet === expected, force === '1' ? 'yes' : 'no');
+      const copy = await page.locator('body').innerText();
+      assert(copy.includes('USD through PayPal')); assert.equal(copy.includes('USDC to an Ethereum wallet address'), force === '1');
+      assert.equal(rpc.length, before); assert.deepEqual(errors, []);
+      await page.screenshot({ path: `${output}/${profile}-jam-gate-${force}.png`, fullPage: true });
+      cases.push({ name: `jam-gate-${force}`, ok: true, rpcRequests: 0, errors });
+      console.log(`${profile}-jam-gate-${force}: mint network passed`);
+      await page.close(); page = null;
     }
     assert.deepEqual(unexpected, []); reports.push({ profile, ok: true, cases, unexpected, realRpcRequests: 0, transactionsSubmitted: 0 });
   } catch (error) { if (page && !page.isClosed()) await page.screenshot({ path: `${output}/${profile}-failure.png`, fullPage: true }); writeFileSync(`${output}/${profile}-failure.json`, JSON.stringify({ error: String(error), cases, unexpected }, null, 2)); throw error; }

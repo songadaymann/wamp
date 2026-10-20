@@ -61,6 +61,7 @@ function harness(options: { interacted?: boolean } = {}) {
   const h = {
     controller, engine, context, AudioContext, sources, gains, loads, fetchMock, timers, windowEvents,
     gesture() { emit(windowEvents, 'pointerdown'); },
+    pageEvent(name: string) { emit(windowEvents, name); },
     visibility(hidden: boolean) { doc.hidden = hidden; emit(docEvents, 'visibilitychange'); },
     osState(state: string) { context.state = state; stateChange?.(); },
     manualLoads() { autoLoad = false; },
@@ -75,10 +76,38 @@ function harness(options: { interacted?: boolean } = {}) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SFX on Web Audio buffers (F023, F229)', () => {
+  it('aborts unfinished sound loads on navigation without trying other formats, and resumes after a cached-page return', async () => {
+    const h = harness();
+    let signal: AbortSignal | undefined;
+    h.fetchMock.mockImplementationOnce((_url: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+      signal = options?.signal ?? undefined;
+      signal?.addEventListener('abort', () => reject(new DOMException('Navigation', 'AbortError')), { once: true });
+    }));
+    h.controller.play('jump', { ignoreCooldown: true });
+    expect(h.fetchMock).toHaveBeenCalledTimes(1);
+    h.pageEvent('pagehide');
+    expect(signal?.aborted).toBe(true);
+    h.runTimers(10_000); await h.settle();
+    expect(h.fetchMock).toHaveBeenCalledTimes(1);
+    expect(h.context.decodeAudioData).not.toHaveBeenCalled();
+    h.pageEvent('pageshow'); await h.settle();
+    expect(h.fetchMock.mock.calls.length).toBeGreaterThan(1);
+    h.controller.play('jump', { ignoreCooldown: true }); await h.settle();
+    expect(h.sources.some(source => source.start.mock.calls.length > 0)).toBe(true);
+  });
+  it('resumes sound loading on the next gesture when a draft prompt cancels navigation', async () => {
+    const h = harness();
+    h.pageEvent('beforeunload');
+    h.runTimers(10_000); await h.settle();
+    expect(h.fetchMock).not.toHaveBeenCalled();
+    h.gesture(); await h.settle();
+    h.controller.play('jump', { ignoreCooldown: true }); await h.settle();
+    expect(h.sources.some(source => source.start.mock.calls.length > 0)).toBe(true);
+  });
   it('plays a cue from a decoded buffer through its gain, the effects volume and the engine bus, never an <audio> element', async () => {
     const h = harness();
     h.controller.play('jump', { ignoreCooldown: true }); await h.settle();
-    expect(h.fetchMock).toHaveBeenCalledWith('http://localhost/assets/sfx/movement/jump.ogg');
+    expect(h.fetchMock).toHaveBeenCalledWith('http://localhost/assets/sfx/movement/jump.ogg', { signal: expect.any(AbortSignal) });
     expect(h.sources).toHaveLength(1);
     const [source] = h.sources;
     expect(source.start).toHaveBeenCalledOnce(); expect(source.loop).toBe(false);

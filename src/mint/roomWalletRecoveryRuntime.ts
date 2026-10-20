@@ -5,7 +5,7 @@ import { getPendingRoomWalletStore } from './pendingRoomWallet';
 import { RoomWalletRecovery } from './roomWalletRecovery';
 import { checkRoomWalletReceipt } from './roomWalletReceipt';
 
-export function getRoomWalletIdentity() {
+function getRoomWalletIdentity() {
   const auth = getAuthDebugState();
   return { userId: auth.authenticated ? auth.user?.id ?? null : null,
     wallet: auth.authenticated ? auth.user?.walletAddress?.toLowerCase() ?? null : null };

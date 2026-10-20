@@ -3,8 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WAMP Minted Room</title>
+    <title>WAMP Room Preview</title>
     <style>
+      @layer components {
       :root {
         color-scheme: dark;
         --bg: #090b10;
@@ -131,28 +132,29 @@
           grid-template-columns: 1fr;
         }
       }
+      }
     </style>
   </head>
   <body>
     <main>
       <section class="panel hero">
         <div>
-          <div class="muted">WAMP NFT</div>
+          <div class="muted">WAMP<span data-crypto> NFT</span></div>
           <h1 id="minted-room-title">Loading room...</h1>
         </div>
-        <div id="minted-room-summary" class="muted">Reading token metadata from chain.</div>
+        <div id="minted-room-summary" class="muted">Loading room preview...</div>
         <div id="minted-room-meta" class="meta"></div>
       </section>
 
       <section class="layout">
         <div class="panel">
-          <h2>Rendered From On-Chain Metadata</h2>
+          <h2>Room Preview<span data-crypto> · On-Chain</span></h2>
           <p id="minted-room-preview-status" class="muted">Loading preview…</p>
           <div id="minted-room-preview" class="preview-shell"></div>
         </div>
 
         <div class="panel">
-          <h2>Token Details</h2>
+          <h2>Room Details</h2>
           <dl id="minted-room-details"></dl>
         </div>
       </section>
@@ -163,7 +165,7 @@
       </section>
 
       <section id="minted-room-error" class="panel error hidden">
-        <h2>Unable To Render Token</h2>
+        <h2>Preview Unavailable</h2>
         <p id="minted-room-error-text"></p>
       </section>
     </main>

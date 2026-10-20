@@ -30,6 +30,8 @@ export interface RoomCollectionFlowHost {
   artwork(options: RoomCollectionStageOptions): Promise<RoomRecord | null>;
   canAddArtwork(): boolean;
   isArtworkSubmitted(): boolean;
+  isArtworkPending?(): boolean;
+  isCollectionSubmitted?(): boolean;
   onStateChanged?(): void;
   onArtworkPending?(status: CollectionStatus): void;
   getStatus(): CollectionStatus;
@@ -50,6 +52,7 @@ export class RoomCollectionFlow {
   private async run(artworkOnly: boolean): Promise<RoomRecord | null> {
     if (this.active || !this.host.isActive()) return null;
     const operation = {}, context = this.host.captureContext(), identity = this.host.getIdentity();
+    const recovering = this.host.isCollectionSubmitted?.() ?? false;
     const wallet = identity.wallet?.trim().toLowerCase() ?? null;
     let signerSeen = Boolean(identity.signer);
     let cancelled = false;
@@ -83,7 +86,7 @@ export class RoomCollectionFlow {
         if (current()) this.host.setStatus({ text: 'Could not finish checking this collection. Check the room before trying again.', accentText: '', linkLabel: '', linkHref: null });
         return null;
       }
-      if (!minted || !current() || !identity.userId || !wallet || !this.host.canAddArtwork()) return minted;
+      if (!minted || recovering || !current() || !identity.userId || !wallet || !this.host.canAddArtwork()) return minted;
       const mintStatus = { ...this.host.getStatus() };
       try {
         const artwork = await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Step 2 of 2: Add artwork' });
@@ -93,6 +96,8 @@ export class RoomCollectionFlow {
         const status = { ...mintStatus, accentText: `Collected token #${minted.mintedTokenId}`,
           text: this.host.isArtworkSubmitted()
             ? 'Your room is collected. The artwork approval was submitted. Choose Add/update artwork to check it without another wallet approval.'
+            : this.host.isArtworkPending?.()
+              ? 'Your room is collected. The artwork approval is not confirmed yet. Choose Add/update artwork to check it without another wallet approval.'
             : "Artwork wasn't added. Choose Add/update artwork to finish; your room is already collected.",
         };
         this.host.setStatus(status);

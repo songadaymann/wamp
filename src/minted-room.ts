@@ -7,6 +7,9 @@ import {
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from './mint/roomOwnership';
 import { parseRoomChainId } from './mint/roomNetwork';
+import { applyWalletGate } from './lib/wallet-gate.js';
+import { hasCryptoWallet } from './mint/walletGate';
+import './styles/sections/wallet-gate.css';
 
 const titleEl = document.getElementById('minted-room-title');
 const summaryEl = document.getElementById('minted-room-summary');
@@ -22,6 +25,7 @@ void bootstrap();
 
 async function bootstrap(): Promise<void> {
   try {
+    await applyWalletGate();
     const params = new URLSearchParams(window.location.search);
     const chainId = parseRoomChainId(params.get('chainId'));
     if (chainId === null) {
@@ -39,7 +43,7 @@ async function bootstrap(): Promise<void> {
       transport: http(),
     });
     const contractAddress = getAddress(contract);
-    summary(`Reading token #${tokenId} from ${chain.name}.`);
+    summary(hasCryptoWallet() ? `Reading token #${tokenId} from ${chain.name}.` : 'Loading room preview...');
 
     const tokenUri = await client.readContract({
       address: contractAddress,
@@ -53,7 +57,7 @@ async function bootstrap(): Promise<void> {
     if (titleEl) {
       titleEl.textContent = metadata.name || payload.title || `Room ${payload.coordinates[0]},${payload.coordinates[1]}`;
     }
-    summary(metadata.description || 'Room metadata loaded from chain.');
+    summary(metadata.description || 'A WAMP room preview.');
     renderMeta([
       `Chain ${chain.name}`,
       `Room ${payload.roomId}`,
@@ -76,16 +80,17 @@ async function bootstrap(): Promise<void> {
       return `${attribute.trait_type}: ${attribute.value}${suffix}`;
     }));
 
-    previewStatus('Rendering from the embedded wamp_room payload.');
+    previewStatus('Rendering room preview...');
     const canvas = await renderWampMintedRoomToCanvas(payload, {
       tilePixelSize: 6,
     });
     previewEl?.replaceChildren(canvas);
-    previewStatus('Rendered from on-chain tokenURI metadata.');
+    previewStatus(hasCryptoWallet() ? 'Rendered from on-chain tokenURI metadata.' : 'Room preview ready.');
   } catch (error) {
     console.error('Failed to render minted room', error);
     if (titleEl) titleEl.textContent = 'Preview unavailable';
-    const message = error instanceof Error ? error.message : 'Unknown render failure.';
+    const message = hasCryptoWallet() ? error instanceof Error ? error.message : 'Unknown render failure.'
+      : 'This room preview is unavailable. Open the room in WAMP for a fresh link.';
     if (errorRootEl) {
       errorRootEl.classList.remove('hidden');
     }
@@ -135,6 +140,7 @@ function renderMeta(values: string[]): void {
     ...values.map((value) => {
       const chip = document.createElement('div');
       chip.className = 'chip';
+      if (value.startsWith('Chain ')) chip.dataset.crypto = '';
       chip.textContent = value;
       return chip;
     }),
@@ -151,6 +157,9 @@ function renderDetails(entries: Record<string, string>): void {
       const dt = document.createElement('dt');
       dt.textContent = label;
       const dd = document.createElement('dd');
+      if (['Contract', 'Token', 'Animation', 'Explorer'].includes(label)) {
+        dt.dataset.crypto = ''; dd.dataset.crypto = '';
+      }
       if (/^https?:\/\//.test(value)) {
         const link = document.createElement('a');
         link.href = value;
@@ -173,7 +182,7 @@ function renderAttributes(entries: string[]): void {
 
   if (entries.length === 0) {
     const item = document.createElement('li');
-    item.textContent = 'No attributes on this token.';
+    item.textContent = 'No room facts available.';
     attributesEl.replaceChildren(item);
     return;
   }

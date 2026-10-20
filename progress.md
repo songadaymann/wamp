@@ -1,5 +1,13 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — F239 final candidate; WebKit reload defect fixed
+
+Added provider-boundary chain checks/chainId, abortable receipt reads, exact unknown/submitted feedback and no automatic second stage when resuming an interrupted collection. Reproduced WebKit sound fallback/queued warmups after navigation started; beforeunload/pagehide now cancels loads and cached-page/cancelled-navigation returns recover through the shared engine. Targeted WebKit mint/artwork reloads and23 audio tests pass; final100-device cases are running. Full quality/build passes595files/5,041tests, boot656.6KB/670KB; OSS0blockers/0warnings; earlier candidate36 preview/jam,28 artwork and40 ownership cases pass. Installed-client gate0/1 captures inspected. Knip baseline reports remain failing, with zero new unused exports. F239 unchecked/master173/216; source/main/preview/guard/live delivery pending. Full goal active. F167 AI on hold per Jonathan. Preserve unsigned F237 repairs/F244-before-signing, other decision/physical boundaries, dirty checkouts, selected animation and user Chrome/TAS4208.
+
+## 2026-10-20 — AI generation remains on hold
+
+Jonathan explicitly chose to keep F167 “Sketch my room” generation on hold. The proposed WAMP-funded pilot (5 sketches/player/day, 100 sitewide/day) is not approved. Checklist/details record the decision; no provider funding, generation route or AI UI is being enabled. Continue the existing F239 verification/release and the full checklist goal; F167 stays unchecked.
+
 ## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
 
 Implemented durable mint/artwork intents/hashes, bounded shared canonical recovery, dismissible wallet waits, late-hash persistence, lock cleanup, account/signer/world/scene fences, and rights/artwork updates that preserve dirty drafts. Automatic recovery can finish a hung foreground wait without starting stage two. Added the explicitly requested installed-wallet visibility gate; non-wallet visitors get email/game UI and no dedicated wallet/chain recovery reads. No wallet SDK is loaded by detection.

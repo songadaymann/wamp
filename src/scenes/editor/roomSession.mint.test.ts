@@ -76,6 +76,24 @@ async function fixture() {
 }
 
 describe('real room session collection and artwork sequence', () => {
+  it('describes an unhashed artwork request as unknown and checks it without another approval', async () => {
+    const f = await fixture();
+    vi.mocked(sendPreparedWalletTransaction).mockImplementationOnce(f.send).mockImplementationOnce(async (_tx, _chain, options) => {
+      options?.onBeforeSend?.(); throw new Error('Wallet disconnected before returning a hash');
+    });
+    expect(await f.controller.mintRoom()).toMatchObject({ mintedTokenId: '42' });
+    expect(f.session.hasPendingWalletConfirmation).toBe(true); expect(f.session.hasPendingArtworkConfirmation).toBe(false);
+    expect(f.session.statusText).toContain('not confirmed yet'); expect(f.session.statusText).not.toContain('was submitted');
+    await f.controller.refreshMintMetadata(); expect(sendPreparedWalletTransaction).toHaveBeenCalledTimes(2);
+    expect(f.repository.prepareMetadataRefresh).toHaveBeenCalledOnce(); expect(f.repository.refreshRoomOwnership).toHaveBeenCalledOnce();
+  });
+  it('checks an interrupted mint from Collect room without automatically opening a new artwork approval', async () => {
+    const f = await fixture(); f.repository.confirmMint.mockRejectedValueOnce(new Error('Confirmation unavailable'));
+    expect(await f.controller.mintRoom()).toBeNull(); expect(f.session.hasPendingWalletConfirmation).toBe(true);
+    expect(await f.controller.mintRoom()).toMatchObject({ mintedTokenId: '42' });
+    expect(f.repository.confirmMint).toHaveBeenCalledTimes(2); expect(sendPreparedWalletTransaction).toHaveBeenCalledOnce();
+    expect(f.repository.prepareMetadataRefresh).not.toHaveBeenCalled(); expect(f.session.statusText).toContain('Your room is collected');
+  });
   it('finishes a hung foreground wait when return-to-tab recovery finds the mint, without a second approval', async () => {
     const f = await fixture(); let finish!: () => void;
     vi.mocked(sendPreparedWalletTransaction).mockImplementationOnce(async (_tx, _chain, options) => {

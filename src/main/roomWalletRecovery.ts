@@ -1,6 +1,7 @@
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../auth/client';
 import { getPendingRoomWalletStore, PENDING_ROOM_WALLET_KEY } from '../mint/pendingRoomWallet';
 import { RoomWalletRecoveryLifecycle } from '../mint/roomWalletRecoveryLifecycle';
+import { getRoomWalletRecovery } from '../mint/roomWalletRecoveryRuntime';
 import { getActiveWorldId, WORLD_CONTEXT_CHANGED_EVENT } from '../worlds/clientContext';
 
 export function installPendingRoomWalletRecovery(): () => void {
@@ -11,10 +12,7 @@ export function installPendingRoomWalletRecovery(): () => void {
       userId: auth.authenticated ? auth.user?.id ?? null : null,
       wallet: auth.authenticated ? auth.user?.walletAddress?.toLowerCase() ?? null : null,
     }; },
-    check: async (pending, signal) => {
-      const { getRoomWalletRecovery } = await import('../mint/roomWalletRecoveryRuntime');
-      return getRoomWalletRecovery().check(pending, signal);
-    },
+    check: (pending, signal) => getRoomWalletRecovery().check(pending, signal),
   });
   const notify = () => { void lifecycle.notify(); };
   const storage = (event: StorageEvent) => { if (event.key === PENDING_ROOM_WALLET_KEY) notify(); };

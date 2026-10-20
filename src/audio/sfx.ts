@@ -407,6 +407,8 @@ export class SfxController {
   private readonly history: SfxHistoryEntry[] = [];
   private lastPlayError: SfxPlayErrorDebugEntry | null = null;
   private volume = 1;
+  private pageActive = true;
+  private loadController = new AbortController();
 
   constructor(private readonly engine: AudioEngine = sharedAudioEngine) {}
 
@@ -417,6 +419,26 @@ export class SfxController {
 
     this.initialized = true;
     this.engine.init(windowObj);
+    const stopLoads = () => {
+      this.pageActive = false;
+      this.pending = [];
+      this.loadController.abort();
+    };
+    const resumeLoads = () => {
+      if (this.pageActive || this.engine.hidden) return;
+      this.pageActive = true;
+      this.loadController = new AbortController();
+      if (this.engine.userInteracted) {
+        this.warmCues(HOT_GAMEPLAY_CUES);
+        this.warmRemainingCues();
+      }
+    };
+    // WebKit cancels fetches before pagehide; stop fallback formats at the earlier boundary.
+    windowObj.addEventListener('beforeunload', stopLoads);
+    windowObj.addEventListener('pagehide', stopLoads);
+    windowObj.addEventListener('pageshow', resumeLoads);
+    // If a dirty-draft prompt cancels navigation, the next gesture restores sound loading.
+    this.engine.onInteraction(resumeLoads);
     // Hidden pages drop their effects rather than replaying them on return.
     this.engine.onHidden(() => {
       this.pending = [];
@@ -594,6 +616,7 @@ export class SfxController {
   }
 
   private loadBuffer(path: string): SfxBuffer | null {
+    if (!this.pageActive) return null;
     const existing = this.buffers.get(path);
     if (existing) {
       return existing;
@@ -608,7 +631,8 @@ export class SfxController {
     const entry: SfxBuffer = { status: 'loading', buffer: null, loaded: Promise.resolve() };
     const formatIndex = Math.min(this.formatIndex, urls.length - 1);
     const ordered = [urls[formatIndex], ...urls.filter((_, index) => index !== formatIndex)];
-    entry.loaded = fetchAndDecode(context, ordered).then(
+    const signal = this.loadController.signal;
+    entry.loaded = fetchAndDecode(context, ordered, signal).then(
       ({ buffer, url }) => {
         if (urls.length > 1) this.formatIndex = urls.indexOf(url);
         entry.status = 'ready';
@@ -617,6 +641,7 @@ export class SfxController {
       },
       () => {
         entry.status = 'failed';
+        if (signal.aborted && this.buffers.get(path) === entry) this.buffers.delete(path);
         this.flushPending();
       }
     );
@@ -771,17 +796,22 @@ export class SfxController {
 /** Tries each file in turn until one downloads and decodes. */
 async function fetchAndDecode(
   context: BaseAudioContext,
-  urls: readonly string[]
+  urls: readonly string[],
+  signal: AbortSignal,
 ): Promise<{ buffer: AudioBuffer; url: string }> {
   let lastError: unknown = new Error('No sound file to load.');
   for (const url of urls) {
+    signal.throwIfAborted();
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       if (!response.ok) {
         throw new Error(`Failed to load ${url} (${response.status}).`);
       }
-      return { buffer: await decodeAudio(context, await response.arrayBuffer()), url };
+      const buffer = await decodeAudio(context, await response.arrayBuffer());
+      signal.throwIfAborted();
+      return { buffer, url };
     } catch (error) {
+      if (signal.aborted) throw error;
       lastError = error;
     }
   }

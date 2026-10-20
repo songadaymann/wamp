@@ -70,6 +70,8 @@ export class EditorPersistenceController {
       artwork: options => roomSession.refreshMintMetadata(options),
       canAddArtwork: () => roomSession.getHistoryState().canRefreshMintMetadata,
       isArtworkSubmitted: () => roomSession.hasPendingArtworkConfirmation,
+      isArtworkPending: () => roomSession.hasPendingWalletConfirmation,
+      isCollectionSubmitted: () => roomSession.hasPendingWalletConfirmation,
       onStateChanged: () => host.refreshUi?.(),
       onArtworkPending: status => showBusyError(status.text, { title: 'Room collected', closeLabel: 'Back to room' }),
       getStatus: () => roomSession.statusDetails,

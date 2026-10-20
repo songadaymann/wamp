@@ -371,6 +371,7 @@ export class EditorRoomSession {
   }
 
   get hasPendingArtworkConfirmation(): boolean { return this.walletActions.hasPendingArtworkConfirmation; }
+  get hasPendingWalletConfirmation(): boolean { return this.walletActions.hasPendingWalletConfirmation; }
 
   acceptWalletRecovery(pending: PendingRoomWallet, result: RoomWalletRecoveryResult): void {
     if (pending.roomId !== this.roomId || this.saveInFlight && !this.walletActions.ownsPending(pending.id)) return;
