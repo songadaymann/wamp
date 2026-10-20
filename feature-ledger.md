@@ -1,5 +1,9 @@
 ## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
 
+## 2026-10-20 — F239 audit performance corrected without weakening verification
+
+Two full read-lifetime quality attempts hit the existing5-second whole-source editor-state audit timeout; its focused unchanged12tests passed in3.02seconds. Preserve the AST assertions, full traversal/Unicode/exclusions and deadline, and use16 bounded file-read workers. Full quality/style/type/build/assets pass596files/5,045tests, boot657.2KB/670KB and OSS0blockers/0warnings; the100-device matrix continues. Sourcec513cf9c preview9e36c9ae matches209files, and hosted gates continue. Push the audit-only follow-up and require all checks for its exact source before merge. F239 unchecked/master173/216, full goal active, F167 AI on hold, all preservation/decision/unsigned-transaction boundaries unchanged.
+
 ## 2026-10-20 — F239 outgoing-page reads fenced; fresh source gates required
 
 The second final matrix passed57 cases, then exposed discovery/guest-progress reads starting between beforeunload and pagehide. The audio fix held. Added a shared GET/HEAD navigation lifetime to API/run/guest-run repositories, initialized before startup callbacks; pending/new reads cancel during unload, while draft writes/keepalive and caller cancellation remain intact. Restore reads on cached-page return or a gesture after a cancelled draft warning. Focused39 cases and four targeted WebKit unhashed/confirmation-outage reloads pass. Full quality and fresh100-case matrix are running. PR267 remains draft; obsolete source4d5c6661 CI39442023520 was cancelled intentionally. Next: commit/push this fix, require every exact-source/main check and fresh hosted proof, then guard/deploy/live proof. F239 unchecked/master173/216, full goal active, F167 AI on hold; no production deploy/write/transaction and all preservation/decision boundaries unchanged.
