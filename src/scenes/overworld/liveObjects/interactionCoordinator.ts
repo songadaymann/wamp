@@ -197,7 +197,26 @@ export class LiveObjectInteractionCoordinator<TEdgeWall = unknown> {
                     player,
                     liveObject.sprite,
                     () => this.options.handleNpcContact(loadedRoom, liveObject),
-                    () => this.options.shouldCollideWithLiveObject(liveObject),
+                    () => {
+                      if (!this.options.shouldCollideWithLiveObject(liveObject)) {
+                        return false;
+                      }
+                      // Separation zeroes a landing velocity before the collide callback.
+                      // Resolve a friendly-fire stomp first so the bounce survives.
+                      const playerBody = this.options.getPlayerBody();
+                      const npcBody = liveObject.sprite.body as ArcadeObjectBody | null;
+                      if (
+                        playerBody &&
+                        npcBody &&
+                        liveObject.runtime.npcFriendlyFire &&
+                        playerBody.velocity.y > 40 &&
+                        playerBody.bottom <= npcBody.top + 10
+                      ) {
+                        this.options.handleNpcContact(loadedRoom, liveObject);
+                        return false;
+                      }
+                      return true;
+                    },
                   ),
                 );
               }

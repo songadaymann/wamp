@@ -189,6 +189,27 @@ describe('LiveObjectInteractionCoordinator', () => {
     expect(harness.controller.getReconciliationGeneration()).toBe(1);
   });
 
+  it('resolves a friendly-fire stomp before the bodies separate', () => {
+    const npc = createLiveObject('jimothy', { body: { enable: true, top: 80 } });
+    npc.runtime.npcPlayerCollision = true;
+    npc.runtime.npcFriendlyFire = true;
+    const room = createRoom('npc-room', [npc]);
+    const harness = createHarness([room]);
+    harness.playerBody.velocity.y = 120;
+    harness.playerBody.bottom = 84;
+
+    harness.controller.syncPlayerInteractions([room]);
+
+    const registration = harness.registrations.find((entry) => entry.kind === 'collider');
+    expect(registration?.process?.()).toBe(false);
+    expect(harness.handleNpcContact).toHaveBeenCalledWith(room, npc);
+
+    harness.handleNpcContact.mockClear();
+    harness.playerBody.velocity.y = 0;
+    expect(registration?.process?.()).toBe(true);
+    expect(harness.handleNpcContact).not.toHaveBeenCalled();
+  });
+
   it('preserves the ladder support process callback boundary', () => {
     const supportBody = { enable: true, top: 20 };
     const ladder = createLiveObject('ladder', { helpers: [{ body: supportBody }] });

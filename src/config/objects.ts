@@ -331,7 +331,7 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: POLICEWOMAN_OBJECT_ID, name: 'Policewoman', category: 'enemy', path: 'assets/enemies/policewoman/idle.png', frameWidth: 64, frameHeight: 64, frameCount: 6, fps: 6, defaultFrame: 0, facingDirection: 'right', bodyWidth: 10, bodyHeight: 27, bodyOffsetX: 25, bodyOffsetY: 37, displayScale: 1.25, displayOffsetY: -8, previewWidth: 20, previewHeight: 34, previewOffsetX: 20, previewOffsetY: 30, placeUsingPreviewBounds: true, behavior: 'patrol', description: 'Ranged police enemy. Can hunt players across platforms or patrol with optional shooting.' },
 
   // ── NPCs ──
-  { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/npc/jimothy.png', frameWidth: 32, frameHeight: 32, frameCount: 8, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
+  { id: JIMOTHY_OBJECT_ID, name: 'Jimothy', category: 'npc', path: 'assets/npc/jimothy.png', frameWidth: 32, frameHeight: 32, frameCount: 12, fps: 4, animationFrames: [0, 1], defaultFrame: 0, facingDirection: 'right', bodyWidth: 24, bodyHeight: 16, bodyOffsetX: 4, bodyOffsetY: 16, behavior: 'static', description: 'A friendly NPC who can idle, wander, patrol, follow players, and deliver dialogue.' },
 
   // ── Interactive ──
   { id: 'bounce_pad',  name: 'Bounce Pad',  category: 'interactive', path: 'assets/objects/bounce_pad.png',  frameWidth: 16, frameHeight: 32, frameCount: 4,  fps: 0,  bodyWidth: 16, bodyHeight: 8,  behavior: 'bounce',   description: 'Launches player upward on contact.' },
