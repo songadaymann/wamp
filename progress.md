@@ -1,5 +1,9 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — Safety key approved/restored; map rebuild and Safari cache candidate
+
+Replaced only approved safety ADMIN_API_KEY; verified access and protected ignored0600 file, production secrets unchanged. Applied safety DB0066/0067 and JAM0003; staged445-leaf770f6454 map with canonical tools. Readiness/parity/zero-DLQ/two browser suites still pending. Source06c58f6e recovery100 pass, preview209+30file parity and hosted28 recovery/36 public cases pass with isolated third-party/CORS fixtures. Safari school-redirect Context-is-stopped also reproduces unchanged main00c3bb61; keep fatal check. Cache candidate reads PNG bytes before CacheStorage Response creation;40 focused tests and three Canvas Safari auth runs pass, full quality/fresh hosted checks pending. F239 unchecked, no production deploy/transaction; all preservation/AI hold/unsigned boundaries retained.
+
 ## 2026-10-20 — Recovery fixture mismatch fixed; Safari diagnostic retained
 
 Hosted sourcee2df3152 quality passes597/5,055. Narrow-phone artwork-confirm reload rejected normal ranked-run writes because fallback recorded snapshots disagreed with its no-goal recovery snapshot. Disable goals consistently in recovery fixtures only; retain every unexpected-write/error/deadline assertion and default goal behavior for other tests. Eight targeted Chromium/WebKit reloads pass. Hosted Safari auth Context-is-stopped after school redirect remains failing/unproven; enrich diagnostics without filtering. Fresh exact-source run required. Safety key replacement approval pending; no keys/config/production changed. F239 still unchecked and all prior boundaries retained.

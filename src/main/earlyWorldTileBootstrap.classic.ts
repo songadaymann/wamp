@@ -489,7 +489,7 @@ export async function persistEarlyWorldTileBlob(
   blob: Blob,
 ): Promise<void> {
   try {
-    await cache.put(request, new Response(blob, {
+    await cache.put(request, new Response(await blob.arrayBuffer(), {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=31536000, immutable',

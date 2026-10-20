@@ -301,7 +301,9 @@ export class WorldTileByteCache {
       const activeCache = cache;
       const persistedWrites = await Promise.all(writes.map(async (write) => {
         try {
-          await activeCache.put(buildWorldTileByteCacheRequest(write.ready), new Response(write.blob, {
+          // Materialize bytes before Cache.put: WebKit otherwise fetches a blob URL during teardown.
+          const bytes = await write.blob.arrayBuffer();
+          await activeCache.put(buildWorldTileByteCacheRequest(write.ready), new Response(bytes, {
             headers: {
               'Content-Type': 'image/png',
               'Cache-Control': 'public, max-age=31536000, immutable',
