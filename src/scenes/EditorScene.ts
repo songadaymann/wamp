@@ -1563,6 +1563,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
+    if (this.previewSmokePersistenceIsolated) {
+      return null;
+    }
     if (this.interactionController.hasPendingTouchEdit) this.interactionController.cancelTouchEdit();
     return this.persistenceController.saveDraft(force, options);
   }

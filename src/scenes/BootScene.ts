@@ -48,6 +48,7 @@ import { logBootPhase, startBootStallWatch } from '../main/bootDiagnostics';
 import { DEFAULT_PLAYER_AVATAR_ID, getRegisteredPlayerAvatarPack } from '../player/avatar/registry';
 import { getRequestedPlayerAvatarId } from '../player/avatar/storage';
 import {
+  JIMOTHY_ACTION_FRAMES,
   JIMOTHY_ANIMATION_KEYS,
   JIMOTHY_OBJECT_ID,
 } from '../npcs/model';
@@ -250,8 +251,10 @@ export class BootScene extends Phaser.Scene {
     const jimothyAnimations = [
       { key: JIMOTHY_ANIMATION_KEYS.idle, frames: [0, 1], frameRate: 4, repeat: -1 },
       { key: JIMOTHY_ANIMATION_KEYS.walk, frames: [4, 5, 6, 7], frameRate: 7, repeat: -1 },
-      { key: JIMOTHY_ANIMATION_KEYS.death, frames: [2], frameRate: 1, repeat: 0 },
-      { key: JIMOTHY_ANIMATION_KEYS.victory, frames: [3], frameRate: 1, repeat: 0 },
+      { key: JIMOTHY_ANIMATION_KEYS.death, frames: [JIMOTHY_ACTION_FRAMES.death], frameRate: 1, repeat: 0 },
+      { key: JIMOTHY_ANIMATION_KEYS.deathLeft, frames: [JIMOTHY_ACTION_FRAMES.deathLeft], frameRate: 1, repeat: 0 },
+      { key: JIMOTHY_ANIMATION_KEYS.victory, frames: [JIMOTHY_ACTION_FRAMES.victory], frameRate: 1, repeat: 0 },
+      { key: JIMOTHY_ANIMATION_KEYS.victoryLeft, frames: [JIMOTHY_ACTION_FRAMES.victoryLeft], frameRate: 1, repeat: 0 },
     ] as const;
     for (const animation of jimothyAnimations) {
       if (this.anims.exists(animation.key)) {
