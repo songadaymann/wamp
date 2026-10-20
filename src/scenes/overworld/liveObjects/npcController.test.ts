@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LiveObjectNpcController, NPC_STEP_JUMP_VELOCITY_X } from './npcController';
 
+const { directionRolls } = vi.hoisted(() => ({ directionRolls: [] as number[] }));
+
 vi.mock('phaser', () => ({
   default: {
     Math: {
-      Between: (min: number) => min,
+      Between: (min: number, max?: number) => {
+        if (min === 0 && max === 1 && directionRolls.length > 0) {
+          return directionRolls.shift() ?? min;
+        }
+        return min;
+      },
     },
   },
 }));
@@ -281,7 +288,79 @@ describe('NPC wander', () => {
     );
   });
 
-  it('keeps an obstacle turn when the wander pause ends, from either wall', () => {
+  it('picks left or right after a wander stop instead of always turning around', () => {
+    let now = 5_000;
+    const controller = new LiveObjectNpcController({
+      scene: { anims: { exists: () => false } },
+      getCurrentTime: () => now,
+      getPlayerBody: () => null,
+      resetDynamicObjectIfOutOfBounds: () => false,
+      applyDirectionalFacing: () => {},
+      hasSolidTerrainAtWorldPoint: () => false,
+      playBounceFx: () => {},
+      bouncePadVelocity: -320,
+      bouncePadCooldownMs: 180,
+    } as never);
+    const liveObject = {
+      runtime: {
+        directionX: 1,
+        npcCanJumpFall: false,
+        npcWalking: true,
+        nextActionAt: now,
+        npcBounceCooldownUntil: 0,
+        npcQuicksandUntil: 0,
+        specialTileOnIce: false,
+        specialTileOnSticky: false,
+        specialTileWindX: 0,
+      },
+      sprite: { anims: { currentAnim: null } },
+      config: { facingDirection: 'right' },
+    };
+    const body = {
+      left: 80,
+      right: 104,
+      top: 80,
+      bottom: 96,
+      velocity: { x: 70, y: 0 },
+      blocked: { left: false, right: false, down: true },
+      touching: { left: false, right: false, down: true },
+      setVelocityX: vi.fn(),
+    };
+    const updateWander = (
+      controller as unknown as {
+        updateWander(
+          room: object,
+          candidate: typeof liveObject,
+          candidateBody: typeof body,
+          terrainActor: boolean,
+          delta: number,
+        ): void;
+      }
+    ).updateWander.bind(controller);
+
+    updateWander({}, liveObject, body, true, 16);
+    expect(liveObject.runtime.npcWalking).toBe(false);
+    expect(liveObject.runtime.directionX).toBe(1);
+
+    directionRolls.push(1);
+    now = liveObject.runtime.nextActionAt;
+    updateWander({}, liveObject, body, true, 16);
+    expect(liveObject.runtime.npcWalking).toBe(true);
+    expect(liveObject.runtime.directionX).toBe(1);
+    expect(body.setVelocityX).toHaveBeenCalledWith(70);
+
+    liveObject.runtime.nextActionAt = now;
+    updateWander({}, liveObject, body, true, 16);
+    expect(liveObject.runtime.directionX).toBe(1);
+    directionRolls.push(0);
+    now = liveObject.runtime.nextActionAt;
+    body.setVelocityX.mockClear();
+    updateWander({}, liveObject, body, true, 16);
+    expect(liveObject.runtime.directionX).toBe(-1);
+    expect(body.setVelocityX).toHaveBeenCalledWith(-70);
+  });
+
+  it('still turns away from a wall, then chooses either direction when that stop ends', () => {
     let now = 10_000;
     const applyDirectionalFacing = vi.fn();
     const controller = new LiveObjectNpcController({
@@ -349,15 +428,18 @@ describe('NPC wander', () => {
         -startDirection,
       );
 
+      const resumeDirection = startDirection > 0 ? 1 : 0;
+      directionRolls.push(resumeDirection);
       now = liveObject.runtime.nextActionAt;
       blocked[blockedSide] = false;
       touching[blockedSide] = false;
       body.setVelocityX.mockClear();
       updateWander({}, liveObject, body, true, 16);
 
-      expect(liveObject.runtime.directionX).toBe(-startDirection);
+      const expectedDirection = resumeDirection === 0 ? -1 : 1;
+      expect(liveObject.runtime.directionX).toBe(expectedDirection);
       expect(liveObject.runtime.npcWalking).toBe(true);
-      expect(body.setVelocityX).toHaveBeenCalledWith(-startDirection * 70);
+      expect(body.setVelocityX).toHaveBeenCalledWith(expectedDirection * 70);
     };
 
     runWall(1);
@@ -366,66 +448,6 @@ describe('NPC wander', () => {
     runWall(-1);
   });
 
-  it('still turns around after a voluntary wander pause', () => {
-    let now = 5_000;
-    const controller = new LiveObjectNpcController({
-      scene: { anims: { exists: () => false } },
-      getCurrentTime: () => now,
-      getPlayerBody: () => null,
-      resetDynamicObjectIfOutOfBounds: () => false,
-      applyDirectionalFacing: () => {},
-      hasSolidTerrainAtWorldPoint: () => false,
-      playBounceFx: () => {},
-      bouncePadVelocity: -320,
-      bouncePadCooldownMs: 180,
-    } as never);
-    const liveObject = {
-      runtime: {
-        directionX: 1,
-        npcCanJumpFall: false,
-        npcWalking: true,
-        nextActionAt: now,
-        npcBounceCooldownUntil: 0,
-        npcQuicksandUntil: 0,
-        specialTileOnIce: false,
-        specialTileOnSticky: false,
-        specialTileWindX: 0,
-      },
-      sprite: { anims: { currentAnim: null } },
-      config: { facingDirection: 'right' },
-    };
-    const body = {
-      left: 80,
-      right: 104,
-      top: 80,
-      bottom: 96,
-      velocity: { x: 70, y: 0 },
-      blocked: { left: false, right: false, down: true },
-      touching: { left: false, right: false, down: true },
-      setVelocityX: vi.fn(),
-    };
-    const updateWander = (
-      controller as unknown as {
-        updateWander(
-          room: object,
-          candidate: typeof liveObject,
-          candidateBody: typeof body,
-          terrainActor: boolean,
-          delta: number,
-        ): void;
-      }
-    ).updateWander.bind(controller);
-
-    updateWander({}, liveObject, body, true, 16);
-    expect(liveObject.runtime.npcWalking).toBe(false);
-    expect(liveObject.runtime.directionX).toBe(1);
-
-    now = liveObject.runtime.nextActionAt;
-    updateWander({}, liveObject, body, true, 16);
-    expect(liveObject.runtime.npcWalking).toBe(true);
-    expect(liveObject.runtime.directionX).toBe(-1);
-    expect(body.setVelocityX).toHaveBeenCalledWith(-70);
-  });
 });
 
 describe('NPC player push', () => {
