@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import type { DeathMapCell, RoomInsightsResponse, RoomInsightTarget } from '../../insights/model';
 import { loadRoomInsights } from '../../insights/repository';
 import { createModalLifecycle } from './modalLifecycle';
-import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
+import { subscribeEditorUi } from '../../scenes/editor/uiEvents';
 import { APP_MODE_CHANGED_EVENT } from '../appMode';
 interface InsightScene { events: Phaser.Events.EventEmitter; getRoomInsightsTarget(): RoomInsightTarget | null; setRoomDeathMap(points: DeathMapCell[]): void; clearRoomDeathMap(): void }
 export class RoomInsightsController {
@@ -14,6 +14,7 @@ export class RoomInsightsController {
   private readonly coverage;
   private readonly toggle;
   private readonly retry;
+  private stopEditorUi: (() => void) | null = null;
   private generation = 0;
   private target: RoomInsightTarget | null = null;
   private result: RoomInsightsResponse | null = null;
@@ -34,7 +35,7 @@ export class RoomInsightsController {
   init(): void {
     this.lifecycle.attach(); this.closeButton?.addEventListener('click',this.onClose);
     this.retry?.addEventListener('click',this.onRetry); this.toggle?.addEventListener('change',this.onToggle);
-    this.win.addEventListener('room-insights-open',this.onOpen); this.win.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange);
+    this.win.addEventListener('room-insights-open',this.onOpen); this.stopEditorUi?.(); this.stopEditorUi = subscribeEditorUi(this.win,this.onEditorChange);
     this.win.addEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
     this.doc.addEventListener('click',this.onEditorClick); this.win.addEventListener('keydown',this.onKeydown,true);
     this.win.addEventListener('keyup',this.onKeyup,true);
@@ -43,7 +44,7 @@ export class RoomInsightsController {
     this.close(); this.clearMap(); this.lifecycle.detach();
     this.closeButton?.removeEventListener('click',this.onClose); this.retry?.removeEventListener('click',this.onRetry);
     this.toggle?.removeEventListener('change',this.onToggle); this.win.removeEventListener('room-insights-open',this.onOpen);
-    this.win.removeEventListener(EDITOR_UI_STATE_CHANGED_EVENT,this.onEditorChange); this.doc.removeEventListener('click',this.onEditorClick);
+    this.stopEditorUi?.(); this.stopEditorUi = null; this.doc.removeEventListener('click',this.onEditorClick);
     this.win.removeEventListener(APP_MODE_CHANGED_EVENT,this.onEditorChange);
     this.win.removeEventListener('keydown',this.onKeydown,true);
     this.win.removeEventListener('keyup',this.onKeyup,true); this.blockedKeys.clear();

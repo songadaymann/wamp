@@ -1,0 +1,22 @@
+import { EventEmitter } from 'node:events';
+import { afterEach, expect, it, vi } from 'vitest';
+import { OverworldAssistRuntime } from './assistRuntime';
+import { createActiveExpandedRoomRunState } from './expandedRoomRuns';
+import { createDefaultCourseSnapshot } from '../../courses/model';
+import { updateAssistSettings } from '../../settings/assistSettings';
+afterEach(() => updateAssistSettings({ speed: 1, safeRespawn: false }));
+it('latches an active attempt before slowing all simulation owners, restores live play and cleans up', () => {
+  const scene = { events: new EventEmitter(), physics: { world: { timeScale: 1 } }, time: { timeScale: 1 }, tweens: { timeScale: 1 }, anims: { globalTimeScale: 1 } };
+  const run = createActiveExpandedRoomRunState({ course: createDefaultCourseSnapshot('test'), returnCoordinates: { x: 0, y: 0 }, leaderboardEligible: true, enemyTarget: null });
+  let available = true;
+  const clearTrace = vi.fn(() => { expect(run.assisted).toBe(true); expect(scene.physics.world.timeScale).toBe(1); });
+  const runtime = new OverworldAssistRuntime(scene as never, { available: () => available, getRoomRun: () => null, getExpandedRun: () => run, clearTrace, renderHud: vi.fn() });
+  updateAssistSettings({ speed: 0.6 });
+  expect(clearTrace).toHaveBeenCalledOnce(); expect(scene.physics.world.timeScale).toBeCloseTo(1 / 0.6);
+  expect(scene.time.timeScale).toBe(0.6); expect(scene.tweens.timeScale).toBe(0.6); expect(scene.anims.globalTimeScale).toBe(0.6);
+  available = false; scene.events.emit('preupdate', 100, 100); expect(runtime.speed).toBe(1); expect(scene.time.timeScale).toBe(1);
+  available = true; scene.events.emit('preupdate', 200, 100); expect(runtime.speed).toBe(0.6);
+  scene.events.emit('sleep'); expect(runtime.speed).toBe(1); scene.events.emit('wake'); expect(runtime.speed).toBe(0.6);
+  runtime.destroy(); expect(scene.events.eventNames()).toEqual([]); expect(scene.anims.globalTimeScale).toBe(1);
+  updateAssistSettings({ speed: 0.8 }); expect(scene.physics.world.timeScale).toBe(1); expect(run.assisted).toBe(true);
+});

@@ -1,3 +1,5 @@
+import { beginPendingDialog } from '../pendingDialog';
+
 /** What other UI needs from a pop-up: open it and close it. */
 export interface ModalController {
   init(): void;
@@ -15,8 +17,12 @@ export class LazyModal<T extends ModalController> {
   private loading: Promise<T> | null = null;
   private openGeneration = 0;
   private destroyed = false;
+  private pendingOpens = new Set<() => void>();
 
-  constructor(private readonly load: () => Promise<T>) {}
+  constructor(
+    private readonly load: () => Promise<T>,
+    private readonly deferredRoots: readonly string[] = [],
+  ) {}
 
   /** True once the pop-up has loaded and handles its own triggers. */
   get loaded(): boolean {
@@ -26,13 +32,26 @@ export class LazyModal<T extends ModalController> {
   async open(...args: Parameters<T['open']>): Promise<void> {
     if (this.destroyed) return;
     const generation = ++this.openGeneration;
-    const modal = await this.ensure();
-    if (generation !== this.openGeneration) return;
-    await (modal.open as (...openArgs: Parameters<T['open']>) => void | Promise<void>)(...args);
+    const release = beginPendingDialog();
+    this.pendingOpens.add(release);
+    try {
+      const modal = await this.ensure();
+      if (generation !== this.openGeneration) return;
+      const opening = (modal.open as (...openArgs: Parameters<T['open']>) => void | Promise<void>)(...args);
+      // The visible dialog now owns the pause. Its later API work must not hold
+      // an invisible pause after its own Close button has hidden the dialog.
+      release();
+      await opening;
+    } finally {
+      this.pendingOpens.delete(release);
+      release();
+    }
   }
 
   close(): void {
     this.openGeneration++;
+    for (const release of this.pendingOpens) release();
+    this.pendingOpens.clear();
     this.instance?.close();
   }
 
@@ -43,15 +62,21 @@ export class LazyModal<T extends ModalController> {
   }
 
   ensure(): Promise<T> {
-    this.loading ??= this.load().then((modal) => {
-      if (this.destroyed) return modal;
-      modal.init();
-      this.instance = modal;
-      return modal;
-    }).catch((error: unknown) => {
-      this.loading = null;
-      throw error;
-    });
+    if (!this.loading) {
+      for (const id of this.deferredRoots) {
+        const template = document.getElementById(`deferred-${id}`);
+        if (template instanceof HTMLTemplateElement) template.replaceWith(template.content);
+      }
+      this.loading = this.load().then((modal) => {
+        if (this.destroyed) return modal;
+        modal.init();
+        this.instance = modal;
+        return modal;
+      }).catch((error: unknown) => {
+        this.loading = null;
+        throw error;
+      });
+    }
     return this.loading;
   }
 }

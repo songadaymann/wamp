@@ -1,3 +1,9 @@
+import {
+  loadDiscoveryViewerRoomStates, loadDiscoveryViewerExpandedRoomStates, createEmptyDiscoveryViewerRoomState,
+  buildDiscoveryRoomVersionKey, buildDiscoveryExpandedRoomVersionKey,
+  type DiscoveryRoomVersionKey, type DiscoveryExpandedRoomVersionKey, type DiscoveryViewerRoomState,
+} from './discoveryViewerStates';
+import type { DiscoveryPublicCache } from './discoveryPublicCache';
 import { attachRoomInsights } from '../insights/store';
 import { loadIndexedDiscoveryRows, type IndexedDiscoveryRow } from '../playableContentIndex/discovery';
 import { loadDiscoveryRunMetrics, resolveDiscoveryDifficulty } from '../playableContentIndex/runMetrics';
@@ -126,22 +132,6 @@ interface RoomDiscoveryRatingAggregateRow {
   medium_weight: number | string | null;
   hard_weight: number | string | null;
   extreme_weight: number | string | null;
-}
-
-interface DiscoveryRoomVersionKey {
-  roomId: string;
-  roomVersion: number;
-}
-
-interface DiscoveryExpandedRoomVersionKey {
-  expandedRoomId: string;
-  expandedRoomVersion: number;
-}
-
-interface DiscoveryViewerRoomState {
-  visited: boolean;
-  completed: boolean;
-  rated: boolean;
 }
 
 interface RoomDiscoveryAreaCandidate {
@@ -281,6 +271,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
   viewerUserId: string | null = null,
   timing: ServerTiming | null = null,
   cursorOffset: number = 0,
+  publicCache?: DiscoveryPublicCache,
 ): Promise<RoomDiscoveryResponse> {
   const includeAllPublishedRooms = includeGoalLessRooms && sort === 'newest' && difficultyFilter === null;
   const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
@@ -290,105 +281,20 @@ async function loadRoomDiscoveryResponseWithoutInsights(
   const indexedRows = await measureDiscovery(
     timing,
     'discovery_index',
-    () => loadIndexedDiscoveryRows(
-      env,
-      difficultyFilter,
-      limit,
-      sort,
-      includeAllPublishedRooms,
-      cursorOffset,
-    ),
+    () => playableContentIndexReadsEnabled(env) && !isPersonalRoomDiscoverySort(sort) && sort !== 'builder'
+      ? cachedPublicRead(publicCache, 'index', [difficultyFilter, limit, sort, includeAllPublishedRooms, cursorOffset],
+        () => loadIndexedDiscoveryRows(env, difficultyFilter, limit, sort, includeAllPublishedRooms, cursorOffset))
+      : Promise.resolve(null),
   );
   if (indexedRows !== null) {
-    return buildIndexedDiscoveryResponse(env, indexedRows, difficultyFilter, sort, limit, cursorOffset, viewerUserId, timing);
+    return buildIndexedDiscoveryResponse(env, indexedRows, difficultyFilter, sort, limit, cursorOffset, viewerUserId, timing, publicCache);
   }
-  const publishedRooms = await measureDiscovery(timing, 'discovery_rows', () => env.DB.prepare(
-    `
-      SELECT
-        rooms.id,
-        rooms.x,
-        rooms.y,
-        rooms.published_title,
-        rooms.published_goal_type,
-        rooms.claimer_user_id,
-        rooms.claimer_display_name,
-        rooms.last_published_by_user_id,
-        rooms.last_published_by_display_name,
-        latest.version AS current_published_version,
-        latest.created_at AS published_at,
-        first_published.first_published_at AS first_published_at,
-        rooms.canonical_version
-      FROM rooms
-      INNER JOIN (
-        SELECT room_id, MAX(version) AS version
-        FROM room_versions
-        GROUP BY room_id
-      ) AS latest_index
-        ON latest_index.room_id = rooms.id
-      INNER JOIN room_versions AS latest
-        ON latest.room_id = latest_index.room_id
-       AND latest.version = latest_index.version
-      INNER JOIN (
-        SELECT room_id, MIN(created_at) AS first_published_at
-        FROM room_versions
-        GROUP BY room_id
-      ) AS first_published
-        ON first_published.room_id = rooms.id
-      WHERE rooms.published_json IS NOT NULL
-        AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
-    `
-  )
-    .bind(
-      includeAllPublishedRooms || expandedRoomsEnabled ? 1 : 0,
-    )
-    .all<PublishedRoomDiscoveryRow>());
-
-  const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));
-
-  if (challengeRooms.length === 0) {
-    return {
-      difficultyFilter,
-      sort,
-      results: [],
-      ...(sort === 'unrated' ? { totalCount: 0 } : {}),
-    };
-  }
-
-  const discoveryAreas = await measureDiscovery(timing, 'discovery_areas', () => resolveRoomDiscoveryAreaCandidates(
-    env,
-    challengeRooms,
-    expandedRoomsEnabled,
-  ));
-  const roomIds = Array.from(
-    new Set(discoveryAreas.flatMap((area) => area.roomVersionKeys.map((key) => key.roomId))),
-  );
-  const builderUserIds = Array.from(
-    new Set(
-      discoveryAreas
-        .map((area) => getDiscoveryAreaBuilderUserId(area)?.trim() ?? '')
-        .filter((value) => value.length > 0),
-    ),
-  );
-  const roomVersionKeys = dedupeDiscoveryRoomVersionKeys(
-    discoveryAreas.flatMap((area) => area.roomVersionKeys),
-  );
-  const expandedRoomVersionKeys = dedupeDiscoveryExpandedRoomVersionKeys(
-    discoveryAreas.flatMap((area) => area.expandedRoomVersionKey ? [area.expandedRoomVersionKey] : []),
-  );
-  const [
-    featuredRows,
-    ratingRows,
-    expandedRoomRatingRows,
-    trophyRows,
-    builderRows,
-    viewerStates,
-    expandedRoomViewerStates,
-  ] = await Promise.all([
-    measureDiscovery(timing, 'discovery_featured', () => loadFeaturedRoomRows(env, roomIds)),
-    measureDiscovery(timing, 'discovery_ratings', () => loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys)),
-    measureDiscovery(timing, 'discovery_expanded_ratings', () => loadExpandedRoomDiscoveryRatingAggregateRows(env, expandedRoomVersionKeys)),
-    measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
-    measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
+  const base = await cachedPublicRead(publicCache, 'legacy', [includeAllPublishedRooms, expandedRoomsEnabled],
+    () => loadLegacyDiscoveryPublicData(env, includeAllPublishedRooms, expandedRoomsEnabled, timing));
+  if (!base) return { difficultyFilter, sort, results: [], ...(sort === 'unrated' ? { totalCount: 0 } : {}) };
+  const { discoveryAreas, roomVersionKeys, expandedRoomVersionKeys,
+    featuredRows, ratingRows, expandedRoomRatingRows, trophyRows, builderRows } = base;
+  const [viewerStates, expandedRoomViewerStates] = await Promise.all([
     viewerUserId
       ? measureDiscovery(timing, 'discovery_viewer', () => loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
@@ -428,7 +334,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
     ] as const),
   );
 
-  const runMetrics = await loadDiscoveryRunMetrics(env);
+  const runMetrics = new Map(base.runMetrics);
   const orderedResults = discoveryAreas
     .map((area): RoomDiscoveryEntry => {
       const room = area.representative;
@@ -543,6 +449,99 @@ async function loadRoomDiscoveryResponseWithoutInsights(
 }
 
 
+async function loadLegacyDiscoveryPublicData(
+  env: Env, includeAllPublishedRooms: boolean, expandedRoomsEnabled: boolean, timing: ServerTiming | null,
+) {
+  const publishedRooms = await measureDiscovery(timing, 'discovery_rows', () => env.DB.prepare(
+    `
+      SELECT
+        rooms.id,
+        rooms.x,
+        rooms.y,
+        rooms.published_title,
+        rooms.published_goal_type,
+        rooms.claimer_user_id,
+        rooms.claimer_display_name,
+        rooms.last_published_by_user_id,
+        rooms.last_published_by_display_name,
+        latest.version AS current_published_version,
+        latest.created_at AS published_at,
+        first_published.first_published_at AS first_published_at,
+        rooms.canonical_version
+      FROM rooms
+      INNER JOIN (
+        SELECT room_id, MAX(version) AS version
+        FROM room_versions
+        GROUP BY room_id
+      ) AS latest_index
+        ON latest_index.room_id = rooms.id
+      INNER JOIN room_versions AS latest
+        ON latest.room_id = latest_index.room_id
+       AND latest.version = latest_index.version
+      INNER JOIN (
+        SELECT room_id, MIN(created_at) AS first_published_at
+        FROM room_versions
+        GROUP BY room_id
+      ) AS first_published
+        ON first_published.room_id = rooms.id
+      WHERE rooms.published_json IS NOT NULL
+        AND (? = 1 OR rooms.published_goal_type IS NOT NULL)
+    `
+  )
+    .bind(
+      includeAllPublishedRooms || expandedRoomsEnabled ? 1 : 0,
+    )
+    .all<PublishedRoomDiscoveryRow>());
+
+  const challengeRooms = publishedRooms.results.map((row) => mapPublishedRoomDiscoveryRow(row));
+
+  if (challengeRooms.length === 0) {
+    return null;
+  }
+
+  const discoveryAreas = await measureDiscovery(timing, 'discovery_areas', () => resolveRoomDiscoveryAreaCandidates(
+    env,
+    challengeRooms,
+    expandedRoomsEnabled,
+  ));
+  const roomIds = Array.from(
+    new Set(discoveryAreas.flatMap((area) => area.roomVersionKeys.map((key) => key.roomId))),
+  );
+  const builderUserIds = Array.from(
+    new Set(
+      discoveryAreas
+        .map((area) => getDiscoveryAreaBuilderUserId(area)?.trim() ?? '')
+        .filter((value) => value.length > 0),
+    ),
+  );
+  const roomVersionKeys = dedupeDiscoveryRoomVersionKeys(
+    discoveryAreas.flatMap((area) => area.roomVersionKeys),
+  );
+  const expandedRoomVersionKeys = dedupeDiscoveryExpandedRoomVersionKeys(
+    discoveryAreas.flatMap((area) => area.expandedRoomVersionKey ? [area.expandedRoomVersionKey] : []),
+  );
+  const [featuredRows, ratingRows, expandedRoomRatingRows, trophyRows, builderRows, runMetrics] = await Promise.all([
+    measureDiscovery(timing, 'discovery_featured', () => loadFeaturedRoomRows(env, roomIds)),
+    measureDiscovery(timing, 'discovery_ratings', () => loadRoomDiscoveryRatingAggregateRows(env, roomVersionKeys)),
+    measureDiscovery(timing, 'discovery_expanded_ratings', () => loadExpandedRoomDiscoveryRatingAggregateRows(env, expandedRoomVersionKeys)),
+    measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
+    measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
+    loadDiscoveryRunMetrics(env),
+  ]);
+  const publicVersions = new Map<string, number>(discoveryAreas.map(area => area.expandedRoomVersionKey
+    ? [`expanded_room:${area.expandedRoomVersionKey.expandedRoomId}`, area.expandedRoomVersionKey.expandedRoomVersion] as const
+    : [`room:${area.representative.roomId}`, area.representative.roomVersion] as const));
+  return { discoveryAreas, roomVersionKeys, expandedRoomVersionKeys, featuredRows, ratingRows,
+    expandedRoomRatingRows, trophyRows, builderRows,
+    runMetrics: [...runMetrics].filter(([key, metrics]) => publicVersions.get(key) === metrics.version_key) };
+
+}
+
+function cachedPublicRead<T>(cache: DiscoveryPublicCache | undefined,
+  kind: Parameters<DiscoveryPublicCache['load']>[0], inputs: unknown[], load: () => Promise<T>): Promise<T> {
+  return cache ? cache.load(kind, inputs, load) : load();
+}
+
 async function buildIndexedDiscoveryResponse(
   env: Env,
   rows: IndexedDiscoveryRow[],
@@ -552,6 +551,7 @@ async function buildIndexedDiscoveryResponse(
   cursorOffset: number,
   viewerUserId: string | null,
   timing: ServerTiming | null,
+  publicCache?: DiscoveryPublicCache,
 ): Promise<RoomDiscoveryResponse> {
   const pageRows = rows.slice(0, limit);
   const roomVersionKeys = pageRows.map((row) => ({
@@ -567,17 +567,24 @@ async function buildIndexedDiscoveryResponse(
   const builderUserIds = Array.from(new Set(
     pageRows.map((row) => row.builder_user_id?.trim() ?? '').filter(Boolean),
   ));
-  const [trophyRows, builderRows, viewerStates, expandedViewerStates, expandedTrophies] = await Promise.all([
-    measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
-    measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
+  const [details, viewerStates, expandedViewerStates] = await Promise.all([
+    cachedPublicRead(publicCache, 'indexed-details', [roomVersionKeys, expandedRoomVersionKeys, builderUserIds], async () => {
+      const [trophyRows, builderRows, expandedTrophies] = await Promise.all([
+        measureDiscovery(timing, 'discovery_trophies', () => loadRoomDiscoveryTrophyRows(env, roomVersionKeys)),
+        measureDiscovery(timing, 'discovery_builders', () => loadBuilderProgressionRows(env, builderUserIds)),
+        loadExpandedDiscoveryTrophies(env, expandedRoomVersionKeys),
+      ]);
+      return { trophyRows, builderRows, expandedTrophies: [...expandedTrophies] };
+    }),
     viewerUserId
       ? measureDiscovery(timing, 'discovery_viewer', () => loadDiscoveryViewerRoomStates(env, viewerUserId, roomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
     viewerUserId
       ? measureDiscovery(timing, 'discovery_expanded_viewer', () => loadDiscoveryViewerExpandedRoomStates(env, viewerUserId, expandedRoomVersionKeys))
       : Promise.resolve(new Map<string, DiscoveryViewerRoomState>()),
-    loadExpandedDiscoveryTrophies(env, expandedRoomVersionKeys),
   ]);
+  const { trophyRows, builderRows } = details;
+  const expandedTrophies = new Map(details.expandedTrophies);
   const trophies = new Map<string, TrophyAwardSummary>();
   for (const row of trophyRows.results) {
     if (!trophies.has(row.content_id)) {
@@ -1289,190 +1296,6 @@ function mapBuilderDiscoveryRow(row: BuilderDiscoveryRow): BuilderDiscoveryEntry
   };
 }
 
-async function loadDiscoveryViewerRoomStates(
-  env: Env,
-  userId: string,
-  roomVersionKeys: DiscoveryRoomVersionKey[],
-): Promise<Map<string, DiscoveryViewerRoomState>> {
-  const states = new Map<string, DiscoveryViewerRoomState>();
-  for (const key of roomVersionKeys) {
-    states.set(buildDiscoveryRoomVersionKey(key.roomId, key.roomVersion), createEmptyDiscoveryViewerRoomState());
-  }
-
-  for (const roomVersionChunk of chunkValues(roomVersionKeys, 40)) {
-    const whereClause = roomVersionChunk
-      .map(() => '(room_id = ? AND room_version = ?)')
-      .join(' OR ');
-    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
-    const runRows = await env.DB.prepare(
-      `
-        SELECT
-          room_id,
-          room_version,
-          COUNT(*) AS run_count,
-          SUM(CASE WHEN result = 'completed' THEN 1 ELSE 0 END) AS completed_count
-        FROM room_runs
-        WHERE user_id = ?
-          AND (${whereClause})
-        GROUP BY room_id, room_version
-      `
-    )
-      .bind(userId, ...bindings)
-      .all<{
-        room_id: string;
-        room_version: number | string | null;
-        run_count: number | string | null;
-        completed_count: number | string | null;
-      }>();
-
-    for (const row of runRows.results) {
-      const key = buildDiscoveryRoomVersionKey(row.room_id, parseRowNumber(row.room_version));
-      const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-      state.visited = parseRowNumber(row.run_count) > 0;
-      state.completed = parseRowNumber(row.completed_count) > 0;
-      states.set(key, state);
-    }
-
-    const ratingWhereClause = roomVersionChunk
-      .map(() => '(room_id = ? AND version_key = ?)')
-      .join(' OR ');
-    const ratingBindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
-    const ratingRows = await env.DB.prepare(
-      `
-        SELECT
-          room_id,
-          version_key
-        FROM room_ratings
-        WHERE user_id = ?
-          AND (quality_stars IS NOT NULL OR difficulty_choice IS NOT NULL)
-          AND (${ratingWhereClause})
-      `
-    )
-      .bind(userId, ...ratingBindings)
-      .all<{ room_id: string; version_key: number | string | null }>();
-
-    for (const row of ratingRows.results) {
-      const key = buildDiscoveryRoomVersionKey(row.room_id, parseRowNumber(row.version_key));
-      const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-      state.rated = true;
-      states.set(key, state);
-    }
-  }
-
-  return states;
-}
-
-async function loadDiscoveryViewerExpandedRoomStates(
-  env: Env,
-  userId: string,
-  expandedRoomVersionKeys: DiscoveryExpandedRoomVersionKey[],
-): Promise<Map<string, DiscoveryViewerRoomState>> {
-  const states = new Map<string, DiscoveryViewerRoomState>();
-  for (const key of expandedRoomVersionKeys) {
-    states.set(
-      buildDiscoveryExpandedRoomVersionKey(key.expandedRoomId, key.expandedRoomVersion),
-      createEmptyDiscoveryViewerRoomState(),
-    );
-  }
-
-  for (const versionChunk of chunkValues(expandedRoomVersionKeys, 40)) {
-    const whereClause = versionChunk
-      .map(() => '(expanded_room_id = ? AND expanded_room_version = ?)')
-      .join(' OR ');
-    const bindings = versionChunk.flatMap((entry) => [
-      entry.expandedRoomId,
-      entry.expandedRoomVersion,
-    ]);
-    try {
-      const runRows = await env.DB.prepare(
-        `
-          SELECT
-            expanded_room_id,
-            expanded_room_version,
-            COUNT(*) AS run_count,
-            SUM(CASE WHEN result = 'completed' THEN 1 ELSE 0 END) AS completed_count
-          FROM expanded_room_runs
-          WHERE user_id = ?
-            AND (${whereClause})
-          GROUP BY expanded_room_id, expanded_room_version
-        `
-      )
-        .bind(userId, ...bindings)
-        .all<{
-          expanded_room_id: string;
-          expanded_room_version: number | string | null;
-          run_count: number | string | null;
-          completed_count: number | string | null;
-        }>();
-
-      for (const row of runRows.results) {
-        const key = buildDiscoveryExpandedRoomVersionKey(
-          row.expanded_room_id,
-          parseRowNumber(row.expanded_room_version),
-        );
-        const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-        state.visited = parseRowNumber(row.run_count) > 0;
-        state.completed = parseRowNumber(row.completed_count) > 0;
-        states.set(key, state);
-      }
-
-      const ratingWhereClause = versionChunk
-        .map(() => '(expanded_room_id = ? AND version_key = ?)')
-        .join(' OR ');
-      const ratingBindings = versionChunk.flatMap((entry) => [
-        entry.expandedRoomId,
-        entry.expandedRoomVersion,
-      ]);
-      const ratingRows = await env.DB.prepare(
-        `
-          SELECT
-            expanded_room_id,
-            version_key
-          FROM expanded_room_ratings
-          WHERE user_id = ?
-            AND (quality_stars IS NOT NULL OR difficulty_choice IS NOT NULL)
-            AND (${ratingWhereClause})
-        `
-      )
-        .bind(userId, ...ratingBindings)
-        .all<{ expanded_room_id: string; version_key: number | string | null }>();
-
-      for (const row of ratingRows.results) {
-        const key = buildDiscoveryExpandedRoomVersionKey(
-          row.expanded_room_id,
-          parseRowNumber(row.version_key),
-        );
-        const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-        state.rated = true;
-        states.set(key, state);
-      }
-    } catch (error) {
-      if (isExpandedRoomSchemaMissingError(error)) {
-        return states;
-      }
-      throw error;
-    }
-  }
-
-  return states;
-}
-
-function createEmptyDiscoveryViewerRoomState(): DiscoveryViewerRoomState {
-  return {
-    visited: false,
-    completed: false,
-    rated: false,
-  };
-}
-
-function buildDiscoveryRoomVersionKey(roomId: string, roomVersion: number): string {
-  return `${roomId}:${roomVersion}`;
-}
-
-function buildDiscoveryExpandedRoomVersionKey(expandedRoomId: string, expandedRoomVersion: number): string {
-  return `${expandedRoomId}:${expandedRoomVersion}`;
-}
-
 async function loadBuilderProgressionRows(
   env: Env,
   userIds: string[],
@@ -1882,8 +1705,9 @@ function parseRoomGoalType(value: string | null): RoomGoalType | null {
 export async function loadRoomDiscoveryResponse(
   env: Env, difficultyFilter: RoomDifficulty | null, limit: number, sort: RoomDiscoverySort,
   includeGoalLessRooms = false, viewerUserId: string | null = null, timing: ServerTiming | null = null, cursorOffset = 0,
+  publicCache?: DiscoveryPublicCache,
 ): Promise<RoomDiscoveryResponse> {
-  const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset);
+  const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset, publicCache);
   const entries = await attachRoomInsights(env, result.results);
   return { ...result, results: await attachCoopDiscoveryFlags(env, entries) };
 }

@@ -1696,6 +1696,8 @@ There is a cheaper quick win than multiplexing. RoomChatClient should subscribe 
 
 The core finding stands: there is no server-side interest filter in flushPresenceUpserts, and all arrivals funnel into chunk (-2,-1). This was recommended before as §2.3 and is still not built.
 
+**2026-10-18 F037 current-state audit:** F095/PR199 already multiplexed chat and capped subscriptions at nine nearby chunks. The remaining F037 target is server-side movement bandwidth/JSON fan-out, including crowded rooms; do not change arrival destinations or separate friends into different instances. Retain snapshots, populations, preview deltas, chat permissions and PvP correctness.
+
 ### F095: Each idle visitor holds 50 PartyKit websockets (25 presence + 25 chat), even in a background tab
 
 **Completed 2026-10-14:** PR #199 / main `bebc8140`, Pages `10049caa`, Worker `3a61d6e1`, matching PartyKit. Negotiated shared presence/chat, legacy fallback, startup-gated identity/avatar refresh and nine nearby realtime chunks preserve existing signed permissions, preview/PvP behavior and terrain loading. Pinned-runtime close handshakes now complete. Fixture 50 → 9 sockets and 2 → 1 token requests; native/live closure, hidden visibility/return, UI chat, permissions and gameplay pass, with full 3,600-test/mobile/hosted gates and exact live asset hashes. Far-map/lobby coverage and physical-device OS checks remain separate. [Receipt](wamp-shared-realtime-2026-10-14.md).
@@ -1739,6 +1741,14 @@ Evidence (dev server, simulated `document.hidden`, PartyKit sockets): this branc
 Open: one socket per shard for both channels (PartyKit server change), the identity refresh through the startup gate, a smaller realtime radius. Receipt: `wamp-flags-phaser-sockets-2026-10-11.md`.
 
 ### F036: Signed-in players get no edge caching; every leaderboard, room summary and discovery read goes to the database
+
+**Completed source 2026-10-18:** public discovery inputs share a bounded20-second cache, with private history read fresh before personal filters/order/pagination. Indexed pages and their public enrichment are cached separately; legacy/personal modes share the complete public candidate pool. Viewer states and personalized responses never enter those caches. Browser reads are account-safe/no-store; saved runs, ratings and Room Rush writes bypass public discovery caches for20 seconds. Existing world visibility, version/grouping rules, verification/history semantics, insights and co-op flags remain unchanged. F036 is complete/master157 at local source acceptance; exact-source/main gates and guarded delivery follow. [Final-step receipt](wamp-personal-discovery-cache-2026-10-18.md).
+
+**Third step 2026-10-17:** share only room standings with a 20-second family/policy/limit key. Resolve access and lineage on every request; read ratings and eligibility fresh in parallel with the standings/private-rank work. Changed listed results and newly listed viewers get a fresh top list, and existing post-clear `fresh=1` bypasses both cache reads and writes. Non-prime Worlds stay uncached. Personalized discovery/filter handling remains. [Receipt](wamp-room-standings-cache-2026-10-17.md).
+
+**Second step 2026-10-17:** all-time global entries share the public cache with a private indexed rank/neighbor lookup. Changed listed scores/ranks/neighbors and explicit Refresh use a fresh full snapshot; weekly stays uncached. Room leaderboards and personal discovery remain. [Receipt](wamp-personal-global-cache-2026-10-17.md).
+
+**Partial 2026-10-17:** builder discovery, public profile rooms and public profile playlists now use the shared 20-second cache for every viewer, after authentication and builder token-scope checks. Personalized responses are unchanged. Leaderboard/discovery public-base plus viewer-overlay work remains, including post-submit freshness. [Receipt](wamp-public-list-cache-2026-10-17.md).
 
 - **Area:** Backend performance, cost & reliability
 - **Type:** improvement · **impact:** low · **effort:** medium
@@ -5426,6 +5436,8 @@ Core claim confirmed. Smaller corrections:
 
 (e) The "11 Transfer events" figure is unverified. If it is accurate, the impact today is latent.
 
+**2026-10-20 completed.** [PR264](https://github.com/songadaymann/wamp/pull/264), main9ba9670b, is verified live. Deliberate Check ownership/Edit refreshes replace stale HUD ownership, require current server edit permission and fence delayed responses across context/lifecycle changes. Acquired protected Expanded cells open only the room editor. Original builder attribution remains; Collection/attribution and Transfer-log product work are separate, as the fact-check specifies. Full4,869 tests,12 source/main checks and160 browser cases/head, guarded API+Pages and28 isolated actual-domain flows pass. [Receipt](wamp-owner-edit-refresh-2026-10-20.md).
+
 ### F237: 4 of the 11 real NFTs have no metadata at all because minting skips the artwork step
 
 - **Area:** Room ownership, NFT minting and wallet flow
@@ -8059,3 +8071,15 @@ Minor additions, not reversals:
 ## October 14 F062 required scene capabilities
 
 [Delivered receipt](wamp-required-scene-capabilities-2026-10-14.md): PR #202 / main `8c590fa0`, Pages `e84dc8c1`; required capabilities, checked lookup and one music coordinator. Full quality/mobile/hosted/live acceptance and exact files pass; portrait-entry and signed header overlap reproduce on the prior release and remain a separately recorded follow-up. Master 145/215.
+
+
+### F250: Expanded Rooms appear to have no leaderboards
+
+- **Area:** Leaderboard, XP and anti-cheat integrity
+- **Type:** bug / verification · **impact:** high · **effort:** medium
+- **Added:** 2026-10-18 at Jonathan's request
+- **Status:** open; Jonathan reports that basically none of the Expanded Rooms he sees have leaderboards.
+
+Existing run routes and a modal tab are implementation evidence, not proof that players can reach a working whole-room leaderboard. Diagnose the reported absence using published Expanded Rooms, distinguishing native Expanded Room IDs, legacy course aliases and independent cell leaderboards. Check selection at entry and non-entry cells, Browse and Play, desktop and phones, goal eligibility and clear empty/no-goal states. Verify accepted whole-room clears, exact ranking, post-clear refresh, reload, republished versions and account/guest behavior using isolated local fixtures and read-only production checks. Avoid adding testing runs to public production statistics. Preserve intentionally goal-less rooms; do not invent goals or silently rank practice runs.
+
+Acceptance: eligible published Expanded Rooms expose the correct whole-room leaderboard through ordinary UI; a completed valid run appears with the expected rank and persists on reload; no-goal, empty, failed and loading states are clear. Add maintained regression coverage for any actual defect. This is separate from F026/F036 performance work and does not reopen their completed scope.

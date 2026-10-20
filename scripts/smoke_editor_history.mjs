@@ -23,9 +23,8 @@ async function inspect(page, expanded) {
 
 async function paint(page, expanded, x = 12) {
   await page.evaluate(async ({ expanded, x }) => {
-    const { editorState } = await import('/src/config.ts');
-    editorState.paletteMode = 'tiles';
-    editorState.selectedTileIndex = 0;
+    const { updateEditorState } = await import('/src/config.ts');
+    updateEditorState({ paletteMode: 'tiles' });
     const scene = window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys[expanded ? 'CourseEditorScene' : 'EditorScene'];
     const runtime = expanded ? scene.getSelectedSlice().runtime : scene.editRuntime;
     runtime.beginTileBatch();

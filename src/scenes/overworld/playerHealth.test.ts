@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../../feedback/haptics', () => ({ playHaptic: vi.fn() }));
+import { playHaptic } from '../../feedback/haptics';
+beforeEach(() => vi.clearAllMocks());
 
 vi.mock('phaser', () => ({ default: {} }));
 const display = vi.hoisted(() => ({ setHearts: vi.fn(), setPosition: vi.fn(), setVisible: vi.fn(),
@@ -14,8 +17,7 @@ function fixture() {
   const body = { center: { x: 40 }, top: 72 };
   const host = { scene: {} as never, getMaximumHearts: () => state.maximum,
     isActive: () => state.active, isPvpActive: () => state.pvp, isDeathPending: () => state.pending,
-    getCurrentTime: () => state.now, getPlayerBody: () => body as never,
-    getPlayerSprite: () => sprite as never, onHurt: vi.fn() };
+    getCurrentTime: () => state.now, runtime: { playerBody: body as never, playerSprite: sprite as never }, onHurt: vi.fn() };
   const controller = new OverworldPlayerHealthController(host);
   return { controller, state, sprite, host };
 }
@@ -28,6 +30,7 @@ describe('room health lifecycle and display ownership', () => {
     expect(f.controller.absorbDamage()).toBe(true);
     expect(f.controller.absorbDamage()).toBe(true);
     expect(f.host.onHurt).toHaveBeenCalledOnce();
+    expect(playHaptic).toHaveBeenCalledExactlyOnceWith('damage');
     expect(f.controller.describe()).toMatchObject({ current: 2, invulnerableMs: 1000 });
     f.state.now = 2000; f.controller.sync();
     expect(f.sprite.clearTint).toHaveBeenCalledOnce();
@@ -45,6 +48,18 @@ describe('room health lifecycle and display ownership', () => {
     f.controller.die(); f.state.pending = true;
     expect(f.controller.heal()).toBe(false); expect(f.controller.describe().visible).toBe(false);
     f.state.pending = false; f.controller.refillForSpawn(); expect(f.controller.describe().current).toBe(3);
+  });
+
+  it('follows replacement bodies and avatars, then hides presentation while the player is destroyed', () => {
+    const f = fixture(); f.controller.refillForSpawn();
+    f.host.runtime.playerBody = { center: { x: 90 }, top: 180 } as never;
+    f.host.runtime.playerSprite = { ...f.sprite, y: 200 } as never;
+    f.controller.sync(); expect(display.setPosition).toHaveBeenLastCalledWith(90, 144);
+    f.host.runtime.playerBody = null as never; f.controller.sync();
+    expect(display.setVisible).toHaveBeenLastCalledWith(false);
+    expect(f.controller.absorbDamage()).toBe(false);
+    f.host.runtime.playerBody = { center: { x: -30 }, top: 90 } as never;
+    f.controller.refillForSpawn(); expect(display.setPosition).toHaveBeenLastCalledWith(-30, 78);
   });
 
   it('leaves Room Rush deaths and PvP damage/tint to their existing owners', () => {

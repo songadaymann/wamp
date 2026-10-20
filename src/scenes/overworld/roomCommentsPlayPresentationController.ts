@@ -1,3 +1,5 @@
+import { formatCommentTime } from '../../roomComments/presentation';
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import Phaser from 'phaser';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { RoomCommentRecord } from '../../roomComments/model';
@@ -46,7 +48,11 @@ export class RoomCommentsPlayPresentationController {
         continue;
       }
 
+      const changed = existing.comment.authorDisplayName !== comment.authorDisplayName
+        || existing.comment.authorUsername !== comment.authorUsername
+        || existing.comment.body !== comment.body || existing.comment.createdAt !== comment.createdAt;
       existing.comment = comment;
+      if (changed) this.redrawRenderedComment(existing);
       existing.container.setPosition(position.x, position.y);
     }
 
@@ -74,6 +80,16 @@ export class RoomCommentsPlayPresentationController {
     return this.renderedCommentsById.size;
   }
 
+  getAuthorLayoutSnapshot(): Array<{ id: string; x: number; y: number; label: string;
+    width: number; height: number; contentWidth: number; authorY: number; bodyY: number; visible: boolean }> {
+    return Array.from(this.renderedCommentsById.values(), rendered => ({ id: rendered.comment.id,
+      x: rendered.container.x, y: rendered.container.y, label: rendered.authorText.text,
+      width: rendered.authorText.width, height: rendered.authorText.height,
+      contentWidth: COMMENT_PANEL_WIDTH - COMMENT_PANEL_PADDING * 2,
+      authorY: rendered.authorText.y, bodyY: rendered.bodyText.y, visible: rendered.authorText.visible,
+    }));
+  }
+
   private getCommentWorldPosition(comment: RoomCommentRecord): { x: number; y: number } {
     const origin = this.options.getRoomOrigin(comment.roomCoordinates);
     return {
@@ -87,10 +103,11 @@ export class RoomCommentsPlayPresentationController {
     pin.setOrigin(0.5, 0.5);
     pin.setDisplaySize(20, 20);
     const panel = this.options.scene.add.graphics();
-    const authorText = this.options.scene.add.text(0, 0, comment.authorDisplayName, {
+    const authorText = this.options.scene.add.text(0, 0, formatAccountIdentity(comment.authorDisplayName, comment.authorUsername), {
       fontFamily: 'IBM Plex Mono, Courier New, monospace',
       fontSize: '11px',
       color: COMMENT_MUTED_COLOR,
+      wordWrap: { width: COMMENT_PANEL_WIDTH - COMMENT_PANEL_PADDING * 2, useAdvancedWrap: true },
     });
     const bodyText = this.options.scene.add.text(0, 0, comment.body, {
       fontFamily: 'IBM Plex Mono, Courier New, monospace',
@@ -114,7 +131,8 @@ export class RoomCommentsPlayPresentationController {
     container.setDepth(COMMENT_PIN_DEPTH);
     container.setSize(30, 30);
     container.setInteractive(
-      new Phaser.Geom.Rectangle(-15, -15, 30, 30),
+      // InputManager adds the Container's half-size display origin before testing.
+      new Phaser.Geom.Rectangle(0, 0, 30, 30),
       Phaser.Geom.Rectangle.Contains,
     );
 
@@ -143,7 +161,7 @@ export class RoomCommentsPlayPresentationController {
   }
 
   private redrawRenderedComment(rendered: RenderedRoomComment): void {
-    rendered.authorText.setText(rendered.comment.authorDisplayName);
+    rendered.authorText.setText(formatAccountIdentity(rendered.comment.authorDisplayName, rendered.comment.authorUsername));
     rendered.bodyText.setText(rendered.comment.body);
     rendered.timeText.setText(formatCommentTime(rendered.comment.createdAt));
     const panelX = 16;
@@ -173,13 +191,4 @@ export class RoomCommentsPlayPresentationController {
     rendered.bodyText.setVisible(visible);
     rendered.timeText.setVisible(visible);
   }
-}
-
-function formatCommentTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
 }

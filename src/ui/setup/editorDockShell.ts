@@ -1,7 +1,7 @@
 import { assetUrl } from '../../assets/assetUrl';
 import { EditorPhoneDock } from './editorPhoneDock';
 import {
-  editorState,
+  editorState, updateEditorState,
   TILE_SIZE,
   type PaletteMode,
   type ToolName,
@@ -17,8 +17,7 @@ import type { SmartStyleId } from '../../autotiling/model';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
   EDITOR_SPAWN_PLACED_EVENT,
-  EDITOR_UI_STATE_CHANGED_EVENT,
-  type EditorShellEscapeRequestedDetail,
+  refreshEditorUi, subscribeEditorUi, EDITOR_CONTROL_STATE_KEYS,
 } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { type EditorObjectScope, PaletteController } from './paletteController';
@@ -197,6 +196,7 @@ function dispatchSelectChange(select: HTMLSelectElement, value: string): void {
 export class EditorDockShellController {
   private state: EditorDockShellState = { ...INITIAL_EDITOR_DOCK_SHELL_STATE };
   private active = false;
+  private stopStateUpdates: (() => void) | null = null;
   private readonly phoneDock: EditorPhoneDock;
   private lastDrawerTrigger: HTMLElement | null = null;
   private lastPopoverTrigger: HTMLElement | null = null;
@@ -230,6 +230,11 @@ export class EditorDockShellController {
     this.renderSmartPicker();
     this.syncChoiceButtons();
     this.syncProxyActions();
+  }
+
+  destroy(): void {
+    this.stopStateUpdates?.();
+    this.stopStateUpdates = null;
   }
 
   private dispatch(action: EditorDockShellAction, trigger?: HTMLElement | null): void {
@@ -449,19 +454,20 @@ export class EditorDockShellController {
       });
     }
 
-    win.addEventListener(EDITOR_UI_STATE_CHANGED_EVENT, () => {
+    this.stopStateUpdates?.();
+    this.stopStateUpdates = subscribeEditorUi(win, () => {
       if (editorState.smartTheme !== 'water') {
         this.lastStandardTheme = editorState.smartTheme;
       }
       this.renderSmartPicker();
       this.syncChoiceButtons();
       this.syncProxyActions();
-    });
+    }, EDITOR_CONTROL_STATE_KEYS);
     win.addEventListener(EDITOR_SPAWN_PLACED_EVENT, () => {
       if (this.state.spawnPlacementActive) this.finishSpawnPlacement(false);
     });
     win.addEventListener(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, (event) => {
-      const detail = (event as CustomEvent<EditorShellEscapeRequestedDetail>).detail;
+      const detail = event.detail;
       if (!this.active || detail.handled) return;
       if (this.state.spawnPlacementActive) {
         this.finishSpawnPlacement(true);
@@ -703,13 +709,13 @@ export class EditorDockShellController {
     }
     this.state = reduceEditorDockShellState(this.state, { type: 'start-spawn' });
     this.phoneDock.collapse();
-    editorState.paletteMode = 'objects';
-    editorState.selectedObjectId = 'spawn_point';
-    editorState.activeTool = 'pencil';
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ selectedObjectId: 'spawn_point' });
+    updateEditorState({ activeTool: 'pencil' });
     const instructions = this.doc.getElementById('editor-marker-instructions');
     if (instructions) instructions.textContent = 'Click the room to place the spawn point. Press Escape to cancel.';
     this.syncDom();
-    this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    refreshEditorUi(this.doc.defaultView);
     this.focusGameCanvas();
   }
 
@@ -717,9 +723,9 @@ export class EditorDockShellController {
     const restore = this.spawnRestoreState;
     this.spawnRestoreState = null;
     if (restore) {
-      editorState.paletteMode = restore.paletteMode;
-      editorState.selectedObjectId = restore.selectedObjectId;
-      editorState.activeTool = restore.activeTool;
+      updateEditorState({ paletteMode: restore.paletteMode });
+      updateEditorState({ selectedObjectId: restore.selectedObjectId });
+      updateEditorState({ activeTool: restore.activeTool });
     }
     this.state = reduceEditorDockShellState(this.state, { type: 'finish-spawn' });
     const instructions = this.doc.getElementById('editor-marker-instructions');
@@ -729,7 +735,7 @@ export class EditorDockShellController {
         : 'Spawn placed. Your previous tool is active again.';
     }
     this.syncDom();
-    this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    refreshEditorUi(this.doc.defaultView);
   }
 
   private focusGameCanvas(): void {
@@ -796,7 +802,7 @@ export class EditorDockShellController {
       collect.disabled = !collectTarget || collectTarget.disabled;
       const label = collect.querySelector<HTMLElement>('[data-editor-share-label]');
       const labelText = collectTarget?.id === 'btn-refresh-room-metadata'
-        ? 'Refresh Room Metadata'
+        ? 'Add/update artwork'
         : 'Collect Room';
       if (label) label.textContent = labelText;
       else collect.textContent = labelText;

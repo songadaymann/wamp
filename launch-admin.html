@@ -120,6 +120,9 @@
       [hidden] {
         display: none !important;
       }
+      #map-capture .auth-actions > button,
+      #map-capture .auth-actions > a { min-height: 44px; }
+      #map-capture-status { color: var(--cream); }
 
       .admin-shell {
         width: min(100%, 1680px);
@@ -1243,6 +1246,7 @@
           <a href="#daily-challenge"><span class="nav-icon" aria-hidden="true">☀</span><span class="nav-label">Room of the Day</span></a>
           <a href="#weekly-rush"><span class="nav-icon" aria-hidden="true">▶</span><span class="nav-label">Weekly Rush</span></a>
           <a href="#build-prompts"><span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Build Prompts</span></a>
+          <a href="#map-capture"><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Map captures</span></a>
           <a href="#infrastructure"><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-label">Infrastructure</span></a>
           <div class="nav-rule"></div>
           <a href="/suspicious-admin.html"><span class="nav-icon" aria-hidden="true">!</span><span class="nav-label">Suspicious Runs</span></a>
@@ -1250,6 +1254,15 @@
         </nav>
 
         <div class="admin-content">
+          <section id="map-capture" class="admin-section stack">
+            <header class="section-heading"><h2>Map captures</h2></header>
+            <div class="auth-actions">
+              <button id="map-capture-button" type="button" disabled>Take screenshot</button>
+              <a class="button-link secondary" href="/capture" target="_blank" rel="noopener">Open gallery</a>
+              <a id="map-capture-result" class="button-link secondary" target="_blank" rel="noopener" hidden>Open screenshot</a>
+            </div>
+            <p id="map-capture-status" role="status">Use your admin key to capture the map.</p>
+          </section>
           <section id="daily-challenge" class="admin-section">
             <header class="section-heading"><h2>Room of the Day</h2></header>
             <div class="panel stack">

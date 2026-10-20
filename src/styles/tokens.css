@@ -1,87 +1,177 @@
-/* Shared WAMP UI values. Import before the surface styles.
+@layer base {
+  /* Shared WAMP UI values. Import before the surface styles.
    Surface aliases stay in their existing scopes for compatibility. Special-purpose
    colors (currency tiers, music notes, artwork and legacy dark panels) stay local;
    repeated core palette colors and font stacks are enforced by styles:check. */
-:root {
-  --wamp-ink: #18161c;
-  --wamp-cream: #fff3db;
-  --wamp-paper: #fffaf0;
-  --wamp-sky: #79ccde;
-  --wamp-sky-deep: #2c5071;
-  --wamp-green: #277b30;
-  --wamp-yellow: #fcea7c;
-  --wamp-red: #ed5f4b;
-  --wamp-pink: #ee8bc4;
-  --wamp-black: #000;
-  --wamp-white: #fff;
-  --wamp-button-paper: #fff4df;
-  --wamp-disabled-surface: #d2caba;
-  --wamp-disabled-text: #5f5a53;
-  --wamp-disabled-border: #8d877c;
 
-  /* RGB channels preserve existing shadows and functional translucent overlays. */
-  --wamp-ink-rgb: 24, 22, 28;
-  --wamp-cream-rgb: 255, 243, 219;
-  --wamp-paper-rgb: 255, 250, 240;
-  --wamp-sky-rgb: 121, 204, 222;
-  --wamp-sky-deep-rgb: 44, 80, 113;
-  --wamp-green-rgb: 39, 123, 48;
-  --wamp-yellow-rgb: 252, 234, 124;
-  --wamp-red-rgb: 237, 95, 75;
-  --wamp-pink-rgb: 238, 139, 196;
-  --wamp-black-rgb: 0, 0, 0;
-  --wamp-white-rgb: 255, 255, 255;
-  --wamp-button-paper-rgb: 255, 244, 223;
-  --wamp-disabled-surface-rgb: 210, 202, 186;
-  --wamp-disabled-text-rgb: 95, 90, 83;
-  --wamp-disabled-border-rgb: 141, 135, 124;
+  :root {
+    --wamp-ink: #18161c;
+    --wamp-cream: #fff3db;
+    --wamp-paper: #fffaf0;
+    --wamp-sky: #79ccde;
+    --wamp-sky-deep: #2c5071;
+    --wamp-green: #277b30;
+    --wamp-yellow: #fcea7c;
+    --wamp-red: #ed5f4b;
+    --wamp-pink: #ee8bc4;
+    --wamp-black: #000;
+    --wamp-white: #fff;
+    --wamp-button-paper: #fff4df;
+    --wamp-disabled-surface: #d2caba;
+    --wamp-disabled-text: #5f5a53;
+    --wamp-disabled-border: #8d877c;
 
-  --surface-hud: var(--wamp-cream);
-  --surface-paper: var(--wamp-paper);
-  --text-on-paper: var(--wamp-ink);
-  --border-paper: var(--wamp-sky);
-  --font-ui: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
-  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
-  --font-label: 'Early GameBoy', monospace;
-  --font-display: 'Super Mario Bros. NES', monospace;
-  --font-room-title: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
-  --font-code: 'Courier New', monospace;
+    /* Stacking roles. These preserve the existing ordering in each stacking context.
+     World/HUD < drawers < modals < feedback < critical duel/build overlays.
+     Local roles are relative to their owner; phone editor roles keep its toolbar,
+     inspector, music, popovers and chat in their established order. */
+    --z-world-ui: 10;
+    --z-hud: 20;
+    --z-drawer: 30;
+    --z-modal: 40;
+    --z-toast: 140;
+    --z-critical: 1200;
+    --z-local-back: -1;
+    --z-local-base: 0;
+    --z-local-content: 1;
+    --z-local-overlay: 2;
+    --z-local-header: 3;
+    --z-world-controls: 12;
+    --z-world-focus-controls: 16;
+    --z-world-prompt: 17;
+    --z-touch-hud: 15;
+    --z-touch-sign: 13;
+    --z-chat: 11;
+    --z-chat-open: 22;
+    --z-room-comment: 32;
+    --z-room-chat: 36;
+    --z-online-popover: 26;
+    --z-world-title-tooltip: 28;
+    --z-editor-actions: 6;
+    --z-editor-resize: 12;
+    --z-editor-inspector: 12;
+    --z-editor-title: 13;
+    --z-editor-toolbar: 14;
+    --z-editor-dock: 15;
+    --z-editor-sprite: 15;
+    --z-editor-music: 16;
+    --z-editor-status: 17;
+    --z-editor-picker: 18;
+    --z-editor-layer-active: 8;
+    --z-editor-layer-tooltip: 9;
+    --z-editor-tooltip: 100;
+    --z-music-tooltip: 90;
+    --z-editor-chat: 14;
+    --z-editor-chat-open: 24;
+    --z-background-modal: 66;
+    --z-phone-editor-sidebar-legacy: 17;
+    --z-phone-editor-sidebar: 19;
+    --z-phone-editor-inspector: 22;
+    --z-phone-editor-dock: 23;
+    --z-phone-editor-link: 23;
+    --z-phone-editor-music: 24;
+    --z-phone-editor-toolbar: 25;
+    --z-phone-editor-popover: 26;
+    --z-phone-editor-picker: 27;
+    --z-phone-editor-chat: 18;
+    --z-phone-editor-nav: 18;
+    --z-phone-world-chat-button: 23;
+    --z-xp-receipt: 69;
+    --z-reward: 70;
+    --z-xp-impact: 71;
+    --z-busy: 135;
+    --z-share-toast: 200;
+    --z-pvp-damage: 1185;
+    --z-pvp-countdown: 1190;
 
-  --shadow-2: 2px 2px 0 var(--wamp-ink);
-  --shadow-3: 3px 3px 0 var(--wamp-ink);
-  --shadow-4: 4px 4px 0 var(--wamp-ink);
-  --shadow-6: 6px 6px 0 var(--wamp-ink);
+    /* RGB channels preserve existing shadows and functional translucent overlays. */
+    --wamp-ink-rgb: 24, 22, 28;
+    --wamp-cream-rgb: 255, 243, 219;
+    --wamp-paper-rgb: 255, 250, 240;
+    --wamp-sky-rgb: 121, 204, 222;
+    --wamp-sky-deep-rgb: 44, 80, 113;
+    --wamp-green-rgb: 39, 123, 48;
+    --wamp-yellow-rgb: 252, 234, 124;
+    --wamp-red-rgb: 237, 95, 75;
+    --wamp-pink-rgb: 238, 139, 196;
+    --wamp-black-rgb: 0, 0, 0;
+    --wamp-white-rgb: 255, 255, 255;
+    --wamp-button-paper-rgb: 255, 244, 223;
+    --wamp-disabled-surface-rgb: 210, 202, 186;
+    --wamp-disabled-text-rgb: 95, 90, 83;
+    --wamp-disabled-border-rgb: 141, 135, 124;
+    --surface-hud: var(--wamp-cream);
+    --surface-paper: var(--wamp-paper);
+    --text-on-paper: var(--wamp-ink);
+    --border-paper: var(--wamp-sky);
+    --font-ui: 'HomeVideo', 'IBM Plex Mono', 'Courier New', monospace;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --font-label: 'Early GameBoy', monospace;
+    --font-display: 'Super Mario Bros. NES', monospace;
+    --font-room-title: 'Super Mario Bros. NES', 'Early GameBoy', monospace;
+    --font-code: 'Courier New', monospace;
+    --font-activity: 'HomeVideo', 'IBM Plex Mono', monospace;
+    --font-home-short: 'HomeVideo', monospace;
+    --shadow-2: 2px 2px 0 var(--wamp-ink);
+    --shadow-3: 3px 3px 0 var(--wamp-ink);
+    --shadow-4: 4px 4px 0 var(--wamp-ink);
+    --shadow-6: 6px 6px 0 var(--wamp-ink);
 
-  /* Legacy theme and public surface aliases: preserve their current colors/fonts. */
-  --bg: #050505;
-  --panel: #0b0b0b;
-  --panel-2: #141414;
-  --panel-3: #1b1b1b;
-  --field: #090909;
-  --border: #252525;
-  --border-strong: #3f4b26;
-  --text: #f3eee2;
-  --text-muted: #a89f8f;
-  --text-dim: #70695c;
-  --accent-cool: #5dc16b;
-  --accent-cool-rgb: 93, 193, 107;
-  --accent-cool-soft: rgba(var(--accent-cool-rgb), 0.18);
-  --accent-warm: #d7ac63;
-  --accent-warm-rgb: 215, 172, 99;
-  --accent-warm-soft: rgba(var(--accent-warm-rgb), 0.18);
-  --accent-hot: #ff7a5c;
-  --accent-hot-rgb: 255, 122, 92;
-  --accent-hot-soft: rgba(var(--accent-hot-rgb), 0.18);
-  --accent-alt: #63d6cb;
-  --accent-alt-rgb: 99, 214, 203;
-  --accent-alt-soft: rgba(var(--accent-alt-rgb), 0.18);
-  --accent-soft: var(--accent-alt);
-  --danger: #b22222;
-  --danger-soft: rgba(178, 34, 34, 0.18);
-  --success: #347433;
-  --success-soft: rgba(52, 116, 51, 0.18);
-  --editor-pixel-font: var(--font-label);
-  --editor-ui-font: var(--font-mono);
-  --hud-ui-font: var(--font-ui);
-  --hud-room-title-font: var(--font-room-title);
+    /* Legacy theme and public surface aliases: preserve their current colors/fonts. */
+    --bg: #050505;
+    --panel: #0b0b0b;
+    --panel-2: #141414;
+    --panel-3: #1b1b1b;
+    --field: #090909;
+    --border: #252525;
+    --border-strong: #3f4b26;
+    --text: #f3eee2;
+    --text-muted: #a89f8f;
+    --text-dim: #70695c;
+    --accent-cool: #5dc16b;
+    --accent-cool-rgb: 93, 193, 107;
+    --accent-cool-soft: rgba(var(--accent-cool-rgb), 0.18);
+    --accent-warm: #d7ac63;
+    --accent-warm-rgb: 215, 172, 99;
+    --accent-warm-soft: rgba(var(--accent-warm-rgb), 0.18);
+    --accent-hot: #ff7a5c;
+    --accent-hot-rgb: 255, 122, 92;
+    --accent-hot-soft: rgba(var(--accent-hot-rgb), 0.18);
+    --accent-alt: #63d6cb;
+    --accent-alt-rgb: 99, 214, 203;
+    --accent-alt-soft: rgba(var(--accent-alt-rgb), 0.18);
+    --accent-soft: var(--accent-alt);
+    --danger: #b22222;
+    --danger-soft: rgba(178, 34, 34, 0.18);
+    --success: #347433;
+    --success-soft: rgba(52, 116, 51, 0.18);
+    --editor-pixel-font: var(--font-label);
+    --editor-ui-font: var(--font-mono);
+    --hud-ui-font: var(--font-ui);
+    --hud-room-title-font: var(--font-room-title);
+  }
+
+  /* Optional UI tiers preserve every original size through its declaration fallback. */
+
+  body[data-text-style='readable'] {
+    --font-ui: var(--font-mono);
+    --font-label: var(--font-mono);
+    --font-display: var(--font-mono);
+    --font-room-title: var(--font-mono);
+    --font-activity: var(--font-mono);
+    --font-home-short: var(--font-mono);
+    --editor-pixel-font: var(--font-mono);
+    --editor-ui-font: var(--font-mono);
+    --hud-ui-font: var(--font-mono);
+    --hud-room-title-font: var(--font-mono);
+    --ui-text-small: 12px;
+    --ui-text-body: 16px;
+    --ui-text-title: 20px;
+  }
+
+  body[data-text-size='large'] {
+    --ui-text-small: 16px;
+    --ui-text-body: 16px;
+    --ui-text-title: 20px;
+  }
 }

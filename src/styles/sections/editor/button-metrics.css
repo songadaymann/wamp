@@ -1,0 +1,8 @@
+@layer components {
+  /* Component-level defaults keep workbench-specific spacing and weights in charge. */
+
+  body[data-editor-dock-shell='true'] button {
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+}

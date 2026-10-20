@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
+import { playHaptic } from '../../feedback/haptics';
 import type { PvpMatchSnapshot } from '../../pvp/model';
 import { showPvpDamageFlashOverlay } from '../../ui/setup/pvpModal';
 import { DEFAULT_PLAYER_VISUAL_FEET_OFFSET } from '../../player/defaultPlayer';
@@ -72,6 +73,7 @@ export class OverworldPvpLocalPresentationController {
   }
 
   playDamageFeedback(previousHearts: number, nextHearts: number): void {
+    playHaptic('damage');
     const scene = this.host.scene;
     const lostHearts = Math.max(1, previousHearts - nextHearts);
     playSfx('player-hurt', { ignoreCooldown: true });

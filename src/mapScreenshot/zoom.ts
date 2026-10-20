@@ -19,8 +19,7 @@ export function computeIdealFitZoom(world: WorldPixelRect): number {
 }
 
 /**
- * Move toward idealZoom by at most MAX_ZOOM_DELTA_PER_DAY per capture
- * (daily or manual — not limited to one step per calendar day).
+ * Move toward idealZoom by at most MAX_ZOOM_DELTA_PER_DAY for one daily step.
  * First capture (no previous) uses idealZoom directly.
  */
 export function applyGradualZoom(
@@ -36,4 +35,9 @@ export function applyGradualZoom(
     return idealZoom;
   }
   return previousZoom + Math.sign(delta) * maxDelta;
+}
+
+/** A manual preview cannot advance or rewind the time-lapse's daily zoom. */
+export function resolveCaptureZoom(mode: 'manual' | 'daily', idealZoom: number, previousZoom: number | null): number {
+  return mode === 'manual' && previousZoom !== null ? previousZoom : applyGradualZoom(idealZoom, previousZoom);
 }

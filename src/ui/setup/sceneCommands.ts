@@ -1,5 +1,6 @@
+import { isGameKeyboardYielded } from '../keyboardFocus';
 import { setupGameMenu } from './gameMenu';
-import { installRestartShortcut } from './restartShortcut';
+import { installGameplayShortcuts } from './restartShortcut';
 import Phaser from 'phaser';
 import type { LazyModal } from './lazyModal';
 import type { AboutModalController } from './aboutModal';
@@ -87,7 +88,7 @@ export function setupSceneCommands(
   };
   const handleRoomChatShortcut = (event: KeyboardEvent) => {
     if (
-      event.key.toLowerCase() !== 't' ||
+      event.code !== 'KeyT' || event.defaultPrevented || isGameKeyboardYielded(doc) ||
       event.repeat ||
       event.metaKey ||
       event.ctrlKey ||
@@ -117,7 +118,7 @@ export function setupSceneCommands(
 
   const handleRoomCommentShortcut = (event: KeyboardEvent) => {
     if (
-      event.key.toLowerCase() !== 'c' ||
+      event.code !== 'KeyC' || event.defaultPrevented || isGameKeyboardYielded(doc) ||
       event.repeat ||
       event.metaKey ||
       event.ctrlKey ||
@@ -145,7 +146,8 @@ export function setupSceneCommands(
     event.stopPropagation();
   };
 
-  installRestartShortcut(() => getActiveOverworldScene(game)?.restartCurrentRun(), doc);
+  installGameplayShortcuts({ restart: () => getActiveOverworldScene(game)?.restartCurrentRun(),
+    stop: () => getActiveOverworldScene(game)?.returnToWorld() }, doc);
   doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
   doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 

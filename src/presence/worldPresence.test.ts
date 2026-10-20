@@ -92,7 +92,7 @@ describe('WorldPresenceClient room preview ownership', () => {
   it('negotiates preview deltas alongside the refreshed identity token', async () => {
     const harness=createHarness(vi.fn());harness.identityTokenProvider={getToken:async()=> 'signed-token'};
     const prototype=WorldPresenceClient.prototype as unknown as {getSocketQuery:()=>Promise<unknown>};
-    expect(await prototype.getSocketQuery.call(harness)).toEqual({identityToken:'signed-token',previewDeltas:'1',roomChat:'1'});
+    expect(await prototype.getSocketQuery.call(harness)).toEqual({identityToken:'signed-token',previewDeltas:'1',roomChat:'1',presenceInterest:'1'});
   });
 });
 

@@ -1,4 +1,6 @@
+import type { RuntimePlayerReader } from './runtimeContext';
 import type Phaser from 'phaser';
+import { playHaptic } from '../../feedback/haptics';
 import { PlayerHealth } from '../../player/health';
 import { PvpHeartDisplay, PVP_HEART_HEAD_CLEARANCE_PX } from './pvpHeartDisplay';
 import { syncPvpInvulnerabilitySpriteStyle } from './pvpInvulnerabilityFx';
@@ -10,8 +12,7 @@ interface PlayerHealthHost {
   isPvpActive(): boolean;
   isDeathPending(): boolean;
   getCurrentTime(): number;
-  getPlayerBody(): Phaser.Physics.Arcade.Body | null;
-  getPlayerSprite(): Phaser.GameObjects.Sprite | null;
+  runtime: Pick<RuntimePlayerReader, 'playerBody' | 'playerSprite'>;
   onHurt(): void;
 }
 
@@ -30,10 +31,13 @@ export class OverworldPlayerHealthController {
   }
 
   absorbDamage(): boolean {
-    if (!this.host.isActive() || !this.host.getPlayerBody()) return false;
+    if (!this.host.isActive() || !this.host.runtime.playerBody) return false;
     this.health.setMaximum(this.host.getMaximumHearts());
     const result = this.health.damage(this.host.getCurrentTime());
-    if (result === 'hurt') this.host.onHurt();
+    if (result === 'hurt') {
+      playHaptic('damage');
+      this.host.onHurt();
+    }
     this.sync();
     return result !== 'death';
   }
@@ -59,8 +63,8 @@ export class OverworldPlayerHealthController {
       this.styledSprite = null;
       return;
     }
-    const sprite = this.host.getPlayerSprite();
-    const body = this.host.getPlayerBody();
+    const sprite = this.host.runtime.playerSprite;
+    const body = this.host.runtime.playerBody;
     if (!this.host.isActive() || !sprite || !body || this.host.isDeathPending()) {
       this.display?.setVisible(false);
       this.releaseSpriteStyle();
@@ -90,7 +94,7 @@ export class OverworldPlayerHealthController {
     return { current: this.health.current, maximum: this.health.maximum,
       invulnerableMs: Math.max(0, Math.round(this.health.invulnerableUntil - this.host.getCurrentTime())),
       enabled: this.host.isActive(), visible: this.host.isActive() && this.health.maximum > 1
-        && !!this.host.getPlayerBody() && !!this.host.getPlayerSprite() && !this.host.isDeathPending() };
+        && !!this.host.runtime.playerBody && !!this.host.runtime.playerSprite && !this.host.isDeathPending() };
   }
 
   reset(): void {

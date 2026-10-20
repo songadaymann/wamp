@@ -35,11 +35,14 @@ import { buildRoomTokenMetadata } from '../../mint/roomMetadata';
 import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import {
   hideBusyOverlay,
+  getAppFeedbackDebugState,
   showBusyOverlay,
   showBusyError,
   updateBusyOverlay,
 } from '../../ui/appFeedback';
 import type { OverworldPlaySceneData } from '../sceneData';
+import type { RoomCollectionStageOptions } from './roomCollectionFlow';
+import { WalletTransactionRevertedError } from '../../auth/walletTransaction';
 
 interface EditorRoomSessionHost {
   applyRoomSnapshot(room: RoomSnapshot): void;
@@ -143,6 +146,10 @@ export class EditorRoomSession {
   private mintedOwnerSyncedAt: string | null = null;
   private mintedMetadataRoomVersion: number | null = null;
   private mintedMetadataUpdatedAt: string | null = null;
+  private pendingArtwork: {
+    roomId: string; tokenId: string; userId: string; wallet: string;
+    txHash: string; metadataRoomVersion: number; metadataHash: string; explorerUrl: string | null;
+  } | null = null;
   private saveInFlightValue = false;
   private saveSettledWaiters: Array<() => void> = [];
   private autoSaveBackoff: AutoSaveBackoff | null = null;
@@ -325,6 +332,7 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = null;
     this.mintedMetadataRoomVersion = null;
     this.mintedMetadataUpdatedAt = null;
+    this.pendingArtwork = null;
     this.saveInFlight = false;
     this.persistenceStatus = {
       text: '',
@@ -338,6 +346,13 @@ export class EditorRoomSession {
   get hasPendingEditConflict(): boolean {
     return this.editConflictPending;
   }
+
+  captureContext(): () => boolean {
+    const generation = this.sessionGeneration, roomId = this.roomId;
+    return () => !this.isStale(generation) && this.roomId === roomId;
+  }
+
+  get hasPendingArtworkConfirmation(): boolean { return this.pendingArtwork !== null; }
 
   private isStale(generation: number): boolean {
     return generation !== this.sessionGeneration;
@@ -368,7 +383,7 @@ export class EditorRoomSession {
       if (this.roomPermissions.canSaveDraft) {
         if (this.mintedMetadataRoomVersion === null) {
           return {
-            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. NFT metadata is not on-chain yet.`,
+            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. Artwork status has not been recorded here. Use Add/update artwork to add or replace it.`,
             accentText,
             linkLabel: '',
             linkHref: null,
@@ -1036,7 +1051,7 @@ export class EditorRoomSession {
     };
   }
 
-  async mintRoom(): Promise<RoomRecord | null> {
+  async mintRoom(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
     if (this.saveInFlight) {
       return null;
     }
@@ -1047,6 +1062,7 @@ export class EditorRoomSession {
     }
 
     const generation = this.sessionGeneration;
+    const isCurrent = () => !this.isStale(generation) && options.isCurrent?.() !== false;
     if (this.host.getRoomDirty() || this.publishedVersion === 0) {
       showBusyOverlay('Publishing room...', 'Preparing room for mint...');
       const publishedRecord = await this.publishRoom(
@@ -1059,7 +1075,7 @@ export class EditorRoomSession {
     }
 
     await refreshAuthSession();
-    if (this.isStale(generation)) {
+    if (!isCurrent()) {
       return null;
     }
     const authState = getAuthDebugState();
@@ -1084,22 +1100,27 @@ export class EditorRoomSession {
     }
 
     this.saveInFlight = true;
-    showBusyOverlay('Preparing mint...', 'Checking room mint configuration...');
+    const hideStage = () => { if (!options.stageLabel || getAppFeedbackDebugState().busyTitle === options.stageLabel) hideBusyOverlay(); };
+    showBusyOverlay(options.stageLabel ?? 'Preparing mint...', 'Checking room mint configuration...');
     this.setStatusText('Preparing mint...');
 
     try {
       const prepare = await this.roomRepository.prepareMint(this.roomId, this.roomCoordinates);
-      updateBusyOverlay('Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} transaction in your wallet.`);
+      if (!isCurrent()) { hideStage(); return null; }
+      updateBusyOverlay(options.stageLabel ?? 'Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} transaction in your wallet.`);
       this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
-      updateBusyOverlay('Confirming mint...', 'Waiting for on-chain confirmation...');
+      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain, {
+        expectedWalletAddress: authState.user.walletAddress, isCurrent,
+      });
+      if (!isCurrent()) { hideStage(); return null; }
+      updateBusyOverlay(options.stageLabel ?? 'Confirming mint...', 'Waiting for on-chain confirmation...');
       this.setStatusText('Confirming mint...');
 
       const record = await this.roomRepository.confirmMint(this.roomId, this.roomCoordinates, {
         txHash: tx.hash,
       });
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
+      if (!isCurrent()) {
+        hideStage();
         return null;
       }
       this.syncRoomMetadata(record);
@@ -1112,24 +1133,25 @@ export class EditorRoomSession {
         linkLabel: explorerUrl ? 'Transaction' : '',
         linkHref: explorerUrl,
       });
-      hideBusyOverlay();
+      hideStage();
       return record;
     } catch (error) {
-      console.error('Failed to mint room', error);
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
+      console.warn('Room collection was not completed.');
+      if (!isCurrent()) {
+        hideStage();
         return null;
       }
       if (isRoomApiError(error) && error.status === 409) {
         const refreshed = createRoomRecordFromCurrent(
           await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
         );
+        if (!isCurrent()) { hideStage(); return null; }
         this.syncRoomMetadata(refreshed);
       }
 
       const message = error instanceof Error ? error.message : 'Mint failed.';
       this.setStatusText(message);
-      hideBusyOverlay();
+      hideStage();
     } finally {
       if (!this.isStale(generation)) {
         this.saveInFlight = false;
@@ -1140,7 +1162,7 @@ export class EditorRoomSession {
     return null;
   }
 
-  async refreshMintMetadata(): Promise<RoomRecord | null> {
+  async refreshMintMetadata(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
     if (this.saveInFlight) {
       return null;
     }
@@ -1161,8 +1183,9 @@ export class EditorRoomSession {
     }
 
     const generation = this.sessionGeneration;
+    const isCurrent = () => !this.isStale(generation) && options.isCurrent?.() !== false;
     await refreshAuthSession();
-    if (this.isStale(generation)) {
+    if (!isCurrent()) {
       return null;
     }
     const authState = getAuthDebugState();
@@ -1178,80 +1201,76 @@ export class EditorRoomSession {
     }
 
     this.saveInFlight = true;
-    showBusyOverlay('Preparing NFT metadata...', 'Rendering room preview...');
+    const hideStage = () => { if (!options.stageLabel || getAppFeedbackDebugState().busyTitle === options.stageLabel) hideBusyOverlay(); };
+    showBusyOverlay(options.stageLabel ?? 'Preparing NFT metadata...', 'Rendering room preview...');
     this.setStatusText('Preparing NFT metadata...');
 
     try {
-      const imageDataUrl = await renderRoomSnapshotToPngDataUrl(this.publishedRoomSnapshot, {
-        tilePixelSize: 2,
-      });
-      const built = await buildRoomTokenMetadata(
-        this.publishedRoomSnapshot,
-        imageDataUrl,
-        {
-          origin: window.location.origin,
-          chainId: this.mintedChainId,
-          contractAddress: this.mintedContractAddress,
-          tokenId: this.mintedTokenId,
-        }
-      );
-      updateBusyOverlay('Preparing wallet transaction...', 'Packaging room metadata for the wallet...');
-      const prepare = await this.roomRepository.prepareMetadataRefresh(
-        this.roomId,
-        this.roomCoordinates,
-        {
-          tokenUri: built.tokenUri,
-        }
-      );
-      updateBusyOverlay(
-        'Waiting for wallet confirmation...',
-        `Approve the ${prepare.chain.name} transaction in your wallet.`
-      );
-      this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
-      updateBusyOverlay('Confirming metadata refresh...', 'Waiting for on-chain confirmation...');
-      this.setStatusText('Confirming NFT metadata refresh...');
-
-      const record = await this.roomRepository.confirmMetadataRefresh(
-        this.roomId,
-        this.roomCoordinates,
-        {
-          txHash: tx.hash,
-          metadataRoomVersion: this.publishedVersion,
-          metadataHash: built.metadataHash,
-        }
-      );
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
+      const roomId = this.roomId, coordinates = { ...this.roomCoordinates }, tokenId = this.mintedTokenId;
+      const wallet = authState.user.walletAddress.toLowerCase(), userId = authState.user.id;
+      let submitted = this.pendingArtwork;
+      if (submitted && (submitted.roomId !== roomId || submitted.tokenId !== tokenId || submitted.wallet !== wallet || submitted.userId !== userId)) {
+        this.setStatusText('Your wallet or room changed. Reopen the room to check its artwork before trying again.');
+        hideStage(); return null;
       }
+      if (!submitted) {
+        const snapshot = cloneRoomSnapshot(this.publishedRoomSnapshot);
+        const imageDataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, { tilePixelSize: 2, strictAssets: true });
+        const built = await buildRoomTokenMetadata(snapshot, imageDataUrl, {
+          origin: window.location.origin, chainId: this.mintedChainId,
+          contractAddress: this.mintedContractAddress, tokenId,
+        });
+        if (!isCurrent()) { hideStage(); return null; }
+        updateBusyOverlay(options.stageLabel ?? 'Preparing artwork...', 'Preparing the artwork approval...');
+        const prepare = await this.roomRepository.prepareMetadataRefresh(roomId, coordinates, { tokenUri: built.tokenUri });
+        if (!isCurrent()) { hideStage(); return null; }
+        updateBusyOverlay(options.stageLabel ?? 'Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} artwork transaction in your wallet.`);
+        this.setStatusText(`Waiting for artwork approval on ${prepare.chain.name}...`);
+        const remember = (txHash: string) => {
+          // A returned hash remains useful after scene sleep; it never authorizes another send.
+          if (!this.isStale(generation) && this.roomId === roomId && this.mintedTokenId === tokenId) this.pendingArtwork = { roomId, tokenId, userId, wallet, txHash,
+            metadataRoomVersion: snapshot.version, metadataHash: built.metadataHash,
+            explorerUrl: buildExplorerTxUrl(prepare.chain, txHash) };
+        };
+        const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain, {
+          expectedWalletAddress: wallet, isCurrent, onSubmitted: tx => remember(tx.hash),
+        });
+        if (!isCurrent()) { hideStage(); return null; }
+        if (!this.pendingArtwork) remember(tx.hash);
+        submitted = this.pendingArtwork;
+      }
+      if (!submitted || !isCurrent()) { hideStage(); return null; }
+      updateBusyOverlay(options.stageLabel ?? 'Confirming artwork...', 'Checking the artwork transaction...');
+      this.setStatusText('Confirming room artwork...');
+      const record = await this.roomRepository.confirmMetadataRefresh(roomId, coordinates, {
+        txHash: submitted.txHash, metadataRoomVersion: submitted.metadataRoomVersion, metadataHash: submitted.metadataHash,
+      });
+      if (!isCurrent()) { hideStage(); return null; }
+      this.pendingArtwork = null;
       this.syncRoomMetadata(record);
-
-      const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.setStatusDetails({
-        text: `On-chain metadata is now synced to room v${record.mintedMetadataRoomVersion ?? this.publishedVersion}.`,
-        accentText: `NFT metadata refreshed for token #${record.mintedTokenId}`,
-        linkLabel: explorerUrl ? 'Transaction' : '',
-        linkHref: explorerUrl,
+      this.setStatusDetails({ text: 'Room artwork is saved.',
+        accentText: `Artwork added to token #${record.mintedTokenId}`,
+        linkLabel: submitted.explorerUrl ? 'Transaction' : '', linkHref: submitted.explorerUrl,
       });
-      hideBusyOverlay();
-      return record;
+      hideStage(); return record;
     } catch (error) {
-      console.error('Failed to refresh room NFT metadata', error);
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
-      }
+      console.warn('Room artwork was not updated.');
+      if (!this.isStale(generation) && error instanceof WalletTransactionRevertedError && this.pendingArtwork?.txHash === error.hash) this.pendingArtwork = null;
+      if (!isCurrent()) { hideStage(); return null; }
       if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = createRoomRecordFromCurrent(
-          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
-        );
+        const refreshed = createRoomRecordFromCurrent(await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates));
+        if (!isCurrent()) { hideStage(); return null; }
         this.syncRoomMetadata(refreshed);
+        if (this.pendingArtwork && refreshed.mintedMetadataHash === this.pendingArtwork.metadataHash
+          && refreshed.mintedMetadataRoomVersion === this.pendingArtwork.metadataRoomVersion) {
+          this.pendingArtwork = null;
+          this.setStatusText('Room artwork is already up to date.'); hideStage(); return refreshed;
+        }
       }
-
-      const message = error instanceof Error ? error.message : 'NFT metadata refresh failed.';
-      this.setStatusText(message);
-      hideBusyOverlay();
+      this.setStatusText(this.pendingArtwork
+        ? 'The artwork approval was submitted. Choose Add/update artwork to check it again without another wallet approval.'
+        : "Artwork wasn't added. Choose Add/update artwork to try again.");
+      hideStage();
     } finally {
       if (!this.isStale(generation)) {
         this.saveInFlight = false;

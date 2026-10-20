@@ -195,6 +195,7 @@ export type OverworldSelectedRoomContext = {
   roomId: string;
   publishedVersion?: number | null;
   expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
@@ -334,7 +335,7 @@ export function getActiveEditorScene(game: Phaser.Game): EditorSceneBridge | nul
 }
 
 export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
-  if (!game.scene.isActive('OverworldPlayScene')) {
+  if (!game.scene.isActive('OverworldPlayScene') && !game.scene.isPaused?.('OverworldPlayScene')) {
     return null;
   }
 

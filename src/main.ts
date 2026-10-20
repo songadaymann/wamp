@@ -46,6 +46,7 @@ import {
   installWebglRecoveryMonitor,
 } from './main/webglRecovery';
 import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
+import { applyTextPreferences } from './settings/textPreferences';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import { getComfortSettings } from './settings/comfortSettings';
 import {
@@ -60,6 +61,7 @@ import {
 import { installFrameCadencePacing, getFrameCadenceDebugState } from './main/frameCadence';
 import { resolveWorldLinkBeforeBoot } from './worlds/worldLinkResolver';
 import { startArrivalWorldPrefetch } from './main/arrivalWorldPrefetch';
+import { getMannCoolDebugState, installMannCoolIntegration } from './integrations/mannCool';
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
@@ -125,6 +127,7 @@ logBootPhase('phaser-game:create-start', {
   height: config.height,
 });
 const game = new Phaser.Game(config);
+game.events.once(Phaser.Core.Events.DESTROY, installMannCoolIntegration());
 logBootPhase('phaser-game:created');
 const destroyFrameCadencePacing = installFrameCadencePacing(game.loop.raf);
 game.events.once(Phaser.Core.Events.DESTROY, destroyFrameCadencePacing);
@@ -200,6 +203,7 @@ if (new URLSearchParams(window.location.search).has('audiodebug')) {
 installDialogEscapeGuard();
 installModalStackBackdrops();
 const applyRuntimeSettings = (settings: GameSettings) => {
+  applyTextPreferences(settings, document);
   globalSfxController.setVolume(settings.sfxVolume);
   globalRoomMusicController.setVolume(settings.musicVolume);
 };
@@ -388,6 +392,7 @@ window.render_game_to_text = () =>
     chat: window.get_chat_debug_state?.() ?? null,
     device: getDeviceLayoutState(),
     touch: getTouchInputDebugState(),
+    mannCool: getMannCoolDebugState(),
     sfx: window.get_sfx_debug_state?.() ?? globalSfxController.getDebugState(),
     music: globalRoomMusicController.getDebugState(),
     settings: {

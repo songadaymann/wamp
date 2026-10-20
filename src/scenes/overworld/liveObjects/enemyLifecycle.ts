@@ -1,4 +1,6 @@
+import { gameplayNow } from '../gameplayClock';
 import Phaser from 'phaser';
+import { playHaptic } from '../../../feedback/haptics';
 import { getObjectDisplayOffset } from '../../../config';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { SfxCue } from '../../../audio/sfx';
@@ -163,7 +165,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     if (liveObject.config.id === SWORDSMAN_AI_OBJECT_ID) {
       if (stomped) {
         playerBody.setVelocityY(this.getStompBounceVelocity());
-        if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
+        if (this.defeatEnemy(loadedRoom, liveObject)) this.playStompImpact();
         if (this.options.getSwordsmanDefeatMode(liveObject) === 'invincible') {
           this.options.playBounceFx(liveObject.sprite.x, liveObject.sprite.y, loadedRoom.room.coordinates);
         }
@@ -182,7 +184,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     }
 
     playerBody.setVelocityY(this.getStompBounceVelocity());
-    if (this.defeatEnemy(loadedRoom, liveObject)) this.options.playEnemyStompImpact?.();
+    if (this.defeatEnemy(loadedRoom, liveObject)) this.playStompImpact();
   }
 
   handleNpcContact(
@@ -202,7 +204,7 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
 
     playerBody.setVelocityY(this.getStompBounceVelocity());
     const defeated = this.defeatEnemy(loadedRoom, liveObject);
-    if (defeated) this.options.playEnemyStompImpact?.();
+    if (defeated) this.playStompImpact();
     if (!defeated && liveObject.runtime.npcDefeatMode === 'invincible') {
       this.options.playBounceFx(
         liveObject.sprite.x,
@@ -220,6 +222,11 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
       return null;
     }
     return this.defeatEnemy(loadedRoom, liveObject);
+  }
+
+  private playStompImpact(): void {
+    playHaptic('hit');
+    this.options.playEnemyStompImpact?.();
   }
 
   private getStompBounceVelocity(): number {
@@ -240,8 +247,8 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
         ? this.options.getSwordsmanDefeatMode(liveObject)
         : 'defeatable';
     if (defeatMode === 'invincible') {
-      if (this.options.scene.time.now >= liveObject.runtime.cooldownUntil) {
-        liveObject.runtime.cooldownUntil = this.options.scene.time.now + 700;
+      if (gameplayNow(this.options.scene) >= liveObject.runtime.cooldownUntil) {
+        liveObject.runtime.cooldownUntil = gameplayNow(this.options.scene) + 700;
         this.options.showTransientStatus(`${liveObject.config.name} can't be defeated.`);
       }
       return null;
@@ -251,11 +258,11 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     const y = liveObject.sprite.y;
     const enemyName = isNpc ? liveObject.npcName ?? liveObject.config.name : liveObject.config.name;
     if (liveObject.runtime.boss) {
-      const damage = damageBoss(liveObject.runtime.boss, this.options.scene.time.now);
+      const damage = damageBoss(liveObject.runtime.boss, gameplayNow(this.options.scene));
       if (damage === 'protected') return null;
       if (damage === 'hurt') {
-        applyBossHitRecoil(liveObject, this.options.getPlayerBody(), this.options.scene.time.now);
-        syncBossPresentation(liveObject, this.options.scene.time.now);
+        applyBossHitRecoil(liveObject, this.options.getPlayerBody(), gameplayNow(this.options.scene));
+        syncBossPresentation(liveObject, gameplayNow(this.options.scene));
         return { roomId: loadedRoom.room.id, enemyName, x, y };
       }
     }

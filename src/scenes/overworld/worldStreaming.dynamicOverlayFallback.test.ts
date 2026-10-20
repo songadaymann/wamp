@@ -1,6 +1,6 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
-import { OverworldWorldStreamingController } from './worldStreaming';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -95,9 +95,7 @@ function deferredBoolean(): {
 describe('world streaming dynamic-overlay fallback', () => {
   it('re-enters the real compact refresh path once the current request releases', async () => {
     const refreshAround = vi.fn(async () => 'success');
-    const controller = Object.create(
-      OverworldWorldStreamingController.prototype,
-    ) as DynamicOverlayFallbackHarness;
+    const controller = createWorldStreamingHarness() as DynamicOverlayFallbackHarness;
     Object.assign(controller, {
       loadGeneration: 7,
       destroyed: false,
@@ -133,9 +131,7 @@ describe('world streaming dynamic-overlay fallback', () => {
 
   it('does not clear or restart an obsolete streaming generation', async () => {
     const refreshAround = vi.fn(async () => 'success');
-    const controller = Object.create(
-      OverworldWorldStreamingController.prototype,
-    ) as DynamicOverlayFallbackHarness;
+    const controller = createWorldStreamingHarness() as DynamicOverlayFallbackHarness;
     Object.assign(controller, {
       loadGeneration: 8,
       destroyed: false,
@@ -161,9 +157,7 @@ describe('world streaming dynamic-overlay fallback', () => {
   it('keeps distant tiled snapshot batches dormant until target LOD is sharp', async () => {
     const sharp = deferredBoolean();
     const ensureRoomSnapshotsBatch = vi.fn(async () => {});
-    const controller = Object.create(
-      OverworldWorldStreamingController.prototype,
-    ) as DynamicSnapshotGateHarness;
+    const controller = createWorldStreamingHarness() as DynamicSnapshotGateHarness;
     Object.assign(controller, {
       loadGeneration: 7,
       destroyed: false,
@@ -231,9 +225,7 @@ describe('world streaming dynamic-overlay fallback', () => {
     const sharp = deferredBoolean();
     const ensureRoomSnapshotsBatch = vi.fn(async () => {});
     const loadDistantPreviewsProgressively = vi.fn(async () => {});
-    const controller = Object.create(
-      OverworldWorldStreamingController.prototype,
-    ) as DynamicSnapshotGateHarness;
+    const controller = createWorldStreamingHarness() as DynamicSnapshotGateHarness;
     Object.assign(controller, {
       loadGeneration: 7,
       destroyed: false,
@@ -315,9 +307,7 @@ describe('world streaming dynamic-overlay fallback', () => {
     const refreshVisibleRoomsFromCache = vi.fn();
     const dynamicOverlayReadiness = new DynamicOverlayReadinessCoordinator();
     dynamicOverlayReadiness.beginReadiness(7);
-    const controller = Object.create(
-      OverworldWorldStreamingController.prototype,
-    ) as ChangedCompactChunkHarness;
+    const controller = createWorldStreamingHarness() as ChangedCompactChunkHarness;
     Object.assign(controller, {
       loadGeneration: 7,
       destroyed: false,

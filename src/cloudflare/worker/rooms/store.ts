@@ -633,10 +633,9 @@ function roomSummaryFromRecord(
 }
 
 /**
- * Loads a room for a write after syncing its ownership from Base. Saves, publishes and
- * reverts keep the stored ownership when the RPC fails ('use-stored'); minting and
- * explicit ownership refreshes pass 'throw'. The record is reloaded only when the
- * sync changed something.
+ * Syncs chain ownership before a write. Saves/publishes/reverts use stored ownership
+ * on provider failure; minting keeps its local-aware 'throw' behavior. Explicit
+ * ownership refreshes require fresh state, including locally. Reloads only on change.
  */
 export async function loadRoomRecordForMutation(
   env: Env,

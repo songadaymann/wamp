@@ -1,5 +1,6 @@
 /// <reference path="../../../../generated-bindings/api-worker-configuration.d.ts" />
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { DurableObjectNamespace, R2Bucket, Service } from '@cloudflare/workers-types';
+import type { MapScreenshotAdmin } from '../../../mapScreenshot/worker';
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
 import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
@@ -65,6 +66,8 @@ export interface RunGhostBucketBinding {
 }
 
 export interface Env {
+  MAP_SCREENSHOTS?: Service<MapScreenshotAdmin>;
+  PRESENCE_ROOMS?: DurableObjectNamespace;
   ASSETS: AssetsBinding;
   DB: D1Database;
   JAM_DB: D1Database;

@@ -19,6 +19,7 @@
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preload" as="image" href="/assets/objects/flag-checkered.png">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/fonts/Super Mario Bros. NES.woff2">
   <link rel="manifest" href="./app.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="https://api.wamp.land/skill.md">
@@ -165,6 +166,7 @@
       </button>
     </div>
       <div id="menu-body">
+        <p id="game-pause-status" class="hidden" role="status"></p>
         <section class="game-menu-account" aria-label="Your account">
           <p id="auth-signin-reason">Sign in to keep your rooms and progress.</p>
           <div id="auth-display-name-row" class="auth-row hidden">
@@ -208,6 +210,7 @@
           <button id="btn-world-controls" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Controls</button>
           <button id="btn-guestbook-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guestbook</button>
           <button id="btn-menu-room-rush" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Room Rush</button>
+          <button id="btn-menu-room-leaderboard" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Room Leaderboard</button>
           <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Room of the Day</button>
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Rate rooms</button>
           <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Build Prompt</button>
@@ -237,7 +240,10 @@
           <summary>Admin</summary>
           <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Reset Test Data</button></div>
         </details>
-        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+        <div class="game-menu-actions" role="group" aria-label="Log out options">
+          <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+          <button id="btn-auth-logout-all" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" type="button" data-menu-action data-button-variant="danger">Log out everywhere</button>
+        </div>
       </div>
     </div>
   <div id="app">
@@ -1331,7 +1337,7 @@
             <div class="editor-advanced-block-label">Room</div>
             <div class="editor-advanced-actions">
               <button id="btn-mint-room" class="bar-btn">Mint Room</button>
-              <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
+              <button id="btn-refresh-room-metadata" class="bar-btn hidden">Add/update artwork</button>
               <button id="btn-room-history" class="bar-btn">History</button>
             </div>
           </div>
@@ -2353,7 +2359,8 @@
       </div>
     </div>
   </div>
-  <div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-room-history-modal">
+<div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-history-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2363,7 +2370,7 @@
         </div>
         <div class="history-modal-header-actions">
           <button id="btn-room-history-restore-canonical" class="bar-btn bar-btn-small hidden" type="button">Restore Canonical</button>
-          <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Refresh NFT Metadata</button>
+          <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Add/update artwork</button>
           <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
         </div>
       </div>
@@ -2371,6 +2378,7 @@
       <div id="room-history-list" class="history-version-list"></div>
     </div>
   </div>
+  </template>
 
   <div id="wamp-o-gram-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel wamp-o-gram-modal-panel" role="dialog" aria-modal="true" aria-labelledby="wamp-o-gram-modal-title">
@@ -2462,7 +2470,8 @@
     </div>
   </div>
 
-  <div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-leaderboard-modal">
+<div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2506,6 +2515,7 @@
         <div id="leaderboard-room-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-course-panel" class="leaderboard-panel hidden">
+        <div class="leaderboard-controls"><button id="btn-leaderboard-course-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button></div>
         <div id="leaderboard-course-summary" class="history-modal-meta">No published expanded room selected.</div>
         <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-course-list" class="history-version-list"></div>
@@ -2535,6 +2545,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="first-steps-summary-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="first-steps-summary-title">
@@ -2784,7 +2795,8 @@
     <p id="build-prompt-result-status" role="status"></p>
     <div class="build-prompt-actions"><button id="btn-build-prompt-entry-retry" class="bar-btn hidden" type="button">Retry Entry</button><button id="btn-build-prompt-view" class="bar-btn" type="button">View Prompt</button><button id="btn-build-prompt-result-close" class="bar-btn" type="button">Dismiss</button></div>
   </aside>
-  <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-explore-modal">
+<div id="explore-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2821,8 +2833,10 @@
       <div id="explore-list" class="history-version-list explore-room-list"></div>
     </div>
   </div>
+  </template>
 
-  <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-profile-modal">
+<div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
           <button id="btn-profile-activity" class="bar-btn bar-btn-small hidden" type="button">Activity</button>
@@ -2903,6 +2917,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="playlist-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel playlist-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
@@ -2938,7 +2953,8 @@
     </div>
   </div>
 
-  <div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-avatar-picker-modal">
+<div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel avatar-picker-modal-panel" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title">
       <div class="history-modal-header avatar-picker-modal-header">
         <div class="history-modal-title-group">
@@ -2968,6 +2984,7 @@
       <div id="avatar-picker-grid" class="profile-avatar-grid"></div>
     </div>
   </div>
+  </template>
 
   <div id="editor-music-phrase-save-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel editor-music-phrase-save-modal-panel" role="dialog" aria-modal="true" aria-labelledby="editor-music-phrase-save-title">
@@ -3229,6 +3246,24 @@
       <div class="settings-modal-body">
         <section class="settings-section settings-comfort-section" aria-labelledby="settings-comfort-title">
           <div id="settings-comfort-title" class="settings-section-title">Comfort</div>
+          <label class="settings-comfort-motion" for="settings-text-style">
+            <span>Text style</span>
+            <select id="settings-text-style" class="settings-comfort-select">
+              <option value="pixel">Retro</option>
+              <option value="readable">Readable</option>
+            </select>
+          </label>
+          <label class="settings-comfort-motion" for="settings-text-size">
+            <span>Text size</span>
+            <select id="settings-text-size" class="settings-comfort-select">
+              <option value="normal">Normal</option>
+              <option value="large">Large</option>
+            </select>
+          </label>
+          <label id="settings-haptics-row" class="settings-toggle-row hidden" for="settings-haptics">
+            <span class="settings-label-copy"><span class="settings-label-title">Vibration</span><span class="settings-choice-description">On this device.</span></span>
+            <input id="settings-haptics" class="settings-checkbox" type="checkbox" />
+          </label>
           <label class="settings-comfort-motion" for="settings-reduce-motion">
             <span>Reduce motion and flashes</span>
             <select id="settings-reduce-motion" class="settings-comfort-select">
@@ -3245,6 +3280,22 @@
             </div>
           </fieldset>
           <p class="settings-comfort-note">Some rooms use a fixed camera.</p>
+        </section>
+        <section class="settings-section" aria-labelledby="settings-assist-title">
+          <div id="settings-assist-title" class="settings-section-title">Assist</div>
+          <p class="settings-comfort-note">Practice only: no records, XP or saved clears. Off in co-op, PvP and Room Rush.</p>
+          <label class="settings-comfort-motion" for="settings-assist-speed">
+            <span>Game speed</span>
+            <select id="settings-assist-speed" class="settings-comfort-select">
+              <option value="1">100% (normal)</option>
+              <option value="0.8">80%</option>
+              <option value="0.6">60%</option>
+            </select>
+          </label>
+          <label class="settings-toggle-row" for="settings-assist-respawn">
+            <span class="settings-label-title">Respawn at last safe ground</span>
+            <input id="settings-assist-respawn" class="settings-checkbox" type="checkbox" />
+          </label>
         </section>
         <section class="settings-section">
           <div class="settings-section-title">Performance</div>
@@ -3375,18 +3426,14 @@
           <div class="controls-row"><span class="controls-key">Warp field</span><span>Go to coordinates</span></div>
           <div class="controls-row"><span class="controls-key">0</span><span>Fit loaded world</span></div>
         </div>
-        <div class="controls-section">
-          <div class="controls-section-title">Play</div>
-          <div class="controls-row"><span class="controls-key">WASD / Arrows</span><span>Move</span></div>
-          <div class="controls-row"><span class="controls-key">Space / Up</span><span>Jump</span></div>
-          <div class="controls-row"><span class="controls-key">Down</span><span>Crouch / crawl</span></div>
-          <div class="controls-row"><span class="controls-key">Down + move</span><span>Pull crate</span></div>
-          <div class="controls-row"><span class="controls-key">Q</span><span>Slash</span></div>
-          <div class="controls-row"><span class="controls-key">E</span><span>Shoot</span></div>
-          <div class="controls-row"><span class="controls-key">T</span><span>Chat in room</span></div>
-          <div class="controls-row"><span class="controls-key">R</span><span>Restart run</span></div>
-          <div class="controls-row"><span class="controls-key">9</span><span>Toggle follow cam</span></div>
-          <div class="controls-row"><span class="controls-key">P / Esc</span><span>Return to browse</span></div>
+        <div class="controls-section controls-section-keyboard">
+          <div class="controls-section-title">Keyboard</div>
+          <p class="keyboard-binding-note">Physical key positions · Saved on this device</p>
+          <div id="keyboard-bindings"></div>
+          <div class="controls-row"><span class="controls-key">T / C</span><span>Chat / comment in room</span></div>
+          <div class="controls-row"><span class="controls-key">Esc</span><span>Return to browse / close dialog</span></div>
+          <button id="btn-keyboard-reset" class="pixel-btn" type="button">Restore default keys</button>
+          <div id="keyboard-binding-status" class="keyboard-binding-status" role="status" aria-live="polite"></div>
         </div>
         <div class="controls-section">
           <div class="controls-section-title">Standard gamepad</div>
@@ -3517,26 +3564,27 @@
     <div class="history-modal-panel leaderboard-modal-panel chat-moderation-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-moderation-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Moderation</div>
           <h2 id="chat-moderation-title" class="history-modal-title">Chat Moderation</h2>
-          <div class="history-modal-meta">Manage chat admins and banned users.</div>
         </div>
         <button id="btn-chat-moderation-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="chat-moderation-status" class="history-modal-error hidden"></div>
       <div id="chat-moderation-admin-section" class="chat-moderation-section hidden">
-        <div class="history-modal-meta">Add or remove delegated chat admins by display name.</div>
+        <div class="history-modal-meta">Chat admins</div>
         <form id="chat-moderation-admin-form" class="chat-moderation-form">
           <input
-            id="chat-moderation-admin-input" aria-label="Chat admin display name"
+            id="chat-moderation-admin-input" aria-label="Search accounts by name or username"
             class="chat-moderation-input"
             type="text"
-            maxlength="24"
-            placeholder="Display name"
+            maxlength="64"
+            placeholder="Name or @username"
+            autocomplete="off"
             spellcheck="false"
           />
           <button id="btn-chat-moderation-admin-add" class="bar-btn bar-btn-small" type="submit">Add Admin</button>
         </form>
+        <div id="chat-moderation-admin-search-status" class="history-modal-meta" role="status" aria-live="polite"></div>
+        <div id="chat-moderation-admin-results" class="chat-moderation-list" role="group" aria-label="Matching accounts"></div>
         <div id="chat-moderation-admin-list" class="chat-moderation-list"></div>
       </div>
       <div id="chat-moderation-ban-section" class="chat-moderation-section">

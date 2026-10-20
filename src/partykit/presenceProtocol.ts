@@ -57,6 +57,9 @@ export interface ConnectionPresenceState {
   previewDeltas?: boolean;
   /** Transport capability only; verified token claims still govern chat permissions. */
   roomChat?: boolean;
+  /** Opt-in movement interest; old clients retain their existing full-rate stream. */
+  presenceInterest?: boolean;
+  interestRoom?: RoomCoordinates | null;
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
   canReceiveRoomChat: boolean;
@@ -96,6 +99,7 @@ export type RoomPreviewDeltaMessage =
   | { type: 'preview:refresh'; roomId: string; revision: string; timestamp: number };
 
 export type IncomingMessage =
+  | { type: 'presence:interest'; roomCoordinates: RoomCoordinates | null }
   | {
       type: 'presence:update';
       presence: PresencePayload;

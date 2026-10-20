@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { editorState } from '../../config';
+import { editorState, updateEditorState } from '../../config';
 import {
   buildCustomSpriteObjectId,
   getCustomSpriteKindLabel,
@@ -35,7 +35,7 @@ import {
   registerCustomSprite,
 } from '../../customSprites/registry';
 import { queueCustomSpriteSync, refreshOwnedCustomSprites } from '../../customSprites/sync';
-import { EDITOR_UI_STATE_CHANGED_EVENT } from '../../scenes/editor/uiEvents';
+import { refreshEditorUi } from '../../scenes/editor/uiEvents';
 import { syncGameKeyboardFocus } from '../keyboardFocus';
 import { withActiveEditorScene, withActiveEditorMusic } from './sceneBridge';
 
@@ -945,7 +945,7 @@ export function setupCustomSpriteEditor(
 
     if (result === 'deleted') {
       if (editorState.selectedObjectId === buildCustomSpriteObjectId(sprite.id)) {
-        editorState.selectedObjectId = null;
+        updateEditorState({ selectedObjectId: null });
       }
       if (editingSpriteId === sprite.id) {
         resetSpriteDraft();
@@ -988,7 +988,7 @@ export function setupCustomSpriteEditor(
     if (active) {
       void refreshOwnedCustomSprites().catch(() => undefined);
       withActiveEditorMusic(game, (music) => music.setMusicModeActive(false));
-      editorState.paletteMode = 'objects';
+      updateEditorState({ paletteMode: 'objects' });
       renderLibrary();
       renderCanvas();
       window.requestAnimationFrame(() => {
@@ -998,7 +998,7 @@ export function setupCustomSpriteEditor(
       });
     }
 
-    window.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    refreshEditorUi(window);
   };
 
   const buildSpriteDraft = (kind: CustomSpriteKind): CustomSpriteDefinition | null => {
@@ -1023,10 +1023,10 @@ export function setupCustomSpriteEditor(
 
   const saveSpriteAsObject = (sprite: CustomSpriteDefinition): void => {
     editingSpriteId = sprite.id;
-    editorState.paletteMode = 'objects';
-    editorState.selectedObjectId = buildCustomSpriteObjectId(sprite.id);
-    editorState.objectFacing = 'right';
-    editorState.activeTool = 'pencil';
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ selectedObjectId: buildCustomSpriteObjectId(sprite.id) });
+    updateEditorState({ objectFacing: 'right' });
+    updateEditorState({ activeTool: 'pencil' });
     registerCustomSprite(sprite, { remixedFromSpriteId });
     queueCustomSpriteSync();
     refreshSpriteInActiveScenes(sprite);
@@ -1309,11 +1309,11 @@ export function setupCustomSpriteEditor(
       }
       setStatus(`Using ${sprite.name} by ${entry.creator.displayName} as a tile.`);
     } else {
-      editorState.paletteMode = 'objects';
-      editorState.selectedObjectId = buildCustomSpriteObjectId(sprite.id);
-      editorState.objectFacing = 'right';
-      editorState.activeTool = 'pencil';
-      window.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+      updateEditorState({ paletteMode: 'objects' });
+      updateEditorState({ selectedObjectId: buildCustomSpriteObjectId(sprite.id) });
+      updateEditorState({ objectFacing: 'right' });
+      updateEditorState({ activeTool: 'pencil' });
+      refreshEditorUi(window);
       setStatus(`Using ${sprite.name} by ${entry.creator.displayName}.`);
     }
     setSpriteModeActive(false);

@@ -1,3 +1,4 @@
+import { bindCanvasTextPreferences } from '../../settings/textPreferences';
 import Phaser from 'phaser';
 import { type CourseGoalType } from '../../courses/model';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
@@ -159,6 +160,7 @@ export class OverworldBrowseOverlayController {
       strokeThickness: 0,
       align: 'center',
     });
+    bindCanvasTextPreferences(warpLabel, 'Early GameBoy, monospace', 16);
     warpLabel.setOrigin(0.5, 0.5);
     warpLabel.setResolution(2);
     warpLabel.setVisible(false);

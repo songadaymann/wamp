@@ -1,19 +1,20 @@
+@layer components {
+  /* ── Scrollbar styling ── */
 
-/* ── Scrollbar styling ── */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
+  ::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
 
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #676153;
+  ::-webkit-scrollbar-thumb:hover {
+    background: #676153;
+  }
 }

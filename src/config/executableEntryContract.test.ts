@@ -147,6 +147,7 @@ describe('executable entry contract', () => {
       ...viteHtmlEntries,
       ...viteModuleEntries,
       'eslint.config.js',
+      'stylelint.config.mjs',
       'vite.config.ts',
       'vitest.config.ts',
       earlyBootstrapEntry!,

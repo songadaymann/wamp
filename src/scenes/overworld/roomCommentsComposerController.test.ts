@@ -17,7 +17,9 @@ function createHarness(options: {
   doc.body.append(host);
   const focusCanvas = vi.fn();
   const showTransientStatus = vi.fn();
-  const submitComment = vi.fn().mockResolvedValue({ comment: {} });
+  const submitComment = vi.fn().mockResolvedValue({
+    comment: {}, status: 'pending_review', message: 'Comment submitted for review.',
+  });
   const playSubmitSound = vi.fn();
   let room = options.room === undefined ? createRoom() : options.room;
   const controller = new RoomCommentsComposerController({
@@ -114,6 +116,20 @@ describe('RoomCommentsComposerController', () => {
       composerOpen: false,
       submitting: false,
     });
+  });
+
+  it('confirms immediate publication when the server approves the comment', async () => {
+    const harness = createHarness();
+    harness.submitComment.mockResolvedValueOnce({
+      comment: {}, status: 'approved', message: 'Comment posted.',
+    });
+    harness.controller.open();
+    harness.input().value = 'Great room';
+    harness.form().emit('submit');
+    await flushMicrotasks();
+    expect(harness.showTransientStatus).toHaveBeenCalledWith('Comment posted.');
+    expect(harness.showTransientStatus).not.toHaveBeenCalledWith('Comment submitted for review.');
+    expect(harness.controller.isOpen()).toBe(false);
   });
 
   it('disables controls while submitting and preserves failures for correction', async () => {

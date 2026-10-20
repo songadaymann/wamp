@@ -7,9 +7,11 @@ vi.mock('phaser', () => ({ default: {
   Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)), Linear: (a: number, b: number, t: number) => a + (b - a) * t },
 } }));
 vi.mock('../../audio/sfx', () => ({ playSfx: vi.fn() }));
+vi.mock('../../feedback/haptics', () => ({ playHaptic: vi.fn() }));
 
 import { OverworldCombatController } from './combatController';
 import { playSfx } from '../../audio/sfx';
+import { playHaptic } from '../../feedback/haptics';
 import type { WeaponHitResult } from './liveObjects';
 import type { PresentedProjectile } from './combatPresentation';
 
@@ -79,6 +81,7 @@ describe('active sword swing', () => {
     const h = harness(26);
     h.controller.handleCombatInput(swordInput);
     expect(playSfx).not.toHaveBeenCalled();
+    expect(playHaptic).not.toHaveBeenCalled();
     expect(h.host.applyWeaponKnockback).not.toHaveBeenCalled();
     expect(h.host.shakeCamera).not.toHaveBeenCalled();
     h.timeTo(1050); h.face(-1); h.body.center.x = 120; h.body.bottom = 268;
@@ -87,6 +90,7 @@ describe('active sword swing', () => {
     expect(h.host.attackEnemiesInRect.mock.calls[1][0]).toEqual({ x: 114, y: 242, width: 28, height: 30 });
     expect(h.controller.getSwordSwingState(1050)).toMatchObject({ remainingMs: 50, connected: true, facing: 1 });
     expect(playSfx).toHaveBeenCalledExactlyOnceWith('enemy-hit');
+    expect(playHaptic).toHaveBeenCalledExactlyOnceWith('hit');
     expect(h.host.applyWeaponKnockback).toHaveBeenCalledExactlyOnceWith(80);
     expect(h.host.shakeCamera).toHaveBeenCalledExactlyOnceWith(50, 0.002);
     expect(h.host.presentCombatEvent).toHaveBeenCalledTimes(1);
@@ -115,6 +119,7 @@ describe('active sword swing', () => {
     expect(h.host.attackEnemiesInRect).toHaveBeenCalledTimes(2);
     expect(h.controller.getSwordSwingState(1070)).toMatchObject({ remainingEnemyHits: 0, enemyContacts: 1 });
     expect(playSfx).toHaveBeenCalledTimes(1);
+    expect(playHaptic).toHaveBeenCalledExactlyOnceWith('hit');
     expect(h.host.applyWeaponKnockback).toHaveBeenCalledTimes(1);
     expect(h.host.shakeCamera).toHaveBeenCalledTimes(1);
   });

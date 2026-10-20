@@ -1,4 +1,4 @@
-import { EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, type EditorShellEscapeRequestedDetail } from '../../scenes/editor/uiEvents';
+import { EDITOR_AUTO_COLLAPSE_EVENT, EDITOR_SHELL_ESCAPE_REQUESTED_EVENT } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 
 /** Phone presentation of the shared dock: existing controls retain their listeners and state. */
@@ -44,11 +44,11 @@ export class EditorPhoneDock {
       if (this.active && this.menuOpen && !doc.getElementById('editor-phone-menu')?.contains(target)
         && !doc.getElementById('btn-editor-phone-menu')?.contains(target)) this.closeMenu();
     });
-    doc.defaultView?.addEventListener('mobile-editor-auto-collapse', () => {
+    doc.defaultView?.addEventListener(EDITOR_AUTO_COLLAPSE_EVENT, () => {
       if (this.active) this.setCollapsed(true);
     });
     doc.defaultView?.addEventListener(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, event => {
-      const detail = (event as CustomEvent<EditorShellEscapeRequestedDetail>).detail;
+      const detail = event.detail;
       if (this.active && this.menuOpen && !detail.handled) {
         this.closeMenu();
         doc.getElementById('btn-editor-phone-menu')?.focus({ preventScroll: true });

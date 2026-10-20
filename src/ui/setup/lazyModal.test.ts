@@ -1,3 +1,4 @@
+import { hasPendingDialog } from '../pendingDialog';
 import { expect, it, vi } from 'vitest';
 import { LazyModal } from './lazyModal';
 function deferred<T>() { let resolve!: (value:T)=>void; const promise=new Promise<T>(done=>{resolve=done;});return {promise,resolve}; }
@@ -23,4 +24,21 @@ it('retries a failed download or initialization without caching a rejection', as
 it('does not initialize or reopen a menu destroyed during its download', async () => {
   const instance={init:vi.fn(),open:vi.fn(),close:vi.fn(),destroy:vi.fn()};const download=deferred<typeof instance>();const modal=new LazyModal(()=>download.promise);
   const opening=modal.open();modal.destroy();download.resolve(instance);await opening;expect(instance.init).not.toHaveBeenCalled();expect(instance.open).not.toHaveBeenCalled();
+});
+
+it('holds a pause through a deferred open and releases it immediately on cancellation or failure', async () => {
+  const download=deferred<{ init:()=>void; open:()=>void; close:()=>void }>();
+  const modal=new LazyModal(()=>download.promise);
+  const opening=modal.open(); expect(hasPendingDialog()).toBe(true);
+  modal.close(); expect(hasPendingDialog()).toBe(false);
+  download.resolve({init:vi.fn(),open:vi.fn(),close:vi.fn()}); await opening;
+  const failed=new LazyModal<{init():void;open():void;close():void}>(async()=>{throw Error('offline');});
+  await expect(failed.open()).rejects.toThrow('offline'); expect(hasPendingDialog()).toBe(false);
+});
+it('hands pause ownership to the visible dialog before its asynchronous data finishes', async () => {
+  const data=deferred<void>(); const instance={init:vi.fn(),open:vi.fn(()=>data.promise),close:vi.fn()};
+  const modal=new LazyModal(async()=>instance);const opening=modal.open();
+  for(let i=0;i<8;i++)await Promise.resolve();
+  expect(instance.open).toHaveBeenCalledOnce(); expect(hasPendingDialog()).toBe(false);
+  data.resolve();await opening;
 });

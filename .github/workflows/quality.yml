@@ -49,3 +49,165 @@ jobs:
           name: mobile-smoke
           path: output/web-game/mobile-smoke-ci
           retention-days: 7
+
+  expanded-leaderboards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --expanded-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expanded-leaderboards
+          path: output/web-game/mobile-smoke-ci/expanded-leaderboards
+          retention-days: 7
+
+  gameplay-pause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --pause-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-pause
+          path: output/web-game/mobile-smoke-ci/gameplay-pause
+          retention-days: 7
+
+  assist-mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --assist-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assist-mode
+          path: output/web-game/mobile-smoke-ci/assist
+          retention-days: 7
+
+  keyboard-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --keyboard-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-controls
+          path: output/web-game/mobile-smoke-ci/keyboard
+          retention-days: 7
+
+  auth-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --auth-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-state
+          path: output/web-game/mobile-smoke-ci/auth
+          retention-days: 7
+
+  chat-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --identity-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-identity
+          path: output/web-game/mobile-smoke-ci/chat-identity
+          retention-days: 7
+
+  map-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:map-capture:service
+      - run: npm run smoke:mobile:ci -- --map-capture-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-capture
+          path: |
+            output/web-game/map-capture-service
+            output/web-game/mobile-smoke-ci/map-capture
+          retention-days: 7
+
+  mint-network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mint-network:service
+      - run: npm run smoke:mobile:ci -- --mint-network-only
+      - run: npm run smoke:mobile:ci -- --ownership-only --skip-build
+      - run: npm run smoke:mobile:ci -- --artwork-only --skip-build
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mint-network
+          path: |
+            output/web-game/mint-network-service
+            output/web-game/mobile-smoke-ci/mint-network
+            output/web-game/mobile-smoke-ci/room-ownership
+            output/web-game/mobile-smoke-ci/room-artwork
+          retention-days: 7

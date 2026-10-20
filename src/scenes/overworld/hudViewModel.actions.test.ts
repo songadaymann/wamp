@@ -26,6 +26,11 @@ function card(overrides: Partial<BuildOverworldHudViewModelOptions> = {}) {
 }
 
 describe('room card available actions', () => {
+  it('does not present an individual cell record as the Expanded Room record', () => {
+    const record = { roomTop: { userDisplayName: 'Cell Runner', elapsedMs: 1000 } as never, rankingMode: 'time' as const };
+    expect(card(record).leaderboardText).toBe('Best: Cell Runner · 1.00s');
+    expect(card({ ...record, selectedCourse: { courseId: 'whole', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2 } }).leaderboardText).toBe('');
+  });
   it('offers play and edit on a public room, without irrelevant build/expand actions', () => {
     expect(card()).toMatchObject({ playButtonHidden: false, editButtonHidden: false,
       buildButtonHidden: true, courseBuilderButtonHidden: true, selectedActionReasonText: '' });
@@ -59,11 +64,24 @@ describe('room card available actions', () => {
     expect(card({ selectedOwnership, currentWalletAddress: '0xabc' }))
       .toMatchObject({ editButtonHidden: false, selectedActionReasonText: '' });
   });
+  it('offers an explicit check to a linked buyer whose cached token owner differs', () => {
+    expect(card({ selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xseller' },
+      currentUserId: 'buyer', currentWalletAddress: '0xbuyer' })).toMatchObject({
+      editButtonHidden: false, editButtonDisabled: false, editButtonText: 'Check ownership',
+      courseBuilderButtonHidden: true, selectedActionReasonText: '',
+    });
+  });
   it('keeps the owner’s expanded setup available and labels expanded play', () => {
     expect(card({ currentUserId: 'builder', selectedCourse: {
       courseId: 'expanded:room', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2,
     } })).toMatchObject({ playButtonText: 'Play Expanded Room', editButtonText: 'Edit Expanded Room',
       courseBuilderButtonText: 'Expanded Room Setup', courseBuilderButtonHidden: false, selectedGoalText: 'Reach exit' });
+  });
+  it('labels an acquired minted cell Edit Room without exposing Expanded Setup', () => {
+    expect(card({ currentUserId: 'buyer', currentWalletAddress: '0xbuyer',
+      selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xbuyer' },
+      selectedCourse: { courseId: 'expanded:room', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2 },
+    })).toMatchObject({ editButtonText: 'Edit Room', courseBuilderButtonHidden: true });
   });
   it('keeps Stop and editor return available during play while hiding browse tools', () => {
     expect(card({ mode: 'play', selectedState: 'frontier' })).toMatchObject({ playButtonHidden: false,

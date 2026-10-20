@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../../../feedback/haptics', () => ({ playHaptic: vi.fn() }));
+import { playHaptic } from '../../../feedback/haptics';
+beforeEach(() => vi.clearAllMocks());
 vi.mock('phaser', () => ({ default: { Geom: {
   Rectangle: class { constructor(public x: number, public y: number, public width: number, public height: number) {} },
   Intersects: { RectangleToRectangle: (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
@@ -38,6 +41,18 @@ function harness() {
 const rect = { x: 0, y: 0, width: 800, height: 100 } as never;
 
 describe('per-swing enemy contacts', () => {
+  it('keeps shared defeat presentation quiet and vibrates on an actual local stomp', () => {
+    const h = harness(), enemy = object('enemy'), loaded = room('0,0', [enemy]);
+    h.controller.attackEnemiesInRect([loaded], rect, 1);
+    expect(playHaptic).not.toHaveBeenCalled();
+    const target = object('stomp'), next = room('0,0', [target]);
+    vi.spyOn(h.callbacks, 'getPlayer').mockReturnValue({} as never);
+    const bounce = vi.fn();
+    vi.spyOn(h.callbacks, 'getPlayerBody').mockReturnValue({ velocity: { y: 100 }, bottom: 30, setVelocityY: bounce } as never);
+    h.controller.handleEnemyContact(next, target);
+    expect(bounce).toHaveBeenCalledExactlyOnceWith(-245);
+    expect(playHaptic).toHaveBeenCalledExactlyOnceWith('hit');
+  });
   it('keeps police contact dangerous while the boss is protected from another hit', () => {
     const h = harness(), boss = object('boss'), loaded = room('0,0', [boss]);
     boss.config = { ...boss.config, id: 'police_patrolman' };

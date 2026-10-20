@@ -475,7 +475,10 @@ function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
     image.crossOrigin = 'anonymous';
     image.decoding = 'async';
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Failed to load asset ${normalizedPath}.`));
+    image.onerror = () => {
+      imageCache.delete(normalizedPath);
+      reject(new Error(`Failed to load asset ${normalizedPath}.`));
+    };
     image.src = assetUrl(normalizedPath);
   });
   imageCache.set(normalizedPath, pending);

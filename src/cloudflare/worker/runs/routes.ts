@@ -1,4 +1,8 @@
+import { DiscoveryPublicCache } from './discoveryPublicCache';
+import { loadCachedRoomStandings } from './roomLeaderboardCache';
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
+import { canReuseGlobalLeaderboardBase, loadGlobalLeaderboardViewer } from './globalLeaderboardViewer';
+import type { GlobalLeaderboardResponse } from '../../../runs/model';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
@@ -28,7 +32,7 @@ import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import { scheduleRunRewards } from './deferredRewards';
-import { loadAnonymousPublicCache } from '../core/publicCache';
+import { hasPublicCache, loadAnonymousPublicCache } from '../core/publicCache';
 import {
   refreshPlayableContentIndexForRoom,
   schedulePlayableContentIndexRefresh,
@@ -554,28 +558,38 @@ export async function handleRoomLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read room leaderboards');
-  const authenticated = auth !== null;
   const fresh = url.searchParams.get('fresh') === '1';
-  const loadResponse = async () => {
-    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
-    const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
-      viewerUserId: auth?.user.id ?? null,
-      viewerWalletAddress: auth?.user.walletAddress ?? null,
-      snapshotVersions: [version],
-    }));
-    const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
-    if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
-    const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
-      env, record, selection, limit, auth?.user.id ?? null,
-    ));
-    timing.setDiagnostic('cache', fresh ? 'fresh' : authenticated ? 'private-20' : 'public-20');
-    return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': fresh ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated || fresh ? undefined : context, loadResponse);
+  const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+  const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  // Resolve access and lineage on every request, including a warmed standings hit.
+  const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
+    viewerUserId: auth?.user.id ?? null,
+    viewerWalletAddress: auth?.user.walletAddress ?? null,
+    viewerIsAdmin: auth?.isAdmin ?? false,
+    snapshotVersions: [version],
+  }));
+  const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
+  if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
+  // Keep non-prime Worlds out of the shared cache, including future private/school Worlds.
+  const cached = !fresh && !record.world && hasPublicCache(context)
+    ? timing.measure('standings', () => loadCachedRoomStandings(
+      request, env, selection, limit, auth?.user.id ?? null, context!,
+    )) : null;
+  const [leaderboard, cacheResult] = await Promise.all([
+    timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
+      env, record, selection, limit, auth?.user.id ?? null, cached?.then(result => result.standings),
+    )),
+    cached,
+  ]);
+  const status = cacheResult?.status ?? 'bypass';
+  timing.setDiagnostic('cache', fresh ? 'fresh' : status);
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': auth || fresh || record.world ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': status,
+    },
+  });
 }
 
 export async function handleRoomDifficultyVote(
@@ -672,24 +686,18 @@ export async function handleRoomDiscovery(
     difficultyFilter === null
     && sort === 'newest'
     && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
-      env,
-      difficultyFilter,
-      limit,
-      sort,
-      includeGoalLessRooms,
-      auth?.user.id ?? null,
-      timing,
-      cursorOffset,
-    ));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const publicCache = new DiscoveryPublicCache(request, env, context, fresh);
+  const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
+    env, difficultyFilter, limit, sort, includeGoalLessRooms, auth?.user.id ?? null, timing, cursorOffset, publicCache,
+  ));
+  timing.setDiagnostic('cache', fresh ? 'fresh' : publicCache.status);
+  return timedJsonResponse(request, response, timing, {
+    headers: {
+      'Cache-Control': auth || fresh ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': publicCache.status,
+    },
+  });
 }
 
 function decodeRoomDiscoveryCursor(value: string | null, sort: RoomDiscoverySort): number {
@@ -723,17 +731,15 @@ export async function handleBuilderDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const authenticated = auth !== null;
   const loadResponse = async () => {
     const response = await timing.measure('builders', () => loadBuilderDiscoveryResponse(env, limit, sort));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
+    timing.setDiagnostic('cache', 'public-20');
     return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+      headers: { 'Cache-Control': 'public, max-age=20' },
     });
   };
-  return authenticated
-    ? loadAnonymousPublicCache(request, undefined, loadResponse)
-    : loadAnonymousPublicCache(request, context, loadResponse);
+  // The builder list is viewer-independent; auth and scope checks still run before cache hits.
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function parseBooleanQueryFlag(value: string | null): boolean {
@@ -762,21 +768,33 @@ export async function handleGlobalLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read global leaderboards');
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const leaderboard = await timing.measure(
-      'leaderboard',
-      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window),
-    );
-    const cache = window === 'week' ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20';
-    timing.setDiagnostic('cache', window === 'week' ? 'no-store' : authenticated ? 'private-20' : 'public-20');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const loadFullResponse = async () => {
+    const leaderboard = await timing.measure('leaderboard', () =>
+      buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window));
+    timing.setDiagnostic('cache', 'fresh');
     return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': cache },
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   };
-  if (window === 'week') return loadResponse();
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  // Weekly rollovers, explicit refreshes and unavailable caches retain one fresh snapshot.
+  if (window === 'week' || fresh || (auth && !hasPublicCache(context))) return loadFullResponse();
+  const publicResponse = await loadAnonymousPublicCache(request, context, async () => {
+    const leaderboard = await timing.measure('leaderboard', () => buildGlobalLeaderboardResponse(env, limit, null, window));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, leaderboard, timing, { headers: { 'Cache-Control': 'public, max-age=20' } });
+  });
+  if (!auth) return publicResponse;
+  const base = await publicResponse.json() as GlobalLeaderboardResponse;
+  const viewer = await timing.measure('viewer', () => loadGlobalLeaderboardViewer(env, auth.user.id));
+  // A new score/rank or changed adjacent player must not contradict a stale top list.
+  if (!canReuseGlobalLeaderboardBase(base, viewer, auth.user.id, limit)) return loadFullResponse();
+  const cache = publicResponse.headers.get('X-WAMP-Cache') ?? 'bypass';
+  timing.setDiagnostic('cache', `public-${cache}-private-viewer`);
+  return timedJsonResponse(request, { ...base, ...viewer }, timing, {
+    headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': cache },
+  });
 }
 
 export function resolveRoomSnapshotForVersion(

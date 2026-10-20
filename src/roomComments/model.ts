@@ -23,6 +23,7 @@ export interface RoomCommentRecord {
   body: string;
   authorUserId: string;
   authorDisplayName: string;
+  authorUsername?: string | null;
   createdAt: string;
 }
 
@@ -51,6 +52,7 @@ export interface BrowseRoomCommentPreview {
   id: string;
   body: string;
   authorDisplayName: string;
+  authorUsername?: string | null;
   createdAt: string;
 }
 

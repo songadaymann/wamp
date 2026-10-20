@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TILE_SIZE, editorState } from '../../config';
+import { TILE_SIZE, editorState, updateEditorState } from '../../config';
 import { EditorInteractionController } from './interaction';
 
 vi.mock('phaser', () => ({ default: { Geom: { Rectangle: class Rectangle {} } } }));
 
 type Handler = (...args: unknown[]) => void;
 const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool, isPlaying: editorState.isPlaying };
-beforeEach(() => { editorState.paletteMode = 'tiles'; editorState.activeTool = 'pencil'; editorState.isPlaying = false; });
-afterEach(() => { Object.assign(editorState, saved); });
+beforeEach(() => { updateEditorState({ paletteMode: 'tiles' }); updateEditorState({ activeTool: 'pencil' }); updateEditorState({ isPlaying: false }); });
+afterEach(() => { updateEditorState(saved); });
 
 /** The room editor's pointer handlers on a fake scene, with every host call recorded. */
 function harness() {

@@ -8,7 +8,7 @@ import {
   ROOM_PX_WIDTH,
   ROOM_WIDTH,
   TILE_SIZE,
-  editorState,
+  editorState, updateEditorState,
   getObjectPreviewRectForTile,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -251,7 +251,7 @@ export class EditorInteractionController {
     originY: number,
     width: number,
     height: number,
-    occupiedMask: boolean[][],
+    occupiedMask: readonly (readonly boolean[])[],
     stroke: number,
     fillAlpha: number,
     lineAlpha: number,
@@ -404,7 +404,7 @@ export class EditorInteractionController {
           bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
         },
       });
-      editorState.zoom = plan.zoom;
+      updateEditorState({ zoom: plan.zoom });
       camera.setZoom(plan.zoom);
       camera.setScroll(plan.scrollX, plan.scrollY);
       syncMusicWorkbenchFrame(this.scene.game.canvas, camera.width, camera.height, plan);
@@ -429,10 +429,10 @@ export class EditorInteractionController {
       (viewH - padding) / ROOM_PX_HEIGHT,
     );
 
-    editorState.zoom = usePhonePortraitFit
+    updateEditorState({ zoom: usePhonePortraitFit
       ? Number(fitZoom.toFixed(2))
-      : Math.round(fitZoom * 4) / 4;
-    editorState.zoom = Math.max(0.25, Math.min(6, editorState.zoom));
+      : Math.round(fitZoom * 4) / 4 });
+    updateEditorState({ zoom: Math.max(0.25, Math.min(6, editorState.zoom)) });
 
     this.centerCameraOnRoom();
     this.host.updateBackgroundPreview();
@@ -961,7 +961,7 @@ export class EditorInteractionController {
     }
 
     const anchor = getScreenAnchorWorldPoint(screenX, screenY, camera);
-    editorState.zoom = nextZoom;
+    updateEditorState({ zoom: nextZoom });
     camera.setZoom(nextZoom);
     const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
     camera.setScroll(nextScroll.x, nextScroll.y);
@@ -1525,7 +1525,7 @@ export class EditorInteractionController {
     if (Math.abs(zoomFactor - 1) > 0.02) {
       const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
       if (Math.abs(nextZoom - editorState.zoom) >= 0.0001) {
-        editorState.zoom = nextZoom;
+        updateEditorState({ zoom: nextZoom });
         this.scene.cameras.main.setZoom(editorState.zoom);
         this.host.updateZoomUI();
       }

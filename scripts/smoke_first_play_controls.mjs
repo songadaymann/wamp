@@ -36,7 +36,7 @@ async function checkGuide(page, touch) {
   const controls = page.locator('#room-goal-intro-controls');
   assert.equal(await controls.getAttribute('data-play-controls-input'), touch ? 'touch' : 'keyboard');
   const text = await controls.innerText();
-  for (const word of touch ? ['Left stick', 'Jump', 'Sword', 'Shoot'] : ['A D', 'Space', 'W', 'Q', 'E']) assert.ok(text.includes(word), text);
+  for (const word of touch ? ['Left stick', 'Jump', 'Sword', 'Shoot'] : ['A', 'D', 'Space', 'W', 'Z', 'Q', 'X', 'E']) assert.ok(text.includes(word), text);
   for (const selector of ['#room-goal-intro-controls', '#btn-room-goal-intro-start']) {
     const box = await page.locator(selector).boundingBox();
     assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= page.viewportSize().width + 1 && box.y + box.height <= page.viewportSize().height + 1, `${selector} clipped: ${JSON.stringify(box)}`);

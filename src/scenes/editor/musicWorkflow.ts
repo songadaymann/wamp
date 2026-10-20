@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playSfx } from '../../audio/sfx';
-import { editorState } from '../../config';
+import { editorState, updateEditorState } from '../../config';
 import { globalRoomMusicController } from '../../music/controller';
 import { EditorPreviewRefresh } from './previewRefresh';
 import { TouchMusicEditor } from './touchMusicEditor';
@@ -404,7 +404,7 @@ export class EditorMusicWorkflowCoordinator {
       this.musicPhraseOrchestrator.setMetadataEditing(false);
     }
     if (active && editorState.activeTool !== 'pencil' && editorState.activeTool !== 'eraser' && editorState.activeTool !== 'copy') {
-      editorState.activeTool = 'pencil';
+      updateEditorState({ activeTool: 'pencil' });
       this.host.onMusicModeToolActivated?.();
     }
     if (active) {

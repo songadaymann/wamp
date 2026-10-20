@@ -4,7 +4,7 @@ import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
-  editorState,
+  editorState, updateEditorState,
   getSelectionTileValue,
   encodeTileDataValue,
   getObjectById,
@@ -53,10 +53,10 @@ describe('editor edit runtime document contracts', () => {
     expect(clone).not.toHaveBeenCalled();
     expect(record.mock.calls.at(-1)?.[0].smartBefore).toBeUndefined();
     expect(record.mock.calls.at(-1)?.[0].smartAfter).toBeUndefined(); clone.mockRestore();
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
     const smart = runtime.exportRoomSnapshot();
-    editorState.paletteMode = 'tiles'; editorState.selectedTileGid = 5;
+    updateEditorState({ paletteMode: 'tiles' }); updateEditorState({ selectedTileGid: 5 });
     runtime.beginTileBatch(); runtime.placeTileAt(96, 96); runtime.commitTileBatch();
     const manual = runtime.exportRoomSnapshot();
     expect(manual.smartTerrain).not.toEqual(smart.smartTerrain);
@@ -67,13 +67,13 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.exportRoomSnapshot().smartTerrain).toEqual(manual.smartTerrain); record.mockRestore();
   });
   it('does not record a repeated Smart stroke or empty manual stroke and preserves Redo', () => {
-    const { runtime } = createHarness(createRoom()); editorState.paletteMode = 'smart';
+    const { runtime } = createHarness(createRoom()); updateEditorState({ paletteMode: 'smart' });
     runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
     const history = (runtime as unknown as { history: EditorHistory<unknown> }).history;
     runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
     expect(history.getDebugSnapshot().undoCount).toBe(1);
     runtime.undo(); const revision = runtime.documentRevision;
-    editorState.paletteMode = 'tiles'; runtime.beginTileBatch(); runtime.eraseTileAt(160, 160); runtime.commitTileBatch();
+    updateEditorState({ paletteMode: 'tiles' }); runtime.beginTileBatch(); runtime.eraseTileAt(160, 160); runtime.commitTileBatch();
     expect(runtime.documentRevision).toBe(revision); expect(runtime.hasRedoHistory()).toBe(true);
   });
   it('records a semantic-only Smart setting and restores it through Undo/Redo without tile changes', () => {
@@ -89,8 +89,8 @@ describe('editor edit runtime document contracts', () => {
     const { runtime } = createHarness(createRoom()); let revision = runtime.documentRevision;
     let oldestRetainedBefore = -1;
     for (let i = 0; i < 170; i++) {
-      editorState.selectedTileGid = i % 2 ? 2 : 1;
-      editorState.selection.startCol = i % 2;
+      updateEditorState({ selectedTileGid: i % 2 ? 2 : 1 });
+      updateEditorState({ selection: { ...editorState.selection, startCol: i % 2 } });
       runtime.beginTileBatch(); runtime.placeTileAt(80, 80); runtime.commitTileBatch();
       if (i === 19) oldestRetainedBefore = runtime.exportRoomSnapshot().tileData.terrain[5][5];
       expect(runtime.documentRevision).toBeGreaterThan(revision); revision = runtime.documentRevision;
@@ -154,31 +154,31 @@ describe('editor edit runtime document contracts', () => {
 
   beforeEach(() => {
     updateGameSettings({ builderMode: 'beginner' });
-    editorState.activeLayer = 'terrain';
-    editorState.activeTool = 'pencil';
-    editorState.paletteMode = 'tiles';
-    editorState.smartTheme = 'forest';
-    editorState.smartMaterial = 'forest.ground';
-    editorState.selectedTileGid = 1;
-    editorState.selection = {
+    updateEditorState({ activeLayer: 'terrain' });
+    updateEditorState({ activeTool: 'pencil' });
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ smartTheme: 'forest' });
+    updateEditorState({ smartMaterial: 'forest.ground' });
+    updateEditorState({ selectedTileGid: 1 });
+    updateEditorState({ selection: {
       tilesetKey: 'essentials',
       startCol: 0,
       startRow: 0,
       width: 1,
       height: 1,
       occupiedMask: [[true]],
-    };
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
-    editorState.selectedObjectId = null;
+    } });
+    updateEditorState({ tileFlipXMode: 'off' });
+    updateEditorState({ tileFlipYMode: 'off' });
+    updateEditorState({ selectedObjectId: null });
   });
 
   it('limits Lost Song to one main-layer object during a live batch, with Undo and read-only parity', () => {
     const { runtime, host, setEditable } = createHarness(createRoom());
-    editorState.selectedObjectId = 'lost_song';
-    editorState.activeLayer = 'background';
+    updateEditorState({ selectedObjectId: 'lost_song' });
+    updateEditorState({ activeLayer: 'background' });
     expect(runtime.handleObjectPlace(64, 64, 4, 4)).toBeNull();
-    editorState.activeLayer = 'terrain';
+    updateEditorState({ activeLayer: 'terrain' });
     runtime.beginObjectBatch(true);
     expect(runtime.handleObjectPlace(64, 64, 4, 4)?.id).toBe('lost_song');
     runtime.handleObjectPlace(64, 64, 4, 4);
@@ -335,7 +335,7 @@ describe('editor edit runtime document contracts', () => {
   });
 
   it('cancels Smart output and semantic changes without making a clean draft dirty', () => {
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     const { runtime, host, setEditable } = createHarness(createRoom());
     const before = runtime.exportRoomSnapshot();
     const dirtyAt = runtime.currentLastDirtyAt;
@@ -357,7 +357,7 @@ describe('editor edit runtime document contracts', () => {
     const room = createRoom();
     room.placedObjects = [object('existing')];
     const { runtime, host } = createHarness(room);
-    editorState.selectedObjectId = 'coin_gold';
+    updateEditorState({ selectedObjectId: 'coin_gold' });
     runtime.beginObjectBatch(true);
     runtime.handleObjectPlace(4 * TILE_SIZE, 4 * TILE_SIZE, 4, 4);
     runtime.commitObjectBatch();
@@ -416,7 +416,7 @@ describe('editor edit runtime document contracts', () => {
     runtime.redo();
     expect(host.getPlacedObjects()).toEqual([]);
 
-    editorState.selectedObjectId = 'spawn_point';
+    updateEditorState({ selectedObjectId: 'spawn_point' });
     runtime.handleObjectPlace(24, 32, 1, 1);
     expect(runtime.currentRoomSpawnPoint).toEqual({ x: 24, y: 32 });
     runtime.undo();
@@ -443,8 +443,8 @@ describe('editor edit runtime document contracts', () => {
 
   it('groups a repeated-object drag into one Undo step', () => {
     const { runtime, host } = createHarness(createRoom());
-    editorState.paletteMode = 'objects';
-    editorState.selectedObjectId = 'coin_gold';
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ selectedObjectId: 'coin_gold' });
     runtime.beginObjectBatch(true);
     for (let x = 3; x <= 5; x += 1) {
       runtime.handleObjectPlace(x * TILE_SIZE + 8, 3 * TILE_SIZE + 8, x, 3);
@@ -461,9 +461,9 @@ describe('editor edit runtime document contracts', () => {
     const room = createRoom();
     for (const y of [2, 3]) for (const x of [2, 3]) room.tileData.terrain[y][x] = 1;
     const { runtime, host } = createHarness(room);
-    editorState.paletteMode = 'objects';
-    editorState.activeTool = 'fill';
-    editorState.selectedObjectId = 'coin_gold';
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ activeTool: 'fill' });
+    updateEditorState({ selectedObjectId: 'coin_gold' });
     runtime.handleObjectPlace(2 * TILE_SIZE + 8, 2 * TILE_SIZE + 8, 2, 2);
     const existingId = host.getPlacedObjects()[0].instanceId;
     expect(runtime.floodFillObjects(3, 3)).toBe(3);
@@ -541,7 +541,7 @@ describe('editor edit runtime document contracts', () => {
   });
 
   it('feeds Smart rectangle and ellipse shapes through semantic auto-tiling', () => {
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     const { runtime, layers } = createHarness(createRoom());
     const terrain = layers.get('terrain')!;
 
@@ -644,7 +644,7 @@ describe('editor edit runtime document contracts', () => {
   it('uses the Advanced-selected layer for Smart recipes and preserves it through undo/redo', () => {
     updateGameSettings({ builderMode: 'advanced' });
     selectCyberBrush('cyber.support');
-    editorState.activeLayer = 'foreground';
+    updateEditorState({ activeLayer: 'foreground' });
     const { runtime, layers } = createHarness(createRoom());
 
     runtime.beginTileBatch();
@@ -676,10 +676,10 @@ describe('editor edit runtime document contracts', () => {
 
   it('commits a reversed diagonal Start Bar drag as one horizontal row with exact Undo/Redo', () => {
     const { runtime } = createHarness(createRoom());
-    editorState.paletteMode = 'smart';
-    editorState.smartTheme = 'wampos95';
-    editorState.smartMaterial = 'wampos95.start-bar';
-    editorState.smartStyle = 'wampos95';
+    updateEditorState({ paletteMode: 'smart' });
+    updateEditorState({ smartTheme: 'wampos95' });
+    updateEditorState({ smartMaterial: 'wampos95.start-bar' });
+    updateEditorState({ smartStyle: 'wampos95' });
     const before = runtime.exportRoomSnapshot();
     runtime.beginTileBatch();
     runtime.stampShape('line', 25, 20, 2, 12);
@@ -834,10 +834,10 @@ describe('editor edit runtime document contracts', () => {
       anchored('coin_gold', 'outside', 20, 12),
     ] });
     for (const layer of ['background', 'terrain', 'foreground'] as const) {
-      editorState.activeLayer = layer;
+      updateEditorState({ activeLayer: layer });
       runtime.beginTileBatch(); runtime.placeTileAt(4 * TILE_SIZE, 13 * TILE_SIZE); runtime.commitTileBatch();
     }
-    editorState.activeLayer = 'terrain';
+    updateEditorState({ activeLayer: 'terrain' });
 
     expect(runtime.moveArea(2, 11, 6, 13, 10, -3)).toBe(true);
     for (const layer of ['background', 'terrain', 'foreground'] as const) {
@@ -860,11 +860,11 @@ describe('editor edit runtime document contracts', () => {
 
   it('re-creates smart terrain at the destination and re-solves the source', () => {
     const { runtime } = createHarness(createRoom());
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     runtime.beginTileBatch();
     for (const x of [2, 3, 4]) for (const y of [10, 11]) placeSmartCell(runtime, x, y);
     runtime.commitTileBatch();
-    editorState.paletteMode = 'tiles';
+    updateEditorState({ paletteMode: 'tiles' });
     const before = getSmartSourceKeys(runtime, 'forest.ground');
     expect(before).toHaveLength(6);
 
@@ -883,17 +883,17 @@ describe('editor edit runtime document contracts', () => {
     selectCyberBrush('cyber.concrete');
     const { runtime, host } = createHarness(createRoom());
     runtime.beginTileBatch(); runtime.stampShape('rect', 4, 5, 6, 5, { outline: false, erase: false }); runtime.commitTileBatch();
-    editorState.paletteMode = 'tiles';
+    updateEditorState({ paletteMode: 'tiles' });
     expect(runtime.moveArea(4, 5, 6, 5, 0, 3)).toBe(true);
     expect(getSmartSourceKeys(runtime, 'cyber.concrete')).toEqual(['terrain:4,8', 'terrain:5,8', 'terrain:6,8']);
 
     // A WampOS Start Bar is one multi-cell recipe: half of it cannot move, all of it can.
-    editorState.paletteMode = 'smart';
-    editorState.smartTheme = 'wampos95';
-    editorState.smartMaterial = 'wampos95.start-bar';
-    editorState.smartStyle = 'wampos95';
+    updateEditorState({ paletteMode: 'smart' });
+    updateEditorState({ smartTheme: 'wampos95' });
+    updateEditorState({ smartMaterial: 'wampos95.start-bar' });
+    updateEditorState({ smartStyle: 'wampos95' });
     runtime.beginTileBatch(); runtime.stampShape('line', 2, 20, 12, 20); runtime.commitTileBatch();
-    editorState.paletteMode = 'tiles';
+    updateEditorState({ paletteMode: 'tiles' });
     expect(Object.values(runtime.exportRoomSnapshot().smartTerrain!.recipes)).toHaveLength(1);
     const beforeSplit = runtime.exportRoomSnapshot();
     expect(runtime.moveArea(2, 20, 6, 20, 0, -5)).toBe(false);
@@ -914,7 +914,7 @@ describe('editor edit runtime document contracts', () => {
   });
 
   it('submits a skipped pointer segment once in Bresenham order', () => {
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     const host = { placeTileAt: vi.fn(), placeTileStroke: vi.fn() };
     const interaction = new EditorInteractionController(
       {} as never, host as never, { getElementById: () => null } as never,
@@ -936,7 +936,7 @@ describe('editor edit runtime document contracts', () => {
     room.smartTerrain = { ...room.smartTerrain!, version: 999 };
     const { runtime, host } = createHarness(room);
     const before = runtime.exportRoomSnapshot();
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     runtime.beginTileBatch();
     runtime.placeTileStroke([{ x: 48, y: 64 }, { x: 64, y: 64 }]);
     runtime.commitTileBatch();
@@ -955,7 +955,7 @@ describe('editor edit runtime document contracts', () => {
     expect(runtime.exportRoomSnapshot().tileData.terrain[4].slice(3, 5)).toEqual([getSelectionTileValue(0, 0), getSelectionTileValue(0, 0)]);
     runtime.undo();
     const before = runtime.exportRoomSnapshot();
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     setEditable(false);
     runtime.beginTileBatch();
     runtime.placeTileStroke(points);
@@ -970,9 +970,9 @@ describe('editor edit runtime document contracts', () => {
     'water.tunnel', 'cyber.concrete', 'cyber.windows', 'cyber.shell',
     'cyber.rubble', 'cyber.support', 'cyber.neon', 'cyber.fence',
   ] as SmartBrushId[])('batches %s with exact ordered-stroke output and undo', (brushId) => {
-    editorState.paletteMode = 'smart';
-    editorState.smartMaterial = brushId;
-    editorState.smartStyle = brushId.startsWith('cyber.') ? 'cyber-yellow' : 'forest';
+    updateEditorState({ paletteMode: 'smart' });
+    updateEditorState({ smartMaterial: brushId });
+    updateEditorState({ smartStyle: brushId.startsWith('cyber.') ? 'cyber-yellow' : 'forest' });
     const room = createRoom();
     // Existing manual output must survive beside and underneath generated details.
     room.tileData.foreground[7][8] = 1;
@@ -1006,7 +1006,7 @@ describe('editor edit runtime document contracts', () => {
   });
 
   it('undoes and redoes a multi-step Smart stroke as one exact transaction', () => {
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     const { runtime } = createHarness(createRoom());
     const before = runtime.exportRoomSnapshot();
 
@@ -1034,10 +1034,10 @@ describe('editor edit runtime document contracts', () => {
 });
 
 function selectCyberBrush(brushId: SmartBrushId): void {
-  editorState.paletteMode = 'smart';
-  editorState.smartTheme = 'cyber';
-  editorState.smartStyle = 'cyber-yellow';
-  editorState.smartMaterial = brushId;
+  updateEditorState({ paletteMode: 'smart' });
+  updateEditorState({ smartTheme: 'cyber' });
+  updateEditorState({ smartStyle: 'cyber-yellow' });
+  updateEditorState({ smartMaterial: brushId });
 }
 
 function placeSmartCell(runtime: EditorEditRuntime, x: number, y: number): void {

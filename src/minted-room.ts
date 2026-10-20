@@ -4,10 +4,9 @@ import { getRoomBackgroundLabel } from './backgrounds/model';
 import { parseRoomTokenMetadataUri } from './mint/roomMetadata';
 import { renderWampMintedRoomToCanvas } from './mint/roomMetadataRender';
 import {
-  DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL,
-  DEFAULT_ROOM_MINT_CHAIN_ID,
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from './mint/roomOwnership';
+import { parseRoomChainId } from './mint/roomNetwork';
 
 const titleEl = document.getElementById('minted-room-title');
 const summaryEl = document.getElementById('minted-room-summary');
@@ -24,7 +23,10 @@ void bootstrap();
 async function bootstrap(): Promise<void> {
   try {
     const params = new URLSearchParams(window.location.search);
-    const chainId = parsePositiveInt(params.get('chainId')) ?? DEFAULT_ROOM_MINT_CHAIN_ID;
+    const chainId = parseRoomChainId(params.get('chainId'));
+    if (chainId === null) {
+      throw new Error('This preview link is missing a valid network. Open the room from WAMP to get its full link.');
+    }
     const contract = params.get('contract');
     const tokenId = params.get('tokenId');
     if (!contract || !tokenId) {
@@ -82,6 +84,7 @@ async function bootstrap(): Promise<void> {
     previewStatus('Rendered from on-chain tokenURI metadata.');
   } catch (error) {
     console.error('Failed to render minted room', error);
+    if (titleEl) titleEl.textContent = 'Preview unavailable';
     const message = error instanceof Error ? error.message : 'Unknown render failure.';
     if (errorRootEl) {
       errorRootEl.classList.remove('hidden');
@@ -108,18 +111,7 @@ function resolveChain(chainId: number) {
 }
 
 function resolveExplorerBase(chainId: number): string {
-  return chainId === DEFAULT_ROOM_MINT_CHAIN_ID
-    ? DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL
-    : resolveChain(chainId).blockExplorers?.default.url ?? '';
-}
-
-function parsePositiveInt(value: string | null): number | null {
-  if (!value || !/^\d+$/.test(value)) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  return resolveChain(chainId).blockExplorers?.default.url ?? '';
 }
 
 function summary(text: string): void {

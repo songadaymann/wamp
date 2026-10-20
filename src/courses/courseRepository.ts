@@ -35,7 +35,8 @@ export interface CourseRepository {
   loadCourseLeaderboard(
     courseId: string,
     version?: number | null,
-    limit?: number
+    limit?: number,
+    fresh?: boolean,
   ): Promise<CourseLeaderboardResponse>;
 }
 
@@ -128,7 +129,8 @@ class ApiCourseRepository implements CourseRepository {
   async loadCourseLeaderboard(
     courseId: string,
     version: number | null = null,
-    limit: number = 10
+    limit: number = 10,
+    fresh: boolean = false,
   ): Promise<CourseLeaderboardResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -139,9 +141,10 @@ class ApiCourseRepository implements CourseRepository {
     }
 
     const path = `/api/leaderboards/courses/${encodeURIComponent(courseId)}?${params.toString()}`;
-    const response = await loadWithStaleWhileRevalidate(
-      `leaderboard:${this.baseUrl}${path}`,
-      () => this.request<CourseLeaderboardResponse>(path),
+    const load = () => this.request<CourseLeaderboardResponse>(path, fresh ? { cache: 'no-store' } : undefined);
+    if (fresh) this.invalidateLeaderboards();
+    const response = fresh ? await load() : await loadWithStaleWhileRevalidate(
+      `leaderboard:${this.baseUrl}${path}`, load,
     );
     return filterCourseLeaderboardForCurrentSurface(response);
   }

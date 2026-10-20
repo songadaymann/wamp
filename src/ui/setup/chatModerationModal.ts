@@ -1,3 +1,5 @@
+import { formatAccountIdentity } from '../../auth/displayIdentity';
+import { ChatAdminPicker } from './chatAdminPicker';
 import {
   AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
@@ -33,6 +35,8 @@ export class ChatModerationModalController {
   private bans: ChatBanRecord[] = [];
   private loading = false;
   private actionPending = false;
+  private readonly picker: ChatAdminPicker;
+  private loadGeneration = 0;
 
   private readonly handleCloseClick = () => {
     this.close();
@@ -54,7 +58,14 @@ export class ChatModerationModalController {
 
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
-    this.authState = detail ?? getAuthDebugState();
+    const next = detail ?? getAuthDebugState();
+    if (next.user?.id !== this.authState.user?.id || next.chatModeration.role !== this.authState.chatModeration.role) {
+      this.loadGeneration += 1;
+      this.picker.clear();
+      this.admins = []; this.bans = [];
+      this.loading = false;
+    }
+    this.authState = next;
     if (this.authState.chatModeration.role === 'none') {
       this.close();
     }
@@ -80,9 +91,15 @@ export class ChatModerationModalController {
       banSection: this.doc.getElementById('chat-moderation-ban-section'),
       banList: this.doc.getElementById('chat-moderation-ban-list'),
     };
+    this.picker = new ChatAdminPicker({ doc: this.doc, input: this.elements.adminInput,
+      results: this.doc.getElementById('chat-moderation-admin-results'),
+      status: this.doc.getElementById('chat-moderation-admin-search-status'),
+      changed: () => this.render(),
+    });
   }
 
   init(): void {
+    this.picker.init();
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.adminForm?.addEventListener('submit', this.handleAdminFormSubmit);
@@ -98,6 +115,7 @@ export class ChatModerationModalController {
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
     this.close();
+    this.picker.destroy();
   }
 
   async open(): Promise<void> {
@@ -105,9 +123,12 @@ export class ChatModerationModalController {
       return;
     }
 
+    this.picker.clear();
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
+    const generation = this.loadGeneration + 1;
     await this.load();
+    if (generation !== this.loadGeneration || this.elements.modal.classList.contains('hidden')) return;
     if (this.authState.chatModeration.role === 'owner') {
       this.elements.adminInput?.focus();
       this.elements.adminInput?.select();
@@ -121,10 +142,14 @@ export class ChatModerationModalController {
 
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
+    this.loadGeneration += 1;
+    this.loading = false;
+    this.picker.clear();
     this.setStatus('', false);
   }
 
   private async load(): Promise<void> {
+    const generation = ++this.loadGeneration;
     this.loading = true;
     this.render();
 
@@ -134,20 +159,22 @@ export class ChatModerationModalController {
           fetchChatAdmins(),
           fetchChatBans(),
         ]);
+        if (generation !== this.loadGeneration) return;
         this.admins = adminsResponse.admins;
         this.bans = bansResponse.bans;
       } else {
         const bansResponse = await fetchChatBans();
+        if (generation !== this.loadGeneration) return;
         this.admins = [];
         this.bans = bansResponse.bans;
       }
       this.setStatus('', false);
     } catch (error) {
+      if (generation !== this.loadGeneration) return;
       console.error('Failed to load chat moderation data', error);
       this.setStatus(getErrorMessage(error, 'Failed to load chat moderation data.'), true);
     } finally {
-      this.loading = false;
-      this.render();
+      if (generation === this.loadGeneration) { this.loading = false; this.render(); }
     }
   }
 
@@ -160,22 +187,27 @@ export class ChatModerationModalController {
       return;
     }
 
-    const displayName = this.elements.adminInput.value.replace(/\s+/g, ' ').trim();
-    if (!displayName) {
-      this.setStatus('Enter a display name first.', true);
+    const selected = this.picker.getSelection();
+    if (!selected) {
+      this.setStatus('Select a matching account first.', true);
       return;
     }
 
+    const generation = this.loadGeneration;
+    const displayName = formatAccountIdentity(selected.displayName, selected.username);
     this.actionPending = true;
     this.setStatus(`Adding ${displayName} as chat admin...`, false);
     this.render();
 
     try {
-      await grantChatAdmin(displayName);
-      this.elements.adminInput.value = '';
+      await grantChatAdmin(selected.userId);
+      if (generation !== this.loadGeneration) return;
+      this.picker.clear();
       await this.load();
+      if (generation + 1 !== this.loadGeneration) return;
       this.setStatus(`${displayName} is now a chat admin.`, false);
     } catch (error) {
+      if (generation !== this.loadGeneration) return;
       console.error('Failed to grant chat admin', error);
       this.setStatus(getErrorMessage(error, 'Failed to grant chat admin.'), true);
     } finally {
@@ -188,19 +220,19 @@ export class ChatModerationModalController {
     if (
       this.authState.chatModeration.role !== 'owner'
       || this.actionPending
-      || !window.confirm(`Remove ${admin.displayName} as chat admin?`)
+      || !window.confirm(`Remove ${formatAccountIdentity(admin.displayName, admin.username)} as chat admin?`)
     ) {
       return;
     }
 
     this.actionPending = true;
-    this.setStatus(`Removing ${admin.displayName}...`, false);
+    this.setStatus(`Removing ${formatAccountIdentity(admin.displayName, admin.username)}...`, false);
     this.render();
 
     try {
       await revokeChatAdmin(admin.userId);
       await this.load();
-      this.setStatus(`${admin.displayName} is no longer a chat admin.`, false);
+      this.setStatus(`${formatAccountIdentity(admin.displayName, admin.username)} is no longer a chat admin.`, false);
     } catch (error) {
       console.error('Failed to revoke chat admin', error);
       this.setStatus(getErrorMessage(error, 'Failed to revoke chat admin.'), true);
@@ -214,19 +246,19 @@ export class ChatModerationModalController {
     if (
       this.authState.chatModeration.role === 'none'
       || this.actionPending
-      || !window.confirm(`Unban ${ban.displayName} from chat?`)
+      || !window.confirm(`Unban ${formatAccountIdentity(ban.displayName, ban.username)} from chat?`)
     ) {
       return;
     }
 
     this.actionPending = true;
-    this.setStatus(`Unbanning ${ban.displayName}...`, false);
+    this.setStatus(`Unbanning ${formatAccountIdentity(ban.displayName, ban.username)}...`, false);
     this.render();
 
     try {
       await unbanChatUser(ban.userId);
       await this.load();
-      this.setStatus(`${ban.displayName} was unbanned from chat.`, false);
+      this.setStatus(`${formatAccountIdentity(ban.displayName, ban.username)} was unbanned from chat.`, false);
     } catch (error) {
       console.error('Failed to unban chat user', error);
       this.setStatus(getErrorMessage(error, 'Failed to unban chat user.'), true);
@@ -245,12 +277,12 @@ export class ChatModerationModalController {
     this.elements.adminSection?.classList.toggle('hidden', this.authState.chatModeration.role !== 'owner');
     this.elements.banSection?.classList.toggle('hidden', this.authState.chatModeration.role === 'none');
 
-    if (this.elements.adminInput) {
-      this.elements.adminInput.disabled = this.loading || this.actionPending || this.authState.chatModeration.role !== 'owner';
-    }
+    this.picker.setEnabled(!this.loading && !this.actionPending && this.authState.chatModeration.role === 'owner'
+      && !this.elements.modal?.classList.contains('hidden'));
 
     if (this.elements.adminAddButton) {
-      this.elements.adminAddButton.disabled = this.loading || this.actionPending || this.authState.chatModeration.role !== 'owner';
+      this.elements.adminAddButton.disabled = this.loading || this.actionPending || this.authState.chatModeration.role !== 'owner'
+        || !this.picker.getSelection();
     }
 
     this.renderAdminList();
@@ -286,12 +318,12 @@ export class ChatModerationModalController {
 
       const title = this.doc.createElement('div');
       title.className = 'chat-moderation-item-title';
-      title.textContent = admin.displayName;
+      title.textContent = formatAccountIdentity(admin.displayName, admin.username);
 
       const meta = this.doc.createElement('div');
       meta.className = 'chat-moderation-item-meta';
       meta.textContent = admin.grantedByDisplayName
-        ? `Granted by ${admin.grantedByDisplayName}`
+        ? `Granted by ${formatAccountIdentity(admin.grantedByDisplayName, admin.grantedByUsername)}`
         : 'Granted by owner';
 
       const action = this.doc.createElement('button');
@@ -338,12 +370,12 @@ export class ChatModerationModalController {
 
       const title = this.doc.createElement('div');
       title.className = 'chat-moderation-item-title';
-      title.textContent = ban.displayName;
+      title.textContent = formatAccountIdentity(ban.displayName, ban.username);
 
       const meta = this.doc.createElement('div');
       meta.className = 'chat-moderation-item-meta';
       meta.textContent = ban.bannedByDisplayName
-        ? `Banned by ${ban.bannedByDisplayName}`
+        ? `Banned by ${formatAccountIdentity(ban.bannedByDisplayName, ban.bannedByUsername)}`
         : 'Banned';
 
       const action = this.doc.createElement('button');

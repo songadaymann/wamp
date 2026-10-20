@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, editorState, getSelectionTileValue } from '../../config';
+import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, editorState, updateEditorState, getSelectionTileValue } from '../../config';
 import {
   applyEditorTileFlipModes,
   applyRandomizeFlips,
@@ -37,11 +37,11 @@ describe('randomizeTiles', () => {
   });
 
   it('applies rand flip modes independently of the current flags', () => {
-    editorState.tileFlipXMode = 'rand';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'rand' });
+    updateEditorState({ tileFlipYMode: 'off' });
     expect(applyEditorTileFlipModes(12, { random: () => 0.1 })).toBe(12 + TILE_FLIP_X_FLAG);
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'off' });
+    updateEditorState({ tileFlipYMode: 'off' });
   });
 
   it('weights the occupied palette pool evenly, including duplicates', () => {
@@ -94,13 +94,13 @@ describe('randomizeTiles', () => {
 
   it('skips empty mask cells the same way pencil stamps do', () => {
     const previous = editorState.selection;
-    editorState.selection = {
+    updateEditorState({ selection: {
       ...previous,
       width: 2,
       height: 1,
       occupiedMask: [[true, false]],
-    };
+    } });
     expect(getSelectionTileValue(1, 0)).toBe(-1);
-    editorState.selection = previous;
+    updateEditorState({ selection: previous });
   });
 });

@@ -1,7 +1,8 @@
+import type { RuntimeModeReader } from './runtimeContext';
 import type { OverworldMode } from '../sceneData';
 
 interface BrowseRealtimeStartupGateOptions {
-  getMode(): OverworldMode;
+  runtime: RuntimeModeReader<OverworldMode>;
   waitForBrowseReady(signal: AbortSignal): Promise<boolean>;
   applySubscriptions(): void;
   onWaitError?(error: unknown): void;
@@ -29,7 +30,7 @@ export class BrowseRealtimeStartupGate {
       return;
     }
 
-    if (this.options.getMode() !== 'browse') {
+    if (this.options.runtime.mode.get() !== 'browse') {
       this.cancelPending();
       this.released = true;
       this.options.applySubscriptions();

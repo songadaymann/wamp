@@ -13,6 +13,8 @@ import { requireWalletLinkedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { loadRoomRecord, loadRoomRecordForMutation } from '../rooms/store';
+import { buildWalletMintChainInfo } from './walletChainInfo';
+import { assertRoomMintNetwork } from './network';
 import {
   loadRoomMintPriceWei,
   persistRoomTokenMetadataState,
@@ -31,6 +33,7 @@ export async function handleRoomMintPrepare(
 ): Promise<Response> {
   const auth = await requireWalletLinkedRequestAuth(env, request, 'mint rooms', 'rooms:write');
   const config = requireRoomMintConfig(env);
+  const chain = buildWalletMintChainInfo(config);
   const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!record.published) {
@@ -66,17 +69,7 @@ export async function handleRoomMintPrepare(
     linkedWalletAddress,
     contractAddress: config.contractAddress,
     priceWei,
-    chain: {
-      chainId: config.chainId,
-      name: config.chainName,
-      rpcUrl: config.rpcUrl,
-      blockExplorerUrl: config.blockExplorerUrl,
-      nativeCurrency: {
-        name: 'Ether',
-        symbol: 'ETH',
-        decimals: 18,
-      },
-    },
+    chain,
     transaction: {
       to: config.contractAddress,
       data: encodeFunctionData({
@@ -154,6 +147,7 @@ export async function handleRoomTokenMetadataPrepare(
   );
   const config = requireRoomMintConfig(env);
   const body = await parseRoomMetadataRefreshPrepareBody(request);
+  const chain = buildWalletMintChainInfo(config);
   const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!isRoomMinted(record) || !record.mintedTokenId || !record.mintedContractAddress) {
@@ -176,23 +170,17 @@ export async function handleRoomTokenMetadataPrepare(
     throw new HttpError(403, 'The linked wallet does not own the minted room token.');
   }
 
+  // Local ownership reads may intentionally use stored state; wallet instructions
+  // still require a working connection to the explicitly selected network.
+  await assertRoomMintNetwork(config);
+
   const responseBody: RoomMetadataRefreshPrepareResponse = {
     roomId: record.draft.id,
     roomCoordinates: { ...record.draft.coordinates },
     linkedWalletAddress,
     contractAddress: record.mintedContractAddress,
     tokenId: record.mintedTokenId,
-    chain: {
-      chainId: config.chainId,
-      name: config.chainName,
-      rpcUrl: config.rpcUrl,
-      blockExplorerUrl: config.blockExplorerUrl,
-      nativeCurrency: {
-        name: 'Ether',
-        symbol: 'ETH',
-        decimals: 18,
-      },
-    },
+    chain,
     transaction: {
       to: record.mintedContractAddress,
       data: encodeFunctionData({
@@ -244,18 +232,8 @@ export async function handleRoomTokenMetadataConfirm(
     throw new HttpError(403, 'The linked wallet does not own the minted room token.');
   }
 
-  await persistRoomTokenMetadataState(
-    env,
-    record,
-    {
-      tokenId: metadataState.tokenId,
-      ownerWalletAddress: metadataState.ownerWalletAddress,
-      metadataRoomVersion: body.metadataRoomVersion,
-      metadataHash: metadataState.metadataHash,
-      updatedAt: metadataState.updatedAt,
-    },
-    auth.user
-  );
+  // The browser's version is advisory; only the verified on-chain payload is persisted.
+  await persistRoomTokenMetadataState(env, record, metadataState);
 
   const updated = await loadRoomRecord(
     env,

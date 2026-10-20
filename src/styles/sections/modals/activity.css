@@ -1,204 +1,294 @@
-.activity-bell {
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  position: relative;
-  display: grid;
-  place-items: center;
-  pointer-events: auto;
-  color: var(--wamp-ink);
-  background: var(--wamp-sky);
-  border: 2px solid var(--wamp-ink);
-  border-radius: 0;
-  box-shadow: var(--shadow-2);
-  cursor: pointer;
-}
-.activity-badge {
-  position: absolute;
-  right: -4px;
-  top: -4px;
-  min-width: 20px;
-  padding: 2px;
-  border: 2px solid var(--wamp-ink);
-  font: 11px/1.2 'HomeVideo', 'IBM Plex Mono', monospace;
-  color: var(--wamp-ink);
-  background: #ffe66b;
-}
-#activity-modal {
-  width: 100dvw;
-  height: 100dvh;
-  right: auto;
-  bottom: auto;
-  background: var(--wamp-ink);
-}
-#activity-modal .activity-panel {
-  width: min(720px, calc(100vw - 24px));
-  max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
-  min-height: 0;
-  gap: 16px;
-  padding: 20px;
-  overflow: hidden;
-  background: var(--wamp-cream);
-  border: 3px solid var(--wamp-sky);
-  border-radius: 0;
-  box-shadow: 6px 6px 0 #0b0b0b;
-  color: var(--wamp-ink);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.5;
-}
-#activity-modal .history-modal-header {
-  flex-direction: row;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 12px;
-}
-#activity-modal .history-modal-title {
-  margin: 0;
-  color: var(--wamp-ink);
-  font-family: var(--font-display);
-  font-size: 16px;
-  line-height: 1.5;
-  font-synthesis: none;
-}
-.activity-tabs {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--wamp-ink);
-}
-#activity-modal .bar-btn {
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 2px solid var(--wamp-ink);
-  border-radius: 0;
-  box-shadow: var(--shadow-2);
-  background: var(--wamp-sky);
-  color: var(--wamp-ink);
-  font: 400 12px/1.35 'HomeVideo', 'IBM Plex Mono', monospace;
-  text-transform: uppercase;
-}
-#activity-modal .activity-tabs .bar-btn { background: #fffaee; }
-#activity-modal .activity-tabs .bar-btn.active { background: #ffe66b; }
-#activity-modal .bar-btn:disabled {
-  opacity: 1;
-  background: var(--wamp-disabled-surface);
-  color: var(--wamp-disabled-text);
-  box-shadow: none;
-  cursor: not-allowed;
-}
-#activity-modal button:focus-visible,
-#activity-modal a:focus-visible,
-#activity-modal summary:focus-visible,
-#activity-modal input:focus-visible,
-.activity-bell:focus-visible {
-  outline: 3px solid var(--wamp-sky-deep);
-  outline-offset: 3px;
-}
-.activity-scroll {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  min-height: 0;
-  padding: 0 4px 4px 0;
-}
-#activity-modal .history-modal-meta {
-  margin: 6px 0 0;
-  color: var(--wamp-sky-deep);
-  font: 11px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
-}
-#activity-status:empty { display: none; }
-.activity-list { list-style: none; padding: 0; margin: 0 0 16px; }
-.activity-row {
-  padding: 12px;
-  margin-top: 12px;
-  border-left: 4px solid #2e7d32;
-  border-bottom: 1px solid #c0b7a2;
-  overflow-wrap: anywhere;
-}
-.activity-row[data-kind='rating'] { border-left-color: #b07d12; }
-.activity-row[data-kind='comment'] { border-left-color: var(--wamp-sky-deep); }
-.activity-row[data-kind='top1'],
-.activity-row[data-kind='dethroned'] { border-left-color: #c63d31; }
-.activity-row a {
-  color: var(--wamp-ink);
-  font-size: 12px;
-  line-height: 1.6;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.activity-row a:hover { background: #ffe66b; }
-.activity-actor-link {
-  display: block;
-  max-width: 100%;
-  min-height: 44px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--wamp-sky-deep);
-  font: inherit;
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.activity-actor-link:hover { color: var(--wamp-ink); }
-.activity-guest-header {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--wamp-ink);
-}
-.activity-guest-name { margin: 0; min-width: 0; font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
-.activity-email-options {
-  border-top: 2px solid var(--wamp-ink);
-  margin-top: 20px;
-  padding-top: 12px;
-}
-.activity-email-options summary {
-  min-height: 44px;
-  padding: 10px 0;
-  cursor: pointer;
-  font-weight: 400;
-  text-transform: uppercase;
-}
-.activity-preferences { border: 0; margin: 0; padding: 0; min-width: 0; }
-.activity-preferences legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-.activity-preferences label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.activity-preferences input { width: 20px; height: 20px; flex: 0 0 20px; accent-color: #2e7d32; }
-#activity-modal #activity-preferences-status { margin-bottom: 12px; }
-.activity-catchup {
-  font: 12px/1.5 'HomeVideo', 'IBM Plex Mono', monospace;
-  color: var(--wamp-ink);
-  border: 2px solid var(--wamp-ink);
-  background: #ffe66b;
-  padding: 6px 10px;
-  min-height: 44px;
-  pointer-events: auto;
-  cursor: pointer;
-}
-@media (max-width: 600px) {
-  #activity-modal { padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom)); }
-  #auth-panel:has(.activity-bell:not(.hidden)) #auth-identity { max-width: min(200px, calc(100vw - 148px - var(--safe-left) - var(--safe-right))); }
-  body[data-device-class='phone'] #auth-panel:has(.activity-bell:not(.hidden)) { width: calc(100dvw - 16px - var(--safe-left) - var(--safe-right)); }
-  #activity-modal .activity-panel { padding: 12px; gap: 12px; }
-  #activity-modal .activity-tabs .bar-btn { flex: 1; min-width: 0; padding: 10px 8px; }
+@layer components {
+  .activity-bell {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    position: relative;
+    display: grid;
+    place-items: center;
+    pointer-events: auto;
+    color: var(--wamp-ink);
+    background: var(--wamp-sky);
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    box-shadow: var(--shadow-2);
+    cursor: pointer;
+  }
+
+  .activity-badge {
+    position: absolute;
+    right: -4px;
+    top: -4px;
+    min-width: 20px;
+    padding: 2px;
+    border: 2px solid var(--wamp-ink);
+    font: var(--ui-text-small, 11px)/1.2 var(--font-activity);
+    color: var(--wamp-ink);
+    background: #ffe66b;
+  }
+
+  #activity-modal {
+    width: 100dvw;
+    height: 100dvh;
+    right: auto;
+    bottom: auto;
+    background: var(--wamp-ink);
+  }
+
+  #activity-modal .activity-panel {
+    width: min(720px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+    min-height: 0;
+    gap: 16px;
+    padding: 20px;
+    overflow: hidden;
+    background: var(--wamp-cream);
+    border: 3px solid var(--wamp-sky);
+    border-radius: 0;
+    box-shadow: 6px 6px 0 #0b0b0b;
+    color: var(--wamp-ink);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.5;
+  }
+
+  #activity-modal .history-modal-header {
+    flex-direction: row;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 12px;
+  }
+
+  #activity-modal .history-modal-title {
+    margin: 0;
+    color: var(--wamp-ink);
+    font-family: var(--font-display);
+    font-size: var(--ui-text-title, 16px);
+    line-height: 1.5;
+    font-synthesis: none;
+  }
+
+  .activity-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--wamp-ink);
+  }
+
+  #activity-modal .bar-btn {
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    box-shadow: var(--shadow-2);
+    background: var(--wamp-sky);
+    color: var(--wamp-ink);
+    font: 400 var(--ui-text-body, 12px)/1.35 var(--font-activity);
+    text-transform: uppercase;
+  }
+
+  #activity-modal .activity-tabs .bar-btn {
+    background: #fffaee;
+  }
+
+  #activity-modal .activity-tabs .bar-btn.active {
+    background: #ffe66b;
+  }
+
+  #activity-modal .bar-btn:disabled {
+    opacity: 1;
+    background: var(--wamp-disabled-surface);
+    color: var(--wamp-disabled-text);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  #activity-modal button:focus-visible,
+  #activity-modal a:focus-visible,
+  #activity-modal summary:focus-visible,
+  #activity-modal input:focus-visible,
+  .activity-bell:focus-visible {
+    outline: 3px solid var(--wamp-sky-deep);
+    outline-offset: 3px;
+  }
+
+  .activity-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
+    padding: 0 4px 4px 0;
+  }
+
+  #activity-modal .history-modal-meta {
+    margin: 6px 0 0;
+    color: var(--wamp-sky-deep);
+    font: var(--ui-text-small, 11px)/1.5 var(--font-activity);
+  }
+
+  #activity-status:empty {
+    display: none;
+  }
+
+  .activity-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px;
+  }
+
+  .activity-row {
+    padding: 12px;
+    margin-top: 12px;
+    border-left: 4px solid #2e7d32;
+    border-bottom: 1px solid #c0b7a2;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-row[data-kind='rating'] {
+    border-left-color: #b07d12;
+  }
+
+  .activity-row[data-kind='comment'] {
+    border-left-color: var(--wamp-sky-deep);
+  }
+
+  .activity-row[data-kind='top1'],
+  .activity-row[data-kind='dethroned'] {
+    border-left-color: #c63d31;
+  }
+
+  .activity-row a {
+    color: var(--wamp-ink);
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.6;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .activity-row a:hover {
+    background: #ffe66b;
+  }
+
+  .activity-actor-link {
+    display: block;
+    max-width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wamp-sky-deep);
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .activity-actor-link:hover {
+    color: var(--wamp-ink);
+  }
+
+  .activity-guest-header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--wamp-ink);
+  }
+
+  .activity-guest-name {
+    margin: 0;
+    min-width: 0;
+    font-size: var(--ui-text-body, 12px);
+    font-weight: 400;
+    overflow-wrap: anywhere;
+  }
+
+  .activity-email-options {
+    border-top: 2px solid var(--wamp-ink);
+    margin-top: 20px;
+    padding-top: 12px;
+  }
+
+  .activity-email-options summary {
+    min-height: 44px;
+    padding: 10px 0;
+    cursor: pointer;
+    font-weight: 400;
+    text-transform: uppercase;
+  }
+
+  .activity-preferences {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  .activity-preferences legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .activity-preferences label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.5;
+  }
+
+  .activity-preferences input {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    accent-color: #2e7d32;
+  }
+
+  #activity-modal #activity-preferences-status {
+    margin-bottom: 12px;
+  }
+
+  .activity-catchup {
+    font: var(--ui-text-body, 12px)/1.5 var(--font-activity);
+    color: var(--wamp-ink);
+    border: 2px solid var(--wamp-ink);
+    background: #ffe66b;
+    padding: 6px 10px;
+    min-height: 44px;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  @media (max-width: 600px) {
+    #activity-modal {
+      padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));
+    }
+
+    #auth-panel:has(.activity-bell:not(.hidden)) #auth-identity {
+      max-width: min(200px, calc(100vw - 148px - var(--safe-left) - var(--safe-right)));
+    }
+
+    body[data-device-class='phone'] #auth-panel:has(.activity-bell:not(.hidden)) {
+      width: calc(100dvw - 16px - var(--safe-left) - var(--safe-right));
+    }
+
+    #activity-modal .activity-panel {
+      padding: 12px;
+      gap: 12px;
+    }
+
+    #activity-modal .activity-tabs .bar-btn {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 8px;
+    }
+  }
 }
