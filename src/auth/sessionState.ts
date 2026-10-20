@@ -91,7 +91,8 @@ export function transitionAuthState(state: AuthDebugState, event: AuthTransition
         roomClaimsRemainingToday: session.roomClaimsRemainingToday ?? null,
         chatModeration: normalizeChatModerationViewer(session.chatModeration),
         status: session.authenticated
-          ? state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status) ? '' : state.status
+          ? state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)
+            || state.status === 'Signed out.' || state.status === 'Signed out on all devices.' ? '' : state.status
           : event.preserveGuestStatus ? state.status : DEFAULT_GUEST_STATUS,
       };
     }

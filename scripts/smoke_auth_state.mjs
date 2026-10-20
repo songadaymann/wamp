@@ -24,7 +24,8 @@ for (const [name, engine, width, height, touch] of [
     if (new URL(base).hostname === '127.0.0.1') await context.routeWebSocket(u => new URL(u).hostname === '127.0.0.1' && new URL(u).port === new URL(base).port && new URL(u).pathname === '/', s => s.connectToServer());
     const user = { id: 'auth-smoke-account', email: 'player@example.invalid', walletAddress: null, displayName: 'Auth player' };
     const guest = () => ({ authenticated: false, user: null, source: null, partykitHost: '', walletProjectId: null });
-    let session = guest(), sessionFailed = false, rejectLink = true, rejectLogout = true;
+    let session = guest(), sessionFailed = false, rejectLink = true, rejectLogout = true, rejectLogoutAll = true;
+    let holdNextSession = false, releaseSession = null, sessionHeld = null;
     const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [];
     let schoolNavigationStarted = false, schoolRedirectPending = false;
     const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin,
@@ -36,6 +37,12 @@ for (const [name, engine, width, height, touch] of [
       if (method === 'OPTIONS') return reply({}, 204);
       if (path === '/api/auth/session') {
         reads.push(path);
+        if (holdNextSession) {
+          holdNextSession = false;
+          const snapshot = structuredClone(session);
+          await new Promise(resolve => { releaseSession = resolve; sessionHeld(); });
+          return reply(snapshot);
+        }
         return sessionFailed ? reply({ error: 'Session unavailable.' }, 503) : reply(session);
       }
       const body = r.request().postDataJSON(); writes.push({ path, method, body });
@@ -52,6 +59,10 @@ for (const [name, engine, width, height, touch] of [
       }
       if (path === '/api/auth/logout') {
         if (rejectLogout) return reply({ error: 'Try signing out again.' }, 503);
+        session = guest(); return reply({ ok: true });
+      }
+      if (path === '/api/auth/logout-all') {
+        if (rejectLogoutAll) return reply({ error: 'Could not sign out all devices. Try again.' }, 503);
         session = guest(); return reply({ ok: true });
       }
       throw new Error(`Unexpected auth request ${method} ${path}`);
@@ -122,11 +133,38 @@ for (const [name, engine, width, height, touch] of [
       const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/session');
       await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await response;
     };
+    const holdRefresh = async () => {
+      holdNextSession = true;
+      const held = new Promise(resolve => { sessionHeld = resolve; });
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await Promise.race([held, new Promise((_, reject) => {
+        const timer = setTimeout(() => reject(new Error('Session response was not held')), 30_000);
+        timer.unref();
+      })]);
+    };
+    const releaseRefresh = async () => {
+      const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/auth/session');
+      releaseSession();
+      await (await response).finished();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.evaluate(() => window.__authState.authenticated), false, 'A delayed session response must not undo logout');
+    };
     const menu = async () => {
       if (!await page.locator('#btn-auth-email').isVisible() && !await page.locator('#btn-auth-logout').isVisible()) {
         await click('#menu-toggle');
         await page.waitForFunction(() => document.getElementById('auth-panel').classList.contains('menu-open'));
       }
+    };
+    const logoutAll = async accepted => {
+      await menu();
+      const target = await page.locator('#btn-auth-logout-all').boundingBox();
+      assert.ok(target && target.height >= 44);
+      const opened = page.waitForEvent('dialog');
+      const clicked = click('#btn-auth-logout-all');
+      const dialog = await opened;
+      assert.equal(dialog.type(), 'confirm'); assert.match(dialog.message(), /all devices.*sign in again/);
+      if (accepted) await dialog.accept(); else await dialog.dismiss();
+      await clicked;
     };
     const emailOptions = async () => {
       await menu();
@@ -173,12 +211,39 @@ for (const [name, engine, width, height, touch] of [
     await menu(); await click('#btn-auth-logout');
     await waitState(() => !window.__authState.loading && window.__authState.status === 'Try signing out again.');
     assert.equal(await page.evaluate(() => window.__authState.authenticated), true);
-    rejectLogout = false; await menu(); await click('#btn-auth-logout');
+    rejectLogout = false; await menu(); await holdRefresh(); await click('#btn-auth-logout');
     await waitState(() => !window.__authState.loading && !window.__authState.authenticated);
     assert.deepEqual(await page.evaluate(() => [window.__authState.roomDailyClaimLimit, window.__authState.roomClaimsUsedToday, window.__authState.roomClaimsRemainingToday]), [null, 0, null]);
+    await releaseRefresh();
     console.log(`${name}: signed out`);
+    session = { ...guest(), authenticated: true, user, source: 'session', roomDailyClaimLimit: 5,
+      roomClaimsUsedToday: 3, roomClaimsRemainingToday: 2 };
+    await refresh(); await waitState(() => window.__authState.authenticated && window.__authState.roomClaimsUsedToday === 3);
+    assert.equal(await page.evaluate(() => window.__authState.status), '');
+    const beforeLogoutAll = writes.filter(w => w.path === '/api/auth/logout-all').length;
+    await logoutAll(false);
+    assert.equal(writes.filter(w => w.path === '/api/auth/logout-all').length, beforeLogoutAll);
+    assert.equal(await page.evaluate(() => window.__authState.authenticated), true);
+    await logoutAll(true);
+    await waitState(() => !window.__authState.loading && window.__authState.status === 'Could not sign out all devices. Try again.');
+    assert.equal(await page.evaluate(() => window.__authState.authenticated), true);
+    assert.equal(await page.evaluate(() => window.__authState.roomClaimsUsedToday), 3);
+    rejectLogoutAll = false;
+    await menu(); await page.locator('#btn-auth-logout-all').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${output}/${name}-logout-all.png` });
+    await holdRefresh();
+    await logoutAll(true);
+    await waitState(() => !window.__authState.loading && !window.__authState.authenticated);
+    assert.deepEqual(await page.evaluate(() => [window.__authState.user, window.__authState.source,
+      window.__authState.roomDailyClaimLimit, window.__authState.roomClaimsUsedToday,
+      window.__authState.roomClaimsRemainingToday, window.__authState.chatModeration.role]), [null, null, null, 0, null, 'none']);
+    assert.equal(await page.evaluate(() => window.__authState.status), 'Signed out on all devices.');
+    assert.equal(writes.filter(w => w.path === '/api/auth/logout-all').length, beforeLogoutAll + 2);
+    await releaseRefresh();
+    console.log(`${name}: all-device logout passed`);
     session = { ...guest(), authenticated: true, user: { ...user, email: null, walletAddress: '0x1234567890123456789012345678901234567890' }, source: 'session' };
     await refresh(); await waitState(() => window.__authState.authenticated && window.__authState.user.email === null);
+    assert.equal(await page.evaluate(() => window.__authState.status), '');
     await emailOptions(); assert.equal(await page.locator('#btn-auth-email').textContent(), 'Add Email');
     await sendCode(); await verifyCode('654321');
     await waitState(() => window.__authState.user?.email === 'player@example.invalid');
@@ -202,8 +267,9 @@ for (const [name, engine, width, height, touch] of [
     }
     await page.screenshot({ path: `${output}/${name}-linked.png` });
     session = guest(); await refresh(); await waitState(() => !window.__authState.authenticated && window.__authState.user === null);
-    session = { ...guest(), authenticated: true, user: { ...user, email: null }, source: 'session', schoolManaged: true,
+    const schoolSession = { ...guest(), authenticated: true, user: { ...user, email: null }, source: 'session', schoolManaged: true,
       school: { classroomId: 'class', classroomSlug: 'music class', classroomName: 'Music', studentId: 'student', studentUsername: 'student1' } };
+    session = schoolSession;
     await refresh(); await waitState(() => window.__authState.schoolManaged);
     await menu(); assert.equal(await page.locator('#auth-email-row').isVisible(), false);
     assert.equal(await page.locator('#btn-auth-wallet').isVisible(), false);
@@ -214,6 +280,13 @@ for (const [name, engine, width, height, touch] of [
     schoolRedirectPending = true;
     await click('#btn-auth-logout'); await page.waitForURL('**/school-login.html?classroom=music%20class');
     assert.equal(schoolNavigationStarted, true);
+    schoolRedirectPending = false; schoolNavigationStarted = false; session = schoolSession;
+    await page.goto(`${base}/?welcome=0&renderer=${renderer}`);
+    await page.waitForFunction(() => document.body.dataset.appReady === 'true');
+    await waitState(() => window.__authState?.schoolManaged);
+    await menu(); schoolRedirectPending = true;
+    await logoutAll(true); await page.waitForURL('**/school-login.html?classroom=music%20class');
+    assert.equal(schoolNavigationStarted, true);
     const fixtures = api.report();
     writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, schoolNavigationStarted }, null, 2));
     assert.equal(errors.length, 0, JSON.stringify(errors)); assert.deepEqual(fixtures.misses, {});
@@ -221,7 +294,8 @@ for (const [name, engine, width, height, touch] of [
     assert.ok(expected.some(e => e.startsWith('Failed to sign out')));
     assert.ok(expected.some(e => e.startsWith('Failed to load auth session')));
     reports.push({ name, ok: true, emailSignIn: true, linkEmail: true, expiry: true, networkRecovery: true,
-      failedAndSuccessfulLogout: true, schoolRedirect: true, summaryTouches, writes: writes.length, sessionReads: reads.length,
+      failedAndSuccessfulLogout: true, logoutAllCancelFailureSuccess: true, staleSessionAfterLogout: true, schoolRedirect: true,
+      schoolLogoutAllRedirect: true, summaryTouches, writes: writes.length, sessionReads: reads.length,
       errors, unloadResourceReports, fixtureMisses: fixtures.misses, expectedFailureReports: expected.length });
     console.log(`${name}: auth state flows passed`);
     await context.close();
