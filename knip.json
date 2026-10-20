@@ -135,7 +135,8 @@
     "scripts/smoke_map_capture.mjs",
     "scripts/smoke_mint_network_service.mjs",
     "scripts/smoke_mint_network.mjs",
-    "scripts/smoke_room_ownership.mjs"
+    "scripts/smoke_room_ownership.mjs",
+    "scripts/smoke_room_artwork.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

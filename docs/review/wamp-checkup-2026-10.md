@@ -1,3 +1,5 @@
+**October20 F241 complete:** [PR264](https://github.com/songadaymann/wamp/pull/264), main9ba9670b / Pages20aef339, is verified live: buyers can check current ownership and enter the editor; sellers are rechecked, original builder credit and group authoring rights preserved. Full4,869 tests, all12 source/main checks and160 browser cases/head; guarded first-attempt API+Pages release, exact API/55 files per domain and28 actual-domain isolated flows. Master172/216; full goal active. [Receipt](wamp-owner-edit-refresh-2026-10-20.md).
+
 **October20 F248 complete:** [PR263](https://github.com/songadaymann/wamp/pull/263), mainba899969 / Pages896767fd, is live: explicit mint networks and verified server reads;4,820 tests, all12 checks and132 browser cases/head; guarded API+Pages, exact API/55 assets per domain and24 live preview cases. Master171/216; full goal active. [Receipt](wamp-mint-network-safety-2026-10-20.md).
 
 **October20 F050 complete:** [PR261](https://github.com/songadaymann/wamp/pull/261) / [daily-recovery follow-up](https://github.com/songadaymann/wamp/pull/262), main b720f143 / Pages 75960fe8, is live:4,787 tests, all11 checks and108 browser cases/head, migration0067, map then full guarded API+Pages release, exact deployed Worker/41 assets per domain and real public archives. Master170/216; full goal active. [Receipt](wamp-map-capture-2026-10-19.md).
@@ -72,7 +74,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 166 of 216 done.**
+**Progress: 172 of 216 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -384,7 +386,7 @@ The music system has a lovely, builder-friendly design. Playback and the editor 
 
 The contract and server checks are carefully designed. The everyday experience around them has rough edges: buyers locked out, blank NFTs, lost confirmations, and smart wallets that can't sign in.
 
-- [ ] **F241** After a sale or transfer, the new owner cannot reach the editor, and the seller keeps the credit · medium impact · small effort
+- [x] **F241** After a sale or transfer, the new owner cannot reach the editor · medium impact · small effort — **done2026-10-20**, [PR264](https://github.com/songadaymann/wamp/pull/264), main9ba9670b. Explicit fresh ownership/permission checks unblock buyers and deny sellers; acquired Expanded cells get room-only access. Original builder credit is intentionally preserved; ownership/profile product work remainsF246. Full4,869 tests,12 checks/160 browser cases per head, guarded API+Pages and exact live proof pass. [Receipt](wamp-owner-edit-refresh-2026-10-20.md).
 - [ ] **F237** 4 of the 11 real NFTs have no metadata at all because minting skips the artwork step · medium impact · small effort
 - [ ] **F239** A lost mint confirmation (phone backgrounded, tab closed, 3-minute timeout) leaves the room looking unminted, with no automatic recovery · medium impact · small effort
 - [ ] **F238** Smart-account wallets (Google/email login in the wallet popup, Coinbase Smart Wallet) cannot sign in or mint · medium impact · small effort

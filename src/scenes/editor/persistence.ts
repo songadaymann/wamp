@@ -1,8 +1,9 @@
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../../buildPrompts/publishing';
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
-import { getAuthDebugState } from '../../auth/client';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
 import { requestRoomPublishName, suggestRoomTitle } from '../../publishing/events';
 import { capturePublishProgression, reportPublishProgression } from '../../publishing/feedback';
+import { RoomCollectionFlow, type RoomCollectionFlowHost } from './roomCollectionFlow';
 import type {
   RoomPermissions,
   RoomRecord,
@@ -25,6 +26,9 @@ interface SaveDraftOptions {
 }
 
 interface EditorPersistenceControllerHost {
+  isActive?(): boolean;
+  events?: RoomCollectionFlowHost['events'];
+  refreshUi?(): void;
   getRoomPermissions(): RoomPermissions;
   getRoomTitle(): string | null;
   setRoomTitle(title: string | null): void;
@@ -40,10 +44,35 @@ interface EditorPersistenceControllerHost {
 
 export class EditorPersistenceController {
   private publishing = false;
+  private readonly collection: RoomCollectionFlow;
   constructor(
     private readonly roomSession: EditorRoomSession,
     private readonly host: EditorPersistenceControllerHost,
-  ) {}
+  ) {
+    this.collection = new RoomCollectionFlow({
+      captureContext: () => roomSession.captureContext(),
+      isActive: () => host.isActive?.() ?? true,
+      events: host.events,
+      watchIdentity: callback => {
+        window.addEventListener(AUTH_STATE_CHANGED_EVENT, callback);
+        return () => window.removeEventListener(AUTH_STATE_CHANGED_EVENT, callback);
+      },
+      getIdentity: () => { const auth = getAuthDebugState(); return {
+        userId: auth.authenticated ? auth.user?.id ?? null : null,
+        wallet: auth.authenticated ? auth.user?.walletAddress ?? null : null,
+      }; },
+      mint: options => roomSession.mintRoom(options),
+      artwork: options => roomSession.refreshMintMetadata(options),
+      canAddArtwork: () => roomSession.getHistoryState().canRefreshMintMetadata,
+      isArtworkSubmitted: () => roomSession.hasPendingArtworkConfirmation,
+      onStateChanged: () => host.refreshUi?.(),
+      onArtworkPending: status => showBusyError(status.text, { title: 'Room collected', closeLabel: 'Back to room' }),
+      getStatus: () => roomSession.statusDetails,
+      setStatus: status => roomSession.setStatusDetails(status),
+    });
+  }
+
+  get isCollecting(): boolean { return this.collection.isCollecting; }
 
   get statusText(): string {
     return this.roomSession.statusText;
@@ -70,7 +99,7 @@ export class EditorPersistenceController {
   }
 
   maybeAutoSave(isPlaying: boolean): void {
-    if (this.publishing) return;
+    if (this.publishing || this.isCollecting) return;
     this.roomSession.maybeAutoSave(isPlaying);
   }
 
@@ -104,6 +133,7 @@ export class EditorPersistenceController {
     force: boolean = false,
     options?: SaveDraftOptions,
   ): Promise<RoomRecord | null> {
+    if (this.isCollecting) return null;
     recordReplayEditorAction('save_attempt');
     const record = await this.roomSession.saveDraft(force, options);
     if (record?.draft) recordReplayEditorAction('draft_saved');
@@ -114,7 +144,7 @@ export class EditorPersistenceController {
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    if (this.publishing) return null;
+    if (this.publishing || this.isCollecting) return null;
     recordReplayEditorAction('publish_attempt');
     const publishValidationError = this.roomSession.getPublishValidationError();
     if (publishValidationError) {
@@ -188,11 +218,13 @@ export class EditorPersistenceController {
   }
 
   async mintRoom(): Promise<RoomRecord | null> {
-    return this.roomSession.mintRoom();
+    if (this.publishing) return null;
+    return this.collection.collect();
   }
 
   async refreshMintMetadata(): Promise<RoomRecord | null> {
-    return this.roomSession.refreshMintMetadata();
+    if (this.publishing) return null;
+    return this.collection.addArtwork();
   }
 
   async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {

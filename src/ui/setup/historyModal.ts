@@ -581,8 +581,8 @@ export class RoomHistoryModalController {
       );
       this.elements.refreshMetadataButton.disabled = this.hasPendingAction();
       this.elements.refreshMetadataButton.textContent = refreshing
-        ? 'Refreshing...'
-        : 'Refresh NFT Metadata';
+        ? 'Updating artwork...'
+        : 'Add/update artwork';
     }
     if (this.elements.restoreCanonicalButton) {
       const canonicalCurrent =
