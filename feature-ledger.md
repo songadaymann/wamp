@@ -1,5 +1,14 @@
 ## 2026-10-20 — F237 artwork plan and keyless chain audit
 
+## 2026-10-20 — F242 verified live; F239 recovery next
+
+PR266/main6d75801b is complete: source/main all12 checks and200 browser cases/head,589files/4,951tests;205-file preview and12 hosted History cases. The five reviewed metadata-cache corrections are applied and verified through public API; tokens1/2/3/10 current,4 genuinely stalev3/roomv8. No wallet key/signature/transaction or production player/account/comment mutation. Full clean-main API+Pages guard passes, API68b3ae99 exactly matches tested code and map099b18fd is unchanged; Pages187f9bb2 and custom domain match56 files. All12 actual-domain History cases and real read-only startup pass; captures inspected. Master173/216; F242 checked. Receipt: docs/review/wamp-metadata-reconcile-2026-10-20.md, ignored delivery.json/releaseComplete=true.
+
+The first main WebKit post-school-navigation Context-is-stopped report remains undiagnosed; unchanged local diagnostics and the one controlled exact-main CI recheck pass, with original failure and accepted job provenance retained. No assertion/deadline/error suppression changed. First guard published then hit immediate bundle404; full smoke/byte rechecks pass, followed by an unchanged full guard rerun exit0 and final live audit. First logs are retained; cache repairs were not repeated. These final facts supersede pending entries below.
+
+Next branch codex/wamp-wallet-recovery-2026-10-20 from verified main, plus this receipt checkpoint. F239 needs durable capture before receipt waiting, finite recovery on load/visibility/check-again, dismissible wallet waits, context/signer fencing and no second send for unknown outcomes. Read current full plan before implementation; no recovery code has been changed yet. F237 six paid legacy repairs remain unsigned; inspect F244 quality/play links before a final concrete signing proposal. Keep full goal active and preserve unrelated dirty primary/mann.cool, user Chrome/TAS4208, selected animation, declined F061/F118, physical iOS F089 and decision-gated F145/F243/F167.
+
+
 ## 2026-10-20 — F242 local acceptance; source gates next
 
 Canonical codex/wamp-metadata-reconcile-2026-10-20, base verified main3ad1f213. Fresh explicit ownership reads reconcile canonical URI/hash/version at one pinned block, with the existing finite deadline and no extra idle/tolerant-save reads. Confirmation uses the chain version; guarded metadata-only writes preserve identity/cache races. A keyless dry-run-first CLI revalidates plan digest, chain and old cache, checkpoints pending/acknowledged writes and checks the resulting chain/cache. All11 mappings read; five historical artwork-cache repairs proposed, none applied. No wallet key, signature, real transaction or production account/comment mutation.
