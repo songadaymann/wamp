@@ -17,6 +17,25 @@ vi.mock('phaser', () => ({
 }));
 
 describe('NPC path handling', () => {
+  it('pushes only active dynamic NPCs in awake rooms, and skips a missing player', () => {
+    let player: object | null = {};
+    const controller = new LiveObjectNpcController({ getPlayerBody: () => player } as never);
+    const push = vi.spyOn(controller, 'applyPlayerPush').mockImplementation(() => {});
+    const body = { enable: true, velocity: {}, setAllowGravity: vi.fn() };
+    const npc = { config: { category: 'npc' }, sprite: { active: true, body } };
+    const rooms = [{ runtimeSuspended: true, liveObjects: [npc] }, { liveObjects: [
+      npc,
+      { ...npc, config: { category: 'enemy' } },
+      { ...npc, sprite: { active: false, body } },
+      { ...npc, sprite: { active: true, body: { enable: true } } },
+      { ...npc, sprite: { active: true, body: { ...body, enable: false } } },
+    ] }];
+    controller.pushFromPlayer(rooms as never);
+    expect(push).toHaveBeenCalledExactlyOnceWith(npc, body, player);
+    push.mockClear(); player = null;
+    controller.pushFromPlayer(rooms as never);
+    expect(push).not.toHaveBeenCalled();
+  });
   it('lets a walking NPC continue over an unsupported edge', () => {
     const controller = new LiveObjectNpcController({
       scene: { anims: { exists: () => false } },

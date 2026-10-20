@@ -989,26 +989,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   pushNpcsFromPlayer(): void {
-    const playerBody = this.options.getPlayerBody();
-    if (!playerBody) {
-      return;
-    }
-
-    for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      if (loadedRoom.runtimeSuspended === true) {
-        continue;
-      }
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (liveObject.config.category !== 'npc' || !liveObject.sprite.active) {
-          continue;
-        }
-        const body = this.getDynamicBody(liveObject.sprite);
-        if (!body?.enable) {
-          continue;
-        }
-        this.npcController.applyPlayerPush(liveObject, body, playerBody);
-      }
-    }
+    this.npcController.pushFromPlayer(this.options.getLoadedFullRooms());
   }
 
   /** Behaviors and settings are constant, so each flying behavior's motion is worked out once (F012). */

@@ -8,7 +8,7 @@ import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
-import { getArcadeBodyBounds } from './bodies';
+import { getArcadeBodyBounds, isDynamicArcadeBody, type ArcadeObjectBody } from './bodies';
 import { carryPlayerOnMovingPlatform } from './movingPlatforms';
 import {
   resolveNpcHorizontalVelocity,
@@ -151,6 +151,20 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       this.containNpcInRoom(loadedRoom.room, liveObject, body, mode);
     }
     this.syncNameLabel(liveObject);
+  }
+
+  pushFromPlayer(rooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody) return;
+    for (const loadedRoom of rooms) {
+      if (loadedRoom.runtimeSuspended === true) continue;
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (liveObject.config.category !== 'npc' || !liveObject.sprite.active) continue;
+        const body = liveObject.sprite.body as ArcadeObjectBody | null;
+        if (!isDynamicArcadeBody(body) || !body.enable) continue;
+        this.applyPlayerPush(liveObject, body, playerBody);
+      }
+    }
   }
 
   applyPlayerPush(
