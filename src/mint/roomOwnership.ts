@@ -150,6 +150,7 @@ export const ROOM_OWNERSHIP_TOKEN_ABI = [
 export interface RoomMintChainInfo {
   chainId: number;
   name: string;
+  /** Public endpoint for wallet network setup, independent of the server transport. */
   rpcUrl: string;
   blockExplorerUrl: string | null;
   nativeCurrency: {

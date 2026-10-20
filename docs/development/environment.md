@@ -91,3 +91,4 @@ CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES=20
 - Worker and PartyKit must share the same presence identity signing secret.
 - Leave optional moderation/upload/mint values blank unless you are testing that subsystem.
 - Prefer the hosting provider's secret store for deployed environments.
+- `ROOM_MINT_RPC_URL` is the server-only blockchain transport and may use a private provider. Wallet network setup receives the public Base RPC for chain8453 or84532, never this setting. Other chain IDs cannot prepare wallet transactions until an explicit public endpoint is supported.

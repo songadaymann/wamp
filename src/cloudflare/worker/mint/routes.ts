@@ -13,6 +13,7 @@ import { requireWalletLinkedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { loadRoomRecord, loadRoomRecordForMutation } from '../rooms/store';
+import { buildWalletMintChainInfo } from './walletChainInfo';
 import {
   loadRoomMintPriceWei,
   persistRoomTokenMetadataState,
@@ -31,6 +32,7 @@ export async function handleRoomMintPrepare(
 ): Promise<Response> {
   const auth = await requireWalletLinkedRequestAuth(env, request, 'mint rooms', 'rooms:write');
   const config = requireRoomMintConfig(env);
+  const chain = buildWalletMintChainInfo(config);
   const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!record.published) {
@@ -66,17 +68,7 @@ export async function handleRoomMintPrepare(
     linkedWalletAddress,
     contractAddress: config.contractAddress,
     priceWei,
-    chain: {
-      chainId: config.chainId,
-      name: config.chainName,
-      rpcUrl: config.rpcUrl,
-      blockExplorerUrl: config.blockExplorerUrl,
-      nativeCurrency: {
-        name: 'Ether',
-        symbol: 'ETH',
-        decimals: 18,
-      },
-    },
+    chain,
     transaction: {
       to: config.contractAddress,
       data: encodeFunctionData({
@@ -154,6 +146,7 @@ export async function handleRoomTokenMetadataPrepare(
   );
   const config = requireRoomMintConfig(env);
   const body = await parseRoomMetadataRefreshPrepareBody(request);
+  const chain = buildWalletMintChainInfo(config);
   const record = await loadRoomRecordForMutation(env, roomId, coordinates, auth.user, false, 'throw');
 
   if (!isRoomMinted(record) || !record.mintedTokenId || !record.mintedContractAddress) {
@@ -182,17 +175,7 @@ export async function handleRoomTokenMetadataPrepare(
     linkedWalletAddress,
     contractAddress: record.mintedContractAddress,
     tokenId: record.mintedTokenId,
-    chain: {
-      chainId: config.chainId,
-      name: config.chainName,
-      rpcUrl: config.rpcUrl,
-      blockExplorerUrl: config.blockExplorerUrl,
-      nativeCurrency: {
-        name: 'Ether',
-        symbol: 'ETH',
-        decimals: 18,
-      },
-    },
+    chain,
     transaction: {
       to: record.mintedContractAddress,
       data: encodeFunctionData({
