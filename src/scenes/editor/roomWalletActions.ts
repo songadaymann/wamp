@@ -2,8 +2,7 @@ import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn, refreshAu
 import { WalletTransactionRevertedError } from '../../auth/walletTransaction';
 import { cloneRoomSnapshot, createRoomRecordFromCurrent, isRoomApiError, type RoomCoordinates, type RoomPermissions, type RoomRecord, type RoomRepository, type RoomSnapshot, type RoomSummary } from '../../persistence/roomRepository';
 import { buildExplorerTxUrl, type RoomMintChainInfo, type PreparedWalletTransaction } from '../../mint/roomOwnership';
-import { buildRoomTokenMetadata } from '../../mint/roomMetadata';
-import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
+import { buildRoomTokenArtwork } from '../../mint/roomTokenArtwork';
 import { getPendingRoomWalletStore, type PendingRoomWallet } from '../../mint/pendingRoomWallet';
 import { RoomWalletRecovery, waitForRoomWallet, type RoomWalletRecoveryResult } from '../../mint/roomWalletRecovery';
 import { checkRoomWalletReceipt } from '../../mint/roomWalletReceipt';
@@ -142,9 +141,7 @@ export class RoomWalletActions {
       if (!run.current() || !this.requireWallet('artwork')) return null;
       this.beginWait(run);
       const snapshot = cloneRoomSnapshot(this.host.publishedRoomSnapshot);
-      const image = await run.wait(renderRoomSnapshotToPngDataUrl(snapshot, { tilePixelSize: 2, strictAssets: true }));
-      if (!run.current()) return null;
-      const built = await run.wait(buildRoomTokenMetadata(snapshot, image, { origin: window.location.origin,
+      const built = await run.wait(buildRoomTokenArtwork(snapshot, { origin: window.location.origin,
         chainId: this.host.mintedChainId, contractAddress: this.host.mintedContractAddress, tokenId: this.host.mintedTokenId }));
       if (!run.current()) return null;
       const prepare = await run.wait(this.roomRepository.prepareMetadataRefresh(this.host.roomId, this.host.roomCoordinates, { tokenUri: built.tokenUri }));

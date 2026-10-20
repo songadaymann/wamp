@@ -212,7 +212,7 @@ describe('real room session collection and artwork sequence', () => {
     const f = await fixture(), result = await f.controller.mintRoom();
     expect(result).toMatchObject({ mintedTokenId: '42', mintedMetadataRoomVersion: 5 });
     expect(f.calls).toEqual(['mint-prepare', 'mint-wallet', 'mint-confirm', 'artwork-prepare', 'artwork-wallet', 'artwork-confirm']);
-    expect(renderRoomSnapshotToPngDataUrl).toHaveBeenCalledWith(expect.objectContaining({ version: 5 }), { tilePixelSize: 2, strictAssets: true });
+    expect(renderRoomSnapshotToPngDataUrl).toHaveBeenCalledWith(expect.objectContaining({ version: 5 }), { tilePixelSize: 16, strictAssets: true });
     expect(f.session.getHistoryState().mintedMetadataCurrent).toBe(true); expect(f.controller.isCollecting).toBe(false); expect(f.session.isSaveInFlight).toBe(false); expect(f.events.eventNames()).toEqual([]);
   });
   it('does not start artwork if the first wallet approval is rejected', async () => {
