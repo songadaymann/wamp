@@ -39,7 +39,11 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       await context.route('**/*', r => {
         const u = new URL(r.request().url());
         if (u.origin === local.origin && r.request().method() === 'GET') return r.continue();
-        if (u.hostname === 'cloudflareinsights.com') return r.fulfill({ status: 204 });
+        if (u.hostname === 'static.cloudflareinsights.com' && u.pathname === '/beacon.min.js' && r.request().method() === 'GET') {
+          return r.fulfill({ status: 200, contentType: 'application/javascript', body: '/* Analytics is disabled in isolated artwork verification. */' });
+        }
+        if (u.hostname === 'cloudflareinsights.com' && u.pathname === '/cdn-cgi/rum') return r.fulfill({ status: 204,
+          headers: { 'access-control-allow-origin': r.request().headers().origin || local.origin, 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' } });
         if (u.hostname === 'mann.cool' && u.pathname === '/api/v1/plays') return r.fulfill({ json: { success: true } });
         unexpected.push({ method: r.request().method(), url: u.href }); return r.abort();
       });
