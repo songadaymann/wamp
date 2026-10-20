@@ -10,7 +10,10 @@ export async function installMobileSignedFixture(context, { roomChat = false, ro
   const json = (route, body) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': route.request().headers().origin ?? '*', 'access-control-allow-credentials': 'true' }, body: JSON.stringify(body) });
   if (roomEditor) {
     const snapshot = JSON.parse(recorded.entries.find(entry => entry.path === '/api/rooms/0%2C0/published').text);
-    const summary = { ...JSON.parse(recorded.entries.find(entry => entry.path === '/api/rooms/0%2C0/summary').text), claimerUserId: userId, mintedTokenId: null, mintedOwnerWalletAddress: null, permissions: { canSaveDraft: true, canPublish: true, canRevert: false, canMint: false } };
+    const summary = { ...JSON.parse(recorded.entries.find(entry => entry.path === '/api/rooms/0%2C0/summary').text), claimerUserId: userId,
+      mintedChainId: null, mintedContractAddress: null, mintedTokenId: null, mintedOwnerWalletAddress: null,
+      mintedOwnerSyncedAt: null, mintedMetadataRoomVersion: null, mintedMetadataUpdatedAt: null, mintedMetadataHash: null,
+      permissions: { canSaveDraft: true, canPublish: true, canRevert: false, canMint: false } };
     let draft = { ...snapshot, music: null };
     const reply = (route, body) => json(route, body);
     await context.route(url => url.pathname === '/api/music/phrases', route => reply(route, { items: [], nextCursor: null }));

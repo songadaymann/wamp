@@ -1,6 +1,11 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
 
+## 2026-10-20 — F241 hosted fixture correction
+
+PR264/source5670f039 passed11/12 checks and the new ownership job. General mobile exposed an inconsistent shared editor fixture: token/owner were cleared while mint chain/contract remained. Product checks correctly required a wallet; eight existing signed phone Edit/navigation flows failed. Clear all mint fields in the synthetic unminted fixture; all eight affected native Chromium/WebKit cases now pass with zero errors/misses and inspected captures. Source-first logs/artifacts are retained. No product check was weakened and no failure is waived. Push the fixture correction, then require all12 exact-source/main gates, fresh preview and full guarded release/live proof. F241 remains unchecked/master171/216. Full goal active; preservation and owner-choice boundaries unchanged.
+
+
 ## 2026-10-20 — F241 scoped editing and verification matrix
 
 Acquired minted cells now receive room-level editor access without whole-Expanded-Room authoring rights; original builder attribution and the original author's Expanded editor route remain intact. The tracked ownership harness uses real native controls for28 desktop/narrow-phone/WebKit/tablet cases (buyer, seller, outsider, failure/retry, Expanded cell, auth cancellation and unminted). The production-build matrix passes with zero unexpected errors/misses/group writes; screenshots inspected. Strict server refreshes are finite and cannot fall back to cached ownership; a real-session/DB/viem stalled-read test proves the5-second no-retry deadline. Scene sleep/shutdown/destroy cancel pending checks. Final full quality583files/4,869tests, fresh native Workerd22cases/11ownership cases and OSS0blockers/0warnings pass after the read-budget/lifecycle updates. The operation-level abort also bounds stalled RPC response bodies;37 focused real-session/DB/viem cases and two final installed-client movement/jump iterations pass. CI reuses the existing mint-network job, retaining12 checks and adding28 cases for160 total per head. Plan/receipt: docs/review/wamp-owner-edit-refresh-2026-10-20.md. F241 remains unchecked; master171/216; PR/release/live proof pending. The full checklist goal remains active and all preservation/owner-choice boundaries remain unchanged.
