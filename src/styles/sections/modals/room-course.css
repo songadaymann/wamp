@@ -85,6 +85,10 @@
     line-height: 1.5;
   }
 
+  #room-history-meta {
+    overflow-wrap: anywhere;
+  }
+
   #room-history-modal .history-modal-meta a,
   #room-rush-modal .history-modal-meta a,
   #room-rush-result-modal .history-modal-meta a {

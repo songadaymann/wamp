@@ -36,7 +36,7 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(body).toMatchObject({ mintedOwnerWalletAddress: FIXTURE_MINT_WALLET, claimerUserId: 'builder', permissions: { canSaveDraft } });
       expect(f.ownership()).toEqual({ minted_owner_wallet_address: FIXTURE_MINT_WALLET, claimer_user_id: 'builder' });
-      expect(f.provider.methods).toEqual(['eth_chainId', 'eth_call', 'eth_call']);
+      expect(f.provider.methods).toEqual(['eth_chainId', 'eth_blockNumber', 'eth_call', 'eth_call', 'eth_call']);
     } finally { f.sqlite.close(); }
   });
   it.each([['p1', true], ['builder', false]] as const)('enforces a real draft write after transfer for %s', async (viewer, allowed) => {
@@ -72,13 +72,14 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
     vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as { id: number; method: string }; methods.push(request.method);
       if (request.method === 'eth_chainId') return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: '0x2105' }));
+      if (request.method === 'eth_blockNumber') return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: '0x10' }));
       return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error(FIXTURE_MINT_RPC)), { once: true }));
     }));
     try {
       const before = f.ownership(), pending = f.run().catch((error: unknown) => error);
-      await vi.waitFor(() => expect(methods).toEqual(['eth_chainId', 'eth_call']));
+      await vi.waitFor(() => expect(methods).toEqual(['eth_chainId', 'eth_blockNumber', 'eth_call']));
       await vi.advanceTimersByTimeAsync(5_100); expect(await pending).toMatchObject({ status: 503 });
-      expect(methods).toEqual(['eth_chainId', 'eth_call']); expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
+      expect(methods).toEqual(['eth_chainId', 'eth_blockNumber', 'eth_call']); expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
     } finally { f.sqlite.close(); }
   });
   it('sanitizes provider failures and recovers on the next explicit attempt', async () => {
@@ -89,11 +90,11 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
       vi.stubGlobal('fetch', vi.fn(f.provider.fetch)); expect((await f.run()).status).toBe(200);
     } finally { f.sqlite.close(); }
   });
-  it.each(['eth_chainId', 'eth_call'])('aborts a stalled %s response body at the whole-operation deadline', async stalledMethod => {
+  it.each(['eth_chainId', 'eth_blockNumber', 'eth_call'])('aborts a stalled %s response body at the whole-operation deadline', async stalledMethod => {
     const f = await setup(); vi.useFakeTimers(); const methods: string[] = [];
     vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as { id: number; method: string }; methods.push(request.method);
-      if (request.method !== stalledMethod) return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: '0x2105' }));
+      if (request.method !== stalledMethod) return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: request.method === 'eth_blockNumber' ? '0x10' : '0x2105' }));
       return Promise.resolve(new Response(new ReadableStream({ start(controller) {
         init?.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), { once: true });
       } }), { headers: { 'Content-Type': 'application/json' } }));
@@ -102,7 +103,7 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
       const before = f.ownership(), pending = f.run().catch((error: unknown) => error);
       await vi.waitFor(() => expect(methods).toContain(stalledMethod));
       await vi.advanceTimersByTimeAsync(12_100); expect(await pending).toMatchObject({ status: 503 });
-      expect(methods).toEqual(stalledMethod === 'eth_chainId' ? ['eth_chainId'] : ['eth_chainId', 'eth_call']);
+      expect(methods).toEqual(stalledMethod === 'eth_chainId' ? ['eth_chainId'] : stalledMethod === 'eth_blockNumber' ? ['eth_chainId', 'eth_blockNumber'] : ['eth_chainId', 'eth_blockNumber', 'eth_call']);
       expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
     } finally { f.sqlite.close(); }
   });

@@ -68,6 +68,20 @@ try {
   const mismatchedRefresh = await refresh(); assert.equal(mismatchedRefresh.status, 503, await mismatchedRefresh.text()); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-mismatch', status: 503 });
   providers.base.state.chainId = 8453; providerFailure = true; const failedRefresh = await refresh(), errorText = await failedRefresh.text(); assert.equal(failedRefresh.status, 503); assert(!errorText.includes('private-sentinel')); assert(!errorText.includes('private-provider-diagnostic-sentinel')); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-private-failure', status: 503 });
   providerFailure = false; assert.equal((await refresh()).status, 200); cases.push({ name: 'ownership-recovery', status: 200 });
+  // Canonical artwork state must recover even when ownership did not change.
+  const uri = (version, legacy = false) => 'data:application/json;base64,' + Buffer.from(JSON.stringify({ wamp_room: legacy
+    ? { v: 1, roomId: '0,0', coordinates: [0,0], background: 'blue', tiles: {}, version }
+    : { v: 4, c: [0,0], b: 'blue', pv: version } })).toString('base64');
+  const { sha256Hex } = await loader.ssrLoadModule('/src/mint/roomMetadata.ts');
+  for (const [name, tokenUri, version] of [['legacy-current', uri(1, true), 1], ['compact-stale', uri(3), 3], ['blank', '', null], ['unsupported', 'https://untrusted.invalid/metadata', null]]) {
+    providers.base.state.tokenUri = tokenUri;
+    const response = await refresh(), text = await response.text(), body = JSON.parse(text);
+    assert.equal(response.status, 200, text); assert.equal(body.mintedMetadataRoomVersion, version); assert.equal(body.mintedMetadataHash, await sha256Hex(tokenUri));
+    const stored = await db.prepare('SELECT minted_metadata_room_version,minted_metadata_hash,claimer_user_id FROM rooms WHERE id=?').bind('0,0').first();
+    assert.deepEqual(stored, { minted_metadata_room_version: version, minted_metadata_hash: await sha256Hex(tokenUri), claimer_user_id: 'p1' });
+    cases.push({ name: 'artwork-' + name, status: 200 });
+  }
+  console.log('room artwork reconciliation: native API passed');
   providers.base.state.tokenId = 0n; const missingToken = await refresh(); assert.equal(missingToken.status, 409, await missingToken.text()); cases.push({ name: 'ownership-missing-token', status: 409 });
   console.log('room ownership service: native API passed');
   assert.deepEqual(unexpected, []); writeFileSync(`${output}/report.json`, JSON.stringify({ accepted: true, freshBuild, cases, unexpectedOutbound: unexpected, productionRequests: 0, transactionsSubmitted: 0, realKeysUsed: false }, null, 2)); console.log('mint network service: native API passed');

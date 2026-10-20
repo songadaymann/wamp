@@ -50,6 +50,7 @@ export default tseslint.config(
             'scripts/smoke_worlds_pilot.ts',
             'scripts/world_tile_asset_contract_check.ts',
             'scripts/smoke_activity_tabs.ts',
+            'scripts/reconcile-room-token-cache.ts',
           ],
         },
         tsconfigRootDir: import.meta.dirname,

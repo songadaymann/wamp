@@ -232,18 +232,8 @@ export async function handleRoomTokenMetadataConfirm(
     throw new HttpError(403, 'The linked wallet does not own the minted room token.');
   }
 
-  await persistRoomTokenMetadataState(
-    env,
-    record,
-    {
-      tokenId: metadataState.tokenId,
-      ownerWalletAddress: metadataState.ownerWalletAddress,
-      metadataRoomVersion: body.metadataRoomVersion,
-      metadataHash: metadataState.metadataHash,
-      updatedAt: metadataState.updatedAt,
-    },
-    auth.user
-  );
+  // The browser's version is advisory; only the verified on-chain payload is persisted.
+  await persistRoomTokenMetadataState(env, record, metadataState);
 
   const updated = await loadRoomRecord(
     env,
