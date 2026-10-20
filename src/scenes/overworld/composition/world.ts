@@ -16,6 +16,9 @@ import type { OverworldMode } from '../../sceneData';
 import { OverworldBackdropController } from '../backdropController';
 import type { CameraMode } from '../camera';
 import { OverworldSceneFlowController } from '../flow';
+import type { OverworldHudStateController } from '../hudState';
+import { prepareRoomOwnershipEdit } from '../roomOwnershipEdit';
+import { getAuthDebugState } from '../../../auth/client';
 import { gameplayNow } from '../gameplayClock';
 import type { LoadedRoomObject } from '../liveObjects';
 import { OverworldLiveObjectController } from '../liveObjects';
@@ -690,10 +693,29 @@ export function createFlowController(
     | 'shouldRespawnPlayer' | 'pendingWarpSpawnRoomCoordinates' | 'refreshAround'
     | 'refreshAroundIfNeededOrFromCache' | 'coursePlaybackController' | 'activeCourseRun'
     | 'activeRoomRushRun' | 'setActiveCourseRun' | 'emitCourseComposerStateChanged'
-    | 'renderHud'
+    | 'renderHud' | 'roomRepository'
   >,
+  hud: OverworldHudStateController,
 ): OverworldSceneFlowController {
   return new OverworldSceneFlowController(host.scene, {
+    prepareRoomEdit: (roomId, coordinates) => prepareRoomOwnershipEdit({
+      repository: host.roomRepository,
+      captureContext: () => hud.captureOwnershipEditContext(),
+      subscribeInvalidation: callback => {
+        const stop = hud.onOwnershipEditInvalidation(callback);
+        host.scene.events.on('sleep', callback);
+        host.scene.events.on('shutdown', callback);
+        host.scene.events.on('destroy', callback);
+        return () => { stop(); for (const event of ['sleep', 'shutdown', 'destroy']) host.scene.events.off(event, callback); };
+      },
+      getUserId: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.id ?? null : null; },
+      getWalletAddress: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.walletAddress ?? null : null; },
+      acceptOwnership: (id, summary) => hud.setRoomOwnershipDetails(id, {
+        claimerUserId: summary.claimerUserId,
+        isMinted: summary.mintedChainId !== null || summary.mintedContractAddress !== null || summary.mintedTokenId !== null,
+        mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
+      }),
+    }, roomId, coordinates),
     getMode: () => host.mode,
     setMode: (mode) => {
       host.mode = mode;

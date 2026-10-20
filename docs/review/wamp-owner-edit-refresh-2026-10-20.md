@@ -1,0 +1,25 @@
+# F241: refreshed ownership before editing
+
+Implementation in progress on `codex/wamp-owner-edit-2026-10-20`, from main ba899969 plus F248 receipt checkpoint773439a4. F248 is delivered; master171/216. F241 remains unchecked and the whole checklist goal remains active.
+
+The current fact-check confirms the editing lockout: the HUD caches ownership for a session, its Edit action is hidden from a new wallet holder, and the authenticated ownership/refresh endpoint has no client caller. Builder attribution and Collection shelves are separate product ideas; original builder credit must remain intact. Expanded Room authoring has its own permissions and must be tested without granting course rights from ownership of one cell.
+
+Connect a deliberate Edit/Check ownership action to a strict current-chain refresh. Refresh the HUD cache, then open the editor only if the same selected room, world, mode and signed-in wallet remain current and the server grants edit permission. Check a previously cached owner as well as a different wallet. Ordinary unminted/local edits retain their behavior. Failed/provider checks have a clear retry path. No per-frame or idle polling; pending checks have a bounded lifetime and cleanup. Old summary loads must not overwrite a newer ownership result or a reset context.
+
+Acceptance still required: meaningful repository, handler/database/chain, asynchronous cache/flow and UI tests; buyer success, seller denial, third-wallet denial, auth/classroom gates, failure/retry, cancellation across selection/world/session/disposal, local/unminted and Expanded authoring compatibility. Inspect desktop/phone/WebKit captures and installed game-client movement. Then full quality/OSS, exact-source and merged-main hosted gates, guarded clean-main API/Pages delivery and actual-domain/bundle proof. No production transfer/mint, real-key signature, credential or contract changes.
+
+Preserve unrelated dirty checkouts, user Chrome/TAS4208 and the selected animation. Declined F061/F118, unanswered F145/F243/F167, physical iOS and other financial/product choices remain separate. Ignored evidence: `output/f241-owner-edit-2026-10-20`.
+
+## Verification and delivery
+
+An acquired minted cell inside an Expanded Room now opens the ordinary room editor without a courseEdit context. Owning one token does not transfer group authoring; the original builder retains the existing Expanded editor route. Cache and lazy-load tests cover both routes. Original builder attribution remains unchanged.
+
+Final full quality passes583 files/4,869 tests, lint/types/DOM/bindings/build/size/assets; the fresh native Workerd API passes22 cases including11 ownership scenarios. OSS has0 blockers/0 warnings. The production-build matrix passes all28 cases across desktop1280x800, narrow phone320x568, WebKit phone390x844 and tablet768x1024: stale-cache buyer, seller, unrelated wallet, provider failure/retry, acquired Expanded cell, sign-out cancellation and unminted editing. Native controls are used, expected provider503 is isolated precisely, and unexpected browser errors/API fixture misses/group writes are zero. Captures inspected. WebKit automation does not certify physical iOS.
+
+Explicit ownership refreshes now use a strict require-fresh mode: missing/disabled configuration, wrong network, missing on-chain token or provider failure cannot return stale ownership as a successful check. A2-second chain probe and two5-second contract-read budgets use no retries. A12-second abort bounds the complete operation, including a response body stalled after headers, inside the browser's15-second wait. Thirty-seven focused real-session/DB/viem cases pass, including stalled network/contract bodies and stalled contract fetches with unchanged ownership, no retry and timer cleanup. Ordinary tolerant saves and local-aware mint behavior remain unchanged.
+
+The UI permit is fenced across room/world/mode/account/wallet changes and scene sleep/shutdown/destroy. Earlier summary replies cannot replace verified ownership. Installed-client movement/jump captures have been inspected; exact-source/main hosted checks, preview proof, guarded release and actual-domain proof remain required. No F241 PR or deployment yet. F241 remains unchecked; master171/216.
+
+## First hosted gate correction
+
+Source5670f039 passed11/12 checks, including the28 ownership cases, but the general mobile suite rejected four signed editor/navigation scenarios in both engines. Downloaded captures show the intended linked-wallet refusal: the shared synthetic editor fixture cleared token/owner but retained the recorded chain/contract. It was a partially minted record, rather than the intended unminted local editor room. Clear all mint fields in that fixture; strict product checks remain unchanged. The existing four affected native flows now pass in Chromium and WebKit (eight cases), with zero console/page errors or fixture misses; captures inspected. Failed logs/artifacts remain diagnostic evidence. Rerun all exact-source and merged-main gates; no failure is waived. F241 remains unchecked and undeployed.

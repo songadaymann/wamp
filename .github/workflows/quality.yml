@@ -199,6 +199,7 @@ jobs:
       - run: npx playwright install --with-deps --only-shell chromium webkit
       - run: npm run smoke:mint-network:service
       - run: npm run smoke:mobile:ci -- --mint-network-only
+      - run: npm run smoke:mobile:ci -- --ownership-only --skip-build
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -206,4 +207,5 @@ jobs:
           path: |
             output/web-game/mint-network-service
             output/web-game/mobile-smoke-ci/mint-network
+            output/web-game/mobile-smoke-ci/room-ownership
           retention-days: 7

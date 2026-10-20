@@ -5,11 +5,17 @@ import { HttpError } from '../core/http';
 export interface MintReadTransportOptions {
   retryCount?: number;
   timeout?: number;
+  signal?: AbortSignal;
 }
 
 /** Server transport remains separate from the public wallet network information. */
 export function createRoomMintPublicClient(config: RoomMintConfig, transport: MintReadTransportOptions = {}) {
-  return createPublicClient({ transport: http(config.rpcUrl, transport) });
+  const { signal, ...options } = transport;
+  return createPublicClient({ transport: http(config.rpcUrl, { ...options,
+    ...(signal ? { fetchFn: (input, init) => fetch(input, { ...init,
+      signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal,
+    }) } : {}),
+  }) });
 }
 
 /** One finite network check per operation, with no shared request I/O or idle work. */
@@ -22,7 +28,7 @@ export async function createVerifiedRoomMintPublicClient(config: RoomMintConfig,
 export async function assertRoomMintNetwork(config: RoomMintConfig, transport: MintReadTransportOptions = {}): Promise<void> {
   const snapshot = { ...config };
   const timeout = transport.timeout && transport.timeout > 0 ? Math.min(transport.timeout, 2_000) : 2_000;
-  const probe = createRoomMintPublicClient(snapshot, { retryCount: 0, timeout });
+  const probe = createRoomMintPublicClient(snapshot, { retryCount: 0, timeout, signal: transport.signal });
   let actual: number;
   try {
     actual = await probe.getChainId();

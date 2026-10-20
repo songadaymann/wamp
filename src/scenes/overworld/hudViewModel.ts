@@ -269,6 +269,7 @@ export function buildOverworldHudViewModel(
     currentWalletAddress &&
     currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
   );
+  const viewerCanCheckMintedOwnership = Boolean(selectedRoomMinted && currentUserId && currentWalletAddress);
   const viewerCanEditWorldRoom = Boolean(
     selectedSummary?.world && canBuildInActiveWorld(selectedSummary.world.id),
   );
@@ -280,7 +281,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'published'
         ? selectedSummary?.world
           ? viewerCanEditWorldRoom
-          : selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
+          : selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom || viewerCanCheckMintedOwnership
         : false;
   const editButtonTitle =
     selectedState !== 'published' && selectedState !== 'draft' && selectedState !== 'claimed_unpublished'
@@ -288,7 +289,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'claimed_unpublished' && !viewerOwnsSelectedRoom
         ? 'Only the claimer can edit an unpublished claimed room.'
       : selectedRoomMinted && !viewerOwnsMintedRoom
-        ? 'Only the room token owner can edit a minted room.'
+        ? viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the room token owner can edit a minted room.'
         : '';
   const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
   const resolvedCourseBuilderButtonDisabled =
@@ -305,7 +306,9 @@ export function buildOverworldHudViewModel(
         : !viewerOwnsSelectedRoom
           ? 'Only the room claimer can build an expanded room from this room.'
           : '';
-  const editButtonText = selectedIsExpandedRoom ? 'Edit Expanded Room' : 'Edit Room';
+  const editButtonText = viewerCanCheckMintedOwnership && !viewerOwnsMintedRoom
+    ? 'Check ownership' : selectedIsExpandedRoom && !(selectedRoomMinted && viewerOwnsMintedRoom && !viewerOwnsSelectedRoom)
+      ? 'Edit Expanded Room' : 'Edit Room';
   const selectedGoalText =
     selectedExpandedRoom
       ? getExpandedRoomGoalBadgeText(selectedPublishedCourse?.goal ?? null)

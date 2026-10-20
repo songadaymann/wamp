@@ -51,7 +51,8 @@ export type RoomPersistenceTarget = 'local' | 'remote';
 
 export interface RoomRepository {
   loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord>;
-  loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary>;
+  loadRoomSummary(roomId: string, coordinates: RoomCoordinates, options?: { signal?: AbortSignal }): Promise<RoomSummary>;
+  refreshRoomOwnership(roomId: string, coordinates: RoomCoordinates, options?: { signal?: AbortSignal }): Promise<RoomSummary>;
   loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord>;
   loadRoomVersions(roomId: string, limit?: number, cursor?: string): Promise<RoomVersionsPage>;
   loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord>;
@@ -156,6 +157,10 @@ class LocalRoomRepository implements RoomRepository {
 
   async loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
     return createRoomSummaryFromRecord(await this.loadRoom(roomId, coordinates));
+  }
+
+  refreshRoomOwnership(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
+    return this.loadRoomSummary(roomId, coordinates);
   }
 
   async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {
@@ -655,14 +660,28 @@ class ApiRoomRepository implements RoomRepository {
     );
   }
 
-  async loadRoomSummary(roomId: string, coordinates: RoomCoordinates): Promise<RoomSummary> {
+  async loadRoomSummary(roomId: string, coordinates: RoomCoordinates, options: { signal?: AbortSignal } = {}): Promise<RoomSummary> {
     const seedSummary = loadWorldSeedEditorSummary(roomId);
     if (seedSummary) return seedSummary;
     const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) });
     return this.withFallback(
-      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/summary?${params.toString()}`),
+      () => this.request(`/api/rooms/${encodeURIComponent(roomId)}/summary?${params.toString()}`, { signal: options.signal }),
       () => this.fallback?.loadRoomSummary(roomId, coordinates),
     );
+  }
+
+  async refreshRoomOwnership(
+    roomId: string,
+    coordinates: RoomCoordinates,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<RoomSummary> {
+    const seedSummary = loadWorldSeedEditorSummary(roomId);
+    if (seedSummary) return seedSummary;
+    const params = withActiveWorldQuery(new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y) }));
+    // A failed chain refresh must never fall back to local or cached ownership.
+    return this.request<RoomSummary>(`/api/rooms/${encodeURIComponent(roomId)}/ownership/refresh?${params}`, {
+      method: 'POST', signal: options.signal,
+    });
   }
 
   async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {

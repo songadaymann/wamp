@@ -174,7 +174,7 @@ export function createViewportController(
 
 export function createHudStateController(
   host: Pick<OverworldCompositionPorts,
-    | 'editorPlaytestReturnTarget' | 'mode' | 'selectedCoordinates'
+    | 'scene' | 'editorPlaytestReturnTarget' | 'mode' | 'selectedCoordinates'
     | 'getCellStateAt' | 'roomSummariesById' | 'draftRoomsById'
     | 'getRoomPopulation' | 'getRoomEditorCount' | 'getRoomEditorDisplayNames'
     | 'activeCourseRun' | 'activeRoomRushRun' | 'currentGoalRun'
@@ -187,6 +187,7 @@ export function createHudStateController(
   >,
 ): OverworldHudStateController {
   return new OverworldHudStateController({
+    isActive: () => host.scene.scene.isActive(),
     isEditorPlaytest: () => Boolean(host.editorPlaytestReturnTarget?.clearCheck),
     getMode: () => host.mode,
     getSelectedCoordinates: () => ({ ...host.selectedCoordinates }),

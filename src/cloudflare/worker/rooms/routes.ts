@@ -213,7 +213,7 @@ export async function handleRoomRequest(
       coordinates,
       auth.user,
       auth.isAdmin,
-      'throw',
+      'require-fresh',
     ));
     const summary = await timing.measure('summary', () => loadRoomSummary(
       env,

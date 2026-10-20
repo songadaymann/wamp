@@ -1,3 +1,5 @@
+**October20 F248 complete:** [PR263](https://github.com/songadaymann/wamp/pull/263), mainba899969 / Pages896767fd, is live: explicit mint networks and verified server reads;4,820 tests, all12 checks and132 browser cases/head; guarded API+Pages, exact API/55 assets per domain and24 live preview cases. Master171/216; full goal active. [Receipt](wamp-mint-network-safety-2026-10-20.md).
+
 **October20 F050 complete:** [PR261](https://github.com/songadaymann/wamp/pull/261) / [daily-recovery follow-up](https://github.com/songadaymann/wamp/pull/262), main b720f143 / Pages 75960fe8, is live:4,787 tests, all11 checks and108 browser cases/head, migration0067, map then full guarded API+Pages release, exact deployed Worker/41 assets per domain and real public archives. Master170/216; full goal active. [Receipt](wamp-map-capture-2026-10-19.md).
 
 **October19 F045 complete:** [PR260](https://github.com/songadaymann/wamp/pull/260), main 14ad286d / Pages 3cce4cb4, is live:4,743 tests, all10 checks and103 browser cases per head, full guarded release, exact Worker/37 assets per domain and4 isolated actual-domain identity profiles. Master169/216. The full checklist remains active. [Receipt](wamp-identity-selection-2026-10-19.md).
@@ -392,7 +394,7 @@ The contract and server checks are carefully designed. The everyday experience a
 - [ ] **F244** NFT artwork is an 80×44-pixel thumbnail with no link back to play the room · medium impact · small effort
 - [ ] **F242** The game's record of NFT metadata disagrees with the chain, so owners are told to pay for artwork that is already on-chain · low impact · small effort
 - [ ] **F245** Cheaper or free first mint: put the price in the signed approval · medium impact · large effort
-- [ ] **F248** Sepolia defaults in code and stale docs could cause a wrong-network mint setup · low impact · small effort
+- [x] **F248** Sepolia defaults in code and stale docs could cause a wrong-network mint setup · low impact · small effort — **done2026-10-20**, [PR263](https://github.com/songadaymann/wamp/pull/263), mainba899969. Explicit networks, verified private server reads, safe standalone previews and accurate mainnet docs;4,820 tests,12 checks/132 browser cases per head, guarded API+Pages and exact live proof. [Receipt](wamp-mint-network-safety-2026-10-20.md).
 
 ### Leaderboard, XP and anti-cheat integrity
 
