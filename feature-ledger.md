@@ -1,5 +1,9 @@
 ## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
 
+## 2026-10-20 — Recovery fixture mismatch fixed; Safari diagnostic retained
+
+Hosted sourcee2df3152 quality passes597/5,055. Narrow-phone artwork-confirm reload rejected normal ranked-run writes because fallback recorded snapshots disagreed with its no-goal recovery snapshot. Disable goals consistently in recovery fixtures only; retain every unexpected-write/error/deadline assertion and default goal behavior for other tests. Eight targeted Chromium/WebKit reloads pass. Hosted Safari auth Context-is-stopped after school redirect remains failing/unproven; enrich diagnostics without filtering. Fresh exact-source run required. Safety key replacement approval pending; no keys/config/production changed. F239 still unchecked and all prior boundaries retained.
+
 ## 2026-10-20 — F239 upstream integration; coordinated map release required
 
 Preserved concurrent main00c3bb61 Jimothy changes. Existing liveObjects ceiling failure reproduced on unchanged upstream; delegated batch pushes to the existing NPC controller with regression coverage. Lossless PNG optimization preserves pixels. Combined full check passes597files/5,055tests, boot657.6KB/670KB; installed-client gate0/1 gameplay captures inspected. Prior local100 recovery cases passed; fresh16 hosted checks/312 browser cases must cover the combined source. Catalog770f6454b93f4f5f requires matching immutable renderer/backfill and canonical safety/production readiness before coordinated clean-main delivery, superseding Pages-only. Safety key not found; Jonathan does not know its location. Asked about replacing only safety ADMIN_API_KEY; pending, no secrets/config changed, no bypass. No production deployment or real transaction. F239 unchecked; F167 on hold, all preservation/decision/unsigned repair boundaries retained.

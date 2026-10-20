@@ -21,7 +21,7 @@ try {
   const { createDefaultRoomRecord } = await loader.ssrLoadModule('/src/persistence/roomModel.ts');
   recordTemplate = createDefaultRoomRecord('0,0', { x: 0, y: 0 });
 } finally { await loader.close(); }
-createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/api.json.gz`);
+createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/api.json.gz`, { goalEnabled: !recoveryMode });
 const recorded = JSON.parse(gunzipSync(readFileSync(`${output}/api.json.gz`)));
 const sourceSnapshot = JSON.parse(recorded.entries.find(e => e.path === '/api/rooms/0%2C0/published').text);
 const sourceSummary = JSON.parse(recorded.entries.find(e => e.path === '/api/rooms/0%2C0/summary').text);
@@ -63,7 +63,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         if (u.hostname === 'mann.cool' && u.pathname === '/api/v1/plays') return r.fulfill({ json: { success: true } });
         unexpected.push({ method: r.request().method(), url: u.href }); return r.abort();
       });
-      const api = createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/${name}-api.json.gz`);
+      const api = createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/${name}-api.json.gz`, { goalEnabled: !recoveryMode });
       await api.install(context); await installMobileSignedFixture(context, { roomEditor: true });
       if (local.hostname === '127.0.0.1') await context.routeWebSocket(u => u.hostname === local.hostname && u.port === local.port && u.pathname === '/', s => s.connectToServer());
       // Replace only the third-party lazy namespace factories. No application/auth/room/renderer code is changed.

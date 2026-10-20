@@ -26,7 +26,7 @@ for (const [name, engine, width, height, touch] of [
     const guest = () => ({ authenticated: false, user: null, source: null, partykitHost: '', walletProjectId: null });
     let session = guest(), sessionFailed = false, rejectLink = true, rejectLogout = true, rejectLogoutAll = true;
     let holdNextSession = false, releaseSession = null, sessionHeld = null;
-    const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [];
+    const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [], pageErrorDetails = [], cancelledRequests = [];
     let schoolNavigationStarted = false, schoolRedirectPending = false;
     const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin,
       'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type',
@@ -122,7 +122,11 @@ for (const [name, engine, width, height, touch] of [
           (text.startsWith('Failed to load resource:') && url.includes('/api/auth/'))) expected.push(text);
       else errors.push(text);
     });
-    page.on('pageerror', error => { if (!collectTeardownReport(error.message, 'pageerror')) errors.push(error.message); });
+    page.on('pageerror', error => {
+      pageErrorDetails.push({ at: Date.now(), message: error.message, stack: error.stack, url: page.url(), schoolRedirectPending, schoolNavigationStarted });
+      if (!collectTeardownReport(error.message, 'pageerror')) errors.push(error.message);
+    });
+    page.on('requestfailed', request => { if (cancelledRequests.length < 200) cancelledRequests.push({ at: Date.now(), url: request.url(), failure: request.failure(), schoolRedirectPending }); });
     page.on('response', r => { if (r.status() >= 400) failedRequests.push({ status: r.status(), url: r.url() }); });
     const waitState = async predicate => {
       try { await page.waitForFunction(predicate, undefined, { timeout: 30_000 }); }
@@ -288,7 +292,7 @@ for (const [name, engine, width, height, touch] of [
     await logoutAll(true); await page.waitForURL('**/school-login.html?classroom=music%20class');
     assert.equal(schoolNavigationStarted, true);
     const fixtures = api.report();
-    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, schoolNavigationStarted }, null, 2));
+    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, pageErrorDetails, cancelledRequests, schoolNavigationStarted }, null, 2));
     assert.equal(errors.length, 0, JSON.stringify(errors)); assert.deepEqual(fixtures.misses, {});
     assert.ok(expected.some(e => e.startsWith('Failed to request magic link')));
     assert.ok(expected.some(e => e.startsWith('Failed to sign out')));
