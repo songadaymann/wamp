@@ -1,3 +1,7 @@
+## 2026-10-20 — F239 verified live; master 174/216
+
+PR #267/main 254eea33, API8b3f56c1, Pages6127a02d and renderer production-2026-10-20-f239-770f6454 are delivered. All16 exact-source/main checks,597 files/5,055 tests/312 browser cases per head, hosted36 recovery+36 public and actual-domain12 recovery+36 public cases pass. Full clean-main guard/smoke,1,008 ready tile states,688 current leaves/all ancestors,988 matching objects and zero work/errors, canonical pixel parity and exact Workers/60 assets per domain/30-file public graphs pass. Safety key reset is approved/completed; ignored0600 local storage and production credentials unchanged. Retain initial telemetry-fixture failures and successful unchanged recheck; no real transaction/player/account/counter mutation. Existing full-map timing/F089/physical-iOS follow-ups remain open; AI on hold, repairs unsigned, preservation/decision boundaries retained. Completion documentation is a local checkpoint for the next checklist PR; application code is merged/deployed. [Receipt](docs/review/wamp-wallet-recovery-2026-10-20.md).
+
 ## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
 
 ## 2026-10-20 — Exact-source acceptance green; catalog staging and scoped benchmark follow-up
