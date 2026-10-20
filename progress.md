@@ -1,5 +1,11 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-19 — F045 delivered; F050 audit next
+
+PR260/main 14ad286d is live on wamp.land / Pages 3cce4cb4. Full4,743 tests, all10 exact-source/main checks and103 hosted browser cases per head pass. The full clean-main guard exits0; Worker 956d4bb3-5209-4cec-93c7-a31f95199865 serves100% and matches bytes;37 assets match each domain. Actual startup and all4 isolated actual-domain identity profiles pass. Duplicate names remain allowed; grants use selected stable IDs and full handles identify authors. No real roles/comments/transactions were changed. F045 checked; master169/216. Receipt: docs/review/wamp-identity-selection-2026-10-19.md.
+
+The full checklist goal remains active. F050 map capture/archives is the next independent audit. F243's historical provider-key question and F145's collision/art choice remain unanswered. Preserve unrelated dirty checkouts, user TAS/Chrome, selected animation, declined F061/F118 and all owner/physical-device decisions.
+
 ## 2026-10-19 — F045 implementation verified locally
 
 The exact-account picker, userId-only grant, unique username author/moderation labels, stale-search cleanup, readable wrapping and centered comment pin input are implemented. Sequential moderation actions now clear busy controls. Full4,743 tests/567 files and every local quality gate pass; four native browser profiles have zero errors/misses and inspected captures, and two installed-client movement/jump iterations pass. Classrooms keep existing public read-only chat while posting/search/grants remain blocked. No schema, dependency or recurring work was added. The new production-build identity matrix, OSS,10 exact-source/main hosted gates/103 cases per head, merge and full live API+Pages proof remain pending. Plan/receipts: docs/review/wamp-identity-selection-2026-10-19.md. F045 open; master168/216. Goal active; preserve other lanes/TAS/animation, declined items and unanswered F145/F243 owner choices.
