@@ -83,6 +83,7 @@ import {
   LiveObjectNpcController,
   type NpcRuntimeStateSnapshot,
 } from './liveObjects/npcController';
+import { pushActiveNpcsFromPlayer } from './liveObjects/npcPlayerPush';
 import type {
   CreateLiveObjectEntryOptions,
   LiveObjectExplicitRemovalReason,
@@ -989,26 +990,13 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   pushNpcsFromPlayer(): void {
-    const playerBody = this.options.getPlayerBody();
-    if (!playerBody) {
-      return;
-    }
-
-    for (const loadedRoom of this.options.getLoadedFullRooms()) {
-      if (loadedRoom.runtimeSuspended === true) {
-        continue;
-      }
-      for (const liveObject of loadedRoom.liveObjects) {
-        if (liveObject.config.category !== 'npc' || !liveObject.sprite.active) {
-          continue;
-        }
-        const body = this.getDynamicBody(liveObject.sprite);
-        if (!body?.enable) {
-          continue;
-        }
-        this.npcController.applyPlayerPush(liveObject, body, playerBody);
-      }
-    }
+    pushActiveNpcsFromPlayer(
+      this.options.getPlayerBody(),
+      this.options.getLoadedFullRooms(),
+      (sprite) => this.getDynamicBody(sprite),
+      (liveObject, npcBody, playerBody) =>
+        this.npcController.applyPlayerPush(liveObject, npcBody, playerBody),
+    );
   }
 
   /** Behaviors and settings are constant, so each flying behavior's motion is worked out once (F012). */
