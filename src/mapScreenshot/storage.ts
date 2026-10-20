@@ -89,28 +89,37 @@ export async function saveScreenshotPng(
 }
 
 /**
- * Prefer state.json; if missing, recover zoom from the latest screenshot's
- * customMetadata so a wiped state file cannot snap straight to ideal fit.
+ * Recover the daily baseline before legacy shared state, which old manual
+ * captures could advance. Legacy state/manual metadata remain last-resort
+ * recovery when no daily artifact has usable zoom metadata.
  */
 export async function loadPreviousZoom(
   bucket: ScreenshotR2Bucket,
+  signal?: AbortSignal,
 ): Promise<number | null> {
+  const listed = await listScreenshots(bucket, undefined, undefined, signal);
+  // listScreenshots sorts newest fileName first within either category.
+  const recover = async (daily: boolean): Promise<number | null> => {
+    for (const item of listed) {
+      signal?.throwIfAborted();
+      if (item.fileName.endsWith('_0.png') !== daily) continue;
+      const object = await bucket.get(item.key);
+      if (!object) continue;
+      const raw = object.customMetadata?.zoom;
+      await object.body.cancel().catch(() => undefined);
+      signal?.throwIfAborted();
+      if (typeof raw !== 'string' || !raw.trim()) continue;
+      const zoom = Number(raw);
+      if (Number.isFinite(zoom) && zoom > 0) return zoom;
+    }
+    return null;
+  };
+  const dailyZoom = await recover(true);
+  if (dailyZoom !== null) return dailyZoom;
+  signal?.throwIfAborted();
   const state = await loadZoomState(bucket);
-  if (state) return state.zoom;
-
-  const listed = await listScreenshots(bucket);
-  if (listed.length === 0) return null;
-
-  // listScreenshots sorts newest fileName first.
-  for (const item of listed) {
-    const object = await bucket.get(item.key);
-    if (!object) continue;
-    const raw = object.customMetadata?.zoom;
-    if (typeof raw !== 'string') continue;
-    const zoom = Number(raw);
-    if (Number.isFinite(zoom)) return zoom;
-  }
-  return null;
+  signal?.throwIfAborted();
+  return state?.zoom ?? await recover(false);
 }
 
 /** Load the cached composite starfield as a PNG data URL, or null if missing. */
@@ -134,15 +143,17 @@ export async function saveStarfieldPng(
   return STARFIELD_OBJECT_KEY;
 }
 
-export async function listScreenshots(bucket: ScreenshotR2Bucket, prefix = SCREENSHOT_KEY_PREFIX, maxFiles = Number.MAX_SAFE_INTEGER): Promise<StoredScreenshot[]> {
+export async function listScreenshots(bucket: ScreenshotR2Bucket, prefix = SCREENSHOT_KEY_PREFIX, maxFiles = Number.MAX_SAFE_INTEGER, signal?: AbortSignal): Promise<StoredScreenshot[]> {
   const results: StoredScreenshot[] = [];
   let cursor: string | undefined;
   do {
+    signal?.throwIfAborted();
     const page = await bucket.list({
       prefix,
       cursor,
       limit: 1000,
     });
+    signal?.throwIfAborted();
     for (const object of page.objects) {
       if (!object.key.endsWith('.png')) continue;
       const fileName = object.key.slice(SCREENSHOT_KEY_PREFIX.length);

@@ -93,7 +93,7 @@ export async function renderMapScreenshot(
   const padded = padPublishedBounds(published, PADDING_ROOMS);
   const world = roomBoundsToWorldPixels(padded);
   const idealZoom = computeIdealFitZoom(world);
-  const previousZoom = lease.previousZoom ?? await loadPreviousZoom(env.SCREENSHOTS);
+  const previousZoom = lease.previousZoom ?? await loadPreviousZoom(env.SCREENSHOTS, signal);
   const zoom = resolveCaptureZoom(mode, idealZoom, previousZoom);
   const zoomDelta = previousZoom === null ? idealZoom : zoom - previousZoom;
   const clamped =
