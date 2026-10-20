@@ -6,10 +6,12 @@ export interface RoomOwnershipEditHost {
   captureContext(): () => boolean;
   subscribeInvalidation(callback: () => void): () => void;
   getWalletAddress(): string | null;
+  getUserId(): string | null;
   acceptOwnership(roomId: string, summary: RoomSummary): void;
 }
 
 export interface RoomOwnershipEditPermit {
+  roomOnly: boolean;
   isCurrent(): boolean;
   dispose(): void;
 }
@@ -22,13 +24,14 @@ export async function prepareRoomOwnershipEdit(
 ): Promise<RoomOwnershipEditPermit | null> {
   const isCurrent = host.captureContext();
   if (!isCurrent()) return null;
+  const userId = host.getUserId();
   const wallet = host.getWalletAddress()?.trim().toLowerCase() ?? null;
   const abort = new AbortController();
   let cancelled = false, handedOff = false;
   let stop = () => {};
   stop = host.subscribeInvalidation(() => { cancelled = true; abort.abort(); stop(); });
-  const current = () => !cancelled && isCurrent() && wallet === (host.getWalletAddress()?.trim().toLowerCase() ?? null);
-  const permit = { isCurrent: current, dispose: () => { cancelled = true; stop(); } };
+  const current = () => !cancelled && isCurrent() && userId === host.getUserId() && wallet === (host.getWalletAddress()?.trim().toLowerCase() ?? null);
+  const permit = { roomOnly: false, isCurrent: current, dispose: () => { cancelled = true; stop(); } };
   const timeout = setTimeout(() => abort.abort(), 15_000);
   try {
     const summary = await host.repository.loadRoomSummary(roomId, coordinates, { signal: abort.signal });
@@ -44,6 +47,8 @@ export async function prepareRoomOwnershipEdit(
       throw new RoomOwnershipDeniedError();
     }
     if (!fresh.permissions.canSaveDraft) throw new RoomOwnershipDeniedError('You do not have permission to edit this room.');
+    // Acquiring one room token does not convey its original builder's group rights.
+    permit.roomOnly = fresh.claimerUserId !== userId;
     handedOff = true;
     return permit;
   } catch (error) {

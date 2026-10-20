@@ -353,14 +353,14 @@ export class OverworldSceneFlowController {
       permit = await this.host.prepareRoomEdit(selectedRoomId, selectedCoordinates);
       const canOpen = () => permit?.isCurrent() ?? false;
       if (!canOpen()) { hideBusyOverlay(); return; }
-      if (selectedCourseId) {
+      if (selectedCourseId && !permit?.roomOnly) {
         await this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates, canOpen);
       } else {
         await this.openEditor({
           roomCoordinates: selectedCoordinates,
           source: 'world',
           roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
-          courseEdit: this.host.getActiveCourseEditContext(selectedRoomId),
+          courseEdit: permit?.roomOnly ? null : this.host.getActiveCourseEditContext(selectedRoomId),
         }, canOpen);
       }
     } catch (error) {

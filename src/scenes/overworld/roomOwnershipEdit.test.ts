@@ -16,7 +16,7 @@ function harness() {
   const repository = { loadRoomSummary: vi.fn<RoomRepository['loadRoomSummary']>(async () => summary(seller)), refreshRoomOwnership: vi.fn<RoomRepository['refreshRoomOwnership']>(async () => summary(buyer)) };
   const acceptOwnership = vi.fn();
   const host: RoomOwnershipEditHost = { repository, subscribeInvalidation: () => () => {}, captureContext: () => () => state.current,
-    getWalletAddress: () => state.wallet, acceptOwnership };
+    getUserId: () => 'buyer', getWalletAddress: () => state.wallet, acceptOwnership };
   return { host, state, repository, acceptOwnership, run: () => prepareRoomOwnershipEdit(host, '0,0', { x: 0, y: 0 }) };
 }
 afterEach(() => vi.useRealTimers());
@@ -27,6 +27,10 @@ describe('current token ownership before editor entry', () => {
     expect(canOpen?.isCurrent()).toBe(true); expect(f.repository.refreshRoomOwnership).toHaveBeenCalledOnce();
     expect(f.acceptOwnership).toHaveBeenCalledWith('0,0', expect.objectContaining({ mintedOwnerWalletAddress: buyer, claimerUserId: 'original-builder' }));
     expect(vi.getTimerCount()).toBe(0); f.state.current = false; expect(canOpen?.isCurrent()).toBe(false);
+  });
+  it('keeps a transferred token room-scoped while preserving the original builder route', async () => {
+    const f = harness(); const acquired = await f.run(); expect(acquired?.roomOnly).toBe(true); acquired?.dispose();
+    f.host.getUserId = () => 'original-builder'; const original = await f.run(); expect(original?.roomOnly).toBe(false); original?.dispose();
   });
   it('rechecks a cached owner and updates their HUD before denying a sold room', async () => {
     const f = harness(); f.state.wallet = seller;

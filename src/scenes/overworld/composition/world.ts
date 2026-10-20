@@ -704,8 +704,11 @@ export function createFlowController(
       subscribeInvalidation: callback => {
         const stop = hud.onOwnershipEditInvalidation(callback);
         host.scene.events.on('sleep', callback);
-        return () => { stop(); host.scene.events.off('sleep', callback); };
+        host.scene.events.on('shutdown', callback);
+        host.scene.events.on('destroy', callback);
+        return () => { stop(); for (const event of ['sleep', 'shutdown', 'destroy']) host.scene.events.off(event, callback); };
       },
+      getUserId: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.id ?? null : null; },
       getWalletAddress: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.walletAddress ?? null : null; },
       acceptOwnership: (id, summary) => hud.setRoomOwnershipDetails(id, {
         claimerUserId: summary.claimerUserId,

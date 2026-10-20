@@ -307,7 +307,8 @@ export function buildOverworldHudViewModel(
           ? 'Only the room claimer can build an expanded room from this room.'
           : '';
   const editButtonText = viewerCanCheckMintedOwnership && !viewerOwnsMintedRoom
-    ? 'Check ownership' : selectedIsExpandedRoom ? 'Edit Expanded Room' : 'Edit Room';
+    ? 'Check ownership' : selectedIsExpandedRoom && !(selectedRoomMinted && viewerOwnsMintedRoom && !viewerOwnsSelectedRoom)
+      ? 'Edit Expanded Room' : 'Edit Room';
   const selectedGoalText =
     selectedExpandedRoom
       ? getExpandedRoomGoalBadgeText(selectedPublishedCourse?.goal ?? null)

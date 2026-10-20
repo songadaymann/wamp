@@ -11,7 +11,7 @@ import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../pe
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
-import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient } from './network';
+import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient, type MintReadTransportOptions } from './network';
 export { createRoomMintPublicClient } from './network';
 
 export function getOptionalRoomMintConfig(env: Env): RoomMintConfig | null {
@@ -88,6 +88,8 @@ export type RoomChainSyncFailureMode = 'throw' | 'use-stored' | 'require-fresh';
 // A tolerant sync gives up sooner: one retry and 5 s per call instead of viem's
 // 3 retries and 10 s, so a hanging RPC delays a save by seconds rather than ~40 s.
 const TOLERANT_CHAIN_READ_TRANSPORT = { retryCount: 1, timeout: 5_000 };
+// A manual refresh stays inside the caller's finite wait instead of retrying after it closes.
+const FRESH_CHAIN_READ_TRANSPORT = { retryCount: 0, timeout: 5_000 };
 
 export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
   const client = await createVerifiedRoomMintPublicClient(config);
@@ -156,11 +158,15 @@ export async function syncRoomOwnershipFromChain(
   }
 
   let chainState: RoomMintChainState | null;
+  const abort = onChainError === 'require-fresh' ? new AbortController() : null;
+  // The operation deadline also covers a provider stalling after response headers.
+  const deadline = abort ? setTimeout(() => abort.abort(), 12_000) : null;
   try {
     chainState = await readRoomMintStateFromChain(
       config,
       record.draft.coordinates,
-      onChainError === 'use-stored' ? TOLERANT_CHAIN_READ_TRANSPORT : {}
+      onChainError === 'use-stored' ? TOLERANT_CHAIN_READ_TRANSPORT
+        : abort ? { ...FRESH_CHAIN_READ_TRANSPORT, signal: abort.signal } : {}
     );
   } catch (error) {
     if (onChainError !== 'require-fresh' && shouldSkipLocalRoomMintSync(config, error)) {
@@ -181,6 +187,8 @@ export async function syncRoomOwnershipFromChain(
         + `(${isRoomMinted(record) ? `minted, owner ${record.mintedOwnerWalletAddress}` : 'unminted'}). ${reason}`
     );
     return record;
+  } finally {
+    if (deadline !== null) clearTimeout(deadline);
   }
 
   if (!chainState) {
@@ -236,7 +244,7 @@ export async function syncRoomOwnershipFromChain(
 export async function readRoomMintStateFromChain(
   config: RoomMintConfig,
   coordinates: RoomCoordinates,
-  transport: { retryCount?: number; timeout?: number } = {}
+  transport: MintReadTransportOptions = {}
 ): Promise<RoomMintChainState | null> {
   const client = await createVerifiedRoomMintPublicClient(config, transport);
   const tokenId = await client.readContract({

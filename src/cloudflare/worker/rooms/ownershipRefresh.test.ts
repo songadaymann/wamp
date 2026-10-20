@@ -17,10 +17,16 @@ async function setup(viewer = 'p1') {
     const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh', { method: 'POST', headers: { Origin: 'https://wamp.land', ...(authenticated ? { Cookie: `ep_session=${cookie}` } : {}) } });
     return handleRoomRequest(request, new URL(request.url), f.env);
   };
+  const save = () => {
+    const request = new Request('https://api.wamp.land/api/rooms/0,0/draft', { method: 'PUT',
+      headers: { Origin: 'https://wamp.land', 'Content-Type': 'application/json', Cookie: `ep_session=${cookie}` },
+      body: JSON.stringify({ ...f.record.draft, title: 'New holder draft' }) });
+    return handleRoomRequest(request, new URL(request.url), f.env);
+  };
   const ownership = () => f.sqlite.prepare('SELECT minted_owner_wallet_address,claimer_user_id FROM rooms WHERE id=?').get('0,0');
-  return { ...f, provider, run, ownership };
+  return { ...f, provider, run, save, ownership };
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('explicit room ownership refresh, real sessions/database/provider protocol', () => {
   it.each([['p1', true], ['builder', false], ['p2', false]] as const)('refreshes holder permissions for %s without replacing the builder', async (viewer, canSaveDraft) => {
@@ -31,6 +37,20 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
       expect(body).toMatchObject({ mintedOwnerWalletAddress: FIXTURE_MINT_WALLET, claimerUserId: 'builder', permissions: { canSaveDraft } });
       expect(f.ownership()).toEqual({ minted_owner_wallet_address: FIXTURE_MINT_WALLET, claimer_user_id: 'builder' });
       expect(f.provider.methods).toEqual(['eth_chainId', 'eth_call', 'eth_call']);
+    } finally { f.sqlite.close(); }
+  });
+  it.each([['p1', true], ['builder', false]] as const)('enforces a real draft write after transfer for %s', async (viewer, allowed) => {
+    const f = await setup(viewer);
+    try {
+      if (allowed) {
+        const response = await f.save(); expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ draft: { title: 'New holder draft' } });
+      } else {
+        const before = f.sqlite.prepare('SELECT draft_json FROM rooms WHERE id=?').get('0,0');
+        await expect(f.save()).rejects.toMatchObject({ status: 403 });
+        expect(f.sqlite.prepare('SELECT draft_json FROM rooms WHERE id=?').get('0,0')).toEqual(before);
+      }
+      expect(f.ownership()).toEqual({ minted_owner_wallet_address: FIXTURE_MINT_WALLET, claimer_user_id: 'builder' });
     } finally { f.sqlite.close(); }
   });
   it('authenticates before configuration or RPC access', async () => {
@@ -47,12 +67,43 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
     try { const before = f.ownership(); await expect(f.run()).rejects.toMatchObject({ status: kind === 'missing-token' ? 409 : 503 }); expect(f.ownership()).toEqual(before); }
     finally { f.sqlite.close(); }
   });
+  it('bounds a stalled contract read without retrying after the manual wait', async () => {
+    const f = await setup(); vi.useFakeTimers(); const methods: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { id: number; method: string }; methods.push(request.method);
+      if (request.method === 'eth_chainId') return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: '0x2105' }));
+      return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error(FIXTURE_MINT_RPC)), { once: true }));
+    }));
+    try {
+      const before = f.ownership(), pending = f.run().catch((error: unknown) => error);
+      await vi.waitFor(() => expect(methods).toEqual(['eth_chainId', 'eth_call']));
+      await vi.advanceTimersByTimeAsync(5_100); expect(await pending).toMatchObject({ status: 503 });
+      expect(methods).toEqual(['eth_chainId', 'eth_call']); expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
+    } finally { f.sqlite.close(); }
+  });
   it('sanitizes provider failures and recovers on the next explicit attempt', async () => {
     const f = await setup(); vi.stubGlobal('fetch', vi.fn(async () => { throw new Error(FIXTURE_MINT_RPC); }));
     try {
       const before = f.ownership(); const error: unknown = await f.run().catch((e: unknown) => e);
       expect(error).toMatchObject({ status: 503 }); expect(String(error)).not.toContain(FIXTURE_MINT_RPC); expect(f.ownership()).toEqual(before);
       vi.stubGlobal('fetch', vi.fn(f.provider.fetch)); expect((await f.run()).status).toBe(200);
+    } finally { f.sqlite.close(); }
+  });
+  it.each(['eth_chainId', 'eth_call'])('aborts a stalled %s response body at the whole-operation deadline', async stalledMethod => {
+    const f = await setup(); vi.useFakeTimers(); const methods: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as { id: number; method: string }; methods.push(request.method);
+      if (request.method !== stalledMethod) return Promise.resolve(Response.json({ jsonrpc: '2.0', id: request.id, result: '0x2105' }));
+      return Promise.resolve(new Response(new ReadableStream({ start(controller) {
+        init?.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')), { once: true });
+      } }), { headers: { 'Content-Type': 'application/json' } }));
+    }));
+    try {
+      const before = f.ownership(), pending = f.run().catch((error: unknown) => error);
+      await vi.waitFor(() => expect(methods).toContain(stalledMethod));
+      await vi.advanceTimersByTimeAsync(12_100); expect(await pending).toMatchObject({ status: 503 });
+      expect(methods).toEqual(stalledMethod === 'eth_chainId' ? ['eth_chainId'] : ['eth_chainId', 'eth_call']);
+      expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
     } finally { f.sqlite.close(); }
   });
 });

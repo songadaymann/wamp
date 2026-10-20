@@ -9,7 +9,7 @@ vi.mock('../../expandedRooms/repository', () => ({ createExpandedRoomRepository:
 vi.mock('../../audio/sfx', () => ({ playSfx: vi.fn() }));
 import { OverworldSceneFlowController } from './flow';
 function harness(expanded = false) {
-  const state = { current: true }, permit = { isCurrent: () => state.current, dispose: vi.fn() };
+  const state = { current: true }, permit = { roomOnly: false, isCurrent: () => state.current, dispose: vi.fn() };
   const prepare = vi.fn(async () => permit), manager = { isSleeping: vi.fn(() => false), isPaused: vi.fn(() => false), isActive: vi.fn(() => false), run: vi.fn(), sleep: vi.fn(), stop: vi.fn() };
   const controller = new OverworldSceneFlowController({ game: {}, scene: manager } as never, {
     getSelectedCoordinates: () => ({ x: 0, y: 0 }), getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }),
@@ -32,6 +32,11 @@ describe('ownership verification before either editor opens', () => {
     f.controller.editSelectedRoom(); await vi.waitFor(() => expect(mocks.ensure).toHaveBeenCalledOnce());
     f.state.current = false; done(); await vi.waitFor(() => expect(f.permit.dispose).toHaveBeenCalledOnce());
     expect(f.manager.run).not.toHaveBeenCalled(); expect(f.manager.sleep).not.toHaveBeenCalled(); expect(mocks.hide).toHaveBeenCalled();
+  });
+  it('opens only the acquired cell and omits courseEdit even inside an Expanded Room', async () => {
+    const f = harness(true); f.permit.roomOnly = true; f.controller.editSelectedRoom();
+    await vi.waitFor(() => expect(f.manager.run).toHaveBeenCalledOnce());
+    expect(f.manager.run).toHaveBeenCalledWith('EditorScene', expect.objectContaining({ roomCoordinates: { x: 0, y: 0 }, courseEdit: null }));
   });
   it('offers a new explicit retry after a failed ownership check', async () => {
     const f = harness(); f.prepare.mockRejectedValueOnce(new Error('Could not check room ownership. Please try again.'));

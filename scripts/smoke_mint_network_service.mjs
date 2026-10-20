@@ -17,9 +17,9 @@ try {
   const fixtures = await loader.ssrLoadModule('/src/cloudflare/worker/mint/testRpc.ts');
   const providers = { base: fixtures.createMintRpcFixture(8453), sepolia: fixtures.createMintRpcFixture(84532) };
   let providerFailure = false;
-  const profiles = [['base', '8453'], ['sepolia', '84532'], ['missing', null], ['unsupported', '1']];
+  const profiles = [['base', '8453'], ['sepolia', '84532'], ['missing', null], ['unsupported', '1'], ['disabled', '8453']];
   mf = new Miniflare({ workers: profiles.map(([name, chainId]) => ({ name, modules: [{ type: 'ESModule', path: resolve(output, 'api/worker.js') }], compatibilityDate: '2026-03-08', compatibilityFlags: ['global_fetch_strictly_public'], unsafeDirectSockets: [{ host: '127.0.0.1', port: 0 }],
-    bindings: { ...(chainId ? { ROOM_MINT_CHAIN_ID: chainId } : {}), ROOM_MINT_CONTRACT_ADDRESS: fixtures.FIXTURE_MINT_CONTRACT, ROOM_MINT_RPC_URL: `https://server-rpc.example/${name}/private-sentinel`, ROOM_MINT_AUTH_PRIVATE_KEY: fixtures.FIXTURE_MINT_AUTH_KEY },
+    bindings: { ...(name === 'disabled' ? { ROOM_MINT_DISABLED: '1' } : {}), ...(chainId ? { ROOM_MINT_CHAIN_ID: chainId } : {}), ROOM_MINT_CONTRACT_ADDRESS: fixtures.FIXTURE_MINT_CONTRACT, ROOM_MINT_RPC_URL: `https://server-rpc.example/${name}/private-sentinel`, ROOM_MINT_AUTH_PRIVATE_KEY: fixtures.FIXTURE_MINT_AUTH_KEY },
     d1Databases: { DB: 'ephemeral-mint-network', JAM_DB: 'ephemeral-mint-network' }, serviceBindings: { ASSETS: () => new Response('Not found', { status: 404 }) },
     outboundService: async request => { const u = new URL(request.url); if (u.hostname !== 'server-rpc.example') { unexpected.push(u.origin); throw new Error('Unexpected outbound'); } if (providerFailure) throw new Error('private-provider-diagnostic-sentinel'); const provider = providers[u.pathname.split('/')[1]]; assert(provider, 'Unconfigured networks must not reach an RPC'); return provider.fetch(request); },
   })) });
@@ -47,5 +47,28 @@ try {
   await db.prepare('UPDATE rooms SET minted_chain_id=8453,minted_contract_address=?,minted_token_id=?,minted_owner_wallet_address=? WHERE id=?').bind(fixtures.FIXTURE_MINT_CONTRACT, '42', fixtures.FIXTURE_MINT_WALLET, '0,0').run(); providers.base.state.tokenId = 42n;
   const metadata = await call('base', 'metadata'), metadataText = await metadata.text(); assert.equal(metadata.status, 200, metadataText); assert.equal(JSON.parse(metadataText).transaction.chainId, 8453); assert(!metadataText.includes('private-sentinel')); cases.push({ name: 'metadata-verified', status: metadata.status });
   providers.base.state.chainId = 84532; const badMetadata = await call('base', 'metadata'); assert.equal(badMetadata.status, 503, await badMetadata.text()); cases.push({ name: 'metadata-mismatch', status: badMetadata.status });
+  // Fresh ownership is a separate endpoint: it must not return the stored owner on a failed read.
+  providers.base.state.chainId = 8453;
+  const oldWallet = '0x1111111111111111111111111111111111111111';
+  await db.prepare('UPDATE users SET wallet_address=? WHERE id=?').bind(oldWallet, 'p1').run();
+  await db.prepare('UPDATE users SET wallet_address=? WHERE id=?').bind(`0x${'33'.repeat(20)}`, 'p2').run();
+  const sellerCookie = await createSession({ DB: db }, 'p1'), outsiderCookie = await createSession({ DB: db }, 'p2');
+  const resetOwner = () => db.prepare('UPDATE rooms SET minted_owner_wallet_address=?,claimer_user_id=? WHERE id=?').bind(oldWallet, 'p1', '0,0').run();
+  const owner = () => db.prepare('SELECT minted_owner_wallet_address,claimer_user_id FROM rooms WHERE id=?').bind('0,0').first();
+  const refresh = (name = 'base', session = cookie, origin = 'https://wamp.land') => fetch(new URL('/api/rooms/0,0/ownership/refresh', urls[name]), { method: 'POST', headers: { Origin: origin, ...(session ? { Cookie: `ep_session=${session}` } : {}) } });
+  for (const [name, session, origin, status] of [['missing', '', 'https://wamp.land', 401], ['missing', cookie, 'https://wamp.land', 503], ['disabled', cookie, 'https://wamp.land', 503], ['base', cookie, 'https://untrusted.example', 403]]) {
+    const before = count(), response = await refresh(name, session, origin); assert.equal(response.status, status, await response.text()); assert.equal(count(), before); cases.push({ name: `ownership-${name}-gate-${status}`, status });
+  }
+  for (const [role, session, canSaveDraft] of [['buyer', cookie, true], ['seller', sellerCookie, false], ['outsider', outsiderCookie, false]]) {
+    await resetOwner(); const response = await refresh('base', session), text = await response.text(), body = JSON.parse(text);
+    assert.equal(response.status, 200, text); assert.equal(body.permissions.canSaveDraft, canSaveDraft); assert.equal(body.mintedOwnerWalletAddress, fixtures.FIXTURE_MINT_WALLET); assert.equal(body.claimerUserId, 'p1'); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert(!text.includes('private-sentinel'));
+    assert.deepEqual(await owner(), { minted_owner_wallet_address: fixtures.FIXTURE_MINT_WALLET, claimer_user_id: 'p1' }); cases.push({ name: `ownership-${role}`, status: response.status });
+  }
+  await resetOwner(); const storedOwner = await owner(); providers.base.state.chainId = 84532;
+  const mismatchedRefresh = await refresh(); assert.equal(mismatchedRefresh.status, 503, await mismatchedRefresh.text()); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-mismatch', status: 503 });
+  providers.base.state.chainId = 8453; providerFailure = true; const failedRefresh = await refresh(), errorText = await failedRefresh.text(); assert.equal(failedRefresh.status, 503); assert(!errorText.includes('private-sentinel')); assert(!errorText.includes('private-provider-diagnostic-sentinel')); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-private-failure', status: 503 });
+  providerFailure = false; assert.equal((await refresh()).status, 200); cases.push({ name: 'ownership-recovery', status: 200 });
+  providers.base.state.tokenId = 0n; const missingToken = await refresh(); assert.equal(missingToken.status, 409, await missingToken.text()); cases.push({ name: 'ownership-missing-token', status: 409 });
+  console.log('room ownership service: native API passed');
   assert.deepEqual(unexpected, []); writeFileSync(`${output}/report.json`, JSON.stringify({ accepted: true, freshBuild, cases, unexpectedOutbound: unexpected, productionRequests: 0, transactionsSubmitted: 0, realKeysUsed: false }, null, 2)); console.log('mint network service: native API passed');
 } finally { f?.sqlite.close(); await mf?.dispose(); await loader.close(); }
