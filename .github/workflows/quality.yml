@@ -144,3 +144,22 @@ jobs:
           name: auth-state
           path: output/web-game/mobile-smoke-ci/auth
           retention-days: 7
+
+  chat-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --identity-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-identity
+          path: output/web-game/mobile-smoke-ci/chat-identity
+          retention-days: 7

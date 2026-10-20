@@ -46,6 +46,7 @@ interface BrowseRoomCommentRow {
   id: string;
   body: string;
   author_display_name: string;
+  author_username: string | null;
   created_at: string;
   comment_count: number;
   comment_rank: number;
@@ -132,6 +133,7 @@ export async function listBrowseRoomCommentSummaries(
           room_comments.id,
           SUBSTR(room_comments.body, 1, 82) AS body,
           room_comments.author_display_name,
+          room_comments.author_user_id,
           room_comments.created_at,
           COUNT(*) OVER (
             PARTITION BY requested_targets.requested_room_id
@@ -148,8 +150,9 @@ export async function listBrowseRoomCommentSummaries(
          AND room_comments.room_version = target_member.room_version
          AND room_comments.status = 'approved'
       )
-      SELECT *
+      SELECT ranked_comments.*, author.username AS author_username
       FROM ranked_comments
+      LEFT JOIN users AS author ON author.id = ranked_comments.author_user_id
       WHERE comment_rank <= ?
       ORDER BY requested_room_id ASC, comment_rank ASC
     `,
@@ -182,6 +185,7 @@ export async function listBrowseRoomCommentSummaries(
           id: row.id,
           body: row.body,
           authorDisplayName: row.author_display_name,
+          authorUsername: row.author_username ?? null,
           createdAt: row.created_at,
         })),
       };
@@ -288,16 +292,19 @@ export async function listApprovedRoomComments(
   const predicate = buildRoomCommentTargetPredicate(getRoomCommentScopeCells(target));
   const result = await env.DB.prepare(
     `
-      SELECT *
-      FROM room_comments
-      WHERE (${predicate.sql})
-        AND status = 'approved'
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
+      SELECT selected.*, author.username AS author_username
+      FROM (
+        SELECT * FROM room_comments
+        WHERE (${predicate.sql}) AND status = 'approved'
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+      ) selected
+      LEFT JOIN users AS author ON author.id = selected.author_user_id
+      ORDER BY selected.created_at DESC, selected.id DESC
     `,
   )
     .bind(...predicate.bindings, limit)
-    .all<RoomCommentRow>();
+    .all<RoomCommentIdentityRow>();
 
   return result.results.map((row) => mapPublicRoomCommentRow(row, target.coordinates));
 }
@@ -311,6 +318,7 @@ export async function createRoomComment(
     body: string;
     authorUserId: string;
     authorDisplayName: string;
+    authorUsername?: string | null;
     ipHash: string | null;
     userAgent: string | null;
     createdAt: string;
@@ -374,6 +382,7 @@ export async function createRoomComment(
     body: input.body,
     authorUserId: input.authorUserId,
     authorDisplayName: input.authorDisplayName,
+    authorUsername: input.authorUsername ?? null,
     createdAt: input.createdAt,
   };
 }
@@ -445,6 +454,7 @@ export async function listAdminRoomComments(
         SELECT
           room_comments.*,
           author.email AS author_email,
+          author.username AS author_username,
           builder.email AS builder_email,
           rooms.published_title AS room_title
         FROM room_comments
@@ -458,6 +468,7 @@ export async function listAdminRoomComments(
         SELECT
           room_comments.*,
           author.email AS author_email,
+          author.username AS author_username,
           builder.email AS builder_email,
           rooms.published_title AS room_title
         FROM room_comments
@@ -486,6 +497,7 @@ export async function loadAdminRoomComment(
       SELECT
         room_comments.*,
         author.email AS author_email,
+          author.username AS author_username,
         builder.email AS builder_email,
         rooms.published_title AS room_title
       FROM room_comments
@@ -567,14 +579,18 @@ export async function markRoomCommentNotificationError(
     .all();
 }
 
-interface AdminRoomCommentJoinRow extends RoomCommentRow {
+interface RoomCommentIdentityRow extends RoomCommentRow {
+  author_username: string | null;
+}
+
+interface AdminRoomCommentJoinRow extends RoomCommentIdentityRow {
   author_email: string | null;
   builder_email: string | null;
   room_title: string | null;
 }
 
 function mapPublicRoomCommentRow(
-  row: RoomCommentRow,
+  row: RoomCommentIdentityRow,
   fallbackCoordinates: RoomCoordinates,
 ): RoomCommentRecord {
   const coordinates = parseRoomId(row.room_id) ?? fallbackCoordinates;
@@ -590,6 +606,7 @@ function mapPublicRoomCommentRow(
     body: row.body,
     authorUserId: row.author_user_id,
     authorDisplayName: row.author_display_name,
+    authorUsername: row.author_username ?? null,
     createdAt: row.created_at,
   };
 }

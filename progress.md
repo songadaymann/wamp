@@ -1,5 +1,9 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-19 — F045 implementation verified locally
+
+The exact-account picker, userId-only grant, unique username author/moderation labels, stale-search cleanup, readable wrapping and centered comment pin input are implemented. Sequential moderation actions now clear busy controls. Full4,743 tests/567 files and every local quality gate pass; four native browser profiles have zero errors/misses and inspected captures, and two installed-client movement/jump iterations pass. Classrooms keep existing public read-only chat while posting/search/grants remain blocked. No schema, dependency or recurring work was added. The new production-build identity matrix, OSS,10 exact-source/main hosted gates/103 cases per head, merge and full live API+Pages proof remain pending. Plan/receipts: docs/review/wamp-identity-selection-2026-10-19.md. F045 open; master168/216. Goal active; preserve other lanes/TAS/animation, declined items and unanswered F145/F243 owner choices.
+
 ## 2026-10-19 — F048 delivered; F045 identity selection next
 
 PR259/main ac2b8c89 is live on wamp.land / Pages c969b57e. Full4,717 tests, all9 exact-source/main checks and99 hosted browser cases per head pass. The full clean-main guard exits0, deployed Worker 2b279ba8-6296-49e3-a5f2-f60c25a8b1a4 serves100% and matches bytes,37 assets match each domain, actual startup and all3 isolated actual-domain auth profiles pass. Both logout choices reject delayed old session responses. No real accounts logged out, new background task or credential changes. F048 checked; master168/216. Receipt: docs/review/wamp-session-controls-2026-10-19.md.

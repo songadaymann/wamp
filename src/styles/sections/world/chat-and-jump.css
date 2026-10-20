@@ -334,12 +334,16 @@
 
   .chat-message-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
   }
 
   .chat-message-author {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
     color: var(--wamp-sky-deep);
     font-family: var(--font-ui);
     font-size: var(--ui-text-body, 12px);

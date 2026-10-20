@@ -30,7 +30,7 @@ let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
   exitCode = 0;
-  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') ? [] : engines) {
+  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') ? [] : engines) {
     const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
       stdio: 'inherit',
       env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
@@ -65,6 +65,13 @@ try {
       `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/auth`],
     { stdio: 'inherit', env: process.env });
     if (auth.status !== 0) exitCode = auth.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--identity-only') && exitCode === 0) {
+    const identity = spawnSync(process.execPath, ['scripts/smoke_chat_identity.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/chat-identity`],
+    { stdio: 'inherit', env: process.env });
+    if (identity.status !== 0) exitCode = identity.status ?? 1;
   }
 
   if (mode === 'replay' && args.has('--pause-only') && exitCode === 0) {

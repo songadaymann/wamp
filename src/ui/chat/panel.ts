@@ -1,3 +1,4 @@
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import {
   type ChatMessageListResponse,
   CHAT_MESSAGE_MAX_LENGTH,
@@ -511,12 +512,13 @@ export class ChatPanelController {
     if (
       !this.canModerateMessages()
       || this.moderationActionMessageId
-      || !this.windowObj.confirm(`Delete ${message.userDisplayName}'s chat message?`)
+      || !this.windowObj.confirm(`Delete ${formatAccountIdentity(message.userDisplayName, message.userUsername)}'s chat message?`)
     ) {
       return;
     }
 
     this.moderationActionMessageId = message.id;
+    this.renderMessages();
     this.setStatus('Deleting message...');
     this.render();
 
@@ -535,6 +537,7 @@ export class ChatPanelController {
     } finally {
       this.moderationActionMessageId = null;
       this.render();
+      this.renderMessages();
     }
   }
 
@@ -542,13 +545,14 @@ export class ChatPanelController {
     if (
       !this.canModerateMessages()
       || this.moderationActionMessageId
-      || !this.windowObj.confirm(`Ban ${message.userDisplayName} from chat?`)
+      || !this.windowObj.confirm(`Ban ${formatAccountIdentity(message.userDisplayName, message.userUsername)} from chat?`)
     ) {
       return;
     }
 
     this.moderationActionMessageId = message.id;
-    this.setStatus(`Banning ${message.userDisplayName}...`);
+    this.renderMessages();
+    this.setStatus(`Banning ${formatAccountIdentity(message.userDisplayName, message.userUsername)}...`);
     this.render();
 
     try {
@@ -559,13 +563,14 @@ export class ChatPanelController {
       };
       syncChatModerationState(response.viewer);
       await this.reloadMessages();
-      this.setStatus(`${message.userDisplayName} was banned from chat.`);
+      this.setStatus(`${formatAccountIdentity(message.userDisplayName, message.userUsername)} was banned from chat.`);
     } catch (error) {
       console.error('Failed to ban chat user', error);
       this.setStatus(getErrorMessage(error, 'Failed to ban chat user.'));
     } finally {
       this.moderationActionMessageId = null;
       this.render();
+      this.renderMessages();
     }
   }
 
@@ -825,7 +830,7 @@ export class ChatPanelController {
       const author = createProfileTriggerElement(
         this.doc,
         message.userId,
-        message.userDisplayName,
+        formatAccountIdentity(message.userDisplayName, message.userUsername),
         'chat-message-author'
       );
 

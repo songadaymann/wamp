@@ -37,7 +37,7 @@ export async function sendChatMessage(text: string): Promise<ChatMessageRecord> 
   });
 }
 
-export async function fetchChatMentionUsers(query: string): Promise<ChatMentionUserListResponse> {
+export async function fetchChatMentionUsers(query: string, options: { signal?: AbortSignal } = {}): Promise<ChatMentionUserListResponse> {
   const params = new URLSearchParams();
   if (query.trim()) {
     params.set('q', query.trim());
@@ -45,7 +45,8 @@ export async function fetchChatMentionUsers(query: string): Promise<ChatMentionU
 
   const suffix = params.toString();
   return apiRequest<ChatMentionUserListResponse>(
-    `/api/chat/mention-users${suffix ? `?${suffix}` : ''}`
+    `/api/chat/mention-users${suffix ? `?${suffix}` : ''}`,
+    options,
   );
 }
 
@@ -59,8 +60,8 @@ export async function fetchChatAdmins(): Promise<ChatAdminListResponse> {
   return apiRequest<ChatAdminListResponse>('/api/chat/moderation/admins');
 }
 
-export async function grantChatAdmin(displayName: string): Promise<ChatAdminMutationResponse> {
-  const body: ChatAdminCreateRequestBody = { displayName };
+export async function grantChatAdmin(userId: string): Promise<ChatAdminMutationResponse> {
+  const body: ChatAdminCreateRequestBody = { userId };
   return apiRequest<ChatAdminMutationResponse>('/api/chat/moderation/admins', {
     method: 'POST',
     body: JSON.stringify(body),

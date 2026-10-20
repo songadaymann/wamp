@@ -1,3 +1,4 @@
+import { formatAccountIdentity } from '../../../auth/displayIdentity';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../../config';
 import {
   ROOM_COMMENT_BROWSE_COMMENT_LIMIT,
@@ -178,6 +179,7 @@ export async function handleRoomCommentCreate(
     body: text,
     authorUserId: auth.user.id,
     authorDisplayName: auth.user.displayName,
+    authorUsername: auth.user.username ?? null,
     ipHash: await hashRoomCommentIp(env, getRequestIp(request)),
     userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
     createdAt: now.toISOString(),
@@ -210,7 +212,7 @@ async function sendRoomCommentAdminReviewNotification(
   const result = await sendAdminReviewNotificationEmail(env, {
     subject: `Comment needs approval: ${roomLabel}`,
     heading: 'New comment needs approval',
-    intro: `${comment.authorDisplayName} submitted a comment on ${roomLabel}.`,
+    intro: `${formatAccountIdentity(comment.authorDisplayName, comment.authorUsername)} submitted a comment on ${roomLabel}.`,
     details: [
       `Comment: ${comment.body}`,
       `Room: ${roomLabel}`,

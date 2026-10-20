@@ -525,3 +525,28 @@
     }
   }
 }
+
+@layer components {
+  #chat-moderation-modal .chat-moderation-form .chat-moderation-input,
+  #chat-moderation-modal .chat-moderation-modal-panel :is(.chat-moderation-form, .chat-moderation-list, .history-modal-header) .bar-btn {
+    min-height: 44px;
+  }
+
+  .chat-moderation-input {
+    border-radius: 0;
+  }
+
+  #chat-moderation-modal .chat-moderation-list .chat-admin-search-result {
+    justify-content: flex-start;
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+    border-radius: 0;
+  }
+
+  .chat-moderation-item-title,
+  .chat-moderation-item-meta {
+    overflow-wrap: anywhere;
+  }
+}
