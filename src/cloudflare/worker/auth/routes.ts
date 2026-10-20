@@ -84,6 +84,7 @@ import {
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
 import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { getRoomClaimQuota } from '../rooms/store';
+import { handleLogoutAll } from './logoutAll';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
   if (url.pathname === '/api/auth/session' && request.method === 'GET') {
@@ -121,6 +122,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
     return handleLogout(request, env);
+  }
+
+  if (url.pathname === '/api/auth/logout-all' && request.method === 'POST') {
+    return handleLogoutAll(request, env);
   }
 
   if (url.pathname === '/api/auth/display-name' && request.method === 'POST') {

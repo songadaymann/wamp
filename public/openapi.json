@@ -2033,6 +2033,18 @@
         }
       }
     },
+    "/api/auth/logout-all": {
+      "post": {
+        "summary": "Log out all of the current user's browser sessions",
+        "description": "Requires a session cookie and an explicit trusted Origin. Revokes only that user's sessions and clears the current cookie. API and agent tokens have separate revocation controls.",
+        "security": [{ "cookieSession": [] }],
+        "responses": {
+          "200": { "description": "All browser sessions logged out", "content": { "application/json": { "schema": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } } } } },
+          "401": { "description": "Missing or expired session" },
+          "403": { "description": "Missing or untrusted browser Origin" }
+        }
+      }
+    },
     "/api/auth/tokens": {
       "get": {
         "summary": "List personal API tokens",

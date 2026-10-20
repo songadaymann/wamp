@@ -73,6 +73,7 @@ interface AuthIdentityProfileView {
 }
 
 let state = createAuthState({ storageBackend: getStorageBackend(), testResetEnabled: isTestResetEnabled() });
+let sessionGeneration = 0;
 
 let authPanel: HTMLElement | null = null;
 let authIdentity: HTMLButtonElement | null = null;
@@ -89,6 +90,7 @@ let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
 let authLogoutButton: HTMLButtonElement | null = null;
+let authLogoutAllButton: HTMLButtonElement | null = null;
 let authDisplayNameRow: HTMLElement | null = null;
 let authDisplayNameInput: HTMLInputElement | null = null;
 let authDisplayNameButton: HTMLButtonElement | null = null;
@@ -143,6 +145,7 @@ export async function setupAuthUi(): Promise<void> {
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
   authLogoutButton = document.getElementById('btn-auth-logout') as HTMLButtonElement | null;
+  authLogoutAllButton = document.getElementById('btn-auth-logout-all') as HTMLButtonElement | null;
   authDisplayNameRow = document.getElementById('auth-display-name-row');
   authDisplayNameInput = document.getElementById('auth-display-name-input') as HTMLInputElement | null;
   authDisplayNameButton = document.getElementById('btn-auth-display-name') as HTMLButtonElement | null;
@@ -208,6 +211,9 @@ export async function setupAuthUi(): Promise<void> {
   });
   authLogoutButton?.addEventListener('click', () => {
     void logout();
+  });
+  authLogoutAllButton?.addEventListener('click', () => {
+    void logout('all');
   });
   authDisplayNameButton?.addEventListener('click', () => {
     void updateDisplayName();
@@ -313,8 +319,10 @@ async function initializeWalletConnect(): Promise<void> {
 }
 
 async function refreshSession(): Promise<void> {
+  const generation = sessionGeneration;
   try {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
+    if (generation !== sessionGeneration) return;
     setRuntimeWalletProjectId(session.walletProjectId);
     setRuntimePartykitConfig(session.partykitHost, session.partykitParty);
     state = transitionAuthState(state, { type: 'session', session, preserveGuestStatus: window.location.search.includes('auth=') });
@@ -338,6 +346,7 @@ async function refreshSession(): Promise<void> {
       lastDisplayNameAvailability = null;
     }
   } catch (error) {
+    if (generation !== sessionGeneration) return;
     console.error('Failed to load auth session', error);
     state = transitionAuthState(state, { type: 'session-failed' });
     authIdentityProfile = null;
@@ -549,12 +558,15 @@ async function verifyEmailCode(): Promise<void> {
   }
 }
 
-async function logout(): Promise<void> {
+async function logout(scope: 'current' | 'all' = 'current'): Promise<void> {
+  if (scope === 'all' && !window.confirm('Log out on all devices? You will need to sign in again.')) return;
+  // A response started before or during revocation must not restore old identity.
+  sessionGeneration += 1;
   setLoading(true, 'Signing out...');
 
   try {
     const classroomSlug = state.schoolManaged ? state.school?.classroomSlug ?? null : null;
-    await apiRequest<{ ok: true }>('/api/auth/logout', {
+    await apiRequest<{ ok: true }>(scope === 'all' ? '/api/auth/logout-all' : '/api/auth/logout', {
       method: 'POST',
     });
     if (classroomSlug) {
@@ -563,11 +575,14 @@ async function logout(): Promise<void> {
       return;
     }
 
-    state = transitionAuthState(state, { type: 'signed-out' });
+    state = transitionAuthState(state, { type: 'signed-out',
+      ...(scope === 'all' ? { status: 'Signed out on all devices.' } : {}),
+    });
   } catch (error) {
     console.error('Failed to sign out', error);
     state.status = getErrorMessage(error, 'Failed to sign out.');
   } finally {
+    sessionGeneration += 1;
     setLoading(false);
   }
 }
@@ -989,6 +1004,10 @@ function renderAuthUi(): void {
   if (authLogoutButton) {
     authLogoutButton.classList.toggle('hidden', !state.authenticated);
     authLogoutButton.disabled = state.loading;
+  }
+  if (authLogoutAllButton) {
+    authLogoutAllButton.classList.toggle('hidden', !state.authenticated);
+    authLogoutAllButton.disabled = state.loading;
   }
 
   if (authDisplayNameRow) {

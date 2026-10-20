@@ -240,7 +240,10 @@
           <summary>Admin</summary>
           <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Reset Test Data</button></div>
         </details>
-        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+        <div class="game-menu-actions" role="group" aria-label="Log out options">
+          <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+          <button id="btn-auth-logout-all" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" type="button" data-menu-action data-button-variant="danger">Log out everywhere</button>
+        </div>
       </div>
     </div>
   <div id="app">

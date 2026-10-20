@@ -14,6 +14,11 @@ function freezeState(state: AuthDebugState) {
 }
 
 describe('auth account transitions', () => {
+  it.each(['Signed out.', 'Signed out on all devices.'])('clears a stale logout notice when a verified session returns (%s)', status => {
+    const signedOut = transitionAuthState(session(fresh(), {}), { type: 'signed-out', status });
+    expect(session(signedOut, { source: 'session' })).toMatchObject({ authenticated: true, user, status: '' });
+  });
+
   it('starts independent guests with injected deployment settings and no account privileges', () => {
     const a = fresh(), b = createAuthState({ storageBackend: 'local', testResetEnabled: true });
     expect(a).toMatchObject({ authenticated: false, user: null, source: null, loading: false,
