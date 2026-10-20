@@ -30,7 +30,7 @@ let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
   exitCode = 0;
-  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') || args.has('--map-capture-only') || args.has('--mint-network-only') || args.has('--ownership-only') ? [] : engines) {
+  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') || args.has('--map-capture-only') || args.has('--mint-network-only') || args.has('--ownership-only') || args.has('--artwork-only') ? [] : engines) {
     const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
       stdio: 'inherit',
       env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
@@ -72,6 +72,13 @@ try {
       `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-ownership`],
     { stdio: 'inherit', env: process.env });
     if (ownership.status !== 0) exitCode = ownership.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--artwork-only') && exitCode === 0) {
+    const artwork = spawnSync(process.execPath, ['scripts/smoke_room_artwork.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-artwork`],
+    { stdio: 'inherit', env: process.env });
+    if (artwork.status !== 0) exitCode = artwork.status ?? 1;
   }
 
   if (mode === 'replay' && args.has('--mint-network-only') && exitCode === 0) {

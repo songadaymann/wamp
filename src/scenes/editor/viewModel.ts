@@ -88,7 +88,6 @@ export function buildEditorUiViewModel(
     mintedTokenId,
     canRefreshMintMetadata,
     saveInFlight,
-    mintedMetadataCurrent,
     publishedVersion,
     roomVersionHistory,
     entrySource,
@@ -149,9 +148,7 @@ export function buildEditorUiViewModel(
     mintButtonText: mintedTokenId ? 'Minted' : 'Mint Room',
     refreshMetadataHidden: !mintedTokenId,
     refreshMetadataDisabled: !canRefreshMintMetadata || saveInFlight,
-    refreshMetadataButtonText: mintedMetadataCurrent
-      ? 'Refresh NFT Metadata'
-      : 'Refresh NFT Metadata',
+    refreshMetadataButtonText: 'Add/update artwork',
     historyHidden: false,
     historyDisabled: !isRoomHistoryAvailable(publishedVersion, roomVersionHistory),
     fitHidden: false,

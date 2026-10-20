@@ -33,6 +33,7 @@ import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQuer
   isGenericSignedInStatus, normalizeChatModerationViewer, type AuthDebugState } from './sessionState';
 export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
+import { WalletTransactionRevertedError } from './walletTransaction';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -275,8 +276,14 @@ export function promptForSignIn(status: string = DEFAULT_SIGN_IN_PROMPT_STATUS):
 
 export async function sendPreparedWalletTransaction(
   transaction: PreparedWalletTransaction,
-  chain: RoomMintChainInfo
+  chain: RoomMintChainInfo,
+  options: {
+    expectedWalletAddress?: string;
+    isCurrent?: () => boolean;
+    onSubmitted?: (transaction: { hash: string; from: string }) => void;
+  } = {},
 ): Promise<{ hash: string; from: string }> {
+  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
   if (!state.walletProjectConfigured) {
     throw new Error(WALLET_NOT_CONFIGURED_MESSAGE);
   }
@@ -285,6 +292,7 @@ export async function sendPreparedWalletTransaction(
   await ensureWalletConnection();
   const provider = getWalletProvider(walletModal);
 
+  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
   await ensureWalletChain(provider, chain);
 
   const { createPublicClient, createWalletClient, custom } = await import('viem');
@@ -297,6 +305,11 @@ export async function sendPreparedWalletTransaction(
     throw new Error('Connected wallet does not match the linked account wallet.');
   }
 
+  if (options.isCurrent?.() === false) throw new Error('This room action is no longer current.');
+  if (options.expectedWalletAddress && options.expectedWalletAddress.trim().toLowerCase() !== signerAddress.toLowerCase()) {
+    throw new Error('The connected wallet changed while preparing this room action.');
+  }
+
   const hash = await walletClient.sendTransaction({
     account: signerAddress,
     chain: null,
@@ -304,8 +317,10 @@ export async function sendPreparedWalletTransaction(
     data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
   });
+  options.onSubmitted?.({ hash, from: signerAddress });
   const publicClient = createPublicClient({ transport: custom(provider) });
-  await publicClient.waitForTransactionReceipt({ hash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status === 'reverted') throw new WalletTransactionRevertedError(hash);
 
   return {
     hash,

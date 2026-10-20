@@ -63,6 +63,11 @@
     margin-left: auto;
   }
 
+  body[data-editor-dock-shell='true'] #busy-overlay :is(#btn-busy-close, #btn-busy-retry) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   body[data-editor-dock-shell='true'] #bottom-bar #btn-fit-screen,
   body[data-editor-dock-shell='true'] #bottom-bar #zoom-level {
     border-color: var(--editor-retro-cream);
@@ -1368,6 +1373,15 @@
   }
 
   @media (max-width: 930px) {
+    /* Keep room actions readable beside the open drawer on portrait tablets. */
+    body[data-editor-dock-shell='true']:not([data-device-class='phone']) .editor-shell-top {
+      grid-column: 1 / -1;
+    }
+
+    body[data-editor-dock-shell='true']:not([data-device-class='phone']) #sidebar {
+      grid-row: 2;
+    }
+
     body[data-editor-dock-shell='true'] .editor-shell-tools {
       grid-template-columns: repeat(5, minmax(34px, 1fr)) 10px minmax(34px, 1fr);
     }

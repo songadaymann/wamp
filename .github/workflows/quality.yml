@@ -200,6 +200,7 @@ jobs:
       - run: npm run smoke:mint-network:service
       - run: npm run smoke:mobile:ci -- --mint-network-only
       - run: npm run smoke:mobile:ci -- --ownership-only --skip-build
+      - run: npm run smoke:mobile:ci -- --artwork-only --skip-build
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -208,4 +209,5 @@ jobs:
             output/web-game/mint-network-service
             output/web-game/mobile-smoke-ci/mint-network
             output/web-game/mobile-smoke-ci/room-ownership
+            output/web-game/mobile-smoke-ci/room-artwork
           retention-days: 7

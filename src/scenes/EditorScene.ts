@@ -534,7 +534,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       },
     });
     this.persistenceController = new EditorPersistenceController(this.roomSession, {
-      getRoomPermissions: () => this.roomPermissions,
+      getRoomPermissions: () => this.roomPermissions, isActive: () => this.scene.isActive(), events: this.events, refreshUi: () => this.renderEditorUi(),
       getRoomTitle: () => this.roomTitle,
       setRoomTitle: (title) => {
         this.roomTitle = title;
@@ -818,7 +818,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private get saveInFlight(): boolean {
-    return this.roomSession.isSaveInFlight;
+    return this.roomSession.isSaveInFlight || this.persistenceController.isCollecting;
   }
 
   private get roomGoal(): RoomGoal | null {
