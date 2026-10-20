@@ -132,7 +132,9 @@
     "scripts/smoke_first_publish.mjs",
     "scripts/smoke_returning_guest_panel.mjs",
     "scripts/smoke_map_capture_service.mjs",
-    "scripts/smoke_map_capture.mjs"
+    "scripts/smoke_map_capture.mjs",
+    "scripts/smoke_mint_network_service.mjs",
+    "scripts/smoke_mint_network.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

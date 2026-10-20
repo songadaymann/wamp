@@ -11,13 +11,17 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 /** Room 0,0 with minting configured, a Base RPC stub, and a count of full history loads. */
 function mintFixture(rpc: 'down' | 'unminted') {
   const f = fixture();
-  Object.assign(f.env, { ROOM_MINT_CONTRACT_ADDRESS: CONTRACT, ROOM_MINT_RPC_URL: 'https://base-rpc.example' });
+  Object.assign(f.env, { ROOM_MINT_CHAIN_ID: '8453', ROOM_MINT_CONTRACT_ADDRESS: CONTRACT, ROOM_MINT_RPC_URL: 'https://base-rpc.example' });
   const rpcCalls = vi.fn(async (_url: unknown, init?: RequestInit) => {
     if (rpc === 'down') return new Response('over rate limit', { status: 429 });
     const { id } = JSON.parse(String(init?.body)) as { id: number };
     return Response.json({ jsonrpc: '2.0', id, result: `0x${'0'.repeat(64)}` });
   });
-  vi.stubGlobal('fetch', rpcCalls);
+  const networkProbes = vi.fn(async (id: number) => Response.json({ jsonrpc: '2.0', id, result: '0x2105' }));
+  vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => {
+    const q = JSON.parse(String(init?.body)) as { id: number; method: string };
+    return q.method === 'eth_chainId' ? networkProbes(q.id) : rpcCalls(url, init);
+  });
   let historyLoads = 0;
   const prepare = f.env.DB.prepare.bind(f.env.DB);
   f.env.DB.prepare = (sql: string) => {
@@ -25,7 +29,7 @@ function mintFixture(rpc: 'down' | 'unminted') {
     return prepare(sql);
   };
   vi.spyOn(console, 'warn').mockImplementation(() => {});
-  return { ...f, rpcCalls, historyLoads: () => historyLoads };
+  return { ...f, rpcCalls, networkProbes, historyLoads: () => historyLoads };
 }
 
 const load = async (f: ReturnType<typeof mintFixture>, userId: string, mode?: 'throw' | 'use-stored') =>
@@ -37,6 +41,7 @@ describe('room writes during a Base RPC outage (F236)', () => {
     const record = await load(f, 'builder');
     expect(record.permissions.canSaveDraft).toBe(true);
     expect(f.rpcCalls).toHaveBeenCalledTimes(2);
+    expect(f.networkProbes).toHaveBeenCalledOnce();
     expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toMatch(/Room 0,0 ownership sync skipped.*unminted/);
   });
 
@@ -58,6 +63,7 @@ describe('room writes during a Base RPC outage (F236)', () => {
     const f = mintFixture('unminted');
     await load(f, 'builder');
     expect(f.rpcCalls).toHaveBeenCalledTimes(1);
+    expect(f.networkProbes).toHaveBeenCalledOnce();
     expect(f.historyLoads()).toBe(1);
   });
 });

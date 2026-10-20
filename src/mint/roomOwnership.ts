@@ -1,9 +1,6 @@
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { encodeAbiParameters, keccak256, stringToHex, type Hex } from 'viem';
 
-export const DEFAULT_ROOM_MINT_CHAIN_ID = 84532;
-export const DEFAULT_ROOM_MINT_CHAIN_NAME = 'Base Sepolia';
-export const DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL = 'https://sepolia.basescan.org';
 export const ROOM_MINT_AUTHORIZATION_TYPE =
   'RoomMintAuthorization(uint256 chainId,address verifyingContract,int32 x,int32 y,address claimer,uint256 deadline)';
 export const ROOM_MINT_AUTHORIZATION_TYPEHASH = keccak256(

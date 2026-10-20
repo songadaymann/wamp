@@ -61,7 +61,7 @@ Notes:
 
 ## Minting Setup
 
-The app is wired for **Base Sepolia**, not Ethereum Sepolia.
+Production uses **Base mainnet**. **Base Sepolia** remains the isolated test network; Ethereum Sepolia is not a minting target. Minting requires an explicit `ROOM_MINT_CHAIN_ID`: an omitted/invalid ID fails closed, and the server checks its RPC network before using chain data or returning wallet instructions.
 
 Current known production deployment:
 
@@ -75,7 +75,7 @@ Historical test deployment still referenced elsewhere:
 - Base Sepolia chain id: `84532`
 - Base Sepolia explorer: `https://sepolia.basescan.org`
 
-What is required to test real minting:
+For a separately authorized, isolated Base Sepolia mint test (not routine production verification):
 
 - a funded **Base Sepolia** deployer private key
 - a separate contract owner address
@@ -116,45 +116,43 @@ You do **not** need an explorer API key unless you also want source verification
 
 ### 2. Configure the remote Worker
 
-The remote Worker currently returns:
-
-- `503 Room minting is not configured on this backend.`
-
-That means at least these env vars are missing remotely:
+A new backend without mint configuration returns `503 Room minting is not configured on this backend.` Production is already configured; this is a setup diagnostic, not its current status. Required bindings for a new mint backend include:
 
 - `ROOM_MINT_RPC_URL`
 - `ROOM_MINT_CONTRACT_ADDRESS`
 - `ROOM_MINT_AUTH_PRIVATE_KEY`
+- `ROOM_MINT_CHAIN_ID`
 
 `ROOM_MINT_RPC_URL` stays on the Worker. Mint and metadata preparation return the public Base mainnet or Base Sepolia endpoint for wallet network setup, according to `ROOM_MINT_CHAIN_ID`. There is no fallback to the server's transport for other chains. See [Base network details](https://docs.base.org/get-started/connect-to-base).
 
-Recommended remote values:
+Production network values:
 
-- `ROOM_MINT_CHAIN_ID=84532`
-- `ROOM_MINT_CHAIN_NAME=Base Sepolia`
-- `ROOM_MINT_BLOCK_EXPLORER_URL=https://sepolia.basescan.org`
+- `ROOM_MINT_CHAIN_ID=8453`
+- `ROOM_MINT_CHAIN_NAME=Base`
+- `ROOM_MINT_BLOCK_EXPLORER_URL=https://basescan.org`
 
-Set them with Wrangler secrets/vars or in the Cloudflare dashboard, then redeploy the Worker.
+For an isolated safety backend, select84532, Base Sepolia and https://sepolia.basescan.org explicitly. Local `.dev.vars` Sepolia examples remain appropriate.
 
-Example CLI flow:
+Existing production deployments already have these bindings, including network labels, stored as secrets. Keep their existing types and values; do not add duplicate vars or delete/rotate credentials for this fix or a frontend redeploy. A public label being stored as a secret does not make it necessary to migrate it.
+
+For a new, isolated safety backend only, use interactive prompts so private values never enter shell arguments/history:
 
 ```bash
-printf '%s' "<base-sepolia-rpc-url>" | npx wrangler secret put ROOM_MINT_RPC_URL
-printf '%s' "<deployed-contract-address>" | npx wrangler secret put ROOM_MINT_CONTRACT_ADDRESS
-printf '%s' "<mint-authority-private-key>" | npx wrangler secret put ROOM_MINT_AUTH_PRIVATE_KEY
-printf '%s' "84532" | npx wrangler secret put ROOM_MINT_CHAIN_ID
-printf '%s' "Base Sepolia" | npx wrangler secret put ROOM_MINT_CHAIN_NAME
-printf '%s' "https://sepolia.basescan.org" | npx wrangler secret put ROOM_MINT_BLOCK_EXPLORER_URL
-npm run cf:deploy
+npx wrangler secret put ROOM_MINT_RPC_URL --env safety
+npx wrangler secret put ROOM_MINT_CONTRACT_ADDRESS --env safety
+npx wrangler secret put ROOM_MINT_AUTH_PRIVATE_KEY --env safety
+npx wrangler secret put ROOM_MINT_CHAIN_ID --env safety
+npx wrangler secret put ROOM_MINT_CHAIN_NAME --env safety
+npx wrangler secret put ROOM_MINT_BLOCK_EXPLORER_URL --env safety
 ```
 
-If you prefer, the non-secret values can live in dashboard vars instead.
+Provide Sepolia's84532 and matching labels in those safety prompts. A new deployment or real wallet transaction requires its own explicit authorization; do not rerun setup against production as a verification shortcut. Routine checks use synthetic keys, RPC responses and isolated data, plus read-only public contract evidence.
 
 The Worker now verifies that `ROOM_MINT_AUTH_PRIVATE_KEY` resolves to the same address as the contract's on-chain `mintAuthority`. If they do not match, mint prepare fails immediately instead of handing the wallet a reverting transaction.
 
 ### 3. Verify minting
 
-Once the Worker is configured:
+For a separately authorized safety-network transaction test, once the Worker is configured:
 
 1. sign in with a wallet-linked account
 2. publish a room
@@ -166,9 +164,9 @@ Once the Worker is configured:
    - `permissions.canSaveDraft` / `canPublish` follow token ownership
    - a second account cannot edit if it does not own the minted token
 
-### 4. What I still need from you
+### 4. New isolated test deployments
 
-To finish real remote mint testing, I need:
+The production mainnet deployment is already complete. For any new isolated test deployment, arrange:
 
 - the Base Sepolia RPC URL you want to use
 - the deployed contract address
@@ -180,6 +178,8 @@ To finish real remote mint testing, I need:
 The safer split is:
 
 - you run the contract deploy locally with your private key
-- you give me the deployed contract address
+- record the deployed contract address and explicit network
 - you configure the Worker with the mint-authority private key
-- then I wire the remote Worker env and finish the mint/edit-gating verification
+- verify that isolated backend and its mint/edit gating; preserve existing production settings
+
+Read-only October20 evidence: Base RPC reports chain8453 and8,941 runtime bytes at the documented contract. [Sourcify](https://sourcify.dev/server/v2/contract/8453/0xc3032d5E67C8A67C9745943929F8DFf2410Dd9A1?fields=all) reports exact runtime/source matching; `src/RoomOwnershipToken.sol` matches the repository. This does not imply that historical token metadata or ownership/UX backlog items are complete. No real transaction or credential change was made.

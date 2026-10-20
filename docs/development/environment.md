@@ -92,3 +92,5 @@ CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES=20
 - Leave optional moderation/upload/mint values blank unless you are testing that subsystem.
 - Prefer the hosting provider's secret store for deployed environments.
 - `ROOM_MINT_RPC_URL` is the server-only blockchain transport and may use a private provider. Wallet network setup receives the public Base RPC for chain8453 or84532, never this setting. Other chain IDs cannot prepare wallet transactions until an explicit public endpoint is supported.
+
+Minting has no implicit network fallback: configure an explicit8453 (production Base) or84532 (isolated Base Sepolia). Matching names/explorers are used when their optional labels are absent. Every server chain operation first checks `eth_chainId` through the server-only RPC with a2-second, no-retry probe; failures/mismatches cannot produce fresh ownership or wallet instructions. Tolerant draft saves keep stored ownership. Standalone `/minted-room` links also require an explicit valid `chainId`. Existing secret binding types/values remain unchanged.

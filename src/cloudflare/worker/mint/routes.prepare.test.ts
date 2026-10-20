@@ -23,6 +23,7 @@ const privateRpc = 'https://server-rpc.example/server-only-sentinel';
 const coordinates = { x: 3, y: -2 };
 const tokenUri = 'data:application/json;base64,e30=';
 const signature = `0x${'ab'.repeat(65)}`;
+let rpcChainId = 8453;
 
 function environment(chainId = 8453): Env {
   return {
@@ -61,9 +62,15 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ user: { id: 'builder', walletAddress: wallet } });
   mocks.price.mockResolvedValue('12345'); mocks.sign.mockResolvedValue(signature);
   mocks.load.mockResolvedValue(record());
+  rpcChainId = 8453;
+  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const q = JSON.parse(String(init?.body)) as { id: number; method: string };
+    expect(q.method).toBe('eth_chainId');
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: q.id, result: `0x${rpcChainId.toString(16)}` }), { headers: { 'Content-Type': 'application/json' } });
+  }));
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('mint and metadata prepare network information', () => {
   it.each(['mint', 'metadata'] as const)('keeps transport diagnostics out of the public error response (%s)', async kind => {
@@ -88,6 +95,7 @@ describe('mint and metadata prepare network information', () => {
     ['mint', 8453, 'https://mainnet.base.org'], ['mint', 84532, 'https://sepolia.base.org'],
     ['metadata', 8453, 'https://mainnet.base.org'], ['metadata', 84532, 'https://sepolia.base.org'],
   ] as const)('returns public wallet data while preserving transaction and private server configuration (%s/%s)', async (kind, chainId, rpcUrl) => {
+    rpcChainId = chainId;
     mocks.load.mockResolvedValue(record(kind === 'metadata'));
     const env = environment(chainId), response = await prepare(kind, env), text = await response.text();
     expect(response.status).toBe(200);

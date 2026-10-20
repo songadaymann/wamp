@@ -1,18 +1,18 @@
-import { createPublicClient, decodeEventLog, decodeFunctionData, http, isAddress, type Hex } from 'viem';
+import { decodeEventLog, decodeFunctionData, isAddress, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { AuthUser } from '../../../auth/model';
 import {
   buildRoomMintAuthorizationHash,
-  DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL,
-  DEFAULT_ROOM_MINT_CHAIN_ID,
-  DEFAULT_ROOM_MINT_CHAIN_NAME,
   ROOM_OWNERSHIP_TOKEN_ABI,
 } from '../../../mint/roomOwnership';
 import { sha256Hex } from '../../../mint/roomMetadata';
+import { getRoomMintNetwork, parseRoomChainId } from '../../../mint/roomNetwork';
 import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
+import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient } from './network';
+export { createRoomMintPublicClient } from './network';
 
 export function getOptionalRoomMintConfig(env: Env): RoomMintConfig | null {
   if (env.ROOM_MINT_DISABLED?.trim() === '1') {
@@ -37,20 +37,21 @@ export function getOptionalRoomMintConfig(env: Env): RoomMintConfig | null {
     throw new HttpError(500, 'ROOM_MINT_CONTRACT_ADDRESS must be a valid EVM address.');
   }
 
-  const rawChainId = env.ROOM_MINT_CHAIN_ID?.trim();
-  const chainId = rawChainId ? Number(rawChainId) : DEFAULT_ROOM_MINT_CHAIN_ID;
-  if (!Number.isInteger(chainId) || chainId <= 0) {
-    throw new HttpError(500, 'ROOM_MINT_CHAIN_ID must be a positive integer.');
+  const chainId = parseRoomChainId(env.ROOM_MINT_CHAIN_ID);
+  if (chainId === null) {
+    throw new HttpError(503, 'Room minting is unavailable because its network is not configured correctly.');
   }
+  const network = getRoomMintNetwork(chainId);
+  if (!network) throw new HttpError(503, 'Wallet network setup is unavailable for the configured mint chain.');
 
-  return {
+  return Object.freeze({
     chainId,
-    chainName: env.ROOM_MINT_CHAIN_NAME?.trim() || DEFAULT_ROOM_MINT_CHAIN_NAME,
+    chainName: env.ROOM_MINT_CHAIN_NAME?.trim() || network.name,
     rpcUrl,
     contractAddress,
     blockExplorerUrl:
-      env.ROOM_MINT_BLOCK_EXPLORER_URL?.trim() || DEFAULT_ROOM_MINT_BLOCK_EXPLORER_URL,
-  };
+      env.ROOM_MINT_BLOCK_EXPLORER_URL?.trim() || network.blockExplorerUrl,
+  });
 }
 
 export function requireRoomMintConfig(env: Env): RoomMintConfig {
@@ -74,15 +75,6 @@ export function requireRoomMintAuthAccount(env: Env) {
   return privateKeyToAccount(privateKey);
 }
 
-export function createRoomMintPublicClient(
-  config: RoomMintConfig,
-  transport: { retryCount?: number; timeout?: number } = {}
-) {
-  return createPublicClient({
-    transport: http(config.rpcUrl, transport),
-  });
-}
-
 /**
  * What a chain-ownership sync does when the Base RPC fails. 'throw' fails the request
  * (minting and explicit ownership refreshes need the real chain state). 'use-stored'
@@ -97,7 +89,7 @@ export type RoomChainSyncFailureMode = 'throw' | 'use-stored';
 const TOLERANT_CHAIN_READ_TRANSPORT = { retryCount: 1, timeout: 5_000 };
 
 export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
-  const client = createRoomMintPublicClient(config);
+  const client = await createVerifiedRoomMintPublicClient(config);
   const priceWei = await client.readContract({
     address: config.contractAddress,
     abi: ROOM_OWNERSHIP_TOKEN_ABI,
@@ -108,7 +100,7 @@ export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<stri
 }
 
 export async function loadRoomMintAuthority(config: RoomMintConfig): Promise<`0x${string}`> {
-  const client = createRoomMintPublicClient(config);
+  const client = await createVerifiedRoomMintPublicClient(config);
   return client.readContract({
     address: config.contractAddress,
     abi: ROOM_OWNERSHIP_TOKEN_ABI,
@@ -151,7 +143,13 @@ export async function syncRoomOwnershipFromChain(
   actor: AuthUser | null,
   onChainError: RoomChainSyncFailureMode = 'throw'
 ): Promise<RoomRecord> {
-  const config = getOptionalRoomMintConfig(env);
+  let config: RoomMintConfig | null;
+  try {
+    config = getOptionalRoomMintConfig(env);
+  } catch (error) {
+    if (onChainError === 'throw') throw error;
+    return record;
+  }
   if (!config) {
     return record;
   }
@@ -233,7 +231,7 @@ export async function readRoomMintStateFromChain(
   coordinates: RoomCoordinates,
   transport: { retryCount?: number; timeout?: number } = {}
 ): Promise<RoomMintChainState | null> {
-  const client = createRoomMintPublicClient(config, transport);
+  const client = await createVerifiedRoomMintPublicClient(config, transport);
   const tokenId = await client.readContract({
     address: config.contractAddress,
     abi: ROOM_OWNERSHIP_TOKEN_ABI,
@@ -275,7 +273,7 @@ export async function verifyMintTransactionForRoom(
   txHash: string,
   coordinates: RoomCoordinates
 ): Promise<RoomMintChainState> {
-  const client = createRoomMintPublicClient(config);
+  const client = await createVerifiedRoomMintPublicClient(config);
   let receipt: Awaited<ReturnType<typeof client.getTransactionReceipt>>;
 
   try {
@@ -476,7 +474,7 @@ export async function verifyRoomTokenMetadataTransaction(
     throw new HttpError(409, 'Room is not minted yet.');
   }
 
-  const client = createRoomMintPublicClient(config);
+  const client = await createVerifiedRoomMintPublicClient(config);
   let receipt: Awaited<ReturnType<typeof client.getTransactionReceipt>>;
   let transaction: Awaited<ReturnType<typeof client.getTransaction>>;
 
