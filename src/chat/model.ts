@@ -13,6 +13,7 @@ export interface ChatMessageRecord {
   id: string;
   userId: string;
   userDisplayName: string;
+  userUsername?: string | null;
   body: string;
   createdAt: string;
 }
@@ -39,17 +40,21 @@ export interface ChatMentionUserListResponse {
 export interface ChatModerationUserRecord {
   userId: string;
   displayName: string;
+  username?: string | null;
   createdAt: string;
   grantedByUserId: string | null;
   grantedByDisplayName: string | null;
+  grantedByUsername?: string | null;
 }
 
 export interface ChatBanRecord {
   userId: string;
   displayName: string;
+  username?: string | null;
   createdAt: string;
   bannedByUserId: string | null;
   bannedByDisplayName: string | null;
+  bannedByUsername?: string | null;
 }
 
 export interface ChatAdminListResponse {
@@ -63,7 +68,7 @@ export interface ChatBanListResponse {
 }
 
 export interface ChatAdminCreateRequestBody {
-  displayName: string;
+  userId: string;
 }
 
 export interface ChatBanCreateRequestBody {

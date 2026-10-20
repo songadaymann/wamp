@@ -16,7 +16,6 @@ import {
   MAX_CHAT_MESSAGE_LIMIT,
 } from '../../../chat/model';
 import { hasSessionCookie, loadCurrentSession, requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from '../auth/request';
-import { findUserByDisplayName } from '../auth/store';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
   HttpError,
@@ -176,7 +175,9 @@ export async function handleCreateChatMessage(
     auth.user.id,
     auth.user.displayName,
     text,
-    new Date(nowMs).toISOString()
+    new Date(nowMs).toISOString(),
+    crypto.randomUUID(),
+    auth.user.username ?? null,
   );
 
   scheduleChatMentionNotificationEmails(request, env, message, auth.user, ctx);
@@ -264,21 +265,13 @@ async function handleCreateChatAdmin(request: Request, env: Env): Promise<Respon
   requireTrustedOriginForMutation(request);
   const { session, viewer } = await requireChatOwnerSession(env, request, 'grant chat admin access');
   const body = await parseJsonBody<ChatAdminCreateRequestBody>(request);
-  const displayName = normalizeDisplayName(body.displayName);
-  if (!displayName) {
-    throw new HttpError(400, 'displayName is required.');
-  }
-
-  const user = await findUserByDisplayName(env, displayName);
-  if (!user) {
-    throw new HttpError(404, 'User not found for that display name.');
-  }
+  const userId = normalizeUserId(body.userId);
+  const { user, viewer: targetViewer } = await loadChatModerationTarget(env, userId);
 
   if (user.id === session.user.id) {
     throw new HttpError(403, 'You cannot grant chat admin access to yourself.');
   }
 
-  const targetViewer = await resolveChatModerationViewer(env, user);
   if (targetViewer.role === 'owner') {
     throw new HttpError(400, 'That user is already a chat owner.');
   }
@@ -418,15 +411,6 @@ function normalizeChatMessageText(value: unknown): string {
   }
 
   return trimmed;
-}
-
-function normalizeDisplayName(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.replace(/\s+/g, ' ').trim();
-  return trimmed || null;
 }
 
 function normalizeUserId(value: unknown): string {

@@ -29,3 +29,11 @@ A controlled old signed-in session response delivered after all-device logout re
 ## Source acceptance
 
 Full local quality exits0:564 files/4,717 tests, styles/lint/types/DOM/generated bindings/build/startup and all asset checks. Startup651.0KB Brotli stays within670KB. The same strict three-profile auth matrix also passes against the built production app. Two installed-client movement/jump iterations have inspected captures, active unpaused gameplay and no browser/HTTP errors. OSS reports0 blockers/0 warnings. These proofs do not log out any real account. Exact-source/main hosted checks, merge and guarded API+Pages delivery remain pending.
+
+## Production delivery
+
+[PR259](https://github.com/songadaymann/wamp/pull/259), source `4c0de36f`, is merged as `ac2b8c89` and live on [wamp.land](https://wamp.land) / [immutable Pages](https://c969b57e.wampland.pages.dev). All nine checks on each exact head pass; parsed logs prove99 hosted browser cases per head and full564 files/4,717 tests. The main tree equals the source tree. Source preview10873936 matches its reviewed assets. The clean literal-main full API+Pages guard exits0, with no skipped checks or schema changes. Worker `2b279ba8-6296-49e3-a5f2-f60c25a8b1a4` serves100%; deployed JavaScript exactly matches the clean-main bundle. All37 checked assets match both custom and immutable domains.
+
+The real endpoint denies anonymous all-device logout with401; health/comments and both existing mint prepare authentication gates pass. The actual-domain game starts with the final assets, zero errors and an inspected capture. All three actual-domain desktop/phone/WebKit profiles pass every existing auth flow, cancellation/failure/success,44px controls, both logout delayed-response protections and classroom redirects, using isolated replayed data. No real account/session or API/agent token was revoked. Physical iOS remains separate.
+
+F048 is complete. Existing password-reset revocation and bounded expiry maintenance were verified; no new timer, background task or provider credential was added. The broader checklist stays active. F243's delivered technical fix still has only the conditional historical provider-key owner follow-up; F145 still awaits the collision/art choice. Unrelated dirty checkouts, TAS and selected animation are preserved.

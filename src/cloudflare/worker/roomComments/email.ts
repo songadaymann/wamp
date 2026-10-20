@@ -1,3 +1,4 @@
+import { formatAccountIdentity } from '../../../auth/displayIdentity';
 import { Resend } from 'resend';
 import { escapeEmailHtml as escapeHtml } from '../email/delivery';
 import type { AdminRoomCommentRecord } from '../../../roomComments/model';
@@ -57,7 +58,7 @@ export async function sendRoomCommentApprovedEmail(
     to: comment.builderEmail,
     subject: `New approved comment on ${roomLabel}`,
     text: [
-      `${comment.authorDisplayName} left a comment on ${roomLabel}:`,
+      `${formatAccountIdentity(comment.authorDisplayName, comment.authorUsername)} left a comment on ${roomLabel}:`,
       '',
       comment.body,
       '',
@@ -66,7 +67,7 @@ export async function sendRoomCommentApprovedEmail(
     html: [
       '<div style="font-family: monospace; background: #050505; color: #f3eee2; padding: 24px;">',
       `<h2 style="margin: 0 0 16px;">New comment on ${escapeHtml(roomLabel)}</h2>`,
-      `<p style="margin: 0 0 12px;"><strong>${escapeHtml(comment.authorDisplayName)}</strong> said:</p>`,
+      `<p style="margin: 0 0 12px;"><strong>${escapeHtml(formatAccountIdentity(comment.authorDisplayName, comment.authorUsername))}</strong> said:</p>`,
       `<blockquote style="margin: 0 0 20px; padding: 12px 14px; border-left: 4px solid #f2c84b; background: #141414;">${escapeHtml(comment.body)}</blockquote>`,
       `<p style="margin: 0;"><a href="${escapeHtml(roomUrl)}" style="color: #7de5ff;">Open the room</a></p>`,
       '</div>',

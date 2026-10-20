@@ -97,6 +97,7 @@
     "scripts/smoke_assist.mjs",
     "scripts/smoke_keyboard_bindings.mjs",
     "scripts/smoke_auth_state.mjs",
+    "scripts/smoke_chat_identity.mjs",
     "scripts/smoke_builder_activity.mjs",
     "scripts/smoke_launch_admin_game_jams.mjs",
     "scripts/smoke_police_enemies.mjs",

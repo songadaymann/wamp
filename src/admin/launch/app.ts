@@ -1,3 +1,4 @@
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import { setupBuildPromptsAdmin } from './buildPrompts';
 import { setupLaunchReplayModal } from './replayModal';
 import { setupDailyAdmin } from './dailyRoom';
@@ -22,6 +23,7 @@ import { setupCustomSpriteAdminController } from '../../custom-sprite-admin';
 import { createAdminResponseClient } from '../adminApiClient';
 import { createPollingController } from '../pollingController';
 import {
+  escapeHtml,
   matchesActivityFilter,
   normalizeActivityFilterKey,
   type LaunchAdminActivityFilterKey,
@@ -816,7 +818,7 @@ function renderRoomCommentCard(comment: AdminRoomCommentRecord): string {
       </div>
       <div class="comment-review-body">${escapeHtml(comment.body)}</div>
       <div class="meta">
-        ${escapeHtml(comment.authorDisplayName)}${comment.authorEmail ? ` (${escapeHtml(comment.authorEmail)})` : ''}
+        ${escapeHtml(formatAccountIdentity(comment.authorDisplayName, comment.authorUsername))}${comment.authorEmail ? ` (${escapeHtml(comment.authorEmail)})` : ''}
         on <a href="${escapeHtml(roomHref)}" target="_blank" rel="noreferrer">${escapeHtml(roomLabel)}</a>
         v${escapeHtml(String(comment.roomVersion))}
         at ${escapeHtml(`${comment.position.x},${comment.position.y}`)}
@@ -2009,13 +2011,4 @@ function emphasizeProgressionSelection(): void {
   progressionSelected.classList.remove('selected-flash');
   void progressionSelected.offsetWidth;
   progressionSelected.classList.add('selected-flash');
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

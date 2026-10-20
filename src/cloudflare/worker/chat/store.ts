@@ -7,6 +7,10 @@ import type {
 } from '../../../chat/model';
 import type { ChatAdminRow, ChatBanRow, ChatMessageRow, Env } from '../core/types';
 
+type ChatMessageIdentityRow = ChatMessageRow & { user_username?: string | null };
+type ChatAdminIdentityRow = ChatAdminRow & { username: string | null; granted_by_username: string | null };
+type ChatBanIdentityRow = ChatBanRow & { username: string | null; banned_by_username: string | null };
+
 const DEFAULT_CHAT_MENTION_USER_LIMIT = 8;
 const MAX_CHAT_MENTION_USER_LIMIT = 12;
 
@@ -19,31 +23,33 @@ export async function listChatMessages(
     afterCreatedAt === null
       ? await env.DB.prepare(
           `
-            SELECT id, user_id, user_display_name, body, created_at, deleted_at, deleted_by_user_id
+            SELECT m.*, u.username AS user_username
             FROM (
               SELECT id, user_id, user_display_name, body, created_at, deleted_at, deleted_by_user_id
               FROM chat_messages
               WHERE deleted_at IS NULL
               ORDER BY created_at DESC, id DESC
               LIMIT ?
-            )
-            ORDER BY created_at ASC, id ASC
+            ) m
+            LEFT JOIN users u ON u.id = m.user_id
+            ORDER BY m.created_at ASC, m.id ASC
           `
         )
           .bind(limit)
-          .all<ChatMessageRow>()
+          .all<ChatMessageIdentityRow>()
       : await env.DB.prepare(
           `
-            SELECT id, user_id, user_display_name, body, created_at, deleted_at, deleted_by_user_id
-            FROM chat_messages
-            WHERE created_at > ?
-              AND deleted_at IS NULL
-            ORDER BY created_at ASC, id ASC
+            SELECT m.*, u.username AS user_username
+            FROM chat_messages m
+            LEFT JOIN users u ON u.id = m.user_id
+            WHERE m.created_at > ?
+              AND m.deleted_at IS NULL
+            ORDER BY m.created_at ASC, m.id ASC
             LIMIT ?
           `
         )
           .bind(afterCreatedAt, limit)
-          .all<ChatMessageRow>();
+          .all<ChatMessageIdentityRow>();
 
   return results.results.map(mapChatMessageRow);
 }
@@ -54,7 +60,8 @@ export async function createChatMessage(
   userDisplayName: string,
   body: string,
   createdAt: string,
-  id: string = crypto.randomUUID()
+  id: string = crypto.randomUUID(),
+  userUsername: string | null = null
 ): Promise<ChatMessageRecord> {
   await env.DB.batch([
     env.DB.prepare(
@@ -69,6 +76,7 @@ export async function createChatMessage(
     id,
     userId,
     userDisplayName,
+    userUsername,
     body,
     createdAt,
   };
@@ -232,8 +240,10 @@ export async function loadChatAdminRecord(
       SELECT
         a.user_id,
         u.display_name,
+        u.username,
         a.granted_by_user_id,
         grantor.display_name AS granted_by_display_name,
+        grantor.username AS granted_by_username,
         a.created_at
       FROM chat_admins a
       JOIN users u ON u.id = a.user_id
@@ -243,7 +253,7 @@ export async function loadChatAdminRecord(
     `
   )
     .bind(userId)
-    .first<ChatAdminRow>();
+    .first<ChatAdminIdentityRow>();
 
   return row ? mapChatAdminRow(row) : null;
 }
@@ -254,15 +264,17 @@ export async function listChatAdmins(env: Env): Promise<ChatModerationUserRecord
       SELECT
         a.user_id,
         u.display_name,
+        u.username,
         a.granted_by_user_id,
         grantor.display_name AS granted_by_display_name,
+        grantor.username AS granted_by_username,
         a.created_at
       FROM chat_admins a
       JOIN users u ON u.id = a.user_id
       LEFT JOIN users grantor ON grantor.id = a.granted_by_user_id
       ORDER BY lower(u.display_name) ASC, a.created_at ASC
     `
-  ).all<ChatAdminRow>();
+  ).all<ChatAdminIdentityRow>();
 
   return result.results.map(mapChatAdminRow);
 }
@@ -318,8 +330,10 @@ export async function loadChatBanRecord(
       SELECT
         b.user_id,
         u.display_name,
+        u.username,
         b.banned_by_user_id,
         banner.display_name AS banned_by_display_name,
+        banner.username AS banned_by_username,
         b.created_at
       FROM chat_bans b
       JOIN users u ON u.id = b.user_id
@@ -329,7 +343,7 @@ export async function loadChatBanRecord(
     `
   )
     .bind(userId)
-    .first<ChatBanRow>();
+    .first<ChatBanIdentityRow>();
 
   return row ? mapChatBanRow(row) : null;
 }
@@ -340,15 +354,17 @@ export async function listChatBans(env: Env): Promise<ChatBanListResponse['bans'
       SELECT
         b.user_id,
         u.display_name,
+        u.username,
         b.banned_by_user_id,
         banner.display_name AS banned_by_display_name,
+        banner.username AS banned_by_username,
         b.created_at
       FROM chat_bans b
       JOIN users u ON u.id = b.user_id
       LEFT JOIN users banner ON banner.id = b.banned_by_user_id
       ORDER BY b.created_at DESC, b.user_id ASC
     `
-  ).all<ChatBanRow>();
+  ).all<ChatBanIdentityRow>();
 
   return result.results.map(mapChatBanRow);
 }
@@ -386,11 +402,12 @@ export async function deleteChatBan(env: Env, userId: string): Promise<void> {
   ]);
 }
 
-function mapChatMessageRow(row: ChatMessageRow): ChatMessageRecord {
+function mapChatMessageRow(row: ChatMessageIdentityRow): ChatMessageRecord {
   return {
     id: row.id,
     userId: row.user_id,
     userDisplayName: row.user_display_name,
+    userUsername: row.user_username ?? null,
     body: row.body,
     createdAt: row.created_at,
   };
@@ -410,23 +427,27 @@ function mapChatMentionUserRow(row: ChatMentionUserRow): ChatMentionUserRecord {
   };
 }
 
-function mapChatAdminRow(row: ChatAdminRow): ChatModerationUserRecord {
+function mapChatAdminRow(row: ChatAdminIdentityRow): ChatModerationUserRecord {
   return {
     userId: row.user_id,
     displayName: row.display_name,
+    username: row.username ?? null,
     createdAt: row.created_at,
     grantedByUserId: row.granted_by_user_id,
     grantedByDisplayName: row.granted_by_display_name,
+    grantedByUsername: row.granted_by_username ?? null,
   };
 }
 
-function mapChatBanRow(row: ChatBanRow): ChatBanRecord {
+function mapChatBanRow(row: ChatBanIdentityRow): ChatBanRecord {
   return {
     userId: row.user_id,
     displayName: row.display_name,
+    username: row.username ?? null,
     createdAt: row.created_at,
     bannedByUserId: row.banned_by_user_id,
     bannedByDisplayName: row.banned_by_display_name,
+    bannedByUsername: row.banned_by_username ?? null,
   };
 }
 
@@ -435,8 +456,8 @@ function normalizeMentionSearchQuery(value: string): string {
     .trim()
     .replace(/^@+/, '')
     .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '')
-    .slice(0, 24);
+    .replace(/\s+/g, ' ')
+    .slice(0, 64);
 }
 
 function escapeSqlLike(value: string): string {

@@ -1924,6 +1924,21 @@
     }
   },
   "paths": {
+    "/api/chat/moderation/admins": {
+      "get": {
+        "summary": "List delegated chat admins with unique usernames",
+        "description": "Owner session required. Display names may be shared; username identifies each account when available. Older accounts may have a null username.",
+        "security": [{ "cookieSession": [] }],
+        "responses": { "200": { "description": "Admin identities and viewer role" }, "401": { "description": "Sign-in required" }, "403": { "description": "Owner access required" } }
+      },
+      "post": {
+        "summary": "Grant chat admin access to a selected account ID",
+        "description": "Owner session required; mutations enforce the existing trusted-origin policy. Use a stable userId from account search; displayName is never used to resolve the target. Shared display names remain allowed.",
+        "security": [{ "cookieSession": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["userId"], "properties": { "userId": { "type": "string", "minLength": 1 } } } } } },
+        "responses": { "201": { "description": "Selected account granted chat admin access" }, "400": { "description": "A valid account ID is required, or the target is already an owner" }, "401": { "description": "Sign-in required" }, "403": { "description": "Owner/origin/self-access guard denied the request" }, "404": { "description": "Selected account not found" }, "409": { "description": "Target is already an admin or is banned" } }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health check",
