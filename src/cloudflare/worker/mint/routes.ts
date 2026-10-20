@@ -14,6 +14,7 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { loadRoomRecord, loadRoomRecordForMutation } from '../rooms/store';
 import { buildWalletMintChainInfo } from './walletChainInfo';
+import { assertRoomMintNetwork } from './network';
 import {
   loadRoomMintPriceWei,
   persistRoomTokenMetadataState,
@@ -168,6 +169,10 @@ export async function handleRoomTokenMetadataPrepare(
   ) {
     throw new HttpError(403, 'The linked wallet does not own the minted room token.');
   }
+
+  // Local ownership reads may intentionally use stored state; wallet instructions
+  // still require a working connection to the explicitly selected network.
+  await assertRoomMintNetwork(config);
 
   const responseBody: RoomMetadataRefreshPrepareResponse = {
     roomId: record.draft.id,
