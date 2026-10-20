@@ -187,8 +187,15 @@ jobs:
           retention-days: 7
 
   wallet-recovery:
+    name: wallet-recovery-${{ matrix.profile }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [desktop, narrow-phone, safari-phone, tablet]
+    env:
+      ARTWORK_PROFILES: ${{ matrix.profile }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -201,7 +208,7 @@ jobs:
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: wallet-recovery
+          name: wallet-recovery-${{ matrix.profile }}
           path: output/web-game/mobile-smoke-ci/room-wallet-recovery
           retention-days: 7
 

@@ -1,5 +1,9 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — F239 complete local matrix; hosted recovery split by device
+
+All100 local actual-control recovery cases pass on desktop/320px/WebKit/tablet, with zero unexpected errors/misses and no real transactions/account writes. Full596files/5,045tests, boot657.2KB/670KB, OSS and inspected installed-client gate0/1 runs pass. Preview94d2ca62/8163a3e4 matches209files. Hosted serial recovery sourcec513cf9c reached83 successful cases before its15-minute runner cancellation; retain it as incomplete, not passing. Run the same100 cases as four25-case device jobs, each retaining15minutes and every existing assertion/action deadline. Final source/main now require16 checks and312 browser cases/head. Source94d2ca62 gates are superseded by the CI-only update; finish fresh preview/hosted proof, all gates, merge, guard and live audit before checking F239. Full goal active/master173/216; AI F167 on hold, unsigned repairs/other boundaries preserved.
+
 ## 2026-10-20 — F239 audit performance corrected without weakening verification
 
 Two full read-lifetime quality attempts hit the existing5-second whole-source editor-state audit timeout; its focused unchanged12tests passed in3.02seconds. Preserve the AST assertions, full traversal/Unicode/exclusions and deadline, and use16 bounded file-read workers. Full quality/style/type/build/assets pass596files/5,045tests, boot657.2KB/670KB and OSS0blockers/0warnings; the100-device matrix continues. Sourcec513cf9c preview9e36c9ae matches209files, and hosted gates continue. Push the audit-only follow-up and require all checks for its exact source before merge. F239 unchecked/master173/216, full goal active, F167 AI on hold, all preservation/decision/unsigned-transaction boundaries unchanged.
