@@ -9,6 +9,9 @@ import {
 import { parseRoomChainId } from './mint/roomNetwork';
 import { applyWalletGate } from './lib/wallet-gate.js';
 import { hasCryptoWallet } from './mint/walletGate';
+import { buildRoomTokenPlayUrl, parseRoomPreviewTokenId } from './mint/roomTokenLinks';
+import './styles/tokens.css';
+import './styles/sections/minted-room.css';
 import './styles/sections/wallet-gate.css';
 
 const titleEl = document.getElementById('minted-room-title');
@@ -20,6 +23,8 @@ const detailsEl = document.getElementById('minted-room-details');
 const attributesEl = document.getElementById('minted-room-attributes');
 const errorRootEl = document.getElementById('minted-room-error');
 const errorTextEl = document.getElementById('minted-room-error-text');
+const playEl = document.getElementById('minted-room-play');
+const ownerEl = document.getElementById('minted-room-owner');
 
 void bootstrap();
 
@@ -32,15 +37,16 @@ async function bootstrap(): Promise<void> {
       throw new Error('This preview link is missing a valid network. Open the room from WAMP to get its full link.');
     }
     const contract = params.get('contract');
-    const tokenId = params.get('tokenId');
-    if (!contract || !tokenId) {
+    const tokenIdText = params.get('tokenId');
+    if (!contract || !tokenIdText) {
       throw new Error('Missing contract or tokenId in the URL.');
     }
 
     const chain = resolveChain(chainId);
+    const tokenId = parseRoomPreviewTokenId(tokenIdText);
     const client = createPublicClient({
       chain,
-      transport: http(),
+      transport: http(undefined, { timeout: 8_000, retryCount: 0 }),
     });
     const contractAddress = getAddress(contract);
     summary(hasCryptoWallet() ? `Reading token #${tokenId} from ${chain.name}.` : 'Loading room preview...');
@@ -49,10 +55,16 @@ async function bootstrap(): Promise<void> {
       address: contractAddress,
       abi: ROOM_OWNERSHIP_TOKEN_ABI,
       functionName: 'tokenURI',
-      args: [BigInt(tokenId)],
+      args: [tokenId],
     });
     const metadata = parseRoomTokenMetadataUri(tokenUri);
     const payload = metadata.wamp_room;
+    const playUrl = buildRoomTokenPlayUrl(payload.coordinates);
+    if (playEl instanceof HTMLAnchorElement) {
+      playEl.href = playUrl;
+      playEl.hidden = false;
+    }
+    observeOwner(chain, contractAddress, tokenId);
 
     if (titleEl) {
       titleEl.textContent = metadata.name || payload.title || `Room ${payload.coordinates[0]},${payload.coordinates[1]}`;
@@ -66,7 +78,7 @@ async function bootstrap(): Promise<void> {
     ]);
     renderDetails({
       Contract: contractAddress,
-      Token: tokenId,
+      Token: tokenId.toString(),
       Room: payload.roomId,
       Coordinates: `${payload.coordinates[0]}, ${payload.coordinates[1]}`,
       Background: getRoomBackgroundLabel(payload.background),
@@ -76,13 +88,12 @@ async function bootstrap(): Promise<void> {
       Explorer: `${resolveExplorerBase(chainId)}/token/${contractAddress}?a=${tokenId}`,
     });
     renderAttributes(metadata.attributes.map((attribute) => {
-      const suffix = attribute.display_type === 'number' ? '' : '';
-      return `${attribute.trait_type}: ${attribute.value}${suffix}`;
+      return `${attribute.trait_type}: ${attribute.value}`;
     }));
 
     previewStatus('Rendering room preview...');
     const canvas = await renderWampMintedRoomToCanvas(payload, {
-      tilePixelSize: 6,
+      tilePixelSize: 16,
     });
     previewEl?.replaceChildren(canvas);
     previewStatus(hasCryptoWallet() ? 'Rendered from on-chain tokenURI metadata.' : 'Room preview ready.');
@@ -117,6 +128,49 @@ function resolveChain(chainId: number) {
 
 function resolveExplorerBase(chainId: number): string {
   return resolveChain(chainId).blockExplorers?.default.url ?? '';
+}
+
+function observeOwner(chain: ReturnType<typeof resolveChain>, contract: `0x${string}`, tokenId: bigint): void {
+  let active: AbortController | null = null;
+  let enabled = false;
+  let suspended = false;
+  const refresh = () => {
+    const nextEnabled = !suspended && hasCryptoWallet();
+    if (nextEnabled === enabled) return;
+    enabled = nextEnabled;
+    active?.abort();
+    active = null;
+    ownerEl?.replaceChildren();
+    if (!enabled || !ownerEl) return;
+    const request = new AbortController();
+    active = request;
+    ownerEl.textContent = 'Reading owner…';
+    const client = createPublicClient({ chain, transport: http(undefined, {
+      timeout: 8_000, retryCount: 0, fetchOptions: { signal: request.signal },
+    }) });
+    void client.readContract({ address: contract, abi: ROOM_OWNERSHIP_TOKEN_ABI,
+      functionName: 'ownerOf', args: [tokenId] }).then(owner => {
+      if (active !== request || request.signal.aborted || !hasCryptoWallet()) return;
+      const link = document.createElement('a');
+      link.href = `${resolveExplorerBase(chain.id)}/address/${owner}`;
+      link.textContent = owner;
+      ownerEl.replaceChildren(document.createTextNode('Owned by '), link);
+    }).catch(() => {
+      if (active === request && !request.signal.aborted && hasCryptoWallet()) {
+        ownerEl.textContent = 'Owner unavailable';
+      }
+    });
+  };
+  window.addEventListener('wallet-gate', refresh);
+  window.addEventListener('pagehide', () => {
+    suspended = true;
+    refresh();
+  });
+  window.addEventListener('pageshow', () => {
+    suspended = false;
+    refresh();
+  });
+  refresh();
 }
 
 function summary(text: string): void {

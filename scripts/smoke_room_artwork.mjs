@@ -196,7 +196,11 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           minted = true; return reply(r, record());
         }
         if (path.endsWith('/metadata/prepare')) {
-          const metadata = parseMetadata(body.tokenUri); assert.equal(metadata.wamp_room.roomId, '0,0'); assert.equal(metadata.wamp_room.version, snapshot.version); assert(metadata.image.startsWith('data:image/png;base64,'));
+          const metadata = parseMetadata(body.tokenUri); assert.equal(metadata.wamp_room.roomId, '0,0'); assert.equal(metadata.wamp_room.version, snapshot.version);
+          assert(metadata.image.startsWith('data:image/svg+xml,')); assert.equal(metadata.external_url, 'https://wamp.land/r/0/0');
+          assert(body.tokenUri.length <= 20000, 'Artwork fits the conservative fresh-storage budget');
+          const artwork = decodeURIComponent(metadata.image.slice('data:image/svg+xml,'.length));
+          assert(artwork.includes('image-rendering:pixelated') && artwork.includes('href="data:image/png;base64,'));
           preparedMetadataHash = createHash('sha256').update(body.tokenUri).digest('hex'); prepareStarted();
           if (kind === 'account-cancellation' || kind === 'account-roundtrip') await new Promise(resolve => { releasePrepare = resolve; });
           return reply(r, { chain, transaction: { to: contract, data: encodeFunctionData({ abi, functionName: 'setRoomTokenURI', args: [0, 0, body.tokenUri] }), value: '0', chainId: 8453 } });

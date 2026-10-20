@@ -37,6 +37,7 @@ import {
   type NpcMode,
 } from '../npcs/model';
 import type { SwordsmanDefeatMode } from '../enemies/swordsmanObjectives';
+import { buildRoomTokenPlayUrl } from './roomTokenLinks';
 
 const WAMP_MINTED_ROOM_SCHEMA_VERSION_V1 = 1 as const;
 const WAMP_MINTED_ROOM_SCHEMA_VERSION_V2 = 2 as const;
@@ -222,6 +223,7 @@ interface WampRoomTokenMetadataBase<TPayload> {
   description: string;
   image: string;
   animation_url: string;
+  external_url?: string;
   attributes: WampRoomTokenAttribute[];
   wamp_room: TPayload;
 }
@@ -401,6 +403,7 @@ export async function buildRoomTokenMetadata(
     description: buildRoomTokenDescription(snapshot),
     image: imageDataUrl,
     animation_url: buildMintedRoomAnimationUrl(options),
+    external_url: buildRoomTokenPlayUrl(payload.coordinates),
     attributes: buildRoomTokenAttributes(snapshot),
     wamp_room: storedPayload,
   };
@@ -430,15 +433,17 @@ export function parseRoomTokenMetadataUri(tokenUri: string): WampRoomTokenMetada
     throw new Error('tokenURI metadata does not include a wamp_room payload.');
   }
 
+  const payload = normalizeMintedRoomPayload(parsed.wamp_room);
   return {
     name: typeof parsed.name === 'string' ? parsed.name : 'WAMP Room',
     description: typeof parsed.description === 'string' ? parsed.description : '',
     image: typeof parsed.image === 'string' ? parsed.image : '',
     animation_url: typeof parsed.animation_url === 'string' ? parsed.animation_url : '',
+    external_url: buildRoomTokenPlayUrl(payload.coordinates),
     attributes: Array.isArray(parsed.attributes)
       ? parsed.attributes.filter(isRoomTokenAttribute)
       : [],
-    wamp_room: normalizeMintedRoomPayload(parsed.wamp_room),
+    wamp_room: payload,
   };
 }
 
