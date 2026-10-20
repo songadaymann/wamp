@@ -26,6 +26,7 @@ const receipt = { transactionHash: hash, blockHash: '0x' + 'b'.repeat(64), block
 async function rpc({ method }: { method: string }): Promise<unknown> {
   if (method === 'wallet_switchEthereumChain') return null;
   if (method === 'eth_accounts') return [fixture.address];
+  if (method === 'eth_chainId') return '0x2105';
   if (method === 'eth_sendTransaction') return hash;
   if (method === 'eth_getTransactionReceipt') return receipt;
   if (method === 'eth_blockNumber') return '0x10';
@@ -36,12 +37,59 @@ beforeEach(() => {
   fixture.session = { authenticated: true, user: { id: 'buyer', displayName: 'Buyer', walletAddress: wallet, email: null } };
   fixture.request.mockImplementation(rpc);
   vi.stubGlobal('window', Object.assign(new EventTarget(), { location: { origin: 'https://wamp.land', search: '' } }));
+  vi.stubGlobal('document', { documentElement: { dataset: { wallet: 'yes' } } });
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 async function client() { const auth = await import('./client'); await auth.refreshAuthSession(); return auth; }
 const sent = () => fixture.request.mock.calls.filter(([q]) => q.method === 'eth_sendTransaction');
 
 describe('prepared room transactions through the real wallet sender and viem provider', () => {
+  it('does not retry a wallet send whose outcome is unknown', async () => {
+    vi.useFakeTimers(); const auth = await client(), onBeforeSend = vi.fn();
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw new Error('Provider disconnected'); return rpc(q); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend })).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(300_000); expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce();
+  });
+  it('rejects a prepared network mismatch before contacting the wallet', async () => {
+    const auth = await client(), onBeforeSend = vi.fn();
+    await expect(auth.sendPreparedWalletTransaction({ ...transaction, chainId: 84532 }, chain, { onBeforeSend })).rejects.toThrow('network changed');
+    expect(fixture.request).not.toHaveBeenCalled(); expect(onBeforeSend).not.toHaveBeenCalled();
+  });
+  it('checks the actual network at the send boundary before reserving an approval intent', async () => {
+    const auth = await client(), onBeforeSend = vi.fn();
+    fixture.request.mockImplementation(async q => q.method === 'eth_chainId' ? '0x14a34' : rpc(q));
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend })).rejects.toThrow('Wallet network changed');
+    expect(sent()).toHaveLength(0); expect(onBeforeSend).not.toHaveBeenCalled();
+  });
+  it('stops real viem receipt reads and all owned timers when the room wait is closed', async () => {
+    vi.useFakeTimers(); const auth = await client(), controller = new AbortController(), onSubmitted = vi.fn();
+    fixture.request.mockImplementation(async q => q.method === 'eth_getTransactionReceipt' ? null : rpc(q));
+    const work = auth.sendPreparedWalletTransaction(transaction, chain, { expectedWalletAddress: wallet, signal: controller.signal, onSubmitted });
+    const checked = expect(work).rejects.toThrow();
+    await vi.waitFor(() => expect(fixture.request.mock.calls.some(([q]) => q.method === 'eth_getTransactionReceipt')).toBe(true));
+    expect(onSubmitted).toHaveBeenCalledWith({ hash, from: wallet }); controller.abort(); await checked;
+    const count = fixture.request.mock.calls.length; await vi.advanceTimersByTimeAsync(300_000);
+    expect(fixture.request).toHaveBeenCalledTimes(count); expect(vi.getTimerCount()).toBe(0);
+  });
+  it('records a hash returned after cancellation without starting any receipt polling', async () => {
+    const auth = await client(), controller = new AbortController(), onSubmitted = vi.fn(); let release!: () => void;
+    fixture.request.mockImplementation(async q => q.method === 'eth_sendTransaction' ? new Promise(resolve => { release = () => resolve(hash); }) : rpc(q));
+    const work = auth.sendPreparedWalletTransaction(transaction, chain, { expectedWalletAddress: wallet, signal: controller.signal, onSubmitted });
+    const checked = expect(work).rejects.toThrow(); await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+    controller.abort(); release(); await checked; expect(onSubmitted).toHaveBeenCalledWith({ hash, from: wallet });
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'eth_getTransactionReceipt')).toEqual([]);
+  });
+  it('does not bootstrap or contact a wallet when the installed-wallet gate is off', async () => {
+    const auth = await client(); document.documentElement.dataset.wallet = 'no';
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain)).rejects.toThrow('unavailable in this browser');
+    expect(fixture.request).not.toHaveBeenCalled();
+  });
+  it('persists the approval intent immediately before sending and refuses a send if that guard fails', async () => {
+    const auth = await client();
+    const before = vi.fn(() => { expect(sent()).toHaveLength(0); throw new Error('Pending approvals full'); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { expectedWalletAddress: wallet, onBeforeSend: before })).rejects.toThrow('Pending approvals full');
+    expect(before).toHaveBeenCalledOnce(); expect(sent()).toHaveLength(0);
+  });
   it('stops an invalidated room before opening or contacting the wallet', async () => {
     const auth = await client(); await expect(auth.sendPreparedWalletTransaction(transaction, chain, { isCurrent: () => false })).rejects.toThrow('no longer current');
     expect(fixture.request).not.toHaveBeenCalled();
@@ -65,7 +113,7 @@ describe('prepared room transactions through the real wallet sender and viem pro
     fixture.request.mockImplementation(async q => { if (q.method === 'eth_getTransactionReceipt') await hold; return rpc(q); });
     const work = auth.sendPreparedWalletTransaction(transaction, chain, { expectedWalletAddress: wallet, isCurrent: () => true, onSubmitted });
     await vi.waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ hash, from: wallet }));
-    expect(sent()).toHaveLength(1); expect(sent()[0][0].params[0]).toMatchObject({ from: wallet, to: wallet, data: '0x01', value: '0x0' });
+    expect(sent()).toHaveLength(1); expect(sent()[0][0].params[0]).toMatchObject({ from: wallet, to: wallet, data: '0x01', value: '0x0', chainId: '0x2105' });
     release(); await expect(work).resolves.toEqual({ hash, from: wallet });
   });
   it('distinguishes a proven reverted receipt from an unknown receipt failure', async () => {

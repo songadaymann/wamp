@@ -4867,6 +4867,8 @@ Change the summary: the editor already draws neighbor rooms in full beside the c
 
 ### F167: Use the existing agent API for an in-editor "Sketch my room" AI helper
 
+**Owner decision, 2026-10-20:** Jonathan chose “Keep AI generation on hold” instead of a WAMP-funded pilot of 5 sketches per signed-in player per day and 100 sitewide. Do not enable generation, add paid provider funding, or treat those proposed limits as approved. This item remains unchecked and on hold until Jonathan changes that decision.
+
 - **Area:** Level building / editor UX
 - **Type:** idea · **impact:** medium · **effort:** large
 

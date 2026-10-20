@@ -181,7 +181,7 @@
             <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guest Drafts</button>
           </div>
           <details id="account-signin-options" open>
-            <summary>Email &amp; wallet</summary>
+            <summary>Email<span data-crypto> &amp; wallet</span></summary>
             <div class="game-menu-account">
               <div id="auth-email-row" class="auth-row">
                 <input id="auth-email-input" aria-label="Email address" type="email" placeholder="you@example.com" spellcheck="false" />
@@ -195,7 +195,7 @@
                 </form>
                 <div id="email-code-status" class="auth-status" role="status">The code expires in 15 minutes.</div>
               </div>
-              <div class="auth-row"><button id="btn-auth-wallet" class="bar-btn auth-menu-action-btn">Sign In With Wallet</button></div>
+              <div class="auth-row" data-crypto><button id="btn-auth-wallet" class="bar-btn auth-menu-action-btn">Sign In With Wallet</button></div>
               <div id="auth-session-summary" class="auth-session-summary hidden">
                 <span class="auth-session-summary-label">Signed In As</span>
                 <span id="auth-session-summary-value" class="auth-session-summary-value"></span>
@@ -203,7 +203,7 @@
               <a id="auth-debug-link" class="auth-debug-link hidden"></a>
             </div>
           </details>
-          <div id="auth-status" class="auth-status">Use email, wallet, or both.</div>
+          <div id="auth-status" class="auth-status">Sign in with email to save your progress.</div>
         </section>
         <nav class="game-menu-actions game-menu-section" aria-label="Game">
           <button id="btn-world-settings" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Settings</button>
@@ -262,7 +262,7 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
         <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-action="history">Version History</button>
-        <button class="editor-drawer-tab" type="button" data-editor-share-action="collect"><span data-editor-share-label>Collect Room</span></button>
+        <button class="editor-drawer-tab" type="button" data-crypto data-editor-share-action="collect"><span data-editor-share-label>Collect Room</span></button>
         <button id="btn-room-template-replace" class="editor-drawer-tab" type="button">Templates</button>
       </div>
       <!-- Tools -->
@@ -1336,8 +1336,8 @@
           <div class="editor-advanced-block" data-advanced-block="room">
             <div class="editor-advanced-block-label">Room</div>
             <div class="editor-advanced-actions">
-              <button id="btn-mint-room" class="bar-btn">Mint Room</button>
-              <button id="btn-refresh-room-metadata" class="bar-btn hidden">Add/update artwork</button>
+              <button data-crypto id="btn-mint-room" class="bar-btn">Mint Room</button>
+              <button data-crypto id="btn-refresh-room-metadata" class="bar-btn hidden">Add/update artwork</button>
               <button id="btn-room-history" class="bar-btn">History</button>
             </div>
           </div>
@@ -1937,7 +1937,7 @@
       <div id="world-hud" class="hidden">
         <div class="world-room-title-row">
           <div id="world-selected-title" class="world-room-title">Room 0,0</div>
-          <div id="world-selected-state-info-wrap" class="world-title-lock-wrap hidden">
+          <div data-crypto id="world-selected-state-info-wrap" class="world-title-lock-wrap hidden">
             <button
               id="world-selected-state-info"
               class="world-title-lock-button"
@@ -2370,7 +2370,7 @@
         </div>
         <div class="history-modal-header-actions">
           <button id="btn-room-history-restore-canonical" class="bar-btn bar-btn-small hidden" type="button">Restore Canonical</button>
-          <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Add/update artwork</button>
+          <button data-crypto id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Add/update artwork</button>
           <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
         </div>
       </div>
@@ -2734,7 +2734,7 @@
           Your room is still saved for this browser. Sign in to make it yours and publish it in the world.
         </div>
         <div id="guest-room-recovery-benefits" class="guest-room-recovery-benefits">
-          Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, minting rights, or other account benefits.
+          Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, or other account benefits.
         </div>
         <div id="guest-room-recovery-status" class="history-modal-meta guest-room-recovery-status hidden"></div>
         <div id="guest-room-recovery-locations" class="guest-room-recovery-actions hidden" aria-label="Choose a new spot"></div>

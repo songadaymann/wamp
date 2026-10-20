@@ -10,14 +10,13 @@ import {
   type RoomPermissions,
   type RoomRecord,
   type RoomSnapshot,
+  type RoomSummary,
   type RoomVersionRecord,
 } from '../../persistence/roomRepository';
 import type { RoomRepository } from '../../persistence/roomRepository';
 import {
   getAuthDebugState,
-  promptForSignIn,
   refreshAuthSession,
-  sendPreparedWalletTransaction,
 } from '../../auth/client';
 import {
   requestGuestBuilderClaim,
@@ -28,23 +27,21 @@ import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 import {
-  buildExplorerTxUrl,
   formatWalletAddress,
 } from '../../mint/roomOwnership';
-import { buildRoomTokenMetadata } from '../../mint/roomMetadata';
-import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import {
   hideBusyOverlay,
-  getAppFeedbackDebugState,
-  showBusyOverlay,
   showBusyError,
-  updateBusyOverlay,
 } from '../../ui/appFeedback';
 import type { OverworldPlaySceneData } from '../sceneData';
-import type { RoomCollectionStageOptions } from './roomCollectionFlow';
-import { WalletTransactionRevertedError } from '../../auth/walletTransaction';
+import type { RoomCollectionStageOptions, RoomCollectionFlowHost } from './roomCollectionFlow';
+import { RoomWalletActions } from './roomWalletActions';
+import type { PendingRoomWallet } from '../../mint/pendingRoomWallet';
+import type { RoomWalletRecoveryResult } from '../../mint/roomWalletRecovery';
 
 interface EditorRoomSessionHost {
+  isActive?(): boolean;
+  events?: RoomCollectionFlowHost['events'];
   applyRoomSnapshot(room: RoomSnapshot): void;
   exportRoomSnapshot(): RoomSnapshot;
   getPublishValidationError(): string | null;
@@ -146,10 +143,6 @@ export class EditorRoomSession {
   private mintedOwnerSyncedAt: string | null = null;
   private mintedMetadataRoomVersion: number | null = null;
   private mintedMetadataUpdatedAt: string | null = null;
-  private pendingArtwork: {
-    roomId: string; tokenId: string; userId: string; wallet: string;
-    txHash: string; metadataRoomVersion: number; metadataHash: string; explorerUrl: string | null;
-  } | null = null;
   private saveInFlightValue = false;
   private saveSettledWaiters: Array<() => void> = [];
   private autoSaveBackoff: AutoSaveBackoff | null = null;
@@ -167,12 +160,37 @@ export class EditorRoomSession {
     linkLabel: '',
     linkHref: null,
   };
+  private readonly walletActions: RoomWalletActions;
   private readonly localRoomRepository: RoomRepository = createLocalRoomRepository();
 
   constructor(
     private readonly roomRepository: RoomRepository,
     private readonly host: EditorRoomSessionHost,
-  ) {}
+  ) {
+    const session = this;
+    this.walletActions = new RoomWalletActions(roomRepository, {
+      isActive: () => host.isActive?.() ?? true, events: host.events,
+      get roomId() { return session.roomId; },
+      get roomCoordinates() { return session.roomCoordinates; },
+      get publishedVersion() { return session.publishedVersion; },
+      get publishedRoomSnapshot() { return session.publishedRoomSnapshot; },
+      get roomPermissions() { return session.roomPermissions; },
+      get mintedTokenId() { return session.mintedTokenId; },
+      get mintedChainId() { return session.mintedChainId; },
+      get mintedContractAddress() { return session.mintedContractAddress; },
+      get sessionGeneration() { return session.sessionGeneration; },
+      get saveInFlight() { return session.saveInFlight; },
+      set saveInFlight(value) { session.saveInFlight = value; },
+      getRoomDirty: () => host.getRoomDirty(),
+      applyRecovery: summary => session.applyWalletRecovery(summary),
+      refreshUi: () => host.refreshUi(),
+      canRefreshMintMetadata: () => session.canRefreshMintMetadata(),
+      publishRoom: status => session.publishRoom(status),
+      syncRoomMetadata: record => session.syncRoomMetadata(record, host.getRoomDirty()),
+      setStatusText: text => session.setStatusText(text),
+      setStatusDetails: status => session.setStatusDetails(status),
+    });
+  }
 
   get currentRoomId(): string {
     return this.roomId;
@@ -332,7 +350,7 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = null;
     this.mintedMetadataRoomVersion = null;
     this.mintedMetadataUpdatedAt = null;
-    this.pendingArtwork = null;
+    this.walletActions.reset();
     this.saveInFlight = false;
     this.persistenceStatus = {
       text: '',
@@ -352,7 +370,29 @@ export class EditorRoomSession {
     return () => !this.isStale(generation) && this.roomId === roomId;
   }
 
-  get hasPendingArtworkConfirmation(): boolean { return this.pendingArtwork !== null; }
+  get hasPendingArtworkConfirmation(): boolean { return this.walletActions.hasPendingArtworkConfirmation; }
+  get hasPendingWalletConfirmation(): boolean { return this.walletActions.hasPendingWalletConfirmation; }
+
+  acceptWalletRecovery(pending: PendingRoomWallet, result: RoomWalletRecoveryResult): void {
+    if (pending.roomId !== this.roomId || this.saveInFlight && !this.walletActions.ownsPending(pending.id)) return;
+    this.applyWalletRecovery(result.summary);
+    this.walletActions.acceptRecovery(pending, result);
+  }
+
+  /** A fresh chain check updates rights/artwork without replacing a builder's draft or timestamps. */
+  applyWalletRecovery(summary: RoomSummary): void {
+    if (summary.id !== this.roomId || summary.coordinates.x !== this.roomCoordinates.x
+      || summary.coordinates.y !== this.roomCoordinates.y || summary.world?.worldId) return;
+    this.roomPermissions = { ...summary.permissions };
+    this.mintedChainId = summary.mintedChainId;
+    this.mintedContractAddress = summary.mintedContractAddress;
+    this.mintedTokenId = summary.mintedTokenId;
+    this.mintedOwnerWalletAddress = summary.mintedOwnerWalletAddress;
+    this.mintedOwnerSyncedAt = summary.mintedOwnerSyncedAt;
+    this.mintedMetadataRoomVersion = summary.mintedMetadataRoomVersion;
+    this.mintedMetadataUpdatedAt = summary.mintedMetadataUpdatedAt;
+    this.host.refreshUi();
+  }
 
   private isStale(generation: number): boolean {
     return generation !== this.sessionGeneration;
@@ -542,6 +582,7 @@ export class EditorRoomSession {
         this.host.setRoomDirty(true);
       }
       this.host.refreshSurroundingRoomPreviews();
+      void this.walletActions.recoverPending();
       this.setStatusText(
         localRecord
           ? getAuthDebugState().authenticated
@@ -1051,234 +1092,12 @@ export class EditorRoomSession {
     };
   }
 
-  async mintRoom(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
-    if (this.saveInFlight) {
-      return null;
-    }
-
-    if (this.mintedTokenId) {
-      this.setStatusText(`Room token #${this.mintedTokenId} is already minted.`);
-      return null;
-    }
-
-    const generation = this.sessionGeneration;
-    const isCurrent = () => !this.isStale(generation) && options.isCurrent?.() !== false;
-    if (this.host.getRoomDirty() || this.publishedVersion === 0) {
-      showBusyOverlay('Publishing room...', 'Preparing room for mint...');
-      const publishedRecord = await this.publishRoom(
-        this.publishedVersion === 0 ? 'Published. Ready to mint.' : 'Published latest changes before mint.'
-      );
-      hideBusyOverlay();
-      if (!publishedRecord) {
-        return null;
-      }
-    }
-
-    await refreshAuthSession();
-    if (!isCurrent()) {
-      return null;
-    }
-    const authState = getAuthDebugState();
-
-    if (!authState.authenticated) {
-      promptForSignIn('Sign in and link a wallet to mint this room.');
-      return null;
-    }
-
-    if (!authState.user?.walletAddress) {
-      this.setStatusText('Link a wallet from the account menu before minting.');
-      return null;
-    }
-
-    if (!this.roomPermissions.canMint) {
-      this.setStatusText(
-        this.roomPermissions.canPublish
-          ? 'Link the owning wallet from the account menu before minting.'
-          : 'Only the current claimer can mint this room.'
-      );
-      return null;
-    }
-
-    this.saveInFlight = true;
-    const hideStage = () => { if (!options.stageLabel || getAppFeedbackDebugState().busyTitle === options.stageLabel) hideBusyOverlay(); };
-    showBusyOverlay(options.stageLabel ?? 'Preparing mint...', 'Checking room mint configuration...');
-    this.setStatusText('Preparing mint...');
-
-    try {
-      const prepare = await this.roomRepository.prepareMint(this.roomId, this.roomCoordinates);
-      if (!isCurrent()) { hideStage(); return null; }
-      updateBusyOverlay(options.stageLabel ?? 'Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} transaction in your wallet.`);
-      this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain, {
-        expectedWalletAddress: authState.user.walletAddress, isCurrent,
-      });
-      if (!isCurrent()) { hideStage(); return null; }
-      updateBusyOverlay(options.stageLabel ?? 'Confirming mint...', 'Waiting for on-chain confirmation...');
-      this.setStatusText('Confirming mint...');
-
-      const record = await this.roomRepository.confirmMint(this.roomId, this.roomCoordinates, {
-        txHash: tx.hash,
-      });
-      if (!isCurrent()) {
-        hideStage();
-        return null;
-      }
-      this.syncRoomMetadata(record);
-      this.host.setRoomDirty(false);
-
-      const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.setStatusDetails({
-        text: '',
-        accentText: `Minted token #${record.mintedTokenId}`,
-        linkLabel: explorerUrl ? 'Transaction' : '',
-        linkHref: explorerUrl,
-      });
-      hideStage();
-      return record;
-    } catch (error) {
-      console.warn('Room collection was not completed.');
-      if (!isCurrent()) {
-        hideStage();
-        return null;
-      }
-      if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = createRoomRecordFromCurrent(
-          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
-        );
-        if (!isCurrent()) { hideStage(); return null; }
-        this.syncRoomMetadata(refreshed);
-      }
-
-      const message = error instanceof Error ? error.message : 'Mint failed.';
-      this.setStatusText(message);
-      hideStage();
-    } finally {
-      if (!this.isStale(generation)) {
-        this.saveInFlight = false;
-        this.host.refreshUi();
-      }
-    }
-
-    return null;
+  mintRoom(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
+    return this.walletActions.mintRoom(options);
   }
 
-  async refreshMintMetadata(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
-    if (this.saveInFlight) {
-      return null;
-    }
-
-    if (!this.mintedTokenId || !this.mintedContractAddress || this.mintedChainId === null) {
-      this.setStatusText('This room is not minted yet.');
-      return null;
-    }
-
-    if (!this.publishedRoomSnapshot) {
-      this.setStatusText('Publish the room before refreshing NFT metadata.');
-      return null;
-    }
-
-    if (!this.canRefreshMintMetadata()) {
-      this.setStatusText('Only the room token owner can refresh NFT metadata.');
-      return null;
-    }
-
-    const generation = this.sessionGeneration;
-    const isCurrent = () => !this.isStale(generation) && options.isCurrent?.() !== false;
-    await refreshAuthSession();
-    if (!isCurrent()) {
-      return null;
-    }
-    const authState = getAuthDebugState();
-
-    if (!authState.authenticated) {
-      promptForSignIn('Sign in and link the owning wallet to refresh NFT metadata.');
-      return null;
-    }
-
-    if (!authState.user?.walletAddress) {
-      this.setStatusText('Link the token-owning wallet from the account menu before refreshing NFT metadata.');
-      return null;
-    }
-
-    this.saveInFlight = true;
-    const hideStage = () => { if (!options.stageLabel || getAppFeedbackDebugState().busyTitle === options.stageLabel) hideBusyOverlay(); };
-    showBusyOverlay(options.stageLabel ?? 'Preparing NFT metadata...', 'Rendering room preview...');
-    this.setStatusText('Preparing NFT metadata...');
-
-    try {
-      const roomId = this.roomId, coordinates = { ...this.roomCoordinates }, tokenId = this.mintedTokenId;
-      const wallet = authState.user.walletAddress.toLowerCase(), userId = authState.user.id;
-      let submitted = this.pendingArtwork;
-      if (submitted && (submitted.roomId !== roomId || submitted.tokenId !== tokenId || submitted.wallet !== wallet || submitted.userId !== userId)) {
-        this.setStatusText('Your wallet or room changed. Reopen the room to check its artwork before trying again.');
-        hideStage(); return null;
-      }
-      if (!submitted) {
-        const snapshot = cloneRoomSnapshot(this.publishedRoomSnapshot);
-        const imageDataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, { tilePixelSize: 2, strictAssets: true });
-        const built = await buildRoomTokenMetadata(snapshot, imageDataUrl, {
-          origin: window.location.origin, chainId: this.mintedChainId,
-          contractAddress: this.mintedContractAddress, tokenId,
-        });
-        if (!isCurrent()) { hideStage(); return null; }
-        updateBusyOverlay(options.stageLabel ?? 'Preparing artwork...', 'Preparing the artwork approval...');
-        const prepare = await this.roomRepository.prepareMetadataRefresh(roomId, coordinates, { tokenUri: built.tokenUri });
-        if (!isCurrent()) { hideStage(); return null; }
-        updateBusyOverlay(options.stageLabel ?? 'Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} artwork transaction in your wallet.`);
-        this.setStatusText(`Waiting for artwork approval on ${prepare.chain.name}...`);
-        const remember = (txHash: string) => {
-          // A returned hash remains useful after scene sleep; it never authorizes another send.
-          if (!this.isStale(generation) && this.roomId === roomId && this.mintedTokenId === tokenId) this.pendingArtwork = { roomId, tokenId, userId, wallet, txHash,
-            metadataRoomVersion: snapshot.version, metadataHash: built.metadataHash,
-            explorerUrl: buildExplorerTxUrl(prepare.chain, txHash) };
-        };
-        const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain, {
-          expectedWalletAddress: wallet, isCurrent, onSubmitted: tx => remember(tx.hash),
-        });
-        if (!isCurrent()) { hideStage(); return null; }
-        if (!this.pendingArtwork) remember(tx.hash);
-        submitted = this.pendingArtwork;
-      }
-      if (!submitted || !isCurrent()) { hideStage(); return null; }
-      updateBusyOverlay(options.stageLabel ?? 'Confirming artwork...', 'Checking the artwork transaction...');
-      this.setStatusText('Confirming room artwork...');
-      const record = await this.roomRepository.confirmMetadataRefresh(roomId, coordinates, {
-        txHash: submitted.txHash, metadataRoomVersion: submitted.metadataRoomVersion, metadataHash: submitted.metadataHash,
-      });
-      if (!isCurrent()) { hideStage(); return null; }
-      this.pendingArtwork = null;
-      this.syncRoomMetadata(record);
-      this.setStatusDetails({ text: 'Room artwork is saved.',
-        accentText: `Artwork added to token #${record.mintedTokenId}`,
-        linkLabel: submitted.explorerUrl ? 'Transaction' : '', linkHref: submitted.explorerUrl,
-      });
-      hideStage(); return record;
-    } catch (error) {
-      console.warn('Room artwork was not updated.');
-      if (!this.isStale(generation) && error instanceof WalletTransactionRevertedError && this.pendingArtwork?.txHash === error.hash) this.pendingArtwork = null;
-      if (!isCurrent()) { hideStage(); return null; }
-      if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = createRoomRecordFromCurrent(await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates));
-        if (!isCurrent()) { hideStage(); return null; }
-        this.syncRoomMetadata(refreshed);
-        if (this.pendingArtwork && refreshed.mintedMetadataHash === this.pendingArtwork.metadataHash
-          && refreshed.mintedMetadataRoomVersion === this.pendingArtwork.metadataRoomVersion) {
-          this.pendingArtwork = null;
-          this.setStatusText('Room artwork is already up to date.'); hideStage(); return refreshed;
-        }
-      }
-      this.setStatusText(this.pendingArtwork
-        ? 'The artwork approval was submitted. Choose Add/update artwork to check it again without another wallet approval.'
-        : "Artwork wasn't added. Choose Add/update artwork to try again.");
-      hideStage();
-    } finally {
-      if (!this.isStale(generation)) {
-        this.saveInFlight = false;
-        this.host.refreshUi();
-      }
-    }
-
-    return null;
+  refreshMintMetadata(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
+    return this.walletActions.refreshMintMetadata(options);
   }
 
   private shouldShowDraftPreviewInWorld(): boolean {

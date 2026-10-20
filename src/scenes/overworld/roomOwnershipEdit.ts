@@ -6,6 +6,7 @@ export interface RoomOwnershipEditHost {
   captureContext(): () => boolean;
   subscribeInvalidation(callback: () => void): () => void;
   getWalletAddress(): string | null;
+  canCheckWallet?(): boolean;
   getUserId(): string | null;
   acceptOwnership(roomId: string, summary: RoomSummary): void;
 }
@@ -25,12 +26,15 @@ export async function prepareRoomOwnershipEdit(
   const isCurrent = host.captureContext();
   if (!isCurrent()) return null;
   const userId = host.getUserId();
-  const wallet = host.getWalletAddress()?.trim().toLowerCase() ?? null;
+  const canCheckWallet = host.canCheckWallet?.() ?? true;
+  const wallet = canCheckWallet ? host.getWalletAddress()?.trim().toLowerCase() ?? null : null;
   const abort = new AbortController();
   let cancelled = false, handedOff = false;
   let stop = () => {};
   stop = host.subscribeInvalidation(() => { cancelled = true; abort.abort(); stop(); });
-  const current = () => !cancelled && isCurrent() && userId === host.getUserId() && wallet === (host.getWalletAddress()?.trim().toLowerCase() ?? null);
+  const current = () => !cancelled && isCurrent() && userId === host.getUserId()
+    && canCheckWallet === (host.canCheckWallet?.() ?? true)
+    && (!canCheckWallet || wallet === (host.getWalletAddress()?.trim().toLowerCase() ?? null));
   const permit = { roomOnly: false, isCurrent: current, dispose: () => { cancelled = true; stop(); } };
   const timeout = setTimeout(() => abort.abort(), 15_000);
   try {
@@ -38,6 +42,11 @@ export async function prepareRoomOwnershipEdit(
     if (!current()) return null;
     if (summary.id !== roomId) throw new Error();
     if (!isRoomMinted(summary)) { handedOff = true; return permit; }
+    if (!canCheckWallet) {
+      if (!summary.permissions.canSaveDraft) throw new RoomOwnershipDeniedError('This room is protected.');
+      permit.roomOnly = summary.claimerUserId !== userId;
+      handedOff = true; return permit;
+    }
     if (!wallet) throw new RoomOwnershipDeniedError('Link the wallet that owns this room to edit it.');
     const fresh = await host.repository.refreshRoomOwnership(roomId, coordinates, { signal: abort.signal });
     if (!current()) return null;

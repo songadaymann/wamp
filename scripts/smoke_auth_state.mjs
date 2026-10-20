@@ -21,12 +21,18 @@ for (const [name, engine, width, height, touch] of [
     const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
     const api = createApiFixtures({ mode: 'replay', file: 'scripts/fixtures/mobile-smoke-api.json.gz' });
     await api.install(context);
+    // Auth probes use recorded compact rooms; live tiled-map rendering has its own acceptance suite.
+    await context.route(u => u.pathname === '/api/world/tiles/config', r => r.fulfill({ json: { schemaVersion: 1, available: false, rolloutPercentage: 0 }, headers: cors(r) }));
+    const liveTileRequests = [];
+    await context.route(u => u.hostname === 'tiles.wamp.land' && u.pathname.startsWith('/world-tiles/'), r => {
+      liveTileRequests.push(r.request().url()); return r.abort();
+    });
     if (new URL(base).hostname === '127.0.0.1') await context.routeWebSocket(u => new URL(u).hostname === '127.0.0.1' && new URL(u).port === new URL(base).port && new URL(u).pathname === '/', s => s.connectToServer());
     const user = { id: 'auth-smoke-account', email: 'player@example.invalid', walletAddress: null, displayName: 'Auth player' };
     const guest = () => ({ authenticated: false, user: null, source: null, partykitHost: '', walletProjectId: null });
     let session = guest(), sessionFailed = false, rejectLink = true, rejectLogout = true, rejectLogoutAll = true;
     let holdNextSession = false, releaseSession = null, sessionHeld = null;
-    const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [];
+    const writes = [], reads = [], expected = [], errors = [], failedRequests = [], unloadResourceReports = [], pageErrorDetails = [], cancelledRequests = [];
     let schoolNavigationStarted = false, schoolRedirectPending = false;
     const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || new URL(base).origin,
       'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'content-type',
@@ -122,7 +128,11 @@ for (const [name, engine, width, height, touch] of [
           (text.startsWith('Failed to load resource:') && url.includes('/api/auth/'))) expected.push(text);
       else errors.push(text);
     });
-    page.on('pageerror', error => { if (!collectTeardownReport(error.message, 'pageerror')) errors.push(error.message); });
+    page.on('pageerror', error => {
+      pageErrorDetails.push({ at: Date.now(), message: error.message, stack: error.stack, url: page.url(), schoolRedirectPending, schoolNavigationStarted });
+      if (!collectTeardownReport(error.message, 'pageerror')) errors.push(error.message);
+    });
+    page.on('requestfailed', request => { if (cancelledRequests.length < 200) cancelledRequests.push({ at: Date.now(), url: request.url(), failure: request.failure(), schoolRedirectPending }); });
     page.on('response', r => { if (r.status() >= 400) failedRequests.push({ status: r.status(), url: r.url() }); });
     const waitState = async predicate => {
       try { await page.waitForFunction(predicate, undefined, { timeout: 30_000 }); }
@@ -288,15 +298,15 @@ for (const [name, engine, width, height, touch] of [
     await logoutAll(true); await page.waitForURL('**/school-login.html?classroom=music%20class');
     assert.equal(schoolNavigationStarted, true);
     const fixtures = api.report();
-    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, schoolNavigationStarted }, null, 2));
-    assert.equal(errors.length, 0, JSON.stringify(errors)); assert.deepEqual(fixtures.misses, {});
+    writeFileSync(`${output}/${name}-diagnostics.json`, JSON.stringify({ errors, failedRequests, fixtures, expected, unloadResourceReports, pageErrorDetails, cancelledRequests, schoolNavigationStarted }, null, 2));
+    assert.equal(errors.length, 0, JSON.stringify(errors)); assert.deepEqual(fixtures.misses, {}); assert.deepEqual(liveTileRequests, [], 'Auth fixtures must not access live production map tiles');
     assert.ok(expected.some(e => e.startsWith('Failed to request magic link')));
     assert.ok(expected.some(e => e.startsWith('Failed to sign out')));
     assert.ok(expected.some(e => e.startsWith('Failed to load auth session')));
     reports.push({ name, ok: true, emailSignIn: true, linkEmail: true, expiry: true, networkRecovery: true,
       failedAndSuccessfulLogout: true, logoutAllCancelFailureSuccess: true, staleSessionAfterLogout: true, schoolRedirect: true,
       schoolLogoutAllRedirect: true, summaryTouches, writes: writes.length, sessionReads: reads.length,
-      errors, unloadResourceReports, fixtureMisses: fixtures.misses, expectedFailureReports: expected.length });
+      errors, unloadResourceReports, liveTileRequests, fixtureMisses: fixtures.misses, expectedFailureReports: expected.length });
     console.log(`${name}: auth state flows passed`);
     await context.close();
   } catch (error) {

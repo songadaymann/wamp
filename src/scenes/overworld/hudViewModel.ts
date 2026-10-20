@@ -58,6 +58,7 @@ interface SelectedSummaryViewData {
 }
 
 export interface BuildOverworldHudViewModelOptions {
+  cryptoVisible?: boolean;
   editorPlaytest?: boolean;
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
@@ -127,6 +128,7 @@ export function formatRoomEditorSummary(names: string[]): string | null {
 export function buildOverworldHudViewModel(
   options: BuildOverworldHudViewModelOptions,
 ): OverworldHudViewModel {
+  const cryptoVisible = options.cryptoVisible !== false;
   const {
     selectedState,
     selectedCoordinates,
@@ -269,7 +271,7 @@ export function buildOverworldHudViewModel(
     currentWalletAddress &&
     currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
   );
-  const viewerCanCheckMintedOwnership = Boolean(selectedRoomMinted && currentUserId && currentWalletAddress);
+  const viewerCanCheckMintedOwnership = Boolean(cryptoVisible && selectedRoomMinted && currentUserId && currentWalletAddress);
   const viewerCanEditWorldRoom = Boolean(
     selectedSummary?.world && canBuildInActiveWorld(selectedSummary.world.id),
   );
@@ -289,7 +291,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'claimed_unpublished' && !viewerOwnsSelectedRoom
         ? 'Only the claimer can edit an unpublished claimed room.'
       : selectedRoomMinted && !viewerOwnsMintedRoom
-        ? viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the room token owner can edit a minted room.'
+        ? !cryptoVisible ? 'This room is protected.' : viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the room token owner can edit a minted room.'
         : '';
   const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
   const resolvedCourseBuilderButtonDisabled =
@@ -319,7 +321,7 @@ export function buildOverworldHudViewModel(
         : '';
   const selectedActionReasonText = canEditSelectedRoom ? ''
     : selectedSummary?.world ? 'Only this World’s builders can edit here.'
-    : selectedRoomMinted ? 'Minted: only the token owner can edit.'
+    : selectedRoomMinted ? cryptoVisible ? 'Minted: only the token owner can edit.' : 'This room is protected.'
     : selectedState === 'claimed_unpublished' ? 'Only the claimer can edit this unpublished room.'
     : '';
   const selectedStateVisible = selectedState !== 'published' && !selectedRoomMinted;
@@ -454,7 +456,7 @@ export function buildOverworldHudViewModel(
     selectedStateVisible,
     selectedStateText:
       selectedRoomMinted
-        ? 'Minted'
+        ? cryptoVisible ? 'Minted' : 'Protected'
         : selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1
           ? 'Expanded'
         : selectedState === 'published'

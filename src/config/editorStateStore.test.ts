@@ -142,11 +142,21 @@ describe('editor state ownership and change delivery', () => {
 it('keeps production callers on the command boundary instead of naked global writes', async () => {
   const fs = await import('node:fs/promises'), ts = await import('typescript');
   const dir = new URL('../', import.meta.url), offenders: string[] = [];
+  const sources: URL[] = [];
   const visitDirectory = async (url: URL): Promise<void> => {
     for (const entry of await fs.readdir(url, { withFileTypes: true })) {
       const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), url);
       if (entry.isDirectory()) { await visitDirectory(child); continue; }
       if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
+      sources.push(child);
+    }
+  };
+  await visitDirectory(dir);
+  // Keep the same whole-source AST audit; bounded parallel reads avoid a serial I/O
+  // bottleneck when the full suite is running alongside browser verification.
+  await Promise.all(Array.from({ length: 16 }, async () => {
+    while (sources.length) {
+      const child = sources.pop()!;
       const source = await fs.readFile(child, 'utf8');
       // A matching identifier must be literal or contain a Unicode escape. Keep the
       // same whole-source audit without parsing unrelated gameplay/server modules.
@@ -169,7 +179,6 @@ it('keeps production callers on the command boundary instead of naked global wri
       };
       visit(sf);
     }
-  };
-  await visitDirectory(dir);
+  }));
   expect(offenders).toEqual([]);
 });

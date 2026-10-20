@@ -26,6 +26,18 @@ function card(overrides: Partial<BuildOverworldHudViewModelOptions> = {}) {
 }
 
 describe('room card available actions', () => {
+  it('keeps a protected room playable without wallet jargon for a visitor without an installed wallet', () => {
+    const view = card({ cryptoVisible: false, currentUserId: 'viewer', currentWalletAddress: '0xviewer',
+      selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xowner' } });
+    expect(view).toMatchObject({ playButtonHidden: false, playButtonDisabled: false, editButtonDisabled: true,
+      editButtonTitle: 'This room is protected.', selectedActionReasonText: 'This room is protected.', selectedStateText: 'Protected' });
+    expect(view.editButtonText).not.toContain('ownership');
+  });
+  it('retains ordinary editing for the linked room owner without an installed wallet', () => {
+    expect(card({ cryptoVisible: false, currentUserId: 'viewer', currentWalletAddress: '0xowner',
+      selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xowner' } }))
+      .toMatchObject({ editButtonDisabled: false, editButtonText: 'Edit Room' });
+  });
   it('does not present an individual cell record as the Expanded Room record', () => {
     const record = { roomTop: { userDisplayName: 'Cell Runner', elapsedMs: 1000 } as never, rankingMode: 'time' as const };
     expect(card(record).leaderboardText).toBe('Best: Cell Runner · 1.00s');

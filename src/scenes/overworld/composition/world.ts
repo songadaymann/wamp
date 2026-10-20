@@ -709,6 +709,7 @@ export function createFlowController(
         return () => { stop(); for (const event of ['sleep', 'shutdown', 'destroy']) host.scene.events.off(event, callback); };
       },
       getUserId: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.id ?? null : null; },
+      canCheckWallet: () => document.documentElement.dataset.wallet === 'yes',
       getWalletAddress: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.walletAddress ?? null : null; },
       acceptOwnership: (id, summary) => hud.setRoomOwnershipDetails(id, {
         claimerUserId: summary.claimerUserId,

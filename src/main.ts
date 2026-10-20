@@ -2,6 +2,8 @@ import { initializeGuestReplay } from './analytics/replay/recorder';
 import { initializeBugReporter } from './bugReports/runtime';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
+import { installPendingRoomWalletRecovery } from './main/roomWalletRecovery';
+import { installPageReadLifecycle } from './api/pageReadLifetime';
 import {
   initializeGuestActivityTracking,
   type GuestActivityMode,
@@ -65,6 +67,7 @@ import { getMannCoolDebugState, installMannCoolIntegration } from './integration
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
+installPageReadLifecycle();
 
 const debug_options = {
   renderer: normalizeRendererQuery(query.get('renderer')),
@@ -226,6 +229,8 @@ if (import.meta.env.DEV) {
 // Set up HTML UI event handlers
 setupUI(game);
 logBootPhase('main:ui-ready');
+const stopRoomWalletRecovery = installPendingRoomWalletRecovery();
+game.events.once('destroy', stopRoomWalletRecovery);
 void setupAuthUi();
 syncGameKeyboardFocus(game);
 installDialogKeyboardSync(game);

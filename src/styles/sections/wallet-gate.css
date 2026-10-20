@@ -1,0 +1,6 @@
+@layer overrides {
+  /* Final visibility policy. Once enabled, each component keeps its normal hidden/display state. */
+  html:not([data-wallet='yes']) [data-crypto] {
+    display: none;
+  }
+}

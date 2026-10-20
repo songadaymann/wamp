@@ -1,4 +1,5 @@
 import { globalLeaderboardWeek } from './globalLeaderboardWindow';
+import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
 import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
@@ -273,7 +274,7 @@ class ApiRunRepository implements RunRepository {
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const response = await fetchWithPageReadLifetime(`${this.baseUrl}${path}`, {
       ...init,
       headers,
       credentials: 'include',

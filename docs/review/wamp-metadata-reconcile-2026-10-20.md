@@ -1,6 +1,6 @@
 # F242: reconcile room artwork records with the chain
 
-Status: local implementation verified; source/main/cache-repair/release gates pending on `codex/wamp-metadata-reconcile-2026-10-20`, based on verified main3ad1f213. Master172/216; F237/F239/F242/F244 remain unchecked. Full checklist goal remains active.
+Status: complete and verified live, [PR266](https://github.com/songadaymann/wamp/pull/266), main `6d75801bae8d66a4f439c9584703cdf89b07c5df`. Master173/216. F237/F239/F244 remain open; the full checklist goal remains active.
 
 The required result is truthful artwork version/hash information from on-chain tokenURI, including legacy v1 and compact pv payloads, rather than browser claims or missing D1 cache records. Explicit fresh ownership refreshes must reconcile unchanged-owner metadata, and a keyless one-off tool must repair the five historical cache discrepancies after rechecking current evidence. Token4 must remain stale atv3 while its published room isv8. No artwork transaction is required for a cache repair.
 
@@ -35,3 +35,18 @@ Usage (dry run): `npm run mint:metadata:reconcile -- --database=DATABASE_NAME --
 
 
 Final local acceptance: the rebuilt actual-control matrix passes all12 new History cases across desktop/320px/WebKit/tablet with zero errors or fixture misses; exact-source native API passes26 cases. The native bundle and UI capture gates are terminal0. Captures of current/stale/unknown states and two official-client gameplay iterations are inspected. The wallet address fits the phone panel. Full quality589/4,951 passed before the final narrow wrap/CLI receipt safeguards; subsequent style/build/UI and guarded CLI checks pass. Exact-source CI must rerun the full quality set and all40 ownership cases plus the remaining browser suites before release. No production cache or chain write has been made.
+
+
+## Verified production delivery, 2026-10-20
+
+Final source85b1c047 and merged main6d75801b have identical trees. Every current required check is green:12 per head, full589files/4,951tests,200 browser cases per head including40 ownership/12 new visible History cases,26 native API cases,28 artwork cases and the other mobile/gameplay/map/auth suites. The exact-source preview matches205 files;12 hosted History cases pass with captures inspected. Source/native/main API bundles are exactly identical,3,510,402bytes/SHA256492420e324e157d0f640720529ddb1f3262a2286554f49293d24fc5de188fb10.
+
+The five reviewed cache repairs are applied and independently verified through the public API. Tokens1/2/3/10 now correctly record current versions6/1/2/19. Token4 correctly records on-chainv3 against publishedv8. Only the three artwork-cache fields changed; guarded baselines and before/after cache identities/non-target rows were preserved. Fresh chain checks surround each update. No wallet key, signature, on-chain transaction or production player/account/comment mutation was used. The four blank tokens and six unsigned paid legacy repair proposals remain separate F237/F244 work.
+
+The full clean-main API+Pages guard finishes successfully with no skipped gates. API version68b3ae99-b9e8-45b8-89c1-4262fdba858d serves100%; immutable frontend https://187f9bb2.wampland.pages.dev and https://wamp.land match all56 compared files. The map Worker099b18fd is byte-for-byte unchanged. Actual-domain verification passes12 visible History cases with no errors, fixture misses, group writes or real wallet transfers. Real read-only startup executes both final main assets with zero browser errors. Representative phone/WebKit/tablet/startup captures are inspected. Telemetry, play counts, account writes and sockets are isolated; no public play was added by verification.
+
+Two earlier failed observations are retained rather than labeled successful. Main's first auth job reported one WebKit 'Context is stopped' after school navigation, with earlier auth assertions and other nine jobs passing. The unchanged-main focused diagnostic passes and20 isolated audio-unload cases do not reproduce it. One controlled exact-main auth rerun with debug logging, unchanged assertions and deadlines passes all profiles. Main acceptance combines those nine original passed jobs and the successful auth rerun; raw job provenance/log hashes are in ignored main-job-provenance.json. The first report's root cause remains unproven. No error was suppressed or timeout relaxed.
+
+The first deployment published successfully but its immediate final smoke saw a main-bundle404. An unchanged production-smoke recheck passes and56 files match both domains. That first run remains exit1 in deploy-attempt-1.log. A full unchanged guard rerun then exits0, followed by the final actual-domain/code/cache/asset/startup audit. The legitimate cache repair was not repeated. No migration, secret/configuration, PartyKit or map-server change was required.
+
+Final receipt: ignored output/f242-metadata-2026-10-20/delivery.json has releaseComplete=true; all original/final logs, five-row receipt, public proof, CI provenance and inspected capture hashes are beside it. The release clone remains clean literal main with HEAD=origin/main. Unrelated checkouts, the selected animation and existing decision gates are preserved. Next is F239 durable wallet-interruption recovery; do not mark F237 or the overall goal complete from this release.

@@ -424,6 +424,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private readonly handleShutdown = (): void => {
     this.roomSession.backupDraftForPageExit();
     this.draftLifecycle?.destroy();
+    this.persistenceController.destroy();
     this.draftLifecycle = null;
     this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
@@ -439,8 +440,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       mode: 'idle',
       resetTransport: true,
     });
-    this.uiBridge?.destroy();
-    this.uiBridge = null;
+    this.uiBridge?.destroy(); this.uiBridge = null;
     this.musicPatternController.destroy();
     this.presenceController.destroy();
     this.resetRuntimeState();
@@ -515,7 +515,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       canSaveDraft: () => this.roomPermissions.canSaveDraft,
       recordBuildPlacement: (count) => this.guestBuilderActivityTracker.recordPlacedBuildContent(count),
     });
-    this.roomSession = new EditorRoomSession(createRoomRepository(), {
+    this.roomSession = new EditorRoomSession(createRoomRepository(), { isActive: () => this.scene.isActive(), events: this.events,
       applyRoomSnapshot: (room) => {
         this.applyRoomSnapshot(room);
       },
@@ -1123,7 +1123,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.flowController.reset();
     this.inspectorController.reset();
     this.courseController.reset();
-    this.roomSession.reset();
+    this.roomSession.reset(); this.persistenceController.start();
     this.toolController.reset();
     this.guestBuilderActivityTracker.reset();
     this.roomEditCount = 0;

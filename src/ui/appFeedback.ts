@@ -131,7 +131,10 @@ export function hideBootSplash(): void {
   getElements().bootRoot?.classList.add('hidden');
 }
 
-export function showBusyOverlay(title: string, status = 'Please wait...'): void {
+export function showBusyOverlay(title: string, status = 'Please wait...', controls?: {
+  close: () => void;
+  check: () => void | Promise<void>;
+}): void {
   const refs = getElements();
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
@@ -143,10 +146,12 @@ export function showBusyOverlay(title: string, status = 'Please wait...'): void 
     refs.busyStatus.textContent = status;
   }
   refs.busySpinner?.classList.remove('hidden');
-  refs.busyRetry?.classList.add('hidden');
-  refs.busyClose?.classList.add('hidden');
-  busyRetryHandler = null;
-  busyCloseHandler = null;
+  refs.busyRetry?.classList.toggle('hidden', !controls);
+  refs.busyClose?.classList.toggle('hidden', !controls);
+  if (refs.busyRetry) refs.busyRetry.textContent = controls ? 'Check again' : 'Retry';
+  if (refs.busyClose) refs.busyClose.textContent = 'Close';
+  busyRetryHandler = controls?.check ?? null;
+  busyCloseHandler = controls?.close ?? null;
 }
 
 export function updateBusyOverlay(title: string, status = 'Please wait...'): void {

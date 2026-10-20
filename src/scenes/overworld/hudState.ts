@@ -1,5 +1,6 @@
 import { toCourseGoalType } from '../../courses/model';
 import { getAuthDebugState } from '../../auth/client';
+import { hasCryptoWallet } from '../../mint/walletGate';
 import { isRoomInActiveCourseDraftSession } from '../../courses/draftSession';
 import {
   type CourseGoal,
@@ -154,7 +155,7 @@ export class OverworldHudStateController {
     const auth = getAuthDebugState(), worldId = getActiveWorldId();
     const identity = JSON.stringify([worldId, worldId ? canBuildInActiveWorld(worldId) : false,
       auth.authenticated, auth.user?.id, auth.user?.walletAddress?.toLowerCase(), auth.schoolManaged,
-      auth.source]);
+      auth.source, hasCryptoWallet()]);
     if (identity !== this.ownershipContextKey) {
       this.ownershipContextKey = identity;
       this.ownershipGeneration++;
@@ -273,6 +274,7 @@ export class OverworldHudStateController {
 
     this.host.renderHudViewModel(
       buildOverworldHudViewModel({
+        cryptoVisible: hasCryptoWallet(),
         editorPlaytest: this.host.isEditorPlaytest?.(),
         selectedState,
         selectedCoordinates,

@@ -4,6 +4,8 @@ import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
 import { requestRoomPublishName, suggestRoomTitle } from '../../publishing/events';
 import { capturePublishProgression, reportPublishProgression } from '../../publishing/feedback';
 import { RoomCollectionFlow, type RoomCollectionFlowHost } from './roomCollectionFlow';
+import { watchRoomWalletRecovery } from '../../mint/roomWalletRecovery';
+import { getActiveWorldId } from '../../worlds/clientContext';
 import type {
   RoomPermissions,
   RoomRecord,
@@ -45,10 +47,12 @@ interface EditorPersistenceControllerHost {
 export class EditorPersistenceController {
   private publishing = false;
   private readonly collection: RoomCollectionFlow;
+  private unwatchWalletRecovery: (() => void) | null = null;
   constructor(
     private readonly roomSession: EditorRoomSession,
     private readonly host: EditorPersistenceControllerHost,
   ) {
+    this.start();
     this.collection = new RoomCollectionFlow({
       captureContext: () => roomSession.captureContext(),
       isActive: () => host.isActive?.() ?? true,
@@ -60,11 +64,14 @@ export class EditorPersistenceController {
       getIdentity: () => { const auth = getAuthDebugState(); return {
         userId: auth.authenticated ? auth.user?.id ?? null : null,
         wallet: auth.authenticated ? auth.user?.walletAddress ?? null : null,
+        signer: auth.walletAddress ?? null,
       }; },
       mint: options => roomSession.mintRoom(options),
       artwork: options => roomSession.refreshMintMetadata(options),
       canAddArtwork: () => roomSession.getHistoryState().canRefreshMintMetadata,
       isArtworkSubmitted: () => roomSession.hasPendingArtworkConfirmation,
+      isArtworkPending: () => roomSession.hasPendingWalletConfirmation,
+      isCollectionSubmitted: () => roomSession.hasPendingWalletConfirmation,
       onStateChanged: () => host.refreshUi?.(),
       onArtworkPending: status => showBusyError(status.text, { title: 'Room collected', closeLabel: 'Back to room' }),
       getStatus: () => roomSession.statusDetails,
@@ -73,6 +80,19 @@ export class EditorPersistenceController {
   }
 
   get isCollecting(): boolean { return this.collection.isCollecting; }
+
+  start(): void {
+    if (this.unwatchWalletRecovery) return;
+    this.unwatchWalletRecovery = watchRoomWalletRecovery((pending, result) => {
+      const auth = getAuthDebugState();
+      if (!getActiveWorldId() && (this.host.isActive?.() ?? true)
+        && auth.authenticated && auth.user?.id === pending.userId && auth.user.walletAddress?.toLowerCase() === pending.wallet) {
+        this.roomSession.acceptWalletRecovery(pending, result);
+      }
+    });
+  }
+
+  destroy(): void { this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
 
   get statusText(): string {
     return this.roomSession.statusText;
