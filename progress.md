@@ -1,8 +1,8 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
-## 2026-10-20 — Safety key approved/restored; map rebuild and Safari cache candidate
+## 2026-10-20 — Isolate auth fixtures; withdraw ineffective cache experiment
 
-Replaced only approved safety ADMIN_API_KEY; verified access and protected ignored0600 file, production secrets unchanged. Applied safety DB0066/0067 and JAM0003; staged445-leaf770f6454 map with canonical tools. Readiness/parity/zero-DLQ/two browser suites still pending. Source06c58f6e recovery100 pass, preview209+30file parity and hosted28 recovery/36 public cases pass with isolated third-party/CORS fixtures. Safari school-redirect Context-is-stopped also reproduces unchanged main00c3bb61; keep fatal check. Cache candidate reads PNG bytes before CacheStorage Response creation;40 focused tests and three Canvas Safari auth runs pass, full quality/fresh hosted checks pending. F239 unchecked, no production deploy/transaction; all preservation/AI hold/unsigned boundaries retained.
+93b8f095 did not fix hosted Safari teardown; reversed its four src/test changes. Final application src exactly matches06c58f6e (597/5,055), not the experiment’s597/5,057. Auth fixtures explicitly use recorded compact-world data and reject live production tile requests; all auth flows/error/deadline assertions remain, with tiled-map gates separate and F089 follow-up recorded. Add one ECONNRESET retry only to the fixture’s immutable wallet-module GET, with HTTP success required; application/provider retries stay zero. Approved safety key reset is complete; safety migrations/API/renderer staged,445 leaves+ancestors building, DLQ/parity/two-probe gates pending. Temporary DLQ inspector removed/restored without ack/deletion. Production renderer preview53eed7a6 exists, no production mutation/deploy. Fresh source/main/canonical map/live proof required; F239 unchecked and all prior boundaries retained.
 
 ## 2026-10-20 — Recovery fixture mismatch fixed; Safari diagnostic retained
 

@@ -68,7 +68,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       if (local.hostname === '127.0.0.1') await context.routeWebSocket(u => u.hostname === local.hostname && u.port === local.port && u.pathname === '/', s => s.connectToServer());
       // Replace only the third-party lazy namespace factories. No application/auth/room/renderer code is changed.
       await context.route(/\/index-[\w-]+\.js(?:\?.*)?$/, async r => {
-        const original = await r.fetch(); let body = await original.text();
+        const original = await r.fetch({ maxRetries: 1 }); assert(original.ok(), 'External wallet module fixture must read the served artifact'); let body = await original.text();
         const originalSha256 = createHash('sha256').update(body).digest('hex');
         for (const [symbol, replacement] of [['createAppKit', 'globalThis.__artworkWalletFactory'], ['WagmiAdapter', 'globalThis.__artworkWalletAdapter']]) {
           const pattern = new RegExp('([,{])' + symbol + ':([A-Za-z_$][\\w$]*)', 'g'); const matches = [...body.matchAll(pattern)];

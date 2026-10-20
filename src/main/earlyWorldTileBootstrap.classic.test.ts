@@ -255,19 +255,12 @@ describe('classic early world tile bootstrap', () => {
       new Request('https://tiles.example/tile.png'),
       new Blob(['png']),
     ).then(() => { persisted = true; });
-    await vi.waitFor(() => expect(put).toHaveBeenCalledOnce());
+    expect(put).toHaveBeenCalledOnce();
+    await Promise.resolve();
     expect(persisted).toBe(false);
     resolvePut();
     await persistence;
     expect(persisted).toBe(true);
-  });
-
-  it('does not begin a persistent write when reading its bytes fails during teardown', async () => {
-    const blob = new Blob(['png']);
-    vi.spyOn(blob, 'arrayBuffer').mockRejectedValue(new DOMException('Document stopped', 'AbortError'));
-    const put = vi.fn();
-    await expect(persistEarlyWorldTileBlob({ put }, new Request('https://tiles.example/tile.png'), blob)).resolves.toBeUndefined();
-    expect(put).not.toHaveBeenCalled();
   });
 
   it('waits for two animation frames before reporting painted coverage', async () => {

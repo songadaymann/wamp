@@ -243,21 +243,6 @@ describe('world tile byte cache deferred persistence', () => {
     await cache.flushPersistence();
   });
 
-  it('retains validated memory bytes when preparing a persistent body fails', async () => {
-    const { blob, ready } = await createReady('teardown-write');
-    const bytes = await blob.arrayBuffer();
-    vi.spyOn(blob, 'arrayBuffer').mockResolvedValueOnce(bytes).mockRejectedValue(new DOMException('Document stopped', 'AbortError'));
-    const fetchMock = vi.fn(async () => ({ ok: true, blob: async () => blob }));
-    vi.stubGlobal('fetch', fetchMock);
-    const persistence = new FakeWorldTilePersistence();
-    const cache = new WorldTileByteCache(1_024, persistence);
-    expect((await cache.getOrFetch(ready)).cacheHit).toBe(false);
-    await cache.flushPersistence();
-    expect(persistence.store.put).not.toHaveBeenCalled();
-    expect((await cache.getOrFetch(ready)).cacheHit).toBe(true);
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
   it('coalesces repeated immutable writes and metadata work into one persistence batch', async () => {
     vi.useFakeTimers();
     const { blob, ready } = await createReady('coalesced');
