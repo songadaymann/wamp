@@ -1,5 +1,9 @@
 ## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
 
+## 2026-10-20 — Exact-source acceptance green; catalog staging and scoped benchmark follow-up
+
+Source6441119d all16 checks/597files/5,055tests/312 browser cases pass. Preview209+30 files, hosted36 recovery+36 public cases and inspected installed-client gate0/1 runs pass; retain earlier transient502 and successful unchanged rechecks. Safety646/646 ready,445/445 leaves/all ancestors/objects, zero work/errors/DLQ and canonical pixels pass. Existing map timing failures also reproduce unchanged live; no map-client/startup code changed and no timing assertion is relaxed. Apply the documented catalog-maintenance pixel/parity/candidate guards rather than re-running the original client/cohort rollout. Exact safety-tested renderer deployed from clean main00c3bb61; production candidate images are building, active API/site/map unchanged. Main14 Quality jobs/312 cases, complete candidate+pixel readiness, coordinated clean-main guard, final Pages/live proofs remain. F239 unchecked, AI on hold/unsigned repairs/preservation boundaries retained.
+
 ## 2026-10-20 — Check-again result race corrected; safety map fully ready
 
 Authb6c4e307 passes. Narrow-phone artwork-check exposed dismissal of the old hidden overlay before asynchronous confirmed UI appeared. Await canonical recovery before dismissing; keep all actual-control/history/error/deadline assertions. Four targeted narrow/WebKit mint/artwork checks pass, app src unchanged. Safety646/646 ready,445/445 published leaves, all ancestor/object parity and zero work/errors pass canonical readiness; DLQ metrics now0 with no explicit ack/deletion. Safety activation/parity/two probes pending, production candidate preview3f3c530d prepared from unchanged app source. F239 unchecked; source/main/production/live gates and all preservation/decision boundaries retained.
