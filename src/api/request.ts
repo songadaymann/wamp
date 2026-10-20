@@ -1,5 +1,6 @@
 import { getApiBaseUrl } from './baseUrl';
 import { readApiErrorMessage } from './readApiErrorMessage';
+import { fetchWithPageReadLifetime } from './pageReadLifetime';
 
 /** A non-2xx API response; the message is the server's plain `error` text. */
 export class ApiError extends Error {
@@ -23,7 +24,7 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetchWithPageReadLifetime(`${baseUrl}${path}`, {
     ...requestInit,
     headers,
     credentials: requestInit.credentials ?? 'include',

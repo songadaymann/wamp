@@ -3,6 +3,7 @@ import { initializeBugReporter } from './bugReports/runtime';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
 import { installPendingRoomWalletRecovery } from './main/roomWalletRecovery';
+import { installPageReadLifecycle } from './api/pageReadLifetime';
 import {
   initializeGuestActivityTracking,
   type GuestActivityMode,
@@ -66,6 +67,7 @@ import { getMannCoolDebugState, installMannCoolIntegration } from './integration
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
+installPageReadLifecycle();
 
 const debug_options = {
   renderer: normalizeRendererQuery(query.get('renderer')),
