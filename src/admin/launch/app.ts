@@ -1,5 +1,6 @@
 import { formatAccountIdentity } from '../../auth/displayIdentity';
 import { setupBuildPromptsAdmin } from './buildPrompts';
+import { setupMapCaptureAdmin } from './mapCapture';
 import { setupLaunchReplayModal } from './replayModal';
 import { setupDailyAdmin } from './dailyRoom';
 import { setupWeeklyRoomRushAdmin } from './weeklyRoomRush';
@@ -131,6 +132,7 @@ const adminResponseClient = createAdminResponseClient(() => adminKey);
 const dailyAdmin = setupDailyAdmin(() => adminKey);
 const weeklyRoomRushAdmin = setupWeeklyRoomRushAdmin(() => adminKey);
 const buildPromptsAdmin = setupBuildPromptsAdmin(() => adminKey);
+const mapCaptureAdmin = setupMapCaptureAdmin(() => adminKey);
 const pollingController = createPollingController(POLL_INTERVAL_MS, () => {
   void refreshSnapshot();
 });
@@ -142,6 +144,7 @@ if (adminKeyInput) {
 saveKeyButton?.addEventListener('click', () => {
   const nextKey = adminKeyInput?.value.trim() ?? '';
   adminKey = nextKey;
+  mapCaptureAdmin.refresh();
   if (adminKey) {
     window.sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, adminKey);
     lastError = null;
@@ -173,6 +176,7 @@ refreshButton?.addEventListener('click', () => {
 
 clearKeyButton?.addEventListener('click', () => {
   adminKey = '';
+  mapCaptureAdmin.refresh();
   lastError = null;
   gameJamsSnapshot = null;
   gameJamsError = null;

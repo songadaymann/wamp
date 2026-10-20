@@ -1,9 +1,5 @@
 import type { StoredScreenshot } from './storage';
 import {
-  AUTO_CAPTURE_CRON,
-  MAX_MANUAL_SHOTS_PER_DAY,
-  MAX_ZOOM_DELTA_PER_DAY,
-  PADDING_ROOMS,
   SCREENSHOT_HEIGHT,
   SCREENSHOT_WIDTH,
 } from './config';
@@ -20,6 +16,7 @@ export function buildGalleryHtml(input: {
   screenshots: StoredScreenshot[];
   allFileNames: string[];
   publicBasePath: string;
+  adminHref: string | null;
   monthKey: string;
   hasPrevMonth: boolean;
   hasNextMonth: boolean;
@@ -142,10 +139,12 @@ export function buildGalleryHtml(input: {
       color: var(--ink);
       font-variant-numeric: tabular-nums;
     }
+    .table-scroll { min-width: 0; max-width: 100%; overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; margin-top: 16px; }
     th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
     th { color: var(--muted); font-weight: 500; }
     a { color: var(--accent); }
+    .capture-admin-link, .capture-admin-link:hover { background: var(--accent); color: var(--bg); border-radius: 0; min-height: 44px; }
     .meta { font-size: 0.85rem; color: var(--muted); margin-top: 24px; }
     code { color: var(--ink); }
   </style>
@@ -153,14 +152,9 @@ export function buildGalleryHtml(input: {
 <body>
   <main>
     <h1>WAMP map screenshots</h1>
-    <p>Daily automatic captures (<code>yyyy_mm_dd_0.png</code>) plus manual test shots (<code>_1</code>…<code>_${MAX_MANUAL_SHOTS_PER_DAY}</code>). Files are stored in R2 and can be downloaded individually or as a ZIP.</p>
 
-    <section class="panel">
-      <h2 style="margin:0 0 12px; font-size:1.15rem;">Manual capture</h2>
-      <p style="margin-top:0;">Takes a screenshot now as <code>yyyy_mm_dd_x.png</code> (x = 1…${MAX_MANUAL_SHOTS_PER_DAY}). Each capture (daily or manual) advances zoom by at most <code>${MAX_ZOOM_DELTA_PER_DAY}</code> toward the ideal fit, so several manuals can catch up after a growth spurt. If _${MAX_MANUAL_SHOTS_PER_DAY} already exists for today, the button does nothing.</p>
-      <button id="capture" type="button">Take screenshot</button>
-      <div id="status"></div>
-    </section>
+
+    ${input.adminHref ? `<p><a class="button capture-admin-link" href="${escapeHtml(input.adminHref)}">Capture in Launch Admin</a></p>` : ''}
 
     <section class="panel">
       <h2 style="margin:0 0 12px; font-size:1.15rem;">Export 4K MPEG</h2>
@@ -196,62 +190,19 @@ export function buildGalleryHtml(input: {
         <a class="button" href="${monthZipHref}">Download this month (ZIP)</a>
         <a class="button" href="${allZipHref}">Download all (ZIP)</a>
       </div>
-      <table>
+      <div class="table-scroll" role="region" aria-label="Map screenshots" tabindex="0"><table>
         <thead>
           <tr><th>File</th><th>Bytes</th><th>Uploaded</th><th></th></tr>
         </thead>
         <tbody>
           ${rows || '<tr><td colspan="4">No screenshots for this month.</td></tr>'}
         </tbody>
-      </table>
+      </table></div>
     </section>
 
-    <p class="meta">
-      Tunables: padding=${PADDING_ROOMS} rooms,
-      max zoom delta/capture=${MAX_ZOOM_DELTA_PER_DAY},
-      size=${SCREENSHOT_WIDTH}×${SCREENSHOT_HEIGHT},
-      cron=<code>${AUTO_CAPTURE_CRON}</code> (04:00 UTC ≈ midnight Eastern EDT).
-    </p>
+
   </main>
   <script type="module">
-    const button = document.getElementById('capture');
-    const status = document.getElementById('status');
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      status.textContent = 'Capturing… this can take a minute.';
-      try {
-        const response = await fetch('${input.publicBasePath}/api/capture', { method: 'POST' });
-        const body = await response.json();
-        if (!response.ok || !body.ok) {
-          status.textContent = body.reason || body.error || 'Capture failed.';
-        } else if (body.skipped) {
-          status.textContent = body.reason || 'Skipped.';
-        } else {
-          status.textContent = (() => {
-            const zoom = Number(body.zoom);
-            const previous = body.previousZoom == null ? null : Number(body.previousZoom);
-            const ideal = Number(body.idealZoom);
-            const delta = Number(body.zoomDelta);
-            const capped = body.clamped ? ' capped' : '';
-            if (previous == null || !Number.isFinite(previous)) {
-              return 'Saved ' + body.fileName + '. zoom ' + zoom.toFixed(4)
-                + ' (first capture → ideal ' + ideal.toFixed(4) + '). Reloading…';
-            }
-            return 'Saved ' + body.fileName + '. zoom ' + zoom.toFixed(4)
-              + ' (was ' + previous.toFixed(4)
-              + ' → ideal ' + ideal.toFixed(4)
-              + ', Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(4)
-              + capped + '). Reloading…';
-          })();
-          setTimeout(() => location.reload(), 1200);
-          return;
-        }
-      } catch (error) {
-        status.textContent = error instanceof Error ? error.message : String(error);
-      }
-      button.disabled = false;
-    });
-
     const allFileNames = ${fileNamesJson};
     const startInput = document.getElementById('video-start');
     const endInput = document.getElementById('video-end');

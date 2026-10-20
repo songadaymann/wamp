@@ -1,4 +1,8 @@
+/// <reference path="../../generated-bindings/map-screenshot-worker-configuration.d.ts" />
+import type { CaptureLease } from './lease';
+import type { D1Database } from '../cloudflare/worker/core/types';
 import type { BrowserWorker } from '@cloudflare/puppeteer';
+import type { ScreenshotR2Bucket } from './storage';
 import {
   chooseTileLevelForZoom,
   padPublishedBounds,
@@ -14,44 +18,34 @@ import {
   PADDING_ROOMS,
 } from './config';
 import { fillInfoOverlayTemplate } from './infoOverlay';
-import { formatEasternDate, formatEasternLongDate } from './naming';
+import { formatEasternLongDate } from './naming';
 import { loadMapScreenshotStats } from './stats';
 import { buildStitchRequest } from './stitch';
 import { stitchMapScreenshotPng } from './stitchBrowser';
+import { CaptureBrowserCleanupError } from './managedBrowser';
 import {
-  dailyFileNameForToday,
   loadPreviousZoom,
   loadStarfieldDataUrl,
-  nextManualFileName,
   saveScreenshotPng,
   saveStarfieldPng,
-  saveZoomState,
-  screenshotExists,
-  type ScreenshotR2Bucket,
 } from './storage';
 import {
   loadActiveRendererVersion,
   loadPublishedRoomBounds,
   loadPublishedRoomCoordinates,
   loadStitchTiles,
-  type MapScreenshotDb,
 } from './tiles';
-import { applyGradualZoom, computeIdealFitZoom } from './zoom';
+import { resolveCaptureZoom, computeIdealFitZoom } from './zoom';
 import { buildDailyCaption, maybePostToTwitter, type TwitterEnv } from './twitter';
 
-export interface MapScreenshotEnv extends TwitterEnv {
-  DB: MapScreenshotDb;
-  SCREENSHOTS: ScreenshotR2Bucket;
-  MAP_SCREENSHOT_BROWSER: BrowserWorker;
-  WORLD_TILE_PUBLIC_BASE_URL: string;
-  MAP_SCREENSHOT_PUBLIC_BASE_URL?: string;
-}
+export type MapScreenshotEnv = Pick<MapScreenshotBindings, 'WORLD_TILE_PUBLIC_BASE_URL' | 'MAP_SCREENSHOT_ADMIN_BASE_URL'> & TwitterEnv & { DB: D1Database; SCREENSHOTS: ScreenshotR2Bucket; MAP_SCREENSHOT_BROWSER: BrowserWorker };
 
 export type CaptureMode = 'daily' | 'manual';
 
 export interface CaptureResult {
   ok: boolean;
   skipped?: boolean;
+  busy?: boolean;
   reason?: string;
   error?: string;
   fileName?: string;
@@ -66,8 +60,8 @@ export interface CaptureResult {
   twitter?: { posted: boolean; reason: string };
 }
 
-async function fetchTileAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
+async function fetchTileAsDataUrl(url: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Failed to fetch tile ${url}: HTTP ${response.status}`);
   }
@@ -75,8 +69,8 @@ async function fetchTileAsDataUrl(url: string): Promise<string> {
   return `data:image/png;base64,${bytes.toString('base64')}`;
 }
 
-async function fetchFontAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
+async function fetchFontAsDataUrl(url: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Failed to fetch font ${url}: HTTP ${response.status}`);
   }
@@ -84,34 +78,13 @@ async function fetchFontAsDataUrl(url: string): Promise<string> {
   return `data:font/ttf;base64,${bytes.toString('base64')}`;
 }
 
-export async function captureMapScreenshot(
+export async function renderMapScreenshot(
   env: MapScreenshotEnv,
-  mode: CaptureMode,
+  capture: { mode: CaptureMode; lease: CaptureLease; signal: AbortSignal; startedAt: number; assertActive(): Promise<void> },
 ): Promise<CaptureResult> {
-  const easternDate = formatEasternDate();
-  let fileName: string;
-  if (mode === 'daily') {
-    fileName = dailyFileNameForToday();
-    if (await screenshotExists(env.SCREENSHOTS, fileName)) {
-      return {
-        ok: true,
-        skipped: true,
-        reason: `Daily screenshot ${fileName} already exists.`,
-        fileName,
-      };
-    }
-  } else {
-    const next = await nextManualFileName(env.SCREENSHOTS, easternDate);
-    if (!next) {
-      return {
-        ok: false,
-        skipped: true,
-        reason: `Manual screenshot limit reached for ${easternDate} (_9 already exists).`,
-      };
-    }
-    fileName = next;
-  }
-
+  const { mode, lease, signal, assertActive } = capture;
+  const easternDate = lease.day, fileName = lease.fileName;
+  await assertActive();
   const published = await loadPublishedRoomBounds(env.DB);
   if (!published) {
     return { ok: false, reason: 'No published rooms found.' };
@@ -120,11 +93,11 @@ export async function captureMapScreenshot(
   const padded = padPublishedBounds(published, PADDING_ROOMS);
   const world = roomBoundsToWorldPixels(padded);
   const idealZoom = computeIdealFitZoom(world);
-  const previousZoom = await loadPreviousZoom(env.SCREENSHOTS);
-  const zoom = applyGradualZoom(idealZoom, previousZoom);
+  const previousZoom = lease.previousZoom ?? await loadPreviousZoom(env.SCREENSHOTS);
+  const zoom = resolveCaptureZoom(mode, idealZoom, previousZoom);
   const zoomDelta = previousZoom === null ? idealZoom : zoom - previousZoom;
   const clamped =
-    previousZoom !== null && Math.abs(idealZoom - previousZoom) > MAX_ZOOM_DELTA_PER_DAY;
+    mode === 'daily' && previousZoom !== null && Math.abs(idealZoom - previousZoom) > MAX_ZOOM_DELTA_PER_DAY;
   const fetchPadding = PADDING_ROOMS + 2;
   const fetchMinX = published.minX - fetchPadding;
   const fetchMaxX = published.maxX + fetchPadding;
@@ -147,8 +120,8 @@ export async function captureMapScreenshot(
     await Promise.all([
       loadPublishedRoomCoordinates(env.DB, padded.minX, padded.maxX, padded.minY, padded.maxY),
       loadMapScreenshotStats(env.DB),
-      fetchFontAsDataUrl(`${fontBase}/assets/fonts/early-gameboy.ttf`),
-      fetchFontAsDataUrl(`${fontBase}/assets/fonts/HomeVideo-Regular.ttf`),
+      fetchFontAsDataUrl(`${fontBase}/assets/fonts/early-gameboy.ttf`, signal),
+      fetchFontAsDataUrl(`${fontBase}/assets/fonts/HomeVideo-Regular.ttf`, signal),
       loadStitchTiles({
         db: env.DB,
         rendererVersion,
@@ -170,11 +143,11 @@ export async function captureMapScreenshot(
   // pages (opaque origin) are not blocked by tile CDN CORS.
   const tilesWithDataUrls = await Promise.all(tiles.map(async (tile) => ({
     ...tile,
-    url: await fetchTileAsDataUrl(tile.url),
+    url: await fetchTileAsDataUrl(tile.url, signal),
   })));
 
   const infoOverlay = {
-    date: formatEasternLongDate(),
+    date: formatEasternLongDate(new Date(capture.startedAt)),
     players: new Intl.NumberFormat('en-US').format(stats.players),
     builders: new Intl.NumberFormat('en-US').format(stats.builders),
     rooms: new Intl.NumberFormat('en-US').format(stats.rooms),
@@ -210,10 +183,13 @@ export async function captureMapScreenshot(
   let pngBytes: ArrayBuffer;
   let starfieldPngBytes: ArrayBuffer | null = null;
   try {
-    const stitchResult = await stitchMapScreenshotPng(env.MAP_SCREENSHOT_BROWSER, stitchRequest);
+    await assertActive();
+    const stitchResult = await stitchMapScreenshotPng(env.MAP_SCREENSHOT_BROWSER, stitchRequest, signal);
+    await assertActive();
     pngBytes = stitchResult.pngBytes;
     starfieldPngBytes = stitchResult.starfieldPngBytes;
   } catch (error) {
+    if (error instanceof CaptureBrowserCleanupError) throw error;
     const stitchDebug = (error as Error & { stitchDebug?: Record<string, unknown> }).stitchDebug;
     const stage = typeof stitchDebug?.stage === 'string' ? ` (stage: ${stitchDebug.stage})` : '';
     return {
@@ -224,15 +200,13 @@ export async function captureMapScreenshot(
   }
 
   if (starfieldPngBytes) {
+    await assertActive();
     await saveStarfieldPng(env.SCREENSHOTS, starfieldPngBytes);
   }
 
+  await assertActive();
   const key = await saveScreenshotPng(env.SCREENSHOTS, fileName, pngBytes, zoom);
-  await saveZoomState(env.SCREENSHOTS, {
-    zoom,
-    updatedAt: new Date().toISOString(),
-    easternDate,
-  });
+  await assertActive();
 
   const twitter = mode === 'daily'
     ? await maybePostToTwitter(env, {

@@ -9,10 +9,8 @@
 export const PADDING_ROOMS = 2;
 
 /**
- * Max absolute zoom change per capture (daily or manual).
- * Limits sudden jumps in a time-lapse. Manual clicks each advance by up to this
- * amount, so several manuals can catch up faster after a growth spurt.
- * Default: 0.001
+ * Max absolute zoom change for the scheduled daily capture. Manual previews reuse
+ * the latest daily zoom and do not advance it. Default: 0.001.
  */
 export const MAX_ZOOM_DELTA_PER_DAY = 0.001;
 
@@ -29,7 +27,7 @@ export const SCREENSHOT_HEIGHT = 2160;
  */
 export const AUTO_CAPTURE_CRON = '0 4 * * *';
 
-/** Manual screenshots allowed per Eastern-calendar day (`_1` … `_9`). Default: 9 */
+/** Manual capture attempts allowed per Eastern-calendar day (`_1` … `_9`). Default: 9 */
 export const MAX_MANUAL_SHOTS_PER_DAY = 9;
 
 /** Room size in world pixels (matches WAMP room geometry; do not change lightly). */

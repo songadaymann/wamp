@@ -130,7 +130,9 @@
     "scripts/smoke_discovery.mjs",
     "scripts/smoke_post_run_reminders.mjs",
     "scripts/smoke_first_publish.mjs",
-    "scripts/smoke_returning_guest_panel.mjs"
+    "scripts/smoke_returning_guest_panel.mjs",
+    "scripts/smoke_map_capture_service.mjs",
+    "scripts/smoke_map_capture.mjs"
   ],
   "project": [
     "src/**/*.{js,mjs,ts}",

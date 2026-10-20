@@ -3,6 +3,7 @@
   "name": "everybodys-platformer",
   "main": "src/cloudflare/worker.ts",
   "keep_vars": true,
+  "services": [{ "binding": "MAP_SCREENSHOTS", "service": "everybodys-platformer-map-screenshots", "entrypoint": "MapScreenshotAdmin" }],
   "durable_objects": { "bindings": [{ "name": "PRESENCE_ROOMS", "class_name": "PresenceDurableObject" }] },
   "migrations": [{ "tag": "presence-v1", "new_sqlite_classes": ["PresenceDurableObject"] }],
   "triggers": { "crons": ["17 * * * *", "7,22,37,52 * * * *"] },
@@ -77,6 +78,7 @@
   ],
   "env": {
     "safety": {
+      "services": [{ "binding": "MAP_SCREENSHOTS", "service": "everybodys-platformer-safety-map-screenshots", "entrypoint": "MapScreenshotAdmin" }],
       "name": "everybodys-platformer-safety",
       "preview_urls": true,
       "durable_objects": { "bindings": [{ "name": "PRESENCE_ROOMS", "class_name": "PresenceDurableObject" }] },
