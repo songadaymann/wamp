@@ -1,3 +1,5 @@
+**Delivered:** PR257/main `adcd47f2` is live on https://wamp.land / https://d3ef1b7e.wampland.pages.dev. All five requirements below are verified. F074 is complete; the broader goal remains active.
+
 # F074: CSS ownership, stacking and regression guards
 
 Baseline: main `63a7eb20` (trusted comments delivered in PR256). Canonical branch: `codex/wamp-css-cleanup-2026-10-19`.
@@ -58,3 +60,9 @@ F074 covers the shared application styles in src/styles. Independently loaded fe
 ## Local source acceptance
 
 The final rebuilt production suite exits0 with all66 cases (33 Chromium,33 WebKit), zero console/page errors and zero API fixture misses. The final146-state comparison after the size-metric correction also exits0 with1,261,068 matched property/geometry values and exact controlled paint crops. Fresh final build and size check pass650.6KB/670KB; the full561-file/4,685-test quality run,18 isolated guard probes, installed-client gameplay captures and staged OSS0/0 scan are accepted. Source requirements1–4 are verified. Push/PR, exact-source/main hosted checks, guarded Pages release and actual-domain/immutable/runtime verification are the remaining delivery gate. Master remains166/216; this is not F074 production completion or completion of the broader goal.
+
+## Delivery acceptance
+
+All9 exact-source checks (70eca1ba) and9 merged-main checks (adcd47f2) pass, including99 browser cases per head. Main full quality retains561 files/4,685 tests. The clean literal-main guarded Pages-only release exits0 with no skipped checks or smoke; startup650.7KB/670KB. Automatic main Pagesd56e332c completed before the final guardedd3ef1b7e upload. All36 checked assets, including all8 CSS assets, match custom and immutable domains. Actual published-room startup executes both final main assets, reports zero errors, and its screenshot was inspected. API health/comments return200; Worker dca6301e remains100%. Three actual-domain public editor/upload/reload/play background flows pass in desktop Chrome, phone Chrome and WebKit with isolated API data, intercepted writes and no fixture misses; selected-animation frames and latest screenshots inspected. No production room, upload, play count or comment test writes were created.
+
+Fresh source audit independently confirms190→48 important flags, both skin/dock0,25→0 inset paint shadows and exact per-file ceilings. Guard probes, stacking parity,146 states/1,261,068 comparisons and native/ordinary-build CSS parity remain accepted. All owned local servers and browser/test/deploy handles are terminal; unrelated checkouts, TAS lab and the selected animation remain preserved. Detailed ignored receipt and requirement audit are in output/f074-css-2026-10-19. Master167/216; continue the full remaining checklist. Existing tablet Back/Undo overlap and physical iOS testing remain separate; no broader-goal completion is claimed.
