@@ -5436,6 +5436,8 @@ Core claim confirmed. Smaller corrections:
 
 (e) The "11 Transfer events" figure is unverified. If it is accurate, the impact today is latent.
 
+**2026-10-20 completed.** [PR264](https://github.com/songadaymann/wamp/pull/264), main9ba9670b, is verified live. Deliberate Check ownership/Edit refreshes replace stale HUD ownership, require current server edit permission and fence delayed responses across context/lifecycle changes. Acquired protected Expanded cells open only the room editor. Original builder attribution remains; Collection/attribution and Transfer-log product work are separate, as the fact-check specifies. Full4,869 tests,12 source/main checks and160 browser cases/head, guarded API+Pages and28 isolated actual-domain flows pass. [Receipt](wamp-owner-edit-refresh-2026-10-20.md).
+
 ### F237: 4 of the 11 real NFTs have no metadata at all because minting skips the artwork step
 
 - **Area:** Room ownership, NFT minting and wallet flow
