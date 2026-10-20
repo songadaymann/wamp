@@ -22,6 +22,14 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe('current token ownership before editor entry', () => {
+  it.each([false, true])('uses ordinary game permissions without crypto reads or wallet prompts when the gate is off (allowed %s)', async allowed => {
+    const f = harness(); f.host.canCheckWallet = () => false;
+    f.repository.loadRoomSummary.mockResolvedValue(summary(seller, allowed));
+    const walletRead = vi.spyOn(f.host, 'getWalletAddress');
+    if (allowed) { const permit = await f.run(); expect(permit?.roomOnly).toBe(true); permit?.dispose(); }
+    else await expect(f.run()).rejects.toThrow('This room is protected.');
+    expect(walletRead).not.toHaveBeenCalled(); expect(f.repository.refreshRoomOwnership).not.toHaveBeenCalled();
+  });
   it('refreshes a stale seller record and permits its new holder without moving builder credit', async () => {
     vi.useFakeTimers(); const f = harness(), canOpen = await f.run();
     expect(canOpen?.isCurrent()).toBe(true); expect(f.repository.refreshRoomOwnership).toHaveBeenCalledOnce();

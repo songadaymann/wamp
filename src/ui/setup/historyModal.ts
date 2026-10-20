@@ -6,6 +6,7 @@ import {
 } from '../../persistence/roomLeaderboardLineage';
 import { getActiveRoomEditorScene, type EditorHistoryState } from './sceneBridge';
 import { asyncListener } from '../asyncListener';
+import { hasCryptoWallet } from '../../mint/walletGate';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -336,7 +337,7 @@ export class RoomHistoryModalController {
     }
 
     if (state.mintedTokenId && !state.canPublish) {
-      metaParts.push('Minted lock active');
+      metaParts.push(hasCryptoWallet() ? 'Minted lock active' : 'Room protected');
     }
 
     const latestVersion = state.versions.reduce((max, version) => Math.max(max, version.version), 0);
@@ -347,7 +348,7 @@ export class RoomHistoryModalController {
       );
     }
 
-    if (state.mintedTokenId) {
+    if (hasCryptoWallet() && state.mintedTokenId) {
       metaParts.push(
         `Token #${state.mintedTokenId} · Owner ${state.mintedOwnerWalletAddress ?? 'unknown'}`
       );
@@ -361,7 +362,7 @@ export class RoomHistoryModalController {
       if (state.mintedMetadataUpdatedAt) {
         metaParts.push(`Metadata updated ${this.formatTimestamp(state.mintedMetadataUpdatedAt)}`);
       }
-    } else if (state.canMint) {
+    } else if (hasCryptoWallet() && state.canMint) {
       metaParts.push('Eligible to mint');
     }
 

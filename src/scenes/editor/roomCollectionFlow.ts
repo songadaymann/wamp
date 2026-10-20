@@ -3,6 +3,8 @@ import type { RoomRecord } from '../../persistence/roomModel';
 export interface RoomCollectionStageOptions {
   isCurrent?: () => boolean;
   stageLabel?: string;
+  signal?: AbortSignal;
+  cancel?: () => void;
 }
 
 interface CollectionStatus {
@@ -12,7 +14,7 @@ interface CollectionStatus {
   linkHref: string | null;
 }
 
-interface CollectionIdentity { userId: string | null; wallet: string | null }
+interface CollectionIdentity { userId: string | null; wallet: string | null; signer?: string | null }
 interface CollectionEvents {
   on(event: string, callback: () => void): unknown;
   off(event: string, callback: () => void): unknown;
@@ -49,14 +51,19 @@ export class RoomCollectionFlow {
     if (this.active || !this.host.isActive()) return null;
     const operation = {}, context = this.host.captureContext(), identity = this.host.getIdentity();
     const wallet = identity.wallet?.trim().toLowerCase() ?? null;
+    let signerSeen = Boolean(identity.signer);
     let cancelled = false;
-    const invalidate = () => { cancelled = true; };
+    const controller = new AbortController();
+    const invalidate = () => { cancelled = true; controller.abort(); };
     const events = ['sleep', 'shutdown', 'destroy'];
     for (const event of events) this.host.events?.on(event, invalidate);
     const sameIdentity = () => {
       const next = this.host.getIdentity();
+      const signer = next.signer?.trim().toLowerCase() ?? null;
+      const signerCurrent = !wallet || (signer ? signer === wallet : !signerSeen);
+      if (wallet && signer === wallet) signerSeen = true;
       return next.userId === identity.userId
-        && (next.wallet?.trim().toLowerCase() ?? null) === wallet;
+        && (next.wallet?.trim().toLowerCase() ?? null) === wallet && signerCurrent;
     };
     const unwatchIdentity = this.host.watchIdentity?.(() => { if (!sameIdentity()) invalidate(); });
     const current = () => !cancelled && context() && this.host.isActive() && sameIdentity();
@@ -64,14 +71,14 @@ export class RoomCollectionFlow {
     try {
       this.host.onStateChanged?.();
       if (artworkOnly) {
-        try { return await this.host.artwork({ isCurrent: current, stageLabel: 'Add/update artwork' }); }
+        try { return await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Add/update artwork' }); }
         catch {
           if (current()) this.host.setStatus({ text: 'Could not check room artwork. Choose Add/update artwork to try again.', accentText: '', linkLabel: '', linkHref: null });
           return null;
         }
       }
       let minted: RoomRecord | null;
-      try { minted = await this.host.mint({ isCurrent: current, stageLabel: 'Step 1 of 2: Collect room' }); }
+      try { minted = await this.host.mint({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Step 1 of 2: Collect room' }); }
       catch {
         if (current()) this.host.setStatus({ text: 'Could not finish checking this collection. Check the room before trying again.', accentText: '', linkLabel: '', linkHref: null });
         return null;
@@ -79,7 +86,7 @@ export class RoomCollectionFlow {
       if (!minted || !current() || !identity.userId || !wallet || !this.host.canAddArtwork()) return minted;
       const mintStatus = { ...this.host.getStatus() };
       try {
-        const artwork = await this.host.artwork({ isCurrent: current, stageLabel: 'Step 2 of 2: Add artwork' });
+        const artwork = await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Step 2 of 2: Add artwork' });
         if (artwork) return artwork;
       } catch { /* Preserve the successful first stage; the existing artwork action retries only artwork. */ }
       if (current()) {

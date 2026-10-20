@@ -1,5 +1,11 @@
 Original prompt: "ok let's start another goal to go through the list!"
 
+## 2026-10-20 — F239 recovery implementation checkpoint; wallet gate applied
+
+Implemented durable mint/artwork intents/hashes, bounded shared canonical recovery, dismissible wallet waits, late-hash persistence, lock cleanup, account/signer/world/scene fences, and rights/artwork updates that preserve dirty drafts. Automatic recovery can finish a hung foreground wait without starting stage two. Added the explicitly requested installed-wallet visibility gate; non-wallet visitors get email/game UI and no dedicated wallet/chain recovery reads. No wallet SDK is loaded by detection.
+
+Local `npm run check` passes:594files/5,025tests, boot655.0KB/670KB; focused136tests pass. Installed game-client movement/jump runs and inspected menu captures pass withcrypto=0/1. The first important-style warning and unhashed-removal test failure are fixed, with original evidence retained. All28 existing artwork browser regressions pass across desktop/320px/WebKit/tablet; inspected phone overlays fit Close/Check again; new interrupted/reload/device recovery coverage, responsive gate audit, CI/preview and release remain pending. F239 stays unchecked; master173/216. No new public push/deploy, no production player/account mutation or real signature/transaction. Plan/evidence: docs/review/wamp-wallet-recovery-2026-10-20.md, output/f239-recovery-2026-10-20/. Preserve all decision gates and dirty primary/mann.cool/TAS4208/selected animation; the full checklist goal remains active.
+
 ## 2026-10-20 — F242 verified live; F239 recovery next
 
 PR266/main6d75801b is complete: source/main all12 checks and200 browser cases/head,589files/4,951tests;205-file preview and12 hosted History cases. The five reviewed metadata-cache corrections are applied and verified through public API; tokens1/2/3/10 current,4 genuinely stalev3/roomv8. No wallet key/signature/transaction or production player/account/comment mutation. Full clean-main API+Pages guard passes, API68b3ae99 exactly matches tested code and map099b18fd is unchanged; Pages187f9bb2 and custom domain match56 files. All12 actual-domain History cases and real read-only startup pass; captures inspected. Master173/216; F242 checked. Receipt: docs/review/wamp-metadata-reconcile-2026-10-20.md, ignored delivery.json/releaseComplete=true.

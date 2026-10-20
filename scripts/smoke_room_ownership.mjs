@@ -89,6 +89,7 @@ for (const [device, engine, width, height, touch] of [
       await context.route('https://cloudflareinsights.com/cdn-cgi/rum', r => r.fulfill({ status: 204, headers: cors(r) }));
       await context.route(u => u.pathname.startsWith('/api/'), r => r.request().method() === 'OPTIONS' ? reply(r, {}, 204) : r.fallback());
       await context.addInitScript(() => {
+        localStorage.setItem('crypto-override', '1'); // Ownership/artwork cases use the documented wallet-present override.
         localStorage.setItem('wamp_welcome_modal_seen_v1', '1'); localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
       });

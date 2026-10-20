@@ -34,6 +34,8 @@ import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQuer
 export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
 import { WalletTransactionRevertedError } from './walletTransaction';
+import { applyWalletGate } from '../lib/wallet-gate.js';
+import { hasCryptoWallet } from '../mint/walletGate';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -131,6 +133,7 @@ const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
 const WALLET_NOT_CONFIGURED_MESSAGE = 'Wallet sign-in is not configured on this deployment.';
 
 export async function setupAuthUi(): Promise<void> {
+  void applyWalletGate().then(() => renderAuthUi());
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity') as HTMLButtonElement | null;
   authIdentityAvatar = document.getElementById('auth-identity-avatar') as HTMLImageElement | null;
@@ -280,6 +283,7 @@ export async function sendPreparedWalletTransaction(
   options: {
     expectedWalletAddress?: string;
     isCurrent?: () => boolean;
+    onBeforeSend?: () => void;
     onSubmitted?: (transaction: { hash: string; from: string }) => void;
   } = {},
 ): Promise<{ hash: string; from: string }> {
@@ -310,6 +314,7 @@ export async function sendPreparedWalletTransaction(
     throw new Error('The connected wallet changed while preparing this room action.');
   }
 
+  options.onBeforeSend?.();
   const hash = await walletClient.sendTransaction({
     account: signerAddress,
     chain: null,
@@ -741,6 +746,7 @@ async function checkDisplayNameAvailability(displayName: string): Promise<void> 
 }
 
 async function handleWalletButton(): Promise<void> {
+  if (!hasCryptoWallet()) return;
   if (!state.walletProjectConfigured) {
     state.status = WALLET_NOT_CONFIGURED_MESSAGE;
     renderAuthUi();
@@ -863,6 +869,7 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
 }
 
 async function ensureWalletModal(): Promise<AppKit> {
+  if (!hasCryptoWallet()) throw new Error('Room collection is unavailable in this browser.');
   if (appKit) {
     return appKit;
   }
@@ -1200,6 +1207,7 @@ function formatProgressFraction(fraction: number | null): string {
 }
 
 function getAuthStatusText(): string {
+  if (!hasCryptoWallet() && /wallet/i.test(state.status)) return 'Sign in with email to save your progress.';
   if (!state.authenticated) {
     return state.status;
   }
@@ -1219,7 +1227,7 @@ function buildSessionSummaryValue(user: AuthUser | null): string {
   }
 
   const primary = user.displayName?.trim() || user.email?.trim() || 'player';
-  if (user.walletAddress) {
+  if (hasCryptoWallet() && user.walletAddress) {
     return `${primary} and ${shortenAddress(user.walletAddress)}`;
   }
 

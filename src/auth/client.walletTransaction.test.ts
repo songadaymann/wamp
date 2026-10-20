@@ -36,12 +36,24 @@ beforeEach(() => {
   fixture.session = { authenticated: true, user: { id: 'buyer', displayName: 'Buyer', walletAddress: wallet, email: null } };
   fixture.request.mockImplementation(rpc);
   vi.stubGlobal('window', Object.assign(new EventTarget(), { location: { origin: 'https://wamp.land', search: '' } }));
+  vi.stubGlobal('document', { documentElement: { dataset: { wallet: 'yes' } } });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 async function client() { const auth = await import('./client'); await auth.refreshAuthSession(); return auth; }
 const sent = () => fixture.request.mock.calls.filter(([q]) => q.method === 'eth_sendTransaction');
 
 describe('prepared room transactions through the real wallet sender and viem provider', () => {
+  it('does not bootstrap or contact a wallet when the installed-wallet gate is off', async () => {
+    const auth = await client(); document.documentElement.dataset.wallet = 'no';
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain)).rejects.toThrow('unavailable in this browser');
+    expect(fixture.request).not.toHaveBeenCalled();
+  });
+  it('persists the approval intent immediately before sending and refuses a send if that guard fails', async () => {
+    const auth = await client();
+    const before = vi.fn(() => { expect(sent()).toHaveLength(0); throw new Error('Pending approvals full'); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { expectedWalletAddress: wallet, onBeforeSend: before })).rejects.toThrow('Pending approvals full');
+    expect(before).toHaveBeenCalledOnce(); expect(sent()).toHaveLength(0);
+  });
   it('stops an invalidated room before opening or contacting the wallet', async () => {
     const auth = await client(); await expect(auth.sendPreparedWalletTransaction(transaction, chain, { isCurrent: () => false })).rejects.toThrow('no longer current');
     expect(fixture.request).not.toHaveBeenCalled();

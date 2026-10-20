@@ -64,6 +64,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         return r.fulfill({ response: original, body });
       });
       await context.addInitScript(({ wallet, contract, kind }) => {
+        localStorage.setItem('crypto-override', '1'); // This suite explicitly exercises the wallet-enabled flow.
         localStorage.setItem('wamp_welcome_modal_seen_v1', '1'); localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
         const state = { requests: [], approvals: [], pending: null, rejectNextArtwork: kind === 'artwork-rejection' };
