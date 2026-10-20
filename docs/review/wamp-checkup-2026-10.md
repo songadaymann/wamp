@@ -1,3 +1,7 @@
+**October19 checklist resumed:** Jonathan started a new goal to continue through the remaining list after the trusted-comments release (PR256/main `63a7eb20`). This supersedes the earlier F069 stopping boundary. F074 CSS ownership and stacking cleanup is next; declined F061/F118 and decision-gated work remain unchanged. [Current plan](wamp-css-architecture-2026-10-19.md).
+
+**October19 F069 complete — stopped:** PR255/main `08673edf` is deployed and verified.4,671 tests,99 browser cases per head, all nine checks per head and actual-domain assets/editor/gameplay proof pass. Master166/216. Jonathan requested stopping after this item; do not continue automatically. Existing tablet toolbar overlap remains a separate follow-up. [Receipt](wamp-editor-state-2026-10-19.md).
+
 **October19 F066 complete:** PRs251–254 deliver all four accepted stages; final main `969b5f83` / Pages `4b2ce789` is live and verified.4,652 tests,99 browser cases per head, all nine checks per head and final asset/gameplay proof pass. Existing strict performance benchmark failures remain a separate follow-up. Master165/216. [Receipt](wamp-runtime-context-2026-10-19.md).
 
 **October19 frame pipeline delivery:** PR253/main `3f9389bd` is live on wamp.land / Pages `fdad411f`. All526 frozen frame traces,4,612 tests and99 hosted browser cases per head pass. F066 remains open for full-room presentation ownership; its source extraction and verification are now in progress on `codex/wamp-room-presentation-2026-10-19`. [Receipt](wamp-runtime-context-2026-10-19.md).
@@ -54,7 +58,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 165 of 216 done.**
+**Progress: 166 of 216 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -459,7 +463,7 @@ The codebase is unusually clean for its size. These items make it safer and fast
 - [x] **F066** Finish gameplay composition and runtime-context ownership · medium impact · large effort — **complete 2026-10-19** ([plan and receipt](wamp-runtime-context-2026-10-19.md)). PRs251–254 deliver required live context to five controllers, all52 constructions in six owners, declarative frame/profiling stages with526 frozen traces, and actual full-room resource ownership separate from streaming policy. Final main `969b5f83`, Pages `4b2ce789`:4,652 tests, all nine exact-source/main checks,99 browser cases per head and guarded/live proof pass. Existing broader performance-benchmark failures are retained separately; no FPS claim.
 - [x] **F072** Make the DOM contract automatic: 575 IDs are used from code but only 159 are checked · low impact · small effort — **done 2026-10-11** (`10f53337`, [PR #144](https://github.com/songadaymann/wamp/pull/144)). `smoke:dom-contract` now resolves every literal `getElementById`/`querySelector('#…')` ID in `src` (909) against the root HTML pages and code-created IDs, and runs in `npm run check`; the three dead lookups it found are deleted. Not done: splitting `index.html` into partials.
 - [x] **F067** Lint has exactly one rule: turn on the cheap ones that catch agent mistakes and add a file-size ratchet · low impact · small effort — **done 2026-10-11** (`8382b61a`, [PR #145](https://github.com/songadaymann/wamp/pull/145)). `no-misused-promises` (19 production sites through `asyncListener()`; the history dialog's metadata refresh can no longer stick), a 1,500-line `max-lines` ratchet with today's 20 oversized files pinned, and `noFallthroughCasesInSwitch`/`noImplicitReturns`/`noImplicitOverride`. Not done: `switch-exhaustiveness-check`, Knip hints.
-- [ ] **F069** Global editorState and string events: 136 writes from 11 files with no change signal, plus orphaned events · low impact · medium effort
+- [x] **F069** Global editorState and string events · low impact · medium effort — **done2026-10-19** ([receipt](wamp-editor-state-2026-10-19.md)). PR255/main `08673edf`, Pages `05632e4d`: all148 former global writes are eliminated through typed settings commands and scene-owned document state; nested settings are immutable, real UI/art owners subscribe with cleanup and orphaned events are removed.4,671 tests,99 browser cases per head, all nine checks per head, guarded release and actual-domain editor/gameplay proof pass. Existing tablet Back/Undo overlap is retained separately. Stop after this item as requested.
 - [ ] **F074** CSS is growing by override: a 995-line skin with 100 !important rules and an unscaled z-index · low impact · medium effort
 
 ## Shipped alongside the review (not review items)

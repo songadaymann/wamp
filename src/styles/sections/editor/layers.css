@@ -1,190 +1,187 @@
-/* Layers */
+@layer components {
+  /* Layers */
 
-#layers {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+  #layers {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 
-.layer-row {
-  position: relative;
-  z-index: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-  align-items: stretch;
-}
+  .layer-row {
+    position: relative;
+    z-index: var(--z-local-base);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: stretch;
+  }
 
-.layer-row:hover,
-.layer-row:focus-within {
-  z-index: 8;
-}
+  .layer-row:hover,
+  .layer-row:focus-within {
+    z-index: var(--z-editor-layer-active);
+  }
 
-.layer-btn {
-  position: relative;
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-size: var(--ui-text-small, 11px);
-  font-family: var(--font-code);
-  cursor: pointer;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  transition:
-    background 0.1s,
+  .layer-btn {
+    position: relative;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: var(--ui-text-small, 11px);
+    font-family: var(--font-code);
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    transition: background 0.1s,
     border-color 0.1s,
     color 0.1s,
     transform 0.06s ease,
     box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
+    box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
+  }
 
-.layer-btn:hover {
-  background: var(--panel-3);
-}
+  .layer-btn:hover {
+    background: var(--panel-3);
+  }
 
-.layer-btn.active {
-  background: var(--accent-cool-soft);
-  border-color: var(--accent-cool);
-  color: var(--text);
-}
+  .layer-btn.active {
+    background: var(--accent-cool-soft);
+    border-color: var(--accent-cool);
+    color: var(--text);
+  }
 
-.layer-btn-summary {
-  color: inherit;
-  font-size: var(--ui-text-small, 11px);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  line-height: 1.35;
-}
+  .layer-btn-summary {
+    color: inherit;
+    font-size: var(--ui-text-small, 11px);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1.35;
+  }
 
-.layer-visibility-button {
-  width: 24px;
-  min-width: 24px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-2);
-  color: var(--text);
-  font-size: var(--ui-text-title, 16px);
-  line-height: 1;
-  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
-  cursor: pointer;
-  transition:
-    background 0.1s,
+  .layer-visibility-button {
+    width: 24px;
+    min-width: 24px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: var(--ui-text-title, 16px);
+    line-height: 1;
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+    cursor: pointer;
+    transition: background 0.1s,
     border-color 0.1s,
     color 0.1s;
-  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
+    box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
+  }
 
-.layer-visibility-button.is-off {
-  opacity: 0.38;
-}
+  .layer-visibility-button.is-off {
+    opacity: 0.38;
+  }
 
-.layer-visibility-button:hover,
-.layer-visibility-button:focus-visible {
-  background: var(--panel-3);
-  border-color: var(--accent-cool);
-  color: var(--text);
-  outline: none;
-}
+  .layer-visibility-button:hover,
+  .layer-visibility-button:focus-visible {
+    background: var(--panel-3);
+    border-color: var(--accent-cool);
+    color: var(--text);
+    outline: none;
+  }
 
-.layer-info-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 9;
-  width: min(228px, calc(100vw - 64px));
-  padding: 9px 10px;
-  border: 1px solid rgba(132, 205, 255, 0.28);
-  border-radius: 8px;
-  background: rgba(11, 11, 11, 0.96);
-  color: var(--text);
-  font-size: var(--ui-text-small, 11px);
-  line-height: 1.45;
-  text-transform: none;
-  letter-spacing: 0;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  pointer-events: none;
-  transition:
-    opacity 0.12s ease,
+  .layer-info-tooltip {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: var(--z-editor-layer-tooltip);
+    width: min(228px, calc(100vw - 64px));
+    padding: 9px 10px;
+    border: 1px solid rgba(132, 205, 255, 0.28);
+    border-radius: 8px;
+    background: rgba(11, 11, 11, 0.96);
+    color: var(--text);
+    font-size: var(--ui-text-small, 11px);
+    line-height: 1.45;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.12s ease,
     transform 0.12s ease,
     visibility 0.12s ease;
-}
+  }
 
-.layer-btn:hover .layer-info-tooltip,
-.layer-btn:focus-visible .layer-info-tooltip {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
+  .layer-btn:hover .layer-info-tooltip,
+  .layer-btn:focus-visible .layer-info-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
 
-.layer-stack-mini {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 2px 2px;
-}
+  .layer-stack-mini {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 2px 2px;
+  }
 
-.layer-stack-mini-btn {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--panel-2);
-  cursor: pointer;
-  transition:
-    border-color 0.1s ease,
+  .layer-stack-mini-btn {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    cursor: pointer;
+    transition: border-color 0.1s ease,
     background 0.1s ease,
     transform 0.06s ease,
     box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
+    box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
+  }
 
-.layer-stack-mini-btn:hover {
-  background: var(--panel-3);
-  border-color: var(--border-strong);
-}
+  .layer-stack-mini-btn:hover {
+    background: var(--panel-3);
+    border-color: var(--border-strong);
+  }
 
-.layer-stack-mini-btn.active {
-  border-color: var(--accent-cool);
-  box-shadow:
-    0 0 0 2px rgba(52, 116, 51, 0.56),
+  .layer-stack-mini-btn.active {
+    border-color: var(--accent-cool);
+    box-shadow: 0 0 0 2px rgba(52, 116, 51, 0.56),
     0 0 0 4px rgba(52, 116, 51, 0.24),
     0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
+  }
 
-.layer-stack-mini-btn:focus-visible {
-  outline: 3px solid var(--accent-cool);
-  outline-offset: 2px;
-}
+  .layer-stack-mini-btn:focus-visible {
+    outline: 3px solid var(--accent-cool);
+    outline-offset: 2px;
+  }
 
-.layer-stack-mini-image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  pointer-events: none;
-}
+  .layer-stack-mini-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    pointer-events: none;
+  }
 
-.layer-btn.is-pressed {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
-}
+  .layer-btn.is-pressed {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
+  }
 
-.sidebar-section.is-collapsed#layers-section .layer-stack-mini {
-  display: flex;
-  margin-top: 8px;
+  .sidebar-section.is-collapsed#layers-section .layer-stack-mini {
+    display: flex;
+    margin-top: 8px;
+  }
 }

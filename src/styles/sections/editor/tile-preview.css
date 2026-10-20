@@ -1,5 +1,7 @@
-/* Tile Preview */
+@layer components {
+  /* Tile Preview */
 
-#tile-preview {
-  display: none;
+  #tile-preview {
+    display: none;
+  }
 }

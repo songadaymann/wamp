@@ -1,25 +1,165 @@
-#first-publish-modal { width: 100dvw; height: 100dvh; right: auto; bottom: auto; padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom)); }
-#first-publish-modal .first-publish-panel { width: min(580px, calc(100vw - 24px)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); min-height: 0; padding: 16px; border: 3px solid var(--wamp-sky); border-radius: 0; background: var(--wamp-cream); color: var(--wamp-ink); box-shadow: var(--shadow-6); }
-#first-publish-modal .history-modal-header { flex-direction: row; align-items: center; flex: 0 0 auto; gap: 12px; }
-#first-publish-modal .history-modal-title { margin: 0; font-size: var(--ui-text-title, 19px); color: var(--wamp-ink); line-height: 1.4; }
-.first-publish-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-#first-publish-modal p, #first-publish-modal label, #first-publish-modal input, #first-publish-modal .bar-btn { font-size: var(--ui-text-body, 12px); line-height: 1.5; }
-#first-publish-modal label { display: block; margin: 12px 0 6px; }
-#first-publish-modal input { width: 100%; min-width: 0; min-height: 44px; border-radius: 0; color: var(--wamp-ink); background: var(--wamp-white); }
-#first-publish-modal .bar-btn { min-height: 44px; min-width: 44px; border-radius: 0; color: var(--wamp-ink); background: #ffe093; border: 2px solid var(--wamp-ink); opacity: 1; }
-#first-publish-modal .bar-btn:hover, #first-publish-modal .bar-btn:focus-visible { background: var(--wamp-sky); }
-#first-publish-name-form > button { margin-top: 12px; }
-#first-publish-title { margin: 0 0 12px; font-weight: bold; overflow-wrap: anywhere; }
-#first-publish-preview { --first-publish-preview-height: 240px; display: grid; gap: 0; width: 100%; margin-inline: auto; background: var(--wamp-ink); max-height: var(--first-publish-preview-height); overflow: hidden; }
-#first-publish-preview:empty { display: none; }
-#first-publish-preview img { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; image-rendering: pixelated; }
-.first-publish-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.first-publish-actions button:last-child { flex: 1 1 100%; }
-#first-publish-status { margin: 12px 0 0; overflow-wrap: anywhere; }
-#first-publish-status:empty { display: none; }
-#first-publish-modal .first-publish-activity { margin: 12px 0 0; }
-@media (max-height: 500px) { #first-publish-preview { --first-publish-preview-height: 120px; } }
-@media (max-width: 400px) { #first-publish-modal .first-publish-panel { padding: 12px; } }
-body[data-reduce-motion="off"] #first-publish-live:not(.hidden) #first-publish-title { animation: publish-arrive 250ms ease-out; }
-@media (prefers-reduced-motion: no-preference) { body:not([data-reduce-motion]) #first-publish-live:not(.hidden) #first-publish-title { animation: publish-arrive 250ms ease-out; } }
-@keyframes publish-arrive { from { transform: translateY(6px); } to { transform: translateY(0); } }
+@layer components {
+  #first-publish-modal {
+    width: 100dvw;
+    height: 100dvh;
+    right: auto;
+    bottom: auto;
+    padding: calc(12px + var(--safe-top)) 12px calc(12px + var(--safe-bottom));
+  }
+
+  #first-publish-modal .first-publish-panel {
+    width: min(580px, calc(100vw - 24px));
+    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+    min-height: 0;
+    padding: 16px;
+    border: 3px solid var(--wamp-sky);
+    border-radius: 0;
+    background: var(--wamp-cream);
+    color: var(--wamp-ink);
+    box-shadow: var(--shadow-6);
+  }
+
+  #first-publish-modal .history-modal-header {
+    flex-direction: row;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 12px;
+  }
+
+  #first-publish-modal .history-modal-title {
+    margin: 0;
+    font-size: var(--ui-text-title, 19px);
+    color: var(--wamp-ink);
+    line-height: 1.4;
+  }
+
+  .first-publish-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  #first-publish-modal p,
+  #first-publish-modal label,
+  #first-publish-modal input,
+  #first-publish-modal .bar-btn {
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.5;
+  }
+
+  #first-publish-modal label {
+    display: block;
+    margin: 12px 0 6px;
+  }
+
+  #first-publish-modal input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    border-radius: 0;
+    color: var(--wamp-ink);
+    background: var(--wamp-white);
+  }
+
+  #first-publish-modal .bar-btn {
+    min-height: 44px;
+    min-width: 44px;
+    border-radius: 0;
+    color: var(--wamp-ink);
+    background: #ffe093;
+    border: 2px solid var(--wamp-ink);
+    opacity: 1;
+  }
+
+  #first-publish-modal .bar-btn:hover,
+  #first-publish-modal .bar-btn:focus-visible {
+    background: var(--wamp-sky);
+  }
+
+  #first-publish-name-form > button {
+    margin-top: 12px;
+  }
+
+  #first-publish-title {
+    margin: 0 0 12px;
+    font-weight: bold;
+    overflow-wrap: anywhere;
+  }
+
+  #first-publish-preview {
+    --first-publish-preview-height: 240px;
+    display: grid;
+    gap: 0;
+    width: 100%;
+    margin-inline: auto;
+    background: var(--wamp-ink);
+    max-height: var(--first-publish-preview-height);
+    overflow: hidden;
+  }
+
+  #first-publish-preview:empty {
+    display: none;
+  }
+
+  #first-publish-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    object-fit: contain;
+    image-rendering: pixelated;
+  }
+
+  .first-publish-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .first-publish-actions button:last-child {
+    flex: 1 1 100%;
+  }
+
+  #first-publish-status {
+    margin: 12px 0 0;
+    overflow-wrap: anywhere;
+  }
+
+  #first-publish-status:empty {
+    display: none;
+  }
+
+  #first-publish-modal .first-publish-activity {
+    margin: 12px 0 0;
+  }
+  @media (max-height: 500px) {
+    #first-publish-preview {
+      --first-publish-preview-height: 120px;
+    }
+  }
+
+  @media (max-width: 400px) {
+    #first-publish-modal .first-publish-panel {
+      padding: 12px;
+    }
+  }
+  body[data-reduce-motion="off"] #first-publish-live:not(.hidden) #first-publish-title {
+    animation: publish-arrive 250ms ease-out;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    body:not([data-reduce-motion]) #first-publish-live:not(.hidden) #first-publish-title {
+      animation: publish-arrive 250ms ease-out;
+    }
+  }
+  @keyframes publish-arrive {
+    from {
+      transform: translateY(6px);
+    }
+
+    to {
+      transform: translateY(0);
+    }
+  }
+}
