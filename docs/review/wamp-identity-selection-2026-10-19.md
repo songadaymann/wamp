@@ -1,6 +1,6 @@
 # F045: unambiguous account identity
 
-Canonical branch: `codex/wamp-identity-selection-2026-10-19`, from merged main `ac2b8c89`. F048's full guarded API+Pages release is complete and verified on wamp.land / Pages c969b57e; no F045 change belongs to that release. The full checklist goal remains active. This item is not complete and has not been deployed.
+Canonical branch: `codex/wamp-identity-selection-2026-10-19`, from merged main `ac2b8c89`. F048's full guarded API+Pages release is complete and verified on wamp.land / Pages c969b57e; no F045 change belongs to that release. The full checklist goal remains active. Production delivery is complete; see the accepted receipt below.
 
 The private review and its fact-checker corrections were read through the rendered browser UI and checked against current source. Display-name duplicates are intentional, and no escaping defect was established. Deleting/banning already targets stable IDs. Preserve those facts rather than imposing a new display-name uniqueness constraint.
 
@@ -16,7 +16,7 @@ The private review and its fact-checker corrections were read through the render
 
 An isolated actual-router reproduction uses a fully migrated local database, real generated owner session, two accounts with the same display name and distinct usernames. The current name-based route grants the first namesake while the intended second ID is ignored. All records and roles are ephemeral; production role changes are zero. The accepted probe closes its database and Vite SSR loader. An earlier unavailable-loader attempt is retained as a diagnostic only. Evidence and detailed current-source notes stay ignored under `output/f045-identity-2026-10-19/` until the fix is delivered.
 
-Implementation is next. Preserve unrelated dirty primary/mann.cool work, user TAS lab/Chrome, selected animation, declined F061/F118, F145's unanswered collision/art choice and the conditional F243 provider-key follow-up. Physical iOS and owner-controlled credentials/financial actions remain separate.
+Implementation and delivery are complete; the following records the original acceptance boundary. Preserve unrelated dirty primary/mann.cool work, user TAS lab/Chrome, selected animation, declined F061/F118, F145's unanswered collision/art choice and the conditional F243 provider-key follow-up. Physical iOS and owner-controlled credentials/financial actions remain separate.
 
 ## Implementation and local evidence
 
@@ -33,3 +33,11 @@ Retained failed diagnostics are not accepted proof: an initial unavailable test 
 Production-build native checks, OSS, exact-source/main hosted gates and full API+Pages delivery/live verification remain pending. F045 stays unchecked; master168/216. The full goal and all owner/physical-device decisions remain active. Ignored evidence:output/f045-identity-2026-10-19/.
 
 The new --identity-only production-build runner exits0 and runs all four profiles, including the selected-account confirmation line and actual comment-pin touches, with no browser errors or fixture misses. Latest selected-account and WebKit comment captures were inspected. The final executable-root contract is satisfied through the new package command and explicit Knip root. Startup is651.2KB Brotli/670KB. Exact-source/main checks, OSS and delivery remain.
+
+## Production delivery
+
+[PR260](https://github.com/songadaymann/wamp/pull/260), source `adf8d6ce`, is merged as `14ad286d` and live on [wamp.land](https://wamp.land) / [immutable Pages](https://3cce4cb4.wampland.pages.dev). All ten checks on each exact head pass. Parsed logs prove103 hosted browser cases per head and full567 files/4,743 tests. The main tree equals the reviewed source tree. The source preview397b7373 matches its reviewed OpenAPI and eight CSS files. The clean literal-main full API+Pages guard exits0, without skipped checks or schema changes. Worker `956d4bb3-5209-4cec-93c7-a31f95199865` serves100%; deployed JavaScript exactly matches the clean-main bundle (3486376 bytes, SHA256 `ae73fe8362d9d1a0a9925f55c75d0b491985da302ee6098ee5e4479701b83342`). All37 checked assets match each domain.
+
+Four production-build and four actual-domain desktop/320px phone/WebKit/readable-text profiles pass exact duplicate-name account selection, retry, changed-input rejection, stale/closed search cleanup, role changes, unique confirmation labels, profile IDs, escaped names,44px controls and centered comment-pin taps with wrapped full usernames. Captures were inspected. Every accepted profile has zero browser errors and fixture misses. Actual-domain startup executes the final assets with no errors. Browser role writes use isolated replay data; no real account was granted or removed, no real comments created and no wallet transaction submitted. The deployed API denies anonymous admin reads/grants with401; health, comments and retained authentication gates pass. Migrated SQLite tests verify the actual grant and comment routes and permission/version boundaries. Physical iOS remains separate.
+
+F045 is complete. Duplicate display names remain valid; unique handles disambiguate accounts and stable IDs identify mutations. Legacy records retain a readable fallback. Existing school read-only chat, polling cadence, anonymous caching and bounded comment queries are preserved. No new schema, dependency or recurring work was added. The full checklist stays active; F050 capture/archives is the next independent audit. F145 and F243 owner decisions remain pending, along with physical-device and financial/credential boundaries. Unrelated dirty checkouts, TAS and selected animation are preserved.

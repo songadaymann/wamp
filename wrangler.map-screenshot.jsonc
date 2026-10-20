@@ -14,6 +14,7 @@
     "crons": ["0 4 * * *"]
   },
   "vars": {
+    "MAP_SCREENSHOT_ADMIN_BASE_URL": "https://wamp.land",
     "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles.wamp.land"
   },
   "d1_databases": [
@@ -50,6 +51,7 @@
         "binding": "MAP_SCREENSHOT_BROWSER"
       },
       "vars": {
+        "MAP_SCREENSHOT_ADMIN_BASE_URL": "https://everybodys-platformer-safety.novox-robot.workers.dev",
         "WORLD_TILE_PUBLIC_BASE_URL": "https://tiles-safety.wamp.land"
       },
       "d1_databases": [

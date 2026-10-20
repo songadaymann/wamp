@@ -1,3 +1,5 @@
+**October19 F045 complete:** [PR260](https://github.com/songadaymann/wamp/pull/260), main 14ad286d / Pages 3cce4cb4, is live:4,743 tests, all10 checks and103 browser cases per head, full guarded release, exact Worker/37 assets per domain and4 isolated actual-domain identity profiles. Master169/216. The full checklist remains active. [Receipt](wamp-identity-selection-2026-10-19.md).
+
 **October19 F048 complete:** [PR259](https://github.com/songadaymann/wamp/pull/259), main ac2b8c89 / Pages c969b57e, is live:4,717 tests, all9 checks and99 browser cases per head, full guarded release, exact Worker/37 assets per domain and3 isolated actual-domain auth profiles. Master168/216. The full checklist remains active; next F045 identity selection is confirmed in an isolated actual-router reproduction. [Receipt](wamp-session-controls-2026-10-19.md).
 
 **October19 F243 technical fix delivered:** [PR258](https://github.com/songadaymann/wamp/pull/258), main bdd2c3ee / Pages b65d6ca3, is verified live:4,703 tests,99 hosted browser cases per head, exact deployed Worker and37 assets per domain. Only the conditional historical provider-key follow-up remains open. F048 session controls are in verification; F145 still awaits direction. [Receipt](wamp-wallet-network-info-2026-10-19.md).
@@ -238,7 +240,7 @@ Open items in this area are withheld from this public repo until fixed.
 - [ ] **F243** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [x] **F051** Most mutating JSON endpoints parse request bodies with no size limit · low impact · small effort — **done 2026-10-11** (`ae6444d7`, [PR #151](https://github.com/songadaymann/wamp/pull/151), API Worker `174d2a23`). Every JSON body is read with a size cap (default 4 MB; 16 KB for guestbook, guest activity, chat and comments; 600 KB for guest drafts) and refused with 413 before parsing. Production: a 20 KB guest heartbeat gets 413.
 - [ ] **F050** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
-- [ ] **F045** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [x] **F045** Exact account selection for chat-admin grants and unique usernames across chat/comment moderation verified and released · low impact · small effort · [receipt](wamp-identity-selection-2026-10-19.md)
 - [x] **F048** All-device session logout, stale-response protection, classroom reset revocation and bounded session cleanup verified and released · low impact · small effort · [receipt](wamp-session-controls-2026-10-19.md)
 
 ### Bugs: lost work and broken moments

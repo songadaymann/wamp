@@ -163,3 +163,25 @@ jobs:
           name: chat-identity
           path: output/web-game/mobile-smoke-ci/chat-identity
           retention-days: 7
+
+  map-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:map-capture:service
+      - run: npm run smoke:mobile:ci -- --map-capture-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-capture
+          path: |
+            output/web-game/map-capture-service
+            output/web-game/mobile-smoke-ci/map-capture
+          retention-days: 7

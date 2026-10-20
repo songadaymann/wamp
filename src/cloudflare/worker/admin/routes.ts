@@ -44,6 +44,7 @@ import { handleAdminWorldsRequest } from '../worlds/adminRoutes';
 import { handleAdminDaily } from '../daily/routes';
 import { handleAdminGhostArchive } from '../runs/ghostArchiveAdmin';
 import { handleAdminPublishedGoalIssues } from './publishedGoalIssues';
+import { handleAdminMapCapture } from './mapScreenshot';
 
 export async function handleAdminRequest(
   request: Request,
@@ -51,6 +52,7 @@ export async function handleAdminRequest(
   env: Env,
   context?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  if (url.pathname === '/api/admin/map-screenshot/capture' && request.method === 'POST') return handleAdminMapCapture(request, env);
   if (url.pathname.startsWith('/api/admin/run-ghost-archive/')) {
     return handleAdminGhostArchive(request, url, env);
   }
