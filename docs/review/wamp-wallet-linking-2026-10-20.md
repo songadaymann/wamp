@@ -1,24 +1,30 @@
-# F247 — safe wallet-link recovery
+# F247 — wallet approval and session safeguards delivered
 
-Initial branch: `codex/wamp-wallet-linking-2026-10-20`, from verified main `fc43bc1e` with the final F240 receipt, merged through PR271. Current canonical release branch: `codex/wamp-wallet-session-recovery-2026-10-20` from main `4ca2f98`. Master175/216. The checklist goal stays active until October21 at05:00 America/New_York; no new implementation, tests or deployments at/after09:00UTC. AI generation stays on hold and historic artwork repairs remain unsigned.
+Delivered through [PR271](https://github.com/songadaymann/wamp/pull/271) and [PR272](https://github.com/songadaymann/wamp/pull/272), final source `009bc9690a10f80c4ed423d7a0443a59a011834f`, main `c25b1f7b2471e7330124313d0f5c46fc612d5d08`. Production [Pages7457cf79](https://7457cf79.wampland.pages.dev) and API `68e74fd6-14ca-4254-a581-26986cd545d5` are verified on wamp.land. Migration `0068_wallet_challenge_intent.sql` is applied. F247 remains unchecked; master175/216.
 
-## Session-recovery follow-up before production
+## Delivered behavior
 
-PR271/main4ca2f98 passed both18-check/420-case pipelines, but pre-release review caught two session edges before the coordinated API release. The follow-up branch `codex/wamp-wallet-session-recovery-2026-10-20` clears invalid/revoked/expired cookies on successful anonymous session refresh, and sends the account expected at the button click as a condition on challenge creation. It never chooses authority from that supplied ID. A stale link screen cannot silently request sign-in instead; clearing an old cookie cannot turn an existing link proof into sign-in. Legacy address-only API clients retain their existing challenge behavior.
+Wallet proofs are bound to sign-in or linking, with the target account named in the linking signature. Linking requires the original live browser session. Proofs are consumed once, and the final conditional attachment preserves any wallet linked while approval was open. Concurrent valid sign-ins converge on the same wallet account. Classroom/API-token restrictions and legacy signed-out API sign-in remain enforced.
 
-Current local evidence:603 files/5,140 tests,42 focused proof/client cases,12 native API/D1 checks and40 controls across four profiles pass. The new sign-in case starts with a stale cookie; a separate case removes the cookie before challenge creation and verifies that no signature or attachment happens. Exact follow-up source/main checks, safety and production guard/live checks are pending. Neither superseded candidate nor this follow-up has been deployed to the production API. New evidence: ignored `output/f247-session-2026-10-20/`; original candidate evidence stays in `output/f247-linking-2026-10-20/`.
+The client checks the actual signer before and after approval, cancels observed account/wallet/gate changes and keeps the action busy until final refresh. Known conflicts and cancellations give readable next steps. Conflicting accounts are preserved; histories are not merged and wallets are not reassociated. The touch action retains its green surface and44px minimum target.
 
-Unused-account recovery still needs proof that previously authenticated, in-flight writes cannot create inaccessible source history after a move. Do not equate zero active sessions at the transfer instant with the absence of an in-flight request. Keep recovery and wallet replacement unchecked until that boundary is verified.
+Successful anonymous session refresh clears invalid, expired or revoked cookies. New challenges compare the account expected at the click with the authenticated server identity before requesting a signature. The supplied ID is a condition, never the authority. Stale link screens cannot silently request sign-in instead, and clearing an old cookie cannot turn a link proof into sign-in. Legacy address-only clients retain existing challenge behavior.
 
-## First release — approval boundary and actionable conflicts
+## Verification and release
 
-The first change binds each proof to sign-in or linking, names the target WAMP account in a linking signature, and permits one proof consumer. A link also requires the original live browser session, and the final conditional write preserves any wallet linked while the approval was open. Signed-out API sign-in still works. Classroom and API-token restrictions stay enforced.
+Both final exact-source and merged-main pipelines pass all18 checks,603 test files/5,140 tests and424 browser cases per head. Focused42 proof/client cases,12 native API/D1 cases and12 safety cases pass. The final safety build passes40 controls across desktop,320px phone,WebKit phone andtablet; the automatic source preview passes10 desktop controls. Installed-client gameplay and wallet-gate captures were inspected.
 
-The client checks the actual signer before and after native approval, cancels observed account/wallet/gate changes, and keeps the action busy through its final session refresh. Expected conflicts and cancellations produce readable messages without provider diagnostics. Another-account conflicts explain how to use the wallet account and explicitly preserve the current account's rooms. Existing-wallet conflicts explain that switching the linked wallet is still unavailable.
+The clean-main coordinated guard (`npm run deploy:prod -- --migrate`) exits0 with no skipped checks. All224 checked JavaScript/CSS/OpenAPI assets match on the custom domain and immutable Pages deployment. Production API bytes match the built Worker; renderer and map Worker bytes and active versions remain unchanged, as do the active map renderer and authoring asset contract.
 
-This phase does not move wallets between accounts. F247 remains unchecked and master175/216; unused-account recovery and wallet replacement are pending. The touch wallet action keeps its green surface after tapping and has a44px minimum target on phones and tablets.
+Actual-domain verification accepts40 strict controls across four profiles, plus5 safe API probes including invalid-cookie recovery. The UI proofs use isolated native API/provider fixtures; no real wallet, production test user/nonce record or blockchain transaction is created. Synthetic safety records are cleaned up. Live captures and preservation checks are inspected/passed.
 
-Local evidence:603 test files/5,132 tests passed, including34 new proof/client cases;10 isolated native D1/API checks passed. All36 app-control checks passed across desktop,320px phone,WebKit phone andtablet against the real bundled API/native D1 with ephemeral signatures. Installed-client gameplay and wallet-gate-on/off captures were inspected. Safety, exact source/main CI, coordinated guard and live proof remain pending. Earlier failed candidates and harness setup failures remain in ignored output; no production user records or real wallets have been used.
+One initial live WebKit no-wallet run encountered488 sampled Cloudflare report-only warnings, all retained with zero unexpected application errors. The unchanged strict WebKit recheck and tablet suite pass; no policy, response header or assertion was changed. Monitoring writes are intercepted only by the proof harness. Earlier candidate/harness failures remain separate from accepted evidence. Canonical evidence: ignored `output/f247-session-2026-10-20/delivery.json`, `live-combined-proof.json`, native/hosted reports, CI full logs and exact asset/Worker inventories. Original PR271 evidence remains in `output/f247-linking-2026-10-20/`.
+
+## Remaining scope
+
+Unused-account recovery must protect against already-authenticated in-flight writes creating inaccessible source history after a transfer. Zero active sessions at transfer time is insufficient. Linked-wallet replacement and identity consolidation also remain pending. No recovery claim is made by this release.
+
+The broader overnight goal remains active until October21 at05:00 America/New_York (09:00UTC), with no new implementation, tests or deployments at/after cutoff. AI generation stays on hold; historical artwork updates stay unsigned. Dirty primary/mann.cool checkouts, selected animated background and user Chrome/TAS4208 remain preserved.
 
 ## Recovery plan after the approval boundary ships
 
