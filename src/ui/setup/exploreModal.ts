@@ -40,6 +40,7 @@ import {
   type RoomDiscoveryResponse,
   type RoomDiscoverySort,
 } from '../../runs/model';
+import { requestReport } from '../../reports/requestReport';
 
 type ExploreMode = 'rooms' | 'builders' | 'guestRooms';
 type ExploreSortButtonValue = Exclude<RoomDiscoverySort, 'builder'> | 'builders' | 'guestRooms';
@@ -647,7 +648,15 @@ export class ExploreModalController {
 
     copy.append(titleRow, builder, meta);
     card.append(preview, copy);
-    item.appendChild(card);
+    const report = this.doc.createElement('button');
+    report.type = 'button';
+    report.className = 'chat-message-report explore-guest-room-report';
+    report.textContent = 'Report';
+    report.setAttribute('aria-label', `Report guest room ${title.textContent}`);
+    report.addEventListener('click', () => requestReport({
+      type: 'guest_room', id: draft.id, label: `${title.textContent} by ${draft.guestDisplayName || 'Guest'}`,
+    }));
+    item.append(card, report);
     void this.loadAndApplyGuestRoomPreview(draft, previewImage, previewFallback);
     return item;
   }

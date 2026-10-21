@@ -370,6 +370,18 @@
     font-weight: 700;
   }
 
+  .chat-message-report {
+    min-height: 32px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: #6d6768;
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
   .chat-message-actions {
     display: flex;
     flex-wrap: wrap;

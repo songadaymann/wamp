@@ -23,6 +23,7 @@ import { getGameSettings } from '../../settings/userSettings';
 import { configureOverworldHudBridgeRuntime } from '../../scenes/overworld/hud';
 import { RoomSharingController } from './roomSharing';
 import { asyncListener } from '../asyncListener';
+import { requestReport } from '../../reports/requestReport';
 
 export function setupSceneCommands(
   game: Phaser.Game,
@@ -40,6 +41,7 @@ export function setupSceneCommands(
 ): void {
   const authPanel = doc.getElementById('auth-panel');
   const aboutOpenBtn = doc.getElementById('btn-about-open');
+  const reportRoomBtn = doc.getElementById('btn-menu-report-room');
   const chatModerationOpenBtn = doc.getElementById('btn-chat-moderation-open');
   const worldJumpInput = doc.getElementById('world-jump-input') as HTMLInputElement | null;
   const courseSaveBtn = doc.getElementById('btn-course-editor-save-course');
@@ -302,6 +304,14 @@ export function setupSceneCommands(
       chatModerationModal.close();
       getActiveOverworldScene(game)?.fitLoadedWorld();
     },
+  });
+
+  reportRoomBtn?.addEventListener('click', () => {
+    closeMenu();
+    const room = getActiveOverworldScene(game)?.getSelectedRoomContext() ?? null;
+    requestReport(room?.state === 'published'
+      ? { type: 'room', id: room.roomId, label: room.shareTitle?.trim() || `Room ${room.coordinates.x}, ${room.coordinates.y}` }
+      : null);
   });
 
   aboutOpenBtn?.addEventListener('click', () => {

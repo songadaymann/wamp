@@ -5,6 +5,7 @@ import { purgeGuestReplays } from '../guestReplay/frames';
 import { pruneGuestRuns } from '../guestRuns/attempts';
 import { purgeLostSongSessions } from '../lostSongs/routes';
 import { pruneExpiredRecords } from './pruneExpired';
+import { pruneClosedContentReports } from '../reports/routes';
 
 export async function runHourlyMaintenance(env: Env, date: Date): Promise<void> {
   await pruneExpiredRecords(env, date);
@@ -13,4 +14,5 @@ export async function runHourlyMaintenance(env: Env, date: Date): Promise<void> 
   await purgeLostSongSessions(env);
   await pruneGuestRuns(env);
   await pruneRateLimitEvents(env);
+  await pruneClosedContentReports(env, date);
 }

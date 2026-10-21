@@ -18,6 +18,8 @@ const requiredIdsByController = {
   'CoopPressurePlates': ['pressure-plate-coop-row', 'pressure-plate-coop-checkbox'],
   'WeeklyRoomRush': ['btn-menu-room-rush', 'btn-room-rush-weekly', 'room-rush-weekly-summary', 'leaderboard-room-rush-winners',
     'room-rush-result-save-status', 'btn-room-rush-result-retry-save'],
+  reportDialog: ['report-modal', 'report-form', 'report-subject', 'report-reasons', 'report-details', 'report-status',
+    'btn-report-send', 'btn-report-close', 'btn-menu-report-room'],
   bugReporter: ['bug-report-modal', 'bug-report-form', 'bug-report-notes', 'bug-report-status', 'btn-bug-report-send',
     'btn-bug-report-close', 'bug-report-attach', 'bug-recording-enabled', 'bug-report-context', 'bug-report-evidence-summary',
     'bug-report-frame', 'bug-report-empty', 'bug-report-play', 'bug-report-scrub', 'bug-report-time', 'bug-report-screenshot'],

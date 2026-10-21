@@ -16,6 +16,7 @@ import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isKeyboardFocusedControl, isTextInputFocused } from '../keyboardFocus';
 import { createProfileTriggerElement } from '../setup/profileEvents';
+import { requestReport } from '../../reports/requestReport';
 import {
   banChatUser,
   deleteChatMessage,
@@ -842,9 +843,20 @@ export class ChatPanelController {
       body.className = 'chat-message-body';
       appendMentionHighlightedText(this.doc, body, message.body);
 
-      const canModerateThisMessage =
-        this.canModerateMessages()
-        && message.userId !== (this.authState.user?.id ?? null);
+      const ownMessage = message.userId === (this.authState.user?.id ?? null);
+      const canModerateThisMessage = this.canModerateMessages() && !ownMessage;
+      const headerItems: HTMLElement[] = [author, timestamp];
+      if (!ownMessage) {
+        const reportButton = this.doc.createElement('button');
+        reportButton.className = 'chat-message-report';
+        reportButton.type = 'button';
+        reportButton.textContent = 'Report';
+        reportButton.setAttribute('aria-label', `Report message from ${message.userDisplayName}`);
+        reportButton.addEventListener('click', () => requestReport({
+          type: 'chat_message', id: message.id, label: `${message.userDisplayName}: ${message.body}`,
+        }));
+        headerItems.push(reportButton);
+      }
 
       if (canModerateThisMessage) {
         const actions = this.doc.createElement('div');
@@ -870,14 +882,14 @@ export class ChatPanelController {
           void this.handleBanUser(message);
         });
 
-        header.append(author, timestamp);
+        header.append(...headerItems);
         actions.append(deleteButton, banButton);
         row.append(header, body, actions);
         this.elements.messages.appendChild(row);
         continue;
       }
 
-      header.append(author, timestamp);
+      header.append(...headerItems);
       row.append(header, body);
       this.elements.messages.appendChild(row);
     }

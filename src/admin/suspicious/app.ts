@@ -11,6 +11,7 @@ import type {
 import { createAdminApiClient } from '../adminApiClient';
 import { createPublishedGoalsPanel } from './publishedGoalsPanel';
 import { createBuildingPanel } from './buildingPanel';
+import { createReportsPanel } from './reportsPanel';
 import {
   countSuspiciousQueueTabs,
   filterSuspiciousUsers,
@@ -115,6 +116,8 @@ const state: ViewState = {
 const apiClient = createAdminApiClient(() => state.adminKey);
 const publishedGoalsPanel = createPublishedGoalsPanel(() => state.adminKey);
 const buildingPanel = createBuildingPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin');
+const reportsPanel = createReportsPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin',
+  (userId) => { void loadDetail(userId, false, true); });
 
 if (adminKeyInput) {
   adminKeyInput.value = state.adminKey;
@@ -150,6 +153,7 @@ clearKeyButton?.addEventListener('click', () => {
   state.adminKey = '';
   publishedGoalsPanel.reset();
   buildingPanel.show(null);
+  reportsPanel.reset();
   state.lastError = null;
   state.summary = null;
   state.usersScope = 'review_window';
@@ -256,6 +260,7 @@ async function refreshAll(force = false): Promise<void> {
       adminRequest<SuspiciousUsersResponse>(buildAdminPath('/api/admin/suspicious/users')),
     ]);
     state.summary = summary;
+    void reportsPanel.load();
     state.usersScope = usersResponse.scope;
     state.users = usersResponse.items;
 
@@ -279,7 +284,7 @@ async function refreshAll(force = false): Promise<void> {
   }
 }
 
-async function loadDetail(userId: string, preserveSelection = false): Promise<void> {
+async function loadDetail(userId: string, preserveSelection = false, fullHistory = false): Promise<void> {
   if (!state.adminKey) {
     return;
   }
@@ -293,7 +298,7 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
   try {
     const previousScope = state.detail?.scope ?? null;
     const detail = await adminRequest<SuspiciousUserDetailResponse>(
-      buildDetailPath(userId)
+      buildDetailPath(userId, fullHistory)
     );
     state.detail = detail;
     if (!preserveSelection || previousScope !== detail.scope) {
@@ -499,9 +504,9 @@ function buildAdminPath(pathname: string): string {
   return `${pathname}?${buildAdminParams().toString()}`;
 }
 
-function buildDetailPath(userId: string): string {
+function buildDetailPath(userId: string, fullHistory = false): string {
   const params = buildAdminParams();
-  if (state.query) {
+  if (state.query || fullHistory) {
     params.set('history', '1');
   }
   return `/api/admin/suspicious/users/${encodeURIComponent(userId)}?${params.toString()}`;
