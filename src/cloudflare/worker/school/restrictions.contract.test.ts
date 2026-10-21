@@ -15,7 +15,7 @@ describe('school-managed accounts are blocked from public and personal-account a
     ['../auth/routes.ts', "assertUserNotSchoolManaged(env, session.user.id, 'create API tokens')"],
     ['../auth/routes.ts', "assertNotSchoolRestricted(auth, 'change their display name')"],
     ['../auth/routes.ts', "assertNotSchoolRestricted(existingAuth, 'add an email address')"],
-    ['../auth/routes.ts', "assertNotSchoolRestricted(existingAuth, 'link a wallet')"],
+    ['../auth/walletRoutes.ts', "assertNotSchoolRestricted(auth, 'link a wallet')"],
     ['../auth/request.ts', 'if (auth.school) {'],
   ])('%s keeps %s', (path, check) => {
     expect(read(path)).toContain(check);

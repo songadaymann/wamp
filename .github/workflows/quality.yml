@@ -231,6 +231,28 @@ jobs:
           path: output/web-game/mobile-smoke-ci/room-wallet-costs
           retention-days: 7
 
+  wallet-authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:wallet-auth:service
+      - run: npm run smoke:mobile:ci -- --wallet-auth-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallet-authentication
+          path: |
+            output/web-game/wallet-auth-service
+            output/web-game/mobile-smoke-ci/wallet-auth
+          retention-days: 7
+
   mint-network:
     runs-on: ubuntu-latest
     timeout-minutes: 15
