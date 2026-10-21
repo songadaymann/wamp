@@ -35,6 +35,11 @@ export async function handleWalletChallenge(request: Request, env: Env): Promise
   const body = await parseJsonBody<WalletChallengeRequestBody>(request, { maxBytes: 1024 });
   const address = typeof body?.address === 'string' ? normalizeAddress(body.address) : '';
   if (!isValidAddress(address)) throw new HttpError(400, 'Wallet address must be a valid EVM address.');
+  // The caller's expected account is a condition, never a source of authority.
+  if (body.expectedUserId !== undefined) {
+    if (body.expectedUserId !== null && typeof body.expectedUserId !== 'string') throw new HttpError(400, 'Wallet sign-in account is invalid.');
+    if (body.expectedUserId !== (auth?.user.id ?? null)) throw new HttpError(409, RESTART);
+  }
   if (auth?.user.walletAddress && auth.user.walletAddress.toLowerCase() !== address) {
     throw new HttpError(409, 'This WAMP account already has a different wallet. Switch your wallet app to the linked address. Changing the linked wallet is not available yet.');
   }

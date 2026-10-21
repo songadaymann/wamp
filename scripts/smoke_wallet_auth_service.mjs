@@ -16,6 +16,10 @@ if (!process.argv.includes('--skip-build')) {
 const service = await startWalletAuthFixture(`${output}/api/worker.js`), cases = [];
 try {
   const wallet = privateKeyToAccount(generatePrivateKey());
+  const stale = await service.call('session', undefined, 'expired-wallet-fixture-cookie');
+  assert.equal(stale.status, 200); assert.match(stale.headers.get('set-cookie'), /Max-Age=0/); cases.push('stale-cookie-cleared');
+  const changedBeforeProof = await service.call('wallet/challenge', { address: wallet.address, expectedUserId: 'builder' });
+  assert.equal(changedBeforeProof.status, 409); cases.push('expected-account-before-proof');
   const proof = async cookie => {
     const response = await service.call('wallet/challenge', { address: wallet.address }, cookie);
     assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');

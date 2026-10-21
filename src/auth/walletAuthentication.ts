@@ -13,6 +13,7 @@ export class WalletAuthenticationChangedError extends Error {
 /** Recheck the actual signer on both sides of the native signature prompt. */
 export async function authenticateWallet(options: {
   connect: () => Promise<WalletConnection>;
+  expectedUserId: string | null;
   isCurrent: () => boolean;
   signal: AbortSignal;
 }): Promise<WalletVerifyResponse> {
@@ -32,7 +33,7 @@ export async function authenticateWallet(options: {
   };
   await signer();
   const challenge = await apiRequest<WalletChallengeResponse>('/api/auth/wallet/challenge', {
-    method: 'POST', body: JSON.stringify({ address }), signal: options.signal,
+    method: 'POST', body: JSON.stringify({ address, expectedUserId: options.expectedUserId }), signal: options.signal,
   });
   current();
   if (challenge.address.toLowerCase() !== address.toLowerCase()) throw new WalletAuthenticationChangedError();

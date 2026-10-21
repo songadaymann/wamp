@@ -23,7 +23,7 @@ function setup() {
   request.mockImplementation(async path => path.endsWith('/challenge')
     ? { address: account.address.toLowerCase(), message, expiresAt: new Date(Date.now() + 60000).toISOString() }
     : { authenticated: true, linkedWallet: true, user: { ...user, walletAddress: account.address.toLowerCase() } });
-  const options = { signal: controller.signal, isCurrent: () => current,
+  const options = { signal: controller.signal, isCurrent: () => current, expectedUserId: user.id,
     connect: async () => ({ address: account.address, provider }) };
   return { account, provider, options, controller, message, signed: () => signed,
     switchWallet: () => { address = privateKeyToAccount(generatePrivateKey()).address; }, leave: () => { current = false; } };
@@ -36,6 +36,7 @@ describe('wallet proof client boundary', () => {
     const f = setup();
     expect(await authenticateWallet(f.options)).toMatchObject({ linkedWallet: true, user: { id: user.id } });
     expect(f.signed()).toBe(1); expect(request).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toMatchObject({ expectedUserId: user.id });
     const body = JSON.parse(String(request.mock.calls[1][1]?.body));
     expect(body.address).toBe(f.account.address); expect(body.message).toBe(f.message);
     expect(await verifyMessage({ address: f.account.address, message: body.message, signature: body.signature })).toBe(true);

@@ -20,7 +20,7 @@ try {
     if (process.env.WALLET_AUTH_PROFILES && !process.env.WALLET_AUTH_PROFILES.split(',').includes(device)) continue;
     const browser = await engine.launch({ args: engine === chromium ? ['--mute-audio'] : [] });
     try {
-      for (const kind of ['sign-in', 'link', 'conflict', 'existing-wallet', 'reject', 'wallet-change', 'account-change', 'gate-change', 'no-wallet']) {
+      for (const kind of ['sign-in', 'link', 'conflict', 'existing-wallet', 'reject', 'wallet-change', 'account-change', 'cookie-before-proof', 'gate-change', 'no-wallet']) {
         if (process.env.WALLET_AUTH_CASES && !process.env.WALLET_AUTH_CASES.split(',').includes(kind)) continue;
         const name = `${device}-${kind}`, wallet = privateKeyToAccount(generatePrivateKey());
         const other = privateKeyToAccount(generatePrivateKey());
@@ -28,7 +28,8 @@ try {
           service.db.prepare("UPDATE users SET wallet_address=NULL WHERE id IN ('builder','p1')")]);
         if (kind === 'conflict') await service.db.prepare("UPDATE users SET wallet_address=? WHERE id='p1'").bind(wallet.address.toLowerCase()).run();
         if (kind === 'existing-wallet') await service.db.prepare("UPDATE users SET wallet_address=? WHERE id='builder'").bind(other.address.toLowerCase()).run();
-        const originalCookie = ['sign-in', 'no-wallet'].includes(kind) ? undefined : await service.createSession('builder');
+        const originalCookie = kind === 'sign-in' ? 'expired-wallet-fixture-cookie'
+          : kind === 'no-wallet' ? undefined : await service.createSession('builder');
         let cookie = originalCookie;
         const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
         const api = createApiFixtures({ mode: 'replay', file: 'scripts/fixtures/mobile-smoke-api.json.gz' });
@@ -120,8 +121,9 @@ try {
             assert.equal(modules.length, 0); assert.equal(await page.evaluate(() => globalThis.__authWallet.bootstraps), 0);
           } else {
             const box = await page.locator('#btn-auth-wallet').boundingBox(); assert(box && box.width >= 44 && box.height >= (touch ? 44 : 32), JSON.stringify(box));
+            if (kind === 'cookie-before-proof') cookie = undefined;
             await click('#btn-auth-wallet');
-            if (kind !== 'existing-wallet') {
+            if (kind !== 'existing-wallet' && kind !== 'cookie-before-proof') {
               await page.waitForFunction(() => globalThis.__authWallet.signatures.length === 1 && typeof globalThis.__authWallet.pending === 'function');
               const signedText = await page.evaluate(() => new TextDecoder().decode(Uint8Array.from(globalThis.__authWallet.signatures[0].message.slice(2).match(/../g), s => parseInt(s, 16))));
               assert(signedText.includes(kind === 'sign-in' ? 'sign in with your wallet' : 'builder (builder)'));
@@ -136,7 +138,7 @@ try {
             }
             await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).auth.loading);
             const state = await page.evaluate(() => JSON.parse(window.render_game_to_text()).auth);
-            assert(state.user || ['sign-in', 'reject'].includes(kind), JSON.stringify(state));
+            assert(state.user || ['sign-in', 'reject', 'cookie-before-proof'].includes(kind), JSON.stringify(state));
             const verified = calls.filter(c => c.path === 'wallet/verify');
             assert.equal(verified.length, ['sign-in', 'link', 'conflict', 'account-change'].includes(kind) ? 1 : 0);
             if (kind === 'sign-in' || kind === 'link') {
@@ -144,7 +146,11 @@ try {
               if (kind === 'link') assert.equal(state.user.id, 'builder');
             } else {
               assert.equal(state.user?.walletAddress ?? null, kind === 'existing-wallet' ? other.address.toLowerCase() : null);
-              assert.match(state.status, kind === 'conflict' ? /Log out of WAMP/ : kind === 'existing-wallet' ? /Switch your wallet app/ : kind === 'reject' ? /approval cancelled/ : kind === 'account-change' ? /Your sign-in changed/ : /account or connected wallet changed/);
+              assert.match(state.status, kind === 'conflict' ? /Log out of WAMP/ : kind === 'existing-wallet' ? /Switch your wallet app/ : kind === 'reject' ? /approval cancelled/ : ['account-change', 'cookie-before-proof'].includes(kind) ? /Your sign-in changed/ : /account or connected wallet changed/);
+              if (kind === 'cookie-before-proof') {
+                assert.equal(state.authenticated, false); assert.equal(await page.evaluate(() => globalThis.__authWallet.signatures.length), 0);
+                assert.equal((await service.db.prepare("SELECT wallet_address FROM users WHERE id='builder'").first()).wallet_address, null);
+              }
               if (kind === 'account-change') {
                 assert.equal(state.user.id, 'p1');
                 assert.equal((await service.db.prepare("SELECT wallet_address FROM users WHERE id='builder'").first()).wallet_address, null);
