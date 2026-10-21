@@ -38,6 +38,9 @@ describe('hourly expired-record cleanup', () => {
     auth('expired', '2026-10-13T23:59:59.999Z');
     auth('boundary', now.toISOString());
     auth('active', '2026-10-14T01:00:00.001Z');
+    const challenge = db.prepare('INSERT INTO wallet_challenges(id,address,nonce_hash,message_text,expires_at,created_at) VALUES(?,?,?,?,?,?)');
+    challenge.run('used-up', '0xabc', 'n1', 'm', '2026-10-14T00:55:00.000Z', now.toISOString());
+    challenge.run('live', '0xabc', 'n2', 'm', '2026-10-14T01:05:00.000Z', now.toISOString());
     const insert = db.prepare('INSERT INTO world_render_tile_outbox VALUES(?,?,?)');
     insert.run(1, 'dispatched', '2026-10-07T01:00:00.000Z');
     insert.run(2, 'dispatched', '2026-10-07T01:00:00.001Z');
@@ -48,6 +51,7 @@ describe('hourly expired-record cleanup', () => {
     for (const table of ['sessions', 'magic_link_tokens']) expect(db.prepare(`SELECT id FROM ${table}`).all()).toEqual([{id:'active'}]);
     expect(db.prepare('SELECT id FROM world_render_tile_outbox ORDER BY id').all()).toEqual([2,3,4,5].map(id => ({id})));
     expect(db.prepare('SELECT COUNT(*) AS n FROM users').get()).toMatchObject({n:1});
+    expect(db.prepare('SELECT id FROM wallet_challenges').all()).toEqual([{ id: 'live' }]);
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('"processedOutbox":1'));
     expect(db.prepare("EXPLAIN QUERY PLAN SELECT id FROM world_render_tile_outbox WHERE state='dispatched' AND dispatched_at <= ? ORDER BY dispatched_at LIMIT 5000").all(now.toISOString()))
       .toEqual(expect.arrayContaining([expect.objectContaining({detail:expect.stringContaining('idx_world_render_tile_outbox_processed_expiry')})]));
