@@ -66,12 +66,16 @@ for (const index of [false, true]) {
     const badCursor = Buffer.from(JSON.stringify({ version: 1, sort: 'newest', offset: 2 })).toString('base64url');
     const rejected = await service.request('/api/leaderboards/rooms/discover?sort=protected&cursor=' + badCursor);
     assert.equal(rejected.status, 400); cases.push({ name: `${index ? 'indexed' : 'legacy'}:sort-bound-cursor`, status: rejected.status });
+    const attributionQuery = new URLSearchParams();
+    responses['/api/leaderboards/rooms/discover?sort=newest&limit=100'].results.forEach(entry =>
+      attributionQuery.append('target', entry.expandedRoom?.expandedRoomId ?? `room:${entry.roomId}`));
+    const attribution = await read('/api/collections/attribution?' + attributionQuery);
     const summary = await read('/api/rooms/1%2C0/summary');
     writeFileSync(`${output}/browser-data-${index ? 'indexed' : 'legacy'}.json`, JSON.stringify({
       discovery: responses['/api/leaderboards/rooms/discover?sort=newest&limit=100'],
       profile: responses['/api/profiles/builder/rooms?limit=100'],
       world: responses['/api/world/chunks/summary?minChunkX=0&maxChunkX=1&minChunkY=0&maxChunkY=0'], summary,
-      protectedDiscovery,
+      protectedDiscovery, attribution,
     }));
     // Confirmed storage change appears on the next uncached read; the public cache's separate unit test proves its 20s lifetime.
     await service.db.prepare("UPDATE rooms SET minted_contract_address='0x1111111111111111111111111111111111111111' WHERE id='2,0'").run();

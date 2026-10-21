@@ -1,3 +1,4 @@
+import { handleCollectionRead } from './worker/collections/routes';
 export { PresenceDurableObject } from './presence/durableObject';
 import { handleCloudflarePresence } from './presence/durableObject';
 import { handleRoomGhosts } from './worker/runs/ghosts';
@@ -595,6 +596,14 @@ export default {
       const profileSummaryMatch = /^\/api\/profiles\/([^/]+)\/summary$/.exec(url.pathname);
       if (profileSummaryMatch && request.method === 'GET') {
         return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]), ctx);
+      }
+
+      if (url.pathname === '/api/collections/attribution' && request.method === 'GET') {
+        return await handleCollectionRead(request, env, ctx);
+      }
+      const collectionShelfMatch = /^\/api\/profiles\/([^/]+)\/collection$/.exec(url.pathname);
+      if (collectionShelfMatch && request.method === 'GET') {
+        return await handleCollectionRead(request, env, ctx, decodeURIComponent(collectionShelfMatch[1]));
       }
 
       const profileRoomsMatch = /^\/api\/profiles\/([^/]+)\/rooms$/.exec(url.pathname);

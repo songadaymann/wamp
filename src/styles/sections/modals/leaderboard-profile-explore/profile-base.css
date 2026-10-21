@@ -133,3 +133,32 @@
     max-height: none;
   }
 }
+
+@layer components {
+  #profile-modal .profile-tabs { display: flex; flex-wrap: wrap; }
+  #profile-modal .profile-tabs .bar-btn { flex: 1 1 auto; }
+  .collection-attribution { font-size: var(--ui-text-small, 10px); color: var(--wamp-ink); line-height: 1.5; overflow-wrap: anywhere; grid-column: 1 / -1; }
+  .collection-cell-count { white-space: nowrap; }
+  .collection-attribution:empty { display: none; }
+  .collection-person { font: inherit; color: var(--wamp-sky-deep); text-decoration: underline; background: transparent; border: 0; padding: 0; cursor: pointer; }
+  .profile-collection-room { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 2px solid var(--wamp-sky-deep); color: var(--wamp-ink); }
+  .profile-collection-room h3 { margin: 0 0 6px; font-size: var(--ui-text-body, 12px); overflow-wrap: anywhere; }
+  .collection-builder, .collection-cell-context, .collection-record-note { font-size: var(--ui-text-small, 10px); overflow-wrap: anywhere; }
+  .collection-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; }
+  .collection-viewer { display: inline-flex; align-items: center; min-height: 44px; color: var(--wamp-sky-deep); font-size: var(--ui-text-small, 10px); text-decoration: underline; }
+  #profile-collection-panel .bar-btn { min-height: 44px; }
+}
+
+@layer components {
+  #profile-collection-status:empty { display: none; }
+  .collection-record-note { color: var(--wamp-ink); }
+  .collection-room-preview { display: flex; align-items: center; justify-content: center; align-self: start; min-height: 54px; border: 2px solid var(--wamp-ink); background: var(--wamp-cream); font-size: var(--ui-text-small, 10px); }
+  .collection-room-preview img { display: block; width: 100%; image-rendering: pixelated; }
+  #profile-collection-panel .bar-btn { background: var(--wamp-green); color: var(--wamp-white); border: 2px solid var(--wamp-ink); box-shadow: var(--shadow-3); border-radius: 0; text-transform: uppercase; font-family: var(--font-ui); font-size: var(--ui-text-small, 10px); }
+  #profile-collection-panel .bar-btn:hover, #profile-collection-panel .bar-btn:focus-visible { background: var(--wamp-sky-deep); }
+}
+@layer responsive {
+  @media (max-width: 480px) {
+    .profile-collection-room { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+  }
+}

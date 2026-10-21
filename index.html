@@ -2878,9 +2878,16 @@
         </div>
         <div class="leaderboard-tabs profile-tabs">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Levels</button>
+          <button id="btn-profile-tab-collection" class="bar-btn bar-btn-small hidden" type="button" aria-selected="false" data-crypto>Collection</button>
           <button id="btn-profile-tab-playlists" class="bar-btn bar-btn-small" type="button" aria-selected="false">Playlists</button>
           <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
+        </div>
+        <div id="profile-collection-panel" class="leaderboard-panel hidden" data-crypto>
+          <p class="collection-record-note">Last recorded ownership. Transfers appear after ownership is refreshed in WAMP.</p>
+          <div id="profile-collection-status" class="leaderboard-empty" role="status"></div>
+          <div id="profile-collection-list"></div>
+          <button id="btn-profile-collection-more" class="bar-btn bar-btn-small hidden" type="button">Load more</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
           <div id="profile-rooms-empty" class="leaderboard-empty">

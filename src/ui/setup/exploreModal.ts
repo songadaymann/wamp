@@ -1,3 +1,4 @@
+import { CollectionAttributionController, collectionAttributionSlot } from './collectionAttribution';
 import { createRoomProtectionBadge } from '../roomProtection';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
 import Phaser from 'phaser';
@@ -127,6 +128,8 @@ export class ExploreModalController {
     this.render();
   };
 
+  private readonly attribution: CollectionAttributionController;
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
@@ -134,6 +137,7 @@ export class ExploreModalController {
     private readonly doc: Document = document,
     private readonly playlistRepository: PlaylistRepository = createPlaylistRepository(),
   ) {
+    this.attribution = new CollectionAttributionController(this.doc, this.doc.getElementById('explore-modal'));
     this.elements = {
       modal: this.doc.getElementById('explore-modal'),
       closeButton: this.doc.getElementById('btn-explore-close') as HTMLButtonElement | null,
@@ -246,6 +250,7 @@ export class ExploreModalController {
   }
 
   destroy(): void {
+    this.attribution.destroy();
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -453,6 +458,7 @@ export class ExploreModalController {
     for (const entry of results) {
       this.elements.list.appendChild(this.renderEntry(entry));
     }
+    this.attribution.refresh();
   }
 
   private renderQueueActions(buildersActive: boolean, activeLoaded: boolean): void {
@@ -718,6 +724,7 @@ export class ExploreModalController {
     if (protectionBadge) titleRow.appendChild(protectionBadge);
     copy.appendChild(titleRow);
     copy.appendChild(this.createBuilderRow(entry));
+    if (entry.protectedCellCount && this.roomDiscovery?.collectionAttributionAvailable) copy.append(collectionAttributionSlot(this.doc, entry));
     const areaMeta = this.createExpandedRoomMeta(entry);
     if (areaMeta) {
       copy.appendChild(areaMeta);
@@ -939,7 +946,7 @@ export class ExploreModalController {
 
     const label = this.doc.createElement('span');
     label.className = 'explore-room-builder-label';
-    label.textContent = 'By';
+    label.textContent = 'Built by';
     row.appendChild(label);
 
     const builderLabel = entry.builderDisplayName?.trim() || 'Unknown builder';

@@ -1724,5 +1724,5 @@ export async function loadRoomDiscoveryResponse(
 ): Promise<RoomDiscoveryResponse> {
   const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset, publicCache);
   const entries = await attachRoomInsights(env, result.results);
-  return { ...result, protectedDiscoveryAvailable: true, results: await attachCoopDiscoveryFlags(env, entries) };
+  return { ...result, protectedDiscoveryAvailable: true, collectionAttributionAvailable: true, results: await attachCoopDiscoveryFlags(env, entries) };
 }
