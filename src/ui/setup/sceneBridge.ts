@@ -278,7 +278,7 @@ export interface OverworldSceneBridge {
     entry: OverworldOnlineRosterViewEntry,
   ) => Promise<void> | void;
   playSelectedCourse: () => Promise<void> | void;
-  editSelectedRoom: () => void;
+  editSelectedRoom: (roomOnly?: boolean) => void;
   buildSelectedRoom: () => void;
   openGuestDraftRoom: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
   zoomIn: () => void;

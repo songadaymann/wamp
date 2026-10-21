@@ -113,3 +113,25 @@ describe('room card available actions', () => {
   });
 
 });
+
+describe('collection reminder eligibility', () => {
+  const own = { currentUserId: 'builder', cryptoVisible: true,
+    selectedOwnership: { claimerUserId: 'builder', isMinted: false, mintedOwnerWalletAddress: null } };
+  it('requires the actual claimer record rather than original builder attribution', () => {
+    expect(card({ ...own }).collectionReminder).toEqual({ roomId: '0,0', userId: 'builder', expanded: false });
+    expect(card({ currentUserId: 'builder' }).collectionReminder).toBeNull();
+    expect(card({ ...own, selectedOwnership: { ...own.selectedOwnership, claimerUserId: 'someone-else' } }).collectionReminder).toBeNull();
+  });
+  it.each([{ cryptoVisible: false }, { currentUserId: null }, { currentUserId: 'visitor' }, { selectedOwnership: { ...own.selectedOwnership, claimerUserId: null } },
+    { mode: 'play' as const }, { selectedState: 'draft' as const },
+    { selectedState: 'claimed_unpublished' as const },
+    { selectedOwnership: { ...own.selectedOwnership, isMinted: true } },
+    { selectedSummary: { title: 'Protected', creatorUserId: 'builder', creatorDisplayName: 'Builder', isMinted: true } },
+    { selectedSummary: { title: 'World', creatorUserId: 'builder', creatorDisplayName: 'Builder', world: { id: 'world', number: 1 } } },
+  ])('hides the reminder for ineligible context %j', change => {
+    expect(card({ ...own, ...change }).collectionReminder).toBeNull();
+  });
+  it('identifies Expanded selection as one cell', () => {
+    expect(card({ ...own, selectedCourse: { courseId: 'whole', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2 } }).collectionReminder?.expanded).toBe(true);
+  });
+});

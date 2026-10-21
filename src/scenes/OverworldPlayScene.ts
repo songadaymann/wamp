@@ -4770,8 +4770,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     return canOpen() && this.scene.isActive('EditorScene');
   }
 
-  editSelectedRoom(): void {
-    this.flowController.editSelectedRoom();
+  editSelectedRoom(roomOnly = false): void {
+    this.flowController.editSelectedRoom(roomOnly);
   }
 
   editCurrentRoom(): void {

@@ -166,9 +166,9 @@ export function setupSceneCommands(
       closeWorldPanels();
       void getActiveOverworldScene(game)?.playSelectedCourse();
     },
-    onEditRoom: () => {
+    onEditRoom: (roomOnly) => {
       closeWorldPanels();
-      getActiveOverworldScene(game)?.editSelectedRoom();
+      getActiveOverworldScene(game)?.editSelectedRoom(roomOnly);
     },
     onBuildRoom: () => {
       const startBuild = () => {

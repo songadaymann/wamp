@@ -335,12 +335,12 @@ export class OverworldSceneFlowController {
     });
   }
 
-  editSelectedRoom(): void {
+  editSelectedRoom(roomOnly = false): void {
     if (this.openingSelectedEditor) return;
-    void this.openSelectedEditorAfterOwnershipCheck();
+    void this.openSelectedEditorAfterOwnershipCheck(roomOnly);
   }
 
-  private async openSelectedEditorAfterOwnershipCheck(): Promise<void> {
+  private async openSelectedEditorAfterOwnershipCheck(roomOnly = false): Promise<void> {
     const selectedCoordinates = { ...this.host.getSelectedCoordinates() };
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
     if (!['published', 'draft', 'claimed_unpublished'].includes(selectedState)) return;
@@ -353,19 +353,19 @@ export class OverworldSceneFlowController {
       permit = await this.host.prepareRoomEdit(selectedRoomId, selectedCoordinates);
       const canOpen = () => permit?.isCurrent() ?? false;
       if (!canOpen()) { hideBusyOverlay(); return; }
-      if (selectedCourseId && !permit?.roomOnly) {
+      if (selectedCourseId && !permit?.roomOnly && !roomOnly) {
         await this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates, canOpen);
       } else {
         await this.openEditor({
           roomCoordinates: selectedCoordinates,
           source: 'world',
           roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
-          courseEdit: permit?.roomOnly ? null : this.host.getActiveCourseEditContext(selectedRoomId),
+          courseEdit: roomOnly || permit?.roomOnly ? null : this.host.getActiveCourseEditContext(selectedRoomId),
         }, canOpen);
       }
     } catch (error) {
       showBusyError(error instanceof Error ? error.message : 'Could not check room ownership. Please try again.', {
-        title: 'Room ownership', retryLabel: 'Try again', retryHandler: () => this.editSelectedRoom(),
+        title: 'Room ownership', retryLabel: 'Try again', retryHandler: () => this.editSelectedRoom(roomOnly),
       });
     } finally {
       permit?.dispose();

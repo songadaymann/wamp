@@ -1,3 +1,4 @@
+import { handleCollectionPrice } from './worker/mint/price';
 import { handleCollectionRead } from './worker/collections/routes';
 export { PresenceDurableObject } from './presence/durableObject';
 import { handleCloudflarePresence } from './presence/durableObject';
@@ -598,6 +599,9 @@ export default {
         return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]), ctx);
       }
 
+      if (url.pathname === '/api/collections/price' && request.method === 'GET') {
+        return await handleCollectionPrice(request, env, ctx);
+      }
       if (url.pathname === '/api/collections/attribution' && request.method === 'GET') {
         return await handleCollectionRead(request, env, ctx);
       }

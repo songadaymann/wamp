@@ -1,3 +1,7 @@
+## 2026-10-21 — F246 owner collection reminder
+
+Original prompt: "ok let’s do the next one". Canonical `codex/wamp-owner-reminder-2026-10-21`, from main `a9dabba8`. Plan: docs/review/wamp-owner-reminder-2026-10-21.md. Read-only real-price lookup and wallet-gated owner reminder; existing explicit collection consent remains authoritative. Implemented;32 native checks,16 device/gate cases, selected-cell collection-control reachability and installed-client gameplay pass. Full609/5,232 quality,660.6KB startup and staged OSS0/0 pass. Hosted release pending. Prior collection shelves PR276 is deployed (maina9dabba8); frozen proof and local final receipt preserved.
+
 ## 2026-10-21 — Collector attribution and collection shelves
 
 Original prompt: "ok let's do collector attribution and collection shelves next, verify it, then push merge and deploy please!"
