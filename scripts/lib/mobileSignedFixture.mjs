@@ -9,6 +9,14 @@ export async function installMobileSignedFixture(context, { roomChat = false, ro
   const userId = 'mobile-smoke-fixture';
   const json = (route, body) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': route.request().headers().origin ?? '*', 'access-control-allow-credentials': 'true' }, body: JSON.stringify(body) });
   if (roomEditor) {
+    // Same read-only price/contract as the native mint-network fixture. This does
+    // not prepare a mint; each consent scenario still owns its explicit prepare.
+    await context.route(url => url.pathname === '/api/collections/price', route => {
+      if (route.request().method() === 'OPTIONS') return route.fallback();
+      if (route.request().method() !== 'GET') throw new Error('Collection price must remain read-only');
+      return json(route, { priceWei: '1000', chainId: 8453,
+        contractAddress: '0x1111111111111111111111111111111111111111', quotedAt: new Date().toISOString() });
+    });
     const snapshot = JSON.parse(recorded.entries.find(entry => entry.path === '/api/rooms/0%2C0/published').text);
     const summary = { ...JSON.parse(recorded.entries.find(entry => entry.path === '/api/rooms/0%2C0/summary').text), claimerUserId: userId,
       mintedChainId: null, mintedContractAddress: null, mintedTokenId: null, mintedOwnerWalletAddress: null,

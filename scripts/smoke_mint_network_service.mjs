@@ -38,7 +38,7 @@ try {
   const call = (name, kind = 'mint', auth = true, origin = 'https://wamp.land') => fetch(new URL(`/api/rooms/0,0/${kind === 'mint' ? 'mint' : 'mint/metadata'}/prepare`, urls[name]), { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(auth ? { Cookie: `ep_session=${cookie}` } : {}) }, body: JSON.stringify(kind === 'mint' ? {} : { tokenUri: 'data:application/json;base64,e30=' }) });
   const prices = {};
   for (const [name, chainId] of [['base', 8453], ['sepolia', 84532]]) {
-    const before = await db.prepare('SELECT * FROM rooms ORDER BY id').all();
+    const before = (await db.prepare('SELECT * FROM rooms ORDER BY id').all()).results;
     const callsBefore = providers[name].methods.length;
     const response = await fetch(new URL('/api/collections/price', urls[name]));
     const text = await response.text(), quote = JSON.parse(text);
@@ -46,7 +46,8 @@ try {
     assert.equal(quote.contractAddress, fixtures.FIXTURE_MINT_CONTRACT); assert(quote.quotedAt);
     assert(!text.includes('signature')); assert(!text.includes('transaction')); assert(!text.includes('private-sentinel'));
     assert.deepEqual(providers[name].methods.slice(callsBefore), ['eth_chainId', 'eth_call']);
-    assert.deepEqual(await db.prepare('SELECT * FROM rooms ORDER BY id').all(), before);
+    const after = await db.prepare('SELECT * FROM rooms ORDER BY id').all();
+    assert.equal(after.meta.rows_written, 0); assert.deepEqual(after.results, before);
     prices[name] = quote; cases.push({ name: name + '-read-only-price', status: 200 });
   }
   writeFileSync(`${output}/price.json`, JSON.stringify(prices, null, 2));
