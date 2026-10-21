@@ -46,3 +46,20 @@ describe('ownership verification before either editor opens', () => {
     await vi.waitFor(() => expect(f.manager.run).toHaveBeenCalledOnce()); expect(f.prepare).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('collection entry into a selected cell', () => {
+  it.each([false, true])('keeps the fresh permit and opens only the selected cell (%s)', async expanded => {
+    const f = harness(expanded); f.controller.editSelectedRoom(true); f.controller.editSelectedRoom(true);
+    await vi.waitFor(() => expect(f.manager.run).toHaveBeenCalledOnce()); expect(f.prepare).toHaveBeenCalledOnce();
+    expect(f.manager.run).toHaveBeenCalledWith('EditorScene', expect.objectContaining({ roomCoordinates: { x: 0, y: 0 }, courseEdit: null }));
+    expect(f.permit.dispose).toHaveBeenCalledOnce();
+  });
+  it('retains cell-only collection intent through an explicit permission-check retry', async () => {
+    const f = harness(true); f.prepare.mockRejectedValueOnce(new Error('Unavailable'));
+    f.controller.editSelectedRoom(true); await vi.waitFor(() => expect(mocks.error).toHaveBeenCalledOnce());
+    (mocks.error.mock.calls[0][1] as { retryHandler: () => void }).retryHandler();
+    await vi.waitFor(() => expect(f.manager.run).toHaveBeenCalledOnce());
+    expect(f.manager.run).toHaveBeenCalledWith('EditorScene', expect.objectContaining({ courseEdit: null }));
+    expect(f.prepare).toHaveBeenCalledTimes(2);
+  });
+});

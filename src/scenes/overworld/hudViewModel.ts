@@ -439,6 +439,10 @@ export function buildOverworldHudViewModel(
 
   return {
     saveStatusTone,
+    collectionReminder: cryptoVisible && mode === 'browse' && selectedState === 'published'
+      && selectedOwnership && !selectedRoomMinted && viewerOwnsSelectedRoom
+      && selectedOwnership.claimerUserId === currentUserId && !selectedSummary?.world
+      ? { roomId: roomIdFromCoordinates(selectedCoordinates), userId: currentUserId!, expanded: selectedIsExpandedRoom } : null,
     jumpInputValue: roomIdFromCoordinates(selectedCoordinates),
     selectedTitleText,
     selectedSubtitleText,

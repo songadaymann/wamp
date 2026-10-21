@@ -15,9 +15,9 @@ try {
   const { fixture } = await loader.ssrLoadModule('/src/cloudflare/worker/activity/testDatabase.ts');
   const { createSession } = await loader.ssrLoadModule('/src/cloudflare/worker/auth/store.ts');
   const fixtures = await loader.ssrLoadModule('/src/cloudflare/worker/mint/testRpc.ts');
-  const providers = { base: fixtures.createMintRpcFixture(8453), sepolia: fixtures.createMintRpcFixture(84532) };
+  const providers = { base: fixtures.createMintRpcFixture(8453), sepolia: fixtures.createMintRpcFixture(84532), mismatch: fixtures.createMintRpcFixture(84532) };
   let providerFailure = false;
-  const profiles = [['base', '8453'], ['sepolia', '84532'], ['missing', null], ['unsupported', '1'], ['disabled', '8453']];
+  const profiles = [['base', '8453'], ['sepolia', '84532'], ['missing', null], ['unsupported', '1'], ['disabled', '8453'], ['mismatch', '8453']];
   mf = new Miniflare({ workers: profiles.map(([name, chainId]) => ({ name, modules: [{ type: 'ESModule', path: resolve(output, 'api/worker.js') }], compatibilityDate: '2026-03-08', compatibilityFlags: ['global_fetch_strictly_public'], unsafeDirectSockets: [{ host: '127.0.0.1', port: 0 }],
     bindings: { ...(name === 'disabled' ? { ROOM_MINT_DISABLED: '1' } : {}), ...(chainId ? { ROOM_MINT_CHAIN_ID: chainId } : {}), ROOM_MINT_CONTRACT_ADDRESS: fixtures.FIXTURE_MINT_CONTRACT, ROOM_MINT_RPC_URL: `https://server-rpc.example/${name}/private-sentinel`, ROOM_MINT_AUTH_PRIVATE_KEY: fixtures.FIXTURE_MINT_AUTH_KEY },
     d1Databases: { DB: 'ephemeral-mint-network', JAM_DB: 'ephemeral-mint-network' }, serviceBindings: { ASSETS: () => new Response('Not found', { status: 404 }) },
@@ -36,6 +36,28 @@ try {
   await db.prepare('UPDATE users SET wallet_address=? WHERE id=?').bind(fixtures.FIXTURE_MINT_WALLET, 'builder').run();
   const cookie = await createSession({ DB: db }, 'builder'), urls = Object.fromEntries(await Promise.all(profiles.map(async ([n]) => [n, await mf.unsafeGetDirectURL(n)])));
   const call = (name, kind = 'mint', auth = true, origin = 'https://wamp.land') => fetch(new URL(`/api/rooms/0,0/${kind === 'mint' ? 'mint' : 'mint/metadata'}/prepare`, urls[name]), { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', ...(auth ? { Cookie: `ep_session=${cookie}` } : {}) }, body: JSON.stringify(kind === 'mint' ? {} : { tokenUri: 'data:application/json;base64,e30=' }) });
+  const prices = {};
+  for (const [name, chainId] of [['base', 8453], ['sepolia', 84532]]) {
+    const before = (await db.prepare('SELECT * FROM rooms ORDER BY id').all()).results;
+    const callsBefore = providers[name].methods.length;
+    const response = await fetch(new URL('/api/collections/price', urls[name]));
+    const text = await response.text(), quote = JSON.parse(text);
+    assert.equal(response.status, 200, text); assert.equal(quote.priceWei, '1000'); assert.equal(quote.chainId, chainId);
+    assert.equal(quote.contractAddress, fixtures.FIXTURE_MINT_CONTRACT); assert(quote.quotedAt);
+    assert(!text.includes('signature')); assert(!text.includes('transaction')); assert(!text.includes('private-sentinel'));
+    assert.deepEqual(providers[name].methods.slice(callsBefore), ['eth_chainId', 'eth_call']);
+    const after = await db.prepare('SELECT * FROM rooms ORDER BY id').all();
+    assert.equal(after.meta.rows_written, 0); assert.deepEqual(after.results, before);
+    prices[name] = quote; cases.push({ name: name + '-read-only-price', status: 200 });
+  }
+  writeFileSync(`${output}/price.json`, JSON.stringify(prices, null, 2));
+  for (const name of ['missing', 'unsupported', 'disabled']) {
+    const response = await fetch(new URL('/api/collections/price', urls[name]));
+    assert.equal(response.status, 503, await response.text()); cases.push({ name: name + '-price-unavailable', status: 503 });
+  }
+  const wrongPrice = await fetch(new URL('/api/collections/price', urls.mismatch));
+  assert.equal(wrongPrice.status, 503, await wrongPrice.text()); cases.push({ name: 'price-network-mismatch', status: 503 });
+  providers.base.state.chainId = 8453;
   for (const [name, chainId] of [['base', 8453], ['sepolia', 84532]]) { const r = await call(name), text = await r.text(), body = JSON.parse(text); assert.equal(r.status, 200, text); assert.equal(body.chain.chainId, chainId); assert.equal(body.transaction.chainId, chainId); assert.equal(body.priceWei, '1000'); assert(!text.includes('private-sentinel')); assert.equal(body.chain.rpcUrl, chainId === 8453 ? 'https://mainnet.base.org' : 'https://sepolia.base.org'); cases.push({ name: name + '-valid-mint', status: r.status }); }
   const count = () => providers.base.methods.length + providers.sepolia.methods.length;
   for (const [name, auth, origin, expected] of [['missing', false, 'https://wamp.land', 401], ['base', true, 'https://untrusted.example', 403], ['missing', true, 'https://wamp.land', 503], ['unsupported', true, 'https://wamp.land', 503]]) { const before = count(), r = await call(name, 'mint', auth, origin), text = await r.text(); assert.equal(r.status, expected, text); assert.equal(count(), before); assert(!text.includes('private-sentinel')); cases.push({ name: name + '-gate-' + expected, status: r.status }); }

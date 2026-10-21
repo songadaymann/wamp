@@ -2077,6 +2077,7 @@
     }
   },
   "paths": {
+    "/api/collections/price": {"get": {"summary": "Read the configured current collection price without creating a mint authorization","description": "Wallet-gated clients only. Public read-only quote cached for 20 seconds. Network verified; final price is read again by explicit prepare. No signer, transaction, account or room mutation.","responses": {"200": {"description": "Current contract price","content": {"application/json": {"schema": {"type": "object","required": ["priceWei","chainId","contractAddress","quotedAt"],"properties": {"priceWei": {"type": "string","pattern": "^(0|[1-9][0-9]{0,77})$"},"chainId": {"type": "integer"},"contractAddress": {"type": "string"},"quotedAt": {"type": "string","format": "date-time"}}}}}},"400": {"description": "Unexpected query parameters"},"503": {"description": "Collection disabled, configuration invalid or chain unavailable"}}}},
     "/api/collections/attribution": {
       "get": {
         "security": [

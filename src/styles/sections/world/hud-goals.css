@@ -608,3 +608,18 @@
     grid-column: 1 / -1;
   }
 }
+
+@layer components {
+  .owner-collection-reminder {
+    overflow-wrap: anywhere;
+    border-top: 2px solid var(--wamp-ink);
+    padding-top: 8px;
+  }
+
+  #btn-owner-collection {
+    min-height: 44px;
+    max-width: 100%;
+    white-space: normal;
+    margin-top: 8px;
+  }
+}

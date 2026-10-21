@@ -93,8 +93,8 @@ const TOLERANT_CHAIN_READ_TRANSPORT = { retryCount: 1, timeout: 5_000 };
 // A manual refresh stays inside the caller's finite wait instead of retrying after it closes.
 const FRESH_CHAIN_READ_TRANSPORT = { retryCount: 0, timeout: 5_000 };
 
-export async function loadRoomMintPriceWei(config: RoomMintConfig): Promise<string> {
-  const client = await createVerifiedRoomMintPublicClient(config);
+export async function loadRoomMintPriceWei(config: RoomMintConfig, transport: MintReadTransportOptions = {}): Promise<string> {
+  const client = await createVerifiedRoomMintPublicClient(config, transport);
   const priceWei = await client.readContract({
     address: config.contractAddress,
     abi: ROOM_OWNERSHIP_TOKEN_ABI,

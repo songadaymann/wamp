@@ -1,3 +1,4 @@
+import { OwnerCollectionReminder, type OwnerCollectionContext } from '../../ui/setup/ownerCollectionReminder';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
   MULTIPLAYER_MODE_LIST,
@@ -12,7 +13,7 @@ interface OverworldHudRuntimeConfig {
   onPlayRoom: () => void | Promise<void>;
   onRestartRun: () => void | Promise<void>;
   onPlayCourse: () => void | Promise<void>;
-  onEditRoom: () => void | Promise<void>;
+  onEditRoom: (roomOnly?: boolean) => void | Promise<void>;
   onBuildRoom: () => void | Promise<void>;
   onOpenCourseBuilder: () => void | Promise<void>;
   onJumpToCoordinates: (coordinates: RoomCoordinates) => void | Promise<void>;
@@ -112,6 +113,7 @@ export function configureOverworldHudBridgeRuntime(
 export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
   jumpInputValue: string;
+  collectionReminder?: OwnerCollectionContext | null;
   selectedTitleText: string;
   selectedSubtitleText: string;
   selectedTitleSize: 'normal' | 'compact' | 'tiny';
@@ -209,6 +211,7 @@ export interface OverworldOnlineRosterViewEntry {
 }
 
 export class OverworldHudBridge {
+  private readonly collectionReminder: OwnerCollectionReminder;
   private readonly hudRoot: HTMLElement | null;
   private readonly selectedTitleEl: HTMLElement | null;
   private readonly selectedSubtitleEl: HTMLElement | null;
@@ -455,6 +458,7 @@ export class OverworldHudBridge {
   };
 
   constructor(private readonly doc: Document = document) {
+    this.collectionReminder = new OwnerCollectionReminder(doc, () => { void runtimeConfig.onEditRoom(true); });
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
     this.selectedSubtitleEl = this.doc.getElementById('world-selected-subtitle');
@@ -567,6 +571,7 @@ export class OverworldHudBridge {
     this.setText(this.selectedTitleEl, viewModel.selectedTitleText);
     this.setText(this.selectedSubtitleEl, viewModel.selectedSubtitleText);
     this.setTitleSize(this.selectedTitleEl, viewModel.selectedTitleSize);
+    this.collectionReminder.update(viewModel.collectionReminder ?? null);
     this.setTitleTone(viewModel.selectedTitleTone);
     this.renderSelectedCreator(
       viewModel.selectedCreatorCardVisible,
@@ -680,6 +685,7 @@ export class OverworldHudBridge {
   }
 
   destroy(): void {
+    this.collectionReminder.destroy();
     this.setGhostRaceInfo(null);
     this.destroyed = true;
     this.playersOnlineWrapEl?.removeEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
