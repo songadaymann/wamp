@@ -25,6 +25,38 @@ async function proof(f: ReturnType<typeof fixture>, wallet = account(), cookie?:
 }
 
 describe('wallet authentication intent and linking', () => {
+  it.each(['invalid', 'expired'])('clears an %s session cookie so the next explicit wallet sign-in can succeed', async kind => {
+    const f = database(), token = kind === 'expired' ? await createSession(f.env, 'builder', -1) : 'invalid-cookie';
+    await expect(proof(f, account(), token)).rejects.toMatchObject({ status: 401 });
+    const response = await dispatch(f, new Request('https://api.wamp.land/api/auth/session', { headers: { Cookie: `ep_session=${token}`, Origin: 'https://wamp.land' } }));
+    expect(await response.json()).toMatchObject({ authenticated: false, user: null });
+    expect(response.headers.get('Set-Cookie')).toMatch(/ep_session=;.*Max-Age=0/);
+    const p = await proof(f); expect((await dispatch(f, request('verify', p.body))).status).toBe(200);
+    expect((await findUserById(f.env, 'builder'))?.walletAddress).toBeNull();
+  });
+  it('keeps an old link proof unusable for sign-in after clearing its revoked cookie', async () => {
+    const f = database(), token = await createSession(f.env, 'builder'), p = await proof(f, account(), token);
+    f.sqlite.exec('DELETE FROM sessions');
+    const response = await dispatch(f, new Request('https://api.wamp.land/api/auth/session', { headers: { Cookie: `ep_session=${token}`, Origin: 'https://wamp.land' } }));
+    expect(response.headers.get('Set-Cookie')).toMatch(/Max-Age=0/);
+    await expect(dispatch(f, request('verify', p.body))).rejects.toMatchObject({ status: 409 });
+    expect((await findUserById(f.env, 'builder'))?.walletAddress).toBeNull();
+  });
+  it.each(['signed-out', 'different-account', 'unexpected-sign-in'])('rejects a changed account before creating proof (%s)', async kind => {
+    const f = database(), token = kind === 'signed-out' ? undefined : await createSession(f.env, 'builder');
+    const expectedUserId = kind === 'unexpected-sign-in' ? null : kind === 'different-account' ? 'p1' : 'builder';
+    await expect(dispatch(f, request('challenge', { address: account().address, expectedUserId }, token))).rejects.toMatchObject({ status: 409 });
+    expect(f.sqlite.prepare('SELECT COUNT(*) AS n FROM wallet_challenges').get()).toMatchObject({ n: 0 });
+  });
+  it('rejects a malformed expected account instead of choosing its identity', async () => {
+    const f = database();
+    await expect(dispatch(f, request('challenge', { address: account().address, expectedUserId: 42 }))).rejects.toMatchObject({ status: 400 });
+  });
+  it('preserves a valid current session cookie during refresh', async () => {
+    const f = database(), token = await createSession(f.env, 'builder');
+    const response = await dispatch(f, new Request('https://api.wamp.land/api/auth/session', { headers: { Cookie: `ep_session=${token}`, Origin: 'https://wamp.land' } }));
+    expect(response.headers.get('Set-Cookie')).toBeNull(); expect(await response.json()).toMatchObject({ authenticated: true, user: { id: 'builder' } });
+  });
   it('signs in with a real ephemeral EOA proof and creates one session; replay cannot create another', async () => {
     const f = database(), p = await proof(f);
     expect(p.challenge.message).toContain('sign in with your wallet');

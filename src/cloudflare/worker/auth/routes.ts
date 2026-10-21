@@ -60,6 +60,7 @@ import {
   createSessionCookie,
   createSessionResponse,
   loadCurrentSession,
+  hasSessionCookie,
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
   requireCurrentSession,
@@ -91,7 +92,9 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
       responseBody.roomClaimsUsedToday = quota.claimsUsedToday;
       responseBody.roomClaimsRemainingToday = quota.claimsRemainingToday;
     }
-    return jsonResponse(request, responseBody);
+    return jsonResponse(request, responseBody, !auth && hasSessionCookie(request)
+      ? { headers: { 'Set-Cookie': clearSessionCookie(request), 'Cache-Control': 'no-store' } }
+      : undefined);
   }
 
   if (url.pathname === '/api/auth/request-link' && request.method === 'POST') {

@@ -61,6 +61,7 @@ export interface EmailCodeVerifyBody {
 
 export interface WalletChallengeRequestBody {
   address: string;
+  expectedUserId?: string | null;
 }
 
 export interface WalletChallengeResponse {

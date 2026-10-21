@@ -1,6 +1,14 @@
 # F247 — safe wallet-link recovery
 
-Canonical branch: `codex/wamp-wallet-linking-2026-10-20`, based on verified main `fc43bc1e` with the final F240 receipt. Master175/216. The checklist goal stays active until October21 at05:00 America/New_York; no new implementation, tests or deployments at/after09:00UTC. AI generation stays on hold and historic artwork repairs remain unsigned.
+Initial branch: `codex/wamp-wallet-linking-2026-10-20`, from verified main `fc43bc1e` with the final F240 receipt, merged through PR271. Current canonical release branch: `codex/wamp-wallet-session-recovery-2026-10-20` from main `4ca2f98`. Master175/216. The checklist goal stays active until October21 at05:00 America/New_York; no new implementation, tests or deployments at/after09:00UTC. AI generation stays on hold and historic artwork repairs remain unsigned.
+
+## Session-recovery follow-up before production
+
+PR271/main4ca2f98 passed both18-check/420-case pipelines, but pre-release review caught two session edges before the coordinated API release. The follow-up branch `codex/wamp-wallet-session-recovery-2026-10-20` clears invalid/revoked/expired cookies on successful anonymous session refresh, and sends the account expected at the button click as a condition on challenge creation. It never chooses authority from that supplied ID. A stale link screen cannot silently request sign-in instead; clearing an old cookie cannot turn an existing link proof into sign-in. Legacy address-only API clients retain their existing challenge behavior.
+
+Current local evidence:603 files/5,140 tests,42 focused proof/client cases,12 native API/D1 checks and40 controls across four profiles pass. The new sign-in case starts with a stale cookie; a separate case removes the cookie before challenge creation and verifies that no signature or attachment happens. Exact follow-up source/main checks, safety and production guard/live checks are pending. Neither superseded candidate nor this follow-up has been deployed to the production API. New evidence: ignored `output/f247-session-2026-10-20/`; original candidate evidence stays in `output/f247-linking-2026-10-20/`.
+
+Unused-account recovery still needs proof that previously authenticated, in-flight writes cannot create inaccessible source history after a move. Do not equate zero active sessions at the transfer instant with the absence of an in-flight request. Keep recovery and wallet replacement unchecked until that boundary is verified.
 
 ## First release — approval boundary and actionable conflicts
 

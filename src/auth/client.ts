@@ -815,7 +815,7 @@ async function authenticateWithWallet(): Promise<void> {
 
   try {
     const response = await authenticateWallet({
-      signal: controller.signal, isCurrent: current,
+      signal: controller.signal, isCurrent: current, expectedUserId: userId,
       connect: async () => {
         const walletModal = await ensureWalletModal(), address = await ensureWalletConnection();
         connectedAddress = address.toLowerCase();
