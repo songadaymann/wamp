@@ -383,6 +383,7 @@ export class ExploreModalController {
 
     for (const button of this.elements.sortButtons) {
       const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
+      button.classList.toggle('hidden', sort === 'protected' && this.roomDiscovery?.protectedDiscoveryAvailable !== true);
       button.classList.toggle(
         'active',
         sort === 'builders'
@@ -439,7 +440,7 @@ export class ExploreModalController {
     }
 
     const results = (this.roomDiscovery?.results ?? []).filter(
-      (entry) => entry.goalType !== null || (this.discoverSort === 'newest' && this.discoverFilter === null),
+      (entry) => entry.goalType !== null || ((this.discoverSort === 'newest' || this.discoverSort === 'protected') && this.discoverFilter === null),
     );
 
     if (results.length === 0) {
@@ -489,7 +490,7 @@ export class ExploreModalController {
         mode,
         entries,
         sourceLabel: mode === 'rate' ? 'Unrated rooms'
-          : this.discoverSort === 'unbeaten' ? 'Unbeaten rooms' : 'Community rooms',
+          : this.discoverSort === 'unbeaten' ? 'Unbeaten rooms' : this.discoverSort === 'protected' ? 'Protected rooms' : 'Community rooms',
       });
       this.close();
     });
@@ -1189,6 +1190,7 @@ export class ExploreModalController {
       || value === 'popular'
       || value === 'quality'
       || value === 'newest'
+      || value === 'protected'
       || value === 'unbeaten'
       || value === 'unvisited'
       || value === 'unrated'
@@ -1235,6 +1237,7 @@ export class ExploreModalController {
   }
 
   private getRoomDiscoveryEmptyText(): string {
+    if (this.discoverSort === 'protected') return this.discoverFilter ? 'No protected rooms match this difficulty.' : 'No protected rooms found.';
     if (this.discoverSort === 'featured' && this.discoverFilter === null) return 'No Featured rooms yet. Try Popular.';
     if (this.discoverSort === 'newest' && this.discoverFilter === null) {
       return 'No published rooms found yet.';

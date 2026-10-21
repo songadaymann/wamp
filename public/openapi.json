@@ -1113,7 +1113,7 @@
       },
       "RoomDiscoverySort": {
         "type": "string",
-        "enum": ["featured", "quality", "newest", "builder"]
+        "enum": ["featured", "popular", "quality", "newest", "protected", "builder", "unbeaten", "unvisited", "unrated"]
       },
       "BuilderDiscoverySort": {
         "type": "string",
@@ -1208,6 +1208,7 @@
         "type": "object",
         "required": ["difficultyFilter", "sort", "results"],
         "properties": {
+          "protectedDiscoveryAvailable": { "type": "boolean", "description": "Clients offer the Protected view only when this capability is true." },
           "difficultyFilter": {
             "oneOf": [
               { "$ref": "#/components/schemas/RoomDifficulty" },
@@ -3268,7 +3269,7 @@
     "/api/leaderboards/rooms/discover": {
       "get": {
         "summary": "Discover published rooms",
-        "description": "Public read. By default this returns published challenge rooms. Set sort=newest with includeGoalLessRooms=true and no difficulty to include all newly published rooms. If a bearer token is supplied, it must include leaderboards:read.",
+        "description": "Public read. By default this returns published challenge rooms. Set sort=newest with includeGoalLessRooms=true and no difficulty to include all newly published rooms. The public protected view returns playable targets with at least one protected cell, including goal-less rooms when no difficulty is selected. If a bearer token is supplied, it must include leaderboards:read.",
         "security": [
           { "bearerAuth": [] },
           {}

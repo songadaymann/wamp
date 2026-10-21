@@ -6,10 +6,22 @@ export function storedRoomProtectionSql(alias: 'rooms' | 'protected_room' = 'roo
 }
 
 export function indexedRoomProtectionCountSql(alias: 'index_row' | 'playable_content_index'): string {
-  return `(SELECT COUNT(DISTINCT protection_member.room_id)
+  return `(CASE WHEN ${alias}.target_type = 'room' THEN
+    (SELECT COUNT(*) FROM rooms protected_room WHERE protected_room.id = ${alias}.content_id
+      AND ${storedRoomProtectionSql('protected_room')})
+    ELSE (SELECT COUNT(DISTINCT protection_member.room_id)
     FROM playable_content_index_members protection_member
     JOIN rooms protected_room ON protected_room.id = protection_member.room_id
-    WHERE protection_member.target_key = ${alias}.target_key AND ${storedRoomProtectionSql('protected_room')})`;
+    WHERE protection_member.target_key = ${alias}.target_key AND ${storedRoomProtectionSql('protected_room')}) END)`;
+}
+
+export function indexedRoomProtectionExistsSql(alias: 'index_row'): string {
+  return `(CASE WHEN ${alias}.target_type = 'room' THEN
+    EXISTS(SELECT 1 FROM rooms protected_room WHERE protected_room.id = ${alias}.content_id
+      AND ${storedRoomProtectionSql('protected_room')})
+    ELSE EXISTS(SELECT 1 FROM playable_content_index_members protection_member
+    JOIN rooms protected_room ON protected_room.id = protection_member.room_id
+    WHERE protection_member.target_key = ${alias}.target_key AND ${storedRoomProtectionSql('protected_room')}) END)`;
 }
 
 /** Only legacy profile cells not included in the builder's existing rows need this bounded read. */

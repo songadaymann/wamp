@@ -20,6 +20,7 @@ export const ROOM_DISCOVERY_SORTS = [
   'popular',
   'quality',
   'newest',
+  'protected',
   'builder',
   'unbeaten',
   'unvisited',
@@ -219,6 +220,8 @@ export interface RoomDiscoveryExpandedRoomTarget {
 }
 
 export interface RoomDiscoveryResponse {
+  /** Explicit server capability so newer clients do not offer an unsupported view during rollout. */
+  protectedDiscoveryAvailable?: boolean;
   difficultyFilter: RoomDifficulty | null;
   sort: RoomDiscoverySort;
   results: RoomDiscoveryEntry[];

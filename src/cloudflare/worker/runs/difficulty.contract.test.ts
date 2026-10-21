@@ -37,10 +37,10 @@ describe('T14 difficulty model contracts', () => {
       'extreme',
     ]);
     expect(
-      ['featured', 'quality', 'newest', 'builder', 'unbeaten', 'unvisited', 'unrated'].map(
+      ['featured', 'quality', 'newest', 'protected', 'builder', 'unbeaten', 'unvisited', 'unrated'].map(
         parseRoomDiscoverySortOrThrow,
       ),
-    ).toEqual(['featured', 'quality', 'newest', 'builder', 'unbeaten', 'unvisited', 'unrated']);
+    ).toEqual(['featured', 'quality', 'newest', 'protected', 'builder', 'unbeaten', 'unvisited', 'unrated']);
     expect(['alphabet', 'rooms', 'recent'].map(parseBuilderDiscoverySortOrThrow)).toEqual([
       'alphabet',
       'rooms',
@@ -51,7 +51,7 @@ describe('T14 difficulty model contracts', () => {
       'difficulty must be easy, medium, hard, or extreme.');
     expect(parseRoomDiscoverySortOrThrow('popular')).toBe('popular');
     expectHttpError(() => parseRoomDiscoverySortOrThrow('random'), 400,
-      'sort must be featured, popular, quality, newest, builder, unbeaten, unvisited, or unrated.');
+      'sort must be featured, popular, quality, newest, protected, builder, unbeaten, unvisited, or unrated.');
     expectHttpError(() => parseBuilderDiscoverySortOrThrow('quality'), 400,
       'sort must be alphabet, rooms, or recent.');
   });
@@ -143,7 +143,7 @@ describe('T14 discovery and difficulty route source contracts', () => {
     for (const sourceContract of [
       'env.PLAYABLE_CONTENT_INDEX_READS?.trim().toLowerCase()',
       "raw === '1' || raw === 'true' || raw === 'on'",
-      "['newest', 'featured', 'quality', 'popular']",
+      "['newest', 'featured', 'quality', 'popular', 'protected']",
       'limit + 1',
       'Discovery index is unavailable; falling back to legacy discovery reads.',
       'throw error;',

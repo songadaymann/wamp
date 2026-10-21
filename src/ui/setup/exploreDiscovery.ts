@@ -10,7 +10,7 @@ export async function loadExploreDiscovery(
 ): Promise<{ response: RoomDiscoveryResponse; sort: Exclude<RoomDiscoverySort, 'builder'> } | null> {
   let response = await repository.loadRoomDiscovery(difficulty, sort, 48, sort === 'newest' && difficulty === null);
   if (!isCurrent()) return null;
-  if (chooseDefault && response.results.filter(room => room.featured).length < MIN_DEFAULT_FEATURED_ROOMS) {
+  if (chooseDefault && sort !== 'protected' && response.results.filter(room => room.featured).length < MIN_DEFAULT_FEATURED_ROOMS) {
     sort = 'popular';
     response = await repository.loadRoomDiscovery(difficulty, sort, 48, false);
   }

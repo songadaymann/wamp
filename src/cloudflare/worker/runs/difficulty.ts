@@ -276,7 +276,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
   cursorOffset: number = 0,
   publicCache?: DiscoveryPublicCache,
 ): Promise<RoomDiscoveryResponse> {
-  const includeAllPublishedRooms = includeGoalLessRooms && sort === 'newest' && difficultyFilter === null;
+  const includeAllPublishedRooms = (sort === 'protected' || (includeGoalLessRooms && sort === 'newest')) && difficultyFilter === null;
   const expandedRoomsEnabled = isExpandedRoomsEnabled(env);
   if (isPersonalRoomDiscoverySort(sort) && !viewerUserId) {
     throw new HttpError(401, 'Sign in to sort by your room history.');
@@ -414,6 +414,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
     })
     .filter((entry) => includeAllPublishedRooms || entry.goalType !== null)
     .filter((entry) => sort !== 'featured' || entry.featured)
+    .filter((entry) => sort !== 'protected' || (entry.protectedCellCount ?? 0) > 0)
     .filter((entry) => difficultyFilter === null || entry.consensusDifficulty === difficultyFilter)
     .filter((entry) => {
       if (!isPersonalRoomDiscoverySort(sort)) {
@@ -1723,5 +1724,5 @@ export async function loadRoomDiscoveryResponse(
 ): Promise<RoomDiscoveryResponse> {
   const result = await loadRoomDiscoveryResponseWithoutInsights(env, difficultyFilter, limit, sort, includeGoalLessRooms, viewerUserId, timing, cursorOffset, publicCache);
   const entries = await attachRoomInsights(env, result.results);
-  return { ...result, results: await attachCoopDiscoveryFlags(env, entries) };
+  return { ...result, protectedDiscoveryAvailable: true, results: await attachCoopDiscoveryFlags(env, entries) };
 }

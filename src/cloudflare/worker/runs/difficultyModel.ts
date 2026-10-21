@@ -57,7 +57,7 @@ export function parseRoomDiscoverySortOrThrow(value: unknown): RoomDiscoverySort
   if (!normalized) {
     throw new HttpError(
       400,
-      'sort must be featured, popular, quality, newest, builder, unbeaten, unvisited, or unrated.',
+      'sort must be featured, popular, quality, newest, protected, builder, unbeaten, unvisited, or unrated.',
     );
   }
 
