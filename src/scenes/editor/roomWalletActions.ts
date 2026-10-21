@@ -1,8 +1,11 @@
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn, refreshAuthSession, sendPreparedWalletTransaction } from '../../auth/client';
-import { WalletTransactionRevertedError } from '../../auth/walletTransaction';
+import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from '../../auth/walletTransaction';
 import { cloneRoomSnapshot, createRoomRecordFromCurrent, isRoomApiError, type RoomCoordinates, type RoomPermissions, type RoomRecord, type RoomRepository, type RoomSnapshot, type RoomSummary } from '../../persistence/roomRepository';
 import { buildExplorerTxUrl, type RoomMintChainInfo, type PreparedWalletTransaction } from '../../mint/roomOwnership';
 import { buildRoomTokenArtwork } from '../../mint/roomTokenArtwork';
+import { roomWalletErrorMessage } from '../../mint/roomWalletError';
+import { hasCryptoWallet } from '../../mint/walletGate';
+import { requestRoomWalletConsent } from '../../ui/roomWalletConsent';
 import { getPendingRoomWalletStore, type PendingRoomWallet } from '../../mint/pendingRoomWallet';
 import { RoomWalletRecovery, waitForRoomWallet, type RoomWalletRecoveryResult } from '../../mint/roomWalletRecovery';
 import { checkRoomWalletReceipt } from '../../mint/roomWalletReceipt';
@@ -41,6 +44,7 @@ interface WalletRun {
   title: string;
   pending: PendingRoomWallet | null;
   durable: boolean;
+  chainName?: string;
   cancel(): void;
 }
 
@@ -110,11 +114,21 @@ export class RoomWalletActions {
       this.beginWait(run);
       const prepare = await run.wait(this.roomRepository.prepareMint(this.host.roomId, this.host.roomCoordinates));
       if (!run.current()) return null;
-      const pendingMint = this.intent('mint', prepare.chain, prepare.transaction);
+      if (prepare.roomId !== this.host.roomId || prepare.roomCoordinates.x !== this.host.roomCoordinates.x
+        || prepare.roomCoordinates.y !== this.host.roomCoordinates.y || prepare.linkedWalletAddress.toLowerCase() !== identity().wallet
+        || prepare.transaction.to.toLowerCase() !== prepare.contractAddress.toLowerCase()) throw new Error('The room cost or network changed.');
+      const transaction = { ...prepare.transaction }, chain = { ...prepare.chain, nativeCurrency: { ...prepare.chain.nativeCurrency } };
+      run.chainName = chain.name;
+      const accepted = await run.wait(requestRoomWalletConsent({ title: run.title, kind: 'mint', transaction, chain,
+        priceWei: prepare.priceWei, wallet: identity().wallet!, signal: run.controller.signal, isCurrent: run.current }));
+      if (!run.current()) return null;
+      if (!accepted) { options.onDeclined?.(); this.host.setStatusText(hasCryptoWallet() ? 'Collection cancelled. No wallet approval was requested.' : 'Room action cancelled.'); return null; }
+      const pendingMint = this.intent('mint', chain, transaction);
       run.pending = pendingMint;
+      this.beginWait(run);
       updateBusyOverlay(run.title, `Approve the ${prepare.chain.name} transaction in your wallet.`);
       this.host.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await run.wait(this.send(run, prepare.transaction, prepare.chain));
+      const tx = await run.wait(this.send(run, transaction, chain));
       if (!run.current()) return null;
       updateBusyOverlay(run.title, 'Checking your collected room...');
       const record = await run.wait(this.roomRepository.confirmMint(pendingMint.roomId, pendingMint.coordinates, { txHash: tx.hash }));
@@ -146,11 +160,21 @@ export class RoomWalletActions {
       if (!run.current()) return null;
       const prepare = await run.wait(this.roomRepository.prepareMetadataRefresh(this.host.roomId, this.host.roomCoordinates, { tokenUri: built.tokenUri }));
       if (!run.current()) return null;
-      run.pending = { ...this.intent('artwork', prepare.chain, prepare.transaction), tokenId: this.host.mintedTokenId,
+      const transaction = { ...prepare.transaction }, chain = { ...prepare.chain, nativeCurrency: { ...prepare.chain.nativeCurrency } };
+      if (chain.chainId !== this.host.mintedChainId || transaction.to.toLowerCase() !== this.host.mintedContractAddress.toLowerCase()) {
+        throw new Error('The room cost or network changed.');
+      }
+      run.chainName = chain.name;
+      const accepted = await run.wait(requestRoomWalletConsent({ title: run.title, kind: 'artwork', transaction, chain,
+        wallet: identity().wallet!, signal: run.controller.signal, isCurrent: run.current }));
+      if (!run.current()) return null;
+      if (!accepted) { options.onDeclined?.(); this.host.setStatusText(hasCryptoWallet() ? 'Artwork was not added. Your room is already collected.' : 'Room action cancelled.'); return null; }
+      run.pending = { ...this.intent('artwork', chain, transaction), tokenId: this.host.mintedTokenId,
         metadataRoomVersion: snapshot.version, metadataHash: built.metadataHash };
+      this.beginWait(run);
       updateBusyOverlay(run.title, `Approve the ${prepare.chain.name} artwork transaction in your wallet.`);
       this.host.setStatusText(`Waiting for artwork approval on ${prepare.chain.name}...`);
-      await run.wait(this.send(run, prepare.transaction, prepare.chain));
+      await run.wait(this.send(run, transaction, chain));
       if (!run.current()) return null;
       return this.confirmArtwork(run, run.pending);
     });
@@ -188,7 +212,8 @@ export class RoomWalletActions {
       onBeforeSend: () => { if (!run.current()) throw new Error('This room action is no longer current.'); remember(); },
       onSubmitted: tx => remember(tx.hash),
     }).then(tx => { if (!pending.txHash) remember(tx.hash); return tx; }, error => {
-      if (definitelyRejected(error) && !pending.txHash || error instanceof WalletTransactionRevertedError && pending.txHash === error.hash.toLowerCase()) {
+      if (!pending.txHash && (definitelyRejected(error) || error instanceof WalletRequestNotSubmittedError)
+        || error instanceof WalletTransactionRevertedError && pending.txHash === error.hash.toLowerCase()) {
         store.remove(pending.id, pending.txHash);
       }
       throw error;
@@ -340,7 +365,7 @@ export class RoomWalletActions {
       if (current()) this.host.setStatusText(pending
         ? `${run.durable ? pending.txHash ? 'The approval was submitted.' : 'The wallet approval is not confirmed yet.'
           : 'Keep this tab open: recovery could not be saved on this device.'} Choose ${kind === 'mint' ? 'Collect room' : 'Add/update artwork'} to check it again without another wallet approval.`
-        : error instanceof Error ? error.message : 'Room approval was not completed.');
+        : roomWalletErrorMessage(error, kind, run.chainName, account.wallet));
       return null;
     } finally {
       options.signal?.removeEventListener('abort', abort);

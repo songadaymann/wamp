@@ -7,17 +7,18 @@ function fixture() {
   const minted = { ...createDefaultRoomRecord('0,1', { x: 0, y: 1 }), mintedTokenId: '42' };
   const artwork = { ...minted, mintedMetadataRoomVersion: 5 };
   const events = new EventEmitter();
-  const state = { generation: 0, active: true, userId: 'buyer', wallet: '0xabc', submitted: false, canAdd: true };
+  const state = { generation: 0, active: true, userId: 'buyer', wallet: '0xabc', signer: null as string | null, submitted: false, mintPending: false, canAdd: true };
   const status = { text: 'Mint confirmed', accentText: 'Minted token #42', linkLabel: 'Transaction', linkHref: 'https://explorer.invalid/mint' };
   const host: RoomCollectionFlowHost = {
     captureContext: () => { const generation = state.generation; return () => generation === state.generation; },
-    isActive: () => state.active, events, getIdentity: () => ({ userId: state.userId, wallet: state.wallet }),
+    isActive: () => state.active, events, getIdentity: () => ({ userId: state.userId, wallet: state.wallet, signer: state.signer }),
     watchIdentity: callback => { events.on('identity', callback); return () => { events.off('identity', callback); }; },
     mint: vi.fn(async () => minted), artwork: vi.fn(async () => artwork),
     canAddArtwork: () => state.canAdd, isArtworkSubmitted: () => state.submitted,
     getStatus: () => status, setStatus: vi.fn(),
     onStateChanged: vi.fn(),
-    onArtworkPending: vi.fn(),
+    onArtworkPending: vi.fn(), onFailure: vi.fn(),
+    isCollectionSubmitted: () => state.mintPending, isArtworkPending: () => state.submitted,
   };
   return { state, host, events, minted, artwork, status, flow: new RoomCollectionFlow(host) };
 }
@@ -49,7 +50,7 @@ describe('two-stage room collection', () => {
     expect(await f.flow.collect()).toBe(f.minted); expect(f.host.setStatus).toHaveBeenCalledWith(expect.objectContaining({
       accentText: 'Collected token #42', text: expect.stringContaining('already collected'), linkHref: f.status.linkHref,
     })); expect(f.host.mint).toHaveBeenCalledOnce();
-    expect(f.host.onArtworkPending).toHaveBeenCalledWith(expect.objectContaining({ accentText: 'Collected token #42', text: expect.stringContaining('already collected') }));
+    expect(f.host.onArtworkPending).toHaveBeenCalledWith(expect.objectContaining({ accentText: 'Collected token #42', text: expect.stringContaining('already collected') }), expect.any(Function));
   });
   it('describes a submitted artwork approval as awaiting confirmation, not missing', async () => {
     const f = fixture(); f.state.submitted = true; vi.mocked(f.host.artwork).mockResolvedValue(null);
@@ -86,4 +87,33 @@ describe('two-stage room collection', () => {
     await f.flow.collect(); expect(f.host.artwork).not.toHaveBeenCalled(); expect(locks).toEqual([true, false]);
     expect(f.events.eventNames()).toEqual([]);
   });
+  it('requires a fresh attempt after an explicit retry and rejects stale room retries', async () => {
+    const f = fixture(); vi.mocked(f.host.mint).mockResolvedValue(null);
+    await f.flow.collect();
+    const retry = vi.mocked(f.host.onFailure!).mock.calls[0][1];
+    expect(f.host.mint).toHaveBeenCalledOnce(); await retry();
+    expect(f.host.mint).toHaveBeenCalledTimes(2);
+    f.state.generation++; await retry(); expect(f.host.mint).toHaveBeenCalledTimes(2);
+  });
+  it('does not offer another approval for an unknown or submitted outcome', async () => {
+    const f = fixture(); f.state.mintPending = true; vi.mocked(f.host.mint).mockResolvedValue(null);
+    await f.flow.collect(); expect(f.host.onFailure).not.toHaveBeenCalled();
+  });
+  it('does not show a retry error after a declined cost confirmation', async () => {
+    const f = fixture(); vi.mocked(f.host.mint).mockImplementation(async o => { o.onDeclined?.(); return null; });
+    await f.flow.collect(); expect(f.host.onFailure).not.toHaveBeenCalled(); expect(f.host.artwork).not.toHaveBeenCalled();
+  });
+  it('rejects a known mismatched signer before preparation, then revalidates on explicit retry', async () => {
+    const f = fixture(); f.state.signer = '0xdef'; await f.flow.collect();
+    expect(f.host.mint).not.toHaveBeenCalled();
+    expect(f.host.onFailure).toHaveBeenCalledOnce();
+    f.state.signer = '0xabc'; await vi.mocked(f.host.onFailure!).mock.calls[0][1]();
+    expect(f.host.mint).toHaveBeenCalledOnce(); expect(f.host.artwork).toHaveBeenCalledOnce();
+  });
+  it('preserves the collected token and retries only artwork after its known rejection', async () => {
+    const f = fixture(); vi.mocked(f.host.artwork).mockResolvedValueOnce(null);
+    await f.flow.collect(); await vi.mocked(f.host.onArtworkPending!).mock.calls[0][1]!();
+    expect(f.host.mint).toHaveBeenCalledOnce(); expect(f.host.artwork).toHaveBeenCalledTimes(2);
+  });
+
 });

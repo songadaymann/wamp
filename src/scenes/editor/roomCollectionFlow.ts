@@ -1,10 +1,13 @@
 import type { RoomRecord } from '../../persistence/roomModel';
+import { WalletRequestNotSubmittedError } from '../../auth/walletTransaction';
+import { roomWalletErrorMessage } from '../../mint/roomWalletError';
 
 export interface RoomCollectionStageOptions {
   isCurrent?: () => boolean;
   stageLabel?: string;
   signal?: AbortSignal;
   cancel?: () => void;
+  onDeclined?: () => void;
 }
 
 interface CollectionStatus {
@@ -33,7 +36,8 @@ export interface RoomCollectionFlowHost {
   isArtworkPending?(): boolean;
   isCollectionSubmitted?(): boolean;
   onStateChanged?(): void;
-  onArtworkPending?(status: CollectionStatus): void;
+  onArtworkPending?(status: CollectionStatus, retry?: () => void | Promise<unknown>): void;
+  onFailure?(status: CollectionStatus, retry: () => void | Promise<unknown>): void;
   getStatus(): CollectionStatus;
   setStatus(status: CollectionStatus): void;
 }
@@ -54,8 +58,23 @@ export class RoomCollectionFlow {
     const operation = {}, context = this.host.captureContext(), identity = this.host.getIdentity();
     const recovering = this.host.isCollectionSubmitted?.() ?? false;
     const wallet = identity.wallet?.trim().toLowerCase() ?? null;
+    const sameAccount = () => {
+      const next = this.host.getIdentity();
+      return next.userId === identity.userId && (next.wallet?.trim().toLowerCase() ?? null) === wallet;
+    };
+    const retryCurrent = () => context() && this.host.isActive() && sameAccount();
+    const retry = (onlyArtwork: boolean) => () => retryCurrent() ? this.run(onlyArtwork) : undefined;
+    const reportMismatch = () => {
+      const status = { text: roomWalletErrorMessage(new WalletRequestNotSubmittedError('wallet-mismatch', ''), artworkOnly ? 'artwork' : 'mint', undefined, wallet),
+        accentText: '', linkLabel: '', linkHref: null };
+      this.host.setStatus(status);
+      this.host.onFailure?.(status, retry(artworkOnly));
+    };
+    if (wallet && identity.signer && identity.signer.toLowerCase() !== wallet) { reportMismatch(); return null; }
     let signerSeen = Boolean(identity.signer);
     let cancelled = false;
+    let declined = false;
+    const onDeclined = () => { declined = true; };
     const controller = new AbortController();
     const invalidate = () => { cancelled = true; controller.abort(); };
     const events = ['sleep', 'shutdown', 'destroy'];
@@ -68,40 +87,60 @@ export class RoomCollectionFlow {
       return next.userId === identity.userId
         && (next.wallet?.trim().toLowerCase() ?? null) === wallet && signerCurrent;
     };
-    const unwatchIdentity = this.host.watchIdentity?.(() => { if (!sameIdentity()) invalidate(); });
+    const unwatchIdentity = this.host.watchIdentity?.(() => {
+      if (!sameIdentity()) {
+        invalidate();
+        const signer = this.host.getIdentity().signer?.toLowerCase();
+        if (retryCurrent() && signer && signer !== wallet && !this.host.isCollectionSubmitted?.() && !this.host.isArtworkPending?.()) reportMismatch();
+      }
+    });
     const current = () => !cancelled && context() && this.host.isActive() && sameIdentity();
     this.active = operation;
     try {
       this.host.onStateChanged?.();
       if (artworkOnly) {
-        try { return await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Add/update artwork' }); }
+        try {
+          const result = await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, onDeclined, stageLabel: 'Add/update artwork' });
+          if (!result && current() && !declined && !this.host.isArtworkPending?.()) {
+            this.host.onFailure?.(this.host.getStatus(), retry(true));
+          }
+          return result;
+        }
         catch {
           if (current()) this.host.setStatus({ text: 'Could not check room artwork. Choose Add/update artwork to try again.', accentText: '', linkLabel: '', linkHref: null });
           return null;
         }
       }
       let minted: RoomRecord | null;
-      try { minted = await this.host.mint({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Step 1 of 2: Collect room' }); }
+      try { minted = await this.host.mint({ isCurrent: current, signal: controller.signal, cancel: invalidate, onDeclined, stageLabel: 'Step 1 of 2: Collect room' }); }
       catch {
         if (current()) this.host.setStatus({ text: 'Could not finish checking this collection. Check the room before trying again.', accentText: '', linkLabel: '', linkHref: null });
         return null;
       }
-      if (!minted || recovering || !current() || !identity.userId || !wallet || !this.host.canAddArtwork()) return minted;
+      if (!minted) {
+        if (current() && !declined && !this.host.isCollectionSubmitted?.()) {
+          this.host.onFailure?.(this.host.getStatus(), retry(false));
+        }
+        return null;
+      }
+      if (recovering || !current() || !identity.userId || !wallet || !this.host.canAddArtwork()) return minted;
       const mintStatus = { ...this.host.getStatus() };
       try {
-        const artwork = await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, stageLabel: 'Step 2 of 2: Add artwork' });
+        const artwork = await this.host.artwork({ isCurrent: current, signal: controller.signal, cancel: invalidate, onDeclined, stageLabel: 'Step 2 of 2: Add artwork' });
         if (artwork) return artwork;
       } catch { /* Preserve the successful first stage; the existing artwork action retries only artwork. */ }
       if (current()) {
+        const failure = this.host.getStatus().text;
         const status = { ...mintStatus, accentText: `Collected token #${minted.mintedTokenId}`,
           text: this.host.isArtworkSubmitted()
             ? 'Your room is collected. The artwork approval was submitted. Choose Add/update artwork to check it without another wallet approval.'
             : this.host.isArtworkPending?.()
               ? 'Your room is collected. The artwork approval is not confirmed yet. Choose Add/update artwork to check it without another wallet approval.'
-            : "Artwork wasn't added. Choose Add/update artwork to finish; your room is already collected.",
+            : `Artwork wasn't added; your room is already collected. ${failure !== mintStatus.text ? failure : 'Choose Add/update artwork to finish.'}`,
         };
         this.host.setStatus(status);
-        this.host.onArtworkPending?.(status);
+        if (!declined && !this.host.isArtworkPending?.()) this.host.onArtworkPending?.(status, retry(true));
+        else this.host.onArtworkPending?.(status);
       }
       return minted;
     } finally {

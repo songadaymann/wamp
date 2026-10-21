@@ -92,9 +92,11 @@ export async function auditRoomWalletRecovery(h) {
   }
 
   await h.action();
+  await h.consent('mint');
   if (kind === 'network-change') {
-    await unlocked(); assert.equal(approvals(), 0); assert.deepEqual(await pending(), []);
-    assert.match(await page.locator('#editor-top-save-status').innerText(), /Wallet network changed/);
+    await page.locator('#busy-overlay[data-busy-state="error"]').waitFor();
+    assert.match(await page.locator('#busy-overlay-status').innerText(), /Switch your wallet to Base/);
+    await h.click('#btn-busy-close'); await unlocked(); assert.equal(approvals(), 0); assert.deepEqual(await pending(), []);
     assert(audit.requests.some(r => r.method === 'eth_chainId')); return;
   }
   if (kind === 'bootstrap-close') {
@@ -105,7 +107,7 @@ export async function auditRoomWalletRecovery(h) {
   await page.waitForFunction(() => typeof globalThis.__artworkWallet?.pending === 'function');
   const artwork = kind.startsWith('artwork-') || kind === 'superseded-artwork';
   if (artwork) {
-    await h.approve(true); await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 2);
+    await h.approve(true); await h.consent('artwork'); await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 2);
   }
   await holdReceipts(true); await controls();
   const expectedApprovals = artwork ? 2 : 1;
@@ -145,6 +147,7 @@ export async function auditRoomWalletRecovery(h) {
     if (kind === 'reverted-reload') {
       assert.equal((await state()).mintedTokenId, null);
       await dismissResult(); await h.action();
+      await h.consent('mint');
       await page.waitForFunction(() => typeof globalThis.__artworkWallet?.pending === 'function');
       assert.equal(approvals(), 2); await close(); await h.approve(false); return;
     }
@@ -224,5 +227,6 @@ export async function auditRoomWalletRecovery(h) {
   } else throw new Error(`Missing recovery audit: ${kind}`);
 
   assert.equal(approvals(), expectedApprovals, 'recovery must not request another wallet approval');
-  assert(audit.publicRequests.every(method => ['eth_chainId', 'eth_getTransactionReceipt'].includes(method)));
+  assert(audit.publicRequests.every(method => ['eth_chainId', 'eth_getTransactionReceipt', 'eth_getBalance'].includes(method)));
+  assert.equal(audit.publicRequests.filter(method => method === 'eth_getBalance').length, artwork ? 2 : 1, 'Recovery never opens another cost sheet or balance lookup');
 }

@@ -1,3 +1,5 @@
+import { beginPendingDialog } from './pendingDialog';
+
 const APP_READY_EVENT = 'wamp:app-ready';
 
 type FeedbackElements = {
@@ -21,6 +23,13 @@ let appReady = false;
 let bootRetryHandler: (() => void | Promise<void>) | null = null;
 let busyRetryHandler: (() => void | Promise<void>) | null = null;
 let busyCloseHandler: (() => void | Promise<void>) | null = null;
+let busyDismissHandler: (() => void) | null = null;
+
+function dismissBusyChoice(): void {
+  const dismiss = busyDismissHandler;
+  busyDismissHandler = null;
+  dismiss?.();
+}
 
 function getElements(doc: Document = document): FeedbackElements {
   if (elements) {
@@ -134,7 +143,9 @@ export function hideBootSplash(): void {
 export function showBusyOverlay(title: string, status = 'Please wait...', controls?: {
   close: () => void;
   check: () => void | Promise<void>;
+  showCheck?: boolean;
 }): void {
+  dismissBusyChoice();
   const refs = getElements();
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
@@ -146,11 +157,11 @@ export function showBusyOverlay(title: string, status = 'Please wait...', contro
     refs.busyStatus.textContent = status;
   }
   refs.busySpinner?.classList.remove('hidden');
-  refs.busyRetry?.classList.toggle('hidden', !controls);
+  refs.busyRetry?.classList.toggle('hidden', !controls || controls.showCheck === false);
   refs.busyClose?.classList.toggle('hidden', !controls);
   if (refs.busyRetry) refs.busyRetry.textContent = controls ? 'Check again' : 'Retry';
   if (refs.busyClose) refs.busyClose.textContent = 'Close';
-  busyRetryHandler = controls?.check ?? null;
+  busyRetryHandler = controls?.showCheck === false ? null : controls?.check ?? null;
   busyCloseHandler = controls?.close ?? null;
 }
 
@@ -175,6 +186,7 @@ export function showBusyError(
     closeHandler?: (() => void | Promise<void>) | null;
   } = {}
 ): void {
+  dismissBusyChoice();
   const refs = getElements();
   const title = options.title?.trim() || 'Something went wrong';
   const variant = options.variant ?? 'default';
@@ -201,6 +213,7 @@ export function showBusyError(
 }
 
 export function hideBusyOverlay(): void {
+  dismissBusyChoice();
   const refs = getElements();
   refs.busyRoot?.classList.add('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
@@ -213,6 +226,62 @@ export function hideBusyOverlay(): void {
   if (refs.busyRetry) {
     refs.busyRetry.textContent = 'Retry';
   }
+}
+
+/** Explicit consent: cancellation/replacement releases the dialog without invoking a wallet. */
+export function requestBusyConfirmation(title: string, message: string, options: {
+  confirmLabel: string;
+  cancelLabel?: string;
+  signal: AbortSignal;
+}): Promise<boolean> {
+  if (options.signal.aborted) return Promise.resolve(false);
+  const refs = getElements();
+  if (!refs.busyRoot || !refs.busyRetry || !refs.busyClose) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const priorFocus = document.activeElement;
+    const release = beginPendingDialog();
+    let settled = false;
+    const finish = (accepted: boolean) => {
+      if (settled) return;
+      settled = true;
+      options.signal.removeEventListener('abort', abort);
+      refs.busyRoot?.removeEventListener('keydown', onKey);
+      refs.busyRoot?.removeAttribute('role');
+      refs.busyRoot?.removeAttribute('aria-modal');
+      refs.busyRoot?.removeAttribute('aria-labelledby');
+      refs.busyRoot?.removeAttribute('aria-describedby');
+      release();
+      if (busyDismissHandler === dismiss) {
+        busyDismissHandler = null;
+        hideBusyOverlay();
+      }
+      if (priorFocus instanceof HTMLElement && priorFocus.isConnected) priorFocus.focus();
+      resolve(accepted && !options.signal.aborted);
+    };
+    const abort = () => finish(false);
+    const dismiss = () => finish(false);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        (document.activeElement === refs.busyRetry ? refs.busyClose : refs.busyRetry)?.focus();
+      }
+    };
+    showBusyOverlay(title, message, { close: () => finish(false), check: () => finish(true) });
+    busyDismissHandler = dismiss;
+    refs.busyRoot?.setAttribute('data-busy-state', 'confirmation');
+    refs.busyRoot?.setAttribute('role', 'dialog');
+    refs.busyRoot?.setAttribute('aria-modal', 'true');
+    refs.busyRoot?.setAttribute('aria-labelledby', 'busy-overlay-title');
+    refs.busyRoot?.setAttribute('aria-describedby', 'busy-overlay-status');
+    refs.busySpinner?.classList.add('hidden');
+    refs.busyRetry!.textContent = options.confirmLabel;
+    refs.busyClose!.textContent = options.cancelLabel ?? 'Cancel';
+    refs.busyRoot?.addEventListener('keydown', onKey);
+    options.signal.addEventListener('abort', abort, { once: true });
+    if (options.signal.aborted) finish(false);
+    else refs.busyClose?.focus();
+  });
 }
 
 export function isBusyOverlayVisible(): boolean {

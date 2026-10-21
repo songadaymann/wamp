@@ -212,6 +212,25 @@ jobs:
           path: output/web-game/mobile-smoke-ci/room-wallet-recovery
           retention-days: 7
 
+  collection-costs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --costs-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-costs
+          path: output/web-game/mobile-smoke-ci/room-wallet-costs
+          retention-days: 7
+
   mint-network:
     runs-on: ubuntu-latest
     timeout-minutes: 15

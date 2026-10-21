@@ -9,11 +9,13 @@ import { encodeFunctionData, decodeFunctionData } from 'viem';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 import { ROOM_WALLET_RECOVERY_CASES, auditRoomWalletRecovery } from './lib/roomWalletRecoveryAudits.mjs';
+import { ROOM_WALLET_COST_CASES, auditRoomWalletCosts } from './lib/roomWalletCostAudits.mjs';
 const recoveryMode = process.argv.includes('--recovery');
+const costMode = process.argv.includes('--costs');
 const base = process.argv[2] || 'http://127.0.0.1:4198';
 const output = process.argv[3] || 'output/web-game/room-artwork';
 mkdirSync(output, { recursive: true });
-const loader = await createServer({ configFile: false, server: { middlewareMode: true }, optimizeDeps: { noDiscovery: true, include: [], entries: [] }, appType: 'custom', logLevel: 'error' });
+const loader = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [], entries: [] }, appType: 'custom', logLevel: 'error' });
 let abi, parseMetadata, recordTemplate;
 try {
   ({ ROOM_OWNERSHIP_TOKEN_ABI: abi } = await loader.ssrLoadModule('/src/mint/roomOwnership.ts'));
@@ -33,7 +35,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
   if (process.env.ARTWORK_PROFILES && !process.env.ARTWORK_PROFILES.split(',').includes(device)) continue;
   const browser = await engine.launch({ args: engine === chromium ? ['--mute-audio'] : [] });
   try {
-    for (const kind of recoveryMode ? ROOM_WALLET_RECOVERY_CASES : ['success', 'artwork-rejection', 'artwork-reverted', 'render-failure', 'confirm-failure', 'account-cancellation', 'account-roundtrip']) {
+    for (const kind of costMode ? ROOM_WALLET_COST_CASES : recoveryMode ? ROOM_WALLET_RECOVERY_CASES : ['success', 'artwork-rejection', 'artwork-reverted', 'render-failure', 'confirm-failure', 'account-cancellation', 'account-roundtrip']) {
       if (process.env.ARTWORK_CASES && !process.env.ARTWORK_CASES.split(',').includes(kind)) continue;
       const name = `${device}-${kind}`, calls = [], errors = [], consoleErrors = [], unexpected = [], walletModules = [], backgroundRequests = [];
       const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
@@ -41,6 +43,10 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       const audit = { requests: [], publicRequests: [], refreshes: 0, holdRefresh: false, publicReceiptStatus: null, expectedStatuses: [] };
       let chainMinted = kind.startsWith('no-wallet'), chainMetadataHash = null, chainMetadataVersion = null, owner = kind === 'no-wallet-readonly' ? '0x' + '3'.repeat(40) : wallet, draft = null;
       const refreshWaiters = [], draftWaiters = [];
+      const balanceWaiters = [];
+      let balanceWei = kind === 'insufficient-balance' ? 5000000000000000n : 100000000000000000n;
+      const releaseBalance = () => { for (const release of balanceWaiters.splice(0)) release(); };
+      let lastPrice = '10000000000000000';
       const releaseDraft = () => { for (const release of draftWaiters.splice(0)) release(); };
       let refreshStarted; const refreshReady = new Promise(resolve => { refreshStarted = resolve; });
       const releaseRefresh = () => { audit.holdRefresh = false; for (const release of refreshWaiters.splice(0)) release(); };
@@ -93,7 +99,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         localStorage.setItem('crypto-override', kind.startsWith('no-wallet') ? '0' : '1'); // This suite explicitly exercises the wallet-enabled flow.
         localStorage.setItem('wamp_welcome_modal_seen_v1', '1'); localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.settings.musicVolume', '0'); localStorage.setItem('wamp.settings.sfxVolume', '0');
-        const state = { requests: [], approvals: [], pending: null, receiptHeld: false };
+        const state = { requests: [], approvals: [], pending: null, receiptHeld: false, bootstraps: 0 };
         if (kind.startsWith('no-wallet')) localStorage.setItem('wamp:pending-room-wallet:v1', JSON.stringify([{ id: 'hidden-recovery', kind: 'mint',
           roomId: '0,0', coordinates: { x: 0, y: 0 }, userId: 'mobile-smoke-fixture', wallet, chainId: 8453,
           contractAddress: contract, txHash: '0x' + '1'.repeat(64), tokenId: null, metadataHash: null, metadataRoomVersion: null, createdAt: Date.now() }]));
@@ -106,7 +112,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           state.requests.push(q.method);
           const auditHash = recoveryMode ? await globalThis.__roomWalletAudit(q) : null;
           if (q.method === 'wallet_switchEthereumChain') return null;
-          if (q.method === 'eth_accounts') return [wallet];
+          if (q.method === 'eth_accounts') return [kind === 'wallet-mismatch' ? '0x' + '3'.repeat(40) : wallet];
           if (q.method === 'eth_chainId') return kind === 'network-change' ? '0x14a34' : '0x2105';
           if (q.method === 'eth_blockNumber') return '0x10';
           if (q.method === 'eth_sendTransaction') {
@@ -115,6 +121,9 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
             return new Promise((resolve, reject) => { state.pending = approve => {
               state.pending = null;
               if (!approve) return reject(Object.assign(new Error('User rejected artwork'), { code: 4001 }));
+              if (state.approvals.length === 1 && kind === 'insufficient-funds') return reject(Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 }));
+              if (state.approvals.length === 1 && kind === 'price-changed') return reject(Object.assign(new Error('execution reverted: Incorrect mint price.'), { code: 3 }));
+              if (state.approvals.length === 1 && kind === 'expired-approval') return reject(Object.assign(new Error('execution reverted: Mint authorization expired.'), { code: 3 }));
               resolve(hash);
             }; });
           }
@@ -124,6 +133,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           throw new Error('Unexpected isolated wallet method ' + q.method);
         } };
         globalThis.__artworkWalletFactory = () => {
+          state.bootstraps++;
           if (recoveryMode) void globalThis.__roomWalletAudit({ method: 'wallet_bootstrap' });
           return { ready: () => kind === 'bootstrap-close' ? new Promise(resolve => { state.bootstrapRelease = resolve; }) : Promise.resolve(), getAddress: () => wallet,
             getAccount: () => ({ address: wallet, isConnected: true }), subscribeAccount: () => () => {}, getWalletProvider: () => provider };
@@ -155,6 +165,20 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       await context.route(u => u.pathname === '/api/rooms/0%2C0/summary', r => reply(r, summary()));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(), draft: draft || snapshot, published: snapshot }));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/published', r => reply(r, snapshot));
+      await context.route('https://mainnet.base.org/', async r => {
+        if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
+        const q = r.request().postDataJSON(); audit.publicRequests.push(q.method);
+        if (q.method === 'eth_getBalance') {
+          assert.deepEqual(q.params, [wallet, 'latest']);
+          if (kind === 'balance-cancel') await new Promise(resolve => balanceWaiters.push(resolve));
+          const result = kind === 'balance-unavailable' ? { error: { code: -32000, message: 'Isolated balance unavailable' } }
+            : { result: '0x' + balanceWei.toString(16) };
+          try { return await reply(r, { jsonrpc: '2.0', id: q.id, ...result }); } catch { return; }
+        }
+        assert(recoveryMode && ['eth_chainId', 'eth_getTransactionReceipt'].includes(q.method));
+        return reply(r, { jsonrpc: '2.0', id: q.id, result: q.method === 'eth_chainId' ? '0x2105'
+          : audit.publicReceiptStatus ? { transactionHash: q.params[0], from: wallet, to: contract, blockNumber: '0x10', status: audit.publicReceiptStatus } : null });
+      });
       if (recoveryMode) {
         await context.route(u => u.pathname === '/api/rooms/0%2C0/versions', r => reply(r, { versions: [{ version: snapshot.version, title: snapshot.title,
           createdAt: snapshot.publishedAt || snapshot.updatedAt, publishedByUserId: sourceSummary.claimerUserId, publishedByPrincipalKind: 'user',
@@ -171,13 +195,6 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           minted = chainMinted; metadataHash = chainMetadataHash; metadataVersion = chainMetadataVersion;
           try { return await reply(r, summary()); } catch { /* The test may have cancelled this captured request. */ }
         });
-        await context.route('https://mainnet.base.org/', r => {
-          if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
-          const q = r.request().postDataJSON(); audit.publicRequests.push(q.method);
-          assert(['eth_chainId', 'eth_getTransactionReceipt'].includes(q.method));
-          return reply(r, { jsonrpc: '2.0', id: q.id, result: q.method === 'eth_chainId' ? '0x2105'
-            : audit.publicReceiptStatus ? { transactionHash: q.params[0], from: wallet, to: contract, blockNumber: '0x10', status: audit.publicReceiptStatus } : null });
-        });
         await context.route(u => u.pathname === '/api/rooms/0%2C0/draft', async r => {
           if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
           assert.equal(r.request().method(), 'PUT'); draft = r.request().postDataJSON();
@@ -190,7 +207,10 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       await context.route(u => u.pathname.startsWith('/api/rooms/0%2C0/mint/'), async r => {
         if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
         assert.equal(r.request().method(), 'POST'); const path = new URL(r.request().url()).pathname, body = r.request().postDataJSON(); calls.push(path.split('/mint/')[1]);
-        if (path.endsWith('/mint/prepare')) return reply(r, { roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, linkedWalletAddress: wallet, contractAddress: contract, priceWei: '10000000000000000', chain, transaction: { to: contract, data: mintData, value: '10000000000000000', chainId: 8453 } });
+        if (path.endsWith('/mint/prepare')) {
+          lastPrice = kind === 'price-changed' && calls.filter(c => c === 'prepare').length > 1 ? '20000000000000000' : '10000000000000000';
+          return reply(r, { roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, linkedWalletAddress: wallet, contractAddress: contract, priceWei: lastPrice, chain, transaction: { to: contract, data: mintData, value: lastPrice, chainId: 8453 } });
+        }
         if (path.endsWith('/mint/confirm')) {
           if (recoveryMode && (kind === 'mint-confirm-reload' || !chainMinted)) { audit.expectedStatuses.push(503); return reply(r, { error: 'Isolated mint confirmation unavailable' }, 503); }
           minted = true; return reply(r, record());
@@ -235,6 +255,17 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         assert(box && box.width >= 44 && box.height >= 44, JSON.stringify(box));
         await click('[data-editor-share-action="collect"]');
       };
+      const consent = async (stage = 'mint', expected = '0.01') => {
+        await page.locator('#busy-overlay[data-busy-state="confirmation"]').waitFor();
+        const text = await page.locator('#busy-overlay-status').textContent();
+        assert(text.includes(stage === 'mint' ? `Collect for ${expected} ETH on Base.` : 'Add artwork on Base. No extra collection charge.'));
+        assert(text.includes('fee'));
+        if (stage === 'mint') assert(text.includes('separate transaction with its own fee'));
+        assert.equal(await page.locator('#btn-busy-retry').textContent(), 'Continue to wallet');
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('wamp:pending-room-wallet:v1') || '[]').length), 0, 'Consent cannot reserve a submitted/unknown intent');
+        await page.screenshot({ path: `${output}/${name}-${stage}-consent.png` });
+        await click('#btn-busy-retry');
+      };
       const enterEditor = async () => {
         await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120_000 });
         const current = await page.evaluate(() => JSON.parse(window.render_game_to_text()).activeScene);
@@ -254,8 +285,15 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       try {
         await page.goto(`${base}/?welcome=0&renderer=${engine === webkit && process.platform === 'linux' ? 'canvas' : 'webgl'}`);
         await enterEditor();
+        if (costMode) {
+          await auditRoomWalletCosts({ page, context, kind, name, output, audit, calls, width, height, click, consent, action: artworkAction, approve,
+            setBalance: value => { balanceWei = value; }, releaseBalance, setUser: value => { activeUser = value; }, lastPrice: () => lastPrice });
+          assert.deepEqual(errors, []); assert.deepEqual(unexpected, []); assert.deepEqual(consoleErrors, []); assert.deepEqual(api.report().misses, {});
+          reports.push({ name, accepted: true, costs: true, audit, calls, errors, unexpected, realTransactions: 0 });
+          console.log(`${name}: collection cost passed`); continue;
+        }
         if (recoveryMode) {
-          await auditRoomWalletRecovery({ page, context, kind, name, output, audit, width, height, click, enterEditor, approve, action: artworkAction, markChain,
+          await auditRoomWalletRecovery({ page, context, kind, name, output, audit, width, height, click, consent, enterEditor, approve, action: artworkAction, markChain,
             walletModules, version: snapshot.version, claimerDisplayName: sourceSummary.claimerDisplayName, transferOwner: () => { owner = '0x' + '3'.repeat(40); }, releaseDraft, waitForRefresh: () => refreshReady, releaseRefresh, setUser: value => { activeUser = value; }, metadataHash: () => metadataHash,
             supersedeArtwork: () => { chainMetadataHash = 'b'.repeat(64); chainMetadataVersion = snapshot.version; } });
           assert.deepEqual(errors, []); assert.deepEqual(unexpected, []); assert.deepEqual(api.report().misses, {});
@@ -268,7 +306,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
             fixtureMisses: api.report().misses, realTransactions: 0 });
           console.log(`${name}: wallet recovery passed`); continue;
         }
-        await artworkAction(); await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 1);
+        await artworkAction(); await consent('mint'); await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 1);
         assert.equal(await page.locator('#busy-overlay-title').textContent(), 'Step 1 of 2: Collect room');
         await page.screenshot({ path: `${output}/${name}-collect.png` }); await approve(true);
         if (kind === 'render-failure') {
@@ -281,12 +319,13 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           releasePrepare();
           await page.locator('#busy-overlay').waitFor({ state: 'hidden' });
         } else {
+          await consent('artwork');
           await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 2);
           assert.equal(await page.locator('#busy-overlay-title').textContent(), 'Step 2 of 2: Add artwork');
           await page.screenshot({ path: `${output}/${name}-artwork.png` }); await approve(kind !== 'artwork-rejection');
           if (kind === 'artwork-rejection' || kind === 'artwork-reverted' || kind === 'confirm-failure') {
             await acknowledgePending();
-            await artworkAction(); if (kind === 'artwork-rejection' || kind === 'artwork-reverted') await approve(true);
+            await artworkAction(); if (kind === 'artwork-rejection' || kind === 'artwork-reverted') { await consent('artwork'); await approve(true); }
           }
           await page.waitForFunction(() => /Room artwork is saved\./i.test(document.body.textContent || ''));
           await page.locator('#busy-overlay').waitFor({ state: 'hidden' });

@@ -315,6 +315,16 @@
     line-height: 1.5;
   }
 
+  .app-busy-overlay[data-busy-state='confirmation'] .app-busy-card {
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+  }
+
+  .app-busy-overlay[data-busy-state='confirmation'] .app-feedback-status {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
   .app-busy-spinner {
     position: relative;
     width: 164px;
