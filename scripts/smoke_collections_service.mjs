@@ -4,6 +4,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { startWalletAuthFixture } from './lib/walletAuthServiceFixture.mjs';
 const output = process.argv[2] || 'output/web-game/collections-service';
 mkdirSync(output, { recursive: true });
+const build = spawnSync('npm', ['run', 'build'], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+writeFileSync(`${output}/build.log`, (build.stdout || '') + (build.stderr || '')); assert.equal(build.status, 0, 'Fresh-checkout assets build');
 const bundle = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js','deploy','--dry-run','--outdir',`${output}/api`], { encoding:'utf8', maxBuffer:20*1024*1024 });
 writeFileSync(`${output}/bundle.log`, (bundle.stdout || '')+(bundle.stderr || '')); assert.equal(bundle.status,0);
 const service = await startWalletAuthFixture(`${output}/api/worker.js`, {

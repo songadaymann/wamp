@@ -36,6 +36,10 @@ for (const [device, engine, width, height, touch] of [
         assert(body); const { protectedDiscoveryAvailable, ...olderBody } = body;
         return reply(r, capable ? { ...body, protectedDiscoveryAvailable } : olderBody);
       });
+      await context.route(u => u.pathname === '/api/collections/attribution', r => {
+        const ids = new URL(r.request().url()).searchParams.getAll('target');
+        return reply(r, { results: data.attribution.results.filter(row => ids.includes(row.targetId)) });
+      });
       await context.route(u => u.pathname === '/api/profiles/builder/rooms', r => reply(r, data.profile));
       await context.route(u => u.pathname === '/api/profiles/builder/summary', r => reply(r, { ...profile, userId: 'builder', displayName: 'Original builder', username: null, avatarUrl: null, avatarChoices: [], isSelf: false, canEdit: false }));
       await context.route(u => u.pathname === '/api/profiles/builder', r => reply(r, { ...profile, userId: 'builder', displayName: 'Original builder', username: null, avatarUrl: null, avatarChoices: [], isSelf: false, canEdit: false, publishedRooms: data.profile.results, playlists: [] }));
