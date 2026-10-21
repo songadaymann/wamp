@@ -9,6 +9,8 @@ import type { ProgressionSummary, QualityRatingSummary } from '../progression/mo
 import type { RoomDifficulty } from '../runs/model';
 
 export interface ProfilePublishedRoomEntry {
+  /** Number of currently protected cells in this playable target; omitted when zero. */
+  protectedCellCount?: number;
   insights?: RoomInsightSummary;
   roomId: string;
   roomCoordinates: RoomCoordinates;

@@ -15,7 +15,7 @@ const costMode = process.argv.includes('--costs');
 const base = process.argv[2] || 'http://127.0.0.1:4198';
 const output = process.argv[3] || 'output/web-game/room-artwork';
 mkdirSync(output, { recursive: true });
-const loader = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [], entries: [] }, appType: 'custom', logLevel: 'error' });
+const loader = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, include: [], entries: [] }, appType: 'custom', logLevel: 'error' });
 let abi, parseMetadata, recordTemplate;
 try {
   ({ ROOM_OWNERSHIP_TOKEN_ABI: abi } = await loader.ssrLoadModule('/src/mint/roomOwnership.ts'));
@@ -151,6 +151,12 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       const record = () => ({ ...recordTemplate, ...summary(), draft: draft || snapshot, published: snapshot });
       const reply = (r, json, status = 200) => r.fulfill({ status, json, headers: { 'access-control-allow-origin': r.request().headers().origin || local.origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' } });
       await context.route(u => u.pathname.startsWith('/api/'), r => {
+        if (new URL(r.request().url()).origin === 'https://mann.cool' && new URL(r.request().url()).pathname === '/api/v1/plays'
+          && ['POST', 'OPTIONS'].includes(r.request().method())) {
+          backgroundRequests.push({ origin: 'https://mann.cool', path: '/api/v1/plays', method: r.request().method() });
+          return r.fulfill({ status: 200, json: { success: true },
+            headers: { 'access-control-allow-origin': local.origin, 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST,OPTIONS' } });
+        }
         if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
         const path = new URL(r.request().url()).pathname;
         if ((path === '/api/settings/me' && r.request().method() === 'PUT') || (path === '/api/guest-activity/heartbeat' && r.request().method() === 'POST')) {

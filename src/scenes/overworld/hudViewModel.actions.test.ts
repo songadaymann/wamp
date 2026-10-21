@@ -104,4 +104,12 @@ describe('room card available actions', () => {
     expect(card({ selectedSummary: { title: 'World', creatorUserId: 'builder', creatorDisplayName: 'Builder', world: { id: 'world', number: 1 } } }))
       .toMatchObject({ editButtonHidden: true, selectedActionReasonText: 'Only this World’s builders can edit here.' });
   });
+  it('shows cached public protection even before ownership details arrive, without assigning the viewer ownership', () => {
+    const result = card({ selectedSummary: { title: 'Protected', creatorUserId: 'builder', creatorDisplayName: 'Builder', isMinted: true }, selectedOwnership: null, cryptoVisible: false });
+    expect(result.selectedStateInfoVisible).toBe(true);
+    expect(result.selectedStateInfoText).toBe('Only the owner can edit or revert this protected room.');
+    expect(result.selectedStateTone).toBe('minted');
+    expect(result.editButtonHidden).toBe(true);
+  });
+
 });

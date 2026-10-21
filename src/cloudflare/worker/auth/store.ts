@@ -1,3 +1,4 @@
+import { storedRoomProtectionSql } from '../rooms/protection';
 import { Resend } from 'resend';
 import { API_TOKEN_SCOPES, type ApiTokenRecord, type ApiTokenScope, type AuthUser } from '../../../auth/model';
 import {
@@ -601,7 +602,8 @@ export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
         x,
         y,
         published_title,
-        published_json
+        published_json,
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted
       FROM rooms
       WHERE published_json IS NOT NULL
         AND claimer_user_id = ?
@@ -614,6 +616,7 @@ export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
       y: number;
       published_title: string | null;
       published_json: string;
+      is_minted?: number;
     }>();
 
   return result.results;

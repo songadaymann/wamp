@@ -6,6 +6,8 @@
     }
 
     #explore-modal .explore-room-list {
+      flex: 0 0 auto;
+      overflow-y: visible;
       grid-template-columns: 1fr;
     }
 

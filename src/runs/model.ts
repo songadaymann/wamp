@@ -170,6 +170,8 @@ export interface RoomDifficultyVoteRequestBody {
 }
 
 export interface RoomDiscoveryEntry {
+  /** Number of currently protected cells in this playable target; omitted when zero. */
+  protectedCellCount?: number;
   insights?: RoomInsightSummary;
   cooperative?: boolean;
   roomId: string;

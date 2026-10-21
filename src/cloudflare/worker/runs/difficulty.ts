@@ -1,3 +1,4 @@
+import { storedRoomProtectionSql } from '../rooms/protection';
 import {
   loadDiscoveryViewerRoomStates, loadDiscoveryViewerExpandedRoomStates, createEmptyDiscoveryViewerRoomState,
   buildDiscoveryRoomVersionKey, buildDiscoveryExpandedRoomVersionKey,
@@ -69,6 +70,7 @@ export {
 } from './difficultyModel';
 
 interface PublishedRoomDiscoveryRow {
+  is_minted?: number;
   id: string;
   x: number;
   y: number;
@@ -135,6 +137,7 @@ interface RoomDiscoveryRatingAggregateRow {
 }
 
 interface RoomDiscoveryAreaCandidate {
+  protectedCellCount?: number;
   representative: PublishedRoomDiscoveryEntry;
   rooms: PublishedRoomDiscoveryEntry[];
   expandedRoom: ResolvedExpandedRoomTarget | null;
@@ -368,6 +371,7 @@ async function loadRoomDiscoveryResponseWithoutInsights(
       const metrics = metricRow?.version_key === targetVersion ? metricRow : undefined;
 
       return {
+        ...(area.protectedCellCount ? { protectedCellCount: area.protectedCellCount } : {}),
         roomId: room.roomId,
         roomCoordinates: { ...room.roomCoordinates },
         roomTitle: expandedRoom?.title?.trim() || room.roomTitle,
@@ -467,7 +471,8 @@ async function loadLegacyDiscoveryPublicData(
         latest.version AS current_published_version,
         latest.created_at AS published_at,
         first_published.first_published_at AS first_published_at,
-        rooms.canonical_version
+        rooms.canonical_version,
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted
       FROM rooms
       INNER JOIN (
         SELECT room_id, MAX(version) AS version
@@ -614,6 +619,7 @@ async function buildIndexedDiscoveryResponse(
       ? null
       : roundQuality(parseRowFloat(row.quality_adjusted_average));
     return {
+      ...(Number(row.protected_cell_count) > 0 ? { protectedCellCount: Number(row.protected_cell_count) } : {}),
       roomId: row.representative_room_id,
       roomCoordinates: { x: parseRowNumber(row.room_x), y: parseRowNumber(row.room_y) },
       roomTitle: row.title,
@@ -741,9 +747,13 @@ async function resolveRoomDiscoveryAreaCandidates(
     });
   }
 
+  const protectedIds = new Set(rooms.filter((room) => room.isMinted).map((room) => room.roomId));
   return Array.from(groupedAreas.values()).map((area) => {
     const representative = selectDiscoveryAreaRepresentative(area.rooms, area.expandedRoom);
     return {
+      protectedCellCount: area.expandedRoom
+        ? new Set(area.expandedRoom.cells.filter((cell) => protectedIds.has(cell.roomId)).map((cell) => cell.roomId)).size
+        : Number(representative.isMinted),
       representative,
       rooms: area.rooms,
       expandedRoom: area.expandedRoom,
@@ -757,6 +767,7 @@ function createStandaloneDiscoveryAreaCandidate(
   room: PublishedRoomDiscoveryEntry,
 ): RoomDiscoveryAreaCandidate {
   return {
+    protectedCellCount: Number(room.isMinted),
     representative: room,
     rooms: [room],
     expandedRoom: null,
@@ -1154,7 +1165,8 @@ async function loadBuilderDiscoveryResponseByPlayableArea(
         latest.version AS current_published_version,
         latest.created_at AS published_at,
         first_published.first_published_at AS first_published_at,
-        rooms.canonical_version
+        rooms.canonical_version,
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted
       FROM rooms
       INNER JOIN (
         SELECT room_id, MAX(version) AS version
@@ -1673,6 +1685,7 @@ function mapPublishedRoomDiscoveryRow(
   goalType: RoomGoalType | null;
   publishedAt: string;
   firstPublishedAt: string;
+  isMinted: boolean;
 } {
   const goalType = parseRoomGoalType(row.published_goal_type);
   if (!goalType && row.published_goal_type !== null) {
@@ -1680,6 +1693,7 @@ function mapPublishedRoomDiscoveryRow(
   }
 
   return {
+    isMinted: row.is_minted === 1,
     roomId: row.id,
     roomCoordinates: {
       x: row.x,
