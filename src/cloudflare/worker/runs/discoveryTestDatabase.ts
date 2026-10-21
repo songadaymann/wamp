@@ -19,8 +19,6 @@ export function discoveryFixture() {
       VALUES (?,'room',?,?,?,?,?,?,?,?,?,?,?,?,?,0,'standalone_room',?,'easy',3)`)
       .run(`room:${snapshot.id}`, snapshot.id, snapshot.version, snapshot.id, n, 0, owner, owner, snapshot.title,
         n === 13 ? null : 'reach_exit', NOW, NOW, 1, n, NOW);
-    f.sqlite.prepare('INSERT INTO playable_content_index_members(target_key,room_id,room_version) VALUES (?,?,?)')
-      .run(`room:${snapshot.id}`, snapshot.id, snapshot.version);
     if (n % 2 === 0) {
       f.sqlite.prepare('INSERT INTO featured_rooms(room_id,room_version,featured_at) VALUES (?,?,?)').run(snapshot.id, snapshot.version, NOW);
       f.sqlite.prepare('UPDATE playable_content_index SET featured_at=? WHERE target_key=?').run(NOW, `room:${snapshot.id}`);

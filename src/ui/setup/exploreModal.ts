@@ -196,7 +196,6 @@ export class ExploreModalController {
     for (const button of this.elements.sortButtons) {
       button.addEventListener('click', () => {
         const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
-      button.classList.toggle('hidden', sort === 'protected' && this.roomDiscovery?.protectedDiscoveryAvailable !== true);
         if (!sort) {
           return;
         }

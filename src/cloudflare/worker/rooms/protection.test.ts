@@ -60,7 +60,19 @@ describe('public room protection metadata', () => {
     const profile = (await loadUserProfileRoomsPage(f.env, 'builder', 100, null)).results;
     expect(profile.find(r => r.expandedRoom?.expandedRoomId === 'native')).toMatchObject({ protectedCellCount: 1 });
     expect(profile.find(r => r.expandedRoom?.expandedRoomId === 'course:legacy')).toMatchObject({ protectedCellCount: 2 });
+    expect(profile.find(r => r.roomId === '1,0')?.protectedCellCount).toBe(1);
     expect(profile.find(r => r.roomId === '2,0')).not.toHaveProperty('protectedCellCount');
+  });
+  it.each(['minted_token_id', 'minted_contract_address', 'minted_chain_id'])('finds standalone targets without Expanded Room membership using %s', async field => {
+    f.env.PLAYABLE_CONTENT_INDEX_READS = '1';
+    expect(f.sqlite.prepare("SELECT COUNT(*) AS count FROM playable_content_index_members WHERE target_key='room:1,0'").get()).toEqual({ count: 0 });
+    protect('1,0', field);
+    for (const sort of ['newest', 'protected'] as const) {
+      const rooms = (await loadRoomDiscoveryResponse(f.env, null, 100, sort, true)).results;
+      expect(rooms.find(r => r.roomId === '1,0')).toMatchObject({ protectedCellCount: 1, builderUserId: 'builder' });
+    }
+    const profile = (await loadUserProfileRoomsPage(f.env, 'builder', 100, null)).results;
+    expect(profile.find(r => r.roomId === '1,0')?.protectedCellCount).toBe(1);
   });
   it('counts pinned cells even when a cell has a newer standalone version', async () => {
     protect('8,0');
