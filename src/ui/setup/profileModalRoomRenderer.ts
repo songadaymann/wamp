@@ -1,3 +1,4 @@
+import { collectionAttributionSlot } from './collectionAttribution';
 import { createRoomProtectionBadge } from '../roomProtection';
 import { insightSummaryText, insightTargetForRoom } from '../../insights/model';
 import type { ProfilePublishedRoomEntry } from '../../profiles/model';
@@ -10,6 +11,7 @@ type ProfileRoomElements = {
 
 type ProfileRoomRenderOptions = {
   canEdit: boolean;
+  showAttribution?: boolean;
   playlistBusy: boolean;
   hasPlaylists: boolean;
   hasSelectedPlaylist: boolean;
@@ -103,10 +105,14 @@ function createRoomRow(
     insights.addEventListener('click', () => doc.defaultView?.dispatchEvent(new CustomEvent('room-insights-open', { detail: insightTargetForRoom(room) })));
     actions.append(insights, createAddRoomToPlaylistButton(doc, room, options));
     row.append(button, actions);
+    if (room.protectedCellCount && options.showAttribution) row.append(collectionAttributionSlot(doc, room));
     return row;
   }
 
-  return button;
+  const row = doc.createElement('div');
+  row.append(button);
+  if (room.protectedCellCount && options.showAttribution) row.append(collectionAttributionSlot(doc, room));
+  return row;
 }
 
 function createAddRoomToPlaylistButton(

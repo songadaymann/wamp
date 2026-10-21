@@ -55,6 +55,7 @@ export interface ProfileStatsSummary {
 }
 
 export interface UserProfileResponse {
+  collectionAvailable?: boolean;
   userId: string;
   displayName: string;
   username: string | null;

@@ -138,6 +138,8 @@
     "scripts/smoke_mint_network.mjs",
     "scripts/smoke_room_ownership.mjs",
     "scripts/smoke_room_protection.mjs",
+    "scripts/smoke_collections.mjs",
+    "scripts/smoke_collections_service.mjs",
     "scripts/smoke_room_protection_service.mjs",
     "scripts/smoke_room_artwork.mjs",
     "scripts/smoke_wallet_auth.mjs",

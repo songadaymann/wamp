@@ -4,7 +4,7 @@ import { HttpError } from './http';
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(), builders: vi.fn(), rooms: vi.fn(), playlists: vi.fn(),
-  summary: vi.fn(), user: vi.fn(),
+  summary: vi.fn(), user: vi.fn(), collection: vi.fn(),
 }));
 vi.mock('../auth/request', async (importOriginal) => ({
   ...await importOriginal<typeof import('../auth/request')>(),
@@ -23,6 +23,8 @@ vi.mock('../auth/store', async (importOriginal) => ({
   ...await importOriginal<typeof import('../auth/store')>(),
   findUserById: mocks.user,
 }));
+vi.mock('../collections/store', () => ({ loadCollectionShelf: mocks.collection }));
+import { handleCollectionRead } from '../collections/routes';
 import { handleBuilderDiscovery } from '../runs/routes';
 import { handleProfilePlaylistsGet, handleProfileRoomsGet, handleProfileSummaryGet } from '../profiles/routes';
 
@@ -38,6 +40,8 @@ const routes = [
     call: (request: Request) => handleProfileRoomsGet(request, new URL(request.url), env, 'builder', context) },
   { path: '/api/profiles/builder/playlists', loader: mocks.playlists,
     call: (request: Request) => handleProfilePlaylistsGet(request, env, 'builder', context) },
+  { path: '/api/profiles/builder/collection?limit=2', loader: mocks.collection,
+    call: (request: Request) => handleCollectionRead(request, env, context, 'builder') },
 ];
 
 function auth(id: string): RequestAuth {

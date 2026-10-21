@@ -112,6 +112,7 @@ export async function loadUserProfile(
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
+    collectionAvailable: true,
     userId: user.id,
     displayName: user.displayName,
     username: user.username ?? null,
@@ -157,6 +158,7 @@ export async function loadUserProfileSummary(
   const isSelf = viewerUserId === targetUserId;
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
   return {
+    collectionAvailable: true,
     userId: user.id,
     displayName: user.displayName,
     username: user.username ?? null,

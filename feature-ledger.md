@@ -1,3 +1,9 @@
+## 2026-10-21 — Collector attribution and collection shelves
+
+Original prompt: "ok let's do collector attribution and collection shelves next, verify it, then push merge and deploy please!"
+
+Canonical codex/wamp-collection-shelves-2026-10-21 from main4596b928, isolated managed worktree. Plan: docs/review/wamp-collection-shelves-2026-10-21.md. Read-only cached attribution and wallet-gated profile shelves; builder credit and fresh permissions preserved. Read-only attribution/shelves implemented. Local607 files/5,190 tests,14 native API checks and8 device/gate browser cases pass, including pagination, retry, gate loss, builder links and Play Room. Screenshots inspected; final quality/OSS, hosted CI, preview/safety and production release pending. Prior overnight goal complete; this is the new explicit request.
+
 ## 2026-10-21 — F246 protection indicators verified live
 
 PR274/sourcef1569095/mainb2dbc271 is delivered through the full clean-main coordinated guard to Pagesa4d3fd74/API1bbd05c6. Both19-check pipelines pass605/5,166 and432 browser cases/head.14 native/12 safety checks,8 preview/16 strict live controls and225 matching assets/domain pass; production read-only proof includes81 nearby rooms with7 protected, compact summaries,199 discovery targets and a profile. Renderer/map bytes/versions/catalog stay unchanged. Safety fixtures/outbox/tile rows cleaned with0 dispatched renders and settings restored;8 test-play POSTs intercepted. Initial543 sampled Cloudflare Report Only warnings retained; unchanged strict recheck passes without filters/header changes. Captures/gameplay inspected and unrelated roots/selected animation preserved. Final receipt: docs/review/wamp-room-protection-2026-10-21.md. F246/master175 remains open; separate Protected-discovery lane is in preparation. Goal active to October21 05:00 NY; held AI/funding/account-recovery/artwork decisions unchanged.

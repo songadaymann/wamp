@@ -250,7 +250,8 @@
   }
 
   #profile-modal .profile-tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
   }
 
   #leaderboard-modal .leaderboard-tabs .bar-btn.active,
