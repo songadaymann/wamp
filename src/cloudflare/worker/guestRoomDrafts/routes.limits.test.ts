@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDefaultRoomSnapshot } from '../../../persistence/roomModel';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
 import { handleGuestRoomDraftRequest } from './routes';
+import { handleAdminGuestRoomDrafts } from './adminRoutes';
 
 let db: DatabaseSync;
 let env: Env;
@@ -78,5 +79,62 @@ describe('guest draft limits (F188)', () => {
     for (let i = 0; i < 2000; i += 1) insert.run('guest-draft-create:all', 'all', now);
     expect(await save(0, 'late', '192.0.2.1')).toBe(429);
     expect(draftCount()).toBe(0);
+  });
+
+  it('caps guest rooms shared to Explore at five a day per network, counting only real submissions', async () => {
+    const submit = async (x: number, guest: string, ip = '203.0.113.7') => {
+      const id = (db.prepare('SELECT id FROM guest_room_drafts WHERE room_id = ?').get(`${x},0`) as { id: string }).id;
+      const url = new URL(`https://api.wamp.land/api/guest-room-drafts/${encodeURIComponent(id)}/submit`);
+      const request = new Request(url, { method: 'POST', headers: {
+        Origin: 'https://wamp.land', 'CF-Connecting-IP': ip, 'X-Guest-User-Id': `guest-${guest}`, 'X-Guest-Recovery-Token': guest.padEnd(64, 'r'),
+      } });
+      try { return (await handleGuestRoomDraftRequest(request, url, env)).status; } catch (error) { return (error as { status?: number }).status ?? 500; }
+    };
+    for (let i = 0; i < 7; i += 1) expect(await save(i, `s${i}`, `198.51.100.${i + 10}`)).toBe(200);
+    for (let i = 0; i < 5; i += 1) expect(await submit(i, `s${i}`)).toBe(200);
+    expect(await submit(0, 's0')).toBe(200);
+    expect(await submit(5, 's5')).toBe(429);
+    expect(await submit(6, 's6', '192.0.2.44')).toBe(200);
+    expect(await submit(5, 'wrong-guest')).toBe(404);
+  });
+});
+
+describe('guest room moderation (F049)', () => {
+  const admin = (path: string, method = 'GET') => {
+    const url = new URL(`https://api.wamp.land${path}`);
+    const request = new Request(url, { method, headers: { Origin: 'https://wamp.land', 'x-admin-key': 'test-admin-key' } });
+    return handleAdminGuestRoomDrafts(request, url, { ...env, ADMIN_API_KEY: 'test-admin-key' } as Env);
+  };
+  it('hides a shared guest room from public lists without taking it from its guest', async () => {
+    expect(await save(1, 'h1')).toBe(200);
+    const id = (db.prepare('SELECT id FROM guest_room_drafts').get() as { id: string }).id;
+    db.prepare("UPDATE guest_room_drafts SET status = 'submitted', moderation_status = 'public', submitted_at = updated_at").run();
+    const before = db.prepare('SELECT updated_at FROM guest_room_drafts').get();
+    expect((await (await admin('/api/admin/guest-room-drafts')).json() as { drafts: Array<{ hidden: boolean }> }).drafts)
+      .toEqual([expect.objectContaining({ id, hidden: false })]);
+    expect((await admin(`/api/admin/guest-room-drafts/${id}/hide`, 'POST')).status).toBe(200);
+    await expect(admin(`/api/admin/guest-room-drafts/${id}/hide`, 'POST')).rejects.toMatchObject({ status: 404 });
+    const listUrl = new URL('https://api.wamp.land/api/guest-room-drafts/submitted');
+    const publicList = await (await handleGuestRoomDraftRequest(new Request(listUrl), listUrl, env)).json() as { drafts: unknown[] };
+    expect(publicList.drafts).toEqual([]);
+    expect(db.prepare('SELECT updated_at FROM guest_room_drafts').get()).toEqual(before);
+    expect((await admin(`/api/admin/guest-room-drafts/${id}/show`, 'POST')).status).toBe(200);
+    const shown = await (await handleGuestRoomDraftRequest(new Request(listUrl), listUrl, env)).json() as { drafts: unknown[] };
+    expect(shown.drafts).toHaveLength(1);
+    await expect(handleAdminGuestRoomDrafts(new Request(listUrl.href.replace('/api/', '/api/admin/')), new URL('https://api.wamp.land/api/admin/guest-room-drafts'), env))
+      .rejects.toMatchObject({ status: 403 });
+  });
+
+  it('keeps a guest whose shared room was hidden from sharing straight back into Explore', async () => {
+    expect(await save(1, 'h2')).toBe(200);
+    db.prepare("UPDATE guest_room_drafts SET status = 'submitted', moderation_status = 'hidden', submitted_at = updated_at").run();
+    expect(await save(2, 'h2')).toBe(200);
+    const second = (db.prepare("SELECT id FROM guest_room_drafts WHERE room_id = '2,0'").get() as { id: string }).id;
+    const url = new URL(`https://api.wamp.land/api/guest-room-drafts/${encodeURIComponent(second)}/submit`);
+    const submitted = await handleGuestRoomDraftRequest(new Request(url, { method: 'POST', headers: {
+      Origin: 'https://wamp.land', 'CF-Connecting-IP': '203.0.113.7', 'X-Guest-User-Id': 'guest-h2', 'X-Guest-Recovery-Token': 'h2'.padEnd(64, 'r'),
+    } }), url, env);
+    expect(submitted.status).toBe(200);
+    expect(db.prepare("SELECT moderation_status FROM guest_room_drafts WHERE room_id = '2,0'").get()).toEqual({ moderation_status: 'hidden' });
   });
 });

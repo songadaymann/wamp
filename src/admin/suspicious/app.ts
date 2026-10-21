@@ -12,6 +12,7 @@ import { createAdminApiClient } from '../adminApiClient';
 import { createPublishedGoalsPanel } from './publishedGoalsPanel';
 import { createBuildingPanel } from './buildingPanel';
 import { createReportsPanel } from './reportsPanel';
+import { createGuestRoomsPanel } from './guestRoomsPanel';
 import {
   countSuspiciousQueueTabs,
   filterSuspiciousUsers,
@@ -116,8 +117,9 @@ const state: ViewState = {
 const apiClient = createAdminApiClient(() => state.adminKey);
 const publishedGoalsPanel = createPublishedGoalsPanel(() => state.adminKey);
 const buildingPanel = createBuildingPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin');
+const guestRoomsPanel = createGuestRoomsPanel(() => state.adminKey);
 const reportsPanel = createReportsPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin',
-  (userId) => { void loadDetail(userId, false, true); });
+  (userId) => { void loadDetail(userId, false, true); }, (draftId) => guestRoomsPanel.hide(draftId));
 
 if (adminKeyInput) {
   adminKeyInput.value = state.adminKey;
@@ -154,6 +156,7 @@ clearKeyButton?.addEventListener('click', () => {
   publishedGoalsPanel.reset();
   buildingPanel.show(null);
   reportsPanel.reset();
+  guestRoomsPanel.reset();
   state.lastError = null;
   state.summary = null;
   state.usersScope = 'review_window';
@@ -261,6 +264,7 @@ async function refreshAll(force = false): Promise<void> {
     ]);
     state.summary = summary;
     void reportsPanel.load();
+    void guestRoomsPanel.load();
     state.usersScope = usersResponse.scope;
     state.users = usersResponse.items;
 
