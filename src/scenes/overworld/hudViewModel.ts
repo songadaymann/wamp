@@ -291,7 +291,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'claimed_unpublished' && !viewerOwnsSelectedRoom
         ? 'Only the claimer can edit an unpublished claimed room.'
       : selectedRoomMinted && !viewerOwnsMintedRoom
-        ? !cryptoVisible ? 'This room is protected.' : viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the room token owner can edit a minted room.'
+        ? !cryptoVisible ? 'This room is protected.' : viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the owner can edit this collected room.'
         : '';
   const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
   const resolvedCourseBuilderButtonDisabled =
@@ -321,7 +321,7 @@ export function buildOverworldHudViewModel(
         : '';
   const selectedActionReasonText = canEditSelectedRoom ? ''
     : selectedSummary?.world ? 'Only this World’s builders can edit here.'
-    : selectedRoomMinted ? cryptoVisible ? 'Minted: only the token owner can edit.' : 'This room is protected.'
+    : selectedRoomMinted ? cryptoVisible ? 'Collected & Locked: only the owner can edit.' : 'This room is protected.'
     : selectedState === 'claimed_unpublished' ? 'Only the claimer can edit this unpublished room.'
     : '';
   const selectedStateVisible = selectedState !== 'published' && !selectedRoomMinted;
@@ -456,7 +456,7 @@ export function buildOverworldHudViewModel(
     selectedStateVisible,
     selectedStateText:
       selectedRoomMinted
-        ? cryptoVisible ? 'Minted' : 'Protected'
+        ? cryptoVisible ? 'Collected & Locked' : 'Protected'
         : selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1
           ? 'Expanded'
         : selectedState === 'published'
@@ -472,7 +472,9 @@ export function buildOverworldHudViewModel(
     selectedStateInfoVisible: selectedRoomMinted,
     selectedStateInfoText:
       selectedRoomMinted
-        ? "Anyone can edit anyone else's room, but the one exception is that you can buy a room as a collectible. This locks the room from being edited."
+        ? cryptoVisible
+          ? 'Collect & Lock protects your own claimed room. Only its owner can edit or revert it.'
+          : 'Only the owner can edit or revert this protected room.'
         : '',
     selectedMetaText,
     selectedMetaTone,

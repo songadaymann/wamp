@@ -1,7 +1,8 @@
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn, refreshAuthSession, sendPreparedWalletTransaction } from '../../auth/client';
 import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from '../../auth/walletTransaction';
 import { cloneRoomSnapshot, createRoomRecordFromCurrent, isRoomApiError, type RoomCoordinates, type RoomPermissions, type RoomRecord, type RoomRepository, type RoomSnapshot, type RoomSummary } from '../../persistence/roomRepository';
-import { buildExplorerTxUrl, type RoomMintChainInfo, type PreparedWalletTransaction } from '../../mint/roomOwnership';
+import { type RoomMintChainInfo, type PreparedWalletTransaction } from '../../mint/roomOwnership';
+import { buildRoomTokenViewerUrl } from '../../mint/roomTokenLinks';
 import { buildRoomTokenArtwork } from '../../mint/roomTokenArtwork';
 import { roomWalletErrorMessage } from '../../mint/roomWalletError';
 import { hasCryptoWallet } from '../../mint/walletGate';
@@ -99,17 +100,17 @@ export class RoomWalletActions {
       const pending = this.getPending();
       if (pending) return this.resume(run, pending);
       if (this.host.mintedTokenId) {
-        this.host.setStatusText(`Room token #${this.host.mintedTokenId} is already minted.`); return null;
+        this.host.setStatusText(`Room token #${this.host.mintedTokenId} is already collected and locked.`); return null;
       }
       if (this.host.getRoomDirty() || this.host.publishedVersion === 0) {
-        const published = await run.wait(this.host.publishRoom('Published latest changes before mint.'));
+        const published = await run.wait(this.host.publishRoom('Published latest changes before Collect & Lock.'));
         if (!published || !run.current()) return null;
       }
       this.host.saveInFlight = true;
       await run.wait(refreshAuthSession());
       if (!run.current() || !this.requireWallet('mint')) return null;
       if (!this.host.roomPermissions.canMint) {
-        this.host.setStatusText('Only the current claimer with a linked wallet can mint this room.'); return null;
+        this.host.setStatusText('Only the current claimer with a linked wallet can Collect & Lock this room.'); return null;
       }
       this.beginWait(run);
       const prepare = await run.wait(this.roomRepository.prepareMint(this.host.roomId, this.host.roomCoordinates));
@@ -134,9 +135,9 @@ export class RoomWalletActions {
       const record = await run.wait(this.roomRepository.confirmMint(pendingMint.roomId, pendingMint.coordinates, { txHash: tx.hash }));
       if (!run.current()) return null;
       this.acceptRecord(run, record);
-      const explorer = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.host.setStatusDetails({ text: '', accentText: `Minted token #${record.mintedTokenId}`,
-        linkLabel: explorer ? 'Transaction' : '', linkHref: explorer });
+      const viewer = buildRoomTokenViewerUrl(record);
+      this.host.setStatusDetails({ text: '', accentText: `Collected & Locked · Token #${record.mintedTokenId}`,
+        linkLabel: viewer ? 'View collectible' : '', linkHref: viewer });
       return record;
     });
   }
@@ -146,7 +147,7 @@ export class RoomWalletActions {
       const pending = this.getPending();
       if (pending) return this.resume(run, pending);
       if (!this.host.mintedTokenId || !this.host.mintedContractAddress || this.host.mintedChainId === null) {
-        this.host.setStatusText('This room is not minted yet.'); return null;
+        this.host.setStatusText('Collect & Lock this room before adding artwork.'); return null;
       }
       if (!this.host.publishedRoomSnapshot) { this.host.setStatusText('Publish the room before refreshing NFT metadata.'); return null; }
       if (!this.host.canRefreshMintMetadata()) { this.host.setStatusText('Only the room token owner can refresh NFT metadata.'); return null; }
@@ -183,7 +184,7 @@ export class RoomWalletActions {
   private requireWallet(kind: 'mint' | 'artwork'): boolean {
     const account = identity();
     if (!account.userId) { promptForSignIn('Sign in and link a wallet to collect this room or add artwork.'); return false; }
-    if (!account.wallet) { this.host.setStatusText(`Link a wallet from the account menu before ${kind === 'mint' ? 'minting' : 'updating artwork'}.`); return false; }
+    if (!account.wallet) { this.host.setStatusText(`Link a wallet from the account menu before ${kind === 'mint' ? 'using Collect & Lock' : 'updating artwork'}.`); return false; }
     return true;
   }
 
@@ -228,8 +229,9 @@ export class RoomWalletActions {
     }));
     if (!run.current()) return null;
     this.acceptRecord(run, record);
+    const viewer = buildRoomTokenViewerUrl(record);
     this.host.setStatusDetails({ text: 'Room artwork is saved.', accentText: `Artwork added to token #${record.mintedTokenId}`,
-      linkLabel: '', linkHref: null });
+      linkLabel: viewer ? 'View collectible' : '', linkHref: viewer });
     return record;
   }
 
@@ -331,7 +333,7 @@ export class RoomWalletActions {
     const abort = () => controller.abort();
     const identityChange = () => { if (!current()) abort(); };
     const run: WalletRun = { controller, current, wait: work => waitForRoomWallet(work, controller.signal), cancel: () => { options.cancel?.(); abort(); },
-      title: options.stageLabel ?? (kind === 'mint' ? 'Collect room' : 'Add/update artwork'), pending: null, durable: true };
+      title: options.stageLabel ?? (kind === 'mint' ? 'Collect & Lock' : 'Add/update artwork'), pending: null, durable: true };
     this.active = run;
     options.signal?.addEventListener('abort', abort, { once: true });
     if (options.signal?.aborted) abort();
@@ -364,7 +366,7 @@ export class RoomWalletActions {
       const pending = this.getPending();
       if (current()) this.host.setStatusText(pending
         ? `${run.durable ? pending.txHash ? 'The approval was submitted.' : 'The wallet approval is not confirmed yet.'
-          : 'Keep this tab open: recovery could not be saved on this device.'} Choose ${kind === 'mint' ? 'Collect room' : 'Add/update artwork'} to check it again without another wallet approval.`
+          : 'Keep this tab open: recovery could not be saved on this device.'} Choose ${kind === 'mint' ? 'Collect & Lock' : 'Add/update artwork'} to check it again without another wallet approval.`
         : roomWalletErrorMessage(error, kind, run.chainName, account.wallet));
       return null;
     } finally {

@@ -28,6 +28,7 @@ export interface EditorUiElements {
   saveBtn: HTMLButtonElement | null;
   publishBtn: HTMLButtonElement | null;
   mintBtn: HTMLButtonElement | null;
+  collectibleLink: HTMLAnchorElement | null;
   refreshMetadataBtn: HTMLButtonElement | null;
   historyBtn: HTMLButtonElement | null;
   fitBtns: HTMLButtonElement[];
@@ -247,6 +248,7 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     saveBtn: byId<HTMLButtonElement>(doc, 'btn-save-draft'),
     publishBtn: byId<HTMLButtonElement>(doc, 'btn-publish-room'),
     mintBtn: byId<HTMLButtonElement>(doc, 'btn-mint-room'),
+    collectibleLink: byId<HTMLAnchorElement>(doc, 'editor-collectible-link'),
     refreshMetadataBtn: byId<HTMLButtonElement>(doc, 'btn-refresh-room-metadata'),
     historyBtn: byId<HTMLButtonElement>(doc, 'btn-room-history'),
     fitBtns: existing([

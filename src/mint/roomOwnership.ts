@@ -209,18 +209,6 @@ export function buildRoomMintAuthorizationHash(
   );
 }
 
-export function buildExplorerTxUrl(
-  chain: Pick<RoomMintChainInfo, 'blockExplorerUrl'>,
-  txHash: string
-): string | null {
-  const base = chain.blockExplorerUrl?.trim().replace(/\/+$/, '');
-  if (!base) {
-    return null;
-  }
-
-  return `${base}/tx/${txHash}`;
-}
-
 export function formatWalletAddress(address: string | null): string {
   if (!address) {
     return 'Unknown wallet';

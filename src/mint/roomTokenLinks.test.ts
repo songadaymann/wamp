@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultRoomSnapshot } from '../persistence/roomModel';
 import { buildRoomTokenMetadata, parseRoomTokenMetadataUri } from './roomMetadata';
-import { buildRoomTokenPlayUrl, parseRoomPreviewTokenId } from './roomTokenLinks';
+import { buildRoomTokenPlayUrl, buildRoomTokenViewerUrl, parseRoomPreviewTokenId } from './roomTokenLinks';
 
 describe('collectible room links', () => {
   it('pins play links to the public game, including negative and boundary coordinates', () => {
@@ -9,6 +9,19 @@ describe('collectible room links', () => {
     expect(buildRoomTokenPlayUrl([-2147483648, 2147483647])).toBe('https://wamp.land/r/-2147483648/2147483647');
     for (const coordinates of [[NaN, 0], [Infinity, 0], [1.5, 2], [2147483648, 0], [0], [0, 1, 2]]) {
       expect(() => buildRoomTokenPlayUrl(coordinates)).toThrow('Invalid room coordinates.');
+    }
+  });
+
+  it('opens only the confirmed token identity on the local viewer', () => {
+    const room = { mintedChainId: 8453, mintedContractAddress: '0x1111111111111111111111111111111111111111', mintedTokenId: '42' };
+    const url = new URL(buildRoomTokenViewerUrl(room)!, 'https://preview.example.test');
+    expect(url.origin).toBe('https://preview.example.test');
+    expect(url.pathname).toBe('/minted-room.html');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ chainId: '8453', contract: room.mintedContractAddress, tokenId: '42' });
+    for (const invalid of [{ mintedChainId: null }, { mintedChainId: 0 }, { mintedChainId: NaN },
+      { mintedContractAddress: null }, { mintedContractAddress: 'javascript:alert(1)' },
+      { mintedTokenId: null }, { mintedTokenId: '0' }, { mintedTokenId: '42&contract=other' }]) {
+      expect(buildRoomTokenViewerUrl({ ...room, ...invalid })).toBeNull();
     }
   });
 

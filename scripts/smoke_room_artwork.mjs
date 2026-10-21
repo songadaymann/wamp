@@ -79,7 +79,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         for (const [symbol, replacement] of [['createAppKit', 'globalThis.__artworkWalletFactory'], ['WagmiAdapter', 'globalThis.__artworkWalletAdapter']]) {
           const pattern = new RegExp('([,{])' + symbol + ':([A-Za-z_$][\\w$]*)', 'g'); const matches = [...body.matchAll(pattern)];
           if (!matches.length) continue; assert.equal(matches.length, 1, 'One external wallet namespace ' + symbol);
-          assert(!body.includes('Step 1 of 2: Collect room') && !body.includes('Room collection was not completed.'), 'Application flow must remain unchanged');
+          assert(!body.includes('Step 1 of 2: Collect & Lock') && !body.includes('Room collection was not completed.'), 'Application flow must remain unchanged');
           walletModules.push({ symbol, path: new URL(r.request().url()).pathname, originalSha256 });
           body = body.replace(pattern, '$1' + symbol + ':' + replacement);
         }
@@ -258,7 +258,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       const consent = async (stage = 'mint', expected = '0.01') => {
         await page.locator('#busy-overlay[data-busy-state="confirmation"]').waitFor();
         const text = await page.locator('#busy-overlay-status').textContent();
-        assert(text.includes(stage === 'mint' ? `Collect for ${expected} ETH on Base.` : 'Add artwork on Base. No extra collection charge.'));
+        assert(text.includes(stage === 'mint' ? `Collect & Lock for ${expected} ETH on Base.` : 'Add artwork on Base. No extra collection charge.'));
         assert(text.includes('fee'));
         if (stage === 'mint') assert(text.includes('separate transaction with its own fee'));
         assert.equal(await page.locator('#btn-busy-retry').textContent(), 'Continue to wallet');
@@ -306,8 +306,10 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
             fixtureMisses: api.report().misses, realTransactions: 0 });
           console.log(`${name}: wallet recovery passed`); continue;
         }
+        assert.equal(await page.locator('#btn-mint-room').textContent(), 'Collect & Lock');
+        assert.equal(await page.locator('[data-editor-share-action="collect"] [data-editor-share-label]').textContent(), 'Collect & Lock');
         await artworkAction(); await consent('mint'); await page.waitForFunction(() => globalThis.__artworkWallet?.approvals.length === 1);
-        assert.equal(await page.locator('#busy-overlay-title').textContent(), 'Step 1 of 2: Collect room');
+        assert.equal(await page.locator('#busy-overlay-title').textContent(), 'Step 1 of 2: Collect & Lock');
         await page.screenshot({ path: `${output}/${name}-collect.png` }); await approve(true);
         if (kind === 'render-failure') {
           await acknowledgePending();
@@ -330,6 +332,21 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           await page.waitForFunction(() => /Room artwork is saved\./i.test(document.body.textContent || ''));
           await page.locator('#busy-overlay').waitFor({ state: 'hidden' });
           assert.equal(metadataVersion, snapshot.version);
+        }
+        if (!['account-cancellation', 'account-roundtrip'].includes(kind)) {
+          const link = page.locator('#editor-collectible-link');
+          await link.scrollIntoViewIfNeeded();
+          assert(await link.isVisible(), 'The collectible destination is reachable in Room Setup');
+          const bounds = await link.boundingBox();
+          assert(bounds && bounds.width >= 44 && bounds.height >= 44 && bounds.x >= 0
+            && bounds.y >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y + bounds.height <= height + 1,
+            'The collectible destination has an on-screen touch target: ' + JSON.stringify(bounds));
+
+          assert.equal(await link.textContent(), 'View collectible');
+          const href = new URL(await link.getAttribute('href'), base);
+          assert.equal(href.origin, new URL(base).origin);
+          assert.equal(href.pathname, '/minted-room.html');
+          assert.deepEqual(Object.fromEntries(href.searchParams), { chainId: '8453', contract, tokenId: '42' });
         }
         const approvals = await page.evaluate(() => globalThis.__artworkWallet.approvals);
         assert.equal(approvals.length, ['render-failure', 'account-cancellation', 'account-roundtrip'].includes(kind) ? 1 : ['artwork-rejection', 'artwork-reverted'].includes(kind) ? 3 : 2);

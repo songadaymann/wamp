@@ -294,7 +294,7 @@
     overflow-x: auto;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-drawer-room-tabs > button {
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-drawer-room-tabs > :is(button, a.editor-drawer-tab) {
     flex: 0 0 auto;
     min-height: 44px;
   }

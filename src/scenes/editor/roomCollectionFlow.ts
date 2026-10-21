@@ -112,7 +112,7 @@ export class RoomCollectionFlow {
         }
       }
       let minted: RoomRecord | null;
-      try { minted = await this.host.mint({ isCurrent: current, signal: controller.signal, cancel: invalidate, onDeclined, stageLabel: 'Step 1 of 2: Collect room' }); }
+      try { minted = await this.host.mint({ isCurrent: current, signal: controller.signal, cancel: invalidate, onDeclined, stageLabel: 'Step 1 of 2: Collect & Lock' }); }
       catch {
         if (current()) this.host.setStatus({ text: 'Could not finish checking this collection. Check the room before trying again.', accentText: '', linkLabel: '', linkHref: null });
         return null;
