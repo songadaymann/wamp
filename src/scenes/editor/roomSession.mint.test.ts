@@ -80,6 +80,19 @@ async function fixture() {
 }
 
 describe('real room session collection and artwork sequence', () => {
+  it('keeps the confirmed collectible link after artwork succeeds or is declined', async () => {
+    const f = await fixture();
+    await f.controller.mintRoom();
+    expect(f.session.statusDetails).toMatchObject({ text: 'Room artwork is saved.', linkLabel: 'View collectible',
+      linkHref: `/minted-room.html?chainId=8453&contract=${wallet}&tokenId=42` });
+    const g = await fixture();
+    vi.mocked(requestRoomWalletConsent).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await g.controller.mintRoom();
+    expect(g.session.statusDetails).toMatchObject({ linkLabel: 'View collectible',
+      linkHref: `/minted-room.html?chainId=8453&contract=${wallet}&tokenId=42` });
+    expect(g.session.statusText).toContain('already collected');
+  });
+
   it('waits for explicit cost consent without a wallet call or durable intent', async () => {
     const f = await fixture(); let finish!: (value: boolean) => void;
     vi.mocked(requestRoomWalletConsent).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

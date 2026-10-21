@@ -145,7 +145,7 @@ export function buildEditorUiViewModel(
     publishButtonAriaDisabled: Boolean(publishValidationError),
     mintHidden: false,
     mintDisabled: Boolean(mintedTokenId) || saveInFlight,
-    mintButtonText: mintedTokenId ? 'Minted' : 'Mint Room',
+    mintButtonText: mintedTokenId ? 'Collected & Locked' : 'Collect & Lock',
     refreshMetadataHidden: !mintedTokenId,
     refreshMetadataDisabled: !canRefreshMintMetadata || saveInFlight,
     refreshMetadataButtonText: 'Add/update artwork',

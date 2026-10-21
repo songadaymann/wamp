@@ -25,7 +25,7 @@ export function getRoomWalletCost(transaction: PreparedWalletTransaction, chain:
 export function roomWalletCostMessage(kind: 'mint' | 'artwork', cost: ReturnType<typeof getRoomWalletCost>,
   wallet: string, balance: bigint | null): string {
   const account = /^0x[0-9a-f]{40}$/i.test(wallet) ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : 'Linked wallet';
-  const amount = kind === 'mint' ? `Collect for ${cost.amount} ETH on ${cost.network}.`
+  const amount = kind === 'mint' ? `Collect & Lock for ${cost.amount} ETH on ${cost.network}.`
     : `Add artwork on ${cost.network}. No extra collection charge.`;
   const funds = balance === null ? 'Balance unavailable. Check it in your wallet.' : `${account}: ${formatRoomEth(balance)} ETH.`;
   const fees = kind === 'mint' ? 'Network fee is extra. Artwork is a separate transaction with its own fee.'

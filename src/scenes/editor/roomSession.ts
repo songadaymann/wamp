@@ -419,7 +419,7 @@ export class EditorRoomSession {
 
   getIdleStatusDetails(): EditorStatusDetails {
     if (this.mintedTokenId) {
-      const accentText = `Minted token #${this.mintedTokenId}`;
+      const accentText = `Collected & Locked · Token #${this.mintedTokenId}`;
       if (this.roomPermissions.canSaveDraft) {
         if (this.mintedMetadataRoomVersion === null) {
           return {
@@ -778,7 +778,7 @@ export class EditorRoomSession {
       }
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
         this.setStatusDetails({
-          text: 'NFT metadata is stale. Refresh NFT Metadata to update the on-chain snapshot.',
+          text: 'Room artwork is stale. Choose Add/update artwork to update the on-chain snapshot.',
           accentText: `Published v${this.publishedVersion}`,
           linkLabel: '',
           linkHref: null,

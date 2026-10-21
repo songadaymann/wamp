@@ -72,7 +72,7 @@ describe('room card available actions', () => {
   it('shows the minted edit restriction only to nonowners', () => {
     const selectedOwnership = { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xabc' };
     expect(card({ selectedOwnership })).toMatchObject({ editButtonHidden: true,
-      selectedActionReasonText: 'Minted: only the token owner can edit.' });
+      selectedActionReasonText: 'Collected & Locked: only the owner can edit.' });
     expect(card({ selectedOwnership, currentWalletAddress: '0xabc' }))
       .toMatchObject({ editButtonHidden: false, selectedActionReasonText: '' });
   });

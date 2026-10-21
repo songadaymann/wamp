@@ -111,7 +111,7 @@ export class EditorChromeController {
     const statusDetails = this.persistenceController.statusDetails;
     const candidate = statusDetails.text || statusDetails.accentText || statusDetails.linkLabel
       ? statusDetails : this.persistenceController.getIdleStatusDetails();
-    if (!hasCryptoWallet() && /token|mint|NFT|wallet|on-chain|owner:|owned by|collect room/i.test(`${candidate.text} ${candidate.accentText}`)) {
+    if (!hasCryptoWallet() && /token|mint|NFT|wallet|on-chain|owner:|owned by|collect(?: room| & lock)/i.test(`${candidate.text} ${candidate.accentText}`)) {
       return { text: this.host.getRoomPermissions().canSaveDraft ? 'Room saved.' : 'This room is protected.',
         accentText: '', linkLabel: '', linkHref: null };
     }

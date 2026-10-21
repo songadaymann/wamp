@@ -803,7 +803,7 @@ export class EditorDockShellController {
       const label = collect.querySelector<HTMLElement>('[data-editor-share-label]');
       const labelText = collectTarget?.id === 'btn-refresh-room-metadata'
         ? 'Add/update artwork'
-        : 'Collect Room';
+        : 'Collect & Lock';
       if (label) label.textContent = labelText;
       else collect.textContent = labelText;
     }

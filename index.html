@@ -262,7 +262,8 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
         <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-action="history">Version History</button>
-        <button class="editor-drawer-tab" type="button" data-crypto data-editor-share-action="collect"><span data-editor-share-label>Collect Room</span></button>
+        <button class="editor-drawer-tab" type="button" data-crypto data-editor-share-action="collect"><span data-editor-share-label>Collect &amp; Lock</span></button>
+        <a id="editor-collectible-link" class="editor-drawer-tab hidden" data-crypto target="_blank" rel="noopener noreferrer">View collectible</a>
         <button id="btn-room-template-replace" class="editor-drawer-tab" type="button">Templates</button>
       </div>
       <!-- Tools -->
@@ -1336,7 +1337,7 @@
           <div class="editor-advanced-block" data-advanced-block="room">
             <div class="editor-advanced-block-label">Room</div>
             <div class="editor-advanced-actions">
-              <button data-crypto id="btn-mint-room" class="bar-btn">Mint Room</button>
+              <button data-crypto id="btn-mint-room" class="bar-btn">Collect &amp; Lock</button>
               <button data-crypto id="btn-refresh-room-metadata" class="bar-btn hidden">Add/update artwork</button>
               <button id="btn-room-history" class="bar-btn">History</button>
             </div>
@@ -1942,7 +1943,7 @@
               id="world-selected-state-info"
               class="world-title-lock-button"
               type="button"
-              aria-label="What minted room lock means"
+              aria-label="About room protection"
             >
               <img
                 class="world-title-lock-icon"
@@ -3489,9 +3490,9 @@
         </div>
         <div class="about-section">
           <div class="about-section-title">Build And Publish</div>
-          <p>Anyone can edit any published room unless its owner has collected and locked it.</p>
-          <p>Until a room is collected, its original claimer can revert it to any previously published state. Once it is collected, its owner controls editing and reverting.</p>
-          <p>You can &ldquo;lock&rdquo; your room by paying a small fee to &ldquo;collect&rdquo; it. Once you own your room, only you can edit it.</p>
+          <p>Anyone can edit a published room unless it is protected.</p>
+          <p>The original claimer can revert an unprotected room to a previously published version. Only the owner can edit or revert a protected room.</p>
+          <p data-crypto>Choose Collect &amp; Lock for your own room to protect it. Review the cost before approving in your wallet.</p>
           <p>Add music to your room with our simple music editor. You can also create custom sprites in the sprite editor.</p>
           <p>There are two types of rooms:</p>
           <ul class="about-list">

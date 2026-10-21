@@ -735,6 +735,14 @@
     padding: 7px;
   }
 
+  body[data-editor-dock-shell='true'] a.editor-drawer-tab {
+    display: inline-flex;
+    font-family: var(--editor-button-font);
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
   body[data-editor-dock-shell='true'] .editor-drawer-tab.active,
   body[data-editor-dock-shell='true'] .smart-theme-button.active,
   body[data-editor-dock-shell='true'] .smart-brush-button.active,

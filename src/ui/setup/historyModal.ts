@@ -337,7 +337,7 @@ export class RoomHistoryModalController {
     }
 
     if (state.mintedTokenId && !state.canPublish) {
-      metaParts.push(hasCryptoWallet() ? 'Minted lock active' : 'Room protected');
+      metaParts.push(hasCryptoWallet() ? 'Collected & Locked' : 'Room protected');
     }
 
     const latestVersion = state.versions.reduce((max, version) => Math.max(max, version.version), 0);
