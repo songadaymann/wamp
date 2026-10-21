@@ -1,4 +1,4 @@
-type ActivityKind = 'completion' | 'rating' | 'comment' | 'top1' | 'dethroned';
+type ActivityKind = 'completion' | 'rating' | 'comment' | 'top1' | 'dethroned' | 'edited';
 export interface BuilderActivity {
   id: number;
   kind: ActivityKind;
@@ -33,6 +33,7 @@ export function activityDescription(entry: BuilderActivity): string {
   const action = entry.kind === 'completion' ? 'cleared'
     : entry.kind === 'rating' ? `rated${entry.qualityStars === null ? '' : ` ${entry.qualityStars}/5`}`
     : entry.kind === 'comment' ? 'left an approved comment on'
-    : entry.kind === 'dethroned' ? 'took your #1 on' : 'took #1 on';
+    : entry.kind === 'dethroned' ? 'took your #1 on'
+    : entry.kind === 'edited' ? 'published changes to your room' : 'took #1 on';
   return `${entry.actorName} ${action} ${entry.contentTitle}`;
 }

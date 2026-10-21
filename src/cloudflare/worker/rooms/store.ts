@@ -48,6 +48,7 @@ import {
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForUser,
 } from './guardrails';
+import { assertOthersRoomEditsOpen, isEditOfOthersRoom } from './othersRoomEdits';
 import {
   applyWorldRoomPermissions,
   applyWorldRoomSummaryPermissions,
@@ -887,6 +888,9 @@ export async function saveDraft(
     }
 
     throw new HttpError(403, 'Only the room claimer can save drafts for this unpublished room.');
+  }
+  if (viewerUserId && !world && isEditOfOthersRoom(existing, viewerUserId, actorIsAdmin)) {
+    assertOthersRoomEditsOpen(env);
   }
   assertDraftUnchangedSince(existing, options.expectedDraftUpdatedAt);
   const now = new Date().toISOString();

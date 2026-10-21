@@ -157,6 +157,10 @@
     border-left-color: #c63d31;
   }
 
+  .activity-row[data-kind='edited'] {
+    border-left-color: #6b4fa0;
+  }
+
   .activity-row a {
     color: var(--wamp-ink);
     font-size: var(--ui-text-body, 12px);

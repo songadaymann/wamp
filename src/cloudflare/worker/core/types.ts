@@ -93,6 +93,8 @@ export interface Env {
   ENABLE_SNAPSHOT_ADMIN?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_DAILY_PUBLISH_LIMIT?: string;
+  /** '1' pauses drafts and publishes over rooms claimed by other builders (raid switch). */
+  OTHERS_ROOM_EDITS_PAUSED?: string;
   EXPANDED_ROOMS_ENABLED?: string;
   PLAYABLE_CONTENT_INDEX_READS?: string;
   COMPACT_WORLD_READS?: string;
