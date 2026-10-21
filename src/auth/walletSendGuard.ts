@@ -4,24 +4,31 @@ interface WalletProvider {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
 }
 
-/** One explicit cost consent permits one provider send, including SDK namespace fallbacks. */
+/** An ambiguous/rejected send cannot become another approval through an SDK namespace fallback. */
 export function createSingleSendProvider(provider: WalletProvider, chainId: number,
   current: () => boolean, onBeforeSend?: () => void): WalletProvider {
   let sendAttempted = false;
   let sendFailure: unknown;
+  let unsupportedEthMethod = false;
   return { request: async args => {
     if (args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction') {
       // viem can try a wallet namespace fallback even for an ambiguous -32000 error.
-      // One consent permits one provider send; preserve the original failure for recovery.
-      if (sendAttempted) throw sendFailure ?? new Error('This wallet approval was already requested. Check it before starting another.');
+      // Only an explicit unsupported-method response proves there was no first approval.
+      if (sendAttempted && !(args.method === 'wallet_sendTransaction' && unsupportedEthMethod)) throw sendFailure ?? new Error('This wallet approval was already requested. Check it before starting another.');
       if (!current()) throw new Error('This room action is no longer current.');
       if (!Array.isArray(args.params) || !args.params[0] || typeof args.params[0] !== 'object') throw new Error('Invalid prepared room transaction.');
       // The generic viem formatter omits this standard RPC field. Keep the prepared network explicit.
       const params = [{ ...args.params[0], chainId: `0x${chainId.toString(16)}` }];
-      onBeforeSend?.();
+      if (!sendAttempted) onBeforeSend?.();
       sendAttempted = true;
+      unsupportedEthMethod = false;
       try { return await provider.request({ ...args, params }); }
-      catch (error) { sendFailure = error; throw error; }
+      catch (error) {
+        sendFailure = error;
+        const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined;
+        unsupportedEthMethod = args.method === 'eth_sendTransaction' && (code === -32601 || code === -32004);
+        throw error;
+      }
     }
     return provider.request(args);
   } };

@@ -94,6 +94,27 @@ describe('prepared room transactions through the real wallet sender and viem pro
     expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce();
     expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
   });
+  it.each([-32601, -32004])('preserves an explicit unsupported-method fallback (%s) without another intent', async code => {
+    const auth = await client(), onBeforeSend = vi.fn(), onSubmitted = vi.fn();
+    fixture.request.mockImplementation(async q => {
+      if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Method unsupported'), { code });
+      if (q.method === 'wallet_sendTransaction') return hash;
+      return rpc(q);
+    });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, onSubmitted })).resolves.toEqual({ hash, from: wallet });
+    expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce(); expect(onSubmitted).toHaveBeenCalledOnce();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(1);
+  });
+  it('rechecks cancellation before an explicitly unsupported-method fallback', async () => {
+    const auth = await client(), onBeforeSend = vi.fn(); let current = true;
+    fixture.request.mockImplementation(async q => {
+      if (q.method === 'eth_sendTransaction') { current = false; throw Object.assign(new Error('Method unsupported'), { code: -32601 }); }
+      return rpc(q);
+    });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, isCurrent: () => current })).rejects.toThrow();
+    expect(onBeforeSend).toHaveBeenCalledOnce();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
+  });
   it('rejects a prepared network mismatch before contacting the wallet', async () => {
     const auth = await client(), onBeforeSend = vi.fn();
     await expect(auth.sendPreparedWalletTransaction({ ...transaction, chainId: 84532 }, chain, { onBeforeSend })).rejects.toThrow('network changed');
