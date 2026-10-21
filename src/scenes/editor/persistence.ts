@@ -73,7 +73,10 @@ export class EditorPersistenceController {
       isArtworkPending: () => roomSession.hasPendingWalletConfirmation,
       isCollectionSubmitted: () => roomSession.hasPendingWalletConfirmation,
       onStateChanged: () => host.refreshUi?.(),
-      onArtworkPending: status => showBusyError(status.text, { title: 'Room collected', closeLabel: 'Back to room' }),
+      onArtworkPending: (status, retry) => showBusyError(status.text, { title: 'Room collected', closeLabel: 'Back to room',
+        retryLabel: 'Try again', retryHandler: retry ? async () => { hideBusyOverlay(); await retry(); } : null }),
+      onFailure: (status, retry) => showBusyError(status.text, { title: 'Room approval not completed', closeLabel: 'Back to room',
+        retryLabel: 'Try again', retryHandler: async () => { hideBusyOverlay(); await retry(); } }),
       getStatus: () => roomSession.statusDetails,
       setStatus: status => roomSession.setStatusDetails(status),
     });

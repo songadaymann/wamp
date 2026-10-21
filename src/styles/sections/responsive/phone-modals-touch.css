@@ -45,13 +45,13 @@
   body[data-device-class='phone'][data-coarse-pointer='true'] .layer-btn:hover,
   body[data-device-class='phone'][data-coarse-pointer='true'] .palette-tab:hover,
   body[data-device-class='phone'][data-coarse-pointer='true'] .obj-cat-tab:hover,
-  body[data-device-class='phone'][data-coarse-pointer='true'] .bar-btn:hover,
+  body[data-device-class='phone'][data-coarse-pointer='true'] .bar-btn:not(#btn-busy-retry, #btn-busy-close):hover,
   body[data-device-class='tablet'][data-coarse-pointer='true'] .object-item:hover,
   body[data-device-class='tablet'][data-coarse-pointer='true'] .tool-btn:hover,
   body[data-device-class='tablet'][data-coarse-pointer='true'] .layer-btn:hover,
   body[data-device-class='tablet'][data-coarse-pointer='true'] .palette-tab:hover,
   body[data-device-class='tablet'][data-coarse-pointer='true'] .obj-cat-tab:hover,
-  body[data-device-class='tablet'][data-coarse-pointer='true'] .bar-btn:hover {
+  body[data-device-class='tablet'][data-coarse-pointer='true'] .bar-btn:not(#btn-busy-retry, #btn-busy-close):hover {
     background: inherit;
   }
 }

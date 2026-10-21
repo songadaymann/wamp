@@ -1,3 +1,4 @@
+import { classifyWalletRpcRejection, createSingleSendProvider } from './walletSendGuard';
 import type { AppKit } from '@reown/appkit';
 import type {
   AuthSessionResponse,
@@ -33,7 +34,7 @@ import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQuer
   isGenericSignedInStatus, normalizeChatModerationViewer, type AuthDebugState } from './sessionState';
 export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
-import { WalletTransactionRevertedError } from './walletTransaction';
+import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from './walletTransaction';
 import { waitForWalletReceipt } from './walletReceiptWait';
 import { applyWalletGate } from '../lib/wallet-gate.js';
 import { hasCryptoWallet } from '../mint/walletGate';
@@ -301,32 +302,25 @@ export async function sendPreparedWalletTransaction(
   const provider = getWalletProvider(walletModal);
 
   if (!current()) throw new Error('This room action is no longer current.');
-  await ensureWalletChain(provider, chain);
+  try { await ensureWalletChain(provider, chain); }
+  catch (error) {
+    throw new WalletRequestNotSubmittedError('network-switch', `Switch your wallet to ${chain.name} and try again.`, error);
+  }
 
-  const { createPublicClient, createWalletClient, custom, TransactionReceiptNotFoundError, BaseError, ChainMismatchError } = await import('viem');
-  const sendProvider: Eip1193Provider = { request: args => {
-    if (args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction') {
-      if (!current()) throw new Error('This room action is no longer current.');
-      if (!Array.isArray(args.params) || !args.params[0] || typeof args.params[0] !== 'object') throw new Error('Invalid prepared room transaction.');
-      // The generic viem formatter omits this standard RPC field. Keep the prepared network explicit.
-      const params = [{ ...args.params[0], chainId: `0x${chain.chainId.toString(16)}` }];
-      options.onBeforeSend?.();
-      return provider.request({ ...args, params });
-    }
-    return provider.request(args);
-  } };
+  const { createPublicClient, createWalletClient, custom, TransactionReceiptNotFoundError, BaseError, ChainMismatchError, InsufficientFundsError, UserRejectedRequestError } = await import('viem');
+  const sendProvider = createSingleSendProvider(provider, chain.chainId, current, options.onBeforeSend);
   const walletClient = createWalletClient({ transport: custom(sendProvider, { retryCount: 0 }) });
   const [signerAddress] = await walletClient.getAddresses();
   if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
 
   if (linkedWallet && linkedWallet !== signerAddress.toLowerCase()) {
-    throw new Error('Connected wallet does not match the linked account wallet.');
+    throw new WalletRequestNotSubmittedError('wallet-mismatch', `Switch to your linked wallet ${linkedWallet.slice(0, 6)}…${linkedWallet.slice(-4)} and try again.`);
   }
 
   if (!current()) throw new Error('This room action is no longer current.');
   if (options.expectedWalletAddress && options.expectedWalletAddress.trim().toLowerCase() !== signerAddress.toLowerCase()) {
-    throw new Error('The connected wallet changed while preparing this room action.');
+    throw new WalletRequestNotSubmittedError('wallet-mismatch', 'The connected wallet changed while preparing this room action.');
   }
 
   const hash = await walletClient.sendTransaction({
@@ -337,8 +331,20 @@ export async function sendPreparedWalletTransaction(
     data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
   }).catch(error => {
+    const stopped = error instanceof BaseError ? error.walk(cause => cause instanceof WalletRequestNotSubmittedError) : error;
+    if (stopped instanceof WalletRequestNotSubmittedError) throw stopped;
     if (error instanceof BaseError && error.walk(cause => cause instanceof ChainMismatchError) instanceof ChainMismatchError) {
-      throw new Error(`Wallet network changed. Switch back to ${chain.name} and try again.`);
+      throw new WalletRequestNotSubmittedError('network-switch', `Wallet network changed. Switch back to ${chain.name} and try again.`, error);
+    }
+    if (error instanceof BaseError && error.walk(cause => cause instanceof InsufficientFundsError) instanceof InsufficientFundsError) {
+      throw new WalletRequestNotSubmittedError('insufficient-funds', 'Your wallet needs ETH for this action and its network fee.', error);
+    }
+    if (error instanceof BaseError && error.walk(cause => cause instanceof UserRejectedRequestError) instanceof UserRejectedRequestError) {
+      throw new WalletRequestNotSubmittedError('cancelled', 'You cancelled in your wallet.', error);
+    }
+    if (error instanceof BaseError) {
+      const rejection = classifyWalletRpcRejection(error, InsufficientFundsError.nodeMessage);
+      if (rejection) throw rejection;
     }
     throw error;
   });

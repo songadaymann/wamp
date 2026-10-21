@@ -10,7 +10,8 @@ const fixture = vi.hoisted(() => ({
   session: {} as AuthSessionResponse,
 }));
 vi.mock('../api/request', () => ({ apiRequest: vi.fn(async () => fixture.session) }));
-vi.mock('../profiles/profileRepository', () => ({ createProfileRepository: () => ({ loadProfileSummary: async () => null }) }));
+vi.mock('../profiles/profileRepository', () => ({ createProfileRepository: () => ({ loadProfileSummary: async () => ({ displayName: 'Buyer', selectedAvatarId: null,
+  progression: { player: { level: 1, progressFraction: 0 }, curator: { level: 1, progressFraction: 0 }, builder: { level: 1, progressFraction: 0 }, builderCaps: { trustTier: 'T0' } } }) }) }));
 vi.mock('@reown/appkit', () => ({ createAppKit: () => ({
   ready: async () => {}, getAddress: () => fixture.address,
   getAccount: () => ({ address: fixture.address, isConnected: true }), subscribeAccount: () => () => {},
@@ -44,11 +45,75 @@ async function client() { const auth = await import('./client'); await auth.refr
 const sent = () => fixture.request.mock.calls.filter(([q]) => q.method === 'eth_sendTransaction');
 
 describe('prepared room transactions through the real wallet sender and viem provider', () => {
+  it.each([
+    ['insufficient-funds', -32000, 'insufficient funds for gas * price + value'],
+    ['price-changed', 3, 'execution reverted: Incorrect mint price.'],
+    ['authorization-expired', 3, 'execution reverted: Mint authorization expired.'],
+    ['cancelled', 4001, 'User rejected request'],
+  ])('classifies %s only at the wallet send boundary', async (reason, code, message) => {
+    const auth = await client(), onSubmitted = vi.fn(), onBeforeSend = vi.fn();
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw Object.assign(new Error(String(message)), { code }); return rpc(q); });
+    const rejected = await auth.sendPreparedWalletTransaction(transaction, chain, { onSubmitted, onBeforeSend }).then(() => null, error => error);
+    expect(rejected).toMatchObject({ name: 'WalletRequestNotSubmittedError', reason });
+    expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce(); expect(onSubmitted).not.toHaveBeenCalled();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'eth_getTransactionReceipt')).toHaveLength(0);
+  });
+  it('does not classify the same insufficient-funds text during receipt reads as an unsent request', async () => {
+    const auth = await client(), onSubmitted = vi.fn();
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_getTransactionReceipt') throw Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 }); return rpc(q); });
+    let rejected: unknown; try { await auth.sendPreparedWalletTransaction(transaction, chain, { onSubmitted, signal: new AbortController().signal }); } catch (error) { rejected = error; }
+    expect(rejected).toBeDefined(); expect(rejected).not.toMatchObject({ name: 'WalletRequestNotSubmittedError' });
+    expect(onSubmitted).toHaveBeenCalledWith({ hash, from: wallet }); expect(sent()).toHaveLength(1);
+  });
+  it('identifies a rejected network switch before creating a send intent', async () => {
+    const auth = await client(), onBeforeSend = vi.fn();
+    fixture.request.mockImplementation(async q => { if (q.method === 'wallet_switchEthereumChain') throw Object.assign(new Error('Rejected network switch'), { code: 4001 }); return rpc(q); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend })).rejects.toMatchObject({ reason: 'network-switch' });
+    expect(sent()).toHaveLength(0); expect(onBeforeSend).not.toHaveBeenCalled();
+  });
+  it('recognizes an explicit nested wallet RPC rejection without treating an internal disconnect as definitely unsent', async () => {
+    const auth = await client();
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Internal JSON-RPC error.'), { code: -32603,
+      data: { originalError: { code: -32000, message: 'insufficient funds for gas * price + value' } } }); return rpc(q); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain)).rejects.toMatchObject({ reason: 'insufficient-funds' });
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Internal disconnect'), { code: -32603 }); return rpc(q); });
+    let rejected: unknown; try { await auth.sendPreparedWalletTransaction(transaction, chain); } catch (error) { rejected = error; }
+    expect(rejected).toBeDefined(); expect(rejected).not.toMatchObject({ name: 'WalletRequestNotSubmittedError' });
+  });
   it('does not retry a wallet send whose outcome is unknown', async () => {
     vi.useFakeTimers(); const auth = await client(), onBeforeSend = vi.fn();
     fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw new Error('Provider disconnected'); return rpc(q); });
     await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend })).rejects.toThrow();
     await vi.advanceTimersByTimeAsync(300_000); expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce();
+  });
+  it('blocks the SDK namespace fallback after an ambiguous invalid-input RPC error', async () => {
+    const auth = await client(), onBeforeSend = vi.fn();
+    fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Provider disconnected during submission'), { code: -32000 }); return rpc(q); });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend })).rejects.toThrow();
+    expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
+  });
+  it.each([-32601, -32004])('preserves an explicit unsupported-method fallback (%s) without another intent', async code => {
+    const auth = await client(), onBeforeSend = vi.fn(), onSubmitted = vi.fn();
+    fixture.request.mockImplementation(async q => {
+      if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Method unsupported'), { code });
+      if (q.method === 'wallet_sendTransaction') return hash;
+      return rpc(q);
+    });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, onSubmitted })).resolves.toEqual({ hash, from: wallet });
+    expect(sent()).toHaveLength(1); expect(onBeforeSend).toHaveBeenCalledOnce(); expect(onSubmitted).toHaveBeenCalledOnce();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(1);
+  });
+  it('rechecks cancellation before an explicitly unsupported-method fallback', async () => {
+    const auth = await client(), onBeforeSend = vi.fn(); let current = true;
+    fixture.request.mockImplementation(async q => {
+      if (q.method === 'eth_sendTransaction') { current = false; throw Object.assign(new Error('Method unsupported'), { code: -32601 }); }
+      return rpc(q);
+    });
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, isCurrent: () => current })).rejects.toMatchObject({ reason: 'cancelled' });
+    expect(onBeforeSend).toHaveBeenCalledOnce();
+    expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
   });
   it('rejects a prepared network mismatch before contacting the wallet', async () => {
     const auth = await client(), onBeforeSend = vi.fn();

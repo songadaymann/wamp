@@ -9,12 +9,14 @@ import { showBusyOverlay, updateBusyOverlay } from '../../ui/appFeedback';
 import { getPendingRoomWalletStore } from '../../mint/pendingRoomWallet';
 import { RoomWalletRecovery } from '../../mint/roomWalletRecovery';
 import { prepareBuildPromptEntry } from '../../buildPrompts/publishing';
-import { WalletTransactionRevertedError } from '../../auth/walletTransaction';
+import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from '../../auth/walletTransaction';
+import { requestRoomWalletConsent } from '../../ui/roomWalletConsent';
 
 const wallet = '0x2222222222222222222222222222222222222222';
 const state = vi.hoisted(() => ({ authenticated: true, userId: 'buyer', wallet: '0x2222222222222222222222222222222222222222', signer: null as string | null, busyTitle: null as string | null }));
 vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth-state-changed', getAuthDebugState: () => ({ authenticated: state.authenticated, walletAddress: state.signer, user: { id: state.userId, walletAddress: state.wallet } }), refreshAuthSession: vi.fn(async () => {}), sendPreparedWalletTransaction: vi.fn(), promptForSignIn: vi.fn() }));
 vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn(async () => 'data:image/png;base64,aGVsbG8=') }));
+vi.mock('../../ui/roomWalletConsent', () => ({ requestRoomWalletConsent: vi.fn(async () => true) }));
 vi.mock('../../ui/appFeedback', () => ({
   showBusyOverlay: vi.fn((title: string) => { state.busyTitle = title; }), updateBusyOverlay: vi.fn((title: string) => { state.busyTitle = title; }),
   hideBusyOverlay: vi.fn(() => { state.busyTitle = null; }), showBusyError: vi.fn(), getAppFeedbackDebugState: () => ({ busyTitle: state.busyTitle }),
@@ -34,6 +36,7 @@ beforeEach(() => {
   vi.stubGlobal('window', Object.assign(new EventTarget(), { location: { origin: 'https://wamp.land' } }));
   vi.spyOn(console, 'error').mockImplementation(() => {}); vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.mocked(renderRoomSnapshotToPngDataUrl).mockResolvedValue('data:image/png;base64,aGVsbG8=');
+  vi.mocked(requestRoomWalletConsent).mockResolvedValue(true);
 });
 afterEach(() => { for (const c of controllers.splice(0)) c.destroy(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -52,7 +55,8 @@ async function fixture() {
     loadRoomCurrent: vi.fn(async () => ({ summary: createRoomSummaryFromRecord(record), draft: record.draft, published: record.published })),
     getLastPersistenceTarget: () => 'remote',
     refreshRoomOwnership: vi.fn(async () => createRoomSummaryFromRecord(record)),
-    prepareMint: vi.fn(async () => { calls.push('mint-prepare'); return { chain, transaction: { to: wallet, data: '0x01', value: '1000', chainId: 8453 } }; }),
+    prepareMint: vi.fn(async () => { calls.push('mint-prepare'); return { roomId: '0,1', roomCoordinates: { x: 0, y: 1 }, linkedWalletAddress: wallet, contractAddress: wallet,
+      priceWei: '1000', chain, transaction: { to: wallet, data: '0x01', value: '1000', chainId: 8453 } }; }),
     confirmMint: vi.fn(async () => { calls.push('mint-confirm'); record = { ...record, mintedChainId: 8453, mintedContractAddress: wallet, mintedTokenId: '42', mintedOwnerWalletAddress: wallet, permissions: { ...record.permissions, canMint: false } }; return record; }),
     prepareMetadataRefresh: vi.fn(async () => { calls.push('artwork-prepare'); return { chain, transaction: { to: wallet, data: '0x02', value: '0', chainId: 8453 } }; }),
     confirmMetadataRefresh: vi.fn(async (_id: string, _coords: unknown, body: { metadataRoomVersion: number; metadataHash: string }) => {
@@ -76,6 +80,36 @@ async function fixture() {
 }
 
 describe('real room session collection and artwork sequence', () => {
+  it('waits for explicit cost consent without a wallet call or durable intent', async () => {
+    const f = await fixture(); let finish!: (value: boolean) => void;
+    vi.mocked(requestRoomWalletConsent).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const work = f.controller.mintRoom(); await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(sendPreparedWalletTransaction).not.toHaveBeenCalled(); expect(getPendingRoomWalletStore().list()).toEqual([]);
+    expect(vi.mocked(requestRoomWalletConsent).mock.calls[0][0]).toMatchObject({ kind: 'mint', priceWei: '1000', transaction: { value: '1000' }, wallet });
+    finish(false); expect(await work).toBeNull(); expect(sendPreparedWalletTransaction).not.toHaveBeenCalled();
+    expect(f.repository.prepareMetadataRefresh).not.toHaveBeenCalled(); expect(f.controller.isCollecting).toBe(false);
+  });
+  it('invalidates an old cost confirmation after an account roundtrip', async () => {
+    const f = await fixture(); let finish!: (value: boolean) => void;
+    vi.mocked(requestRoomWalletConsent).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const work = f.controller.mintRoom(); await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    state.userId = 'other'; window.dispatchEvent(new Event('auth-state-changed')); state.userId = 'buyer'; window.dispatchEvent(new Event('auth-state-changed'));
+    finish(true); expect(await work).toBeNull(); expect(sendPreparedWalletTransaction).not.toHaveBeenCalled(); expect(getPendingRoomWalletStore().list()).toEqual([]);
+  });
+  it('cleans a proven insufficient-funds rejection but preserves a submitted hash on the same named error', async () => {
+    const f = await fixture();
+    vi.mocked(sendPreparedWalletTransaction).mockImplementationOnce(async (_tx, _chain, options) => {
+      options?.onBeforeSend?.(); throw new WalletRequestNotSubmittedError('insufficient-funds', 'RPC dump');
+    });
+    expect(await f.controller.mintRoom()).toBeNull(); expect(getPendingRoomWalletStore().list()).toEqual([]);
+    expect(f.session.statusText).toContain('more ETH on Base'); expect(f.session.statusText).not.toContain('RPC dump');
+    vi.mocked(sendPreparedWalletTransaction).mockImplementationOnce(async (_tx, _chain, options) => {
+      options?.onBeforeSend?.(); options?.onSubmitted?.({ hash: '0x' + 'a'.repeat(64), from: wallet });
+      throw new WalletRequestNotSubmittedError('insufficient-funds', 'Malformed provider receipt error');
+    });
+    expect(await f.controller.mintRoom()).toBeNull(); expect(getPendingRoomWalletStore().list()).toHaveLength(1);
+    expect(f.session.statusText).toContain('was submitted');
+  });
   it('describes an unhashed artwork request as unknown and checks it without another approval', async () => {
     const f = await fixture();
     vi.mocked(sendPreparedWalletTransaction).mockImplementationOnce(f.send).mockImplementationOnce(async (_tx, _chain, options) => {
