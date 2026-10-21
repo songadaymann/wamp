@@ -4,7 +4,7 @@ import { clearSessionCookie, requireCurrentSession } from './request';
 
 /** Revoke browser sessions only for the identity authenticated by this cookie. */
 export async function handleLogoutAll(request: Request, env: Env): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'log out on all devices');
+  const session = await requireCurrentSession(env, request, 'log out on all devices', { allowSuspended: true });
   if (!request.headers.get('Origin')) {
     throw new HttpError(403, 'A trusted browser origin is required to log out on all devices.');
   }

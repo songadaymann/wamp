@@ -8,6 +8,7 @@ import type { Env } from '../core/types';
 import { loadRoomRecord, publishRoom } from '../rooms/store';
 import { loadWorldAccessById, loadWorldAccessByRoomId } from './access';
 import { prepareWorldActivityStatement } from './activity';
+import { assertAccountNotSuspended } from '../moderation/suspension';
 
 interface PublicationRow {
   id: string;
@@ -130,6 +131,7 @@ export async function resolveWorldPublicationRequest(
   }
 
   if (decision === 'approve') {
+    await assertAccountNotSuspended(env, request.submittedByUserId);
     try {
       await publishRoom(
         env,

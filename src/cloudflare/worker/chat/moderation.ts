@@ -5,6 +5,7 @@ import { findUserById, normalizeEmail } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { AuthSession, Env } from '../core/types';
 import { isChatAdminUser, isChatBannedUser } from './store';
+import { assertAccountNotSuspended } from '../moderation/suspension';
 
 export const NO_CHAT_MODERATION_VIEWER: ChatModerationViewer = {
   role: 'none',
@@ -51,6 +52,7 @@ export async function requireChatModeratorSession(
   if (!session) {
     throw new HttpError(401, `You must be signed in to ${actionLabel}.`);
   }
+  await assertAccountNotSuspended(env, session.user.id);
 
   const viewer = await resolveChatModerationViewer(env, session.user);
   if (viewer.role === 'none') {

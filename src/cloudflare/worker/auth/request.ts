@@ -5,6 +5,7 @@ import type { AuthSession, Env, RequestAuth } from '../core/types';
 import { loadAgentTokenAuth } from '../agents/store';
 import type { LoadedSchoolAuthContext } from '../school/authContext';
 import { loadSchoolAuthContextForUser } from '../school/store';
+import { assertAccountNotSuspended } from '../moderation/suspension';
 import {
   SESSION_MAX_AGE_SECONDS,
   deleteSessionById,
@@ -19,7 +20,8 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export async function requireCurrentSession(
   env: Env,
   request: Request,
-  actionLabel: string
+  actionLabel: string,
+  options: { allowSuspended?: boolean } = {},
 ): Promise<AuthSession> {
   const session = await loadCurrentSession(env, request);
   if (!session) {
@@ -27,6 +29,9 @@ export async function requireCurrentSession(
   }
 
   requireTrustedOriginForMutation(request);
+  if (!options.allowSuspended && isMutatingRequest(request)) {
+    await assertAccountNotSuspended(env, session.user.id);
+  }
   return session;
 }
 
@@ -43,6 +48,9 @@ export async function requireAuthenticatedRequestAuth(
 
   if (requiredScope) {
     requireScope(auth, requiredScope, actionLabel);
+  }
+  if (!auth.isAdmin && isMutatingRequest(request)) {
+    await assertAccountNotSuspended(env, auth.user.id);
   }
 
   return auth;

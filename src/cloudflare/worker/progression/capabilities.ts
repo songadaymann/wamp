@@ -15,12 +15,13 @@ const TRUST_TIER_CAPABILITIES: Record<
   T4: { claimLimitPerDay: 25, publishLimitPerDay: 25, objectLimit: 1500, collectibleLimit: 150 },
 };
 
+/** An admin override of 0 is a real limit (nothing allowed); only blank or invalid clears it. */
 export function sanitizeOptionalOverride(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
   }
   const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 0) {
     return null;
   }
   return Math.floor(parsed);

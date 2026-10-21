@@ -350,6 +350,37 @@ export interface SuspiciousUserDetailResponse {
   recentInvalidations: SuspiciousInvalidationAuditSummary[];
 }
 
+export interface AdminBuildingModerationResponse {
+  userId: string;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  recentActions: Array<{ action: string; operatorLabel: string; reason: string | null; createdAt: string }>;
+}
+
+export interface AdminRevertEditsRoom {
+  roomId: string;
+  x: number;
+  y: number;
+  title: string | null;
+  editCount: number;
+  latestVersion: number;
+  targetVersion: number | null;
+  action: 'revert' | 'skip';
+  reason: 'own_room' | 'minted' | 'no_earlier_version' | 'changed_since' | 'newer_draft' | null;
+  /** The user claimed the room only by publishing over it while it was unclaimed. */
+  releaseClaim?: boolean;
+}
+
+export interface AdminRevertEditsResponse {
+  userId: string;
+  since: string;
+  rooms: AdminRevertEditsRoom[];
+  reverted: Array<{ roomId: string; fromVersion: number; toVersion: number }>;
+  failed: Array<{ roomId: string; error: string }>;
+  remaining: number;
+  truncated: boolean;
+}
+
 export interface SuspiciousInvalidationPreviewRequest {
   roomRunAttemptIds: string[];
   courseRunAttemptIds: string[];

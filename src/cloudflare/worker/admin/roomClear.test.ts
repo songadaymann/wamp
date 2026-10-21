@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
@@ -36,7 +37,9 @@ beforeEach(() => {
     CREATE TABLE room_versions (room_id TEXT, version INTEGER, published_by_user_id TEXT);
     CREATE TABLE room_difficulty_votes (room_id TEXT, user_id TEXT);
     CREATE TABLE point_events (id INTEGER PRIMARY KEY, event_type TEXT, source_key TEXT);
+    CREATE TABLE users (id TEXT PRIMARY KEY);
   `);
+  db.exec(readFileSync('migrations/0070_account_suspension.sql', 'utf8'));
   const database = {
     prepare: statement,
     async batch<T>(queries: D1PreparedStatement[]): Promise<T[]> {
@@ -75,5 +78,7 @@ describe('admin room clear (F205)', () => {
     const left = db.prepare("SELECT source_key FROM point_events WHERE event_type = 'run_finalized'").all() as { source_key: string }[];
     expect(left.map((row) => row.source_key)).toEqual(['attempt-in-another-room']);
     expect(db.prepare('SELECT COUNT(*) AS n FROM room_runs').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT action, target_user_id, target_room_id FROM moderation_audit').all())
+      .toEqual([{ action: 'room_clear', target_user_id: 'builder', target_room_id: '4,2' }]);
   });
 });

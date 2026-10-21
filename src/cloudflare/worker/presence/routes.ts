@@ -20,6 +20,7 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { hasUserAvatarEntitlement } from '../avatars/entitlements';
 import { isChatBannedUser } from '../chat/store';
+import { loadAccountSuspension } from '../moderation/suspension';
 
 const MAX_IDENTITY_TOKEN_REQUEST_BYTES = 4096;
 
@@ -54,7 +55,7 @@ async function handlePresenceIdentityTokenIssue(
     ? undefined
     : auth.school
       ? 'school'
-      : await isChatBannedUser(env, auth.user.id) ? 'muted' : 'ok';
+      : await isChatBannedUser(env, auth.user.id) || (await loadAccountSuspension(env, auth.user.id))?.suspendedAt ? 'muted' : 'ok';
   const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret, { roomChat });
   const response: PartyKitIdentityTokenIssueResponse = {
     token,
