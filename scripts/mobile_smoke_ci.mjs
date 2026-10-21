@@ -31,7 +31,7 @@ let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
   exitCode = 0;
-  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') || args.has('--map-capture-only') || args.has('--mint-network-only') || args.has('--ownership-only') || args.has('--artwork-only') || args.has('--wallet-recovery-only') || args.has('--costs-only') || args.has('--wallet-auth-only') || args.has('--protection-only') ? [] : engines) {
+  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') || args.has('--map-capture-only') || args.has('--mint-network-only') || args.has('--ownership-only') || args.has('--artwork-only') || args.has('--wallet-recovery-only') || args.has('--costs-only') || args.has('--wallet-auth-only') || args.has('--protection-only') || args.has('--protected-discovery-only') ? [] : engines) {
     const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
       stdio: 'inherit',
       env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
@@ -68,10 +68,11 @@ try {
     if (auth.status !== 0) exitCode = auth.status ?? 1;
   }
 
-  if (mode === 'replay' && args.has('--protection-only') && exitCode === 0) {
+  if (mode === 'replay' && (args.has('--protection-only') || args.has('--protected-discovery-only')) && exitCode === 0) {
     const protection = spawnSync(process.execPath, ['scripts/smoke_room_protection.mjs',
-      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-protection`,
-      process.env.ROOM_PROTECTION_DATA_FILE ?? 'output/web-game/room-protection-service/browser-data-indexed.json'],
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/${args.has('--protected-discovery-only') ? 'protected-discovery' : 'room-protection'}`,
+      process.env.ROOM_PROTECTION_DATA_FILE ?? 'output/web-game/room-protection-service/browser-data-indexed.json',
+      ...(args.has('--protected-discovery-only') ? ['--discovery'] : [])],
     { stdio: 'inherit', env: process.env });
     if (protection.status !== 0) exitCode = protection.status ?? 1;
   }

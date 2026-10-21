@@ -1,4 +1,4 @@
-import { indexedRoomProtectionCountSql } from '../rooms/protection';
+import { indexedRoomProtectionCountSql, indexedRoomProtectionExistsSql } from '../rooms/protection';
 import type { RoomDifficulty, RoomDiscoverySort } from '../../../runs/model';
 import type { ExpandedRoomSource } from '../../../expandedRooms/model';
 import type { Env } from '../core/types';
@@ -40,10 +40,10 @@ export async function loadIndexedDiscoveryRows(
   includeAll: boolean, offset: number,
 ): Promise<IndexedDiscoveryRow[] | null> {
   const enabled = /^(1|true|on)$/i.test(env.PLAYABLE_CONTENT_INDEX_READS?.trim() ?? '');
-  if (!enabled || !['newest', 'featured', 'quality', 'popular'].includes(sort)) return null;
+  if (!enabled || !['newest', 'featured', 'quality', 'popular', 'protected'].includes(sort)) return null;
   const order = sort === 'popular'
     ? 'index_row.recent_players DESC, index_row.first_published_at DESC, index_row.published_at DESC, index_row.target_key ASC'
-    : sort === 'newest'
+    : sort === 'newest' || sort === 'protected'
       ? 'index_row.first_published_at DESC, index_row.published_at DESC, index_row.target_key ASC'
       : sort === 'quality'
         ? 'index_row.quality_adjusted_average DESC, index_row.quality_vote_count DESC, index_row.published_at DESC, index_row.target_key ASC'
@@ -99,6 +99,7 @@ export async function loadIndexedDiscoveryRows(
       WHERE (? = 1 OR index_row.goal_type IS NOT NULL)
         AND (? IS NULL OR index_row.effective_difficulty = ?)
         AND (? = 0 OR index_row.featured_at IS NOT NULL)
+        ${sort === 'protected' ? `AND ${indexedRoomProtectionExistsSql('index_row')}` : ''}
       ORDER BY ${order} LIMIT ? OFFSET ?
     `).bind(new Date(Date.now() - POPULAR_WINDOW_MS).toISOString(), includeAll ? 1 : 0,
       difficulty, difficulty, sort === 'featured' ? 1 : 0, limit + 1, offset).all<IndexedDiscoveryRow>();

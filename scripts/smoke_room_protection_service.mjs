@@ -21,8 +21,12 @@ for (const index of [false, true]) {
     prepare(f) {
       for (const [target, cell] of [['native', '8,0'], ['course:legacy', '10,0']]) f.sqlite.prepare(
         'INSERT INTO playable_content_index_members(target_key,room_id,room_version) VALUES (?,?,1)').run(`expanded_room:${target}`, cell);
-      f.sqlite.prepare("UPDATE rooms SET minted_token_id='42' WHERE id IN ('1,0','9,0','10,0')").run();
-      f.sqlite.prepare("UPDATE rooms SET minted_chain_id=8453 WHERE id='8,0'").run();
+      f.sqlite.prepare("UPDATE rooms SET minted_token_id='42' WHERE id IN ('0,0','1,0','9,0','10,0')").run();
+      f.sqlite.prepare("UPDATE rooms SET minted_chain_id=8453 WHERE id IN ('8,0','13,0')").run();
+      f.sqlite.prepare("UPDATE rooms SET published_json=json_set(published_json,'$.goal',NULL) WHERE id='13,0'").run();
+      f.sqlite.prepare("UPDATE room_versions SET snapshot_json=json_set(snapshot_json,'$.goal',NULL) WHERE room_id='13,0'").run();
+      f.sqlite.prepare("UPDATE playable_content_index SET first_published_at='2026-10-20T00:00:00Z' WHERE content_id='0,0'").run();
+      f.sqlite.prepare("UPDATE room_versions SET created_at='2026-10-20T00:00:00Z' WHERE room_id='0,0'").run();
     },
   });
   try {
@@ -46,11 +50,28 @@ for (const index of [false, true]) {
       assert.equal(rooms.find(r => r.id === '1,0').isMinted, true);
       assert.equal(rooms.find(r => r.id === '2,0').isMinted, undefined);
     }
+    const protectedDiscovery = await read('/api/leaderboards/rooms/discover?sort=protected&limit=100');
+    assert.equal(protectedDiscovery.protectedDiscoveryAvailable, true);
+    const key = entry => entry.expandedRoom?.expandedRoomId ?? entry.roomId;
+    assert.deepEqual(new Set(protectedDiscovery.results.map(key)), new Set(['0,0','1,0','native','course:legacy','13,0']));
+    assert.equal(protectedDiscovery.results.find(r => r.roomId === '13,0').goalType, null);
+    assert.equal(protectedDiscovery.results[0].roomId, '0,0');
+    const seen = []; let cursor;
+    do {
+      const page = await read('/api/leaderboards/rooms/discover?sort=protected&limit=2' + (cursor ? '&cursor=' + cursor : ''));
+      assert(page.results.length > 0); assert(page.results.every(r => r.protectedCellCount > 0));
+      seen.push(...page.results.map(key)); cursor = page.nextCursor;
+    } while (cursor);
+    assert.equal(seen.length, 5); assert.equal(new Set(seen).size, 5);
+    const badCursor = Buffer.from(JSON.stringify({ version: 1, sort: 'newest', offset: 2 })).toString('base64url');
+    const rejected = await service.request('/api/leaderboards/rooms/discover?sort=protected&cursor=' + badCursor);
+    assert.equal(rejected.status, 400); cases.push({ name: `${index ? 'indexed' : 'legacy'}:sort-bound-cursor`, status: rejected.status });
     const summary = await read('/api/rooms/1%2C0/summary');
     writeFileSync(`${output}/browser-data-${index ? 'indexed' : 'legacy'}.json`, JSON.stringify({
       discovery: responses['/api/leaderboards/rooms/discover?sort=newest&limit=100'],
       profile: responses['/api/profiles/builder/rooms?limit=100'],
       world: responses['/api/world/chunks/summary?minChunkX=0&maxChunkX=1&minChunkY=0&maxChunkY=0'], summary,
+      protectedDiscovery,
     }));
     // Confirmed storage change appears on the next uncached read; the public cache's separate unit test proves its 20s lifetime.
     await service.db.prepare("UPDATE rooms SET minted_contract_address='0x1111111111111111111111111111111111111111' WHERE id='2,0'").run();

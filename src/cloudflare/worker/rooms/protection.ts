@@ -12,6 +12,12 @@ export function indexedRoomProtectionCountSql(alias: 'index_row' | 'playable_con
     WHERE protection_member.target_key = ${alias}.target_key AND ${storedRoomProtectionSql('protected_room')})`;
 }
 
+export function indexedRoomProtectionExistsSql(alias: 'index_row'): string {
+  return `EXISTS(SELECT 1 FROM playable_content_index_members protection_member
+    JOIN rooms protected_room ON protected_room.id = protection_member.room_id
+    WHERE protection_member.target_key = ${alias}.target_key AND ${storedRoomProtectionSql('protected_room')})`;
+}
+
 /** Only legacy profile cells not included in the builder's existing rows need this bounded read. */
 export async function loadProtectedRoomIds(env: Env, roomIds: string[]): Promise<Set<string>> {
   const ids = [...new Set(roomIds)];

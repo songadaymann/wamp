@@ -66,6 +66,26 @@ describe('cached public discovery inputs and fresh private filtering', () => {
     expect(expired.body.results.find((r: { roomId: string }) => r.roomId === '1,0')).toMatchObject({ protectedCellCount: 1, viewerState: null });
     expect(expired.response.headers.get('Cache-Control')).toBe('public, max-age=20');
   });
+  it.each([false, true])('keeps the Protected view distinct from ordinary pages, shares public eligibility and refreshes private history; index=%s', async index => {
+    vi.useFakeTimers(); f.env.PLAYABLE_CONTENT_INDEX_READS = index ? '1' : '0';
+    f.sqlite.prepare("UPDATE rooms SET minted_token_id='42' WHERE id='1,0'").run();
+    const a = await createSession(f.env, 'p1'), b = await createSession(f.env, 'p2');
+    const initial = await read('protected', a, '&limit=200');
+    expect(initial.body.results.map((r: { roomId: string }) => r.roomId)).toEqual(['1,0']);
+    const ordinary = await read('newest', undefined, '&limit=200&includeGoalLessRooms=1');
+    expect(ordinary.body.results.length).toBeGreaterThan(initial.body.results.length);
+    const other = await read('protected', b, '&limit=200'); expect(other.response.headers.get('X-WAMP-Cache')).toBe('hit');
+    expect(other.body.results[0].viewerState.completed).toBe(false);
+    f.history('protected-p2-clear','p2',1);
+    expect((await read('protected', b, '&limit=200')).body.results[0].viewerState.completed).toBe(true);
+    f.sqlite.prepare("UPDATE rooms SET minted_chain_id=8453 WHERE id='13,0'").run();
+    expect((await read('protected', undefined, '&limit=200')).body.results).toHaveLength(1);
+    expect((await read('protected', undefined, '&limit=200&fresh=1')).body.results).toHaveLength(2);
+    vi.advanceTimersByTime(20_001);
+    const expired = await read('protected', undefined, '&limit=200');
+    expect(expired.body.results).toHaveLength(2); expect(expired.body.results.every((r: { viewerState: unknown }) => r.viewerState === null)).toBe(true);
+    for (const value of stored.values()) expect(await value.response.clone().text()).not.toContain('viewerState');
+  });
   it('shares the candidate pool between users and personal sorts, without caching their history', async () => {
     const a = await createSession(f.env, 'p1'), b = await createSession(f.env, 'p2');
     expect((await read('unrated', a)).response.headers.get('X-WAMP-Cache')).toBe('miss');
