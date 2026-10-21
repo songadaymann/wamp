@@ -49,6 +49,23 @@ describe('cached public discovery inputs and fresh private filtering', () => {
       }
     }
   });
+  it.each([false, true])('shares protection metadata with a 20-second lifetime and refreshes without leaking private state; index=%s', async index => {
+    vi.useFakeTimers(); f.env.PLAYABLE_CONTENT_INDEX_READS = index ? '1' : '0';
+    const a = await createSession(f.env, 'p1'), b = await createSession(f.env, 'p2');
+    await read('newest', a, '&limit=200');
+    f.sqlite.prepare("UPDATE rooms SET minted_token_id='42' WHERE id='1,0'").run();
+    const warm = await read('newest', b, '&limit=200');
+    expect(warm.response.headers.get('X-WAMP-Cache')).toBe('hit');
+    expect(warm.body.results.find((r: { roomId: string }) => r.roomId === '1,0')).not.toHaveProperty('protectedCellCount');
+    const fresh = await read('newest', b, '&limit=200&fresh=1');
+    expect(fresh.response.headers.get('X-WAMP-Cache')).toBe('bypass');
+    expect(fresh.body.results.find((r: { roomId: string }) => r.roomId === '1,0').protectedCellCount).toBe(1);
+    vi.advanceTimersByTime(20_001);
+    const expired = await read('newest', undefined, '&limit=200');
+    expect(expired.response.headers.get('X-WAMP-Cache')).toBe('miss');
+    expect(expired.body.results.find((r: { roomId: string }) => r.roomId === '1,0')).toMatchObject({ protectedCellCount: 1, viewerState: null });
+    expect(expired.response.headers.get('Cache-Control')).toBe('public, max-age=20');
+  });
   it('shares the candidate pool between users and personal sorts, without caching their history', async () => {
     const a = await createSession(f.env, 'p1'), b = await createSession(f.env, 'p2');
     expect((await read('unrated', a)).response.headers.get('X-WAMP-Cache')).toBe('miss');

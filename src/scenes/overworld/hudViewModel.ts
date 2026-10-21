@@ -51,6 +51,7 @@ export interface SelectedCreatorProfileViewData {
 }
 
 interface SelectedSummaryViewData {
+  isMinted?: boolean;
   title: string | null;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
@@ -251,7 +252,7 @@ export function buildOverworldHudViewModel(
   const selectedCreatorBuilderProgressFraction = selectedCreatorProfile
     ? Math.max(0, Math.min(1, selectedCreatorProfile.builderProgressFraction))
     : 0;
-  const selectedRoomMinted = selectedState === 'published' && Boolean(selectedOwnership?.isMinted);
+  const selectedRoomMinted = selectedState === 'published' && Boolean(selectedSummary?.isMinted || selectedOwnership?.isMinted);
   const selectedTitleTone: OverworldHudViewModel['selectedTitleTone'] =
     selectedRoomMinted ? 'minted' : 'default';
   const selectedRoomClaimOwnerUserId =
@@ -283,7 +284,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'published'
         ? selectedSummary?.world
           ? viewerCanEditWorldRoom
-          : selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom || viewerCanCheckMintedOwnership
+          : !selectedRoomMinted || viewerOwnsMintedRoom || viewerCanCheckMintedOwnership
         : false;
   const editButtonTitle =
     selectedState !== 'published' && selectedState !== 'draft' && selectedState !== 'claimed_unpublished'

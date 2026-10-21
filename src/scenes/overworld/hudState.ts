@@ -280,6 +280,7 @@ export class OverworldHudStateController {
         selectedCoordinates,
         selectedSummary: this.selectedSummary
           ? {
+              isMinted: this.selectedSummary.isMinted,
               title: this.selectedSummary.title ?? null,
               creatorUserId: this.selectedSummary.creatorUserId ?? null,
               creatorDisplayName: this.selectedSummary.creatorDisplayName ?? null,

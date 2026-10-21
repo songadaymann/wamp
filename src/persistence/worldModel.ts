@@ -13,6 +13,8 @@ export type WorldCellState = 'published' | 'claimed_unpublished' | 'frontier';
 export const WORLD_CHUNK_SIZE = 8;
 
 export interface WorldRoomSummary {
+  /** Cached editing protection; omitted when unprotected or from an older server. */
+  isMinted?: boolean;
   id: string;
   coordinates: RoomCoordinates;
   title: string | null;
@@ -37,6 +39,7 @@ export interface WorldRoomSummary {
 }
 
 export interface PublishedWorldRoomSource {
+  isMinted?: boolean;
   state: 'published';
   snapshot: RoomSnapshot;
   creatorUserId: string | null;
@@ -44,6 +47,7 @@ export interface PublishedWorldRoomSource {
 }
 
 export interface ClaimedUnpublishedWorldRoomSource {
+  isMinted?: boolean;
   state: 'claimed_unpublished';
   snapshot: RoomSnapshot;
   claimerUserId: string | null;
@@ -276,6 +280,7 @@ export function createPublishedRoomSummary(
     coordinates: { ...snapshot.coordinates },
     title: snapshot.title,
     state: 'published',
+    ...(isPublishedWorldRoomSource(room) && room.isMinted === true ? { isMinted: true } : {}),
     background: snapshot.background,
     goalType: snapshot.goal?.type ?? null,
     version: snapshot.version,
@@ -299,6 +304,7 @@ export function createClaimedUnpublishedRoomSummary(
     coordinates: { ...snapshot.coordinates },
     title: snapshot.title,
     state: 'claimed_unpublished',
+    ...(isClaimedUnpublishedWorldRoomSource(room) && room.isMinted === true ? { isMinted: true } : {}),
     background: snapshot.background,
     goalType: snapshot.goal?.type ?? null,
     version: snapshot.version,

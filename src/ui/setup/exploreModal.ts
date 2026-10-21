@@ -1,3 +1,4 @@
+import { createRoomProtectionBadge } from '../roomProtection';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
 import Phaser from 'phaser';
 import { loadExploreDiscovery } from './exploreDiscovery';
@@ -712,6 +713,8 @@ export class ExploreModalController {
       titleRow.appendChild(badge);
     }
 
+    const protectionBadge = createRoomProtectionBadge(this.doc, entry);
+    if (protectionBadge) titleRow.appendChild(protectionBadge);
     copy.appendChild(titleRow);
     copy.appendChild(this.createBuilderRow(entry));
     const areaMeta = this.createExpandedRoomMeta(entry);

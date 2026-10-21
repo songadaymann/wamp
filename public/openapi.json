@@ -1178,6 +1178,7 @@
           "publishedAt"
         ],
         "properties": {
+          "protectedCellCount": { "type": "integer", "minimum": 1, "description": "Currently protected cells in this playable target; omitted when zero. This cached public metadata does not grant editing permission." },
           "roomId": { "type": "string" },
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
@@ -1670,6 +1671,7 @@
           "quality"
         ],
         "properties": {
+          "protectedCellCount": { "type": "integer", "minimum": 1, "description": "Currently protected cells in this playable target; omitted when zero. This cached public metadata does not grant editing permission." },
           "roomId": { "type": "string" },
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },

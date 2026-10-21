@@ -83,6 +83,7 @@ export class OverworldRoomCellController {
       return;
     }
 
+    const protectedRoomIds = new Set((worldWindow.rooms ?? []).filter(room => room.isMinted === true).map(room => room.id));
     const visibleFrontierLabelKeys = new Set<string>();
     const gridSize = worldWindow.radius * 2 + 1;
     for (let row = 0; row < gridSize; row += 1) {
@@ -97,7 +98,7 @@ export class OverworldRoomCellController {
 
         this.roomFillGraphics.fillStyle(cellFill.color, cellFill.alpha);
         this.roomFillGraphics.fillRect(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-        this.drawCellFrame(coordinates, cellState, origin.x, origin.y);
+        this.drawCellFrame(coordinates, cellState, origin.x, origin.y, protectedRoomIds.has(`${coordinates.x},${coordinates.y}`));
         if (cellState === 'published' && this.host.getMode() === 'browse' && this.host.hasFoundLostSong?.(coordinates)) {
           this.drawInsetFrame(this.roomFrameGraphics, origin.x, origin.y, 18, 2, 0xf4cc55, 0.9);
         }
@@ -178,11 +179,14 @@ export class OverworldRoomCellController {
     cellState: SelectedCellState,
     x: number,
     y: number,
+    protectedRoom: boolean,
   ): void {
     if (!this.roomFrameGraphics) {
       return;
     }
 
+    const showProtection = protectedRoom && cellState === 'published' && this.host.getMode() === 'browse';
+    if (showProtection) this.drawInsetFrame(this.roomFrameGraphics, x, y, 2, 2, 0xf4cc55, 1);
     const expandedRoomId = this.host.getExpandedRoomIdAt(coordinates);
     if (expandedRoomId) {
       return;
@@ -200,7 +204,7 @@ export class OverworldRoomCellController {
       this.drawInsetFrame(this.roomFrameGraphics, x, y, 4, 2, RETRO_COLORS.claimedUnpublished, 0.92);
     } else if (cellState === 'frontier') {
       this.drawInsetFrame(this.roomFrameGraphics, x, y, 4, 2, FRONTIER_BUILD_HERE_RED, 0.95);
-    } else if (cellState === 'published') {
+    } else if (cellState === 'published' && !showProtection) {
       this.drawInsetFrame(this.roomFrameGraphics, x, y, 2, 1, RETRO_COLORS.published, 0.45);
     }
 

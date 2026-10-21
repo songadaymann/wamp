@@ -1,5 +1,5 @@
 import { getLostSongService } from '../../../lostSongs/service';
-import { roomIdFromCoordinates } from '../../../persistence/roomModel';
+import { isRoomMinted, roomIdFromCoordinates } from '../../../persistence/roomModel';
 import { getActiveWorldId } from '../../../worlds/clientContext';
 import { OverworldBrowseOverlayController } from '../browseOverlays';
 import { OverworldCameraController } from '../cameraController';
@@ -227,9 +227,7 @@ export function createHudStateController(
       const summary = await host.roomRepository.loadRoomSummary(roomId, coordinates);
       return {
         claimerUserId: summary.claimerUserId,
-        isMinted: summary.mintedChainId !== null &&
-          summary.mintedContractAddress !== null &&
-          summary.mintedTokenId !== null,
+        isMinted: isRoomMinted(summary),
         mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
       };
     },

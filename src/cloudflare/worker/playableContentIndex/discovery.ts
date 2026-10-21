@@ -1,3 +1,4 @@
+import { indexedRoomProtectionCountSql } from '../rooms/protection';
 import type { RoomDifficulty, RoomDiscoverySort } from '../../../runs/model';
 import type { ExpandedRoomSource } from '../../../expandedRooms/model';
 import type { Env } from '../core/types';
@@ -31,6 +32,7 @@ export interface IndexedDiscoveryRow {
   difficulty_source: 'votes' | 'measured' | null;
   measured_players: number | string | null;
   recent_players: number | string | null;
+  protected_cell_count?: number | string;
 }
 
 export async function loadIndexedDiscoveryRows(
@@ -63,6 +65,7 @@ export async function loadIndexedDiscoveryRows(
           ON metrics.target_key = current_target.target_key AND metrics.version_key = current_target.version_key
       )
       SELECT
+        ${indexedRoomProtectionCountSql('index_row')} AS protected_cell_count,
         index_row.target_type,
         index_row.content_id,
         index_row.version_key,

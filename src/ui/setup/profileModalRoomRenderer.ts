@@ -1,3 +1,4 @@
+import { createRoomProtectionBadge } from '../roomProtection';
 import { insightSummaryText, insightTargetForRoom } from '../../insights/model';
 import type { ProfilePublishedRoomEntry } from '../../profiles/model';
 import { ROOM_DIFFICULTY_LABELS } from '../../runs/model';
@@ -83,7 +84,10 @@ function createRoomRow(
   meta.className = 'profile-room-card-meta';
   meta.textContent = getProfileRoomMeta(room, options.formatShortDate);
 
-  copy.append(title, meta, createRoomRatingRow(doc, room));
+  copy.append(title);
+  const protectionBadge = createRoomProtectionBadge(doc, room);
+  if (protectionBadge) copy.append(protectionBadge);
+  copy.append(meta, createRoomRatingRow(doc, room));
   if (room.insights) {
     const stats = doc.createElement('div'); stats.className = 'profile-room-card-meta room-insight-summary';
     stats.textContent = `${room.insights.uniquePlayers.toLocaleString()} players · ${insightSummaryText(room.insights)}`;
