@@ -6,8 +6,6 @@ import type {
   DisplayNameUpdateResponse,
   AuthUser,
   MagicLinkRequestResponse,
-  WalletChallengeResponse,
-  WalletVerifyResponse,
 } from './model';
 import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
@@ -38,6 +36,7 @@ import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from '
 import { waitForWalletReceipt } from './walletReceiptWait';
 import { applyWalletGate } from '../lib/wallet-gate.js';
 import { hasCryptoWallet } from '../mint/walletGate';
+import { authenticateWallet, walletAuthenticationErrorMessage } from './walletAuthentication';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
@@ -774,6 +773,7 @@ async function checkDisplayNameAvailability(displayName: string): Promise<void> 
 }
 
 async function handleWalletButton(): Promise<void> {
+  if (state.loading) return;
   if (!hasCryptoWallet()) return;
   if (!state.walletProjectConfigured) {
     state.status = WALLET_NOT_CONFIGURED_MESSAGE;
@@ -781,13 +781,17 @@ async function handleWalletButton(): Promise<void> {
     return;
   }
 
-  const walletModal = await ensureWalletModal();
-
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
   const connectedWallet = state.walletAddress?.toLowerCase();
 
   if (linkedWallet && linkedWallet === connectedWallet) {
-    await walletModal.open({ view: 'Account', namespace: 'eip155' });
+    try {
+      const walletModal = await ensureWalletModal();
+      await walletModal.open({ view: 'Account', namespace: 'eip155' });
+    } catch (error) {
+      state.status = walletAuthenticationErrorMessage(error);
+      renderAuthUi();
+    }
     return;
   }
 
@@ -795,43 +799,41 @@ async function handleWalletButton(): Promise<void> {
 }
 
 async function authenticateWithWallet(): Promise<void> {
+  const userId = state.user?.id ?? null, generation = sessionGeneration;
+  const controller = new AbortController();
+  let connectedAddress: string | null = null;
+  const current = () => hasCryptoWallet() && generation === sessionGeneration
+    && (state.user?.id ?? null) === userId
+    && (!connectedAddress || state.walletAddress?.toLowerCase() === connectedAddress);
+  const changed = () => { if (!current()) controller.abort(); };
+  const leaving = () => controller.abort();
+  window.addEventListener(AUTH_STATE_CHANGED_EVENT, changed);
+  window.addEventListener('wallet-gate', changed);
+  window.addEventListener('pagehide', leaving);
+  let failure = '';
   setLoading(true, state.authenticated ? 'Linking wallet...' : 'Signing in with wallet...');
 
   try {
-    const walletModal = await ensureWalletModal();
-    const address = await ensureWalletConnection();
-    const challenge = await apiRequest<WalletChallengeResponse>('/api/auth/wallet/challenge', {
-      method: 'POST',
-      body: JSON.stringify({ address }),
+    const response = await authenticateWallet({
+      signal: controller.signal, isCurrent: current,
+      connect: async () => {
+        const walletModal = await ensureWalletModal(), address = await ensureWalletConnection();
+        connectedAddress = address.toLowerCase();
+        return { address, provider: getWalletProvider(walletModal) };
+      },
     });
-
-    const provider = getWalletProvider(walletModal);
-
-    const { createWalletClient, custom } = await import('viem');
-    const walletClient = createWalletClient({ transport: custom(provider) });
-    const [signerAddress] = await walletClient.getAddresses();
-    if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
-    const signature = await walletClient.signMessage({
-      account: signerAddress,
-      message: challenge.message,
-    });
-
-    const response = await apiRequest<WalletVerifyResponse>('/api/auth/wallet/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        address: signerAddress,
-        message: challenge.message,
-        signature,
-      }),
-    });
-
+    if (controller.signal.aborted || !current()) return;
     state = transitionAuthState(state, { type: 'wallet-verified', response });
   } catch (error) {
-    console.error('Wallet authentication failed', error);
-    state.status = getErrorMessage(error, 'Wallet sign-in failed.');
+    failure = walletAuthenticationErrorMessage(error);
   } finally {
-    setLoading(false);
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, changed);
+    window.removeEventListener('wallet-gate', changed);
+    window.removeEventListener('pagehide', leaving);
+    controller.abort();
     await refreshSession();
+    if (failure) state.status = failure;
+    setLoading(false);
   }
 }
 

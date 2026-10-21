@@ -802,6 +802,9 @@ export interface WalletChallengeRow {
   expires_at: string;
   consumed_at: string | null;
   created_at: string;
+  purpose: 'sign_in' | 'link_wallet';
+  target_user_id: string | null;
+  target_session_id: string | null;
 }
 
 export interface ApiTokenRow {

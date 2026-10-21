@@ -273,13 +273,14 @@ async function hasUsernameColumn(env: Env): Promise<boolean> {
 export async function attachWalletToUser(
   env: Env,
   user: AuthUser,
-  walletAddress: string
+  walletAddress: string,
+  sessionId: string,
 ): Promise<AuthUser> {
   const normalizedWallet = normalizeAddress(walletAddress);
   const existingWalletUser = await findUserByWallet(env, normalizedWallet);
 
   if (existingWalletUser && existingWalletUser.id !== user.id) {
-    throw new HttpError(409, 'That wallet is already linked to another account.');
+    throw new HttpError(409, 'That wallet belongs to another WAMP account. Log out of WAMP and choose Sign in with wallet to use that account. Your current rooms stay with this account; account recovery is not available yet.');
   }
 
   if (user.walletAddress === normalizedWallet) {
@@ -287,19 +288,27 @@ export async function attachWalletToUser(
   }
 
   if (user.walletAddress && user.walletAddress !== normalizedWallet) {
-    throw new HttpError(409, 'This account is already linked to a different wallet.');
+    throw new HttpError(409, 'This WAMP account already has a different wallet. Switch your wallet app to the linked address. Changing the linked wallet is not available yet.');
   }
 
   const updatedAt = new Date().toISOString();
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE users
-        SET wallet_address = ?, updated_at = ?
-        WHERE id = ?
-      `
-    ).bind(normalizedWallet, updatedAt, user.id),
-  ]);
+  let linked: { id: string } | null;
+  try {
+    linked = await env.DB.prepare(`
+      UPDATE users SET wallet_address = ?, updated_at = ?
+      WHERE id = ? AND wallet_address IS NULL
+        AND EXISTS (SELECT 1 FROM sessions WHERE id = ? AND user_id = users.id AND expires_at > ?)
+      RETURNING id
+    `).bind(normalizedWallet, updatedAt, user.id, sessionId, updatedAt).first<{ id: string }>();
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('UNIQUE constraint failed: users.wallet_address')) throw error;
+    throw new HttpError(409, 'That wallet was just linked to another WAMP account. Refresh WAMP and try again.');
+  }
+  if (!linked) {
+    const current = await findUserById(env, user.id);
+    if (current?.walletAddress === normalizedWallet) return current;
+    throw new HttpError(409, 'Your account or wallet changed. Refresh WAMP, then try linking your wallet again.');
+  }
 
   await ensureFounderIdentityQualification(env, user.id, updatedAt);
 
@@ -715,7 +724,8 @@ export async function loadWalletChallengeByNonceHash(
 ): Promise<WalletChallengeRow | null> {
   return env.DB.prepare(
     `
-      SELECT id, address, nonce_hash, message_text, expires_at, consumed_at, created_at
+      SELECT id, address, nonce_hash, message_text, expires_at, consumed_at, created_at,
+        purpose, target_user_id, target_session_id
       FROM wallet_challenges
       WHERE nonce_hash = ?
       LIMIT 1
@@ -731,15 +741,18 @@ export async function createWalletChallenge(
   nonceHash: string,
   messageText: string,
   expiresAt: string,
-  createdAt: string
+  createdAt: string,
+  target?: { userId: string; sessionId: string },
 ): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `
-        INSERT INTO wallet_challenges (id, address, nonce_hash, message_text, expires_at, consumed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        INSERT INTO wallet_challenges (id, address, nonce_hash, message_text, expires_at, consumed_at, created_at,
+          purpose, target_user_id, target_session_id)
+        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
       `
-    ).bind(crypto.randomUUID(), address, nonceHash, messageText, expiresAt, createdAt),
+    ).bind(crypto.randomUUID(), address, nonceHash, messageText, expiresAt, createdAt,
+      target ? 'link_wallet' : 'sign_in', target?.userId ?? null, target?.sessionId ?? null),
   ]);
 }
 
@@ -747,16 +760,17 @@ export async function consumeWalletChallenge(
   env: Env,
   challengeId: string,
   consumedAt: string
-): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE wallet_challenges
-        SET consumed_at = ?
-        WHERE id = ?
-      `
-    ).bind(consumedAt, challengeId),
-  ]);
+): Promise<boolean> {
+  const result = await env.DB.prepare(`
+    UPDATE wallet_challenges SET consumed_at = ?
+    WHERE id = ? AND consumed_at IS NULL AND expires_at > ?
+      AND (purpose = 'sign_in' OR EXISTS (
+        SELECT 1 FROM sessions WHERE id = wallet_challenges.target_session_id
+          AND user_id = wallet_challenges.target_user_id AND expires_at > ?
+      ))
+    RETURNING id
+  `).bind(consumedAt, challengeId, consumedAt, consumedAt).first<{ id: string }>();
+  return Boolean(result);
 }
 
 export async function findApiTokenIdForUser(
@@ -1433,13 +1447,15 @@ export function createWalletChallengeMessage(
   env: Env,
   address: string,
   nonce: string,
-  issuedAt: string
+  issuedAt: string,
+  target?: AuthUser,
 ): string {
   const host = new URL(resolvePublicBaseUrl(request, env)).host;
 
   return [
-    "Everybody's Platformer wants you to sign in with your wallet.",
+    target ? "Link this wallet to your current WAMP account." : "Everybody's Platformer wants you to sign in with your wallet.",
     '',
+    ...(target ? [`WAMP account: ${target.displayName.replace(/[\r\n]/g, ' ')} (${target.id})`, 'Your rooms and profile stay with this WAMP account.', ''] : []),
     `Address: ${address}`,
     `Nonce: ${nonce}`,
     `Domain: ${host}`,
