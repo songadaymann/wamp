@@ -15,7 +15,10 @@ export function createSingleSendProvider(provider: WalletProvider, chainId: numb
       // viem can try a wallet namespace fallback even for an ambiguous -32000 error.
       // Only an explicit unsupported-method response proves there was no first approval.
       if (sendAttempted && !(args.method === 'wallet_sendTransaction' && unsupportedEthMethod)) throw sendFailure ?? new Error('This wallet approval was already requested. Check it before starting another.');
-      if (!current()) throw new Error('This room action is no longer current.');
+      if (!current()) {
+        if (unsupportedEthMethod) throw new WalletRequestNotSubmittedError('cancelled', 'This room action was cancelled before wallet approval.');
+        throw new Error('This room action is no longer current.');
+      }
       if (!Array.isArray(args.params) || !args.params[0] || typeof args.params[0] !== 'object') throw new Error('Invalid prepared room transaction.');
       // The generic viem formatter omits this standard RPC field. Keep the prepared network explicit.
       const params = [{ ...args.params[0], chainId: `0x${chainId.toString(16)}` }];

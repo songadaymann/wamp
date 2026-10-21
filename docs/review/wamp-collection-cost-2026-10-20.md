@@ -24,3 +24,5 @@ Reuse the current feedback overlay and extracted room wallet/collection modules.
 
 
 Compatibility review preserved the pre-existing namespace fallback only for explicit JSON-RPC method-not-found (-32601) and method-not-supported (-32004) responses, which prove the first method could not approve a transaction. Invalid-input (-32000), insufficient-funds, user rejection, disconnects and other uncertain results cannot trigger another native send. Real-viem tests cover both safe fallbacks and cancellation before fallback; no second intent callback is permitted. Source acceptance and hosted proofs must use the final compatibility commit.
+
+Cancellation after an explicitly unsupported first method is classified as known-unsent before fallback, so a context change cannot leave a false pending intent. The sender unwraps this internal guard error before the normal RPC classifiers. Focused103 provider/action/cost/flow tests pass; receipt-failure tests assert error shape rather than module-instance identity across isolated imports. Full final acceptance remains required.

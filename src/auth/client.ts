@@ -331,6 +331,8 @@ export async function sendPreparedWalletTransaction(
     data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
   }).catch(error => {
+    const stopped = error instanceof BaseError ? error.walk(cause => cause instanceof WalletRequestNotSubmittedError) : error;
+    if (stopped instanceof WalletRequestNotSubmittedError) throw stopped;
     if (error instanceof BaseError && error.walk(cause => cause instanceof ChainMismatchError) instanceof ChainMismatchError) {
       throw new WalletRequestNotSubmittedError('network-switch', `Wallet network changed. Switch back to ${chain.name} and try again.`, error);
     }

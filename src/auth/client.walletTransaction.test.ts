@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthSessionResponse } from './model';
-import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from './walletTransaction';
+import { WalletTransactionRevertedError } from './walletTransaction';
 
 const wallet = '0x2222222222222222222222222222222222222222';
 const otherWallet = '0x3333333333333333333333333333333333333333';
@@ -63,7 +63,7 @@ describe('prepared room transactions through the real wallet sender and viem pro
     const auth = await client(), onSubmitted = vi.fn();
     fixture.request.mockImplementation(async q => { if (q.method === 'eth_getTransactionReceipt') throw Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 }); return rpc(q); });
     let rejected: unknown; try { await auth.sendPreparedWalletTransaction(transaction, chain, { onSubmitted, signal: new AbortController().signal }); } catch (error) { rejected = error; }
-    expect(rejected).toBeDefined(); expect(rejected).not.toBeInstanceOf(WalletRequestNotSubmittedError);
+    expect(rejected).toBeDefined(); expect(rejected).not.toMatchObject({ name: 'WalletRequestNotSubmittedError' });
     expect(onSubmitted).toHaveBeenCalledWith({ hash, from: wallet }); expect(sent()).toHaveLength(1);
   });
   it('identifies a rejected network switch before creating a send intent', async () => {
@@ -79,7 +79,7 @@ describe('prepared room transactions through the real wallet sender and viem pro
     await expect(auth.sendPreparedWalletTransaction(transaction, chain)).rejects.toMatchObject({ reason: 'insufficient-funds' });
     fixture.request.mockImplementation(async q => { if (q.method === 'eth_sendTransaction') throw Object.assign(new Error('Internal disconnect'), { code: -32603 }); return rpc(q); });
     let rejected: unknown; try { await auth.sendPreparedWalletTransaction(transaction, chain); } catch (error) { rejected = error; }
-    expect(rejected).toBeDefined(); expect(rejected).not.toBeInstanceOf(WalletRequestNotSubmittedError);
+    expect(rejected).toBeDefined(); expect(rejected).not.toMatchObject({ name: 'WalletRequestNotSubmittedError' });
   });
   it('does not retry a wallet send whose outcome is unknown', async () => {
     vi.useFakeTimers(); const auth = await client(), onBeforeSend = vi.fn();
@@ -111,7 +111,7 @@ describe('prepared room transactions through the real wallet sender and viem pro
       if (q.method === 'eth_sendTransaction') { current = false; throw Object.assign(new Error('Method unsupported'), { code: -32601 }); }
       return rpc(q);
     });
-    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, isCurrent: () => current })).rejects.toThrow();
+    await expect(auth.sendPreparedWalletTransaction(transaction, chain, { onBeforeSend, isCurrent: () => current })).rejects.toMatchObject({ reason: 'cancelled' });
     expect(onBeforeSend).toHaveBeenCalledOnce();
     expect(fixture.request.mock.calls.filter(([q]) => q.method === 'wallet_sendTransaction')).toHaveLength(0);
   });
