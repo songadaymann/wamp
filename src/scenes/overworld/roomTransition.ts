@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { CourseSnapshot } from '../../courses/model';
 import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
+import { EDGE_WALL_THICKNESS } from './composition/settings';
 import { hasDeadlyBottomEdge } from './pits';
 import {
   ROOM_PX_HEIGHT,
@@ -62,8 +63,8 @@ interface OverworldRoomTransitionHost {
   ): void;
   clearPerformanceTransitionGate?(): void;
   onRoomTransitionCompleted?(): void;
-  /** True while the player is held at a seam whose room is not ready (F355). */
-  onUnpreparedTransitionWaitChanged?(waiting: boolean): void;
+  /** True while the player is held at a room edge whose room is not ready (F355). */
+  onSeamWaitChanged?(waiting: boolean): void;
 }
 
 type BlockedTransitionReason = 'locked' | 'unreachable' | 'non-cardinal' | 'unprepared';
@@ -88,6 +89,8 @@ const TRANSITION_PREFETCH_DISTANCE_PX = Math.max(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
 const TRANSITION_PREPARE_DISTANCE_PX = 72;
 const MOVEMENT_EPSILON = 1;
 const BLOCKED_TRANSITION_LOG_INTERVAL_MS = 1_000;
+// A body pressed against an edge wall rests within its thickness of the seam.
+const EDGE_WALL_HOLD_TOLERANCE_PX = EDGE_WALL_THICKNESS + 2;
 
 export class OverworldRoomTransitionController {
   private readonly lastSafePlayerTransform: SafePlayerTransform = {
@@ -99,6 +102,7 @@ export class OverworldRoomTransitionController {
   };
   private pendingHorizontalPreparation: RoomCoordinates | null = null;
   private pendingVerticalPreparation: RoomCoordinates | null = null;
+  private seamWaitSignaled = false;
   private authorizedTeleportDestination: RoomCoordinates | null = null;
   private transitionRoomPreparedThisUpdate = false;
   private predictedRoomRequestedThisUpdate = false;
@@ -113,6 +117,11 @@ export class OverworldRoomTransitionController {
   }
 
   maybeAdvancePlayerRoom(): void {
+    this.advancePlayerRoom();
+    this.syncSeamWaitSignal();
+  }
+
+  private advancePlayerRoom(): void {
     this.host.setTransitionPreparationSeamUrgent?.(false);
     if (this.host.getMode() !== 'play') {
       this.lastSafePlayerTransform.valid = false;
@@ -201,7 +210,7 @@ export class OverworldRoomTransitionController {
       // The advisor owns clearing a prior unprepared stall when it receives a
       // different gate reason. Keep only the controller's intent bookkeeping
       // in sync here so we do not double-clear the same episode.
-      this.setActiveUnpreparedTransition(null);
+      this.activeUnpreparedTransition = null;
       this.host.recordPerformanceTransitionGate?.(
         reason,
         currentRoomCoordinates,
@@ -562,10 +571,10 @@ export class OverworldRoomTransitionController {
     if (active) {
       this.clearActiveUnpreparedTransition();
     }
-    this.setActiveUnpreparedTransition({
+    this.activeUnpreparedTransition = {
       from: { ...currentRoomCoordinates },
       to: { ...nextRoomCoordinates },
-    });
+    };
   }
 
   private clearPreparedUnpreparedTransition(coordinates: RoomCoordinates): void {
@@ -602,7 +611,7 @@ export class OverworldRoomTransitionController {
             ? 'unreachable'
             : null;
     if (replacementReason) {
-      this.setActiveUnpreparedTransition(null);
+      this.activeUnpreparedTransition = null;
       this.host.recordPerformanceTransitionGate?.(
         replacementReason,
         currentRoomCoordinates,
@@ -629,20 +638,43 @@ export class OverworldRoomTransitionController {
     );
   }
 
+  private syncSeamWaitSignal(): void {
+    const waiting = this.activeUnpreparedTransition !== null || this.isHeldAtPendingEdgeWall();
+    if (waiting === this.seamWaitSignaled) return;
+    this.seamWaitSignaled = waiting;
+    this.host.onSeamWaitChanged?.(waiting);
+  }
+
+  // A reachable room that is not ready yet keeps an edge wall just inside the
+  // seam (runtimeController), so the player usually stops before the gate
+  // above ever runs. Pressing against that wall while its room is pending is
+  // the same wait.
+  private isHeldAtPendingEdgeWall(): boolean {
+    const body = this.host.getPlayerBody();
+    if (this.host.getMode() !== 'play' || !body) return false;
+    const current = this.host.getCurrentRoomCoordinates();
+    const origin = this.host.getRoomOrigin(current);
+    const right = origin.x + ROOM_PX_WIDTH;
+    const bottom = origin.y + ROOM_PX_HEIGHT;
+    const tolerance = EDGE_WALL_HOLD_TOLERANCE_PX;
+    return [this.pendingHorizontalPreparation, this.pendingVerticalPreparation].some((pending) => {
+      if (!pending) return false;
+      const deltaX = pending.x - current.x;
+      const deltaY = pending.y - current.y;
+      if (deltaX === 1) return Boolean(body.blocked?.right || body.touching?.right) && body.right >= right - tolerance;
+      if (deltaX === -1) return Boolean(body.blocked?.left || body.touching?.left) && body.left <= origin.x + tolerance;
+      if (deltaY === 1) return Boolean(body.blocked?.down || body.touching?.down) && body.bottom >= bottom - tolerance;
+      if (deltaY === -1) return Boolean(body.blocked?.up || body.touching?.up) && body.top <= origin.y + tolerance;
+      return false;
+    });
+  }
+
   private clearActiveUnpreparedTransition(): void {
     if (!this.activeUnpreparedTransition) {
       return;
     }
-    this.setActiveUnpreparedTransition(null);
+    this.activeUnpreparedTransition = null;
     this.host.clearPerformanceTransitionGate?.();
-  }
-
-  private setActiveUnpreparedTransition(next: ActiveUnpreparedTransition | null): void {
-    const wasWaiting = this.activeUnpreparedTransition !== null;
-    this.activeUnpreparedTransition = next;
-    if (wasWaiting !== (next !== null)) {
-      this.host.onUnpreparedTransitionWaitChanged?.(next !== null);
-    }
   }
 
   private consumeAuthorizedTeleport(nextRoomCoordinates: RoomCoordinates): boolean {

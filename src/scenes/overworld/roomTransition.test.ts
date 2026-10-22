@@ -27,6 +27,9 @@ function createHarness() {
     height: 24,
     bottomOffsetY: 0,
     get bottom() { return player.y + body.height * 0.5 + body.bottomOffsetY; },
+    get left() { return player.x - body.width * 0.5; },
+    get right() { return player.x + body.width * 0.5; },
+    blocked: { up: false, down: false, left: false, right: false },
     velocity: { x: 150, y: 0 },
     reset: vi.fn((x: number, y: number) => {
       player.x = x;
@@ -82,7 +85,7 @@ function createHarness() {
     recordPerformanceTransitionGate: vi.fn(),
     clearPerformanceTransitionGate: vi.fn(),
     onRoomTransitionCompleted: vi.fn(),
-    onUnpreparedTransitionWaitChanged: vi.fn(),
+    onSeamWaitChanged: vi.fn(),
   };
   return {
     body,
@@ -423,66 +426,125 @@ describe('overworld room transition hydration', () => {
 
 
 describe('seam wait signal for the loading notice (F355)', () => {
-  it('reports one wait per held seam and clears it once the room is ready', () => {
+  const FRAME_SECONDS = 1 / 60;
+  const EDGE_WALL_LEFT_X = 640 - 12;
+  const EDGE_WALL_TOP_Y = 352 - 12;
+
+  // One Arcade step against the right edge wall that runtimeController keeps
+  // just inside the seam until the room beyond it is ready.
+  function runRight(harness: ReturnType<typeof createHarness>, wall = true, speed = 150) {
+    const { body, controller, player } = harness;
+    player.x += speed * FRAME_SECONDS;
+    body.blocked.right = wall && player.x + body.width * 0.5 >= EDGE_WALL_LEFT_X;
+    if (body.blocked.right) player.x = EDGE_WALL_LEFT_X - body.width * 0.5;
+    body.velocity.x = body.blocked.right ? 0 : speed;
+    controller.maybeAdvancePlayerRoom();
+  }
+
+  it('signals the wait while the player presses against a pending room\'s edge wall', () => {
+    const harness = createHarness();
+    const { body, host, player } = harness;
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    player.x = 560;
+
+    for (let frame = 0; frame < 30 && !body.blocked.right; frame += 1) {
+      expect(host.onSeamWaitChanged).not.toHaveBeenCalled();
+      runRight(harness);
+    }
+
+    expect(body.blocked.right).toBe(true);
+    expect(player.x).toBe(620);
+    expect(host.setCurrentRoomCoordinates).not.toHaveBeenCalled();
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true]]);
+
+    for (let frame = 0; frame < 10; frame += 1) runRight(harness);
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true]]);
+
+    // Once the room is ready its edge wall is removed and the run continues.
+    host.preparePlayableRoomForTransition.mockReturnValue(true);
+    runRight(harness, false);
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true], [false]]);
+    for (let frame = 0; frame < 10; frame += 1) runRight(harness, false);
+    expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 1, y: 0 });
+  });
+
+  it('signals the wait while the player stands on a pending room\'s bottom edge wall', () => {
     const { body, controller, host, player } = createHarness();
     host.preparePlayableRoomForTransition.mockReturnValue(false);
+    player.x = 320;
+    player.y = 300;
+    body.velocity.x = 0;
+    body.velocity.y = 150;
 
+    for (let frame = 0; frame < 30 && !body.blocked.down; frame += 1) {
+      player.y += body.velocity.y * FRAME_SECONDS;
+      body.blocked.down = body.bottom >= EDGE_WALL_TOP_Y;
+      if (body.blocked.down) {
+        player.y = EDGE_WALL_TOP_Y - body.height * 0.5;
+        body.velocity.y = 0;
+      }
+      controller.maybeAdvancePlayerRoom();
+    }
+
+    expect(body.blocked.down).toBe(true);
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true]]);
+  });
+
+  it('stays silent against the edge wall of a room that cannot be entered', () => {
+    const harness = createHarness();
+    harness.host.isNeighborReachable.mockReturnValue(false);
+    harness.player.x = 600;
+
+    for (let frame = 0; frame < 20; frame += 1) runRight(harness);
+
+    expect(harness.body.blocked.right).toBe(true);
+    expect(harness.host.onSeamWaitChanged).not.toHaveBeenCalled();
+  });
+
+  it('ends the wait when the player walks away from the wall', () => {
+    const harness = createHarness();
+    const { body, controller, host, player } = harness;
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    player.x = 600;
+    for (let frame = 0; frame < 10; frame += 1) runRight(harness);
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true]]);
+
+    body.blocked.right = false;
+    body.velocity.x = -150;
+    player.x = 610;
     controller.maybeAdvancePlayerRoom();
-    expect(host.onUnpreparedTransitionWaitChanged).not.toHaveBeenCalled();
+
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('also signals when the centre reaches a seam before its wall exists', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    controller.maybeAdvancePlayerRoom();
 
     player.x = 645;
     controller.maybeAdvancePlayerRoom();
     body.velocity.x = 150;
     player.x = 645;
     controller.maybeAdvancePlayerRoom();
-    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true]]);
-
-    host.preparePlayableRoomForTransition.mockReturnValue(true);
-    body.velocity.x = 0;
-    controller.maybeAdvancePlayerRoom();
-    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
-  });
-
-  it('ends the wait when the player walks away from the seam', () => {
-    const { body, controller, host, player } = createHarness();
-    host.preparePlayableRoomForTransition.mockReturnValue(false);
-    controller.maybeAdvancePlayerRoom();
-    player.x = 645;
-    controller.maybeAdvancePlayerRoom();
-
-    player.x = 500;
-    body.velocity.x = -150;
-    controller.maybeAdvancePlayerRoom();
-
-    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
-  });
-
-  it('ends the wait when the seam turns into a different gate', () => {
-    const { body, controller, host, player } = createHarness();
-    host.preparePlayableRoomForTransition.mockReturnValue(false);
-    controller.maybeAdvancePlayerRoom();
-    player.x = 645;
-    controller.maybeAdvancePlayerRoom();
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true]]);
 
     host.isRoomTransitionLocked.mockReturnValue(true);
-    body.velocity.x = 150;
     player.x = 645;
     controller.maybeAdvancePlayerRoom();
-
-    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
+    expect(host.onSeamWaitChanged.mock.calls).toEqual([[true], [false]]);
   });
 
   it('ends the wait on leaving play', () => {
-    const { controller, host, player } = createHarness();
-    host.preparePlayableRoomForTransition.mockReturnValue(false);
-    controller.maybeAdvancePlayerRoom();
-    player.x = 645;
-    controller.maybeAdvancePlayerRoom();
+    const harness = createHarness();
+    harness.host.preparePlayableRoomForTransition.mockReturnValue(false);
+    harness.player.x = 600;
+    for (let frame = 0; frame < 10; frame += 1) runRight(harness);
 
-    host.getMode.mockReturnValue('browse' as never);
-    controller.maybeAdvancePlayerRoom();
+    harness.host.getMode.mockReturnValue('browse' as never);
+    harness.controller.maybeAdvancePlayerRoom();
 
-    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
+    expect(harness.host.onSeamWaitChanged.mock.calls).toEqual([[true], [false]]);
   });
 });
 

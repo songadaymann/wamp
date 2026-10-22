@@ -640,7 +640,7 @@ export function createRoomTransitionController(
       performanceAdvisorRuntime.advisor.clearTransitionGate(performance.now());
     },
     onRoomTransitionCompleted: () => host.handlePerformanceRoomTransitionCompleted(),
-    onUnpreparedTransitionWaitChanged: (waiting) => host.connectionNoticeController.setSeamWaiting(waiting),
+    onSeamWaitChanged: (waiting) => host.connectionNoticeController.setSeamWaiting(waiting),
     isRoomTransitionLocked: () => host.isPvpArenaActive(),
     resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
       host.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);
