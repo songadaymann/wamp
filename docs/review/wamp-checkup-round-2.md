@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 20 of 248 done.**
+**Progress: 21 of 248 done.**
 
 ## How to use this file
 
@@ -275,7 +275,7 @@ Phones can now do most building tasks. Expanded Room setup, the tile picker and 
 Each new system works on its own; the bugs appear where they meet. The stale-tab break, lost or overwritten data, and inputs that disagree come first.
 
 - [x] **F374** After each release, anyone with WAMP already open can't open the editor or menus until they reload the page · high impact · small effort — _also covers: If an on-demand dialog fails to download, nothing happens, and a finished Room Rush can lose its score_ — **done 2026-10-22** ([PR #288](https://github.com/songadaymann/wamp/pull/288)): a failed on-demand download checks whether this tab's entry script is gone (404) and then offers a "WAMP was updated" card with Reload, waiting until the busy card is free; it never reloads by itself. The editor stylesheet reports its failures the same way, and the Room Rush result dialog downloads with the Rush dialog. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
-- [ ] **F379** Expanded-room cell saves skip the 'edited somewhere else' check, so two tabs or devices still overwrite each other · medium impact · small effort
+- [x] **F379** Expanded-room cell saves skip the 'edited somewhere else' check, so two tabs or devices still overwrite each other · medium impact · small effort — **done 2026-10-22** ([PR #292](https://github.com/songadaymann/wamp/pull/292)): Expanded Room cell saves and publishes send the server version each cell was edited from. A conflict reloads the cell: a save the server already holds counts as saved, a cell with no edits here takes the newer version, and a real conflict is backed up and reported, with reopening offering the choice (or Load Newer Version / Keep Editing when no backup is possible). Session copies from the Composer and the room editor carry their base, and cells that haven't loaded are never saved. The goal/setup save still sends no base. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 - [ ] **F378** Escape or P during a Room Rush throws the run away with no score, while the Stop button, phone Stop and gamepad save it · medium impact · small effort
 - [ ] **F385** Pressing Escape to close the room-chat or comment box also kicks you out of the room and ends your run · medium impact · small effort
 - [ ] **F383** Opening a room from Profile, My Rooms, Explore or a playlist mid-run leaves the old run half-alive · medium impact · small effort

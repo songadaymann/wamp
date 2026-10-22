@@ -4880,6 +4880,8 @@ The room editor sends `baseUpdatedAt` on every write (roomSession.ts:655-657 sav
   - The evidence line for the refresh after save is :2059, not :2058.
   - The course goal and setup save (expandedRoomEditorRepository.saveDraft at :1417 and :1457) has the same gap.
 
+**2026-10-22 delivered.** PR #292 (four commits, after four review rounds). New `src/scenes/courseEditor/sliceEditConflict.ts`, which compares contents normalized with `cloneRoomSnapshot`, as the server does. `draftSession.ts` records each session copy's server base, and the room editor refreshes that copy after every accepted save. Other cells keep saving past a conflict. Cmd+S key-repeat is ignored and only one save runs at a time. Remaining: the Expanded Room goal/setup save (`expandedRoomEditorRepository.saveDraft`) sends no base, publish has no timeout, and pressing Play twice during an upload could start two play tests. `npm run check`: 629 files, 5,384 tests. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
 ### F378: Escape or P during a Room Rush throws the run away with no score, while the Stop button, phone Stop and gamepad save it
 
 - **Area:** Bugs and regressions (reviewer: Bugs and regressions: gameplay, editor and UI)

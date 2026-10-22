@@ -8,7 +8,7 @@ Delivers round-2 items F374, F485, F388 and F251 (step 1 of the suggested order)
 - **F485, Node 22** ([PR #289](https://github.com/songadaymann/wamp/pull/289)). `.nvmrc` is 22.22.0, `package.json` requires Node 22.13 or later, and every CI job reads `.nvmrc`. Cloudflare Pages now builds on Node 22.
 - **F388, logs** ([PR #290](https://github.com/songadaymann/wamp/pull/290)). Every line the Worker's code writes is kept again. Cloudflare's automatic per-request records stay off; they were the cost the 1% sampling was meant to cut.
 - **F251, dead fetch** ([PR #291](https://github.com/songadaymann/wamp/pull/291)). Entering a goal room no longer loads the unused global top 5. 197 lines of dead summary code are gone with it.
-- **F379** (Expanded Room cells changed in another tab) is not done yet. The first version could block Publish, so it was reworked and is being reviewed again ([PR #292](https://github.com/songadaymann/wamp/pull/292), draft).
+- **F379, Expanded Room cells changed in another tab** ([PR #292](https://github.com/songadaymann/wamp/pull/292), shipped later the same day). The first version could block Publish. After four review rounds, cell saves and publishes now send the version each cell was edited from, and conflicts are resolved without overwriting newer work. The goal/setup save still sends no base.
 - **F483** (branch protection on main) needs Jonathan to approve a GitHub setting.
 
 ## Security batch
