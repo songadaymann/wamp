@@ -612,7 +612,7 @@ export function createRoomTransitionController(
     | 'getRoomSnapshotViewForCoordinates' | 'refreshLeaderboardForSelection' | 'refreshAround'
     | 'refreshAroundIfNeededOrFromCache' | 'redrawWorld' | 'renderHud'
     | 'getRoomOrigin' | 'movementController' | 'playerPresentationController'
-    | 'getCellStateAt'
+    | 'getCellStateAt' | 'specialTilesController'
   >,
 ): OverworldRoomTransitionController {
   return new OverworldRoomTransitionController({
@@ -620,6 +620,7 @@ export function createRoomTransitionController(
     getPlayer: () => host.player,
     getPlayerBody: () => host.playerBody,
     getPlayerFacing: () => host.playerFacing < 0 ? -1 : 1,
+    getPlayerGravityEnvironment: () => host.specialTilesController.getPlayerEnvironment(),
     getCurrentRoomCoordinates: () => ({ ...host.currentRoomCoordinates }),
     setCurrentRoomCoordinates: (coordinates) => {
       host.currentRoomCoordinates = { ...coordinates };

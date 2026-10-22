@@ -469,3 +469,148 @@ describe('opt-in bottom falls before navigation', () => {
     expect(host.setCurrentRoomCoordinates).toHaveBeenCalledWith({ x: 0, y: 1 });
   });
 });
+
+describe('transition prediction follows reachable seams (F350)', () => {
+  const FRAME_SECONDS = 1 / 60;
+  const GRAVITY = 700;
+  const LOW_FLOOR_FEET_Y = 352 - 16;
+
+  function createPhysicalHarness() {
+    const harness = createHarness();
+    const physicalBody = Object.assign(harness.body, {
+      allowGravity: true,
+      gravity: { y: 0 },
+      world: { gravity: { y: GRAVITY } },
+      blocked: { up: false, down: false },
+      get top() { return harness.player.y - harness.body.height * 0.5; },
+    });
+    const requested = (coordinates: { x: number; y: number }) =>
+      harness.host.prefetchPlayableRoomForTransition.mock.calls
+        .filter(([call]) => call.x === coordinates.x && call.y === coordinates.y).length;
+    const stand = (feetY: number) => {
+      harness.player.y = feetY - physicalBody.height * 0.5;
+      physicalBody.velocity.y = 0;
+      physicalBody.blocked.down = true;
+    };
+    // One 60 Hz Arcade step: integrate gravity, then land on `floorFeetY`.
+    const step = (floorFeetY: number) => {
+      physicalBody.blocked.down = false;
+      physicalBody.velocity.y += GRAVITY * FRAME_SECONDS;
+      harness.player.x += physicalBody.velocity.x * FRAME_SECONDS;
+      harness.player.y += physicalBody.velocity.y * FRAME_SECONDS;
+      if (physicalBody.bottom >= floorFeetY && physicalBody.velocity.y > 0) stand(floorFeetY);
+      harness.controller.maybeAdvancePlayerRoom();
+    };
+    return { ...harness, physicalBody, requested, stand, step };
+  }
+
+  it('drops the room below after landing on a low floor and keeps the room ahead', () => {
+    const { host, physicalBody, player, requested, step } = createPhysicalHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    player.x = 300;
+    player.y = 300;
+    physicalBody.velocity.y = 120;
+
+    for (let frame = 0; frame < 60 && !physicalBody.blocked.down; frame += 1) step(LOW_FLOOR_FEET_Y);
+    expect(physicalBody.blocked.down).toBe(true);
+    expect(requested({ x: 0, y: 1 })).toBeGreaterThan(0);
+    host.prefetchPlayableRoomForTransition.mockClear();
+    host.preparePlayableRoomForTransition.mockClear();
+
+    for (let frame = 0; frame < 30; frame += 1) step(LOW_FLOOR_FEET_Y);
+
+    expect(requested({ x: 0, y: 1 })).toBe(0);
+    expect(requested({ x: 1, y: 0 })).toBe(30);
+    expect(host.preparePlayableRoomForTransition).not.toHaveBeenCalledWith({ x: 0, y: 1 });
+  });
+
+  it('keeps the room ahead through a running hop that cannot reach another room', () => {
+    const { host, physicalBody, player, requested, stand, step } = createPhysicalHarness();
+    player.x = 200;
+    stand(LOW_FLOOR_FEET_Y);
+    for (let frame = 0; frame < 5; frame += 1) step(LOW_FLOOR_FEET_Y);
+
+    physicalBody.velocity.y = -280;
+    let airborneFrames = 0;
+    do {
+      step(LOW_FLOOR_FEET_Y);
+      airborneFrames += 1;
+    } while (!physicalBody.blocked.down && airborneFrames < 120);
+
+    expect(airborneFrames).toBeGreaterThan(40);
+    expect(requested({ x: 0, y: -1 })).toBe(0);
+    expect(requested({ x: 0, y: 1 })).toBe(0);
+    expect(requested({ x: 1, y: 0 })).toBe(5 + airborneFrames);
+    expect(host.clearPredictedPlayableRoomForTransition).not.toHaveBeenCalled();
+  });
+
+  it('keeps the facing room through a standing hop', () => {
+    const { host, physicalBody, requested, stand, step } = createPhysicalHarness();
+    physicalBody.velocity.x = 0;
+    stand(200);
+    step(200);
+    physicalBody.velocity.y = -280;
+    for (let frame = 0; frame < 20; frame += 1) step(200);
+
+    expect(requested({ x: 1, y: 0 })).toBe(21);
+    expect(requested({ x: 0, y: -1 })).toBe(0);
+    expect(host.clearPredictedPlayableRoomForTransition).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a spring launch from mid-room', 176, -700],
+    ['a normal jump just under the top seam', 50, -280],
+  ])('still predicts the room above for %s', (_label, centerY, launchVelocity) => {
+    const { physicalBody, requested, stand, step } = createPhysicalHarness();
+    stand(centerY + 12);
+    step(centerY + 12);
+    physicalBody.velocity.y = launchVelocity;
+
+    step(centerY + 12);
+
+    expect(requested({ x: 0, y: -1 })).toBe(1);
+  });
+
+  it('predicts the room below once a run carries the player off a ledge', () => {
+    const { physicalBody, requested, stand, step } = createPhysicalHarness();
+    stand(200);
+    step(200);
+    expect(requested({ x: 0, y: 1 })).toBe(0);
+
+    for (let frame = 0; frame < 12; frame += 1) step(Number.POSITIVE_INFINITY);
+
+    expect(physicalBody.velocity.y).toBeGreaterThan(0);
+    expect(requested({ x: 0, y: 1 })).toBeGreaterThan(0);
+  });
+
+  it('keeps polling the room below while the player stands on its seam edge wall', () => {
+    const { controller, host, physicalBody, player, stand } = createPhysicalHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    host.isNeighborReachable.mockImplementation((_current, neighbor) => neighbor.x === 0);
+    player.x = 320;
+    player.y = 320;
+    physicalBody.velocity.x = 0;
+    physicalBody.velocity.y = 150;
+
+    controller.maybeAdvancePlayerRoom();
+    stand(352 - 12);
+    controller.maybeAdvancePlayerRoom();
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.preparePlayableRoomForTransition).toHaveBeenCalledTimes(3);
+    expect(host.preparePlayableRoomForTransition).toHaveBeenLastCalledWith({ x: 0, y: 1 });
+  });
+
+  it('keeps swimming predictions on the direction of travel', () => {
+    const { host, physicalBody, requested, step } = createPhysicalHarness();
+    Object.assign(host, {
+      getPlayerGravityEnvironment: vi.fn(() => ({ gravityDirection: 'down' as const, inWater: true })),
+    });
+    physicalBody.velocity.x = 0;
+    physicalBody.velocity.y = -168;
+
+    step(Number.POSITIVE_INFINITY);
+
+    expect(requested({ x: 0, y: -1 })).toBe(1);
+  });
+});

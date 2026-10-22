@@ -851,6 +851,32 @@ describe('world streaming loaded-room lifecycle', () => {
     expect(callShouldAdoptPredictedPreparation(harness, '0,-1', { x: 0, y: -1 })).toBe(true);
   });
 
+  it.each([
+    ['a low floor 16 px above the seam', 336, true],
+    ['the seam edge wall 12 px above the seam', 340, false],
+  ])('adopts the room ahead over a stopped room below while standing on %s', (_label, feetY, adopts) => {
+    // F350: running right at 150 px/s from x=300 is 2.27 s from the side seam.
+    const player = {
+      x: 300,
+      y: feetY - 12,
+      body: { velocity: { x: 150, y: 0 }, blocked: { down: true }, bottom: feetY },
+    };
+    const harness = Object.assign(
+      createWorldStreamingHarness(),
+      {
+        predictedPreparationRoomId: '0,1',
+        predictedPreparationCoordinates: { x: 0, y: 1 },
+        options: {
+          getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }),
+          getPlayer: () => player,
+          getRoomOrigin: () => ({ x: 0, y: 0 }),
+        },
+      },
+    );
+
+    expect(callShouldAdoptPredictedPreparation(harness, '1,0', { x: 1, y: 0 })).toBe(adopts);
+  });
+
   it('cancels queued teardown immediately when an already-loaded room is predicted again', () => {
     const room = createDefaultRoomSnapshot('5,7', { x: 5, y: 7 });
     const loadedRoom = { room, collisionReady: false };
