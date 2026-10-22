@@ -33,6 +33,7 @@ import {
   getRoomMetadataObjectDrawRect,
 } from './roomMetadataRenderLayout';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfieldCanvas';
+import { isCustomSpriteBlocked } from '../customSprites/blocklist';
 
 export interface MintedRoomRenderOptions {
   tilePixelSize?: number;
@@ -414,7 +415,7 @@ function getCustomSpriteForObject(
   }
 
   return snapshot.customSprites.find(
-    (sprite) => sprite.id === spriteId && sprite.status !== 'blocked'
+    (sprite) => sprite.id === spriteId && sprite.status !== 'blocked' && !isCustomSpriteBlocked(sprite.id)
   ) ?? null;
 }
 

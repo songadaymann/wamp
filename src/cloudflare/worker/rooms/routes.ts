@@ -59,6 +59,7 @@ import {
 } from '../runs/points';
 import { releaseRateLimitSlots } from '../core/rateLimit';
 import { isEditOfOthersRoom, takeOthersRoomEditSlot } from './othersRoomEdits';
+import { hiddenVersionSnapshot, isRoomVersionRedacted, presentRoomRecordVersions } from './versionRedaction';
 import {
   handleBrowseRoomCommentSummaries,
   handleRoomCommentCreate,
@@ -147,7 +148,7 @@ export async function handleRoomRequest(
       auth?.user.walletAddress ?? null,
       auth?.isAdmin ?? false,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return jsonResponse(request, annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, roomId, record)));
   }
 
   if (segments.length === 4 && segments[3] === 'summary' && request.method === 'GET') {
@@ -326,7 +327,7 @@ export async function handleRoomRequest(
       auth.isAdmin,
       { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
     );
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 5 && segments[3] === 'music' && segments[4] === 'phrases' && request.method === 'POST') {
@@ -391,7 +392,7 @@ export async function handleRoomRequest(
       auth.isAdmin,
       { worldId: parseWorldIdContext(url) },
     );
-    return roomMutationResponse(request, url, record, { commandRefs });
+    return roomMutationResponse(request, url, env, record, { commandRefs });
   }
 
   if (segments.length === 4 && segments[3] === 'publish' && request.method === 'POST') {
@@ -456,7 +457,7 @@ export async function handleRoomRequest(
     });
     await upsertUserStats(env, auth.user.id);
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'revert' && request.method === 'POST') {
@@ -511,7 +512,7 @@ export async function handleRoomRequest(
     });
     await upsertUserStats(env, auth.user.id);
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'canonical' && request.method === 'POST') {
@@ -533,7 +534,7 @@ export async function handleRoomRequest(
       { worldId: parseWorldIdContext(url) },
     );
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'leaderboard-lineage' && request.method === 'POST') {
@@ -554,7 +555,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'versions' && request.method === 'GET') {
@@ -581,8 +582,12 @@ export async function handleRoomRequest(
     const timing = new ServerTiming();
     const exact = await timing.measure('version', () => loadExactRoomVersion(env, roomId, version));
     if (!exact) throw new HttpError(404, 'Room version not found.');
-    return timedJsonResponse(request, annotateRoomVersionRecordsWithTilesetHints([exact])[0], timing, {
-      headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'X-WAMP-Cache': 'bypass' },
+    // A version can be hidden by moderation later, so browsers may keep it only briefly.
+    const shown = await isRoomVersionRedacted(env, roomId, version)
+      ? { ...exact, snapshot: hiddenVersionSnapshot(exact.snapshot) }
+      : exact;
+    return timedJsonResponse(request, annotateRoomVersionRecordsWithTilesetHints([shown])[0], timing, {
+      headers: { 'Cache-Control': 'public, max-age=300', 'X-WAMP-Cache': 'bypass' },
     });
   }
 
@@ -654,15 +659,16 @@ function parseWorldIdContext(url: URL): string | null {
   return worldId;
 }
 
-function roomMutationResponse(
+async function roomMutationResponse(
   request: Request,
   url: URL,
+  env: Env,
   record: RoomRecord,
   additions: Record<string, unknown> = {},
-): Response {
+): Promise<Response> {
   if (url.searchParams.get('response') !== 'compact') {
     return jsonResponse(request, {
-      ...annotateRoomRecordWithTilesetHints(record),
+      ...annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, record.draft.id, record)),
       ...additions,
     });
   }

@@ -50,6 +50,9 @@ export function parseWorldTileConfig(value: unknown): WorldTileConfig {
       record.expectedRendererAssetContractHash,
       'expectedRendererAssetContractHash',
     ),
+    ...(Array.isArray(record.blockedCustomSpriteIds)
+      ? { blockedCustomSpriteIds: record.blockedCustomSpriteIds.filter((id): id is string => typeof id === 'string').slice(0, 1000) }
+      : {}),
   };
 }
 

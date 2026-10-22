@@ -18,6 +18,7 @@ import {
   renderExpandedRoomSharePreviewPng,
   renderRoomSharePreviewPng,
 } from './roomPreviewImage';
+import { listEmbeddedCustomSpriteIds, maskBlockedCustomArt } from '../../../customSprites/blockedArt';
 
 interface RoomShareMetadata {
   roomId: string;
@@ -79,7 +80,7 @@ export async function handleRoomShareRequest(
     if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget), {
       headers: { 'Cache-Control': 'public, max-age=20' },
     });
-    if (target === 'image' || target === 'image.png') return roomShareImageResponse(request, shareTarget);
+    if (target === 'image' || target === 'image.png') return roomShareImageResponse(request, await maskBlockedShareArt(env, shareTarget));
     return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
   });
 }
@@ -188,10 +189,26 @@ async function loadShareCellSnapshot(
   return loadPublishedRoom(env, roomId, coordinates);
 }
 
+/** Share images never show a community sprite an admin blocked (F189). */
+async function maskBlockedShareArt(env: Env, target: RoomShareTarget): Promise<RoomShareTarget> {
+  const ids = [...new Set([target.focusSnapshot, ...target.previewCells.map((cell) => cell.snapshot)].flatMap(listEmbeddedCustomSpriteIds))];
+  if (ids.length === 0) return target;
+  const rows = await env.DB.prepare(`SELECT id FROM custom_sprites WHERE status = 'blocked' AND id IN (SELECT value FROM json_each(?))`)
+    .bind(JSON.stringify(ids)).all<{ id: string }>();
+  const blocked = new Set(rows.results.map((row) => row.id));
+  if (blocked.size === 0) return target;
+  return {
+    ...target,
+    focusSnapshot: maskBlockedCustomArt(target.focusSnapshot, blocked),
+    previewCells: target.previewCells.map((cell) => ({ ...cell, snapshot: maskBlockedCustomArt(cell.snapshot, blocked) })),
+  };
+}
+
 function roomShareImageResponse(request: Request, target: RoomShareTarget): Response {
   const headers = new Headers({
     'Content-Type': 'image/png',
-    'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+    // An hour at the edge, so a sprite blocked by moderation leaves cached share images soon (F189).
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600',
     ...corsHeaders(request),
   });
 

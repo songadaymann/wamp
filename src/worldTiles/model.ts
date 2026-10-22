@@ -105,6 +105,8 @@ export interface WorldTileConfig {
   activeRendererVersion: string | null;
   activeRendererAssetContractHash?: string | null;
   expectedRendererAssetContractHash?: string;
+  /** Community sprites an admin blocked; rooms that embed them draw a placeholder instead (F189). */
+  blockedCustomSpriteIds?: string[];
 }
 
 export function isWorldTileLevel(value: number): value is WorldTileLevel {

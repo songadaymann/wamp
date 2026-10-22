@@ -16,6 +16,7 @@ import { collectUnreferencedWorldTileObjects } from './gc';
 import {
   acquireRenderLease,
   isCustomBackgroundApproved,
+  loadBlockedCustomSpriteIdsAmong,
   listDispatchableOutbox,
   loadChildRenderTiles,
   loadPublishedRoomAt,
@@ -39,6 +40,7 @@ import type {
   ScheduledControllerLike,
   WorldTileRendererEnv,
 } from './runtimeTypes';
+import { listEmbeddedCustomSpriteIds, maskBlockedCustomArt } from '../../customSprites/blockedArt';
 
 const DEFAULT_LEASE_SECONDS = 120;
 const OUTBOX_DISPATCH_LIMIT = 100;
@@ -296,8 +298,9 @@ async function renderLeafJob(
 
 async function resolveRenderableLeafSnapshot(
   db: D1Database,
-  snapshot: RoomSnapshot
+  original: RoomSnapshot
 ): Promise<RoomSnapshot> {
+  const snapshot = maskBlockedCustomArt(original, await loadBlockedCustomSpriteIdsAmong(db, listEmbeddedCustomSpriteIds(original)));
   const customBackgroundId = parseCustomBackgroundId(snapshot.background);
   if (!customBackgroundId || await isCustomBackgroundApproved(db, customBackgroundId)) {
     return snapshot;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../config/room';
 import { drawCustomRoomTileToContext } from './draw';
+import { onBlockedCustomSpritesChanged } from '../customSprites/blocklist';
 import {
   CUSTOM_ROOM_TILE_ATLAS_COLUMNS,
   CUSTOM_ROOM_TILE_ATLAS_ROWS,
@@ -108,6 +109,7 @@ export class CustomRoomTileTexturePreparation {
     // its dimensions would invalidate Phaser's newly registered texture source.
     this.preparedCanvas = null;
     this.committedTextureKey = normalizedTextureKey;
+    trackLiveAtlas(this.scene, normalizedTextureKey, this.tiles);
     return normalizedTextureKey;
   }
 
@@ -201,7 +203,26 @@ export function ensureCustomRoomTileTexture(
   drawCustomRoomTileRangeToContext(context, tiles, 0, tiles.length);
 
   texture.refresh();
+  trackLiveAtlas(scene, textureKey, tiles);
 }
+
+// Atlases on screen, so tiles made from a sprite blocked or restored mid-session are redrawn (F189).
+const liveAtlases = new Map<string, { scene: Phaser.Scene; tiles: readonly CustomRoomTileDefinition[] }>();
+
+function trackLiveAtlas(scene: Phaser.Scene, textureKey: string, tiles: readonly CustomRoomTileDefinition[]): void {
+  if (tiles.some((tile) => tile.sourceSpriteId)) liveAtlases.set(textureKey, { scene, tiles });
+  else liveAtlases.delete(textureKey);
+}
+
+onBlockedCustomSpritesChanged((changed) => {
+  for (const [textureKey, atlas] of liveAtlases) {
+    if (!atlas.scene.textures?.exists(textureKey)) {
+      liveAtlases.delete(textureKey);
+    } else if (atlas.tiles.some((tile) => tile.sourceSpriteId && changed.includes(tile.sourceSpriteId))) {
+      ensureCustomRoomTileTexture(atlas.scene, textureKey, atlas.tiles);
+    }
+  }
+});
 
 function createDetachedCanvas(): HTMLCanvasElement {
   return document.createElement('canvas');

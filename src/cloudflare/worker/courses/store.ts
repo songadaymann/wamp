@@ -646,6 +646,7 @@ async function loadPublishedRoomVersionForCourse(
       FROM room_versions
       WHERE room_id = ?
         AND version = ?
+        AND redacted_at IS NULL
       LIMIT 1
     `
     )

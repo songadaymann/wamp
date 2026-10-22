@@ -41,6 +41,7 @@ import {
 import {
   ROOM_SHARE_IMAGE_HEIGHT,
   ROOM_SHARE_IMAGE_WIDTH,
+  loadBlockedCustomSpriteIds,
   loadPublishedRoomSnapshot,
   type PublishedRoomSnapshot,
   type RoomCoordinates,
@@ -100,15 +101,32 @@ export async function handleRoomImageRequest(
     return new Response(null, { status: 200, headers });
   }
 
-  const snapshot =
-    await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_IMAGE_TIMEOUT_MS)
-    ?? createFallbackRoomSnapshot(coordinates);
+  const published = await loadPublishedRoomSnapshot(request, env, url, coordinates, ROOM_IMAGE_TIMEOUT_MS);
+  const sprites = Array.isArray(published?.customSprites) ? published.customSprites as unknown[] : [];
+  let snapshot = published ?? createFallbackRoomSnapshot(coordinates);
+  if (published && sprites.length > 0) {
+    const blocked = await loadBlockedCustomSpriteIds(request, env, url, ROOM_IMAGE_TIMEOUT_MS);
+    // Without the list, leave every community sprite out and cache only briefly.
+    snapshot = markBlockedCustomSprites(published, blocked ?? new Set(sprites.flatMap((sprite) => (
+      isRecord(sprite) && typeof sprite.id === 'string' ? [sprite.id] : []))));
+    if (!blocked) headers['Cache-Control'] = 'public, max-age=60, s-maxage=60';
+  }
   const png = await renderRoomSharePreviewPng(request, env, url, snapshot);
   const body = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
   return new Response(body, {
     status: 200,
     headers,
   });
+}
+
+/** A room's own copy of a sprite an admin blocked is drawn as blocked (skipped), like the catalog entry. */
+export function markBlockedCustomSprites(snapshot: PublishedRoomSnapshot, blocked: ReadonlySet<string>): PublishedRoomSnapshot {
+  if (blocked.size === 0 || !Array.isArray(snapshot.customSprites)) return snapshot;
+  return {
+    ...snapshot,
+    customSprites: snapshot.customSprites.map((sprite: unknown) => (
+      isRecord(sprite) && typeof sprite.id === 'string' && blocked.has(sprite.id) ? { ...sprite, status: 'blocked' } : sprite)),
+  };
 }
 
 export function createFallbackRoomSnapshot(

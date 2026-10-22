@@ -36,6 +36,8 @@ export interface WorldTileConfig {
   activeRendererVersion: string | null;
   activeRendererAssetContractHash?: string | null;
   expectedRendererAssetContractHash?: string;
+  /** Community sprites an admin blocked (F189). */
+  blockedCustomSpriteIds?: string[];
 }
 
 export interface WorldTileRoomSummary {

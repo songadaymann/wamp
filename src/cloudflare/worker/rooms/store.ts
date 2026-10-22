@@ -49,6 +49,7 @@ import {
   getDailyRoomClaimLimitForUser,
 } from './guardrails';
 import { assertOthersRoomEditsOpen, isEditOfOthersRoom } from './othersRoomEdits';
+import { assertRoomVersionNotRedacted, HIDDEN_VERSION_TITLE, hiddenVersionSnapshot } from './versionRedaction';
 import {
   applyWorldRoomPermissions,
   applyWorldRoomSummaryPermissions,
@@ -340,18 +341,19 @@ export async function loadRoomVersionPage(
         published_by_agent_id,
         published_by_display_name,
         reverted_from_version,
-        leaderboard_source_version
+        leaderboard_source_version,
+        redacted_at
       FROM room_versions
       WHERE room_id = ? AND (? IS NULL OR version < ?)
       ORDER BY version DESC
       LIMIT ?
     `,
-  ).bind(roomId, beforeVersion, beforeVersion, limit + 1).all<Omit<RoomVersionRow, 'snapshot_json'>>();
+  ).bind(roomId, beforeVersion, beforeVersion, limit + 1).all<Omit<RoomVersionRow, 'snapshot_json'> & { redacted_at: string | null }>();
   const hasMore = result.results.length > limit;
   const rows = result.results.slice(0, limit);
   const versions: RoomVersionSummary[] = rows.map((row) => ({
     version: row.version,
-    title: row.title,
+    title: row.redacted_at ? HIDDEN_VERSION_TITLE : row.title,
     createdAt: row.created_at,
     publishedByUserId: row.published_by_user_id,
     publishedByPrincipalKind: row.published_by_principal_type,
@@ -409,7 +411,7 @@ export async function loadRoomSnapshotsByReferences(
     (reference): reference is Extract<RoomSnapshotQueryReference, { kind: 'current_preview' }> => reference.kind === 'current_preview',
   );
   const versionStatements = chunkArray(versionReferences, 40).map((chunk) => env.DB.prepare(
-    `SELECT room_id, version, snapshot_json FROM room_versions WHERE (room_id, version) IN (${chunk.map(() => '(?, ?)').join(', ')})`,
+    `SELECT room_id, version, snapshot_json, redacted_at FROM room_versions WHERE (room_id, version) IN (${chunk.map(() => '(?, ?)').join(', ')})`,
   ).bind(...chunk.flatMap((reference) => [reference.roomId, reference.version])));
   const currentStatements = chunkArray(currentReferences, 60).map((chunk) => env.DB.prepare(
     `SELECT id, x, y, draft_json, published_json FROM rooms WHERE id IN (${chunk.map(() => '?').join(', ')})`,
@@ -423,10 +425,9 @@ export async function loadRoomSnapshotsByReferences(
     for (const row of result?.results ?? []) {
       const roomId = String(row.room_id);
       const version = Number(row.version);
-      snapshotsByKey.set(
-        snapshotReferenceKey({ kind: 'version', roomId, version }),
-        parseStoredSnapshot(String(row.snapshot_json), 'room version'),
-      );
+      const stored = parseStoredSnapshot(String(row.snapshot_json), 'room version');
+      snapshotsByKey.set(snapshotReferenceKey({ kind: 'version', roomId, version }),
+        row.redacted_at ? hiddenVersionSnapshot(stored) : stored);
     }
   }
 
@@ -1198,6 +1199,7 @@ export async function revertRoom(
   if (!target) {
     throw new HttpError(404, `Version ${targetVersion} was not found.`);
   }
+  await assertRoomVersionNotRedacted(env, roomId, targetVersion);
   if (options.expectedLatestVersion !== undefined && existing.versions.at(-1)?.version !== options.expectedLatestVersion) {
     throw new HttpError(409, 'This room was published again since the restore was planned.');
   }
@@ -1320,6 +1322,7 @@ export async function setCanonicalRoomVersion(
   if (!target) {
     throw new HttpError(404, `Version ${targetVersion} was not found.`);
   }
+  await assertRoomVersionNotRedacted(env, roomId, targetVersion);
 
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
