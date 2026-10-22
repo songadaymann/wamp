@@ -128,6 +128,10 @@ export class CourseDraftBackupController {
     return this.currentBackup()?.writeRoom(courseId, snapshot, base) ?? false;
   }
 
+  forgetRoom(courseId: string, roomId: string): void {
+    this.currentBackup()?.forgetRoom(courseId, roomId);
+  }
+
   savedRoom(courseId: string, sent: RoomSnapshot): void {
     this.currentBackup()?.discardRoom(courseId, sent);
   }

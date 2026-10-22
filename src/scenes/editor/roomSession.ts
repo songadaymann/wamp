@@ -25,7 +25,7 @@ import {
 import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
-import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
+import { isRoomEditConflict } from '../../persistence/roomEditConflict';
 import {
   formatWalletAddress,
 } from '../../mint/roomOwnership';
@@ -50,6 +50,8 @@ interface EditorRoomSessionHost {
   getLastDirtyAt(): number;
   refreshUi(): void;
   refreshSurroundingRoomPreviews(): void;
+  /** Every draft the server accepted, autosaves included, so a course cell's session copy follows it (F379). */
+  onDraftSaved?(record: RoomRecord): void;
 }
 
 export interface EditorHistoryState {
@@ -92,10 +94,6 @@ interface AutoSaveBackoff {
   failures: number;
   retryAt: number;
   backedUpDirtyAt: number;
-}
-
-function isRoomEditConflict(error: unknown): boolean {
-  return isRoomApiError(error) && error.status === 409 && error.message === ROOM_EDIT_CONFLICT_MESSAGE;
 }
 
 function isPermanentSaveError(error: unknown): boolean {
@@ -274,6 +272,11 @@ export class EditorRoomSession {
 
   get isSaveInFlight(): boolean {
     return this.saveInFlight;
+  }
+
+  /** The server draft version this editor last loaded or saved; null for a room it has not loaded from the server. */
+  get currentServerDraftUpdatedAt(): string | null {
+    return this.serverDraftUpdatedAt;
   }
 
   private get saveInFlight(): boolean {
@@ -660,6 +663,7 @@ export class EditorRoomSession {
       }
       this.autoSaveBackoff = null;
       this.syncRoomMetadata(record, this.host.getLastDirtyAt() !== saveStartedAt);
+      if (this.shouldClearLocalDraftAfterRepositoryMutation()) this.host.onDraftSaved?.(record);
       if (this.host.getLastDirtyAt() === saveStartedAt) {
         this.host.setRoomDirty(false);
         if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
@@ -1035,6 +1039,7 @@ export class EditorRoomSession {
           roomCoordinates: { ...this.roomCoordinates },
           statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
           draftRoom: cloneRoomSnapshot(this.host.exportRoomSnapshot()),
+          draftRoomBaseUpdatedAt: this.serverDraftUpdatedAt,
           clearDraftRoomId: null,
           invalidateRoomId: this.roomId,
           forceRefreshAround: true,
@@ -1085,6 +1090,7 @@ export class EditorRoomSession {
       roomCoordinates: { ...this.roomCoordinates },
       statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
+      draftRoomBaseUpdatedAt: draftRecord.draft.updatedAt,
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,
       forceRefreshAround: true,

@@ -205,7 +205,8 @@ export class OverworldWindowController {
       this.applyCourseEditedRoomReturn(
         data.courseEditedRoom,
         data.draftRoom ? cloneRoomSnapshot(data.draftRoom) : null,
-        data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null
+        data.publishedRoom ? cloneRoomSnapshot(data.publishedRoom) : null,
+        data.draftRoomBaseUpdatedAt ?? null,
       );
     }
 
@@ -710,7 +711,8 @@ export class OverworldWindowController {
   private applyCourseEditedRoomReturn(
     courseEditedRoom: NonNullable<OverworldPlaySceneData['courseEditedRoom']>,
     draftRoom: RoomSnapshot | null,
-    publishedRoom: RoomSnapshot | null
+    publishedRoom: RoomSnapshot | null,
+    draftRoomBaseUpdatedAt: string | null,
   ): void {
     if (getActiveCourseDraftSessionCourseId() !== courseEditedRoom.courseId) {
       return;
@@ -734,7 +736,8 @@ export class OverworldWindowController {
     if (nextPublishedRoom) {
       clearActiveCourseDraftSessionRoomOverride(courseEditedRoom.roomId);
     } else if (nextDraftRoom) {
-      setActiveCourseDraftSessionRoomOverride(nextDraftRoom);
+      // Keeps the version the room editor edited it from, so the Expanded Room editor cannot overwrite newer work (F379).
+      setActiveCourseDraftSessionRoomOverride(nextDraftRoom, draftRoomBaseUpdatedAt);
     }
 
     const nextTitle =

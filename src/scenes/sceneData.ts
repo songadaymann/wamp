@@ -61,6 +61,8 @@ export interface OverworldPlaySceneData {
   centerCoordinates?: RoomCoordinates;
   roomCoordinates?: RoomCoordinates;
   draftRoom?: RoomSnapshot | null;
+  /** The server draft version `draftRoom` was edited from, kept with an Expanded Room cell's session copy (F379). */
+  draftRoomBaseUpdatedAt?: string | null;
   publishedRoom?: RoomSnapshot | null;
   clearDraftRoomId?: string | null;
   invalidateRoomId?: string | null;

@@ -86,7 +86,7 @@ import {
 import { EditorPresenceController } from './editor/presence';
 import { EditorPersistenceController } from './editor/persistence';
 import { EditorToolController } from './editor/tools';
-import { EditorCourseController } from './editor/courseController';
+import { EditorCourseController, type CourseRoomSessionSyncOptions } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
 import { EditorChromeController } from './editor/chrome';
 import { RoomLightingController } from '../lighting/controller';
@@ -532,6 +532,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       refreshSurroundingRoomPreviews: () => {
         void this.refreshSurroundingRoomPreviews();
       },
+      onDraftSaved: (record) => this.syncActiveCourseRoomSessionSnapshot(record.draft, {
+        published: false, baseUpdatedAt: record.draft.updatedAt, unsaved: false,
+      }),
     });
     this.persistenceController = new EditorPersistenceController(this.roomSession, {
       getRoomPermissions: () => this.roomPermissions, isActive: () => this.scene.isActive(), events: this.events, refreshUi: () => this.renderEditorUi(),
@@ -857,10 +860,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return this.courseController.buildCourseEditedRoomData();
   }
 
-  private syncActiveCourseRoomSessionSnapshot(
-    room: RoomSnapshot,
-    options: { published: boolean }
-  ): void {
+  private syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void {
     this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
   }
 

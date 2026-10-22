@@ -22,6 +22,7 @@ import type {
   EditorRoomSession,
   EditorStatusDetails,
 } from './roomSession';
+import type { CourseRoomSessionSyncOptions } from './courseController';
 
 interface SaveDraftOptions {
   promptForSignInOnUnauthorized?: boolean;
@@ -39,7 +40,7 @@ interface EditorPersistenceControllerHost {
   getLastDirtyAt(): number;
   setLastDirtyAt(value: number): void;
   getInitialRoomSnapshot(): RoomSnapshot | null;
-  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void;
+  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void;
   onRoomMarkedDirty(): void;
   onRoomPublished?(room: RoomSnapshot, firstPublish: boolean, userId: string): void;
 }
@@ -160,8 +161,10 @@ export class EditorPersistenceController {
     recordReplayEditorAction('save_attempt');
     const record = await this.roomSession.saveDraft(force, options);
     if (record?.draft) recordReplayEditorAction('draft_saved');
-    if (record?.draft) {
-      this.host.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false });
+    // A server save refreshes the course session copy through onDraftSaved; one kept only on this
+    // device (guest or offline) has no server version and is still unsaved there (F379).
+    if (record?.draft && this.roomSession.currentServerDraftUpdatedAt === null) {
+      this.host.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false, baseUpdatedAt: null, unsaved: true });
     }
     return record;
   }

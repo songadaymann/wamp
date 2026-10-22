@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultCourseSnapshot } from './model';
 import { createDefaultRoomSnapshot } from '../persistence/roomModel';
 import { draftBackupRevision, ExpandedRoomDraftBackup } from './localDraftBackup';
+import type { PlacedObject } from '../config/objects';
 
 function storageFixture() {
   const values = new Map<string, string>();
@@ -99,6 +100,38 @@ describe('expanded draft backup persistence and recovery', () => {
     }
     const full = new ExpandedRoomDraftBackup('alice', () => ({ setItem: () => { throw new Error('Quota'); } }) as unknown as Storage);
     expect(full.writeRoom('course:one', remote, remote)).toBe(false);
+  });
+
+  it('removes the backup once a cell with a freshly placed object is saved (F379)', () => {
+    const { backup, values } = storageFixture();
+    // Built the way the editor places an object (editRuntime placeObject): no bossHitPoints or coopPlate keys,
+    // which the backup's normalized copy has, so a raw comparison would keep the backup forever.
+    const placed: PlacedObject = {
+      id: 'jungle_climbing_vine_1', x: 40, y: 64, instanceId: 'obj_fresh', customSpriteKind: null, facing: undefined,
+      layer: 'terrain', triggerTargetInstanceId: null, linkedTargetInstanceIds: null, containedObjectId: null, signText: null,
+      swordsmanObjectiveMode: null, swordsmanDefeatMode: null, policeBehaviorMode: null, policePatrolShoots: null,
+      npcMode: null, npcPushable: null, npcCanJumpFall: null, npcPlayerCollision: null, npcFriendlyFire: null,
+      npcName: null, npcDefeatMode: null,
+    };
+    const remote = room();
+    const sent = { ...remote, placedObjects: [placed] };
+    expect(backup.writeRoom('course:one', sent, remote)).toBe(true);
+    const stored = JSON.parse([...values.values()][0]) as { snapshot: typeof sent };
+    expect(draftBackupRevision(stored.snapshot)).not.toBe(draftBackupRevision(sent));
+    expect(backup.discardRoom('course:one', sent)).toBe(true);
+    expect(values.size).toBe(0);
+  });
+
+  it('forgets a cell backup whatever it holds, leaving other cells alone (F379)', () => {
+    const { backup, values } = storageFixture();
+    const remote = room();
+    const other = createDefaultRoomSnapshot('9,9', { x: 9, y: 9 });
+    backup.writeRoom('course:one', { ...remote, title: 'Older local copy' }, remote);
+    backup.writeRoom('course:one', { ...other, title: 'Other cell' }, other);
+    backup.forgetRoom('course:one', remote.id);
+    expect(backup.recoverRoom('course:one', remote).status).toBe('none');
+    expect(values.size).toBe(1);
+    expect(() => new ExpandedRoomDraftBackup('alice', () => { throw new Error('Denied'); }).forgetRoom('course:one', remote.id)).not.toThrow();
   });
 
   it('uses editable content revisions independent of field ordering and server timestamps', () => {
