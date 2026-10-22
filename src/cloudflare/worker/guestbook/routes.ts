@@ -16,19 +16,29 @@ import {
   parseJsonBody,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
+import {
+  getClientIp,
+  hashRateLimitKey,
+  networkKeyForIp,
+  releaseRateLimitSlots,
+  takeRateLimitSlots,
+  type RateLimitRule,
+} from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
-  countRecentGuestbookEntriesForIp,
-  countRecentGuestbookEntriesForSession,
   createGuestbookEntry,
   hideGuestbookEntry,
   listGuestbookEntries,
 } from './store';
 
-const GUESTBOOK_IP_HOURLY_LIMIT = 5;
-const GUESTBOOK_SESSION_MINUTE_LIMIT = 1;
-const GUESTBOOK_SESSION_DAILY_LIMIT = 10;
+/**
+ * Anyone can sign, so entries are limited per network (an IPv6 /64 counts as one) and per browser
+ * session (F422). Slots are taken before Turnstile runs and given back when signing fails.
+ */
+const GUESTBOOK_PER_NETWORK: RateLimitRule = { bucket: 'guestbook:network', limit: 5, windowMs: 60 * 60 * 1000 };
+const GUESTBOOK_PER_SESSION_MINUTE: RateLimitRule = { bucket: 'guestbook:session-minute', limit: 1, windowMs: 60 * 1000 };
+const GUESTBOOK_PER_SESSION_DAY: RateLimitRule = { bucket: 'guestbook:session-day', limit: 10, windowMs: 24 * 60 * 60 * 1000 };
 
 export async function handleGuestbookRequest(
   request: Request,
@@ -80,20 +90,15 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
   if (auth) {
     assertNotSchoolRestricted(auth, 'sign the guestbook');
   }
-  const remoteIp = getRequestIp(request);
+  const remoteIp = getClientIp(request);
   const ipHash = remoteIp ? await hashGuestbookIp(env, remoteIp) : null;
-  const now = new Date();
-  const nowIso = now.toISOString();
+  const nowIso = new Date().toISOString();
 
-  await assertGuestbookRateLimit(env, {
-    ipHash,
-    guestSessionId,
-    nowMs: now.getTime(),
-  });
-  const turnstileVerifiedAt = await verifyTurnstileToken(env, body.turnstileToken, remoteIp, nowIso);
-
-  const responseBody: GuestbookCreateResponse = {
-    entry: await createGuestbookEntry(env, {
+  const slotIds = await takeGuestbookSlots(env, remoteIp, guestSessionId);
+  let entry: GuestbookCreateResponse['entry'];
+  try {
+    const turnstileVerifiedAt = await verifyTurnstileToken(env, body.turnstileToken, remoteIp, nowIso);
+    entry = await createGuestbookEntry(env, {
       displayName,
       body: message,
       userId: auth?.user.id ?? null,
@@ -102,7 +107,14 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
       userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
       turnstileVerifiedAt,
       createdAt: nowIso,
-    }),
+    });
+  } catch (error) {
+    await releaseRateLimitSlots(env, slotIds);
+    throw error;
+  }
+
+  const responseBody: GuestbookCreateResponse = {
+    entry,
     config: getGuestbookConfig(env),
   };
 
@@ -142,8 +154,16 @@ function getGuestbookConfig(env: Env): GuestbookConfigResponse {
   const turnstileSiteKey = env.TURNSTILE_SITE_KEY?.trim() || null;
   return {
     turnstileSiteKey,
-    turnstileRequired: Boolean(turnstileSiteKey || env.TURNSTILE_SECRET?.trim()),
+    turnstileRequired: Boolean(turnstileSiteKey || getTurnstileSecret(env)),
   };
+}
+
+/**
+ * The guestbook has always verified with TURNSTILE_SECRET, which production sets; the documented
+ * TURNSTILE_SECRET_KEY (also used by the Jam page) is read only when it is missing.
+ */
+function getTurnstileSecret(env: Env): string | null {
+  return env.TURNSTILE_SECRET?.trim() || env.TURNSTILE_SECRET_KEY?.trim() || null;
 }
 
 function normalizeGuestbookDisplayName(value: unknown): string {
@@ -209,37 +229,28 @@ function normalizeGuestSessionId(value: unknown): string | null {
   return trimmed;
 }
 
-async function assertGuestbookRateLimit(
+async function takeGuestbookSlots(
   env: Env,
-  options: {
-    ipHash: string | null;
-    guestSessionId: string | null;
-    nowMs: number;
-  },
-): Promise<void> {
-  if (options.ipHash) {
-    const hourAgo = new Date(options.nowMs - 60 * 60 * 1000).toISOString();
-    const recentForIp = await countRecentGuestbookEntriesForIp(env, options.ipHash, hourAgo);
-    if (recentForIp >= GUESTBOOK_IP_HOURLY_LIMIT) {
-      throw new HttpError(429, 'Too many guestbook entries from this network. Try again later.');
-    }
+  remoteIp: string | null,
+  guestSessionId: string | null,
+): Promise<number[]> {
+  const sessionKey = guestSessionId ? await hashRateLimitKey(env, `guestbook-session:${guestSessionId}`) : null;
+  const { ids, limitedBy } = await takeRateLimitSlots(env, [
+    { rule: GUESTBOOK_PER_NETWORK, keyHash: await hashRateLimitKey(env, remoteIp ? networkKeyForIp(remoteIp) : 'network:unknown') },
+    ...(sessionKey
+      ? [{ rule: GUESTBOOK_PER_SESSION_MINUTE, keyHash: sessionKey }, { rule: GUESTBOOK_PER_SESSION_DAY, keyHash: sessionKey }]
+      : []),
+  ]);
+  if (limitedBy === GUESTBOOK_PER_NETWORK) {
+    throw new HttpError(429, 'Too many guestbook entries from this network. Try again later.');
   }
-
-  if (!options.guestSessionId) {
-    return;
-  }
-
-  const minuteAgo = new Date(options.nowMs - 60 * 1000).toISOString();
-  const recentForSession = await countRecentGuestbookEntriesForSession(env, options.guestSessionId, minuteAgo);
-  if (recentForSession >= GUESTBOOK_SESSION_MINUTE_LIMIT) {
+  if (limitedBy === GUESTBOOK_PER_SESSION_MINUTE) {
     throw new HttpError(429, 'Please wait a minute before signing again.');
   }
-
-  const dayAgo = new Date(options.nowMs - 24 * 60 * 60 * 1000).toISOString();
-  const recentForSessionDay = await countRecentGuestbookEntriesForSession(env, options.guestSessionId, dayAgo);
-  if (recentForSessionDay >= GUESTBOOK_SESSION_DAILY_LIMIT) {
+  if (limitedBy) {
     throw new HttpError(429, 'This browser has signed the guestbook enough for today.');
   }
+  return ids;
 }
 
 async function verifyTurnstileToken(
@@ -248,7 +259,7 @@ async function verifyTurnstileToken(
   remoteIp: string | null,
   verifiedAt: string,
 ): Promise<string | null> {
-  const secret = env.TURNSTILE_SECRET?.trim();
+  const secret = getTurnstileSecret(env);
   if (!secret) {
     if (env.TURNSTILE_SITE_KEY?.trim()) {
       throw new HttpError(503, 'Turnstile verification is unavailable.');
@@ -292,14 +303,6 @@ async function verifyTurnstileToken(
   }
 
   return verifiedAt;
-}
-
-function getRequestIp(request: Request): string | null {
-  return normalizeHeaderValue(
-    request.headers.get('CF-Connecting-IP')
-    ?? request.headers.get('X-Forwarded-For')?.split(',')[0]
-    ?? null,
-  );
 }
 
 async function hashGuestbookIp(env: Env, ip: string): Promise<string> {
