@@ -62,6 +62,7 @@ ROOM_MINT_BLOCK_EXPLORER_URL="https://sepolia.basescan.org"
 ROOM_MINT_AUTH_PRIVATE_KEY=
 
 TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET=
 TURNSTILE_SECRET_KEY=
 GUESTBOOK_IP_HASH_SALT=
 
@@ -91,6 +92,7 @@ CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES=20
 - Worker and PartyKit must share the same presence identity signing secret.
 - Leave optional moderation/upload/mint values blank unless you are testing that subsystem.
 - Prefer the hosting provider's secret store for deployed environments.
+- Turnstile secrets: the guestbook verifies with `TURNSTILE_SECRET` and falls back to `TURNSTILE_SECRET_KEY` when that is unset. The Jam page reads `TURNSTILE_SECRET_KEY`. Both use `TURNSTILE_SITE_KEY`, and with a site key set and neither secret set, guestbook signing returns 503.
 - `OTHERS_ROOM_EDITS_PAUSED=1` pauses draft saves and publishes over rooms claimed by other builders, for example during a vandal raid; builders' own rooms keep working. Set it with `wrangler secret put OTHERS_ROOM_EDITS_PAUSED` so a later deploy does not clear it, and remove it with `wrangler secret delete OTHERS_ROOM_EDITS_PAUSED`.
 - `ROOM_MINT_RPC_URL` is the server-only blockchain transport and may use a private provider. Wallet network setup receives the public Base RPC for chain8453 or84532, never this setting. Other chain IDs cannot prepare wallet transactions until an explicit public endpoint is supported.
 
