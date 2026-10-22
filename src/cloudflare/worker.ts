@@ -31,7 +31,7 @@ import { handleBackgroundImageRequest } from './worker/backgroundImages/routes';
 import { handleAgentRequest } from './worker/agents/routes';
 import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
-import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
+import { handleGuestActivityHeartbeat, handleGuestActivityLinkAccount } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleClaimGuestRequest, handleGuestProgressHistoryRequest, handleGuestRunRequest } from './worker/guestRuns/routes';
 import { scheduleRunGhostArchive } from './worker/runs/ghostArchive';
@@ -322,6 +322,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: '/api/guest-activity/heartbeat',
     auth: 'optional',
     handler: ({ request, env }) => handleGuestActivityHeartbeat(request, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/guest-activity/link-account',
+    auth: 'authenticated',
+    handler: ({ request, env }) => handleGuestActivityLinkAccount(request, env),
   },
   {
     methods: ['GET', 'POST', 'PUT', 'DELETE'],

@@ -504,3 +504,15 @@ export interface AdminGuestRoomDraft {
   submittedAt: string | null;
   hidden: boolean;
 }
+
+export interface LaunchFunnelResponse {
+  days: number;
+  since: string;
+  steps: { visitors: number; played: number; built: number; cleared: number; signedUp: number; published: number };
+  phoneVisitors: number;
+  sources: Array<{ source: string; visitors: number; played: number; built: number; signedUp: number }>;
+  returns: {
+    d1: { eligible: number; returned: number };
+    d7: { eligible: number; returned: number };
+  };
+}

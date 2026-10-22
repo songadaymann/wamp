@@ -1328,6 +1328,37 @@
             </div>
           </section>
 
+          <section id="launch-funnel" class="admin-section">
+            <header class="section-heading">
+              <span class="section-icon" aria-hidden="true">⇣</span>
+              <div class="section-heading-copy">
+                <h2>Where Players Come From</h2>
+              </div>
+            </header>
+            <section class="panel stack">
+              <div class="activity-toolbar">
+                <select id="launch-funnel-range" aria-label="Funnel window">
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+                <button id="launch-funnel-load" type="button">Load</button>
+              </div>
+              <div class="meta" id="launch-funnel-status">Use your admin key, then Load.</div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Step</th><th>Guests</th><th>Of all</th></tr></thead>
+                  <tbody id="launch-funnel-steps"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>First visit came from</th><th>Guests</th><th>Played</th><th>Built</th><th>Signed up</th></tr></thead>
+                  <tbody id="launch-funnel-sources"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
           <section id="activity" class="admin-section" data-tone="red">
             <header class="section-heading">
               <span class="section-icon" aria-hidden="true">↯</span>
