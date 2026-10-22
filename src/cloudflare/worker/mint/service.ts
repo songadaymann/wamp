@@ -9,7 +9,9 @@ import { getRoomMintNetwork, parseRoomChainId } from '../../../mint/roomNetwork'
 import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
+import { releaseRateLimitSlots } from '../core/rateLimit';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
+import { takeRoomChainReadSlots } from './chainReadBudget';
 import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient, type MintReadTransportOptions } from './network';
 export { createRoomMintPublicClient } from './network';
 import { observeRoomTokenMetadata, persistRoomTokenMetadataState, type RoomTokenMetadataObservation } from './metadata';
@@ -159,6 +161,24 @@ export async function syncRoomOwnershipFromChain(
     return record;
   }
 
+  const slots = await takeRoomChainReadSlots(env, record.draft.id, actor?.id ?? null, onChainError);
+  if (!slots) return record;
+  try {
+    return await syncRoomOwnershipWithConfig(env, config, record, actor, onChainError);
+  } catch (error) {
+    // A failed refresh can be retried at once; the account's slot stays taken.
+    await releaseRateLimitSlots(env, [slots.freshnessSlot]);
+    throw error;
+  }
+}
+
+async function syncRoomOwnershipWithConfig(
+  env: Env,
+  config: RoomMintConfig,
+  record: RoomRecord,
+  actor: AuthUser | null,
+  onChainError: RoomChainSyncFailureMode,
+): Promise<RoomRecord> {
   let chainState: RoomMintObservedState | null;
   const abort = onChainError === 'require-fresh' ? new AbortController() : null;
   // The operation deadline also covers a provider stalling after response headers.

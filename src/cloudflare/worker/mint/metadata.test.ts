@@ -34,7 +34,11 @@ async function setup(uri = payload()) {
   };
   vi.stubGlobal('fetch', vi.fn(serve));
   const headers = { Origin: 'https://wamp.land', 'Content-Type': 'application/json', Cookie: `ep_session=${session}` };
-  const refresh = () => { const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh', { method: 'POST', headers }); return handleRoomRequest(request, new URL(request.url), f.env); };
+  const refresh = () => {
+    // Each refresh here stands for one made after the short window in which a repeat reuses the last read.
+    f.sqlite.prepare("DELETE FROM rate_limit_events WHERE bucket = 'room-chain:refreshed'").run();
+    const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh', { method: 'POST', headers }); return handleRoomRequest(request, new URL(request.url), f.env);
+  };
   const confirm = async (version = 999, hash?: string) => handleRoomTokenMetadataConfirm(new Request('https://api.wamp.land/api/rooms/0,0/mint/metadata/confirm', { method: 'POST', headers, body: JSON.stringify({ txHash: tx, metadataRoomVersion: version, metadataHash: hash ?? await sha256Hex(provider.state.tokenUri) }) }), f.env, '0,0', { x: 0, y: 0 });
   const stored = () => f.sqlite.prepare('SELECT minted_metadata_room_version,minted_metadata_hash,minted_metadata_updated_at,minted_owner_wallet_address,claimer_user_id FROM rooms WHERE id=?').get('0,0') as { minted_metadata_room_version: number | null; minted_metadata_hash: string | null; minted_metadata_updated_at: string | null; minted_owner_wallet_address: string; claimer_user_id: string };
   const loadRecord = () => loadRoomRecord(f.env, '0,0', { x: 0, y: 0 }, 'p1', wallet);
@@ -48,8 +52,9 @@ describe('canonical room artwork observations and recovery', () => {
     try {
       expect(await (await f.refresh()).json()).toMatchObject({ mintedMetadataRoomVersion: 6, mintedMetadataHash: await sha256Hex(f.provider.state.tokenUri) });
       expect(f.stored()).toMatchObject({ minted_metadata_room_version: 6, minted_owner_wallet_address: wallet, claimer_user_id: 'builder' });
-      const before = f.stored(), writes = f.sqlite.prepare('SELECT total_changes() AS n').get();
-      await f.refresh(); expect(f.stored()).toEqual(before); expect(f.sqlite.prepare('SELECT total_changes() AS n').get()).toEqual(writes);
+      const before = f.stored(), writes: string[] = [], prepare = f.env.DB.prepare.bind(f.env.DB);
+      f.env.DB.prepare = (sql: string) => { if (/^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql) && !/rate_limit_events/.test(sql)) writes.push(sql); return prepare(sql); };
+      await f.refresh(); expect(f.stored()).toEqual(before); expect(writes).toEqual([]);
       const calls = f.requests.filter(q => q.method === 'eth_call'); expect(calls).toHaveLength(6); expect(calls.every(q => q.params?.[1] === '0x10')).toBe(true);
     } finally { f.sqlite.close(); }
   });
