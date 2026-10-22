@@ -6142,9 +6142,33 @@ A Logout button already exists. It is index.html:197, shown for school students 
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F213: details withheld
+### F213: Anyone can build next to a World's rooms without joining, skipping its review and limits
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap: School/classroom accounts, Worlds pilot and Jam modes
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Worlds are supposed to grow from their own far-away starting point and be built only by members. But the main grid's 'build next to an existing room' rule counts a World's rooms too. A non-member, or a bot using the API, can claim and publish ordinary WAMP 0 rooms right on a World's edges. That skips the World's invite list, approval queue and daily limits, and a griefer could block a World from growing at all.
+
+**Technical detail.**
+
+When neither the existing room nor the request names a World, the claim falls through to the WAMP 0 path (rooms/store.ts:905-915 saveDraft; 1044-1053 publishRoom). enforceFrontierClaimRule then accepts any published orthogonal neighbor (rooms/store.ts:1496-1549) and doesn't check which World that neighbor belongs to. The World is resolved only from an existing claim or the optional, client-supplied ?worldId= (worlds/roomMutationIntegration.ts:26-40; rooms/routes.ts:634-637). The client sets that context heuristically from the last room it loaded (src/persistence/roomRepository.ts:1023-1029), and agents/API callers never send it. The PRD's 'Worlds may collide naturally' (worlds-mvp-prd.md:17) is about two frontiers meeting, not WAMP 0 jumping 129 coordinates to a World's border. Fix: in enforceFrontierClaimRule, join world_room_claims and require at least one neighbor whose world_id is WAMP_PRIME_WORLD_ID. Alternatively, when every published neighbor belongs to numbered World N, resolve world = N on the server and apply its policy (non-members get 403 'Join World N to build here'). Add a test: a non-member claim adjacent to a World-only room is rejected.
+
+**Evidence.**
+- src/cloudflare/worker/rooms/store.ts:1496-1526 — hasPublishedOrthogonalNeighbor counts rooms from any World
+- src/cloudflare/worker/rooms/store.ts:905-915 — with world null, a non-admin goes through enforceFrontierClaimRule with no membership check
+- src/cloudflare/worker/worlds/roomMutationIntegration.ts:26-40 — World comes only from an existing claim or the requested worldId
+- src/cloudflare/worker/rooms/routes.ts:634-637 — worldId is an optional query parameter
+- src/persistence/roomRepository.ts:1023-1029 — client World context is inferred from the last loaded room
+
+**Fact-check (confirmed).**
+
+Four details need correcting:
+1. Ordinary non-members using the normal UI are mostly protected by accident. After walking from a World's rooms, the client sends worldId=N and gets a 403. The real exposure is API/agent callers (skill.md never documents worldId) and clients whose context is stale or null.
+2. Claiming alone is enough to block a cell; no publish is needed. A saveDraft claim occupies the coordinate, and I found no expiry. The WAMP 0 daily limit still applies (T0 = 5/day), but that is enough for one account to wall off a fresh World origin's 4 neighbours. Once a World has a larger perimeter, it takes many accounts to stop it growing.
+3. Today there are no numbered Worlds in production (the /api/worlds directory lists only WAMP 0), so this is a pre-pilot fix, not an active exploit.
+4. The fix should LEFT JOIN world_room_claims and treat rooms with a NULL claim row as Prime, so any unattributed legacy rooms still count. It should also stop the frontier display from advertising World-only-adjacent cells as buildable to everyone: computeWorldWindow in persistence/worldModel.ts and the claimable-frontier window in world/routes.ts:183-209. Otherwise players will see "Build here" and then get a 409.
+
+**2026-10-21 delivered.** PR #283 / `c64b73e0` and API Worker `bc00ef00`. `hasPublishedOrthogonalNeighbor` and the frontier check in `prepareRoomMutationGuards` ignore rooms claimed by a numbered World. Production has no numbered World rooms yet, so nothing changes for current players. Follow-up: stop advertising World-only-adjacent cells as buildable on the client. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
 ### F214: details withheld
 
@@ -6487,17 +6511,112 @@ Evidence (dev server):
 
 Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
-### F182: details withheld
+### F182: Any brand-new account (or agent token) can overwrite every unminted room, with no cap and no alert to the owner
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** high · **effort:** medium
 
-### F184: details withheld
+**Summary.** WAMP's rooms are editable by anyone, like a wiki. That's on purpose, but none of the usual wiki protections against vandals exist. An account made five minutes ago, or a bot script, can publish over hundreds of other people's rooms in one day. The daily publish limit doesn't count these edits, and the original builders are never told. One troll could deface the whole map in an afternoon.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F183: details withheld
+Server permissions fall through to `true` for any published, unminted room (rooms/store.ts:1824-1836), so `canPublish` is granted to any signed-in principal. The publish route calls `assertUserCanPublishContent` for non-owners (rooms/routes.ts:410-415). But `countDailyRoomPublishes` only counts versions with `NOT EXISTS prior_versions` (trustCaps.ts:166-184), meaning brand-new rooms only. Republishing over an existing room never increments the count, so T0's 5/day limit doesn't apply to vandal edits. `buildBuilderCapabilitySummary` ignores `_requestAuthSource` (capabilities.ts:42), so agent and API tokens get full human caps, and `POST /api/agents` has no per-owner agent cap (agents/routes.ts:68-84). Fix, all small server changes: (1) add `countDailyEditsToOthersRooms`, counting room_versions where published_by_user_id = me AND rooms.claimer_user_id != me, with a tier table (e.g. T0: 3/day plus account age >= 24h, T1: 10, T2+: 30). Halve it for `agent_token`/`api_token`. (2) On a publish by a non-claimer, queue an email/in-app notice to the claimer with a one-click 'Revert to v{prev}' link. The revert route already exists. (3) Add an env var kill switch, `OTHERS_ROOM_EDIT_MIN_TIER` / `PUBLISHING_PAUSED=1`, checked in the publish and draft routes, so Jonathan can freeze edits during a raid from the Cloudflare dashboard without a code deploy. (4) Add a line to skill.md telling agents never to publish over rooms they didn't claim unless the claimer asked.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Evidence.**
+- src/cloudflare/worker/rooms/store.ts:1824-1836 — canSaveDraft/canPublish evaluate to `true` for any published unminted room regardless of viewer
+- src/cloudflare/worker/progression/trustCaps.ts:166-184 — daily publish count only includes rooms with no prior version (first publishes), so overwriting others' rooms is uncounted
+- src/cloudflare/worker/rooms/routes.ts:410-415 — the only publish-rate gate for non-owners is that first-publish counter
+- src/cloudflare/worker/progression/capabilities.ts:42 — `_requestAuthSource` unused; agent/API tokens get identical caps
+- src/cloudflare/worker/agents/routes.ts:68-84 — agent creation has no per-owner limit
+- docs/product/product-requirements.md:121 — 'Pre-mint rooms: Anyone can edit' (intended design, so needs anti-vandal guardrails)
+
+**Fact-check (confirmed, confirmed, partially confirmed).**
+
+The core claim stands. Correct one detail: the missing per-owner agent cap (agents/routes.ts:68-84) does not multiply publish or claim quotas. Agent and API tokens act as the owning user (auth/actors.ts:7), and their versions are stored with the owner's `published_by_user_id`, so every agent shares the owner's caps. More agents only means more display names. Also note that two repair paths already exist: a claimer-only revert (rooms/routes.ts:452) and a single-room moderator restore (admin/routes.ts:209). What's missing is any alert to the claimer, any cap on overwrites, and any bulk revert-by-user tool.
+
+Two small clarifications; neither changes the core claim. (a) Because agent tokens act as the owner user (agents/store.ts:364-366) and every quota is keyed on auth.user.id, the missing per-owner agent limit does not multiply publish capacity. Its main effect is letting one person act under many disposable display names. (b) Non-claimer republishes are blocked once the user has already published their daily limit of new rooms that day (routes.ts:413-415 runs the check). So the loophole is unlimited for anyone who publishes no new rooms, rather than for every account in every case. Moderators do have a single-room restore (admin/routes.ts:210-240); what is missing is reverting everything one user published and a kill switch.
+
+Remove the agent-token and per-owner-agent-cap points as causes. Agent tokens publish as the owner user (auth/actors.ts:7), and skill.md:86 says quotas roll up to the human owner, so extra agents add no capacity. Change "brand-new account" to "any signed-in account, of any age or trust tier". Add three facts:
+1. Trust penalties (chat ban, suspicious flag) only drop a user to T0, which still allows unlimited overwrites (trustCaps.ts:93-111).
+2. There is no publish ban and no admin bulk-revert tool. Revert is claimer-only (store.ts:1835-1837), so recovery from a raid is manual, room by room. Rooms with no claimer can only be reverted by an admin.
+3. Damage can be undone through the version history, and vandals earn no points (runs/points.ts:57).
+For the fix, ship the env-var kill switch and the counter for edits to other people's rooms first (small). Then add a per-user ban that blocks publishing and an admin "revert all versions by user X since T" tool. Claimer notifications come after that. Add the skill.md warning, because accidental overwrites by agents are a realistic case.
+
+**2026-10-21 delivered.** PR #278 / `6a2d2d0b`, migration 0069 and API Worker `bc00ef00`. Production edits to other builders' rooms peak at 3 distinct rooms per builder per day since May, so the allowance (5 at T0 up to 25 at T4) sits above real use. The publish route takes one `rate_limit_events` row per attempt in a single statement and releases it if the publish fails. `OTHERS_ROOM_EDITS_PAUSED` is a Worker secret so deploys don't clear it. Migration 0069 rebuilds `builder_activity` to add the `edited` kind (six triggers recreated verbatim and verified against production; the id sequence carried over) and adds a room-version trigger that notifies the claimer once per editor, room and UTC day, skipping restores, minted rooms and numbered-World rooms. Notices are private (inbox and weekly digest only). An adversarial review found six issues, all fixed before release, including a `?worldId=` spoof that let a WAMP 0 room be treated as a World room. Agent guide (`public/skill.md`) mentions the allowance. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
+
+### F184: Admins can't stop a bad actor from building, and cleanup is one room at a time
+
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** high · **effort:** medium
+
+**Summary.** The only ban in WAMP is a chat ban. A banned troll can keep publishing rooms, uploading sprites, and running bots. The admin limit controls can't even set someone's publishing to zero. If a vandal hits 200 rooms, Jonathan has to open each room's History and restore it by hand, and the 'clear room' tool permanently deletes the room's whole history.
+
+**Technical detail.**
+
+`resolveChatModerationViewer().banned` (chat/moderation.ts:14-27) is enforced only in chat (chat/routes.ts:145-148) and room comments (roomComments/routes.ts:148-151). Room publish, draft save, custom sprites, agents, profiles and Wamp-O-Grams never check it. Admin cap overrides pass through `sanitizeOptionalOverride`, which turns 0 into null, i.e. back to the default (capabilities.ts:23, progression/admin.ts:168-169). `enforcePublishLimitForUser`, which does handle a limit <= 0, is defined (guardrails.ts:30-39) but never called. `handleAdminRoomClear` hard-deletes rooms, room_versions, runs and points (admin/routes.ts:242-330, DELETEs at 308-309), with no audit row and no undo. Fix: (1) add `users.suspended_at/suspended_reason` and check it in `requireAuthenticatedRequestAuth` for all mutating scopes, agent tokens included, by owner. Also revoke sessions and agent tokens on suspend. (2) Add `POST /api/admin/users/:id/revert-edits?since=ISO`. It selects room_versions WHERE published_by_user_id=? AND created_at>=?, groups by room, and calls existing `revertRoom` to the latest version before `since` that was authored by someone else. Also add a preview mode, like the suspicious-invalidation preview pattern. (3) Replace hard 'clear' with a soft `rooms.hidden_at` that world/playable-content reads filter, plus a `moderation_audit` table. (4) Put these three buttons on suspicious-admin's user detail page.
+
+**Evidence.**
+- src/cloudflare/worker/chat/moderation.ts:14-27 — ban state is chat-scoped only
+- src/cloudflare/worker/roomComments/routes.ts:148-151 and src/cloudflare/worker/chat/routes.ts:145-148 — the only two places a ban is enforced
+- src/cloudflare/worker/progression/capabilities.ts:23 — override values <= 0 are discarded, so admins cannot set publish limit to 0
+- src/cloudflare/worker/rooms/guardrails.ts:30-39 — enforcePublishLimitForUser (handles <= 0) has no callers
+- src/cloudflare/worker/admin/routes.ts:308-309 — admin clear permanently DELETEs room_versions and rooms with no audit trail
+- src/cloudflare/worker/admin/routes.ts:210-240 — restore exists but only per room/version
+
+**Fact-check (partially confirmed, partially confirmed, confirmed).**
+
+1. A chat ban is not purely chat-scoped. While the ban is active, and for 30 days after it, trustCaps.ts:58-103 sets effective trust to 0. That drops the user to T0 caps (5 new rooms per day, 5 claims, 250 objects per room). So room publishing does indirectly check the ban, through assertUserCanPublishContent (rooms/routes.ts:414). It throttles new-room creation; it does not block publishing.
+2. The real gap is bigger than "a banned user can still publish". The daily cap counts only first versions of rooms (trustCaps.ts:166-185). Anyone can republish other users' published, unminted rooms (rooms/store.ts:1823-1834). Together that means editing other people's rooms is effectively unlimited for any user, banned or not, and even a publish-cap override of 1 does not limit it. Letting admins save an override of 0 is a quick partial fix: publishCount >= 0 would then block every publish that isn't bypassed.
+3. Room claimers can restore their own rooms themselves (canRevert). Cleanup is still one room at a time with no bulk tool, but it does not fall only on Jonathan.
+4. The clear endpoint needs the admin key and has no UI. The handler spans admin/routes.ts:242-360 and its DELETEs are at 306-336.
+
+A chat ban is not purely chat-scoped. Through the trust penalty (progression/trustCaps.ts:56-103), an active or recent chat ban drops the user to tier T0: 5 new-room claims and publishes per day, 250 objects and 50 collectibles. Uploads are not fully unmoderated either: custom sprites can be blocked one at a time (customSprites/adminRoutes.ts:32-41), and background images need review and per-user upload permission (backgroundImages/routes.ts:183-188, rooms/store.ts:932).
+
+The dead enforcePublishLimitForUser does not matter. The live limit check is assertUserCanPublishContent (trustCaps.ts:187-202, rooms/routes.ts:414), and it would already reject a limit of 0. Only sanitizeOptionalOverride (capabilities.ts:23) stops admins from setting 0.
+
+The real hole is bigger than the claim states. Published, non-minted rooms are editable by anyone (rooms/store.ts:1823-1834), and countDailyRoomPublishes (trustCaps.ts:166-185) counts only a room's first version. So overwriting other people's existing rooms is never counted, and even a chat-banned T0 user can vandalize any number of them per day.
+
+Restore is per room but open to delegated chat moderators (admin/routes.ts:218). Clear is admin-key only (line 248). It hard-deletes runs, difficulty votes, versions and the room at lines 304-309, with no audit.
+
+Quickest partial fix: let the cap override accept 0, which the existing assertUserCanPublishContent then blocks, and count republishes of other people's rooms toward a daily edit cap. Then add the suspension flag, bulk revert-by-user and soft-hide with an audit table.
+
+These are refinements; the core claim stands.
+
+1. **Owners can also undo vandalism, so it isn't all on Jonathan.** A room's owner (its claimer) can revert their own room (`canRevert` at rooms/store.ts:1835-1837). The real gap is that no tool reverts many rooms at once, or reverts everything one user did.
+2. **The function that actually matters is `assertUserCanPublishContent`, not `enforcePublishLimitForUser`.** It is the one that runs, and it would block publishing if the limit were 0 (count >= 0 is always true). Only `sanitizeOptionalOverride` stops admins from setting 0.
+3. **That function only counts brand-new rooms.** `countDailyRoomPublishes` (trustCaps.ts:166-185) only counts first versions of new rooms. Overwriting other people's published rooms is therefore unlimited for every tier, and any positive cap leaves it unlimited.
+4. **The fix should also cap edits to other people's rooms.** Count them, or add a per-user per-minute publish rate limit, alongside the suspension.
+5. **Restore and clear are protected differently.** Restore is gated by a chat-moderator session (`requireChatModeratorSession`), while clear needs the admin key (`requireAdminRequest`). A bulk-revert endpoint should use the moderator-session path so it can be a button in the UI.
+6. **Effort.** Suspension plus bulk revert is medium. Soft-hide with world-tile and index filtering is closer to large.
+
+**2026-10-21 delivered.** PR #279 / `99c30c64`, migration 0070 and API Worker `bc00ef00`. `users.suspended_at` is checked for every mutating request in `requireAuthenticatedRequestAuth` and `requireCurrentSession` (log out everywhere and token revocation stay allowed), plus chat-moderator sessions, room-chat bubble tokens (muted) and World publication approval. The suspicious-activity page has Building Controls: suspend or lift with a reason, and Preview/Restore Rooms for a user's edits since a time. A room is restored to the newest version by someone else before the user's first edit in the window, only if nobody else published since and no newer draft exists; rooms they claimed by publishing over an unclaimed room are restored and released. Restores run as `WAMP moderation`, 25 per request, and refuse with 409 if the room changed after planning. Admin cap overrides of 0 now mean none (server and Launch Admin form). `moderation_audit` records suspensions, restores and room clears. An adversarial review found nine issues, all fixed. Still open as an optional follow-up: replacing the hard-delete room clear with a soft hide. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
+
+### F183: Players have no way to report a room, user, chat message, or guest room
+
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** improvement · **impact:** high · **effort:** medium
+
+**Summary.** When a player sees something offensive (a drawing, a sign, a slur in chat, a nasty guest room), there's no Report button anywhere, and the site lists no contact address either. Classroom student accounts can read world chat too. That means Jonathan only hears about problems by luck, and moderation can't scale past him personally watching.
+
+**Technical detail.**
+
+Neither the client nor the Worker has a report surface: no `/api/reports` route, and no report/flag strings in index.html or src/ui. The PRD's moderation plan (flagging, categories, review) is still an unchecked v1.5 item. Build it small: a `content_reports` table (id, target_type: room_version|user|chat_message|guest_draft|custom_sprite|wamp_o_gram, target_id, category, note, reporter_user_id or reporter_ip_hash, created_at, resolved_at, resolution). Add `POST /api/reports`: signed-in users, or guests with Turnstile, which is already wired for the guestbook. Rate limit it at 10/day/reporter. Reuse `sendAdminReviewNotificationEmail` (admin/reviewNotifications.ts) for the first report on each target. Add a 'Reports' tab to launch-admin next to the existing comment review queue. Auto-hide rule: content by T0/T1 authors gets hidden pending review after 3 distinct reporters. Put the client entry points in the room info/History modal, the chat message context menu, and Explore cards, with a large tap target on mobile.
+
+**Evidence.**
+- docs/product/product-requirements.md:614 — 'There is still no public room-flagging flow, review UI, or full moderation system'
+- docs/product/product-requirements.md:843 — '[ ] Moderation: flagging system, admin review panel' still unchecked
+- src/ui/chat/panel.ts:762-764 — 'Classroom accounts can read chat, but cannot post' (minors see unfiltered chat with no way to report)
+- src/cloudflare/worker/admin/reviewNotifications.ts:24-60 — existing admin email notifier can be reused for report alerts
+- src/cloudflare/worker/guestbook/routes.ts:94 — Turnstile verification already exists and can gate guest reports
+
+**Fact-check (confirmed).**
+
+Minor overstatements to fix in the write-up:
+(1) "The site lists no contact address" is too strong. There is no email or mailto, but index.html:165-171 has a visible "Join the Discord" link (discord.gg/bEpc3XsnvV), and the About page links @songadaymann on X (index.html:2945). Players have an informal side channel, just no report flow inside the game.
+(2) Moderators already have tools to act once they know about a problem. They can delete chat messages and ban/unban (chat/moderation.ts, chatModerationModal.ts), clear/restore rooms (admin/routes.ts:153-158), block custom sprites (catalogStore 'blocked' status) and roll back history in historyModal.ts:452-464. Background uploads get AI moderation. Room comments are already reviewed before they appear (roomComments/routes.ts:186 'pending_review'), so comments don't need a report target. The gap is only reporting itself: content gets published right away and nobody has a way to tell Jonathan about it. Resolution actions in the new Reports tab should call the existing clear/restore/block/ban endpoints rather than adding new ones.
+
+
+**2026-10-21 delivered.** PR #280 / `ba17164e`, migration 0071 and API Worker `bc00ef00`. `POST /api/reports` (optional sign-in, trusted origins only) reads the reported room, player, chat message or public guest room on the server and stores what the reporter saw. Guests are counted by network, not by browser id; limits are 10 per reporter, 30 per network and 1,000 guest reports a day in all (signed-in players are exempt from the last). The first open report on an item emails the admin, at most 20 a day. `/api/admin/reports` lists and closes reports; closed reports are pruned after 90 days. The dialog code loads on first use (boot JS 660.8 KB). An adversarial review found report-spam and email-flood paths through rotating guest ids; fixed before release. Not built: automatic hiding after several reports (left as a choice for Jonathan). [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
 ### F185: Production errors are invisible: no client error beacon, no request IDs, raw 500 messages
 
@@ -6565,17 +6684,86 @@ Not done: the hourly alert digest (optional per the fact-check), the user id in 
 
 3. **Implementation note:** the token is checked only in `onConnect` (presenceServer.ts:197), and the socket stays open after the 5-minute token TTL. A ban added after someone connects therefore won't apply until they reconnect, unless the server re-checks or the Worker pushes a revoke.
 
-### F188: details withheld
+### F188: Anonymous guest saves have no rate limit and can fill the database
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Guests can save room drafts to the server without an account, at up to half a megabyte each, with no limit on how many. A simple script could fill WAMP's database to its 10 GB maximum. After that, nobody can save, publish, chat, or sign in until someone cleans it up by hand.
+
+**Technical detail.**
+
+`PUT /api/guest-room-drafts/:roomId` accepts snapshots up to 512 KB (guestRoomDrafts/routes.ts:29, 90-115). The guest id is self-asserted: anything starting with `guest-` passes (routes.ts:151). There's no IP rate limit, no Turnstile, no per-guest count and no expiry. `POST /api/auth/wallet/challenge` also inserts a row per anonymous call (auth/routes.ts:511-526). Expired wallet_challenges, magic_link_tokens and sessions are never purged: only the test-reset route deletes them (maintenance/routes.ts:46-48), and the cron only purges replays (worker.ts:261). D1 caps a database at 10 GB, and a full DB rejects every write. The repo already has the right pattern in guest replays: an atomic SQL budget gate (guestReplay/routes.ts:61-74). Fix: (1) copy that gate for guest drafts, e.g. at most 20 new drafts/day per ip_hash and at most 2,000/day globally, and require Turnstile on the first save. (2) Add a Workers Rate Limiting binding for anonymous POST/PUT routes: guest drafts, wallet challenge, request-link, guest-activity, guestbook. (3) Extend the hourly cron to delete expired wallet_challenges/magic_link_tokens/sessions and unsubmitted guest drafts older than 30 days. (4) Have the hourly cron email Jonathan if `PRAGMA page_count * page_size` passes 5 GB.
+
+**Evidence.**
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:29 — MAX_GUEST_ROOM_SNAPSHOT_JSON_BYTES = 512_000
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:90-115 — anonymous PUT with no rate limit, captcha, or quota
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:151 — any string starting with 'guest-' is accepted as identity
+- src/cloudflare/worker/auth/routes.ts:511-526 — unauthenticated wallet challenge inserts
+- src/cloudflare/worker.ts:261 — scheduled handler only purges guest replays
+- src/cloudflare/worker/guestReplay/routes.ts:61-74 — existing atomic budget-gate pattern to copy
+
+**Fact-check (confirmed, confirmed, partially confirmed).**
+
+The core claim is accurate. Corrections and additions to the fix plan:
+(a) The guestbook already has protection: a D1 rate limit keyed by IP hash and guest session (assertGuestbookRateLimit, guestbook/routes.ts:86-91) plus server-side Turnstile verification (routes.ts:93, 245). Drop it from the list, or reuse its hashGuestbookIp pattern for the guest-draft ip_hash.
+(b) /api/auth/request-link already limits each email to one request per 60 seconds (auth/routes.ts:174-176). It is not throttled per IP, though, and it calls createUserForEmail for any new address (auth/routes.ts:197), so each new email adds a users row and sends a Resend email. That makes it a better rate-limit target than the claim suggests.
+(c) The design doc's retention policy says to keep non-empty active guest drafts indefinitely and purge discarded drafts after 30 days (guest-room-recovery-design.md:392-396). Deleting all unsubmitted drafts after 30 days would destroy recoverable guest work. Base expiry on last_seen_at with a longer window (e.g. 90-180 days), or check with Jonathan first.
+(d) Add to the fix: routes.ts:92 calls parseJsonBody without maxBytes, so a body of any size is read and JSON-parsed before the 512 KB check. Pass { maxBytes: ~600_000 } as guestReplay/routes.ts:53 does.
+
+The core claim holds, but parts of the proposed fix need adjusting:
+- **Guestbook:** remove it from the "add rate limiting" list. It already has an hourly per-IP limit and a per-minute per-session limit (`guestbook/routes.ts:88`, `212-224`), plus Turnstile siteverify (`guestbook/routes.ts:93`, `245-291`).
+- **Request-link:** it already has a per-email cooldown (`auth/store.ts:680-684`, `hasRecentEmailSignInRequest`). It is not fully open; it can still be abused by using a different email each time.
+- **No IP column:** `guest_room_drafts` has no `ip_hash` column (`migrations/0037`). A per-IP gate needs a small migration, or it has to rely on a guest-id-only limit plus a global budget. Effort is still small.
+- **Extra gaps in the same PUT:**
+  - It calls `parseJsonBody` with no `maxBytes` (`routes.ts:92`). The whole body is buffered and parsed before the 512 KB check. The normal room save path caps the body at 2 MB (`core/http.ts:21`, `374`).
+  - It skips `validateRoomSnapshotForWrite`, so tile and object data are not validated.
+- **Submit publishes right away:** `POST /:id/submit` flips `moderation_status` from private to public with no Turnstile (`store.ts:256-271`). The design doc recommended Turnstile at that step.
+
+The core claim stands: PUT /api/guest-room-drafts/:roomId has no IP limit, no quota, no Turnstile and no expiry, even though guest-room-recovery-design.md:302 planned an IP and guest-id rate limit. Corrections:
+
+(a) Take the guestbook off the fix list. It already has an IP rate limit and Turnstile (guestbook/routes.ts:84-93, 212-260).
+
+(b) Keep the wallet_challenges and magic_link_tokens purge as minor housekeeping. Those rows are tiny and cannot realistically fill the database.
+
+(c) Budget gate: base it on bytes or new rows per ip_hash, set high enough for a shared classroom IP (around 100 new drafts per day per IP). Add a total-bytes check across all guests that sends an alert instead of blocking every guest at a fixed 2,000 per day.
+
+(d) Do NOT delete active guest drafts after 30 days, because guests can still come back and claim them. Purge only discarded or hidden drafts. If active drafts must expire, use last_seen_at with a long window such as 180 days or more.
+
+(e) Pass maxBytes to parseJsonBody on the guest PUT (routes.ts:92), so oversized bodies are rejected before parsing.
+
+(f) For the size alert, read `meta.size_after` from any D1 query result instead of relying on PRAGMA.
+
+Impact should be medium, not high. It is a cheap, site-wide outage risk if someone abuses it, but nothing shows abuse today and normal play never triggers it.
+
+**2026-10-21 delivered.** PR #282 / `e0aba341` and API Worker `bc00ef00`, completing the guest-draft limits from PR #173. Wallet approval requests take a 60-an-hour-per-network slot after the trusted-origin check (no sitewide cap, so many networks cannot lock everyone out); 199 expired approvals were waiting to be pruned. `checkDatabaseSize` runs first in the hourly job and emails at most once a day above 8 GB, retrying next hour if the email fails (production is 0.47 GB). [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
 ### F191: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F049: details withheld
+### F049: Public guest-room repository serves unmoderated, user-controlled titles and names to all visitors
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Security & abuse resistance
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Rooms submitted by anonymous guests go straight into the public Explore 'Guest Rooms' list with no review step — their chosen titles and display names are shown to everyone. The project's own design doc said to add abuse controls before shipping this, and the submit path has no CAPTCHA. Live data already shows guest-chosen titles like knife/among-us emoji.
+
+**Technical detail.**
+
+submitOwnedGuestRoomDraft (guestRoomDrafts/store.ts:255-273) flips moderation_status from 'private' to 'public' automatically on submit, and listSubmittedGuestRoomDrafts (store.ts:173-200) returns every status='submitted' AND moderation_status='public' row to unauthenticated callers. handleGuestRoomDraftRequest submit (guestRoomDrafts/routes.ts:116-131) requires only the guest recovery token, with no Turnstile and no rate limit in this handler (contrast guest-replays which has an atomic budget gate, guestReplay/routes.ts:62-74). Titles/display names are capped in length (routes.ts:156-163) but not content-moderated. The guest-room-recovery design doc explicitly says 'add Guest Rooms only after the backend submission path has abuse controls' and 'Turnstile or equivalent abuse check recommended' (docs/features/guest-room-recovery-design.md:332,369). Confirmed live: GET https://api.wamp.land/api/guest-room-drafts/submitted returns guest-authored titles. Rendering appears to use textContent in exploreModal so this is a spam/abuse-content issue, not stored XSS. Fix: default submitted guest rooms to pending review, add Turnstile + per-IP/token rate limiting on submit.
+
+**Evidence.**
+- src/cloudflare/worker/guestRoomDrafts/store.ts:264 — submit auto-promotes moderation_status 'private' -> 'public' with no review
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:116 — submit requires only the guest recovery token, no Turnstile/rate limit
+- docs/features/guest-room-recovery-design.md:369 — design doc says ship Guest Rooms only after abuse controls exist
+- live: GET https://api.wamp.land/api/guest-room-drafts/submitted returned 6 public guest rooms with guest-chosen titles
+
+**Fact-check (partially confirmed).**
+
+Fix the citations: the submit handler is guestRoomDrafts/routes.ts:57-72 (not 116-131), and the display-name cap is routes.ts:157-164. Don't present the live list as abuse that has already happened. Only 6 guest rooms are public, and titles like '🔪among us' are harmless kid content, so this is a risk that hasn't been exploited yet. Add the missing key fact: no admin hide or takedown path exists for guest rooms at all. Nothing writes hidden_at on guest_room_drafts, so removing a room means editing the database directly. Also note that the PUT save (routes.ts:90-115) is just as unlimited (any invented guest id and token, up to 512KB per draft), and that /submitted sends full snapshots, so spam could also bloat the Explore payload. Recommended fix, in priority order: (1) add an admin-only hide endpoint modeled on handleGuestbookHide (guestbook/routes.ts:112-130); (2) add the guestbook's Turnstile check and IP/session rate-limit pattern (guestbook/routes.ts:29-31, 88-93) to submit and to PUT save; (3) optionally default submissions to 'pending' with a review queue.
+
+**2026-10-21 delivered.** PR #281 / `f5b34d21` and API Worker `bc00ef00`. `/api/admin/guest-room-drafts` lists recent shared guest rooms and `…/:id/hide|show` flips `moderation_status` without touching `updated_at`, so the guest's own saves and claims keep working. Submitting from a guest who already has a hidden room keeps the new room hidden. The share limit releases its slot unless the request actually shared the room. Production had 6 shared guest rooms and at most one share a day. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
 ### F189: details withheld
 

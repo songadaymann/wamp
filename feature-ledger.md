@@ -1,3 +1,7 @@
+## 2026-10-21 — Vandal safeguards, player reports and abuse limits (F182, F184, F183, F049, F188, F213)
+
+Original prompt (lane brief): finish the remaining open checkup items that need no decision; Jonathan approved merging and deploying for this run. Branches `claude/f182-others-room-edit-cap` → `claude/f184-building-suspension` → `claude/f183-player-reports` → `claude/f049-guest-room-moderation` → `claude/f188-abuse-limits` → `claude/f213-world-edge-claims`, stacked on main 2d540764 (PRs #278–#283). Production D1 migrations 0069–0071 applied first, then API Worker `bc00ef00`, then the PRs merged for Pages. Receipt: docs/review/wamp-vandal-safeguards-2026-10-21.md.
+
 ## 2026-10-21 — F246 owner collection reminder
 
 Original prompt: "ok let’s do the next one". Canonical `codex/wamp-owner-reminder-2026-10-21`, from main `a9dabba8`. Plan: docs/review/wamp-owner-reminder-2026-10-21.md. Read-only real-price lookup and wallet-gated owner reminder; existing explicit collection consent remains authoritative. Implemented;32 native checks,16 device/gate cases, selected-cell collection-control reachability and installed-client gameplay pass. Full609/5,232 quality,660.6KB startup and staged OSS0/0 pass. Hosted release pending. Prior collection shelves PR276 is deployed (maina9dabba8); frozen proof and local final receipt preserved.
