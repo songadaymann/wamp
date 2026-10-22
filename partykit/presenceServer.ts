@@ -28,6 +28,12 @@ import {
   type PartyKitIdentityTokenClaims,
 } from '../src/presence/identityToken';
 import {
+  isRoomChatSenderMuted,
+  resolveRoomChatModerationDatabase,
+  ROOM_CHAT_PERMISSION_RECHECK_MS,
+  type RoomChatModerationDatabase,
+} from '../src/partykit/roomChatModeration';
+import {
   resolveConstructionPreviewTokenSigningSecret,
   verifyConstructionPreviewToken,
 } from '../src/presence/constructionPreviewToken';
@@ -853,6 +859,7 @@ export default class PresenceServer implements Party.Server {
       presenceInterest: channel === 'presence' && url.searchParams.get('presenceInterest') === '1',
       canSendRoomChat: canSendRoomChat(claims),
       canReceiveRoomChat: canReceiveRoomChat(claims),
+      roomChatCheckedAt: claims.iat,
       school: claims.roomChat === 'school',
       userId: claims.userId,
       displayName: claims.displayName,
@@ -903,11 +910,48 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    // Taken before any database read so a burst cannot slip past the rate limit.
     sender.setState({
       ...state,
       lastRoomChatSentAt: now,
     });
 
+    // A ban or suspension made after connecting applies here, re-read at most once a minute.
+    const db = resolveRoomChatModerationDatabase(this.room.env);
+    if (db && now - (state.roomChatCheckedAt ?? 0) >= ROOM_CHAT_PERMISSION_RECHECK_MS) {
+      this.runBackground(this.recheckRoomChatSender(db, sender, now).then((allowed) => {
+        if (allowed) this.broadcastRoomChat(state, presence, text, now);
+      }));
+      return;
+    }
+    this.broadcastRoomChat(state, presence, text, now);
+  }
+
+  /** Resolves false when the sender may no longer post bubbles; a failed read keeps the earlier decision. */
+  private async recheckRoomChatSender(
+    db: RoomChatModerationDatabase,
+    sender: Party.Connection<ConnectionPresenceState>,
+    checkedAt: number,
+  ): Promise<boolean> {
+    let muted: boolean;
+    try {
+      muted = await isRoomChatSenderMuted(db, sender.state?.userId ?? '');
+    } catch (error) {
+      console.warn('Room chat permission check unavailable.', error);
+      return true;
+    }
+    const current = sender.state;
+    if (!current) return false;
+    sender.setState({ ...current, roomChatCheckedAt: checkedAt, canSendRoomChat: current.canSendRoomChat && !muted });
+    return !muted;
+  }
+
+  private broadcastRoomChat(
+    state: ConnectionPresenceState,
+    presence: PresencePayload,
+    text: string,
+    now: number,
+  ): void {
     const roomId = this.getRoomId(presence.roomCoordinates);
     const payload = buildRoomChatBroadcast(
       state, this.room.id, text, now, crypto.randomUUID(), ROOM_CHAT_MESSAGE_LIFETIME_MS,
