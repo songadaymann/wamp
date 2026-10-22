@@ -33,6 +33,14 @@ export function draftBackupRevision(snapshot: SnapshotBase): string {
   return JSON.stringify(stable(value));
 }
 
+/**
+ * A room's editable contents after the normalization the server and this backup apply on write, so an
+ * editor snapshot (a freshly placed object lacks keys they fill in) matches its stored copies (F379).
+ */
+export function roomContentRevision(room: RoomSnapshot): string {
+  return draftBackupRevision(cloneRoomSnapshot(room));
+}
+
 /** Separate from repository Save: this never touches runtime state, permissions, or dirty flags. */
 export class ExpandedRoomDraftBackup {
   constructor(
@@ -110,13 +118,13 @@ export class ExpandedRoomDraftBackup {
     return this.recover(backup, remote);
   }
 
-  private discard(key: string, sent: SnapshotBase): boolean {
+  private discard<T extends SnapshotBase>(key: string, sent: T, revision: (snapshot: T) => string = draftBackupRevision): boolean {
     try {
       const storage = this.getStorage();
       const raw = storage.getItem(key);
       if (!raw) return true;
-      const backup = JSON.parse(raw) as DraftBackup<SnapshotBase>;
-      if (backup.snapshot?.id !== sent.id || draftBackupRevision(backup.snapshot) !== draftBackupRevision(sent)) return false;
+      const backup = JSON.parse(raw) as DraftBackup<T>;
+      if (backup.snapshot?.id !== sent.id || revision(backup.snapshot) !== revision(sent)) return false;
       storage.removeItem(key);
       return true;
     } catch {
@@ -129,6 +137,7 @@ export class ExpandedRoomDraftBackup {
   }
 
   discardRoom(courseId: string, sent: RoomSnapshot): boolean {
-    return this.discard(this.key(courseId, sent.id), sent);
+    // The backup holds a normalized copy and `sent` is the raw editor snapshot, so compare normalized.
+    return this.discard(this.key(courseId, sent.id), sent, roomContentRevision);
   }
 }

@@ -88,6 +88,7 @@ export class EditorSceneFlowController {
       coursePreview,
       courseEditedRoom: this.host.buildCourseEditedRoomData(),
       practiceStart,
+      draftBaseUpdatedAt: this.roomSession.currentServerDraftUpdatedAt,
     });
 
     this.host.hideObjectInspectorUi();

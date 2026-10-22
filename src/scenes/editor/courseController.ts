@@ -13,6 +13,7 @@ import {
   getActiveCourseDraftSessionCourseId,
   getActiveCourseDraftSessionDraft,
   setActiveCourseDraftSessionRoomOverride,
+  setActiveCourseDraftSessionRoomUnsaved,
   updateActiveCourseDraftSession,
 } from '../../courses/draftSession';
 import { createGoalMarkerPointFromTile } from '../../goals/roomGoals';
@@ -95,7 +96,15 @@ export class EditorCourseController {
     return getSelectedCoursePreviewForPlay(this.getActiveCourseDraft(), this.host.getRoomId());
   }
 
-  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void {
+  /**
+   * `baseUpdatedAt` is the server version the room was loaded or last saved at and `unsaved` whether it
+   * holds edits not saved yet, so the Expanded Room editor neither overwrites newer work with this copy
+   * nor drops it as stale (F379).
+   */
+  syncActiveCourseRoomSessionSnapshot(
+    room: RoomSnapshot,
+    options: { published: boolean; baseUpdatedAt?: string | null; unsaved?: boolean },
+  ): void {
     const courseEdit = this.activeCourseMarkerEdit;
     if (!courseEdit || getActiveCourseDraftSessionCourseId() !== courseEdit.courseId) {
       return;
@@ -105,7 +114,8 @@ export class EditorCourseController {
     if (options.published) {
       clearActiveCourseDraftSessionRoomOverride(snapshot.id);
     } else {
-      setActiveCourseDraftSessionRoomOverride(snapshot);
+      setActiveCourseDraftSessionRoomOverride(snapshot, options.baseUpdatedAt ?? null);
+      if (options.unsaved !== undefined) setActiveCourseDraftSessionRoomUnsaved(snapshot.id, options.unsaved);
     }
 
     const currentDraft = getActiveCourseDraftSessionDraft();

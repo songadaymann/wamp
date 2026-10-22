@@ -861,7 +861,11 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     room: RoomSnapshot,
     options: { published: boolean }
   ): void {
-    this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
+    this.courseController.syncActiveCourseRoomSessionSnapshot(room, {
+      ...options,
+      baseUpdatedAt: this.roomSession.currentServerDraftUpdatedAt,
+      unsaved: this.roomDirty,
+    });
   }
 
   getRoomInsightsTarget(): RoomInsightTarget | null {

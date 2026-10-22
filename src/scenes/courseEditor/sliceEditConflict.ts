@@ -1,6 +1,5 @@
-import { draftBackupRevision } from '../../courses/localDraftBackup';
+import { roomContentRevision } from '../../courses/localDraftBackup';
 import { isRoomEditConflict } from '../../persistence/roomEditConflict';
-import { cloneRoomSnapshot } from '../../persistence/roomModel';
 import type { RoomRecord, RoomSnapshot, RoomWriteOptions } from '../../persistence/roomRepository';
 
 export type SliceWriteKind = 'save' | 'publish';
@@ -14,13 +13,8 @@ export interface SliceWriteAdapter {
   loadLatest(): Promise<RoomRecord>;
 }
 
-/**
- * A cell's editable contents after the normalization the server applies on save, so an editor
- * snapshot (a freshly placed object lacks keys the server fills in) matches its stored copy.
- */
-export function sliceContentRevision(room: RoomSnapshot): string {
-  return draftBackupRevision(cloneRoomSnapshot(room));
-}
+/** A cell's editable contents, normalized as the server stores them (roomContentRevision). */
+export const sliceContentRevision = roomContentRevision;
 
 /**
  * Whether the server holds a saved copy of this cell. Until then its draft is a fresh default with a
@@ -66,7 +60,27 @@ export async function writeSliceAgainstBase(
   }
 }
 
+interface WritableSlice {
+  roomId: string;
+  loaded: boolean;
+  runtime: { isRoomDirty: boolean };
+}
+
+/**
+ * The cells a Save (edited ones) or Publish (edited ones, or ones with a session copy) writes. A cell
+ * whose server copy has not loaded is never written: its blank editor would overwrite real work.
+ */
+export function selectSlicesToWrite<T extends WritableSlice>(
+  slices: Iterable<T>,
+  kind: SliceWriteKind,
+  hasSessionCopy: (roomId: string) => boolean,
+): T[] {
+  return Array.from(slices).filter((slice) => slice.loaded
+    && (slice.runtime.isRoomDirty || (kind === 'publish' && hasSessionCopy(slice.roomId))));
+}
+
 export interface SliceEditConflict {
+  roomId: string;
   label: string;
   /** Whether this cell's version was written to the local backup that reopening offers to restore. */
   kept: boolean;
@@ -124,7 +138,7 @@ export function describeSliceEditConflicts(progress: SliceWriteProgress, error?:
     parts.push(`Your version${kept.length === 1 ? '' : 's'}${lost.length ? ` of ${listCells(kept)}` : ''} ${kept.length === 1 ? 'is' : 'are'} kept on this device: reopen this Expanded Room to choose which to keep.`);
   }
   if (lost.length) {
-    parts.push(`Your version${lost.length === 1 ? '' : 's'}${kept.length ? ` of ${listCells(lost)}` : ''} could not be kept on this device and ${lost.length === 1 ? 'is' : 'are'} only in this tab.`);
+    parts.push(`Your version${lost.length === 1 ? '' : 's'}${kept.length ? ` of ${listCells(lost)}` : ''} could not be kept on this device and ${lost.length === 1 ? 'is' : 'are'} only in this tab. Load Newer Version replaces ${lost.length === 1 ? 'it' : 'them'} with the version saved elsewhere.`);
   }
   if (progress.written > 0) parts.push(`The other ${progress.written} ${progress.written === 1 ? 'cell was' : 'cells were'} ${verb}.`);
   const refreshed = describeRefreshed(progress);

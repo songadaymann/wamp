@@ -272,6 +272,11 @@ export class EditorRoomSession {
     return this.saveInFlight;
   }
 
+  /** The server draft version this editor last loaded or saved; null for a room it has not loaded from the server. */
+  get currentServerDraftUpdatedAt(): string | null {
+    return this.serverDraftUpdatedAt;
+  }
+
   private get saveInFlight(): boolean {
     return this.saveInFlightValue;
   }
@@ -1031,6 +1036,7 @@ export class EditorRoomSession {
           roomCoordinates: { ...this.roomCoordinates },
           statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
           draftRoom: cloneRoomSnapshot(this.host.exportRoomSnapshot()),
+          draftRoomBaseUpdatedAt: this.serverDraftUpdatedAt,
           clearDraftRoomId: null,
           invalidateRoomId: this.roomId,
           forceRefreshAround: true,
@@ -1081,6 +1087,7 @@ export class EditorRoomSession {
       roomCoordinates: { ...this.roomCoordinates },
       statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
+      draftRoomBaseUpdatedAt: draftRecord.draft.updatedAt,
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,
       forceRefreshAround: true,

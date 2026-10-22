@@ -4,7 +4,7 @@ import { cloneRoomSnapshot, createDefaultRoomRecord, type RoomRecord, type RoomS
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
 import type { PlacedObject } from '../../config/objects';
 import {
-  createSliceWriteProgress, describeSliceEditConflicts, describeSliceWriteSuccess, hasStoredRoomDraft, sliceContentRevision,
+  createSliceWriteProgress, describeSliceEditConflicts, describeSliceWriteSuccess, hasStoredRoomDraft, selectSlicesToWrite, sliceContentRevision,
   writeSliceAgainstBase, type SliceEditConflict, type SliceWriteAdapter, type SliceWriteKind,
 } from './sliceEditConflict';
 
@@ -112,20 +112,20 @@ function progress(kind: SliceWriteKind, written: number, conflicts: SliceEditCon
 
 describe('describeSliceEditConflicts (F379)', () => {
   it('claims a local copy only for cells whose backup was written', () => {
-    expect(describeSliceEditConflicts(progress('save', 0, [{ label: '3,4', kept: true }])))
+    expect(describeSliceEditConflicts(progress('save', 0, [{ roomId: '3,4', label: '3,4', kept: true }])))
       .toBe('Cell 3,4 was changed in another tab or device, so it was not saved. Your version is kept on this device: reopen this Expanded Room to choose which to keep.');
-    expect(describeSliceEditConflicts(progress('publish', 0, [{ label: '3,4', kept: false }])))
-      .toBe('Cell 3,4 was changed in another tab or device, so it was not published. Your version could not be kept on this device and is only in this tab.');
+    expect(describeSliceEditConflicts(progress('publish', 0, [{ roomId: '3,4', label: '3,4', kept: false }])))
+      .toBe('Cell 3,4 was changed in another tab or device, so it was not published. Your version could not be kept on this device and is only in this tab. Load Newer Version replaces it with the version saved elsewhere.');
   });
 
   it('reports several cells together, with what still went through', () => {
     const text = describeSliceEditConflicts(
-      progress('save', 2, [{ label: '1,2', kept: true }, { label: '3,4', kept: false }, { label: '5,6', kept: true }]),
+      progress('save', 2, [{ roomId: '1,2', label: '1,2', kept: true }, { roomId: '3,4', label: '3,4', kept: false }, { roomId: '5,6', label: '5,6', kept: true }]),
       'Network down.',
     );
     expect(text).toBe('Cells 1,2; 3,4 and 5,6 were changed in another tab or device, so they were not saved. '
       + 'Your versions of cells 1,2 and 5,6 are kept on this device: reopen this Expanded Room to choose which to keep. '
-      + 'Your version of cell 3,4 could not be kept on this device and is only in this tab. '
+      + 'Your version of cell 3,4 could not be kept on this device and is only in this tab. Load Newer Version replaces it with the version saved elsewhere. '
       + 'The other 2 cells were saved. Network down.');
   });
 
@@ -136,6 +136,21 @@ describe('describeSliceEditConflicts (F379)', () => {
       .toBe('Published 1 room. Cell 7,8 was changed in another tab or device and had no edits here, so the newer version was loaded instead.');
     expect(describeSliceWriteSuccess(progress('publish', 0, [], ['7,8', '9,9'])))
       .toBe('Cells 7,8 and 9,9 were changed in another tab or device and had no edits here, so the newer version was loaded instead.');
+  });
+});
+
+describe('selectSlicesToWrite (F379)', () => {
+  it('never writes a cell whose server copy has not loaded, even with a session copy or edits', () => {
+    const cells = [
+      { roomId: 'edited', loaded: true, runtime: { isRoomDirty: true } },
+      { roomId: 'copy', loaded: true, runtime: { isRoomDirty: false } },
+      { roomId: 'untouched', loaded: true, runtime: { isRoomDirty: false } },
+      { roomId: 'loading-edited', loaded: false, runtime: { isRoomDirty: true } },
+      { roomId: 'loading-copy', loaded: false, runtime: { isRoomDirty: false } },
+    ];
+    const hasCopy = (roomId: string) => roomId === 'copy' || roomId === 'loading-copy';
+    expect(selectSlicesToWrite(cells, 'save', hasCopy).map((cell) => cell.roomId)).toEqual(['edited']);
+    expect(selectSlicesToWrite(cells, 'publish', hasCopy).map((cell) => cell.roomId)).toEqual(['edited', 'copy']);
   });
 });
 

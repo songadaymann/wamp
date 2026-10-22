@@ -98,8 +98,8 @@ import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { getAppFeedbackDebugState, hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
 import {
-  createSliceWriteProgress, describeSliceEditConflicts, describeSliceWriteSuccess, hasStoredRoomDraft, sliceContentRevision,
-  writeSliceAgainstBase, type SliceWriteProgress,
+  createSliceWriteProgress, describeSliceEditConflicts, describeSliceWriteSuccess, hasStoredRoomDraft, selectSlicesToWrite,
+  sliceContentRevision, writeSliceAgainstBase, type SliceWriteProgress,
 } from './courseEditor/sliceEditConflict';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import { requestSignTextEdit } from '../signs/events';
@@ -225,6 +225,8 @@ interface CourseRoomSlice {
   grid: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
   runtime: EditorEditRuntime;
+  /** False until the server copy is applied: a blank cell is never saved, published or kept as a session copy. */
+  loaded: boolean;
 }
 
 export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSceneBridge {
@@ -1836,6 +1838,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       createdAt: '',
       updatedAt: '',
       publishedAt: null,
+      loaded: false,
       origin,
       backgroundVisuals: createCourseEditorRoomBackgroundVisuals(this, origin, 'none'),
       map,
@@ -1944,7 +1947,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     };
 
     this.roomSlices.set(slice.roomId, slice);
-    void this.loadRoomSliceState(slice);
+    void this.loadRoomSliceState(slice).catch((error: unknown) => {
+      console.error('Failed to load expanded room cell', error);
+      if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
+      this.statusText = `Could not load cell ${slice.coordinates.x},${slice.coordinates.y}, so it will not be saved or published. Reopen this Expanded Room to try again.`;
+      this.renderUi();
+    });
   }
 
   private async loadRoomSliceState(slice: CourseRoomSlice): Promise<void> {
@@ -1962,13 +1970,13 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       ? recovered ?? (this.draftBackup.mayRestoreSessionRoom(slice.roomId) ? getActiveCourseDraftSessionRoomOverride(slice.roomId) : null)
       : null;
     // A cell restored from this session keeps the server version it was edited from, so a change
-    // saved elsewhere since then is caught when it saves (F379).
-    const overrideBase = !recovered && override ? getActiveCourseDraftSessionRoomOverrideBase(slice.roomId) : null;
-    if (overrideBase) this.roomBackupBases.set(slice.roomId, { id: remote.id, updatedAt: overrideBase, version: remote.version });
-    // A copy the room editor left carries no base or unsaved mark; it is unsaved work unless the server holds it.
-    if (override && !recovered && !overrideBase && sliceContentRevision(override) !== sliceContentRevision(remote)) {
-      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
-    }
+    // saved elsewhere since then is caught when it saves (F379). A copy the server already holds is
+    // clean at the server's version; one with other contents and no recorded version is unsaved work.
+    const sessionCopy = !recovered && override ? override : null;
+    const overrideBase = sessionCopy ? getActiveCourseDraftSessionRoomOverrideBase(slice.roomId) : null;
+    const onServer = Boolean(sessionCopy && sliceContentRevision(sessionCopy) === sliceContentRevision(remote));
+    if (overrideBase && !onServer) this.roomBackupBases.set(slice.roomId, { id: remote.id, updatedAt: overrideBase, version: remote.version });
+    if (sessionCopy && (onServer || !overrideBase)) setActiveCourseDraftSessionRoomUnsaved(slice.roomId, !onServer);
     const overrideDirty = Boolean(recovered) || (Boolean(override) && isActiveCourseDraftSessionRoomUnsaved(slice.roomId));
     const snapshot = override ?? record.draft ?? record.published ?? null;
     if (!snapshot) {
@@ -1980,6 +1988,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       keepOverride: Boolean(override),
     });
     slice.runtime.applyRoomSnapshot(cloneRoomSnapshot(snapshot));
+    slice.loaded = true;
     if (override) {
       slice.roomTitle = override.title;
       slice.label.setText(slice.roomTitle?.trim() || `${slice.coordinates.x},${slice.coordinates.y}`);
@@ -2053,6 +2062,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private rememberSliceOverride(slice: CourseRoomSlice): void {
+    if (!slice.loaded || !this.roomBackupBases.has(slice.roomId)) return;
     setActiveCourseDraftSessionRoomOverride(slice.runtime.exportRoomSnapshot(), this.roomBackupBases.get(slice.roomId)?.updatedAt ?? null);
   }
 
@@ -2094,16 +2104,14 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       const label = `${slice.coordinates.x},${slice.coordinates.y}`;
       if (outcome.status === 'conflict' && !slice.runtime.isRoomDirty && !isActiveCourseDraftSessionRoomUnsaved(slice.roomId)) {
         // Never edited here (a copy kept from the Composer): take the newer version rather than offer this one over it.
-        const latest = outcome.latest.draft;
-        this.roomBackupBases.set(slice.roomId, { id: latest.id, updatedAt: latest.updatedAt, version: latest.version });
-        this.applyStoredRoomRecordToSlice(slice, outcome.latest, { keepDirty: false, keepOverride: false });
+        this.takeServerVersion(slice, outcome.latest);
         progress.refreshed.push(label);
         continue;
       }
       if (outcome.status === 'conflict') {
         const base = this.roomBackupBases.get(slice.roomId);
         const kept = Boolean(base && this.courseRecord && this.draftBackup.writeRoom(this.courseRecord.draft.id, slice.runtime.exportRoomSnapshot(), base));
-        progress.conflicts.push({ label, kept });
+        progress.conflicts.push({ roomId: slice.roomId, label, kept });
         continue;
       }
       this.applySavedSliceResponse(slice, sent, outcome.record, progress.kind === 'save');
@@ -2117,9 +2125,35 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private reportSliceEditConflicts(progress: SliceWriteProgress, error?: unknown): null {
     const stoppedBy = error === undefined ? undefined : error instanceof Error ? error.message : 'The remaining cells were not written.';
     this.statusText = describeSliceEditConflicts(progress, stoppedBy);
-    showBusyError(this.statusText, { title: 'Changed somewhere else' });
+    // Cells that could not be backed up would fail every Save, so offer to take the newer version now.
+    const lost = progress.conflicts.filter((conflict) => !conflict.kept).map((conflict) => conflict.roomId);
+    showBusyError(this.statusText, lost.length === 0 ? { title: 'Changed somewhere else' } : {
+      title: 'Changed somewhere else', retryLabel: 'Load Newer Version', closeLabel: 'Keep Editing',
+      retryHandler: () => this.loadNewerSliceVersions(lost),
+    });
     this.renderUi();
     return null;
+  }
+
+  private async loadNewerSliceVersions(roomIds: string[]): Promise<void> {
+    hideBusyOverlay();
+    try {
+      for (const roomId of roomIds) {
+        const slice = this.roomSlices.get(roomId);
+        if (!slice || this.isShuttingDown) continue;
+        const record = await this.roomRepository.loadRoom(roomId, slice.coordinates);
+        if (this.roomSlices.get(roomId) === slice && !this.isShuttingDown) this.takeServerVersion(slice, record);
+      }
+      this.statusText = 'Loaded the newer version.';
+    } catch (error) {
+      this.statusText = error instanceof Error ? error.message : 'Could not load the newer version.';
+    }
+    this.renderUi();
+  }
+
+  private takeServerVersion(slice: CourseRoomSlice, record: RoomRecord): void {
+    this.roomBackupBases.set(slice.roomId, { id: record.draft.id, updatedAt: record.draft.updatedAt, version: record.draft.version });
+    this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
   }
 
   private flushDraftBackup(): void {
@@ -2247,7 +2281,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private getDirtySlices(): CourseRoomSlice[] {
-    return Array.from(this.roomSlices.values()).filter((slice) => slice.runtime.isRoomDirty);
+    return selectSlicesToWrite(this.roomSlices.values(), 'save', () => false);
   }
 
   private getCourseSaveDisabledReason(): string | null {
@@ -2274,15 +2308,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private getChangedSlicesForPublish(): CourseRoomSlice[] {
-    return Array.from(this.roomSlices.values()).filter(
-      (slice) =>
-        slice.runtime.isRoomDirty ||
-        getActiveCourseDraftSessionRoomOverride(slice.roomId) !== null
-    );
+    return selectSlicesToWrite(this.roomSlices.values(), 'publish', (roomId) => getActiveCourseDraftSessionRoomOverride(roomId) !== null);
   }
 
   private persistSessionOverridesForPlayableSlices(): void {
     for (const slice of this.roomSlices.values()) {
+      if (!slice.loaded) continue;
       // Marked so reopening never drops an edited copy as stale (F379).
       if (slice.runtime.isRoomDirty) setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
       this.rememberSliceOverride(slice);
