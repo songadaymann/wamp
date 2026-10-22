@@ -19,6 +19,10 @@
     gap: 8px;
   }
 
+  #explore-modal .explore-guest-room-report {
+    justify-self: end;
+  }
+
   #explore-modal .explore-builder-item {
     min-width: 0;
   }

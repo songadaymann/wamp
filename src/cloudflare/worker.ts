@@ -15,6 +15,7 @@ import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay } from './worker/guestReplay/routes';
 import { runHourlyMaintenance } from './worker/maintenance/hourly';
 import { handleBugReports } from './worker/bugReports/routes';
+import { handleContentReports } from './worker/reports/routes';
 import { handleLostSongs } from './worker/lostSongs/routes';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -234,6 +235,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     handler: ({ request, url, env }) => handleBugReports(request, url, env),
   },
   {
+    methods: ['GET', 'PATCH'],
+    pattern: { prefix: '/api/admin/reports' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleContentReports(request, url, env),
+  },
+  {
     methods: ['GET', 'PUT', 'DELETE'],
     pattern: '/api/admin/room-rush/weekly',
     auth: 'admin',
@@ -290,6 +297,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: '/api/bug-reports',
     auth: 'optional',
     handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/reports',
+    auth: 'optional',
+    handler: ({ request, url, env, executionContext }) => handleContentReports(request, url, env, executionContext),
   },
   {
     methods: ['POST'],

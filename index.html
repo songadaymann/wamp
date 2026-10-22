@@ -219,6 +219,7 @@
         <nav class="game-menu-actions game-menu-section" aria-label="Help and community">
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>About WAMP</button>
           <button id="btn-world-report-bug" class="bar-btn auth-menu-action-btn" type="button" data-bug-report-open data-menu-action>Report a bug</button>
+          <button id="btn-menu-report-room" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Report this room</button>
           <a
           id="auth-discord-link" data-menu-action
           class="auth-discord-link"
@@ -2847,6 +2848,7 @@
       <div class="history-modal-header profile-modal-header">
           <button id="btn-profile-activity" class="bar-btn bar-btn-small hidden" type="button">Activity</button>
         <button id="btn-profile-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
+        <button id="btn-profile-report" class="bar-btn bar-btn-small hidden" type="button">Report</button>
         <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="profile-modal-error" class="history-modal-error hidden"></div>
@@ -3245,6 +3247,24 @@
       </form>
       <p id="bug-report-status" role="status" aria-live="polite"></p>
       <div class="bug-report-actions"><button id="btn-bug-report-send" class="bar-btn" type="submit" form="bug-report-form" disabled>Send report</button></div>
+    </div>
+  </div>
+
+  <div id="report-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel report-modal-panel" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <div class="history-modal-header">
+        <h2 id="report-title" class="history-modal-title">Report</h2>
+        <button id="btn-report-close" class="bar-btn bar-btn-small" type="button">Cancel</button>
+      </div>
+      <p id="report-subject" class="report-subject"></p>
+      <form id="report-form">
+        <fieldset id="report-reasons" class="report-reasons"><legend>What is wrong?</legend></fieldset>
+        <label for="report-details">Anything else? (optional)</label>
+        <textarea id="report-details" rows="3" placeholder="Where to look, or what happened"></textarea>
+        <p class="report-note">Reports are private. The person you report is not told who sent it.</p>
+      </form>
+      <p id="report-status" role="status" aria-live="polite"></p>
+      <div class="report-actions"><button id="btn-report-send" class="bar-btn" type="submit" form="report-form" disabled>Send report</button></div>
     </div>
   </div>
 

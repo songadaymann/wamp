@@ -53,6 +53,7 @@ import {
 import { requestPlaylistOpen } from './playlistEvents';
 import { renderProfileProgress, renderProfileStats } from './profileModalProgressRenderer';
 import { getProfileRoomTitle, renderProfileRooms } from './profileModalRoomRenderer';
+import { requestReport } from '../../reports/requestReport';
 
 type ProfileModalElements = {
   modal: HTMLElement | null;
@@ -307,6 +308,7 @@ export class ProfileModalController {
       canCreatePlaylist: () => Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)),
       findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
+    this.doc.getElementById('btn-profile-report')?.addEventListener('click', () => { const shown = this.currentProfile; if (shown && !shown.isSelf) requestReport({ type: 'user', id: shown.userId, label: shown.displayName }); });
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -360,9 +362,7 @@ export class ProfileModalController {
 
   private openProfileFromCurrentPath(): void {
     const username = parseProfileSharePath(this.windowObj.location.pathname);
-    if (!username) {
-      return;
-    }
+    if (!username) return;
 
     void this.openByUsername(username);
   }
@@ -657,10 +657,8 @@ export class ProfileModalController {
   }
 
   private renderShareControls(): void {
-    if (!this.elements.shareButton) {
-      return;
-    }
-
+    this.doc.getElementById('btn-profile-report')?.classList.toggle('hidden', !this.currentProfile || this.currentProfile.isSelf);
+    if (!this.elements.shareButton) return;
     const profile = this.currentProfile;
     const username = profile?.canEdit && !this.isSchoolAvatarOnlyEdit(profile)
       ? this.elements.usernameInput?.value.trim() || profile.username
