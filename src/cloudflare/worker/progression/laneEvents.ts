@@ -122,6 +122,16 @@ function isLaneDedupeConstraintError(
     && message.includes(`${table}.dedupe_key`);
 }
 
+function laneTable(lane: 'pxp' | 'bxp' | 'cxp' | 'trust'): LaneEventConfig['table'] {
+  return lane === 'pxp'
+    ? 'pxp_events'
+    : lane === 'bxp'
+      ? 'bxp_events'
+      : lane === 'cxp'
+        ? 'cxp_events'
+        : 'trust_events';
+}
+
 export async function awardLaneDelta(
   env: Env,
   userId: string,
@@ -134,16 +144,8 @@ export async function awardLaneDelta(
   createdAt: string,
   breakdown?: Record<string, unknown> | null,
 ): Promise<number> {
-  const table =
-    lane === 'pxp'
-      ? 'pxp_events'
-      : lane === 'bxp'
-        ? 'bxp_events'
-        : lane === 'cxp'
-          ? 'cxp_events'
-          : 'trust_events';
   const inserted = await recordLaneEvent(env, userId, {
-    table,
+    table: laneTable(lane),
     amount,
     eventType,
     sourceType,
@@ -155,30 +157,32 @@ export async function awardLaneDelta(
   return inserted ? amount : 0;
 }
 
+interface CappedLaneEvent {
+  eventType: string;
+  sourceType: string;
+  sourceId: string;
+  dedupeKey: string;
+  amount: number;
+  createdAt: string;
+  breakdown?: Record<string, unknown> | null;
+}
+
 /**
- * Hidden trust is meant to grow slowly from real play. This awards trust like
- * awardLaneDelta, but never more than dailyCap per UTC day across the given event
- * types, so a burst of repeat clears or quick publishes cannot buy a trust tier.
+ * Awards like awardLaneDelta, but never more than dailyCap per UTC day across the given
+ * event types in that lane.
  */
-export async function awardCappedTrustDelta(
+export async function awardCappedLaneDelta(
   env: Env,
   userId: string,
-  event: {
-    eventType: string;
-    sourceType: string;
-    sourceId: string;
-    dedupeKey: string;
-    amount: number;
-    createdAt: string;
-    breakdown?: Record<string, unknown> | null;
-  },
+  lane: 'pxp' | 'bxp' | 'cxp' | 'trust',
+  event: CappedLaneEvent,
   cap: { eventTypes: readonly string[]; dailyCap: number },
 ): Promise<number> {
   const dayStart = `${event.createdAt.slice(0, 10)}T00:00:00.000Z`;
   const row = await env.DB.prepare(
     `
       SELECT COALESCE(SUM(amount), 0) AS total
-      FROM trust_events
+      FROM ${laneTable(lane)}
       WHERE user_id = ?
         AND event_type IN (SELECT value FROM json_each(?))
         AND created_at >= ?
@@ -190,6 +194,20 @@ export async function awardCappedTrustDelta(
   if (amount <= 0) {
     return 0;
   }
-  return awardLaneDelta(env, userId, 'trust', event.eventType, event.sourceType, event.sourceId,
+  return awardLaneDelta(env, userId, lane, event.eventType, event.sourceType, event.sourceId,
     event.dedupeKey, amount, event.createdAt, event.breakdown);
+}
+
+/**
+ * Hidden trust is meant to grow slowly from real play. This awards trust like
+ * awardLaneDelta, but never more than dailyCap per UTC day across the given event
+ * types, so a burst of repeat clears or quick publishes cannot buy a trust tier.
+ */
+export async function awardCappedTrustDelta(
+  env: Env,
+  userId: string,
+  event: CappedLaneEvent,
+  cap: { eventTypes: readonly string[]; dailyCap: number },
+): Promise<number> {
+  return awardCappedLaneDelta(env, userId, 'trust', event, cap);
 }

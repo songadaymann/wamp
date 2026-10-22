@@ -106,6 +106,11 @@ const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
 const PVP_STORAGE_KEY = 'pvp:match';
 interface StoredPvpMatch { match: PvpMatchState; finalizeAt: number | null }
+interface PresenceServerRuntime {
+  waitUntil?: (work: Promise<void>) => void;
+  /** Saves a finished PvP match from this room's own state (the Cloudflare host wires it to D1). */
+  recordPvpResult?: (snapshot: PvpMatchSnapshot) => Promise<void>;
+}
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -155,8 +160,9 @@ export default class PresenceServer implements Party.Server {
   private pvpMatchState: PvpMatchState | null = null;
   private pvpFinalizeAt: number | null = null;
   private pvpStorageWork: Promise<void> = Promise.resolve();
+  private pvpResultWork: Promise<void> = Promise.resolve();
 
-  constructor(readonly room: Party.Room, private readonly runtime: { waitUntil?: (work: Promise<void>) => void } = {}) {
+  constructor(readonly room: Party.Room, private readonly runtime: PresenceServerRuntime = {}) {
     this.heartbeat = new ShardHeartbeatScheduler({
       storage: room.storage,
       enabled: () => !this.isMetricsRoom() && !this.isPvpRoom() && this.getInternalToken() !== null,
@@ -182,6 +188,7 @@ export default class PresenceServer implements Party.Server {
       if (match?.status === 'countdown' && match.countdownEndsAt !== null && match.countdownEndsAt <= Date.now()) this.startPvpMatch();
       if (match?.status === 'finalizing' && this.pvpFinalizeAt !== null && this.pvpFinalizeAt <= Date.now()) this.finalizePvpMatch();
       await this.pvpStorageWork;
+      await this.pvpResultWork;
       return;
     }
     await this.heartbeat.alarm();
@@ -253,6 +260,11 @@ export default class PresenceServer implements Party.Server {
     const identity = await this.parseIdentity(ctx.request.url);
     if (!identity) {
       connection.close(1008, 'invalid-presence-identity');
+      return;
+    }
+    // Classroom accounts do not play PvP, matching the invite rule in handlePvpInvite.
+    if (this.isPvpRoom() && identity.school) {
+      connection.close(1008, 'pvp-unavailable');
       return;
     }
 
@@ -1104,8 +1116,10 @@ export default class PresenceServer implements Party.Server {
       return;
     }
     if (!this.pvpMatchState) {
-      this.pvpMatchState = createPvpMatchState(message, this.identityFromState(state));
-      if (!this.pvpMatchState) return;
+      const match = createPvpMatchState(message, this.identityFromState(state));
+      // A match id names exactly one room, so each match finishes in one place with one result.
+      if (!match || `pvp:${match.matchId}` !== this.room.id) return;
+      this.pvpMatchState = match;
     }
 
     this.upsertPvpParticipant(sender);
@@ -1280,6 +1294,19 @@ export default class PresenceServer implements Party.Server {
     this.pvpFinalizeAt = null;
     finalizePvpMatchState(match, Date.now());
     this.broadcastPvpSnapshot();
+    this.recordPvpResult(buildPvpSnapshot(match));
+  }
+
+  private recordPvpResult(snapshot: PvpMatchSnapshot): void {
+    const record = this.runtime.recordPvpResult;
+    if (!record) {
+      return;
+    }
+
+    // Alarms wait for this too, so a match finalized by its deadline is saved before the alarm ends.
+    const work = record(snapshot).catch((error) => { console.warn('PvP match result was not saved.', error); });
+    this.pvpResultWork = work;
+    this.runBackground(work);
   }
 
   private broadcastPvpSnapshot(): void {

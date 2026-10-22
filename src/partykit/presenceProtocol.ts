@@ -63,7 +63,7 @@ export interface ConnectionPresenceState {
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
   canReceiveRoomChat: boolean;
-  /** Classroom accounts: no PvP invites to or from strangers. */
+  /** Classroom accounts: no PvP invites to or from strangers, and no PvP rooms. */
   school: boolean;
   userId: string;
   displayName: string;
