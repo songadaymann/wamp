@@ -245,6 +245,22 @@ describe('Pages successful share app shells', () => {
     },
   );
 
+  it.each(SHELL_CASES)('inserts $ sequences in the $kind title and description as written', async ({ render, metadata }) => {
+    const fetchAsset = vi.fn(async () => new Response(APP_SHELL));
+    const response = await render(
+      new Request(metadata.url),
+      createEnv(fetchAsset),
+      { ...metadata, title: 'Cash $` and $& and $1', description: "Tip $' and $$" },
+    );
+    const html = await response.text();
+
+    expect(html).toContain('<title>Cash $` and $&amp; and $1</title>');
+    expect(html).toContain('<meta property="og:title" content="Cash $` and $&amp; and $1">');
+    expect(html).toContain('<meta property="og:description" content="Tip $&#39; and $$">');
+    expect(html.match(/<!doctype html>/gi)).toHaveLength(1);
+    expect(html.match(/<\/head>/gi)).toHaveLength(1);
+  });
+
   it('forces the response contract while preserving unrelated asset headers', async () => {
     const fetchAsset = vi.fn(async () => new Response(APP_SHELL, {
       status: 206,
