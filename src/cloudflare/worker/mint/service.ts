@@ -9,9 +9,8 @@ import { getRoomMintNetwork, parseRoomChainId } from '../../../mint/roomNetwork'
 import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../persistence/roomModel';
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
-import { releaseRateLimitSlots } from '../core/rateLimit';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
-import { takeRoomChainReadSlots } from './chainReadBudget';
+import { recordRoomChainRead, takeRoomChainRead } from './chainReadBudget';
 import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient, type MintReadTransportOptions } from './network';
 export { createRoomMintPublicClient } from './network';
 import { observeRoomTokenMetadata, persistRoomTokenMetadataState, type RoomTokenMetadataObservation } from './metadata';
@@ -161,15 +160,12 @@ export async function syncRoomOwnershipFromChain(
     return record;
   }
 
-  const slots = await takeRoomChainReadSlots(env, record.draft.id, actor?.id ?? null, onChainError);
-  if (!slots) return record;
-  try {
-    return await syncRoomOwnershipWithConfig(env, config, record, actor, onChainError);
-  } catch (error) {
-    // A failed refresh can be retried at once; the account's slot stays taken.
-    await releaseRateLimitSlots(env, [slots.freshnessSlot]);
-    throw error;
+  // Without a linked wallet only an admin can edit a minted room, whoever holds its token now.
+  if (onChainError === 'use-stored' && isRoomMinted(record) && !actor?.walletAddress && !record.permissions.canSaveDraft) {
+    return record;
   }
+  if (!await takeRoomChainRead(env, record.draft.id, actor?.id ?? null, onChainError, isRoomMinted(record))) return record;
+  return syncRoomOwnershipWithConfig(env, config, record, actor, onChainError);
 }
 
 async function syncRoomOwnershipWithConfig(
@@ -214,6 +210,18 @@ async function syncRoomOwnershipWithConfig(
     if (deadline !== null) clearTimeout(deadline);
   }
 
+  const synced = await storeRoomChainState(env, record, chainState, actor, onChainError);
+  await recordRoomChainRead(env, record.draft.id);
+  return synced;
+}
+
+async function storeRoomChainState(
+  env: Env,
+  record: RoomRecord,
+  chainState: RoomMintObservedState | null,
+  actor: AuthUser | null,
+  onChainError: RoomChainSyncFailureMode,
+): Promise<RoomRecord> {
   if (!chainState) {
     if (onChainError === 'require-fresh' && isRoomMinted(record)) {
       throw new HttpError(409, 'This room token could not be verified on the configured network.');
