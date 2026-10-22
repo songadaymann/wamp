@@ -20,14 +20,14 @@ function start(goal: RoomGoal, entry: 'spawn' | 'transition' = 'spawn', guestRun
 }
 
 describe('goal lifecycle contracts', () => {
-  it('requires per-goal lifecycle/status policies with correlated handlers', () => {
+  it('requires per-goal lifecycle policies with correlated handlers', () => {
     // @ts-expect-error A new goal must explicitly choose a lifecycle policy.
     const missing: GoalLifecycleRegistry = {};
     void missing;
-    // @ts-expect-error Presentation cannot be omitted while event handlers compile.
-    const incomplete: GoalLifecycleRegistry['collect_target'] = { ...GOAL_LIFECYCLE_RULES.collect_target, status: undefined };
+    // @ts-expect-error A goal's completion rules cannot be omitted.
+    const incomplete: GoalLifecycleRegistry['collect_target'] = { ...GOAL_LIFECYCLE_RULES.collect_target, destinationCompleted: undefined };
     void incomplete;
-    expectTypeOf(GOAL_LIFECYCLE_RULES.collect_target.status).parameter(0).toEqualTypeOf<CollectTargetGoal>();
+    expectTypeOf(GOAL_LIFECYCLE_RULES.collect_target.destinationCompleted).parameter(0).toEqualTypeOf<CollectTargetGoal>();
   });
 
   it('discovers an NPC during practice, then keeps the first resolved identity', () => {
