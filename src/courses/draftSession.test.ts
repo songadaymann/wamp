@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDefaultCourseRecord, cloneCourseRecord } from './model';
+import { createDefaultRoomSnapshot } from '../persistence/roomModel';
+import { isRoomEditConflict, ROOM_EDIT_CONFLICT_MESSAGE } from '../persistence/roomEditConflict';
 import {
   acknowledgeActiveCourseDraftSessionSave,
   clearActiveCourseDraftSession,
+  clearActiveCourseDraftSessionRoomOverride,
+  dropStaleActiveCourseDraftSessionRoomOverride,
+  getActiveCourseDraftSessionRoomOverride,
+  getActiveCourseDraftSessionRoomOverrideBase,
+  setActiveCourseDraftSessionRoomOverride,
   hasActiveCourseDraftSessionUnsavedRooms,
   isActiveCourseDraftSessionRoomUnsaved,
   setActiveCourseDraftSessionRoomUnsaved,
@@ -66,4 +73,54 @@ describe('expanded-room session persistence baseline', () => {
     expect(hasActiveCourseDraftSessionUnsavedRooms()).toBe(false);
   });
 
+});
+
+describe('expanded-room cell overrides remember their server version (F379)', () => {
+  it('keeps the base only with the override it was recorded for', () => {
+    const record = createDefaultCourseRecord();
+    record.draft.roomRefs = [{ roomId: '3,4', coordinates: { x: 3, y: 4 }, roomVersion: 1, roomTitle: null }];
+    setActiveCourseDraftSessionRecord(record);
+    const room = createDefaultRoomSnapshot('3,4', { x: 3, y: 4 });
+    setActiveCourseDraftSessionRoomOverride(room, '2026-10-22T10:00:00.000Z');
+    expect(getActiveCourseDraftSessionRoomOverrideBase('3,4')).toBe('2026-10-22T10:00:00.000Z');
+    setActiveCourseDraftSessionRoomOverride(room);
+    expect(getActiveCourseDraftSessionRoomOverrideBase('3,4')).toBeNull();
+    setActiveCourseDraftSessionRoomOverride(room, '2026-10-22T11:00:00.000Z');
+    clearActiveCourseDraftSessionRoomOverride('3,4');
+    expect(getActiveCourseDraftSessionRoomOverrideBase('3,4')).toBeNull();
+  });
+
+  it('drops a clean copy once the cell was saved elsewhere, but never an edited one', () => {
+    const record = createDefaultCourseRecord();
+    record.draft.roomRefs = [
+      { roomId: '1,2', coordinates: { x: 1, y: 2 }, roomVersion: 1, roomTitle: null },
+      { roomId: '3,4', coordinates: { x: 3, y: 4 }, roomVersion: 1, roomTitle: null },
+      { roomId: '5,6', coordinates: { x: 5, y: 6 }, roomVersion: 1, roomTitle: null },
+    ];
+    setActiveCourseDraftSessionRecord(record);
+    const base = '2026-10-22T10:00:00.000Z';
+    const newer = '2026-10-22T11:00:00.000Z';
+    setActiveCourseDraftSessionRoomOverride(createDefaultRoomSnapshot('1,2', { x: 1, y: 2 }), base);
+    setActiveCourseDraftSessionRoomOverride(createDefaultRoomSnapshot('3,4', { x: 3, y: 4 }), base);
+    setActiveCourseDraftSessionRoomUnsaved('3,4', true);
+    setActiveCourseDraftSessionRoomOverride(createDefaultRoomSnapshot('5,6', { x: 5, y: 6 }));
+
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', base)).toBe(false);
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', newer)).toBe(true);
+    expect(getActiveCourseDraftSessionRoomOverride('1,2')).toBeNull();
+    expect(getActiveCourseDraftSessionRoomOverrideBase('1,2')).toBeNull();
+    // Edited: kept, so the save is refused and the conflict offered instead of losing the edit.
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('3,4', newer)).toBe(false);
+    expect(getActiveCourseDraftSessionRoomOverride('3,4')).not.toBeNull();
+    // No recorded base (made by the single-room editor): nothing to compare, so kept.
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('5,6', newer)).toBe(false);
+    expect(getActiveCourseDraftSessionRoomOverride('5,6')).not.toBeNull();
+  });
+
+  it('recognises only the server conflict refusal', () => {
+    expect(isRoomEditConflict(Object.assign(new Error(ROOM_EDIT_CONFLICT_MESSAGE), { status: 409 }))).toBe(true);
+    expect(isRoomEditConflict(Object.assign(new Error('Room is locked.'), { status: 409 }))).toBe(false);
+    expect(isRoomEditConflict(Object.assign(new Error(ROOM_EDIT_CONFLICT_MESSAGE), { status: 500 }))).toBe(false);
+    expect(isRoomEditConflict(null)).toBe(false);
+  });
 });

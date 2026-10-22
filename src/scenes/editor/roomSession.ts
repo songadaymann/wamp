@@ -25,7 +25,7 @@ import {
 import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
-import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
+import { isRoomEditConflict } from '../../persistence/roomEditConflict';
 import {
   formatWalletAddress,
 } from '../../mint/roomOwnership';
@@ -92,10 +92,6 @@ interface AutoSaveBackoff {
   failures: number;
   retryAt: number;
   backedUpDirtyAt: number;
-}
-
-function isRoomEditConflict(error: unknown): boolean {
-  return isRoomApiError(error) && error.status === 409 && error.message === ROOM_EDIT_CONFLICT_MESSAGE;
 }
 
 function isPermanentSaveError(error: unknown): boolean {
