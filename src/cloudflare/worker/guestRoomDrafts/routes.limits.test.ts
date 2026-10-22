@@ -43,9 +43,9 @@ beforeEach(() => {
 });
 afterEach(() => db.close());
 
-async function save(x: number, guest: string, ip = '203.0.113.7') {
+async function save(x: number, guest: string, ip = '203.0.113.7', extra: Record<string, unknown> = {}) {
   const roomId = `${x},0`;
-  const snapshot = { ...createDefaultRoomSnapshot(roomId, { x, y: 0 }), title: `Room ${x}` };
+  const snapshot = { ...createDefaultRoomSnapshot(roomId, { x, y: 0 }), title: `Room ${x}`, ...extra };
   const url = new URL(`https://api.wamp.land/api/guest-room-drafts/${encodeURIComponent(roomId)}`);
   const request = new Request(url, {
     method: 'PUT',
@@ -136,5 +136,30 @@ describe('guest room moderation (F049)', () => {
     } }), url, env);
     expect(submitted.status).toBe(200);
     expect(db.prepare("SELECT moderation_status FROM guest_room_drafts WHERE room_id = '2,0'").get()).toEqual({ moderation_status: 'hidden' });
+  });
+});
+
+describe('guest room video (F410)', () => {
+  const video = { youtubeId: 'dQw4w9WgXcQ', x: 0, y: 0, width: 320, autoplay: true };
+  const stored = () => JSON.parse((db.prepare('SELECT snapshot_json FROM guest_room_drafts').get() as { snapshot_json: string }).snapshot_json) as Record<string, unknown>;
+
+  it('saves a guest draft without its room video and keeps the rest', async () => {
+    expect(await save(1, 'v1', '203.0.113.7', { video, goalIntroText: 'Reach the flag' })).toBe(200);
+    expect(stored()).not.toHaveProperty('video');
+    expect(stored()).toMatchObject({ title: 'Room 1', goalIntroText: 'Reach the flag' });
+  });
+
+  it('leaves a video out of the public guest room list for drafts saved with one', async () => {
+    expect(await save(1, 'v2')).toBe(200);
+    db.prepare(`UPDATE guest_room_drafts SET snapshot_json = json_set(snapshot_json, '$.video', json(?)),
+      status = 'submitted', moderation_status = 'public', submitted_at = updated_at`).run(JSON.stringify(video));
+    expect(stored()).toHaveProperty('video');
+    const listUrl = new URL('https://api.wamp.land/api/guest-room-drafts/submitted');
+    const list = await (await handleGuestRoomDraftRequest(new Request(listUrl), listUrl, env)).json() as {
+      drafts: Array<{ title: string; snapshot: Record<string, unknown> }>;
+    };
+    expect(list.drafts).toHaveLength(1);
+    expect(list.drafts[0].snapshot).not.toHaveProperty('video');
+    expect(list.drafts[0].snapshot).toMatchObject({ title: 'Room 1' });
   });
 });

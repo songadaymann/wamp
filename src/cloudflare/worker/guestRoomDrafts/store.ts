@@ -321,6 +321,8 @@ export function rowToGuestRoomDraftSummary(row: GuestRoomDraftRow | null): Guest
       row.room_id,
       { x: row.room_x, y: row.room_y },
     ).draft;
+    // Drafts saved before guest videos were dropped on save may still hold one.
+    delete snapshot.video;
     if (isRoomSnapshotBlank(snapshot)) {
       return null;
     }

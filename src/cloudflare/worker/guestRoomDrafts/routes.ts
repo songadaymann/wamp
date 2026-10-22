@@ -210,6 +210,8 @@ function normalizeSnapshot(roomId: string, value: unknown): RoomSnapshot {
   const snapshot = cloneRoomSnapshot(value);
   snapshot.status = 'draft';
   snapshot.publishedAt = null;
+  // A room video needs builder trust level 1, so guest drafts are saved without one.
+  delete snapshot.video;
   return snapshot;
 }
 
