@@ -205,17 +205,19 @@ export function setupBackgroundAdminController(
 
     const actions = document.createElement('div');
     actions.className = 'photo-actions';
+    // Rejecting deletes the photo file; a rejected photo still shown here had a failed delete.
+    const deleted = item.status === 'rejected' && !item.imageUrl;
     const approve = document.createElement('button');
     approve.type = 'button';
     approve.className = 'success';
     approve.innerHTML = '<span aria-hidden="true">✓</span> Approve';
-    approve.disabled = item.status === 'approved' || item.status === 'blocked';
+    approve.disabled = item.status === 'approved' || item.status === 'blocked' || deleted;
     approve.addEventListener('click', () => void reviewUpload(item.id, 'approved'));
     const reject = document.createElement('button');
     reject.type = 'button';
     reject.className = 'danger';
     reject.innerHTML = '<span aria-hidden="true">×</span> Reject';
-    reject.disabled = item.status === 'rejected';
+    reject.disabled = deleted;
     reject.addEventListener('click', () => void reviewUpload(item.id, 'rejected'));
     actions.append(approve, reject);
 
@@ -229,7 +231,7 @@ export function setupBackgroundAdminController(
     decision: 'approved' | 'rejected',
   ): Promise<void> {
     const reason =
-      window.prompt(`${decision === 'approved' ? 'Approval' : 'Rejection'} reason`, '') ?? '';
+      window.prompt(decision === 'approved' ? 'Approval reason' : 'Rejection reason (rejecting deletes the photo)', '') ?? '';
     setStatus(
       queueStatus,
       `${decision === 'approved' ? 'Approving' : 'Rejecting'} photo...`,

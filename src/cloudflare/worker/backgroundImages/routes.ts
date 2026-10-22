@@ -339,6 +339,10 @@ async function handleBackgroundImageFinalize(
   if (row.owner_user_id !== auth.user.id && !auth.isAdmin) {
     throw new HttpError(403, 'Only the uploader can finalize this background upload.');
   }
+  // An upload is finalized once; after that only an admin review changes its status.
+  if (row.status !== 'upload_pending') {
+    throw new HttpError(409, 'This background upload was already finalized.');
+  }
 
   const details = await waitForCloudflareImageUpload(env, row.cloudflare_image_id);
   if (details.draft === true || !details.uploaded) {
@@ -359,7 +363,7 @@ async function handleBackgroundImageFinalize(
     await deleteCloudflareImage(env, row.cloudflare_image_id);
   }
 
-  await env.DB.prepare(
+  const finalized = await env.DB.prepare(
     `
       UPDATE background_image_uploads
       SET
@@ -375,7 +379,8 @@ async function handleBackgroundImageFinalize(
         review_reason = CASE WHEN ? = 'approved' THEN ? ELSE review_reason END,
         cloudflare_deleted_at = CASE WHEN ? = 'blocked' THEN ? ELSE cloudflare_deleted_at END,
         updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status = 'upload_pending'
+      RETURNING id
     `,
   )
     .bind(
@@ -398,13 +403,16 @@ async function handleBackgroundImageFinalize(
       row.id,
     )
     .all();
+  if (finalized.results.length === 0) {
+    throw new HttpError(409, 'This background upload was already finalized.');
+  }
 
   const updated = await loadBackgroundImageRow(env, row.id);
   if (!updated) {
     throw new HttpError(500, 'Background upload disappeared after finalization.');
   }
 
-  if (row.status !== 'pending_review' && updated.status === 'pending_review') {
+  if (updated.status === 'pending_review') {
     await sendBackgroundImageAdminReviewNotification(request, env, updated);
   }
 
@@ -599,10 +607,17 @@ async function handleAdminBackgroundImageReview(
   if (row.status === 'blocked' && decision === 'approved') {
     throw new HttpError(409, 'Blocked uploads cannot be approved from this console.');
   }
+  if (row.cloudflare_deleted_at && decision === 'approved') {
+    throw new HttpError(409, 'This upload was deleted, so it cannot be approved.');
+  }
 
   const reason = normalizeOptionalText(body.reason, 500);
   const operatorLabel = normalizeOptionalText(body.operatorLabel, 80) ?? 'Admin';
   const now = new Date().toISOString();
+  // A rejected photo is deleted from Cloudflare Images, like a blocked one. If the delete
+  // fails, rejecting it again retries.
+  const deleted = decision === 'rejected' && !row.cloudflare_deleted_at
+    && await deleteCloudflareImage(env, row.cloudflare_image_id);
   await env.DB.prepare(
     `
       UPDATE background_image_uploads
@@ -611,11 +626,12 @@ async function handleAdminBackgroundImageReview(
         reviewed_at = ?,
         reviewed_by = ?,
         review_reason = ?,
+        cloudflare_deleted_at = COALESCE(cloudflare_deleted_at, ?),
         updated_at = ?
       WHERE id = ?
     `,
   )
-    .bind(decision, now, operatorLabel, reason, now, row.id)
+    .bind(decision, now, operatorLabel, reason, deleted ? now : null, now, row.id)
     .all();
 
   const updated = await loadBackgroundImageRow(env, row.id);
@@ -1055,13 +1071,14 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function deleteCloudflareImage(env: Env, imageId: string): Promise<void> {
+/** Returns whether the image is gone from Cloudflare Images (deleted now or already missing). */
+async function deleteCloudflareImage(env: Env, imageId: string): Promise<boolean> {
   const accountId = env.CLOUDFLARE_ACCOUNT_ID?.trim();
   const token = env.CLOUDFLARE_IMAGES_API_TOKEN?.trim();
   if (!accountId || !token) {
-    return;
+    return false;
   }
-  await fetch(
+  const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/images/v1/${encodeURIComponent(imageId)}`,
     {
       method: 'DELETE',
@@ -1070,6 +1087,7 @@ async function deleteCloudflareImage(env: Env, imageId: string): Promise<void> {
       },
     },
   );
+  return response.ok || response.status === 404;
 }
 
 function buildCloudflareDeliveryUrl(
