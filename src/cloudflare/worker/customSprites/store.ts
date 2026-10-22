@@ -1,3 +1,4 @@
+import { buildCustomSpriteObjectId } from '../../../customSprites/model';
 import { roomSnapshotUsesCustomSprite } from '../../../customSprites/usage';
 import type { Env } from '../core/types';
 
@@ -10,27 +11,35 @@ interface StoredGuestRoomUsageCandidate {
   snapshot_json: string;
 }
 
+/**
+ * Only rooms that contain one of the two exact JSON tokens a use can produce are read back and
+ * checked: a placed object (`"custom_sprite:<id>"`) or a tile made from the sprite
+ * (`"sourceSpriteId":"<id>"`). Matching the bare id let a one-letter id return almost every
+ * room (F411).
+ */
 export async function isCustomSpriteUsedInStoredRooms(env: Env, spriteId: string): Promise<boolean> {
+  const objectToken = `"${buildCustomSpriteObjectId(spriteId)}"`;
+  const tileToken = `"sourceSpriteId":"${spriteId}"`;
   const [roomRows, guestRows] = await Promise.all([
     env.DB.prepare(
       `
         SELECT draft_json, published_json
         FROM rooms
-        WHERE instr(draft_json, ?) > 0
-           OR instr(COALESCE(published_json, ''), ?) > 0
+        WHERE instr(draft_json, ?1) > 0 OR instr(draft_json, ?2) > 0
+           OR instr(COALESCE(published_json, ''), ?1) > 0 OR instr(COALESCE(published_json, ''), ?2) > 0
       `,
     )
-      .bind(spriteId, spriteId)
+      .bind(objectToken, tileToken)
       .all<StoredRoomUsageCandidate>(),
     env.DB.prepare(
       `
         SELECT snapshot_json
         FROM guest_room_drafts
         WHERE status = 'active'
-          AND instr(snapshot_json, ?) > 0
+          AND (instr(snapshot_json, ?1) > 0 OR instr(snapshot_json, ?2) > 0)
       `,
     )
-      .bind(spriteId)
+      .bind(objectToken, tileToken)
       .all<StoredGuestRoomUsageCandidate>(),
   ]);
 

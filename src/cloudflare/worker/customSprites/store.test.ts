@@ -74,3 +74,35 @@ function createStatement(rows: unknown[]): D1PreparedStatement {
   };
   return statement;
 }
+
+describe('sprite usage checks on the real schema (F411)', () => {
+  it('matches only exact uses of the id, not ids or text that contain it', async () => {
+    const { fixture } = await import('../activity/testDatabase');
+    const f = fixture();
+    const insert = (id: string, x: number, snapshot: ReturnType<typeof createDefaultRoomSnapshot>) => f.sqlite
+      .prepare('INSERT INTO rooms (id, x, y, draft_json) VALUES (?, ?, 0, ?)').run(id, x, JSON.stringify(snapshot));
+    const longer = createDefaultRoomSnapshot('40,0', { x: 40, y: 0 });
+    longer.title = 'ab ab ab';
+    longer.placedObjects = [{ instanceId: 'p1', id: 'custom_sprite:abc', x: 16, y: 16 }];
+    insert('40,0', 40, longer);
+    await expect(isCustomSpriteUsedInStoredRooms(f.env, 'ab')).resolves.toBe(false);
+    const exact = createDefaultRoomSnapshot('41,0', { x: 41, y: 0 });
+    exact.placedObjects = [{ instanceId: 'p2', id: 'custom_sprite:ab', x: 16, y: 16 }];
+    insert('41,0', 41, exact);
+    await expect(isCustomSpriteUsedInStoredRooms(f.env, 'ab')).resolves.toBe(true);
+    f.sqlite.close();
+  });
+
+  it('gives one network a limited number of public checks an hour', async () => {
+    const { fixture } = await import('../activity/testDatabase');
+    const { handleCustomSpriteRequest } = await import('./routes');
+    const f = fixture();
+    const check = () => {
+      const request = new Request('https://api.wamp.land/api/custom-sprites/abcd/usage', { headers: { 'CF-Connecting-IP': '203.0.113.9' } });
+      return handleCustomSpriteRequest(request, new URL(request.url), f.env);
+    };
+    for (let index = 0; index < 60; index += 1) expect((await check()).status).toBe(200);
+    await expect(check()).rejects.toMatchObject({ status: 429 });
+    f.sqlite.close();
+  });
+});
