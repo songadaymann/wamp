@@ -1,5 +1,5 @@
 import { OverworldGamepadInput } from './gamepadInput';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OverworldMovementInput } from './physicsCadence';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
@@ -63,14 +63,13 @@ vi.mock('phaser', () => ({
 
 vi.mock('../../audio/sfx', () => audio);
 
+const touch = vi.hoisted(() => ({
+  state: { active: false, moveX: 0, moveY: 0, directionX: 0, directionY: 0, jumpHeld: false },
+}));
+
 vi.mock('../../ui/mobile/touchControls', () => ({
   consumeTouchAction: () => false,
-  getTouchInputState: () => ({
-    active: false,
-    moveX: 0,
-    moveY: 0,
-    jumpHeld: false,
-  }),
+  getTouchInputState: () => touch.state,
 }));
 
 import type { LoadedRoomObject } from './liveObjects';
@@ -316,6 +315,63 @@ describe('touch butt stomp (F140)', () => {
     h.body.blocked.down = false;
     h.controller.updateMovement(1000 / 60, false, input({ downPressed: true, downHeld: true }));
     expect(h.controller.isButtStomping()).toBe(true);
+  });
+});
+
+describe('touch stick sectors and presses (F358)', () => {
+  const input = (overrides: Partial<OverworldMovementInput> = {}): OverworldMovementInput => ({
+    left: false, right: false, upKeyHeld: false, downHeld: false, spaceHeld: false,
+    touchLeft: false, touchRight: false, touchUp: false, touchDown: false,
+    upPressed: false, downPressed: false, leftPressed: false, rightPressed: false, spacePressed: false, ...overrides,
+  });
+  const environment = (gravityDirection: SpecialTilePlayerEnvironment['gravityDirection']): SpecialTilePlayerEnvironment => ({
+    inWater: false, onIce: false, onSticky: false, conveyorX: 0, windX: 0,
+    gravityDirection, onBounce: false, onDamage: false,
+  });
+  const setStick = (moveX: number, moveY: number, directionX: number, directionY: number) =>
+    Object.assign(touch.state, { active: true, moveX, moveY, directionX, directionY });
+  afterEach(() => setStick(0, 0, 0, 0).active = false);
+
+  it('runs at full speed and still jumps while the thumb drifts slightly down', () => {
+    const h = createHarness();
+    h.body.blocked.down = true;
+    setStick(1, 0.43, 60, 22);
+    expect(h.controller.captureInput()).toMatchObject({ right: true, downHeld: false, touchDown: false });
+    h.controller.updateMovement(1000 / 60, false);
+    expect(h.controller.isCrouching()).toBe(false);
+    expect(h.body.velocity.x).toBe(120);
+    h.cursors.space.justDown = true;
+    h.controller.updateMovement(1000 / 60, false);
+    expect(h.host.playJumpDustFx).toHaveBeenCalledOnce();
+  });
+
+  it('still crouches when the thumb points clearly down', () => {
+    const h = createHarness();
+    h.body.blocked.down = true;
+    setStick(0.58, 1, 10, 40);
+    h.controller.updateMovement(1000 / 60, false);
+    expect(h.controller.isCrouching()).toBe(true);
+    expect(h.body.velocity.x).toBe(48);
+  });
+
+  it('reads the walking axis from the gravity zone', () => {
+    // An up-right push about 44 degrees steep counts only along the axis the hero walks.
+    setStick(1, -1, 40, -38);
+    expect(createHarness().controller.captureInput()).toMatchObject({ right: true, touchUp: false });
+    expect(createHarness(environment('left')).controller.captureInput())
+      .toMatchObject({ right: false, touchRight: false, touchUp: true });
+  });
+
+  it.each([
+    ['up', { touchDown: true, downHeld: true }],
+    ['left', { touchRight: true, right: true }],
+    ['right', { touchLeft: true, left: true }],
+  ] as const)('jumps once per stick push in %s gravity, not on every step it is held', (gravity, held) => {
+    const h = createHarness(environment(gravity));
+    const steps = () => Array.from({ length: 4 }, () => h.controller.updateMovement(1000 / 60, false, input(held)).jumpPressed);
+    expect(steps()).toEqual([true, false, false, false]);
+    h.controller.updateMovement(1000 / 60, false, input());
+    expect(steps()).toEqual([true, false, false, false]);
   });
 });
 

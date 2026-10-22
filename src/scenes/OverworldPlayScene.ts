@@ -115,6 +115,7 @@ import { applyGameplayPause, installGameplayPause, type GameplayPauseContext } f
 import {
   getTouchInputState,
 } from '../ui/mobile/touchControls';
+import { resolveTouchStickDirections } from '../ui/mobile/touchStick';
 import { getRoomGoalIntroModalController } from '../ui/setup/roomGoalIntroModal';
 import {
   COURSE_COMPOSER_STATE_CHANGED_EVENT,
@@ -3373,10 +3374,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private isLadderDropRequested(): boolean {
-    const touchInput = getTouchInputState();
     return (
       this.gameplayKeyboard.held('down') ||
-      (touchInput.active && touchInput.moveY >= 0.42)
+      resolveTouchStickDirections(getTouchInputState()).down
     );
   }
 
