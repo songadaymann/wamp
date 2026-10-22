@@ -9,6 +9,8 @@ export function buildWampOGramShareUrl(slug: string, href: string): string {
   url.pathname = buildWampOGramSharePath(slug);
   url.search = '';
   url.hash = '';
+  // Counted as the visit's source in the Launch Admin funnel (F127).
+  url.searchParams.set('from', 'gram');
   return url.toString();
 }
 

@@ -1,5 +1,6 @@
 import { formatAccountIdentity } from '../../auth/displayIdentity';
 import { setupBuildPromptsAdmin } from './buildPrompts';
+import { setupLaunchFunnel } from './funnel';
 import { setupMapCaptureAdmin } from './mapCapture';
 import { setupLaunchReplayModal } from './replayModal';
 import { setupDailyAdmin } from './dailyRoom';
@@ -133,6 +134,7 @@ const dailyAdmin = setupDailyAdmin(() => adminKey);
 const weeklyRoomRushAdmin = setupWeeklyRoomRushAdmin(() => adminKey);
 const buildPromptsAdmin = setupBuildPromptsAdmin(() => adminKey);
 const mapCaptureAdmin = setupMapCaptureAdmin(() => adminKey);
+setupLaunchFunnel(() => adminKey);
 const pollingController = createPollingController(POLL_INTERVAL_MS, () => {
   void refreshSnapshot();
 });

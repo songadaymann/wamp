@@ -25,6 +25,7 @@ import { syncUserBadges } from '../progression/badgesTrophies';
 import { revertRoom } from '../rooms/store';
 import { upsertUserStats } from '../runs/points';
 import { loadLaunchStats } from './launchStats';
+import { handleAdminLaunchFunnel } from './launchFunnel';
 import { loadAdminGameJams } from './gameJams';
 import { handleAdminExpandedRoomsMigrationReport } from '../expandedRooms/migrationReport';
 import {
@@ -91,6 +92,10 @@ export async function handleAdminRequest(
 
   if (url.pathname.startsWith('/api/admin/school')) {
     return handleAdminSchoolRequest(request, url, env);
+  }
+
+  if (url.pathname === '/api/admin/launch-funnel' && request.method === 'GET') {
+    return handleAdminLaunchFunnel(request, url, env);
   }
 
   if (url.pathname === '/api/admin/launch-stats' && request.method === 'GET') {
