@@ -139,6 +139,9 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
   }
 
   if (url.pathname === '/api/auth/wallet/challenge' && request.method === 'POST') {
+    // Cross-site browser posts are refused before they can use up anyone's allowance.
+    requireTrustedOriginForMutation(request);
+    await takeWalletChallengeSlot(request, env);
     return handleWalletChallenge(request, env);
   }
 
@@ -183,6 +186,21 @@ const SIGN_IN_EMAILS_PER_INBOX: RateLimitRule = { bucket: 'sign-in-email:inbox',
 const WRONG_CODES_PER_NETWORK: RateLimitRule = { bucket: 'wrong-code:network', limit: 100, windowMs: HOUR_MS };
 const WRONG_CODES_PER_ADDRESS_AND_NETWORK: RateLimitRule = { bucket: 'wrong-code:address-network', limit: 10, windowMs: DAY_MS };
 const WRONG_CODES_PER_ADDRESS: RateLimitRule = { bucket: 'wrong-code:address', limit: 30, windowMs: DAY_MS };
+// Wallet approvals are created before anyone signs in, so each one is a row anybody can add
+// (F188). One sign-in or link uses one or two; the cap leaves room for a busy shared network.
+// There is deliberately no sitewide cap: it would let many networks lock everyone out, and the
+// hourly prune already removes expired approvals.
+const WALLET_CHALLENGES_PER_NETWORK: RateLimitRule = { bucket: 'wallet-challenge:network', limit: 60, windowMs: HOUR_MS };
+
+async function takeWalletChallengeSlot(request: Request, env: Env): Promise<void> {
+  const ip = getClientIp(request);
+  const { limitedBy } = await takeRateLimitSlots(env, [
+    { rule: WALLET_CHALLENGES_PER_NETWORK, keyHash: await hashRateLimitKey(env, ip ? networkKeyForIp(ip) : 'network:unknown') },
+  ]);
+  if (limitedBy) {
+    throw new HttpError(429, 'Too many wallet approvals were requested. Wait a few minutes, then try again.');
+  }
+}
 
 interface AuthLimitKeys {
   network: string | null;
