@@ -17,6 +17,8 @@ import { buildWalletMintChainInfo } from './walletChainInfo';
 import { assertRoomMintNetwork } from './network';
 import {
   loadRoomMintPriceWei,
+  normalizeNullableAddress,
+  persistMintedRoomClaimer,
   persistRoomTokenMetadataState,
   persistRoomMintState,
   requireRoomMintConfig,
@@ -120,7 +122,18 @@ export async function handleRoomMintConfirm(
     throw new HttpError(403, 'The linked wallet does not own the minted room token.');
   }
 
-  await persistRoomMintState(env, record, mintState, auth.user);
+  // The owner at the mint block only proves this wallet minted the room. The load above already
+  // stored the owner at the latest block, so the mint is written only when that load had not seen it.
+  const alreadyRecorded = record.mintedChainId === mintState.chainId
+    && normalizeNullableAddress(record.mintedContractAddress) === normalizeNullableAddress(mintState.contractAddress)
+    && record.mintedTokenId === mintState.tokenId;
+  if (!alreadyRecorded) {
+    await persistRoomMintState(env, record, mintState, auth.user);
+  } else if (!record.claimerUserId
+    && normalizeNullableAddress(record.mintedOwnerWalletAddress) === normalizeAddress(auth.user.walletAddress!)) {
+    // An earlier sync by someone else recorded the mint without a claimer; the minter still holds it.
+    await persistMintedRoomClaimer(env, record, { ...auth.user, walletAddress: auth.user.walletAddress! }, mintState.ownerSyncedAt);
+  }
 
   const updated = await loadRoomRecord(
     env,

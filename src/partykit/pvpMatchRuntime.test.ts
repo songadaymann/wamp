@@ -55,9 +55,19 @@ describe('PartyKit PvP match runtime', () => {
     expect(match).toMatchObject({ draw: true, winnerUserId: null, loserUserId: null, lastEvent: 'Draw.' });
 
     const forfeit = activeMatch();
-    expect(markPvpForfeit(forfeit, forfeit.participants[1]!, 3_000)).toBe(true);
+    expect(markPvpForfeit(forfeit, forfeit.participants[1]!)).toBe(true);
     finalizePvpMatch(forfeit, 3_000);
-    expect(forfeit).toMatchObject({ winnerUserId: 'alice', loserUserId: 'bob' });
+    expect(forfeit).toMatchObject({ startedAt: 0, winnerUserId: 'alice', loserUserId: 'bob' });
+  });
+
+  it('keeps no start time for a match left during the countdown', () => {
+    const match = createPvpMatchState({ type: 'pvp:match:configure', matchId: 'm', mode: 'arena', roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, participants: [alice, bob] }, alice)!;
+    upsertPvpParticipant(match, alice);
+    upsertPvpParticipant(match, bob);
+    activatePvpMatchIfReady(match, 0);
+    expect(markPvpForfeit(match, match.participants[1]!)).toBe(true);
+    finalizePvpMatch(match, 1_000);
+    expect(getPvpSnapshot(match)).toMatchObject({ status: 'complete', startedAt: null, countdownEndsAt: null, finishedAt: 1_000 });
   });
 
   it('normalizes bounded player, combat, room-state, and participant inputs', () => {

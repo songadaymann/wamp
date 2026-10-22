@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PvpMatchSnapshot } from '../pvp/model';
 import {
   messageTypes,
@@ -176,4 +176,48 @@ describe('PvP two-client protocol baseline', () => {
     expect(harness.room.storage.alarmAt).toBeNull();
   });
 
+  it('hands the finished match to the result recorder exactly once', async () => {
+    const recordPvpResult = vi.fn(async (_snapshot: PvpMatchSnapshot) => {});
+    harness = new PresenceServerHarness({ roomId: 'pvp:match-two-client', runtime: { recordPvpResult } });
+    const { alice, bob, aliceIdentity, bobIdentity } = await configureTwoClients();
+    await harness.advance(4_200);
+    for (let loss = 0; loss < 5; loss += 1) {
+      await harness.advance(1_800);
+      send(bob, { type: 'pvp:match:self-death', hitId: `bob-out-${loss}`, source: 'environment' });
+    }
+    expect(recordPvpResult).not.toHaveBeenCalled();
+    await harness.advance(350);
+    harness.close(bob);
+    harness.close(alice);
+    await harness.settleAsyncWork();
+
+    expect(recordPvpResult).toHaveBeenCalledTimes(1);
+    expect(recordPvpResult.mock.calls[0]?.[0]).toMatchObject({
+      matchId: 'match-two-client',
+      status: 'complete',
+      winnerUserId: aliceIdentity.userId,
+      loserUserId: bobIdentity.userId,
+      participants: [
+        { userId: aliceIdentity.userId, displayName: aliceIdentity.displayName, hearts: 5 },
+        { userId: bobIdentity.userId, displayName: bobIdentity.displayName, hearts: 0 },
+      ],
+    });
+  });
+
+  it('keeps classroom accounts out of PvP rooms', async () => {
+    harness = new PresenceServerHarness({ roomId: 'pvp:match-two-client' });
+    const student = await harness.connect('student', { roomChat: 'school' });
+    expect(student.closes).toEqual([{ code: 1008, reason: 'pvp-unavailable' }]);
+    expect(student.state).toBeNull();
+  });
+
+  it('only configures the match its room is named for', async () => {
+    harness = new PresenceServerHarness({ roomId: 'pvp:match-two-client' });
+    const alice = await harness.connect('alice');
+    send(alice, {
+      type: 'pvp:match:configure', matchId: 'another-match', mode: 'arena', roomId: '0,0',
+      roomCoordinates: { x: 0, y: 0 }, participants: [testIdentity('alice'), testIdentity('bob')],
+    });
+    expect(latestSnapshot(alice)).toBeNull();
+  });
 });

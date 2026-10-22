@@ -525,32 +525,8 @@ export class OverworldPvpArenaController {
 
     this.lastSubmittedPvpMatchId = snapshot.matchId;
     try {
-      const result = snapshot.draw ? 'draw' : 'win';
-      await this.pvpRepository.submitMatch({
-        matchId: snapshot.matchId,
-        mode: snapshot.mode,
-        roomId: snapshot.roomId,
-        roomCoordinates: { ...snapshot.roomCoordinates },
-        startedAt: new Date(snapshot.startedAt).toISOString(),
-        finishedAt: new Date(snapshot.finishedAt).toISOString(),
-        durationMs: Math.max(0, snapshot.finishedAt - snapshot.startedAt),
-        result,
-        winnerUserId: snapshot.winnerUserId,
-        loserUserId: snapshot.loserUserId,
-        participants: snapshot.participants.map((participant) => ({
-          userId: participant.userId,
-          userDisplayName: participant.displayName,
-          result: snapshot.draw
-            ? 'draw'
-            : participant.userId === snapshot.winnerUserId
-              ? 'win'
-              : 'loss',
-          heartsRemaining: participant.hearts,
-          livesLost: Math.max(0, getMultiplayerModeDefinition(snapshot.mode).startingLives - participant.hearts),
-          hits: participant.hits,
-        })),
-        finalSnapshot: snapshot,
-      });
+      // The presence room saves the result; this only reads back what it saved.
+      await this.pvpRepository.submitMatch({ matchId: snapshot.matchId });
     } catch (error) {
       console.error('Failed to submit PVP match result', error);
       this.lastSubmittedPvpMatchId = null;

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdminContentReportsResponse, ContentReportRequestBody } from '../../../reports/model';
 import { fixture } from '../activity/testDatabase';
-import { createSession } from '../auth/store';
+import { API_TOKEN_PREFIX, createApiTokenForUser, createSession, generateOpaqueToken, hashToken } from '../auth/store';
 import { handleContentReports, pruneClosedContentReports } from './routes';
 
 const sendAdminReviewNotificationEmail = vi.hoisted(() => vi.fn(async () => ({ attempted: true, sent: true, skippedReason: null, error: null })));
@@ -81,6 +81,28 @@ describe('player reports', () => {
     const session = await createSession(f.env, 'p2');
     expect((await report(f, {}, { Cookie: `ep_session=${session}` })).status).toBe(201);
     expect(sendAdminReviewNotificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('links the review email to APP_BASE_URL, a browser request\'s trusted Origin, or wamp.land', async () => {
+    const f = setup();
+    const token = API_TOKEN_PREFIX + generateOpaqueToken(32);
+    await createApiTokenForUser(f.env, 'p2', 'Test', await hashToken(token), ['rooms:write'], new Date().toISOString(), crypto.randomUUID());
+    const actionUrls = () => sendAdminReviewNotificationEmail.mock.calls.map((call) => (call as unknown[])[1] as { actionUrl: string })
+      .map((email) => email.actionUrl);
+    const preview = 'https://wampland.pages.dev';
+    expect((await report(f, {}, { Authorization: `Bearer ${token}`, Origin: preview })).status).toBe(201);
+    expect((await report(f, { targetType: 'user', targetId: 'p3' }, { Origin: '' })).status).toBe(201);
+    expect((await report(f, { targetType: 'chat_message', targetId: 'msg-1' }, { Origin: preview })).status).toBe(201);
+    f.env.APP_BASE_URL = 'https://preview.wamp.land/';
+    f.sqlite.prepare("INSERT INTO users (id,email,display_name,created_at,updated_at) VALUES (?,?,?,?,?)")
+      .run('target-x', 'tx@example.test', 'Target X', '2026-10-01', '2026-10-01');
+    expect((await report(f, { targetType: 'user', targetId: 'target-x' }, { Origin: preview })).status).toBe(201);
+    expect(actionUrls()).toEqual([
+      'https://wamp.land/suspicious-admin.html',
+      'https://wamp.land/suspicious-admin.html',
+      `${preview}/suspicious-admin.html`,
+      'https://preview.wamp.land/suspicious-admin.html',
+    ]);
   });
 
   it('does not let players report themselves', async () => {

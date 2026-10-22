@@ -109,44 +109,6 @@ export async function hideGuestbookEntry(
   return true;
 }
 
-export async function countRecentGuestbookEntriesForIp(
-  env: Env,
-  ipHash: string,
-  sinceIso: string,
-): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COUNT(*) AS count
-      FROM guestbook_entries
-      WHERE ip_hash = ?
-        AND created_at >= ?
-    `
-  )
-    .bind(ipHash, sinceIso)
-    .first<{ count: number }>();
-
-  return Number(row?.count ?? 0);
-}
-
-export async function countRecentGuestbookEntriesForSession(
-  env: Env,
-  guestSessionId: string,
-  sinceIso: string,
-): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COUNT(*) AS count
-      FROM guestbook_entries
-      WHERE guest_session_id = ?
-        AND created_at >= ?
-    `
-  )
-    .bind(guestSessionId, sinceIso)
-    .first<{ count: number }>();
-
-  return Number(row?.count ?? 0);
-}
-
 function mapGuestbookEntryRow(row: GuestbookEntryRow): GuestbookEntry {
   return {
     id: row.id,

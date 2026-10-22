@@ -30,6 +30,7 @@ import {
   prepareProgressRollbackStatements,
   summarizeProgressRollback,
 } from './invalidationProgress';
+import { planStatsRollback, prepareStatsRollbackStatements } from './invalidationStats';
 
 const RECENT_INVALIDATION_LIMIT = 10;
 
@@ -110,6 +111,7 @@ export async function handleAdminSuspiciousInvalidate(
   const preview = await buildInvalidationPreview(env, userId, body);
   // Planned before the runs go, since it asks which accepted clears remain without them.
   const rollback = await planProgressRollback(env, [...preview.roomRuns, ...preview.courseRuns]);
+  const statsRollback = await planStatsRollback(env, preview.roomRuns, preview.courseRuns);
   const auditId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const snapshot = {
@@ -177,6 +179,7 @@ export async function handleAdminSuspiciousInvalidate(
     statements.push(env.DB.prepare('DELETE FROM point_events WHERE id = ?').bind(event.id));
   }
   statements.push(...prepareProgressRollbackStatements(env, rollback, createdAt));
+  statements.push(...prepareStatsRollbackStatements(env, statsRollback));
 
   await env.DB.batch(statements);
   await deleteExpandedRoomRunsByAttemptIds(env, preview.courseRuns.map((run) => run.attemptId));

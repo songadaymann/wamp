@@ -5,7 +5,7 @@ import {
   deriveProfileUsernameBase,
   PROFILE_USERNAME_MAX_LENGTH,
 } from '../../../profiles/username';
-import { HttpError } from '../core/http';
+import { HttpError, isLocalOrPrivateHostname, isTrustedOrigin } from '../core/http';
 import { isTrustedAppHostname } from '../../../config';
 import type {
   ApiTokenRow,
@@ -26,6 +26,7 @@ export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
 export const WALLET_CHALLENGE_TTL_MS = 1000 * 60 * 10;
 export const DEFAULT_AUTH_EMAIL_FROM = "Everybody's Platformer <onboarding@resend.dev>";
+const DEFAULT_PUBLIC_BASE_URL = 'https://wamp.land';
 export const API_TOKEN_PREFIX = 'epat_';
 const API_TOKEN_SCOPE_SET = new Set<string>(API_TOKEN_SCOPES);
 
@@ -1260,17 +1261,40 @@ async function loadLegacyOptionalUserProfileFields(
 }
 
 export function resolvePublicBaseUrl(request: Request, env: Env): string {
+  return (
+    resolveConfiguredPublicBaseUrl(request, env)
+    ?? resolveTrustedRequestOrigin(request)
+    ?? new URL(request.url).origin
+  );
+}
+
+// Base for links in outgoing email. A token request sets its own headers, so only a browser
+// request's trusted Origin is used, and only an https one on a public host unless the worker
+// itself runs locally; anything else links to APP_BASE_URL or wamp.land.
+export function resolveEmailBaseUrl(request: Request, env: Env): string {
   const configured = resolveConfiguredPublicBaseUrl(request, env);
   if (configured) {
     return configured;
   }
 
-  const origin = request.headers.get('Origin')?.trim();
-  if (origin) {
-    return origin.replace(/\/+$/, '');
+  const hasBearerToken = /^\s*Bearer\s+\S/i.test(request.headers.get('Authorization') ?? '');
+  const origin = hasBearerToken ? null : resolveTrustedRequestOrigin(request);
+  if (!origin) {
+    return DEFAULT_PUBLIC_BASE_URL;
   }
 
-  return new URL(request.url).origin;
+  const parsed = new URL(origin);
+  const publicHttps = parsed.protocol === 'https:' && !isLocalOrPrivateHostname(parsed.hostname);
+  return publicHttps || isLocalOrPrivateHostname(new URL(request.url).hostname) ? origin : DEFAULT_PUBLIC_BASE_URL;
+}
+
+function resolveTrustedRequestOrigin(request: Request): string | null {
+  const origin = request.headers.get('Origin')?.trim();
+  if (!origin || !isTrustedOrigin(origin, request.url)) {
+    return null;
+  }
+
+  return new URL(origin).origin;
 }
 
 export function resolveMagicLinkReturnBase(request: Request, env: Env): string {

@@ -226,6 +226,7 @@ function fallbackWampOGramHtmlResponse(request: Request, metadata: RoomShareMeta
   });
 }
 
+// The replacements are functions so `$` sequences in titles and descriptions are inserted as written.
 function injectRoomMetadata(html: string, metadata: RoomShareMetadata): string {
   let nextHtml = html;
   if (!/<base\s/i.test(nextHtml)) {
@@ -233,10 +234,10 @@ function injectRoomMetadata(html: string, metadata: RoomShareMetadata): string {
   }
 
   if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
-    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${escapeHtml(metadata.title)}</title>`);
   }
 
-  return nextHtml.replace(/<\/head>/i, `${buildRoomMetaTags(metadata)}\n  </head>`);
+  return nextHtml.replace(/<\/head>/i, () => `${buildRoomMetaTags(metadata)}\n  </head>`);
 }
 
 function injectProfileMetadata(html: string, metadata: ShareMetadata): string {
@@ -246,10 +247,10 @@ function injectProfileMetadata(html: string, metadata: ShareMetadata): string {
   }
 
   if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
-    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${escapeHtml(metadata.title)}</title>`);
   }
 
-  return nextHtml.replace(/<\/head>/i, `${buildProfileMetaTags(metadata)}\n  </head>`);
+  return nextHtml.replace(/<\/head>/i, () => `${buildProfileMetaTags(metadata)}\n  </head>`);
 }
 
 function injectPlaylistMetadata(html: string, metadata: ShareMetadata): string {
@@ -259,10 +260,10 @@ function injectPlaylistMetadata(html: string, metadata: ShareMetadata): string {
   }
 
   if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
-    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${escapeHtml(metadata.title)}</title>`);
   }
 
-  return nextHtml.replace(/<\/head>/i, `${buildPlaylistMetaTags(metadata)}\n  </head>`);
+  return nextHtml.replace(/<\/head>/i, () => `${buildPlaylistMetaTags(metadata)}\n  </head>`);
 }
 
 function injectWampOGramMetadata(html: string, metadata: RoomShareMetadata): string {
@@ -272,10 +273,10 @@ function injectWampOGramMetadata(html: string, metadata: RoomShareMetadata): str
   }
 
   if (/<title>[\s\S]*?<\/title>/i.test(nextHtml)) {
-    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`);
+    nextHtml = nextHtml.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${escapeHtml(metadata.title)}</title>`);
   }
 
-  return nextHtml.replace(/<\/head>/i, `${buildRoomMetaTags(metadata)}\n  </head>`);
+  return nextHtml.replace(/<\/head>/i, () => `${buildRoomMetaTags(metadata)}\n  </head>`);
 }
 
 function buildRoomMetaTags(metadata: RoomShareMetadata): string {

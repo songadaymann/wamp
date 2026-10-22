@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fixture } from '../activity/testDatabase';
 import { createSession } from '../auth/store';
+import { hashRateLimitKey } from '../core/rateLimit';
+import { ROOM_CHAIN_CHECK_USER_RULE, ROOM_CHAIN_SAVE_USER_RULE } from '../mint/chainReadBudget';
 import { createMintRpcFixture, FIXTURE_MINT_CONTRACT, FIXTURE_MINT_WALLET, FIXTURE_MINT_RPC } from '../mint/testRpc';
 import { handleRoomRequest } from './routes';
 
@@ -105,6 +107,95 @@ describe('explicit room ownership refresh, real sessions/database/provider proto
       await vi.advanceTimersByTimeAsync(12_100); expect(await pending).toMatchObject({ status: 503 });
       expect(methods).toEqual(stalledMethod === 'eth_chainId' ? ['eth_chainId'] : stalledMethod === 'eth_blockNumber' ? ['eth_chainId', 'eth_blockNumber'] : ['eth_chainId', 'eth_blockNumber', 'eth_call']);
       expect(f.ownership()).toEqual(before); expect(vi.getTimerCount()).toBe(0);
+    } finally { f.sqlite.close(); }
+  });
+});
+
+describe('how often room ownership is read from the chain', () => {
+  const fillBucket = async (f: Awaited<ReturnType<typeof setup>>, bucket: string, userId: string, count: number) => {
+    const key = await hashRateLimitKey(f.env, `user:${userId}`), at = new Date().toISOString();
+    for (let index = 0; index < count; index += 1) {
+      f.sqlite.prepare('INSERT INTO rate_limit_events (bucket, key_hash, created_at) VALUES (?, ?, ?)').run(bucket, key, at);
+    }
+  };
+  const spent = (f: Awaited<ReturnType<typeof setup>>, bucket: string) =>
+    (f.sqlite.prepare('SELECT COUNT(*) AS n FROM rate_limit_events WHERE bucket = ?').get(bucket) as { n: number }).n;
+  const draftTitle = (f: Awaited<ReturnType<typeof setup>>) =>
+    (JSON.parse((f.sqlite.prepare('SELECT draft_json FROM rooms WHERE id=?').get('0,0') as { draft_json: string }).draft_json) as { title: string }).title;
+  it('reads the chain on every explicit refresh', async () => {
+    const f = await setup();
+    try {
+      expect((await f.run()).status).toBe(200);
+      expect((await f.run()).status).toBe(200);
+      expect(f.provider.methods.filter(method => method === 'eth_blockNumber')).toHaveLength(2);
+    } finally { f.sqlite.close(); }
+  });
+  it('limits ownership refreshes per account without calling the provider', async () => {
+    const f = await setup();
+    try {
+      await fillBucket(f, ROOM_CHAIN_CHECK_USER_RULE.bucket, 'p1', ROOM_CHAIN_CHECK_USER_RULE.limit);
+      await expect(f.run()).rejects.toMatchObject({ status: 429 });
+      expect(f.provider.methods).toEqual([]);
+    } finally { f.sqlite.close(); }
+  });
+  it('keeps the token holder saving, sharing one chain read between saves moments apart', async () => {
+    const f = await setup();
+    try {
+      for (let index = 0; index < 3; index += 1) expect((await f.save()).status).toBe(200);
+      expect(f.provider.methods).toEqual(['eth_chainId', 'eth_call', 'eth_call']);
+      expect(spent(f, ROOM_CHAIN_SAVE_USER_RULE.bucket)).toBe(1);
+      expect(draftTitle(f)).toBe('New holder draft');
+    } finally { f.sqlite.close(); }
+  });
+  it('does not reuse a read that has not finished', async () => {
+    const f = await setup('builder'); let release = () => {}, held = false;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((JSON.parse(String(init?.body)) as { method: string }).method === 'eth_call' && !held) { held = true; await gate; }
+      return f.provider.fetch(input, init);
+    }));
+    try {
+      const first = f.save().catch((error: unknown) => error);
+      await vi.waitFor(() => expect(held).toBe(true));
+      await expect(f.save()).rejects.toMatchObject({ status: 403 });
+      release(); expect(await first).toMatchObject({ status: 403 });
+      expect(draftTitle(f)).not.toBe('New holder draft');
+    } finally { f.sqlite.close(); }
+  });
+  it('reads again after a save whose chain read failed', async () => {
+    const f = await setup('builder'); vi.stubGlobal('fetch', vi.fn(async () => { throw new Error(FIXTURE_MINT_RPC); }));
+    try {
+      expect((await f.save()).status).toBe(200);
+      vi.stubGlobal('fetch', vi.fn(f.provider.fetch));
+      await expect(f.save()).rejects.toMatchObject({ status: 403 });
+      expect(f.ownership()).toEqual({ minted_owner_wallet_address: FIXTURE_MINT_WALLET, claimer_user_id: 'builder' });
+    } finally { f.sqlite.close(); }
+  });
+  it('refuses a save past the per-account budget on a minted room instead of using stored ownership', async () => {
+    const f = await setup('builder');
+    try {
+      await fillBucket(f, ROOM_CHAIN_SAVE_USER_RULE.bucket, 'builder', ROOM_CHAIN_SAVE_USER_RULE.limit);
+      await expect(f.save()).rejects.toMatchObject({ status: 429 });
+      expect(f.provider.methods).toEqual([]);
+      expect(draftTitle(f)).not.toBe('New holder draft');
+      expect(f.ownership()).toEqual({ minted_owner_wallet_address: seller, claimer_user_id: 'builder' });
+    } finally { f.sqlite.close(); }
+  });
+  it('lets saves past the per-account budget use stored ownership on an unminted room', async () => {
+    const f = await setup('builder'); f.provider.state.tokenId = 0n;
+    f.sqlite.prepare('UPDATE rooms SET minted_chain_id=NULL,minted_contract_address=NULL,minted_token_id=NULL,minted_owner_wallet_address=NULL WHERE id=?').run('0,0');
+    try {
+      await fillBucket(f, ROOM_CHAIN_SAVE_USER_RULE.bucket, 'builder', ROOM_CHAIN_SAVE_USER_RULE.limit);
+      expect((await f.save()).status).toBe(200);
+      expect(f.provider.methods).toEqual([]);
+    } finally { f.sqlite.close(); }
+  });
+  it('spends no chain read on a minted room the account cannot edit without a linked wallet', async () => {
+    const f = await setup('p2'); f.sqlite.prepare('UPDATE users SET wallet_address=NULL WHERE id=?').run('p2');
+    try {
+      await expect(f.save()).rejects.toMatchObject({ status: 403 });
+      expect(f.provider.methods).toEqual([]);
+      expect(spent(f, ROOM_CHAIN_SAVE_USER_RULE.bucket)).toBe(0);
     } finally { f.sqlite.close(); }
   });
 });

@@ -50,7 +50,7 @@ async function handlePresenceIdentityTokenIssue(
   });
   const auth = await loadOptionalRequestAuth(env, request);
   const { identity, source } = await resolveIssueIdentity(body, auth?.user ?? null, env);
-  // The presence server cannot query the database, so the bubble permission travels in the token.
+  // The bubble permission travels in the token; where the presence host has the database, it re-checks while connected.
   const roomChat: RoomChatPermission | undefined = !auth?.user
     ? undefined
     : auth.school

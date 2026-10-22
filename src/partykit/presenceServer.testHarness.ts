@@ -21,6 +21,7 @@ const DEFAULT_IDENTITY_SECRET = 'presence-server-test-secret';
 type ServerConnection = Parameters<PresenceServer['onConnect']>[0];
 type ServerConnectionState = ServerConnection['state'];
 type ServerRoom = ConstructorParameters<typeof PresenceServer>[0];
+type ServerRuntime = ConstructorParameters<typeof PresenceServer>[1];
 
 export interface FakeConnectionClose {
   code: number | undefined;
@@ -276,11 +277,14 @@ export class PresenceServerHarness {
   readonly room: FakePresenceRoom;
   server: PresenceServer;
 
-  constructor(options: { roomId?: string; env?: Record<string, unknown>; nowMs?: number } = {}) {
+  private readonly runtime: ServerRuntime | undefined;
+
+  constructor(options: { roomId?: string; env?: Record<string, unknown>; nowMs?: number; runtime?: ServerRuntime } = {}) {
     vi.useFakeTimers();
     vi.setSystemTime(options.nowMs ?? DEFAULT_NOW_MS);
     this.room = new FakePresenceRoom(options.roomId, 'main', options.env);
-    this.server = new PresenceServer(this.room.asPartyRoom());
+    this.runtime = options.runtime;
+    this.server = new PresenceServer(this.room.asPartyRoom(), this.runtime);
   }
 
   async connect(id: string, options: ConnectOptions = {}): Promise<FakePresenceConnection> {
@@ -358,7 +362,7 @@ export class PresenceServerHarness {
   }
 
   async reactivate(): Promise<void> {
-    this.server = new PresenceServer(this.room.asPartyRoom());
+    this.server = new PresenceServer(this.room.asPartyRoom(), this.runtime);
     await this.server.onStart();
   }
 
