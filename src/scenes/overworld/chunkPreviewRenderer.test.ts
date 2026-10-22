@@ -41,6 +41,8 @@ vi.mock('../../backgrounds/runtime', () => ({
   getCustomBackgroundTextureKey: (id: string) => `custom_background_${id}`,
 }));
 
+import type Phaser from 'phaser';
+import { getCustomBackgroundTextureLeases } from '../../backgrounds/textureLeases';
 import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import { FrameWorkCoordinator } from './frameWorkCoordinator';
 
@@ -432,6 +434,42 @@ describe('sparse overworld chunk preview textures', () => {
 
     expect(mocks.ensureCustomBackgroundTexture).toHaveBeenCalledOnce();
     expect(scene.canvasBuilds).toHaveLength(1);
+  });
+
+  it('keeps custom backgrounds of on-screen preview rooms resident until they leave', () => {
+    const scene = createScene();
+    let fullRoomLoaded = false;
+    const renderer = new OverworldChunkPreviewRenderer({
+      scene: scene.value,
+      getPreviewTileSize: () => 4,
+      getRoomOrigin: (coordinates) => ({
+        x: coordinates.x * ROOM_PX_WIDTH,
+        y: coordinates.y * ROOM_PX_HEIGHT,
+      }),
+      isFullRoomLoaded: () => fullRoomLoaded,
+      createCanvas: scene.createDetachedCanvas,
+    });
+    const leases = getCustomBackgroundTextureLeases(
+      (scene.value as { textures: Phaser.Textures.TextureManager }).textures,
+    );
+    const first = room(5, 3);
+    first.background = 'custom:abcdefgh';
+    const second = room(6, 3);
+    second.background = 'custom:abcdefgh?fit=stretch';
+
+    renderer.renderChunkPreviews([first, second]);
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+
+    // A room drawn as a full room holds its own background instead.
+    fullRoomLoaded = true;
+    renderer.syncPreviewVisibility();
+    expect(leases.getSnapshot().leases).toEqual({});
+
+    fullRoomLoaded = false;
+    renderer.syncPreviewVisibility();
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+    renderer.reset();
+    expect(leases.getSnapshot().leases).toEqual({});
   });
 });
 

@@ -12,6 +12,7 @@ import {
   type BuiltInBackgroundObject,
   type CustomBackgroundObject,
 } from '../../backgrounds/runtime';
+import { holdCustomBackgroundTextureFor } from '../../backgrounds/textureLeases';
 import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -555,6 +556,12 @@ export class OverworldFullRoomPresenter<
       );
       colorRect.setOrigin(0, 0);
       colorRect.setDepth(8);
+      // The room keeps its background resident from the first request until it is torn down.
+      holdCustomBackgroundTextureFor(
+        this.options.scene,
+        getCustomBackgroundTextureKey(resolved.id),
+        colorRect,
+      );
       const createReadyCustomBackground = () => {
         const layer = createCustomBackgroundLayer(
           this.options.scene,

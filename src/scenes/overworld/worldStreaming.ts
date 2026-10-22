@@ -5,6 +5,10 @@ import {
   getCustomBackgroundTextureKey,
 } from '../../backgrounds/runtime';
 import {
+  acquireCustomBackgroundTexture,
+  type ReleaseCustomBackgroundTexture,
+} from '../../backgrounds/textureLeases';
+import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -174,6 +178,8 @@ interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   nextLiveObjectIndex: number;
   customBackgroundReady: boolean;
   customBackgroundPreparation: CustomBackgroundTexturePreparation | null;
+  // Keeps the background resident between its upload and the room's own background objects.
+  releaseCustomBackground: ReleaseCustomBackgroundTexture | null;
   backgroundPrepared: boolean;
 }
 
@@ -3777,6 +3783,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       nextLiveObjectIndex: 0,
       customBackgroundReady,
       customBackgroundPreparation,
+      releaseCustomBackground: resolvedBackground.kind === 'custom'
+        ? acquireCustomBackgroundTexture(
+            this.options.scene,
+            getCustomBackgroundTextureKey(resolvedBackground.id),
+          )
+        : null,
       backgroundPrepared: false,
     };
     this.pendingFullRoomPreparationsById.set(renderableRoom.id, preparation);
@@ -4348,6 +4360,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       // course overrides and invalidate this same room. Re-entrant invalidation
       // must not cancel and destroy the runtime that was just published.
       fullRoomPreparationLifecycle.markCommitted(preparation);
+      this.releasePreparationCustomBackground(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation) {
         this.pendingFullRoomPreparationsById.delete(preparation.room.id);
       }
@@ -4368,6 +4381,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         previousReleaseAt,
       );
       fullRoomPreparationLifecycle.markFailed(preparation);
+      this.releasePreparationCustomBackground(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) !== preparation) {
         this.settleDisposedReplacementAfterPreparationStops(preparation);
       }
@@ -4545,6 +4559,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation.texturePreparation?.cancel();
     preparation.customTilePreparation?.cancel();
     preparation.customBackgroundPreparation?.cancel();
+    this.releasePreparationCustomBackground(preparation);
     if (preparation.loadedRoom) {
       const loadedRoom = preparation.loadedRoom;
       this.runPreparedRoomRollbackStep('destroy cancelled destination runtime', () => {
@@ -4574,6 +4589,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       );
     }
     return preserveDisposedReplacementLifecycle ? disposedReplacementRoom : null;
+  }
+
+  private releasePreparationCustomBackground(
+    preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
+  ): void {
+    preparation.releaseCustomBackground?.();
+    preparation.releaseCustomBackground = null;
   }
 
   private cancelAllFullRoomPreparations(reason: string): void {

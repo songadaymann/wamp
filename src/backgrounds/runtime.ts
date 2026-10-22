@@ -4,6 +4,7 @@ import { BACKGROUND_GROUPS } from '../config/backgrounds';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
 import { animateBackgroundTexture, decodeBackground, isBackgroundAnimation, observeAnimatedBackground, releaseBackgroundImage, type BackgroundDecodedImage } from './animation';
+import { getCustomBackgroundTextureLeases, holdCustomBackgroundTextureFor } from './textureLeases';
 import { addStaticCanvasTexture } from '../visuals/staticCanvasTexture';
 
 // Cloudflare Images converts backgrounds to WebP or AVIF when the request accepts them. fetch()
@@ -116,6 +117,7 @@ export function createCustomBackgroundObject(
     sprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     syncCustomBackgroundObject(sprite, layer, x, y, width, height, 0);
     observeAnimatedBackground(sprite, scene.textures.get(layer.key));
+    holdCustomBackgroundTextureFor(scene, layer.key, sprite);
     return sprite;
   }
 
@@ -124,6 +126,7 @@ export function createCustomBackgroundObject(
   image.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   syncCustomBackgroundObject(image, layer, x, y, width, height, 0);
   observeAnimatedBackground(image, scene.textures.get(layer.key));
+  holdCustomBackgroundTextureFor(scene, layer.key, image);
   return image;
 }
 
@@ -225,6 +228,10 @@ export function syncCustomBackgroundObject(
   object.setDisplaySize(rect.width, rect.height);
 }
 
+/**
+ * Loads a custom background once per key. Hold a texture lease (textureLeases.ts) while
+ * waiting, or the texture may be freed as soon as it lands.
+ */
 export function ensureCustomBackgroundTexture(
   scene: Phaser.Scene,
   id: string,
@@ -318,6 +325,7 @@ export class CustomBackgroundTexturePreparation {
       this.releaseBitmap();
     }
     this.committed = true;
+    getCustomBackgroundTextureLeases(scene.textures).noteResident(this.key);
     return this.key;
   }
 

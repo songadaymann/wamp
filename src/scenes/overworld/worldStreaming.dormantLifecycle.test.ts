@@ -1,3 +1,4 @@
+import type Phaser from 'phaser';
 import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +18,7 @@ vi.mock('phaser', () => ({
 
 import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
 import { getCustomBackgroundTextureKey } from '../../backgrounds/runtime';
+import { getCustomBackgroundTextureLeases } from '../../backgrounds/textureLeases';
 import { FrameWorkCoordinator } from './frameWorkCoordinator';
 import { OverworldWorldStreamingController } from './worldStreaming';
 
@@ -93,6 +95,9 @@ describe('world streaming dormant destination lifecycle', () => {
     expect(loadedRoom.backgroundSprites[0]?.sprite).toBe(customImage);
     expect(colorRect).toMatchObject({ active: false, visible: false });
     expect(customImage).toMatchObject({ active: false, visible: false });
+    // Both background objects keep the shared texture resident until they are destroyed.
+    expect(colorRect.once).toHaveBeenCalledWith('destroy', expect.any(Function));
+    expect(customImage.once).toHaveBeenCalledWith('destroy', expect.any(Function));
     expect(preparation.backgroundPrepared).toBe(true);
     expect(queuePreparedTerrainBatch).toHaveBeenCalledWith(preparation);
   });
@@ -307,6 +312,10 @@ describe('world streaming dormant destination lifecycle', () => {
       expect(preparation).not.toBeNull();
       expect(preparation.phase).toBe('custom-background');
       expect(preparation.activationRequested).toBe(true);
+      const leases = getCustomBackgroundTextureLeases(
+        scene.textures as unknown as Phaser.Textures.TextureManager,
+      );
+      expect(leases.getSnapshot().leases).toEqual({ [customBackgroundTextureKey]: 1 });
       expect(loadedFullRoomsById.has(room.id)).toBe(false);
       expect(loadedRoom.collisionReady).toBe(false);
 
@@ -333,6 +342,8 @@ describe('world streaming dormant destination lifecycle', () => {
       expect(loadedFullRoomsById.get(room.id)).toBe(loadedRoom);
       expect(loadedRoom.collisionReady).toBe(true);
       expect(pendingFullRoomPreparationsById.has(room.id)).toBe(false);
+      // The preparation's hold ends at activation; the room's own objects hold it from here.
+      expect(leases.getSnapshot().leases).toEqual({});
       expect(onFullRoomCollisionReady).toHaveBeenCalledWith(loadedRoom);
       expect(onFullRoomSetChanged).toHaveBeenCalledWith([room.coordinates]);
       expect(observerStates).toEqual([{ published: true, collisionReady: true }]);
@@ -804,6 +815,7 @@ function createDormantBackgroundObject() {
     setPosition: vi.fn().mockReturnThis(),
     setCrop: vi.fn().mockReturnThis(),
     setDisplaySize: vi.fn().mockReturnThis(),
+    once: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
   };
 }

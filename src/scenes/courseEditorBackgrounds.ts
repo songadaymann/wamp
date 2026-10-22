@@ -11,12 +11,14 @@ import {
   createCustomBackgroundObject,
   ensureCustomBackgroundTexture,
   getBuiltInBackgroundTileScale,
+  getCustomBackgroundTextureKey,
   syncBuiltInBackgroundObject,
   syncCustomBackgroundObject,
   type BuiltInBackgroundObject,
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../backgrounds/runtime';
+import { holdCustomBackgroundTextureFor } from '../backgrounds/textureLeases';
 import {
   RETRO_COLORS,
   createStarfieldTileSprite,
@@ -92,6 +94,7 @@ export function createCourseEditorRoomBackgroundVisuals(
     );
     visuals.colorRect.setOrigin(0, 0);
     visuals.colorRect.setDepth(-40);
+    holdCustomBackgroundTextureFor(scene, getCustomBackgroundTextureKey(resolved.id), visuals.colorRect);
     void ensureCustomBackgroundTexture(scene, resolved.id)
       .then(() => {
         if (!visuals.colorRect?.active) {

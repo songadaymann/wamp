@@ -7,6 +7,10 @@ import {
   getCustomBackgroundTextureKey,
 } from '../../backgrounds/runtime';
 import {
+  acquireCustomBackgroundTexture,
+  CustomBackgroundTextureLeaseSet,
+} from '../../backgrounds/textureLeases';
+import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -153,8 +157,14 @@ export class OverworldChunkPreviewRenderer {
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
   private readonly roomArt: RoomPreviewArtLoader;
+  // Rooms on screen as previews keep their custom backgrounds, so an eviction cannot make a
+  // visible chunk's signature change and refetch the background in a loop (F352).
+  private readonly customBackgroundLeases: CustomBackgroundTextureLeaseSet;
 
   constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
+    this.customBackgroundLeases = new CustomBackgroundTextureLeaseSet(
+      (key) => acquireCustomBackgroundTexture(options.scene, key),
+    );
     this.roomArt = new RoomPreviewArtLoader(options.scene, () => this.syncChunkImages());
     this.textureNamespace = sanitizeChunkKey(options.scene.sys.settings.key);
   }
@@ -199,6 +209,7 @@ export class OverworldChunkPreviewRenderer {
     this.visiblePreviewRoomIds = new Set();
     this.pendingCustomBackgroundLoads = new Map();
     this.customBackgroundLoadGeneration += 1;
+    this.customBackgroundLeases.releaseAll();
   }
 
   getPreviewImages(): Phaser.GameObjects.Image[] {
@@ -387,6 +398,7 @@ export class OverworldChunkPreviewRenderer {
 
   private syncChunkImages(): void {
     const nextVisiblePreviewRoomIds = new Set<string>();
+    const customBackgroundKeys = new Set<string>();
     const activeChunkIds = new Set(this.chunkStatesByChunkId.keys());
 
     for (const [chunkId, chunkState] of this.getPrioritizedChunkStates()) {
@@ -399,6 +411,8 @@ export class OverworldChunkPreviewRenderer {
 
       for (const room of visibleRooms) {
         nextVisiblePreviewRoomIds.add(room.id);
+        const backgroundId = getCustomBackgroundId(room);
+        if (backgroundId) customBackgroundKeys.add(getCustomBackgroundTextureKey(backgroundId));
       }
 
       this.ensureChunkPreview(chunkState.chunkCoordinates, visibleRooms);
@@ -411,6 +425,7 @@ export class OverworldChunkPreviewRenderer {
     }
 
     this.visiblePreviewRoomIds = nextVisiblePreviewRoomIds;
+    this.customBackgroundLeases.sync(customBackgroundKeys);
     this.hasCompletedInitialTexturePass = true;
     this.pruneTextureCache();
   }
