@@ -1,3 +1,7 @@
+## 2026-10-21 — F205 cheat cleanup takes back what removed runs earned
+
+Same lane run (merge and deploy approved). Branch `claude/f205-cheat-cleanup` from main 5511a5ea, PR #284, API Worker `723f525c` (no migration). Receipt: docs/review/wamp-cheat-cleanup-2026-10-21.md.
+
 ## 2026-10-21 — Vandal safeguards, player reports and abuse limits (F182, F184, F183, F049, F188, F213)
 
 Original prompt (lane brief): finish the remaining open checkup items that need no decision; Jonathan approved merging and deploying for this run. Branches `claude/f182-others-room-edit-cap` → `claude/f184-building-suspension` → `claude/f183-player-reports` → `claude/f049-guest-room-moderation` → `claude/f188-abuse-limits` → `claude/f213-world-edge-claims`, stacked on main 2d540764 (PRs #278–#283). Production D1 migrations 0069–0071 applied first, then API Worker `bc00ef00`, then the PRs merged for Pages. Receipt: docs/review/wamp-vandal-safeguards-2026-10-21.md.

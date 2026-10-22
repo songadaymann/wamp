@@ -5927,9 +5927,37 @@ The core claim is accurate. Clarifications:
 
 They now require `verification_status` to be `not_required` (or NULL) or `passed`. Test: `progression/rejectedRuns.test.ts` against the real-SQLite fixture (fails on the previous code). Forward-only: no stored XP, BXP or ratings were recomputed. Receipt: `wamp-keyboard-dialogs-limits-2026-10-11.md`.
 
-### F205: details withheld
+### F205: Admin cheat cleanup leaves XP, trust, badges and ratings, and room clear breaks on rooms with more than 100 runs
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap: Leaderboard, XP & progression integrity (anti-cheat and economy)
+- **Type:** defect · **impact:** low · **effort:** medium
+
+**Summary.** When an admin wipes a cheater's runs, only runs and points are deleted. Their XP levels, hidden trust, badges, the ratings they cast and any trophies stay, and the trust penalty ends after 30 days. Clearing a busy room's leaderboard will likely fail outright, because it binds every run ID in one database query.
+
+**Technical detail.**
+
+handleAdminSuspiciousInvalidate deletes room_runs, course_runs and point_events, then recomputes user_stats (suspiciousInvalidation.ts:156-175). It never touches pxp_events, bxp_events, cxp_events or trust_events, user_progress totals, badge_awards, room_ratings/course_ratings or content_trophies. The only trust consequence is a 30-day window where effective trust is 0 (trustCaps.ts:34-40, 98-103; shared.ts:58), after which the farmed raw score returns. handleAdminRoomClear builds DELETE FROM point_events ... source_key IN (?,?,...) with one placeholder per attempt (admin/routes.ts:325-336). D1 caps a query at 100 bound parameters, and suspiciousInvalidation.ts:361 already chunks at 50 because of it, so any room with more than 100 attempts (failed and abandoned ones count) fails the whole atomic batch. It also deletes the legacy room_difficulty_votes table (admin/routes.ts:307) instead of room_ratings, and leaves XP and trophies behind. Fix (medium): the XP economy is already event-sourced with dedupe keys (laneEvents.ts:38-149), so (1) add voided_at, plus attempt_id where applicable, to room_runs and the four *_events tables; (2) add one admin 'void run' action that soft-voids the run and every point/lane event whose sourceId or breakdown references that attempt; (3) add recomputeUserProgress(userId) that re-sums non-voided events into user_progress and re-runs syncUserBadges (it would need to be able to revoke awards); (4) make the trust penalty permanent until an admin clears it; (5) switch the room-clear IN-list to json_each(?), the pattern leaderboards.ts:74-79 already uses.
+
+**Evidence.**
+- src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-175 — deletes runs and point_events only, then upsertUserStats
+- src/cloudflare/worker/progression/trustCaps.ts:98-103 — the suspicious penalty only zeroes effective trust while the window is active
+- src/cloudflare/worker/progression/shared.ts:58 — TRUST_PENALTY_WINDOW_MS = 30 days
+- src/cloudflare/worker/admin/routes.ts:325-336 — one placeholder per attemptId in a single statement
+- src/cloudflare/worker/admin/suspiciousInvalidation.ts:361 — elsewhere the code chunks attempt IDs at 50 to stay under D1's bind limit
+- src/cloudflare/worker/admin/routes.ts:307 — room clear deletes room_difficulty_votes but not room_ratings (migrations/0019_progression.sql:87)
+- src/cloudflare/worker/progression/laneEvents.ts:118-149 — every XP and trust grant is an idempotent event row, so recomputing is straightforward
+
+**Fact-check (partially confirmed).**
+
+Remove the room_ratings part. Room ratings are cascade-deleted along with room_versions (migrations/0019_progression.sql:100-102), so the room_difficulty_votes delete at admin/routes.ts:307 is only redundant. What room clear actually leaves behind is orphaned content_trophies rows (no foreign key) and the XP/trust events and user_progress totals earned from the room.
+
+Describe the endpoint accurately: it is the operator-only admin delete-room action (POST /api/admin/rooms/:id/clear, no UI caller), not a leaderboard reset. With more than 100 room_runs rows it fails cleanly with a full rollback and an error. The easiest fix is `source_key IN (SELECT attempt_id FROM room_runs WHERE room_id = ?)`, ordered before the room_runs delete, or json_each(?).
+
+The XP, trust and badge retention after suspicious invalidation is accurate. Frame it as: raw trust and XP earned from voided runs (awards.ts:449, persistProgressIncrement at laneEvents.ts:11-35) are never subtracted, and badges are never revoked (badgesTrophies.ts:345-423). Do not frame the 30-day window itself as the bug.
+
+Effort: the bind-limit fix is small. Voiding events and recomputing progress is medium.
+
+**2026-10-21 delivered.** PR #284 / `3415d8b3` and API Worker `723f525c` (no migration). `admin/invalidationProgress.ts` plans the rollback before the runs are deleted and runs it in the same batch. Because XP and trust events are keyed by content and version rather than by run, a run's rewards go only when the player has no other accepted clear of that content left in any version (claimed guest clears included); personal-best and daily-room rewards also need no clear left that day. Rank rewards name the run and always go. Totals lose only the events still present, so overlapping invalidations cannot subtract twice; totals seeded when a progress row was first created are not touched. Badges are revoked only when this cleanup took them below their threshold; trophies held up by removed ratings are recomputed. Expanded Room runs are matched to their legacy course ids; their ratings stay. The admin preview lists the XP, trust and ratings that will go. An adversarial review found eight issues (wrong Expanded Room ids, version-family and guest-clear cases, double subtraction, badge over-revocation, ordering), all fixed before release. [Receipt](wamp-cheat-cleanup-2026-10-21.md).
 
 ### F207: details withheld
 

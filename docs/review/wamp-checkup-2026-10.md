@@ -1,3 +1,5 @@
+**October21 cheat cleanup delivered:** [PR284](https://github.com/songadaymann/wamp/pull/284) and API Worker `723f525c` complete F205: invalidating runs now also takes back the XP, trust, ratings, badges and trophies only those runs supported, never a reward a remaining clear still earns. Master182/216. [Receipt](wamp-cheat-cleanup-2026-10-21.md).
+
 **October21 vandal safeguards, reports and abuse limits delivered:** [PRs278–283](https://github.com/songadaymann/wamp/pull/278), migrations0069–0071 and API Worker `bc00ef00` ship six withheld items: F182 (daily allowance for publishing over other builders' rooms, claimer notice, raid switch), F184 (account suspension and bulk undo of a user's edits), F183 (player reports), F049 (hiding shared guest rooms), F188 (remaining anonymous write limits and a database-size alert) and F213 (World edges). Three adversarial reviews' findings were fixed before release; 5,264 tests pass. Master181/216. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
 **October21 F246 owner reminder candidate:** actual-price read-only GET and wallet-gated current-claimer reminder implemented, with selected-cell editor entry for Expanded Rooms.32 native checks and16 four-device cases pass; final quality/hosted release pending. Previous Protected discovery and collector shelves (PR275/PR276) are deployed. F246/master175/216 remains open until delivery. [Receipt](wamp-owner-reminder-2026-10-21.md).
@@ -94,7 +96,7 @@ A fact-checked review of the whole game, run on 2026-10-03 against production co
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/NvifrLw4proi3T2ZjFVC6X
 
-**Progress: 181 of 216 done.**
+**Progress: 182 of 216 done.**
 
 **October 14 phone controls:** [F109 is complete and F089 automated coverage is expanded](wamp-phone-keyboard-targets-2026-10-14.md): 44px control heights, readable HUD/footer text, Play menu access and keyboard positioning. Forty-two mobile cases and live input checks pass; real iOS remains a manual F089 follow-up.
 
@@ -432,7 +434,7 @@ Security and anti-cheat details in this area are withheld from this public repo 
 - [ ] **F203** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [ ] **F206** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
 - [x] **F204** Runs rejected by verification still count for XP ranks, rating eligibility and badges · low impact · small effort — **done 2026-10-11** (`5bf9fc14`, [PR #153](https://github.com/songadaymann/wamp/pull/153), API Worker `174d2a23`). Rating eligibility (rooms and courses) and a builder's historical unique-clear count now skip runs whose verification failed or timed out; award ranking and clear counts already did. Forward-only.
-- [ ] **F205** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · medium effort — _Partly done 2026-10-11 (`62bdf59b`, [PR #174](https://github.com/songadaymann/wamp/pull/174), API Worker `378e20a6`): the admin room clear works on rooms with more than 100 runs._
+- [x] **F205** Admin cheat cleanup leaves XP, trust, badges and ratings, and room clear breaks on rooms with more than 100 runs · low impact · medium effort — **done 2026-10-21** (`3415d8b3`, [PR #284](https://github.com/songadaymann/wamp/pull/284), API Worker `723f525c`; the busy-room clear fix shipped earlier in PR #174): invalidating runs now also takes back the rank rewards of those runs and, when no other accepted clear of the room remains, first-clear, personal-best and daily-room XP, clear trust, the builder's unique-player rewards and the player's room ratings, then revokes badges the cleanup took below threshold and recomputes trophies. Expanded Room ratings are left in place. [Receipt](wamp-cheat-cleanup-2026-10-21.md).
 - [ ] **F207** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · medium effort
 
 ### School accounts, Worlds and Jams
