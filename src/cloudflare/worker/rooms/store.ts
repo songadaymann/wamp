@@ -1513,6 +1513,7 @@ async function hasPublishedOrthogonalNeighbor(
   env: Env,
   coordinates: RoomCoordinates
 ): Promise<boolean> {
+  // A numbered World's rooms grow only that World, so they never make a WAMP 0 cell claimable.
   const row = await env.DB.prepare(
     `
       SELECT 1
@@ -1523,6 +1524,9 @@ async function hasPublishedOrthogonalNeighbor(
           OR (x = ? AND y = ?)
           OR (x = ? AND y = ?)
           OR (x = ? AND y = ?)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM world_room_claims c WHERE c.room_id = rooms.id AND c.world_id <> 'wamp-prime'
         )
       LIMIT 1
     `

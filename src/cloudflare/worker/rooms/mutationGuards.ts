@@ -26,7 +26,8 @@ export function prepareRoomMutationGuards(env: Env, existing: RoomRecord, option
       THEN 1 ELSE 0 END,
     CASE WHEN ? = 0 OR
       (NOT EXISTS (SELECT 1 FROM rooms WHERE published_json IS NOT NULL) AND ? = 0 AND ? = 0) OR
-      EXISTS (SELECT 1 FROM rooms WHERE published_json IS NOT NULL AND abs(x - ?) + abs(y - ?) = 1)
+      EXISTS (SELECT 1 FROM rooms n WHERE n.published_json IS NOT NULL AND abs(n.x - ?) + abs(n.y - ?) = 1
+        AND NOT EXISTS (SELECT 1 FROM world_room_claims c WHERE c.room_id = n.id AND c.world_id <> 'wamp-prime'))
       THEN 1 ELSE 0 END,
     CASE WHEN ? = 0 OR ? IS NULL OR
       (SELECT COUNT(*) FROM rooms WHERE claimer_user_id = ? AND claimed_at >= ? AND
