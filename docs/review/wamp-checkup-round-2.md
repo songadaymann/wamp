@@ -1,0 +1,431 @@
+# WAMP Checkup, Round 2 (October 2026)
+
+A second fact-checked review of the whole game, run on 2026-10-21 against production commit `2d540764`. 24 reviewers (18 specialists plus 6 gap reviews chosen by a completeness critic) proposed 288 suggestions. 31 overlaps were merged, and a separate skeptical reviewer checked each remaining item against the code (three reviewers for high-impact items). 9 were dropped as wrong or already covered, leaving **248 items**. This round focused on dead code, duplicated code, obvious ideas, speed and mobile.
+
+IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F001–F250): this round is **F251–F498**.
+
+Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
+
+**Progress: 0 of 248 done.**
+
+## How to use this file
+
+This is the master checklist for round 2. Humans and AI agents can both read and update it.
+
+- The full write-up for each item (what is wrong, the technical detail, file:line evidence, and fact-check corrections) is in [wamp-checkup-round-2-details.md](wamp-checkup-round-2-details.md). Search for `### F260` and so on.
+- Evidence line numbers are from commit `2d540764`. The code moves fast, so re-read the current code before acting on an item.
+- Finish round 1 first. Then work one item at a time, and let Jonathan check it before starting the next.
+- When an item ships, change `- [ ]` to `- [x]`, append `— **done YYYY-MM-DD** (commit)` plus a one-line note of what was done and anything left open, and update the progress count above.
+- If an item turns out to be wrong or not worth doing, leave it unticked and append `— **won't do:** reason`.
+- Security, safety and privacy items are withheld from this public repo until fixed. Read them from the private review page. When one ships, replace its placeholder with the real write-up, and keep other open items redacted.
+
+## Report card
+
+| Area | Grade | Summary |
+|---|---|---|
+| Dead code | B | Few dead files, but about 3,000 lines of unused functions remain, retired systems were only half removed, and every page load still carries a hidden copy of the old editor. |
+| Superfluous and duplicated code | C+ | Expanded Rooms carry a second copy of the server code, the editor input and the object inspector. The copies have already drifted into real bugs. |
+| Performance: frame rate and smoothness | B | Play runs on a time budget and is mostly lean. Custom tiles, enemy route search and the map tile planner still redo all their work every frame. |
+| Load time and downloads | B | Well measured and well cached. But startup code grew 30 KB in a week, open tabs break after each release, and the default player sheet wastes 26 MB of graphics memory. |
+| Backend speed, cost and reliability | B- | The core is solid. Newer routes brought back old slow paths, guest play writes far more than it needs, and link-preview images are 3 MB each. |
+| Mobile play | B- | Touch, audio and pause are solid. But the next-room guess misfires on phones, a weak signal loses ranked clears, and custom backgrounds are never freed from memory. |
+| Mobile building | B- | Phones can do most of what desktop can. Expanded Room setup, the tileset picker and landscape mode are close to unusable by touch, and switching tools takes three taps. |
+| Bugs and regressions | B- | Each new system works on its own. The bugs are where they meet: Stop and Escape differ per input, room jumps skip cleanup, and Expanded Room saves skip a safety check. |
+| Security and safety | C+ | Details withheld from this public repo until the open items are fixed. |
+| Ideas: players | B+ | October gave players many reasons to come back. They don't lead to each other yet, and the weekly events sit empty unless someone stocks them by hand. |
+| Ideas: builders | B+ | The tools are broad, but feedback leaks. Approvals, Featured and Room of the Day reach builders silently or not at all, and republishing wipes their stats. |
+| Room music and audio | B+ | The engine is solid after F220 and F229. The remaining issues are at the edges: room videos ignore the volume settings, and reward jingles arrive late. |
+| Design, UX and accessibility | B- | The accessibility basics are real. They are undercut by dialogs that slipped out of the focus code, invisible selected states, and red error styling on good news. |
+| Code health, tests and tooling | B- | Strongly typed, with a fast, green test suite. But main is unprotected, the pinned Node version breaks 60 test files, the riskiest write routes are untested, and the logs keep ballooning. |
+
+## Summary
+
+**Since round 1.** 175 of the 216 first-round items were done when this review ran, and the checklist lane has since reached 182. The fixes hold up in the code. The play loop runs on a time budget. Startup art fell from 2.5 MB to 415 KB. Rate limits are solid, and 5,232 tests pass. October also shipped a lot: pause, key remapping, gamepad, Collect & Lock, Worlds, daily and weekly events, ghost races, Lost Songs and phone building.
+
+**What this round found.** There are 248 findings. Most sit where features meet, not in the core.
+
+- **Things that exist twice.** Expanded Rooms grew out of "courses", so the server code, the editor's mouse and touch handling, and the object inspector each exist twice. The copies have already drifted into real bugs: ratings vanish from Explore, an "edited elsewhere" check is missing, and some tools behave differently in each editor.
+- **Dead code.** There are few dead files. But about 3,000 lines of unused functions remain, and several retired systems were only half removed (PartyKit, Play.fun, difficulty votes, the old editor layout). Nothing stops this from growing.
+- **Speed.** Normal play is smooth. A few spots still redo all their work on every frame: custom tiles, enemy route search and the map tile planner. Some newer server routes brought back slow patterns that round 1 removed. Link previews are 3 MB each. Startup code grew 30 KB in one week.
+- **Phones.** Play is mostly solid. But the game often guesses the wrong next room, a weak signal can lose a ranked clear, and background images are never freed from memory. Building on a phone still hits walls: Expanded Room setup, the tile picker and landscape.
+- **Where features meet.** Stop and Escape act differently on each input. Menus that now load on demand dropped out of the focus code. A tab left open across a release can't open the editor.
+- **Safety net.** Only 1 in 100 server errors is logged. main has no branch protection. The pinned Node version can't run about 60 test files.
+- **Ideas.** The new retention features don't point to each other. The weekly events sit empty unless someone stocks them by hand. Builders rarely hear good news about their rooms.
+
+**Recommended direction.** Fix the seams before adding new features. Start with the same-day fixes: the stale-tab reload, logging, branch protection and the Node version. Then do the security batch. After that, make phone play smooth and light on memory. Then merge the duplicated Expanded Room code, writing tests first. Last, connect the loops that already exist. That costs far less than building new ones.
+
+## Top 10 priorities
+
+1. **Fix the stale-tab break after every release** (F374). There were 32 releases between Oct 18 and Oct 21. Anyone whose tab was open across a release can't open the editor or most menus, and Retry fails the same way. A small handler can offer a reload, or reload by itself when nothing is unsaved. Don't just swallow the error, because callers would then crash in a different way.
+2. **Security/safety priority** (F407, F411, F413, F415). Details withheld from this public repo until fixed.
+3. **Restore the safety net: logs, branch protection, Node version, flaky checks** (F388, F483, F485, F482). Since Oct 18 the server logs only 1 error in 100, so most error references players report lead nowhere. main has no branch protection, and a PR merged before its checks finished left main red for two hours. The pinned Node version can't run about 60 test files. About 4% of CI runs fail on harmless console noise. Each fix is about the size of a config change.
+4. **Make room-to-room movement and run finishes survive phones and weak signal** (F350, F355, F351). On phones the game often prepares the wrong next room after a jump, so the player is held at the room edge. On a weak signal that edge becomes a silent wall with no message. A signed-in player's ranked clear is lost if one request fails, and there is no retry. Guests already get a retry queue.
+5. **Remove the per-frame hot spots** (F301, F305, F302, F306, F363). Rooms with custom tiles re-check the whole tile list on every lookup. Chasing enemies re-plan every route on every frame. A coin-collecting Sword Hunter can freeze the game on its first plan. The map tile planner rebuilds its plan every frame even when nothing moves. The publish checklist is rebuilt on every pinch-zoom step. Each fix is small, and the gain is smoother play on phones.
+6. **Bring back the fast server paths** (F329, F331, F330, F333). The ghost lookup for timed rooms still reads every saved version of the room, the same slow pattern round 1 fixed for leaderboards. Room of the Day reloads with several uncached database trips after guest runs and tab returns. Every guest attempt copies the whole room into the database. Finishing a run still waits on about 14 database trips in a row.
+7. **Stop phones holding images they no longer need** (F352, F357, F304, F307). Custom backgrounds are never freed, so memory keeps growing during a long phone session. A tiled photo background keeps a 2048x1024 copy per room just to draw a small tile. Every drawn texture keeps a hidden full-size copy that nothing uses, and empty foreground layers are still built. On phones, running out of memory is what crashes the tab.
+8. **Make Stop, Escape and room jumps behave the same everywhere** (F378, F385, F383, F375). During Room Rush, Escape throws away the score that the Stop button saves. Pressing Escape to close chat also ends the run. Opening a room from a menu mid-run leaves the old run half-alive. After a test run, the room's music keeps playing in the editor. All four happen because different inputs take different paths, so one shared way to end a run fixes them.
+9. **Unblock phone builders** (F365, F368, F369). On phones, the Expanded Room setup panel covers the map, and the map can't be dragged by touch. The tileset picker won't scroll, so most of WampOS 95 and Backrooms is out of reach. Switching between Draw and Erase takes three taps. These are the biggest gaps left between phone and desktop building.
+10. **Fix the accessibility regressions** (F380, F464, F467, F406). Five dialogs that now load on demand dropped out of the shared focus and dimming code, which undid two round-1 fixes. Explore and the Leaderboard don't show which filter or rating is selected. The shared pop-up shows good news and choices in red error styling and doesn't take keyboard focus. The Worlds and PvP pop-ups still sit outside the shared dialog system.
+
+## Quick wins
+
+- **Send the starting version with Expanded Room cell saves** (F379). The round-1 fix that stops two tabs overwriting each other never reached Expanded Rooms. The editor already knows the version it started from. Sending it takes about one line per save call, plus the existing 'changed elsewhere' prompt.
+- **Compress link-preview images and cache Wamp-O-Gram previews** (F332, F348). Every link preview is a 3 MB uncompressed picture. Cloudflare's built-in compression makes them 10-111 KB and several times faster to make. A Wamp-O-Gram never changes, so its preview can be cached for good.
+- **Fix the touch stick's low-diagonal crawl** (F358). A thumb that drifts slightly down makes the hero crouch, crawl and ignore Jump, and gravity zones jump by themselves. This is the half of F140 that never got done.
+- **Keep tablets in the tablet layout when the keyboard opens** (F354). Typing in chat or in the editor's room-name box switches iPads and Android tablets to the phone layout. In the editor, that switch closes the keyboard mid-word.
+- **Respect the player's sound and battery settings** (F461, F322, F360). Room videos ignore the volume settings and keep playing in hidden tabs. Players with effects turned off still download every effect. Battery Saver doesn't pause animated backgrounds.
+- **Security/safety item** (F382). Details withheld from this public repo until fixed.
+- **Repair the admin room-delete tool** (F390). Since Worlds launched in September, it has failed on every claimed room. A small database change lets the automatic cleanup through. It also removes a blocker for deleting accounts later, which schools will need.
+- **Make name changes reach every leaderboard and card** (F377). After a player changes their display name, Expanded Room and Course leaderboards, comments and Explore credits keep showing the old one.
+- **Let new builders actually publish an Expanded Room** (F466). New accounts get 1 cell, but publishing needs 2, and the screen doesn't explain why. Either allow 2 cells at the first tier, or hide the button and show 'unlocks soon'.
+- **Finish retiring PartyKit** (F252, F387). Safety previews still send multiplayer to the old hosted server, and local development runs a different server from production. A 141 MB package stays installed only for its type names.
+- **Make the phone editor's controls reachable** (F367, F371). Markers and Room Setup start off-screen in the phone dock, and nothing shows that the dock scrolls. With Move selected, pinch-zoom doesn't work, and phones have no Fit button.
+- **Drop the global leaderboard fetch nobody sees** (F251). Every room entry asks the server for a leaderboard that nothing shows. Removing it saves one request per room entry and about 165 lines.
+- **Lock in the file-size limits and the dead-code report** (F498, F497). The file-size limits weren't lowered after this week's refactors, so about 2,500 lines can grow back unnoticed. Nothing enforces the dead-code report, so it keeps growing. A script that tightens the limits and a dead-code baseline check in CI stop both.
+- **Shrink the two running log files** (F486, F493). progress.md and feature-ledger.md have grown six-fold since Oct 3 and largely copy each other. 71% of commits edit them, so parallel lanes collide and every agent session wastes context reading them.
+- **Small screen-reader and keyboard fixes** (F471, F478, F477). Error messages in menus aren't read out by screen readers. The main menu doesn't close on Escape. Tabbing to a player's name makes it fade almost to invisible. Each fix is a few lines.
+
+## Big bets
+
+- **One server path for Expanded Rooms** (F270, F268, F273, F278, F272). The server still runs Expanded Rooms through two copy-pasted systems (old courses and new Expanded Rooms) that write every run and rating twice. The gaps between the copies already let ratings vanish from Explore, and they can split the leaderboard. The anti-cheat progression rules also exist twice. Turn the old course routes into thin wrappers around the new ones, delete the unused ones, share one progression core and retire the Play.fun filters. About 1,500 lines go, and every later fix only has to be made once.
+- **One input layer and one inspector for both editors** (F274, F275, F279, F297). The Expanded Room editor has its own copy of the mouse, drawing and camera code, and its own object inspector. New tools land in only one copy, so Spray, fast Auto-Tile strokes and plate linking already behave differently. Teach the room editor's input code which room cell it is over, and build one shared inspector. About 1,200 lines go, and every new tool works in both editors from day one.
+- **One room picture for the map, share links and NFTs** (F334, F269, F389, F288, F484). Link previews come from two server drawings that have drifted from the game. Starfield rooms show green hills, custom tiles become blocks, trees are drawn twice their size, and Expanded Rooms are drawn as colored blocks. The world map already stores a real-art, compressed picture of every published room. Use that for share links and keep one drawing as a fallback. Share the layout math between renderers, and add one feature-rich test room that every renderer must draw the same way.
+- **A memory and battery budget for phones** (F353, F317, F356, F359). The tiled background layers quietly keep extra room-sized copies, about 50 MB for a Forest room. The default player sheet takes 26 MB for 2% visible pixels. The game redraws at full speed behind full-screen menus and while paused. A shared background layer, a tightly packed player sheet and slower redrawing when nothing moves would cut phone memory and heat by a lot.
+- **Touch-first and landscape building** (F366, F370, F364, F372, F454). Sideways phones get a room view 109px tall. Objects are placed under the fingertip, where the builder can't see them. Erasing a shape, picking an irregular group of tiles and quick undo need a mouse or don't exist on touch. A side-panel layout in landscape, a preview that floats above the finger (like a text loupe), an Erase switch for shape tools and two-finger-tap undo would make phones a real building device.
+- **Connect the player loops** (F436, F428, F429, F435, F433, F432). October added daily rooms, the weekly Rush and Prompt, ghost races and Lost Songs. They don't lead to each other, and the weekly events sit empty unless someone stocks them by hand. Pick the weekly events automatically, with a manual override. Send your ghost with a share link. Offer 'Keep playing' after a free-play clear. Mark beaten rooms on the map, show the Lost Song total, and let players follow builders they like.
+- **Close the builder feedback loop** (F447, F451, F381, F449, F450, F452). The biggest compliments (Featured, Room of the Day, prompt wins) arrive silently or not at all. Republishing wipes a room's stats, and World approval results never reach the builder. Put these moments in the Activity inbox. Keep stats across versions that play the same. Show approval status in the editor. Offer the weekly email at first publish. Let builders watch recent clears, and tell them when someone builds next door.
+
+## Suggested order
+
+1. **Same-day fixes (each about the size of a config change):** the stale-tab reload handler (F374), log sampling (F388), branch protection on main (F483), pin Node 22 in one place (F485), the Expanded Room edit-conflict check (F379), and the dead global-leaderboard fetch (F251).
+2. **Security batch:** F407, F411, F413 and F415 first, then the rest of the security section in its listed order. The repo is public, so keep exploit details out of PR text.
+3. **Phone play:** room transitions and weak signal (F350, F355, F351), the touch stick (F358) and tablet layout (F354). Then the memory fixes (F352, F357, F304, F307).
+4. **Speed:** in the game, F301, F305, F302, F306 and F363. On the server, F329, F331, F330, F333 and F332.
+5. **Where features meet:** Stop, Escape and room jumps (F378, F385, F383, F375). Then the dialog and accessibility regressions (F380, F464, F467, F406) and the small fixes (F471, F478, F477).
+6. **Phone building:** F365, F368, F369, then F367 and F371.
+7. **Clean-up sweep:** retire PartyKit (F252, F387) and the Play.fun and difficulty-vote leftovers (F256, F264, step 1 of F272). Remove the old editor layout once Clear Layer has a new home (F253). Then add the dead-code baseline and tighten the file-size limits (F497, F498) so the codebase stays clean. Shrink the logs (F486, F493).
+8. **Tests before the big merges:** Expanded Room save and publish, Worlds, playlists, Wamp-O-Gram and the renderers (F487, F481, F484, F480).
+9. **Big merges:** one server path for Expanded Rooms (F270, F268, F273). Then the shared editor input and inspector (F274, F275). Then one source for share pictures (F334, F269, F389).
+10. **Connect the loops:** auto-pick the weekly events (F436), ghost challenge links (F428), 'Keep playing' (F429), beaten rooms on the map (F435), and the builder news items (F447, F451, F381).
+11. **Decisions only you can make:** where Clear Layer should live (F253), whether the Protected sort counts as crypto (F479), whether students get emotes (F439), and whether weekly events may pick themselves (F436).
+12. **Everything else,** in section order.
+
+## Checklist by area
+
+### Dead code
+
+There are almost no dead files. But about 3,000 lines of unused functions remain, and several retired systems were only half removed. The items that also save a request or a download come first. Two notes: F262 is not dead, because CI uses the camera tuner, so make it idle instead of deleting it. And finishBootDiagnostics in F257 should be connected, not deleted.
+
+- [ ] **F251** Every room entry fetches the global leaderboard for an unused HUD summary; goal 'status' text is also never shown · medium impact · small effort
+- [ ] **F252** PartyKit leftovers: a 141 MB dev dependency kept only for types, a local presence server unlike production, stale docs · medium impact · small effort
+- [ ] **F253** The old editor toolbars and old phone tabs are still in every page load, always hidden, since the new dock replaced them · medium impact · medium effort — _also covers: The old phone editor tab bar and its zoom/status panel are dead code since the phone dock shipped_
+- [ ] **F262** The hidden 'Camera Tuner' developer panel ships to every player and measures the page on every menu change · low impact · small effort
+- [ ] **F256** About 425 lines of Worker code nothing calls, led by the whole retired difficulty-vote system · low impact · small effort
+- [ ] **F264** Three D1 tables are dead weight: two frozen since their features retired, one written on every publish and never read · low impact · small effort
+- [ ] **F265** Unused admin endpoints: a second world-tile admin API on the renderer Worker and a 364-line report nobody calls · low impact · small effort
+- [ ] **F261** Remove dead render code: an unused NFT 'warm all art' function and the API share page nothing links to · low impact · small effort — _also covers: Remove about 30 lines of unused NFT render and export code left over from the fast PR series_
+- [ ] **F259** Clutter sweep: an OpenAI sprite prototype, a committed debug log, a dev-only page and 165 KB of unused art in production · low impact · small effort — _also covers: A developer preview page and a redirect stub are still built and deployed as full pages; About 420 KB of art source files are deployed to the live site and listed in the startup asset table_
+- [ ] **F263** The old Mac LaunchAgent avatar queue (961 lines) was replaced by a Cloudflare container in April but never removed · low impact · small effort
+- [ ] **F257** About 60 small dead helpers and methods scattered through the client (about 475 lines) · low impact · small effort
+- [ ] **F255** About 40% of the Cyber autotile profile (341 lines) is an older resolver that only its own tests still use · low impact · small effort
+- [ ] **F260** Music engine leftovers from the stems era and the sequencer rewrite: about 260 lines nothing calls · low impact · small effort — _also covers: About 150 lines of unused audio code, plus a 'footstep' sound that is preloaded first but never played_
+- [ ] **F258** About 85 lines of unused streaming methods and leftovers can be deleted · low impact · small effort
+- [ ] **F266** World-map tile 'coverage contract' code from July (about 200 lines) was never wired in, so its tests check code that doesn't run · low impact · small effort
+- [ ] **F254** About 220 lines of CSS can never apply: removed HUD and menu classes, plus the pre-dock editor layout · low impact · small effort — _also covers: 155 lines of styling for 25 class names that no page or code uses any more (old world HUD title, auth header, profile stats rows)_
+
+### Superfluous and duplicated code
+
+The Expanded Room work left two copies of several things: server routes, progression rules, editor input and the object inspector. Those copies have already drifted into bugs, so they come first. Smaller copy-paste follows, such as pop-up skins, thumbnail loaders and small helpers.
+
+- [ ] **F270** Expanded Room runs, leaderboards and ratings run through two copy-pasted backends that can split the leaderboard · medium impact · medium effort
+- [ ] **F268** Every Expanded Room rating is written twice, recomputes badges up to 3 times, and can vanish from Explore after a rename-only republish · medium impact · medium effort
+- [ ] **F274** The Expanded Room editor has its own 930-line copy of the room editor's mouse, drawing and camera code, and it has already drifted · medium impact · large effort
+- [ ] **F275** The two object inspectors are still separate 1,250-line copies, and each has picked up half of the recent fixes · medium impact · medium effort
+- [ ] **F273** Room vs Expanded Room progression and rating rules are two hand-synced copies of the anti-cheat-sensitive logic · medium impact · medium effort
+- [ ] **F283** Five separate copies of 'which version of this room is current' have already drifted apart · low impact · small effort
+- [ ] **F269** Expanded Room and Wamp-O-Gram previews use a separate 838-line 'colored blocks' renderer; fold it into the real-art one · medium impact · medium effort
+- [ ] **F267** Each pop-up re-declares the same paper skin by name (~750 duplicate lines); the default is still the old dark one · medium impact · medium effort
+- [ ] **F271** Most user lookups still make two database trips because of fallback code for columns added in March-May · medium impact · small effort — _also covers: Bot and API-token requests make 4 trips including a write each time, and profile lookups read the same user row twice_
+- [ ] **F272** Play.fun was removed in July, but about 60 queries and the client still filter its leftover accounts on every read · medium impact · medium effort — _also covers: Play.fun was removed in July, but its account filters still run inside 64 queries and add a database read to every run_
+- [ ] **F282** Five client repositories keep private fetch-and-error copies and so miss the Safari page-leave fix in apiRequest · low impact · medium effort — _also covers: Three course and expanded-room API clients hand-roll the same request code, and five old course save methods are unused; The collection price and shelf loaders skip the shared request helper and lose its Safari page-exit fix_
+- [ ] **F279** Expanded-room goal editing, goal flags and publishing are written out three times across three scenes · low impact · medium effort
+- [ ] **F276** 15 pop-up controllers still carry their own Escape and click-outside code the shared stack already does · low impact · medium effort
+- [ ] **F298** Worker has two routers: a 34-entry table whose 'auth' labels are never enforced, and ~490 lines of hand-written if-chains · low impact · large effort
+- [ ] **F296** The wallet-approval recovery logic is spread over six files, with five copies of 'who is signed in' and a two-tab gap · low impact · small effort
+- [ ] **F278** Delete five unused /api/courses editor endpoints that duplicate /api/expanded-rooms with different rules · low impact · small effort — _also covers: Leftovers from when Expanded Rooms were called 'courses': unused course create/publish calls and helpers (about 120 lines)_
+- [ ] **F281** Feature flags that are always on, plus ~27 'table missing' guards for 5-month-old migrations, keep unreachable fallback paths alive · low impact · medium effort — _also covers: Feature switches are read by 11 copy-pasted helpers with three different rules for what counts as 'on'_
+- [ ] **F291** Share-link pages come from four copy-pasted code paths (~480 lines), and World links get no preview card · low impact · small effort
+- [ ] **F288** Pull the shared room-drawing geometry into one small module; the same math is copied three or four times · low impact · medium effort
+- [ ] **F299** World-map tile geometry and wire types are defined twice, once for the server and once for the game client · low impact · small effort
+- [ ] **F285** Next cuts for OverworldPlayScene: a 379-line debug dump and PvP code that handles two opponent sources in five places · low impact · medium effort
+- [ ] **F287** OverworldPlayScene now carries a 478-line forwarding adapter, and 21 controllers still re-read the mode by hand · low impact · medium effort
+- [ ] **F289** Room setup and teardown are written two or three times over in the streamer and presenter · low impact · medium effort
+- [ ] **F293** The editor UI bridge is 3 lines from its limit: split out the 300-line background-photo panel and use the existing listener helpers · low impact · medium effort
+- [ ] **F297** Undo and Redo are the same 108 lines pasted twice in the edit runtime · low impact · small effort
+- [ ] **F277** Admin pages hand-roll the same API request about ten ways, and several still show raw {"error":…} text · low impact · small effort
+- [ ] **F290** Seven standalone pages hold ~2,300 lines of inline CSS and seven palettes; Classroom Login doesn't look like WAMP · low impact · medium effort
+- [ ] **F280** Explore, Profile and Collection each carry their own lazy room-thumbnail loader (~260 lines) · low impact · small effort
+- [ ] **F292** Small helpers are copied file to file: 8 array-chunkers, 5 HTML escapers, 3 minted-room queries, 7 ad-hoc page-size parsers · low impact · small effort — _also covers: About 30 copy-pasted helpers in the Worker, including three copies of the minted-room protection lookup_
+- [ ] **F294** The July jam's sign-up and submit endpoints have returned 'closed' since July 28, and carry a second Turnstile check with a different secret name · low impact · small effort
+- [ ] **F286** Old-name pass-through files (music/model.ts and pvp/model.ts) re-export about 100 names nobody imports from them · low impact · small effort
+- [ ] **F295** The object palette's five filter-tab rows are five copies of the same code (~140 lines) · low impact · small effort
+- [ ] **F300** Worlds Worker carries about 70 lines of dead or copy-pasted code, and seed saves parse every grant's 2.5 MB draft twice · low impact · small effort
+- [ ] **F284** Map-screenshot video export uses untested copies of its date/frame logic while the tested versions are never called · low impact · small effort
+
+### Performance: frame rate and smoothness
+
+Normal play is in good shape. What's left is a handful of spots that redo all their work every frame or create throwaway objects on every event. Players feel the first four most.
+
+- [ ] **F301** Rooms with custom tiles re-check the whole custom tile list on every tile lookup, costing milliseconds per frame · high impact · small effort
+- [ ] **F305** Sword Hunters and police re-search every possible route on every frame while chasing you · medium impact · small effort
+- [ ] **F302** Coin-collecting Sword Hunters can freeze the game for a moment when they first plan, and re-plan every frame when coins are out of reach · medium impact · medium effort
+- [ ] **F306** World-map tile system still re-plans its whole display every frame, while you play and while the map sits still · medium impact · medium effort
+- [ ] **F304** Every game canvas texture does a blocking pixel read-back and keeps a second full-size copy that nothing uses · medium impact · small effort
+- [ ] **F303** Custom tiles are painted one pixel at a time into room and map pictures (256 draw calls per tile, even for 4-pixel thumbnails) · medium impact · small effort
+- [ ] **F307** Each loaded room uses about twice the memory the budget thinks, and always builds an empty foreground layer · low impact · small effort
+- [ ] **F312** Room building is throttled by fixed cost guesses, so a room needs at least ~0.6 s to get ready on phones · low impact · medium effort
+- [ ] **F313** Room data is deep-copied two or three times every time it is downloaded or read from a cache · low impact · medium effort
+- [ ] **F311** In-game room pictures copy a 12-field tileset object for every tile they draw · low impact · small effort
+- [ ] **F314** Tapping a room on the map rebuilds every Expanded Room label, re-drawing long titles one letter at a time · low impact · small effort
+- [ ] **F310** Every coin pickup creates a brand-new text image for its '+10' popup, then throws it away · low impact · small effort
+- [ ] **F309** Editor 'layer guides' overlay is rebuilt from scratch every frame while it is switched on · low impact · small effort
+- [ ] **F308** Each NPC name tag is drawn and sent to the graphics chip about five times when a room loads · low impact · small effort
+
+### Load time and downloads
+
+Startup is well measured and well cached, but it grew 30 KB in a week. The biggest wins are packing the oversized player sheet, starting the art download earlier, and keeping wallet-only code away from visitors without a wallet.
+
+- [ ] **F317** The default player sprite sheet uses 26 MB of graphics memory but is 98% empty, and every other avatar on screen adds another 21 MB · medium impact · medium effort
+- [ ] **F316** Startup art (176 files, 415 KB) can't start downloading until the map cover and game code finish; it could download while players wait · medium impact · medium effort
+- [ ] **F328** Wallet-only code (room approval recovery, collection prices, wallet signing) is downloaded by every visitor, including those with no wallet · low impact · small effort
+- [ ] **F315** A music-theory library adds ~10 KB gzip to the startup download just for two scale tables and a sharp/flat map · medium impact · small effort — _also covers: A catch-all music-theory import ships every chord and scale dictionary at startup (about 5 KB)_
+- [ ] **F325** Swordsman AI, PvP arena, Room Rush and ghost-race code (about 30 KB) download for every player before the first frame · low impact · medium effort
+- [ ] **F320** Half of the startup page is level-editor markup and phone-editor styles that players never see unless they build · low impact · medium effort — _also covers: Phone-editor styles (225 rules, 49 KB) still load in every player's render-blocking stylesheet_
+- [ ] **F323** Returning players re-download the whole 327 KB game chunk after every release, even when its code did not change · low impact · large effort
+- [ ] **F326** The NFT image renderer (6.8 KB) loads at startup because of a single cache-clearing import · low impact · small effort
+- [ ] **F319** Developer-only debugging tools (about 8 KB) ship in every player's startup download · low impact · small effort — _also covers: Load the opt-in phone profiler and resource logger only when asked for: about 5 KB of the 9 KB boot-budget headroom_
+- [ ] **F318** After the first tap, every player downloads all 29 sound effects (469 KB), including editor, PvP and bounce-pad sounds the room may never play · low impact · small effort
+- [ ] **F322** Players who turn sound effects off still download every effect (~400-470 KB) and start the audio engine · low impact · small effort
+- [ ] **F321** Neighbouring rooms can be downloaded twice when you start moving right after entering a room · low impact · small effort
+- [ ] **F324** Room pictures in menus download their art one file at a time, and fetch tree art the game already has · low impact · small effort
+- [ ] **F327** The world-map tile cache rereads its whole index from disk after almost every tile it loads from disk · low impact · small effort
+
+### Backend speed, cost and reliability
+
+Newer routes brought back slow patterns that round 1 removed, and guest play writes more than it needs. Most fixes are small changes to queries or caching.
+
+- [ ] **F329** Ghost race lookup still loads and parses every saved version of a room, on every goal-room intro and restart · high impact · small effort
+- [ ] **F332** Every link-preview image is a 3 MB uncompressed PNG, and most of the render time goes to a slow checksum · medium impact · small effort — _also covers: Share preview images are 3 MB uncompressed PNGs, redrawn from scratch on every link unfurl (146 ms each)_
+- [ ] **F331** Every guest death, every first clear and every tab return reloads the uncached daily-challenge endpoint (4-6 database trips each) · medium impact · small effort
+- [ ] **F330** Every guest attempt copies the whole room (9-38 KB) into the database, and abandoned attempts keep the copy for 14 days · medium impact · small effort
+- [ ] **F333** Finishing a run still waits on about 14 database trips in a row, half of which can be skipped or run together · medium impact · small effort
+- [ ] **F335** A failing world-map alert email is retried forever, blocks newer alerts, and stops the daily pick and activity emails from running on that cron tick · low impact · small effort — _also covers: One failing timer step skips the rest: a stuck alert email delays Room of the Day, #1 alerts and prompt results_
+- [ ] **F349** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F346** Streaming rooms onto the map reads each room's draft as well as its published copy, and no response can be cached · low impact · small effort
+- [ ] **F344** Signed-in session check makes 6 database trips in a row and fires twice every time the tab regains focus · low impact · small effort
+- [ ] **F345** Spam limits for guest saves are stored in the main database, adding about 12 writes and 4 extra trips to every guest attempt · low impact · small effort
+- [ ] **F339** Guest activity ping reads then writes the database every 15 seconds per tab, updates an index nothing uses, and is never cleaned up · low impact · small effort
+- [ ] **F334** Use the pre-drawn world-map tiles as share pictures instead of drawing rooms again on the server · medium impact · medium effort
+- [ ] **F338** Expanded Room lookups count every cell of every version ever published, on each world-map load and room-comment read · low impact · small effort
+- [ ] **F340** Opening the multiplayer connection waits on an admin-stats ping to one shared server object · low impact · small effort
+- [ ] **F341** Phrase save and publish code is duplicated in the Worker and makes up to five one-at-a-time database trips on every music-room publish · low impact · small effort
+- [ ] **F336** Every playlist view, add and remove unpacks each room's full saved level just to read its title · low impact · small effort
+- [ ] **F337** Every room save makes 2 paid Base chain calls (doubled on Oct 20), and Collect & Lock makes 6-7 in a row · low impact · medium effort
+- [ ] **F343** Room-stats triggers rewrite stats on any change to a run row, so a name change rewrites them for the player's entire history · low impact · small effort
+- [ ] **F347** The public 'Collected by' endpoint does 3 database reads per room, and one missing room blanks the whole batch · low impact · small effort — _also covers: One missing room blanks 'Collected by' credit for 16 rooms, and each lookup unpacks a full room_
+- [ ] **F348** Wamp-O-Gram preview images are redrawn on every request and don't match the postcard the sender saw · low impact · medium effort
+- [ ] **F342** Playlists have no size limits, and your 13th playlist disappears from your profile · low impact · small effort
+
+### Mobile play
+
+Touch controls, audio and pause are solid. The open issues are moving between rooms on phones, weak connections, and image memory that is never released.
+
+- [ ] **F350** After every jump, phones prepare the room above or below instead of the room you're running into · high impact · medium effort
+- [ ] **F351** A signed-in player's ranked clear is lost if one network request fails on a weak phone signal · medium impact · medium effort
+- [ ] **F355** On a slow or dropped phone connection, room edges become silent invisible walls and nothing says you're offline · medium impact · small effort
+- [ ] **F358** Touch stick: a slightly low diagonal still makes you crawl and ignores Jump, and gravity zones auto-jump · medium impact · small effort
+- [ ] **F352** Custom backgrounds are never freed: every one seen on the map or in play, animated ones included, stays in memory until the tab closes · medium impact · medium effort — _also covers: Custom room backgrounds are never unloaded, so memory grows with every new background you pass_
+- [ ] **F357** Tiled photo backgrounds, the default setting, keep a 2048x1024 copy per room just to draw a 128-pixel tile · medium impact · small effort
+- [ ] **F353** Each starfield or parallax background layer costs 3-7 MB of hidden memory per room; a Forest room is about 50 MB · medium impact · medium effort
+- [ ] **F356** Phones redraw the game at full speed behind full-screen menus, while paused and when idle, and Battery Saver doesn't slow it · medium impact · medium effort
+- [ ] **F354** iPads and Android tablets switch to the phone layout whenever the on-screen keyboard opens in landscape · medium impact · small effort
+- [ ] **F362** Rotating the phone mid-run drops your held stick and jump while the run keeps going · low impact · small effort
+- [ ] **F360** Battery Saver doesn't pause or simplify animated backgrounds · low impact · small effort
+- [ ] **F359** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · medium effort
+- [ ] **F361** Idea: invite repeat phone players to add WAMP to their home screen, and fix the Android icon · low impact · small effort
+
+### Mobile building
+
+Phones can now do most building tasks. Expanded Room setup, the tile picker and switching tools still block real work by touch.
+
+- [ ] **F365** Expanded Room setup on phones: the panel covers the whole map, and the map can't be dragged by touch · medium impact · medium effort
+- [ ] **F368** On phones, most of the WampOS 95 and Backrooms tilesets can't be reached because the tile picker won't scroll by touch · medium impact · small effort
+- [ ] **F363** Editor rebuilds the publish checklist (full room copy, sort, JSON and hash) on every UI refresh, including each pinch-zoom step · medium impact · small effort
+- [ ] **F369** Phone builders have to reopen the library just to switch between Draw and Erase · medium impact · medium effort
+- [ ] **F367** On a 390px phone, Markers (Spawn and Goal) and Room Setup start off-screen in the dock, with no hint to scroll · medium impact · small effort
+- [ ] **F371** With the Move tool picked, touch builders can't zoom or pan, and phones have no Fit button · medium impact · small effort
+- [ ] **F366** Landscape phones get a 109px-tall room view, and tablets lose 366px of height to toolbars · medium impact · medium effort
+- [ ] **F370** Placing objects, pastes and markers by touch is blind: the preview is hidden under your finger, and sliding cancels · medium impact · medium effort
+- [ ] **F364** Erasing a rectangle, line, connected area or stamp shape needs a right-click, so touch builders can't do it · medium impact · medium effort
+- [ ] **F373** Uploading an animated background holds every full-size frame at once (up to 128 MB) and wastes a PNG encode per frame on Safari · low impact · small effort
+- [ ] **F372** Picking an irregular group of tiles (Ctrl+click in the tileset) has no touch equivalent · low impact · small effort
+
+### Bugs and regressions
+
+Each new system works on its own; the bugs appear where they meet. The stale-tab break, lost or overwritten data, and inputs that disagree come first.
+
+- [ ] **F374** After each release, anyone with WAMP already open can't open the editor or menus until they reload the page · high impact · small effort — _also covers: If an on-demand dialog fails to download, nothing happens, and a finished Room Rush can lose its score_
+- [ ] **F379** Expanded-room cell saves skip the 'edited somewhere else' check, so two tabs or devices still overwrite each other · medium impact · small effort
+- [ ] **F378** Escape or P during a Room Rush throws the run away with no score, while the Stop button, phone Stop and gamepad save it · medium impact · small effort
+- [ ] **F385** Pressing Escape to close the room-chat or comment box also kicks you out of the room and ends your run · medium impact · small effort
+- [ ] **F383** Opening a room from Profile, My Rooms, Explore or a playlist mid-run leaves the old run half-alive · medium impact · small effort
+- [ ] **F375** After a test run, Stop/Escape returns to the room editor with the room's music still playing, and a later test can start silent · medium impact · small effort
+- [ ] **F380** Five dialogs moved into on-demand templates lost the keyboard-focus, stacked-dimming and game-key fixes (F175/F116 regressed) · medium impact · small effort — _also covers: Explore, Profile, Room History and Avatar menus lost their keyboard focus, dimming and key handling when they became load-on-demand_
+- [ ] **F388** Server logs are now sampled at 1%, so 99 of 100 error references and phone crash reports are thrown away · medium impact · small effort
+- [ ] **F376** An interrupted wallet approval never expires, so Collect & Lock or Add artwork can stay stuck for that room forever · medium impact · medium effort
+- [ ] **F382** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F390** The admin 'clear room' tool fails on every claimed room since Worlds launched, and no builder account can be deleted · medium impact · small effort
+- [ ] **F377** Changing your display name leaves the old name on Expanded Room and Course leaderboards, comments and Explore cards · medium impact · small effort — _also covers: Renamed players keep their old name on Expanded Room leaderboards and Explore builder credits_
+- [ ] **F381** In approval-only Worlds, builders never learn whether their room was approved, rejected, or needs resubmitting · medium impact · medium effort
+- [ ] **F391** Wamp-O-Gram fails with 'Request body is too large' for rooms that use about six custom sprites · medium impact · small effort
+- [ ] **F387** Safety preview deploys still send multiplayer to the retired PartyKit server, not the safety Worker · medium impact · small effort — _also covers: Safety previews still run multiplayer on the old PartyKit host, not the Durable Object production uses_
+- [ ] **F386** Rooms that share a custom background each download and decode it, and the slower one can fail and restart · medium impact · small effort
+- [ ] **F399** Points, XP, badges and creator rewards for a finished run are given after the reply, with no retry if that work fails · low impact · medium effort
+- [ ] **F384** Playlist share names run out after 100 per title, and every emoji or non-English title competes for 'playlist' · medium impact · small effort
+- [ ] **F389** Single-room share pictures draw the room wrong: starfield rooms get green hills, custom tiles become blocks, trees are double size · medium impact · small effort
+- [ ] **F396** One failed download silences a sound effect, or swaps a drum for a synthesized stand-in, until the page is reloaded · low impact · small effort
+- [ ] **F401** Room links in Explore, Profile, the new collection shelf and playlists are dead clicks while you're in the editor · low impact · small effort
+- [ ] **F404** Teacher page can lose a new student's one-time password when browser storage is blocked · low impact · small effort
+- [ ] **F400** Removing a World builder, or turning down a join request, bans them for good · low impact · small effort
+- [ ] **F397** Playlist entries for Expanded Rooms turn into one stale screen after the builder edits the level · low impact · small effort
+- [ ] **F392** Badly encoded links (for example /api/rooms/%E0%A4%A) crash into a 500 error instead of a 400 · low impact · small effort
+- [ ] **F395** New NFT artwork permanently links to whichever website address the builder happened to be on · low impact · small effort
+- [ ] **F405** The NFT artwork backfill tool still makes the old blurry 80x44 images and text-card fallbacks · low impact · small effort
+- [ ] **F394** Keyboard focus is pulled out of the wallet cost check when 'Add/update artwork' is started from Room History · low impact · small effort
+- [ ] **F406** The Worlds window and PvP pop-ups bypass the shared dialog system, so keys, focus and Escape misbehave there · low impact · small effort — _also covers: The Worlds window was left out of the shared pop-up system: no focus handling, no pause, and it ignores Readable text_
+- [ ] **F393** Controller players can't press Start on the room intro, which now appears before every timed room · low impact · small effort
+- [ ] **F402** Share-image server remembers a failed image load forever and keeps every decoded picture in memory · low impact · small effort
+- [ ] **F403** Swing settings 96-100% sound identical to 95% but still count as a different groove · low impact · small effort
+- [ ] **F398** Playlist thumbnails show the room's latest version, not the one the playlist plays, and load all at once · low impact · small effort
+
+### Security and safety
+
+Details withheld from this public repo until the items are fixed.
+
+- [ ] **F407** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · high impact · medium effort
+- [ ] **F411** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F413** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F415** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F414** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F417** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F410** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F409** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F412** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F408** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F420** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F421** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F418** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F419** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F425** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F426** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F427** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F423** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · medium effort
+- [ ] **F416** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F422** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+- [ ] **F424** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · small effort
+
+### Ideas: players
+
+Each October feature is good on its own. Most of these ideas connect them, so that one session leads into the next.
+
+- [ ] **F436** Weekly Room Rush and Build Prompt sit empty unless Jonathan schedules them by hand every week · medium impact · medium effort
+- [ ] **F428** 'Can you do better?' share links don't let your friend race you: send your ghost with the link · medium impact · medium effort
+- [ ] **F429** After beating a room in free play there's no 'Next room' button: offer the next unbeaten room · medium impact · medium effort
+- [ ] **F435** The world map doesn't show which rooms you've already beaten · medium impact · small effort
+- [ ] **F433** Players are never told Lost Songs exist, how many there are, or where to look · medium impact · medium effort
+- [ ] **F434** The person who receives a Wamp-O-Gram never sees the sender's message, and the link preview isn't the postcard · medium impact · medium effort
+- [ ] **F432** No way to follow a builder you like and hear when they publish something new · medium impact · medium effort
+- [ ] **F431** Idea: give touch players a 'whole room' view button; the code for it already exists, only the button is missing · medium impact · small effort
+- [ ] **F430** Finding a Lost Song gives '+5 XP' and nothing musical: let each find add that room's song to your profile Mixtape · medium impact · medium effort
+- [ ] **F442** No badges reward the daily and weekly loops, flawless clears, or exploring many builders' rooms · low impact · small effort
+- [ ] **F443** Room of the Day says 'Beaten 3 of the last 7' but gives no way to play the 4 you missed · low impact · small effort
+- [ ] **F439** Guests and classroom players can't communicate in the world at all: add a small set of emotes · low impact · small effort
+- [ ] **F437** Duck the room music under reward stings so level-ups and #1 moments land · low impact · small effort
+- [ ] **F438** Empty rooms feel dead even though WAMP has recordings of everyone who played them: show recent runs as faint ghosts · low impact · medium effort
+- [ ] **F440** Keep downloaded rooms on the device so returning players don't re-download their neighbourhood · low impact · medium effort
+- [ ] **F444** Three finished GameJew prize avatars (green, purple, yellow) ship in every deploy but no player can wear them · low impact · small effort
+- [ ] **F441** Multiplayer has one mode (Arena Duel): add a live head-to-head race through a goal room · low impact · large effort
+
+### Ideas: builders
+
+The builder tools are broad. What's missing is good news reaching the builder, and stats that survive a republish.
+
+- [ ] **F447** Builders aren't told when their room is Featured, Room of the Day, or a Build Prompt winner, and a quick republish silently un-features it · medium impact · medium effort
+- [ ] **F451** Room stats and the death map go blank whenever a builder republishes, even after only a title or music change · medium impact · medium effort
+- [ ] **F450** Offer the weekly 'who played your room' email at first publish, and put the room's numbers in it · medium impact · small effort
+- [ ] **F445** Add 'Remix this room': start a new room from any published room, with credit to the original builder · medium impact · medium effort
+- [ ] **F446** Add a 'My rooms & drafts' list so builders can find unfinished rooms, and release claims they gave up on · medium impact · medium effort
+- [ ] **F448** Let builders rename, delete and reorder playlists: the server already supports two of the three · medium impact · small effort
+- [ ] **F449** Let builders watch recent clears of their room, or see every player's path drawn over it · medium impact · medium effort
+- [ ] **F452** Tell builders when someone builds next to their room, so neighbors connect their rooms · medium impact · medium effort
+- [ ] **F453** Add Solo and Mute buttons per instrument while composing, using the live mixer that already exists · low impact · small effort
+- [ ] **F454** Idea: two-finger tap to undo, three-finger tap to redo, as in drawing apps · low impact · small effort
+- [ ] **F460** The agent guide never mentions the public room-stats endpoint, so AI builders can't learn how their rooms play · low impact · small effort
+- [ ] **F457** Saved stamps live only in one browser: sync them to the account and let builders share them · low impact · medium effort
+- [ ] **F455** Let World owners run their own weekly Build Prompt (and, later, teachers for their class) · low impact · medium effort
+- [ ] **F458** Show a room's YouTube screen and its darkness in map tiles, share pictures and NFT art · low impact · medium effort
+- [ ] **F456** Read the NFT contract's transfer log once an hour, so collector shelves and artwork records update themselves · low impact · medium effort
+- [ ] **F459** Store NFT artwork about 29% smaller on-chain, for cheaper artwork updates or sharper images · low impact · medium effort
+
+### Room music and audio
+
+The music engine is solid. All three items are at its edges.
+
+- [ ] **F461** Room YouTube videos ignore the player's Music/Effects volume and keep playing after the tab is hidden · medium impact · small effort
+- [ ] **F463** Level-up and leaderboard stings are not preloaded, so on slow connections they arrive late or are dropped · low impact · small effort
+- [ ] **F462** Build the next room's music while the player walks toward its door (the unfinished half of F223) · low impact · small effort
+
+### Design, UX and accessibility
+
+The accessibility foundation is real, but two regressions undercut it, and error and success messages still look and read inconsistently.
+
+- [ ] **F464** Explore never shows which filter or sort is selected, and the Leaderboard hides your own star rating · medium impact · small effort
+- [ ] **F467** The shared pop-up shows successes and choices as red errors, paints every Cancel/Close red, and doesn't take keyboard focus · medium impact · small effort
+- [ ] **F466** New builders can open 'Expand Room' but can never publish one: they get 1 cell and publishing needs 2 · medium impact · small effort
+- [ ] **F473** Players still see 'Failed to fetch', 'Request failed with status 502.' or raw HTML in error messages, including on the Welcome screen · low impact · medium effort
+- [ ] **F465** Music library and Arrange panels are rebuilt from scratch on every editor render, losing keyboard focus and wasting work · medium impact · small effort
+- [ ] **F471** Error messages in Explore, Leaderboard, Profile and 9 other menus are never announced to screen readers · low impact · small effort
+- [ ] **F478** The main menu button doesn't say whether the menu is open, and Escape doesn't close the menu · low impact · small effort
+- [ ] **F477** Tabbing to a player's name makes it fade to near-invisible, with no focus ring · low impact · small effort
+- [ ] **F472** Explore room cards read as one long run-on button, and key explanations only exist as mouse-hover tooltips · low impact · small effort
+- [ ] **F476** Stylesheets outside src/styles skip all style checks; Worlds and Bug Report ignore Readable and Large text · low impact · small effort
+- [ ] **F475** Settings: four choice groups have no name (two are both just 'Auto'), Audio is buried 7th of 9, and 'Option-drag' is Mac-only wording · low impact · small effort
+- [ ] **F474** Readable and Large text don't reach in-world comments, chat bubbles, ghost names or goal labels · low impact · medium effort
+- [ ] **F470** Desktop editor squeezes 'Scramble' and 'Rectangle' to 7px, and shrinks Publish to 8px on tablets and small laptops · low impact · small effort
+- [ ] **F469** About 30 editor instructions tell phone builders to 'Click', 'press Escape' or 'move the mouse' · low impact · small effort
+- [ ] **F468** 'Collect' now means both coin pickups and owning a room; 'My Rooms' opens a tab called 'Levels' · low impact · small effort
+- [ ] **F479** Visitors without a wallet still download NFT owner addresses and token IDs whenever they tap a room · low impact · medium effort
+
+### Code health, tests and tooling
+
+The code is strongly typed and the tests are fast and green, but the safety net has a few holes. The first two are cheap, and they protect every other fix on this list.
+
+- [ ] **F483** main isn't protected: a PR was merged before its checks finished, failed lint, and auto-deployed · medium impact · small effort
+- [ ] **F485** Pinned Node version (.nvmrc = 20) can't run about 60 test files; the tests and CI need Node 22 · medium impact · small effort
+- [ ] **F487** Riskiest write paths barely tested: Expanded Room editing 0%, room save/publish 15%, agent tokens, Worlds · medium impact · medium effort — _also covers: Worlds Worker has 2,581 lines but only two test files, and the room-clear test uses a fake schema that hides a production failure_
+- [ ] **F481** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort
+- [ ] **F480** 48 of 69 smoke and probe scripts never run in CI, and at least five are broken on main · medium impact · medium effort — _also covers: 40 of 62 smoke tests never run in CI, and wiring in a new one takes edits in six places_
+- [ ] **F482** Browser checks fail at random in about 4% of CI runs, mostly on harmless console noise · medium impact · small effort
+- [ ] **F486** progress.md and feature-ledger.md grew 6x since Oct 3, copy each other, and 71% of commits edit them · medium impact · small effort
+- [ ] **F498** The file-size limits were never lowered after this week's big refactors: the two largest files can regrow by 2,000 lines unnoticed · low impact · small effort — _also covers: File-size ratchet never tightens: shrunk files can regrow by 2,500 lines with no lint error_
+- [ ] **F497** The dead-code report keeps growing because nothing enforces it (481 to 513 unused exports in 17 days) · low impact · small effort
+- [ ] **F489** scripts/ is outside type checking and real linting; two scripts already disagree with the game's types · medium impact · small effort
+- [ ] **F490** Startup code grew 30 KB in a week with nothing to flag it until the budget breaks; the size check needs per-change attribution and more boundaries · medium impact · small effort
+- [ ] **F488** Room Video swaps out the editor's save/load methods at runtime, hidden from readers and tests · medium impact · medium effort
+- [ ] **F484** No test checks that the renderers draw the same room the same way; the abstract server renderer has no tests at all · medium impact · small effort
+- [ ] **F491** `npm run check` and CI run different checks, and check type-checks the project twice · low impact · small effort
+- [ ] **F493** Docs agents read first are stale or huge: presence still 'PartyKit', checklist title at line 67, logs 6x · low impact · small effort
+- [ ] **F492** Database test fakes are copy-pasted 21 times, with 12 hand-typed copies of the rooms table · low impact · medium effort
+- [ ] **F496** Streaming tests skip the constructor, so the game code carries test-only workarounds · low impact · small effort
+- [ ] **F495** Split the 5,357-line streaming file into four modules and lower its line limit · low impact · large effort
+- [ ] **F494** Each push runs 18 CI jobs that each reinstall browsers and rebuild the game: 106 runner-min, 12.6 min wait · low impact · small effort
