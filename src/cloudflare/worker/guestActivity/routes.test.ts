@@ -50,4 +50,16 @@ describe('guest visit heartbeats (F415)', () => {
     for (let index = 0; index < 119; index += 1) insert.run('guest-visit-create:network', keys[1].key_hash, now);
     await expect(heartbeat(f, 'visit-unknown-b', null)).rejects.toMatchObject({ status: 429 });
   });
+
+  it('stops new visits sitewide past the hourly ceiling and keeps recorded visits beating', async () => {
+    const f = setup();
+    expect((await heartbeat(f, 'visit-recorded')).status).toBe(200);
+    const insert = f.sqlite.prepare("INSERT INTO rate_limit_events (bucket, key_hash, created_at) VALUES ('guest-visit-create:all', 'all', ?)");
+    const now = new Date().toISOString();
+    for (let index = 0; index < 4999; index += 1) insert.run(now);
+    await expect(heartbeat(f, 'visit-new', '198.51.100.30')).rejects.toMatchObject({ status: 429, message: expect.stringMatching(/right now/) });
+    expect((await heartbeat(f, 'visit-recorded', '198.51.100.30')).status).toBe(200);
+    expect(visits(f)).toEqual([{ session_id: 'visit-recorded', heartbeat_count: 2 }]);
+    expect(f.sqlite.prepare("SELECT COUNT(*) AS n FROM rate_limit_events WHERE bucket = 'guest-visit-create:network'").get()).toEqual({ n: 1 });
+  });
 });
