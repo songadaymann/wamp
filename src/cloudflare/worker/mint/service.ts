@@ -521,6 +521,28 @@ export async function persistRoomMintState(
   ]);
 }
 
+/** Gives the minter builder credit on a minted room with no claimer, while D1 still records them as its owner. */
+export async function persistMintedRoomClaimer(
+  env: Env,
+  record: RoomRecord,
+  actor: AuthUser & { walletAddress: string },
+  claimedAt: string,
+): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE rooms
+        SET
+          claimer_user_id = ?,
+          claimer_principal_type = COALESCE(claimer_principal_type, 'user'),
+          claimer_display_name = COALESCE(claimer_display_name, ?),
+          claimed_at = COALESCE(claimed_at, ?)
+        WHERE id = ? AND claimer_user_id IS NULL AND minted_owner_wallet_address = ?
+      `
+    ).bind(actor.id, actor.displayName, claimedAt, record.draft.id, normalizeAddress(actor.walletAddress)),
+  ]);
+}
+
 export function normalizeNullableAddress(address: string | null): string | null {
   return address ? normalizeAddress(address) : null;
 }

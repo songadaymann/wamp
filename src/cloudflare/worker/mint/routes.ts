@@ -18,6 +18,7 @@ import { assertRoomMintNetwork } from './network';
 import {
   loadRoomMintPriceWei,
   normalizeNullableAddress,
+  persistMintedRoomClaimer,
   persistRoomTokenMetadataState,
   persistRoomMintState,
   requireRoomMintConfig,
@@ -126,7 +127,13 @@ export async function handleRoomMintConfirm(
   const alreadyRecorded = record.mintedChainId === mintState.chainId
     && normalizeNullableAddress(record.mintedContractAddress) === normalizeNullableAddress(mintState.contractAddress)
     && record.mintedTokenId === mintState.tokenId;
-  if (!alreadyRecorded) await persistRoomMintState(env, record, mintState, auth.user);
+  if (!alreadyRecorded) {
+    await persistRoomMintState(env, record, mintState, auth.user);
+  } else if (!record.claimerUserId
+    && normalizeNullableAddress(record.mintedOwnerWalletAddress) === normalizeAddress(auth.user.walletAddress!)) {
+    // An earlier sync by someone else recorded the mint without a claimer; the minter still holds it.
+    await persistMintedRoomClaimer(env, record, { ...auth.user, walletAddress: auth.user.walletAddress! }, mintState.ownerSyncedAt);
+  }
 
   const updated = await loadRoomRecord(
     env,
