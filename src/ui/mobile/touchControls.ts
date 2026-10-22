@@ -12,13 +12,18 @@ export interface TouchInputState {
 }
 
 export interface TouchStickInputState extends TouchInputState {
-  // The stick's push direction before each axis's own dead zone and full-tilt scaling,
-  // so direction sectors judge how steeply the thumb really points (any length).
-  directionX: number;
-  directionY: number;
+  // The on-screen stick and the keys forwarded by the mann.cool shell, kept apart because
+  // only the analog stick has an angle for direction sectors (F358). The stick's direction
+  // is its push before each axis's own dead zone and full-tilt scaling (any length).
+  stickMoveX: number;
+  stickMoveY: number;
+  stickDirectionX: number;
+  stickDirectionY: number;
+  forwardedMoveX: number;
+  forwardedMoveY: number;
 }
 
-const state: TouchStickInputState = {
+const state: TouchInputState & { directionX: number; directionY: number } = {
   active: false,
   moveX: 0,
   moveY: 0,
@@ -85,8 +90,12 @@ export function getTouchInputState(): TouchStickInputState {
     active: state.active || parent.active,
     moveX: Math.max(-1, Math.min(1, state.moveX + parent.moveX)),
     moveY: Math.max(-1, Math.min(1, state.moveY + parent.moveY)),
-    directionX: state.directionX + parent.moveX,
-    directionY: state.directionY + parent.moveY,
+    stickMoveX: state.moveX,
+    stickMoveY: state.moveY,
+    stickDirectionX: state.directionX,
+    stickDirectionY: state.directionY,
+    forwardedMoveX: parent.moveX,
+    forwardedMoveY: parent.moveY,
     jumpHeld: state.jumpHeld || parent.jumpHeld,
     slashHeld: state.slashHeld || parent.slashHeld,
     shootHeld: state.shootHeld || parent.shootHeld,

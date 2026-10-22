@@ -457,10 +457,12 @@ export class OverworldMovementController {
   captureInput(): OverworldMovementInput {
     const touch = getTouchInputState();
     const keyboard = this.host.getKeyboardInput();
-    // In left or right gravity the hero walks along the stick's vertical axis.
-    const gravity = this.host.getSpecialTileEnvironment().gravityDirection;
-    const { left: touchLeft, right: touchRight, up: touchUp, down: touchDown } = resolveTouchStickDirections(
-      touch, gravity === 'left' || gravity === 'right' ? 'vertical' : 'horizontal');
+    // In left or right gravity the hero walks along the stick's vertical axis. On a ladder
+    // or in water, up and down count at the plain threshold so a diagonal push still climbs.
+    const { gravityDirection: gravity, inWater } = this.host.getSpecialTileEnvironment();
+    const { left: touchLeft, right: touchRight, up: touchUp, down: touchDown } = resolveTouchStickDirections(touch,
+      gravity === 'left' || gravity === 'right' ? 'vertical'
+        : inWater || this.host.findOverlappingLadder() ? 'both' : 'horizontal');
     const upPressed = keyboard.pressed('up');
     const downPressed = keyboard.pressed('down');
     const leftPressed = keyboard.pressed('left');

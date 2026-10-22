@@ -64,7 +64,8 @@ vi.mock('phaser', () => ({
 vi.mock('../../audio/sfx', () => audio);
 
 const touch = vi.hoisted(() => ({
-  state: { active: false, moveX: 0, moveY: 0, directionX: 0, directionY: 0, jumpHeld: false },
+  state: { active: false, moveX: 0, moveY: 0, jumpHeld: false, stickMoveX: 0, stickMoveY: 0,
+    stickDirectionX: 0, stickDirectionY: 0, forwardedMoveX: 0, forwardedMoveY: 0 },
 }));
 
 vi.mock('../../ui/mobile/touchControls', () => ({
@@ -328,9 +329,12 @@ describe('touch stick sectors and presses (F358)', () => {
     inWater: false, onIce: false, onSticky: false, conveyorX: 0, windX: 0,
     gravityDirection, onBounce: false, onDamage: false,
   });
-  const setStick = (moveX: number, moveY: number, directionX: number, directionY: number) =>
-    Object.assign(touch.state, { active: true, moveX, moveY, directionX, directionY });
-  afterEach(() => setStick(0, 0, 0, 0).active = false);
+  const setStick = (moveX: number, moveY: number, directionX: number, directionY: number) => Object.assign(touch.state, {
+    active: true, moveX, moveY, stickMoveX: moveX, stickMoveY: moveY, stickDirectionX: directionX, stickDirectionY: directionY,
+  });
+  const setForwardedKeys = (moveX: number, moveY: number) =>
+    Object.assign(setStick(0, 0, 0, 0), { moveX, moveY, forwardedMoveX: moveX, forwardedMoveY: moveY });
+  afterEach(() => setForwardedKeys(0, 0).active = false);
 
   it('runs at full speed and still jumps while the thumb drifts slightly down', () => {
     const h = createHarness();
@@ -360,6 +364,33 @@ describe('touch stick sectors and presses (F358)', () => {
     expect(createHarness().controller.captureInput()).toMatchObject({ right: true, touchUp: false });
     expect(createHarness(environment('left')).controller.captureInput())
       .toMatchObject({ right: false, touchRight: false, touchUp: true });
+  });
+
+  it('climbs a ladder or swims with a diagonal push that would walk on open ground', () => {
+    // About 40 degrees up and to the right.
+    setStick(1, -0.86, 40, -34);
+    const ground = createHarness();
+    expect(ground.controller.captureInput()).toMatchObject({ right: true, touchUp: false });
+    const ladder = createHarness();
+    ladder.host.findOverlappingLadder = (() => ({ key: '0,0:ladder:1', sprite: { x: 105, y: 113 } })) as never;
+    ladder.controller.updateMovement(1000 / 60, false);
+    expect(ladder.controller.getDebugSnapshot()).toMatchObject({ ladderKey: '0,0:ladder:1' });
+    expect(ladder.body.velocity.y).toBe(-90);
+    expect(createHarness({ ...environment('down'), inWater: true }).controller.captureInput())
+      .toMatchObject({ right: true, touchUp: true });
+  });
+
+  it('keeps forwarded mann.cool direction keys at the plain thresholds', () => {
+    setForwardedKeys(1, 1);
+    const h = createHarness();
+    h.body.blocked.down = true;
+    h.controller.updateMovement(1000 / 60, false);
+    expect(h.controller.isCrouching()).toBe(true);
+    expect(h.body.velocity.x).toBe(48);
+    setForwardedKeys(1, -1);
+    const wall = createHarness(environment('left'));
+    expect(wall.controller.updateMovement(1000 / 60, false).jumpPressed).toBe(true);
+    expect(wall.controller.updateMovement(1000 / 60, false).jumpPressed).toBe(false);
   });
 
   it.each([

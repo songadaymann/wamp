@@ -7,14 +7,18 @@ export interface TouchStickDirections {
   down: boolean;
 }
 
-/** The stick axis the hero walks along: across the screen, or up and down in left/right gravity. */
-export type TouchStickWalkAxis = 'horizontal' | 'vertical';
+/**
+ * The stick axes that count at their plain thresholds: the one the hero walks along (up and
+ * down in left or right gravity), or both on a ladder or in water, where up and down move too.
+ */
+export type TouchStickPrimaryAxis = 'horizontal' | 'vertical' | 'both';
 
 const HORIZONTAL_THRESHOLD = 0.28;
 const VERTICAL_THRESHOLD = 0.42;
-// A push off the walking axis (crouch, climb, or the jump side in tilted gravity) counts only
-// when the thumb points clearly along it, about 50 degrees or steeper. A thumb that drifts
-// while walking keeps walking instead of crouching, crawling or jumping.
+// A push off the primary axis (crouch, or the jump side in tilted gravity) counts only when
+// the thumb points clearly along it, about 50 degrees or steeper. A thumb that drifts while
+// walking keeps walking instead of crouching, crawling or jumping. Keys forwarded by the
+// mann.cool shell are all-or-nothing and have no angle, so they keep the plain thresholds.
 const CROSS_AXIS_RATIO = 1.2;
 
 const NO_DIRECTIONS: Readonly<TouchStickDirections> = Object.freeze({
@@ -22,22 +26,23 @@ const NO_DIRECTIONS: Readonly<TouchStickDirections> = Object.freeze({
 });
 
 export function resolveTouchStickDirections(
-  touch: Pick<TouchStickInputState, 'active' | 'moveX' | 'moveY' | 'directionX' | 'directionY'>,
-  walkAxis: TouchStickWalkAxis = 'horizontal',
+  touch: Pick<TouchStickInputState, 'active' | 'stickMoveX' | 'stickMoveY' | 'stickDirectionX' | 'stickDirectionY'
+    | 'forwardedMoveX' | 'forwardedMoveY'>,
+  primaryAxis: TouchStickPrimaryAxis = 'horizontal',
 ): TouchStickDirections {
   if (!touch.active) {
     return { ...NO_DIRECTIONS };
   }
 
-  const pushX = Math.abs(touch.directionX);
-  const pushY = Math.abs(touch.directionY);
-  const horizontalCounts = walkAxis === 'horizontal' || pushX > pushY * CROSS_AXIS_RATIO;
-  const verticalCounts = walkAxis === 'vertical' || pushY > pushX * CROSS_AXIS_RATIO;
+  const pushX = Math.abs(touch.stickDirectionX);
+  const pushY = Math.abs(touch.stickDirectionY);
+  const stickX = primaryAxis !== 'vertical' || pushX > pushY * CROSS_AXIS_RATIO;
+  const stickY = primaryAxis !== 'horizontal' || pushY > pushX * CROSS_AXIS_RATIO;
   return {
-    left: horizontalCounts && touch.moveX <= -HORIZONTAL_THRESHOLD,
-    right: horizontalCounts && touch.moveX >= HORIZONTAL_THRESHOLD,
-    up: verticalCounts && touch.moveY <= -VERTICAL_THRESHOLD,
-    down: verticalCounts && touch.moveY >= VERTICAL_THRESHOLD,
+    left: (stickX && touch.stickMoveX <= -HORIZONTAL_THRESHOLD) || touch.forwardedMoveX <= -HORIZONTAL_THRESHOLD,
+    right: (stickX && touch.stickMoveX >= HORIZONTAL_THRESHOLD) || touch.forwardedMoveX >= HORIZONTAL_THRESHOLD,
+    up: (stickY && touch.stickMoveY <= -VERTICAL_THRESHOLD) || touch.forwardedMoveY <= -VERTICAL_THRESHOLD,
+    down: (stickY && touch.stickMoveY >= VERTICAL_THRESHOLD) || touch.forwardedMoveY >= VERTICAL_THRESHOLD,
   };
 }
 
