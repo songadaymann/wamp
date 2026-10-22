@@ -79,14 +79,18 @@ function computeState(): DeviceLayoutState {
   const coarsePointer = touchPrimary || navigator.maxTouchPoints > 0;
   // An open keyboard or pinch zoom shrinks the visual viewport but not the layout
   // viewport. Orientation and device class follow the layout viewport, so typing in chat
-  // keeps a portrait phone in portrait and a landscape tablet a tablet (F354). The fit
-  // scale still applies, so a zoomed-out phone is classed by its real screen.
+  // keeps a portrait phone in portrait and a landscape tablet a tablet (F354).
   const layoutWidth = window.innerWidth || width;
   const layoutHeight = window.innerHeight || height;
   const orientationState: OrientationState = layoutWidth >= layoutHeight ? 'landscape' : 'portrait';
+  // Device class measures the layout viewport at the screen's real size. The visible width
+  // times the zoom is the real screen width at any zoom, and the keyboard never changes it,
+  // so a phone whose page is wider than its screen stays a phone at every zoom level.
+  const realWidth = viewport ? viewport.width * viewport.scale : layoutWidth;
+  const realScale = Math.min(1, realWidth / Math.max(1, layoutWidth));
   const deviceClass = classifyDeviceClass(
-    window.innerWidth ? Math.round(window.innerWidth * fitScale) : width,
-    window.innerHeight ? Math.round(window.innerHeight * fitScale) : height,
+    Math.round(layoutWidth * realScale),
+    Math.round(layoutHeight * realScale),
     coarsePointer,
   );
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);

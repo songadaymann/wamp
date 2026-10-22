@@ -117,4 +117,15 @@ describe('device layout classification', () => {
       visualViewport: { width: 738, height: 1597.1078, scale: 390 / 738 } });
     expect(layout).toMatchObject({ deviceClass: 'phone', orientationState: 'portrait', viewport: { width: 390, height: 844 } });
   });
+
+  it('keeps that phone a phone when the page is zoomed partway back in (F354)', async () => {
+    for (const scale of [0.6, 0.8, 1, 1.5]) {
+      const portrait = await classify({ width: 738, height: 1598, coarse: true, touchPoints: 5,
+        visualViewport: { width: 390 / scale, height: 844 / scale, scale } });
+      expect(portrait).toMatchObject({ deviceClass: 'phone', orientationState: 'portrait' });
+      const landscape = await classify({ width: 1598, height: 738, coarse: true, touchPoints: 5,
+        visualViewport: { width: 844 / scale, height: 390 / scale, scale } });
+      expect(landscape).toMatchObject({ deviceClass: 'phone', orientationState: 'landscape' });
+    }
+  });
 });
