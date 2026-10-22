@@ -8570,6 +8570,8 @@ Fix:
   
   The real exposure is narrower: code that compiles but fails lint, tests or smoke could auto-deploy if one write collaborator, or an agent, merges early. In about 100 merges this happened once, and production was not affected. Recommended fix: add a ruleset on main that requires only the `quality` check, gives the repo admin a bypass (the owner pushes "Record ..." commits directly), and blocks force-push. Leave mobile-smoke advisory, because it failed on main after #284 even though it passed on the PR. A possible alternative is to run lint and test in the production-only prebuild.
 
+**2026-10-22 delivered.** Created with `POST /repos/songadaymann/wamp/rulesets`: `required_status_checks` (`quality`, `mobile-smoke`, integration 15368 = GitHub Actions, not strict) and `non_fast_forward` on `refs/heads/main`, with bypass actor RepositoryRole 5 (Admin), mode `always`. `GET /repos/songadaymann/wamp/rules/branches/main` lists both rules. Write collaborators (KamiSawZe) can no longer merge before those two checks pass. The other browser checks stay advisory; F482's console-noise flakes are still open. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
 ### F485: Pinned Node version (.nvmrc = 20) can't run about 60 test files; the tests and CI need Node 22
 
 - **Area:** Code health, tests and tooling (reviewer: Code health, tests and tooling for AI agents)

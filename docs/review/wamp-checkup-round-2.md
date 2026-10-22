@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 21 of 248 done.**
+**Progress: 22 of 248 done.**
 
 ## How to use this file
 
@@ -410,7 +410,7 @@ The accessibility foundation is real, but two regressions undercut it, and error
 
 The code is strongly typed and the tests are fast and green, but the safety net has a few holes. The first two are cheap, and they protect every other fix on this list.
 
-- [ ] **F483** main isn't protected: a PR was merged before its checks finished, failed lint, and auto-deployed · medium impact · small effort
+- [x] **F483** main isn't protected: a PR was merged before its checks finished, failed lint, and auto-deployed · medium impact · small effort — **done 2026-10-22** (GitHub ruleset "Protect main", id 25659943, set up with Jonathan's approval): main requires the `quality` and `mobile-smoke` checks from GitHub Actions and blocks force-pushes. The repository Admin role (only songadaymann) can always bypass, so the delivery lanes' direct record pushes keep working. Pull requests are not required. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 - [x] **F485** Pinned Node version (.nvmrc = 20) can't run about 60 test files; the tests and CI need Node 22 · medium impact · small effort — **done 2026-10-22** ([PR #289](https://github.com/songadaymann/wamp/pull/289)): `.nvmrc` is 22.22.0, package.json requires Node >=22.13, every CI job reads `.nvmrc`, and Vitest no longer prints SQLite's experimental warning per file. Cloudflare Pages builds move to Node 22. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 - [ ] **F487** Riskiest write paths barely tested: Expanded Room editing 0%, room save/publish 15%, agent tokens, Worlds · medium impact · medium effort — _also covers: Worlds Worker has 2,581 lines but only two test files, and the room-clear test uses a fake schema that hides a production failure_
 - [ ] **F481** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · medium impact · small effort

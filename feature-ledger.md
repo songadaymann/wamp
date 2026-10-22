@@ -1,6 +1,6 @@
 ## 2026-10-22 — Round 2: same-day fixes and the security batch
 
-Round-2 lane (Jonathan approved merging and deploying round 2, security fixes included). PRs #288 F374, #289 F485, #290 F388, #291 F251, #293 CI browser jobs in the Playwright image, #294 sixteen security items (F407 F408 F409 F410 F411 F413 F415 F417 F419 F420 F421 F422 F425 F426 F427 F382) with seven review follow-ups; API Worker `073f68a2`, no migration. F379 shipped later in #292 after four review rounds; F483 needs Jonathan. Receipt: docs/review/wamp-round2-security-and-step1-2026-10-22.md.
+Round-2 lane (Jonathan approved merging and deploying round 2, security fixes included). PRs #288 F374, #289 F485, #290 F388, #291 F251, #293 CI browser jobs in the Playwright image, #294 sixteen security items (F407 F408 F409 F410 F411 F413 F415 F417 F419 F420 F421 F422 F425 F426 F427 F382) with seven review follow-ups; API Worker `073f68a2`, no migration. F379 shipped later in #292 after four review rounds; F483: "Protect main" ruleset (quality + mobile-smoke required, no force-push, Admin bypass). Receipt: docs/review/wamp-round2-security-and-step1-2026-10-22.md.
 
 ## 2026-10-21 — F189 takedowns and F127 visitor attribution
 

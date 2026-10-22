@@ -9,7 +9,7 @@ Delivers round-2 items F374, F485, F388 and F251 (step 1 of the suggested order)
 - **F388, logs** ([PR #290](https://github.com/songadaymann/wamp/pull/290)). Every line the Worker's code writes is kept again. Cloudflare's automatic per-request records stay off; they were the cost the 1% sampling was meant to cut.
 - **F251, dead fetch** ([PR #291](https://github.com/songadaymann/wamp/pull/291)). Entering a goal room no longer loads the unused global top 5. 197 lines of dead summary code are gone with it.
 - **F379, Expanded Room cells changed in another tab** ([PR #292](https://github.com/songadaymann/wamp/pull/292), shipped later the same day). The first version could block Publish. After four review rounds, cell saves and publishes now send the version each cell was edited from, and conflicts are resolved without overwriting newer work. The goal/setup save still sends no base.
-- **F483** (branch protection on main) needs Jonathan to approve a GitHub setting.
+- **F483, branch protection** (set up with Jonathan's approval). A "Protect main" ruleset requires the `quality` and `mobile-smoke` checks and blocks force-pushes. The Admin role, which only songadaymann has, can always bypass it, so record pushes keep working.
 
 ## Security batch
 
