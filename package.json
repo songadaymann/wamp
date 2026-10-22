@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "check": "npm run styles:check && npm run lint && npm run test && npm run typecheck && npm run smoke:dom-contract && npm run world-tiles:types:check && npm run build && npm run size:check && npm run assets:png:check && npm run assets:trees:check && npm run assets:audio:check",
