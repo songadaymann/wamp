@@ -28,6 +28,11 @@ import {
   drawRoomTileLayerRowsToContext,
 } from '../../visuals/roomSnapshotTexture';
 import { hashStringToSeed } from '../../visuals/starfield';
+import {
+  addStaticCanvasTexture,
+  createPooledTextureCanvas,
+  releasePooledTextureCanvas,
+} from '../../visuals/staticCanvasTexture';
 import { calculateChunkPreviewCrop, type ChunkPreviewCrop } from './chunkPreviewCrop';
 import type {
   FrameWorkGeneration,
@@ -592,37 +597,41 @@ export class OverworldChunkPreviewRenderer {
     crop: ChunkPreviewCrop,
   ): boolean {
     return this.measure('stream.buildChunkPreviewTexture', () => {
-      const canvasTexture = this.options.scene.textures.createCanvas(
-        textureKey,
+      if (this.options.scene.textures.exists(textureKey)) {
+        return false;
+      }
+      // Drawn once, then uploaded as a plain texture without a pixel read-back copy (F304).
+      const canvas = createPooledTextureCanvas(
         crop.roomColumns * ROOM_WIDTH * previewTileSize,
         crop.roomRows * ROOM_HEIGHT * previewTileSize,
       );
-      if (!canvasTexture) {
-        return false;
-      }
+      let registered = false;
+      try {
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return false;
+        }
 
-      const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        this.options.scene.textures.remove(textureKey);
-        return false;
-      }
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingEnabled = false;
 
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.imageSmoothingEnabled = false;
+        for (const room of rooms) {
+          this.drawChunkPreviewRoom(
+            context,
+            chunkCoordinates,
+            room,
+            previewTileSize,
+            crop,
+          );
+        }
 
-      for (const room of rooms) {
-        this.drawChunkPreviewRoom(
-          context,
-          chunkCoordinates,
-          room,
-          previewTileSize,
-          crop,
+        registered = Boolean(
+          addStaticCanvasTexture(this.options.scene.textures, textureKey, canvas),
         );
+        return registered;
+      } finally {
+        if (!registered) releasePooledTextureCanvas(canvas);
       }
-
-      canvasTexture.refresh();
-      return true;
     });
   }
 
@@ -1263,7 +1272,7 @@ export class OverworldChunkPreviewRenderer {
       } else {
         const canvas = request.canvas;
         this.measure('stream.uploadChunkPreviewTexture', () => {
-          this.options.scene.textures.addCanvas(request.textureKey, canvas);
+          addStaticCanvasTexture(this.options.scene.textures, request.textureKey, canvas);
         });
         if (!this.options.scene.textures.exists(request.textureKey)) {
           this.cancelPendingTextureBuild(request, 'preview-texture-upload-failed');

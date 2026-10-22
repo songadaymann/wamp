@@ -45,7 +45,7 @@ describe('CustomBackgroundTexturePreparation', () => {
     const scene = {
       textures: {
         exists: vi.fn(() => registered),
-        addCanvas: vi.fn(() => {
+        addImage: vi.fn(() => {
           registered = true;
           return {};
         }),
@@ -88,7 +88,7 @@ describe('CustomBackgroundTexturePreparation', () => {
         }),
       );
       expect(decodeImage).toHaveBeenCalledWith(blob);
-      expect(scene.textures.addCanvas).not.toHaveBeenCalled();
+      expect(scene.textures.addImage).not.toHaveBeenCalled();
       expect(preparation.getSnapshot()).toMatchObject({
         prepared: true,
         committed: false,
@@ -97,7 +97,7 @@ describe('CustomBackgroundTexturePreparation', () => {
 
       expect(preparation.commit(scene)).toBe(getCustomBackgroundTextureKey('receiver-safe'));
       expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
-      expect(scene.textures.addCanvas).toHaveBeenCalledOnce();
+      expect(scene.textures.addImage).toHaveBeenCalledOnce();
       expect(bitmap.close).toHaveBeenCalledOnce();
     } finally {
       fetchSpy.mockRestore();
@@ -174,7 +174,7 @@ describe('CustomBackgroundTexturePreparation', () => {
     const scene = {
       textures: {
         exists: vi.fn(() => registered),
-        addCanvas: vi.fn(() => {
+        addImage: vi.fn(() => {
           registered = true;
           return {};
         }),
@@ -193,7 +193,7 @@ describe('CustomBackgroundTexturePreparation', () => {
       headers: { Accept: 'image/avif,image/webp,*/*' },
     }));
 
-    expect(scene.textures.addCanvas).not.toHaveBeenCalled();
+    expect(scene.textures.addImage).not.toHaveBeenCalled();
     expect(preparation.getSnapshot()).toMatchObject({
       key: getCustomBackgroundTextureKey('heavy/photo'),
       prepared: true,
@@ -207,9 +207,54 @@ describe('CustomBackgroundTexturePreparation', () => {
     expect(canvas.width).toBe(320);
     expect(canvas.height).toBe(176);
     expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
-    expect(scene.textures.addCanvas).toHaveBeenCalledOnce();
+    expect(scene.textures.addImage).toHaveBeenCalledOnce();
     expect(bitmap.close).toHaveBeenCalledOnce();
     expect(preparation.getSnapshot()).toMatchObject({ committed: true, prepared: true });
+  });
+
+  it('keeps an animated background on a redrawable canvas texture', async () => {
+    const frame = { width: 240, height: 135 } as HTMLCanvasElement;
+    const animation = {
+      width: 240,
+      height: 135,
+      frames: [frame],
+      durations: [100],
+      loops: 0,
+      close: vi.fn(),
+    };
+    const fetchImage = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['animated']),
+    }) as Response);
+    const { canvas, context } = createCanvasHarness();
+    let registered = false;
+    const scene = {
+      textures: {
+        exists: vi.fn(() => registered),
+        addImage: vi.fn(),
+        addCanvas: vi.fn(() => {
+          registered = true;
+          return { key: getCustomBackgroundTextureKey('animated') };
+        }),
+        once: vi.fn(),
+      },
+      game: { events: { on: vi.fn(), once: vi.fn() } },
+    } as unknown as Phaser.Scene;
+    const preparation = new CustomBackgroundTexturePreparation(
+      'animated',
+      fetchImage as typeof fetch,
+      vi.fn(async () => animation),
+      () => canvas,
+    );
+
+    await preparation.prepare();
+    preparation.commit(scene);
+
+    expect(context.drawImage).toHaveBeenCalledWith(frame, 0, 0);
+    expect(scene.textures.addCanvas).toHaveBeenCalledWith(getCustomBackgroundTextureKey('animated'), canvas);
+    expect(scene.textures.addImage).not.toHaveBeenCalled();
+    expect(animation.close).not.toHaveBeenCalled();
   });
 
   it('aborts an in-flight fetch and never starts decode or upload after cancellation', async () => {

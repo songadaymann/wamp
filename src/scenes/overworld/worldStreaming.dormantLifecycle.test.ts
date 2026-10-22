@@ -177,7 +177,7 @@ describe('world streaming dormant destination lifecycle', () => {
     const scene = {
       textures: {
         exists: vi.fn((key: string) => registeredTextures.has(key)),
-        addCanvas: vi.fn((key: string) => {
+        addImage: vi.fn((key: string) => {
           registeredTextures.add(key);
           return {};
         }),

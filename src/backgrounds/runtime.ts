@@ -4,6 +4,7 @@ import { BACKGROUND_GROUPS } from '../config/backgrounds';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
 import { animateBackgroundTexture, decodeBackground, isBackgroundAnimation, observeAnimatedBackground, releaseBackgroundImage, type BackgroundDecodedImage } from './animation';
+import { addStaticCanvasTexture } from '../visuals/staticCanvasTexture';
 
 // Cloudflare Images converts backgrounds to WebP or AVIF when the request accepts them. fetch()
 // and Phaser's loader otherwise send */* and get the original upload (one GIF background is
@@ -304,15 +305,16 @@ export class CustomBackgroundTexturePreparation {
       throw new Error('Could not create a custom background staging canvas.');
     }
     context.imageSmoothingEnabled = true;
-    context.drawImage(isBackgroundAnimation(bitmap) ? bitmap.frames[0] : bitmap, 0, 0);
-    const texture = scene.textures.addCanvas(this.key, canvas);
-    if (!texture || !scene.textures.exists(this.key)) {
-      throw new Error(`Custom background texture ${this.key} was not registered.`);
-    }
     if (isBackgroundAnimation(bitmap)) {
+      context.drawImage(bitmap.frames[0], 0, 0);
+      // Animation frames are drawn into this canvas later, so it stays a CanvasTexture.
+      const texture = this.requireRegistered(scene, scene.textures.addCanvas(this.key, canvas));
       animateBackgroundTexture(scene, texture, bitmap);
       this.bitmap = null; // The texture owns frames until removal or game teardown.
     } else {
+      context.drawImage(bitmap, 0, 0);
+      // A still is never redrawn, so it skips CanvasTexture's pixel read-back copy (F304).
+      this.requireRegistered(scene, addStaticCanvasTexture(scene.textures, this.key, canvas));
       this.releaseBitmap();
     }
     this.committed = true;
@@ -358,6 +360,13 @@ export class CustomBackgroundTexturePreparation {
       return;
     }
     this.bitmap = bitmap;
+  }
+
+  private requireRegistered<T extends Phaser.Textures.Texture>(scene: Phaser.Scene, texture: T | null): T {
+    if (!texture || !scene.textures.exists(this.key)) {
+      throw new Error(`Custom background texture ${this.key} was not registered.`);
+    }
+    return texture;
   }
 
   private releaseBitmap(): void {

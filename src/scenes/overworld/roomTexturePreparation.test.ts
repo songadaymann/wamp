@@ -42,11 +42,11 @@ function createRoom(): RoomSnapshot {
 
 describe('RoomTexturePreparation', () => {
   it('draws bounded row batches across all layers before committing once', () => {
-    const addCanvas = vi.fn();
+    const addImage = vi.fn();
     const scene = {
       textures: {
         exists: vi.fn(() => false),
-        addCanvas,
+        addImage,
         get: vi.fn(() => ({ getSourceImage: () => null })),
       },
     };
@@ -68,14 +68,14 @@ describe('RoomTexturePreparation', () => {
       resourceKey: 'terrain-key',
       complete: false,
     });
-    expect(addCanvas).toHaveBeenCalledTimes(1);
+    expect(addImage).toHaveBeenCalledTimes(1);
     expect(preparation.commit('terrain-key', 'foreground-key')).toEqual([
       'terrain-key',
       'foreground-key',
     ]);
-    expect(addCanvas).toHaveBeenCalledTimes(2);
+    expect(addImage).toHaveBeenCalledTimes(2);
     preparation.commit('terrain-key', 'foreground-key');
-    expect(addCanvas).toHaveBeenCalledTimes(2);
+    expect(addImage).toHaveBeenCalledTimes(2);
   });
 
   it('cancels detached canvases before upload', () => {
@@ -83,7 +83,7 @@ describe('RoomTexturePreparation', () => {
     const scene = {
       textures: {
         exists: vi.fn(() => false),
-        addCanvas: vi.fn(),
+        addImage: vi.fn(),
         get: vi.fn(() => ({ getSourceImage: () => null })),
       },
     };
@@ -98,7 +98,7 @@ describe('RoomTexturePreparation', () => {
 
     expect(createCanvasForPreparation).not.toHaveBeenCalled();
     expect(preparation.getSnapshot()).toMatchObject({ cancelled: true, complete: false });
-    expect(scene.textures.addCanvas).not.toHaveBeenCalled();
+    expect(scene.textures.addImage).not.toHaveBeenCalled();
     expect(() => preparation.commit('terrain', 'foreground')).toThrow();
   });
 });

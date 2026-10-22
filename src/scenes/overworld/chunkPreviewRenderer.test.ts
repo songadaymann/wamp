@@ -9,9 +9,26 @@ const mocks = vi.hoisted(() => ({
   drawRoomObjectRangeForLayerToContext: vi.fn(),
   drawConstructionOverlay: vi.fn(),
   ensureCustomBackgroundTexture: vi.fn(() => new Promise<string>(() => undefined)),
+  createPooledCanvas: vi.fn((_width: number, _height: number): HTMLCanvasElement => {
+    throw new Error('createScene() installs the pooled canvas factory.');
+  }),
+  releasePooledCanvas: vi.fn(),
 }));
 
-vi.mock('phaser', () => ({ default: {} }));
+vi.mock('phaser', () => ({
+  default: {
+    CANVAS: 1,
+    Display: {
+      Canvas: {
+        CanvasPool: {
+          create: (_parent: unknown, width: number, height: number) =>
+            mocks.createPooledCanvas(width, height),
+          remove: mocks.releasePooledCanvas,
+        },
+      },
+    },
+  },
+}));
 vi.mock('../../visuals/roomSnapshotTexture', () => ({
   drawRoomSnapshotToContext: mocks.drawRoomSnapshotToContext,
   drawRoomBackground: mocks.drawRoomBackground,
@@ -471,27 +488,23 @@ function createScene(): {
     detachedCanvasBuilds.push(created);
     return created.canvas;
   };
+  // Immediate previews draw into a pooled canvas, as textures.createCanvas did.
+  mocks.createPooledCanvas.mockImplementation((width: number, height: number) => {
+    const created = createCanvas(width, height);
+    canvasBuilds.push({ width, height, context: created.context });
+    return created.canvas;
+  });
   const value = {
     sys: { settings: { key: 'chunk-preview-test' } },
     textures: {
       exists: (key: string) => textures.has(key),
-      createCanvas: (key: string, width: number, height: number) => {
-        const { canvas, context } = createCanvas(width, height);
-        const texture = {
-          getSourceImage: () => canvas,
-          refresh: vi.fn(),
-        };
+      // Previews are drawn once, so they register as plain textures (no CanvasTexture).
+      addImage: (key: string, canvas: HTMLCanvasElement) => {
+        const texture = { getSourceImage: () => canvas };
         textures.set(key, texture);
-        canvasBuilds.push({ width, height, context });
-        return texture;
-      },
-      addCanvas: (key: string, canvas: HTMLCanvasElement) => {
-        const texture = {
-          getSourceImage: () => canvas,
-          refresh: vi.fn(),
-        };
-        textures.set(key, texture);
-        registeredCanvasUploads.push({ key, canvas });
+        if (detachedCanvasBuilds.some((build) => build.canvas === canvas)) {
+          registeredCanvasUploads.push({ key, canvas });
+        }
         return texture;
       },
       remove: (key: string) => textures.delete(key),

@@ -9,6 +9,7 @@ import {
 } from '../../config';
 import type { RoomSnapshot } from '../../persistence/roomModel';
 import { drawRoomTileLayerRowsToContext } from '../../visuals/roomSnapshotTexture';
+import { addStaticCanvasTexture } from '../../visuals/staticCanvasTexture';
 
 const PREPARED_LAYERS: readonly LayerName[] = ['background', 'terrain', 'foreground'];
 
@@ -90,7 +91,7 @@ export class RoomTexturePreparation {
     if (!this.terrainCommitted) {
       const terrain = this.requirePreparedCanvas(this.terrain, 'terrain');
       if (!this.scene.textures.exists(terrainTextureKey)) {
-        this.scene.textures.addCanvas(terrainTextureKey, terrain.canvas);
+        addStaticCanvasTexture(this.scene.textures, terrainTextureKey, terrain.canvas);
       }
       this.terrainCommitted = true;
       return { resourceKey: terrainTextureKey, complete: this.isCommitted() };
@@ -98,7 +99,7 @@ export class RoomTexturePreparation {
     if (!this.foregroundCommitted) {
       const foreground = this.requirePreparedCanvas(this.foreground, 'foreground');
       if (!this.scene.textures.exists(foregroundTextureKey)) {
-        this.scene.textures.addCanvas(foregroundTextureKey, foreground.canvas);
+        addStaticCanvasTexture(this.scene.textures, foregroundTextureKey, foreground.canvas);
       }
       this.foregroundCommitted = true;
       return { resourceKey: foregroundTextureKey, complete: true };
