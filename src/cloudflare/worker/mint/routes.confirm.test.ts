@@ -24,6 +24,7 @@ import { handleRoomMintConfirm } from './routes';
 const coordinates = { x: 3, y: -2 };
 const TX = `0x${'ab'.repeat(32)}`;
 const WALLET = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const CONTRACT = '0x1111111111111111111111111111111111111111';
 const builder = { id: 'user-1', walletAddress: WALLET };
 
 function confirm(txHash: string = TX) {
@@ -90,5 +91,19 @@ describe('room mint confirmation (F064)', () => {
     const response = await confirm();
     expect(response.status).toBe(200);
     expect(mocks.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the current owner when the minter confirms after the token changed hands', async () => {
+    const buyer = '0x3333333333333333333333333333333333333333';
+    mocks.loadForMutation.mockResolvedValue(roomRecord({
+      permissions: { canMint: false }, mintedChainId: 8453, mintedContractAddress: CONTRACT,
+      mintedTokenId: '42', mintedOwnerWalletAddress: buyer,
+    }));
+    mocks.verifyMint.mockResolvedValue({ chainId: 8453, contractAddress: CONTRACT, ownerWalletAddress: WALLET, tokenId: '42' });
+    mocks.loadRecord.mockResolvedValue({ id: '3,-2', mintedTokenId: '42', mintedOwnerWalletAddress: buyer });
+    const response = await confirm();
+    expect(response.status).toBe(200);
+    expect(mocks.persist).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ mintedOwnerWalletAddress: buyer });
   });
 });
