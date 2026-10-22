@@ -606,6 +606,7 @@ export function createRoomTransitionController(
     | 'playerFacing' | 'currentRoomCoordinates' | 'selectedCoordinates'
     | 'windowCenterCoordinates' | 'getRoomCoordinatesForPoint' | 'runtimeController'
     | 'worldStreamingController' | 'recordPerformanceTransitionGate' | 'handlePerformanceRoomTransitionCompleted'
+    | 'connectionNoticeController'
     | 'isPvpArenaActive' | 'sessionResetController' | 'updateSelectedSummary'
     | 'activeCourseRun' | 'activeCourseSnapshot' | 'roomSummariesById'
     | 'activeRoomRushRun' | 'recordRoomRushVisit' | 'syncGoalRunForRoomWithIntro'
@@ -639,6 +640,7 @@ export function createRoomTransitionController(
       performanceAdvisorRuntime.advisor.clearTransitionGate(performance.now());
     },
     onRoomTransitionCompleted: () => host.handlePerformanceRoomTransitionCompleted(),
+    onUnpreparedTransitionWaitChanged: (waiting) => host.connectionNoticeController.setSeamWaiting(waiting),
     isRoomTransitionLocked: () => host.isPvpArenaActive(),
     resetChallengeStateForRoomExit: (nextRoomCoordinates) => {
       host.sessionResetController.resetChallengeStateForRoomExit(nextRoomCoordinates);

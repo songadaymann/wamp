@@ -1,0 +1,28 @@
+@layer components {
+  /* Over the play area on every device: the HUD status line is hidden on phones (F355). */
+  #play-connection-notice {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    z-index: var(--z-world-prompt);
+    max-width: min(360px, calc(100% - 24px));
+    padding: 8px 12px;
+    transform: translate(-50%, -50%);
+    border: 2px solid #222;
+    background: var(--wamp-cream);
+    color: #222;
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.35;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  #play-connection-notice[data-tone='offline'] {
+    background: var(--wamp-sky);
+  }
+
+  #play-connection-notice.hidden,
+  body:not([data-app-mode='world']):not([data-app-mode='play-world']) #play-connection-notice {
+    display: none;
+  }
+}

@@ -62,6 +62,8 @@ interface OverworldRoomTransitionHost {
   ): void;
   clearPerformanceTransitionGate?(): void;
   onRoomTransitionCompleted?(): void;
+  /** True while the player is held at a seam whose room is not ready (F355). */
+  onUnpreparedTransitionWaitChanged?(waiting: boolean): void;
 }
 
 type BlockedTransitionReason = 'locked' | 'unreachable' | 'non-cardinal' | 'unprepared';
@@ -199,7 +201,7 @@ export class OverworldRoomTransitionController {
       // The advisor owns clearing a prior unprepared stall when it receives a
       // different gate reason. Keep only the controller's intent bookkeeping
       // in sync here so we do not double-clear the same episode.
-      this.activeUnpreparedTransition = null;
+      this.setActiveUnpreparedTransition(null);
       this.host.recordPerformanceTransitionGate?.(
         reason,
         currentRoomCoordinates,
@@ -560,10 +562,10 @@ export class OverworldRoomTransitionController {
     if (active) {
       this.clearActiveUnpreparedTransition();
     }
-    this.activeUnpreparedTransition = {
+    this.setActiveUnpreparedTransition({
       from: { ...currentRoomCoordinates },
       to: { ...nextRoomCoordinates },
-    };
+    });
   }
 
   private clearPreparedUnpreparedTransition(coordinates: RoomCoordinates): void {
@@ -600,7 +602,7 @@ export class OverworldRoomTransitionController {
             ? 'unreachable'
             : null;
     if (replacementReason) {
-      this.activeUnpreparedTransition = null;
+      this.setActiveUnpreparedTransition(null);
       this.host.recordPerformanceTransitionGate?.(
         replacementReason,
         currentRoomCoordinates,
@@ -631,8 +633,16 @@ export class OverworldRoomTransitionController {
     if (!this.activeUnpreparedTransition) {
       return;
     }
-    this.activeUnpreparedTransition = null;
+    this.setActiveUnpreparedTransition(null);
     this.host.clearPerformanceTransitionGate?.();
+  }
+
+  private setActiveUnpreparedTransition(next: ActiveUnpreparedTransition | null): void {
+    const wasWaiting = this.activeUnpreparedTransition !== null;
+    this.activeUnpreparedTransition = next;
+    if (wasWaiting !== (next !== null)) {
+      this.host.onUnpreparedTransitionWaitChanged?.(next !== null);
+    }
   }
 
   private consumeAuthorizedTeleport(nextRoomCoordinates: RoomCoordinates): boolean {

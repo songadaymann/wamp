@@ -82,6 +82,7 @@ function createHarness() {
     recordPerformanceTransitionGate: vi.fn(),
     clearPerformanceTransitionGate: vi.fn(),
     onRoomTransitionCompleted: vi.fn(),
+    onUnpreparedTransitionWaitChanged: vi.fn(),
   };
   return {
     body,
@@ -417,6 +418,71 @@ describe('overworld room transition hydration', () => {
     expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 1, y: 0 });
     expect(host.prefetchPlayableRoomForTransition).toHaveBeenCalledWith({ x: 0, y: 1 });
     expect(host.preparePlayableRoomForTransition).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('seam wait signal for the loading notice (F355)', () => {
+  it('reports one wait per held seam and clears it once the room is ready', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+
+    controller.maybeAdvancePlayerRoom();
+    expect(host.onUnpreparedTransitionWaitChanged).not.toHaveBeenCalled();
+
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+    body.velocity.x = 150;
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true]]);
+
+    host.preparePlayableRoomForTransition.mockReturnValue(true);
+    body.velocity.x = 0;
+    controller.maybeAdvancePlayerRoom();
+    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('ends the wait when the player walks away from the seam', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    player.x = 500;
+    body.velocity.x = -150;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('ends the wait when the seam turns into a different gate', () => {
+    const { body, controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    host.isRoomTransitionLocked.mockReturnValue(true);
+    body.velocity.x = 150;
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('ends the wait on leaving play', () => {
+    const { controller, host, player } = createHarness();
+    host.preparePlayableRoomForTransition.mockReturnValue(false);
+    controller.maybeAdvancePlayerRoom();
+    player.x = 645;
+    controller.maybeAdvancePlayerRoom();
+
+    host.getMode.mockReturnValue('browse' as never);
+    controller.maybeAdvancePlayerRoom();
+
+    expect(host.onUnpreparedTransitionWaitChanged.mock.calls).toEqual([[true], [false]]);
   });
 });
 
