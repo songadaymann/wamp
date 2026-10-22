@@ -5,7 +5,7 @@ import {
   deriveProfileUsernameBase,
   PROFILE_USERNAME_MAX_LENGTH,
 } from '../../../profiles/username';
-import { HttpError, isTrustedOrigin } from '../core/http';
+import { HttpError, isLocalOrPrivateHostname, isTrustedOrigin } from '../core/http';
 import { isTrustedAppHostname } from '../../../config';
 import type {
   ApiTokenRow,
@@ -1269,7 +1269,8 @@ export function resolvePublicBaseUrl(request: Request, env: Env): string {
 }
 
 // Base for links in outgoing email. A token request sets its own headers, so only a browser
-// request's trusted Origin is used; anything else links to APP_BASE_URL or wamp.land.
+// request's trusted Origin is used, and only an https one on a public host unless the worker
+// itself runs locally; anything else links to APP_BASE_URL or wamp.land.
 export function resolveEmailBaseUrl(request: Request, env: Env): string {
   const configured = resolveConfiguredPublicBaseUrl(request, env);
   if (configured) {
@@ -1277,7 +1278,14 @@ export function resolveEmailBaseUrl(request: Request, env: Env): string {
   }
 
   const hasBearerToken = /^\s*Bearer\s+\S/i.test(request.headers.get('Authorization') ?? '');
-  return (hasBearerToken ? null : resolveTrustedRequestOrigin(request)) ?? DEFAULT_PUBLIC_BASE_URL;
+  const origin = hasBearerToken ? null : resolveTrustedRequestOrigin(request);
+  if (!origin) {
+    return DEFAULT_PUBLIC_BASE_URL;
+  }
+
+  const parsed = new URL(origin);
+  const publicHttps = parsed.protocol === 'https:' && !isLocalOrPrivateHostname(parsed.hostname);
+  return publicHttps || isLocalOrPrivateHostname(new URL(request.url).hostname) ? origin : DEFAULT_PUBLIC_BASE_URL;
 }
 
 function resolveTrustedRequestOrigin(request: Request): string | null {
