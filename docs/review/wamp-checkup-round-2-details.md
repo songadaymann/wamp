@@ -54,6 +54,8 @@ Fix: drop the global call from the Promise.all, delete the chain, and repoint th
   
   Impact is medium, not high: there is no visible effect, and the saving is about one Worker request per goal-room entry or selection. Deleting the lifecycle presentation members changes nothing visible; the live HUD and modal already format protect quests as pts. The presence.ts deletion is separate dead code, unrelated to the request.
 
+**2026-10-22 delivered.** PR #291. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
 ### F252: PartyKit leftovers: a 141 MB dev dependency kept only for types, a local presence server unlike production, stale docs
 
 - **Area:** Dead code (reviewer: Dead code: Worker, scripts, configs and docs)
@@ -4817,6 +4819,8 @@ Fix (about 30 lines): in src/main/coarseFirstEntry.ts add `window.addEventListen
   
   Optional, lower priority: read the build id at runtime (for example from a meta tag in index.html) instead of compiling it into the shared chunk, so lazy chunk names survive releases that do not touch them. Overall effort is still small, about 40-60 lines plus a unit test.
 
+**2026-10-22 delivered.** PR #288, `src/main/staleBuildRecovery.ts`. Never calls preventDefault, so callers reset as before. A review showed "browsing with nothing open" doesn't prove nothing is unsaved, so auto-reload was dropped in favour of the offer. A Playwright run against a local build with one lazy chunk and the entry script returning 404 showed the card and no reload. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
 ### F379: Expanded-room cell saves skip the 'edited somewhere else' check, so two tabs or devices still overwrite each other
 
 - **Area:** Bugs and regressions (reviewer: Superfluous and duplicated code: scenes and game runtime)
@@ -5108,6 +5112,8 @@ wrangler.jsonc:20-22 sets observability.logs.head_sampling_rate to 0.01. Commit 
   
   Impact: medium. Effort: small.
 
+**2026-10-22 delivered.** PR #290: `observability.logs.head_sampling_rate: 1`, `invocation_logs: false`. Log ingestion should be checked in the dashboard after a few days. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
 ### F376: An interrupted wallet approval never expires, so Collect & Lock or Add artwork can stay stuck for that room forever
 
 - **Area:** Bugs and regressions (reviewer: Gap review: Collect & Lock: room collecting, wallet approvals and the crypto gate)
@@ -5168,9 +5174,46 @@ Fix plan (~60 lines + tests): (1) add deadline to RoomMintPrepareResponse (roomO
   
   Effort stays medium. The change touches a new 'expired' status, the lifecycle, UI copy, the unit tests, and the 25-case × 4-profile recovery browser matrix.
 
-### F382: details withheld
+### F382: Lost Songs start a new server session on every room entry; after about 32 rooms in 30 minutes a player can't collect songs
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Bugs and data integrity: API, storage and realtime
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Each time a player walks into a room that hides a Lost Song they haven't found, the game opens a new 30-minute 'play session' on the server, even when re-entering a room they just left. The server allows only 32 open sessions per player and 5,000 for the whole game. An explorer who crosses 33 song rooms in half an hour sees 'Song progress is unavailable', and on a busy day everyone does. Reusing the open session for the same room fixes it.
+
+**Technical detail.**
+
+Client: LostSongPlayController.update() calls getProof for the current Lost Song room (src/scenes/overworld/lostSongs.ts:38-47). getProof caches only the most recent room (68). Leaving to a room without a song clears it (43), and every new context POSTs /api/lost-songs/play ('Starts early on entry', 71-84). Server: src/cloudflare/worker/lostSongs/routes.ts:88-98 inserts a session with a 30-minute expiry (90). The insert happens only if the identity has fewer than 32 unexpired, unfound sessions (94) and fewer than 5,000 are active worldwide (95). Otherwise it returns 429 'Too many active Lost Song play sessions' (98). The client maps that to 'Song progress is unavailable. Touch the song to retry' and retries every 5 s (lostSongs.ts:76-82). A find needs a valid session (routes.ts:106-110), so the song cannot be saved until old sessions expire, up to 30 minutes. Walking back and forth between two song rooms 33 times trips the per-player cap. The worldwide cap is shared fate: per-network limits are 120 plays a minute (routes.ts:31-36), so 2 networks × 120 × 30 min = 7,200, which is over 5,000. Two connections, or ordinary traffic of about 170 room entries a minute, lock every player out. Fix: before inserting, reuse the identity's existing unexpired, unfound session for the same (room_id, room_version, expanded_room_id), using index lost_song_session_identity, and return a fresh token for it. Keep the per-identity cap but drop the global COUNT(*) gate (or make it per network). Optionally shorten expiry to about 10 minutes. Add a test that enters the same room 40 times and gets one session back.
+
+**Evidence.**
+- src/scenes/overworld/lostSongs.ts:43 — leaving a song room drops the proof
+- src/scenes/overworld/lostSongs.ts:68-72 — only the latest room is cached; a new /play session starts on entry
+- src/scenes/overworld/lostSongs.ts:82 — a 429 surfaces as 'Song progress is unavailable'
+- src/cloudflare/worker/lostSongs/routes.ts:90 — sessions last 30 minutes
+- src/cloudflare/worker/lostSongs/routes.ts:94-95 — cap of 32 unfound per player and 5,000 worldwide
+- src/cloudflare/worker/lostSongs/routes.ts:98 — returns 429 when the insert was skipped
+
+**Fact-check (confirmed).**
+
+Checked against main 2d540764. Every cited line is correct.
+
+Client: OverworldLostSongController.update() (src/scenes/overworld/lostSongs.ts:38-47) sets proof = null whenever getContext() returns null (line 43). getProof (66-85) keeps only one proof, keyed by JSON.stringify([target, userId]) (67-68). Any new key, or a proof that was cleared, POSTs /api/lost-songs/play again (71). A failure sets retryAfter to now + 5 s and shows 'Song progress is unavailable. Touch the song to retry.' (79-82). After that, update() starts another /play every 5 s on its own.
+
+getContext (src/scenes/overworld/lostSongContext.ts:16-29) returns null in a room without a lost_song object, and also whenever canPlay() is false. canPlay includes !gameFeelController.isDeathPending() (src/scenes/overworld/composition/player.ts:205). The death phase lasts 180 ms (gameFeel.ts:2), and update() runs from finalize() every frame with a 100 ms throttle (framePipeline.ts:296). So the 100 ms throttle will almost always land one tick inside the death window, and the proof is cleared on each death. The finding misses this amplifier. A new server session starts not only on each room re-entry but on each respawn in a song room. A player who dies 33 times in one hard, unfound song room within 30 minutes hits the cap without ever leaving the room.
+
+Server: src/cloudflare/worker/lostSongs/routes.ts:89-98 always inserts a new row with a 30-minute expiry (line 90). The insert is gated on fewer than 32 unexpired, unfound rows for the identity (93-94) and fewer than 5,000 unexpired rows in total, found ones included (95). If either gate fails, the route returns 429 'Too many active Lost Song play sessions' (98). /find needs a valid unexpired session (106-109). There is no reuse path. The existing test routes.test.ts:109 proves the cap: it plays the same target 32 times and the 33rd play gets 429.
+
+Global cap: guestRunIdentity (src/cloudflare/worker/guestRuns/identity.ts:10-16) accepts any client-chosen X-Guest-User-Id and recovery token. That means the per-identity cap of 32 does nothing against an attacker. The only real limit is 120 plays per minute per network, where a network is an IPv4 address or an IPv6 /64 (routes.ts:34, rateLimit.ts:22-34). 120 × 30 = 3,600 sessions per network, so two IPs push past 5,000 and lock out every player's Lost Song saving for up to 30 minutes. The trusted-origin check is no barrier to a non-browser client. Organic traffic reaching 5,000 ('on a busy day everyone does') is overstated for current traffic. The deliberate cheap DoS is real.
+
+Not covered by any prior item: only F144 (the feature itself, DONE) mentions Lost Songs, and nothing in prior_findings.json addresses session caps.
+
+Fix notes:
+- Reusing a session is compatible with assertLostSongPickupProof (validation.ts:46-52), since an older started_at only loosens the timing bound.
+- Only token_hash is stored, so a reuse must UPDATE token_hash with a new token (and ideally started_at). That matches the finding's 'fresh token'.
+- The client should also keep the proof through death-pending, or cache proofs per room key in a Map, so respawns and re-entries stop calling /play.
+- The global COUNT(*) gate should become per-network or be removed.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). Two tabs in the same song room each refresh the session's token, so one may need a second touch. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F390: The admin 'clear room' tool fails on every claimed room since Worlds launched, and no builder account can be deleted
 
@@ -6012,73 +6055,673 @@ Fix: collect visible rows with an IntersectionObserver and call worldRepository.
 
 - **partially confirmed.** Drop the version-mismatch claim. Playlist playback (roomSequenceController.ts:326-338) jumps to coordinates and plays the live room, so thumbnails, row click and Play already all show the current version. The only real version inconsistency is that row titles come from the pinned version_title while gameplay and images are current, which is a product question about whether playlists should pin versions. The valid defect is that playlistModal.createRoomRow loads every thumbnail eagerly: one uncached full-snapshot GET plus a canvas render per item, and playlist size is unbounded. Fix by copying profileModal's IntersectionObserver pattern (observeRoomPreview/getRoomPreviewObserver with rootMargin 240px). If batching through queryRoomSnapshots, use current_preview references (or keep the version references only if playback is also changed to pin versions), with detail 'overview'. Do not switch thumbnails to {kind:'version'} on their own, because that would make them disagree with what Play loads.
 
-### F407: details withheld
+### F407: Anyone signed in can record fake PvP matches against any player, farming XP and rewriting that player's leaderboard name
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap review: Classroom accounts and Worlds: routes added since the F209 fix
+- **Type:** defect · **impact:** high · **effort:** medium
 
-### F411: details withheld
+**Summary.** The server accepts whatever PvP match result the browser sends. A player can invent a match against any account, including a classroom student who is supposed to be shielded from PvP. They can give themselves the win and XP as often as they like, and write any 32-character text as either player's name on the public leaderboard. The PvP match server, which already exists, should confirm results, and names should be looked up on the server.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F413: details withheld
+handlePvpMatchSubmit (src/cloudflare/worker/pvp/routes.ts:19-25) checks only that the submitter's userId is in body.participants. Everything else comes from the request body: the opponents' userIds, results, hearts and hits, and userDisplayName (normalizeParticipants 275-298, name capped at 32 chars at 291). For every participant it inserts pvp_match_players (83-109) and upserts user_stats with `user_display_name = excluded.user_display_name` (124-149, line 136). It also awards PXP: +20 for a win, +10 draw, +6 loss (15-17, 165-200). The dedupe key includes matchId, so sending a fresh matchId each time defeats it. There is no rate limit.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+Effects:
+(a) Unlimited PXP. PXP sets player_level (progression/laneEvents.ts:19-36), and level 10 unlocks CryptoPunk avatar generation (avatars/routes.ts:227-233).
+(b) The global leaderboard shows user_stats.user_display_name (runs/globalLeaderboards.ts:46). Any player can rename any other player there until that player's next run or publish rebuilds the row (runs/points.ts:465-497). The attacker can then repeat it.
+(c) Classroom angle: presence blocks PvP invites to and from students (partykit/presenceServer.ts:939, school flag from the token at 844). The Worker never checks school context, so a stranger can still attach a student's userId to fabricated wins and losses. A student can also set their own public leaderboard name to any text, which gets around the display-name block (auth/routes.ts:537).
 
-### F415: details withheld
+PvP party rooms also accept the participant list from the client's configure message (src/partykit/pvpMatchRuntime.ts:45-48).
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+Fix plan:
+1. Make the Worker fetch the authoritative final snapshot from the `pvp:<matchId>` PartyKit room, which persists its state under PVP_STORAGE_KEY (presenceServer.ts:107, 201-205). Reuse the existing internal-token channel: the Worker already sends x-partykit-internal-token (admin/launchStats.ts:1277), and the server already verifies it (presenceServer.ts:796-802). Accept only a match whose status is complete and whose participants actually connected.
+2. Ignore client display names and read users.display_name instead.
+3. Reject any participant with school context.
+4. Add takeRateLimitSlots per user, for example 20 matches per hour.
+
+**Evidence.**
+- src/cloudflare/worker/pvp/routes.ts:20-25 — only checks that the submitter appears in body.participants
+- src/cloudflare/worker/pvp/routes.ts:126-149 — upserts user_stats for every participant; line 136 overwrites user_display_name with the client-supplied name
+- src/cloudflare/worker/pvp/routes.ts:291 — participant display name is free text from the request (32 chars)
+- src/cloudflare/worker/pvp/routes.ts:177-186 — PXP dedupe key is per matchId, so a new matchId awards again
+- src/cloudflare/worker/runs/globalLeaderboards.ts:46 — leaderboard shows user_stats.user_display_name
+- partykit/presenceServer.ts:939 — school block exists only on PvP invites, not on result submission
+- src/partykit/pvpMatchRuntime.ts:45-48 — match participants taken from the configuring client's message
+- src/cloudflare/worker/avatars/routes.ts:227-233 — player level 10 gate that PXP farming reaches
+- src/cloudflare/worker/pvp/routes.ts:22-25 — only checks that the caller is listed as a participant
+- src/cloudflare/worker/pvp/routes.ts:27-44 — duplicate check is a separate read of a client-chosen matchId
+- src/cloudflare/worker/pvp/routes.ts:113-150 — awards XP and upserts user_stats for every client-listed participant, overwriting user_display_name (136)
+- src/cloudflare/worker/pvp/routes.ts:199-271 — validation is shape-only; finalSnapshot passed through (270) and stored (80)
+- src/cloudflare/worker/runs/globalLeaderboards.ts:44-47 — leaderboard entries use user_stats.user_display_name
+- partykit/presenceServer.ts:1274-1283 — the presence object already finalizes the match server-side
+- src/cloudflare/presence/durableObject.ts:73 — the presence DO receives the full Env (including DB)
+- src/scenes/overworld/pvpArenaController.ts:466-467,517-559 — both clients submit the same match when it completes
+
+**Fact-check (partially confirmed, partially confirmed, confirmed).**
+
+The defect holds exactly as described. Two corrections:
+
+1. The leaderboard rename only shows where the victim's row is displayed: the top 50, the victim's own row, and the "player above you" row.
+
+2. The fix plan needs changing:
+   - PvP rooms now run in the API Worker's PresenceDurableObject (env.PRESENCE_ROOMS), not PartyKit, so no internal-token fetch is needed.
+   - The room deletes its stored match when the last socket closes (presenceServer.ts:418-423). Clients leave about 450 ms after the match completes. A Worker-side fetch of the final snapshot would therefore race and lose. Instead, have the DO write the completed result to D1 itself in finalizePvpMatch/finalizePvpForfeit, using the server-held identities, display names and connected participants. Turn the client POST into a no-op or read, or keep completed matches for a few minutes.
+   - Still reject school participants, and still add a per-user rate limit or a daily PvP PXP cap. Hits in the room are client-reported (pvp:match:hit), so two alt accounts could still farm.
+
+The defect and evidence hold. Three corrections:
+
+1. **Scope of the harm**
+   - Forged PvP PXP raises player level and avatar unlocks only. It does not change global leaderboard rank, which uses total_points; PvP gives no points.
+   - A forged leaderboard name shows only where the victim's row appears: the top 50, their own row, or as someone's "next above". It lasts until upsertUserStats runs: the victim's next run or publish, or someone clearing one of their rooms.
+   - Fake PvP win/loss/draw counts are permanent on the victim's profile, because upsertUserStats never resets the pvp_* columns.
+
+2. **Fix step 1 needs a different mechanism**
+   - PvP rooms return 404 to HTTP at two layers (presenceServer.ts:225-228 and presence/durableObject.ts:51-57).
+   - A room deletes its stored match once both sockets close (presenceServer.ts:418-424), so a Worker fetching it afterwards would race the deletion.
+   - Instead, have the PvP room DO, which already has env.DB (durableObject.ts:73), record the result to D1 when the match finalizes. Or keep the completed snapshot with a TTL and read it through env.PRESENCE_ROOMS.
+   - Either way, accept results only for participants who actually connected.
+
+3. **Room checks alone are not enough**
+   - The room still trusts hits that clients report, so two colluding accounts could still farm.
+   - Keep the per-user rate limit or add a daily PvP XP cap, plus the school-context check and server-side display names (users.display_name).
+
+I checked every evidence line against 2d540764 and tried to refute the finding. I couldn't.
+
+**The route trusts the request body.**
+- handlePvpMatchSubmit (src/cloudflare/worker/pvp/routes.ts:19-25) requires only auth with the runs:write scope, plus the caller's userId appearing in body.participants.
+- normalizePvpMatchSubmission (204-272) checks shape only: the result must be win or draw, there must be exactly one winner and one loser, and the IDs must be consistent. finalSnapshot is passed through (270) and stored (80).
+- normalizeParticipants (274-301) takes the userDisplayName as free text capped at 32 characters (291).
+- For every listed participant, the route inserts pvp_match_players (83-109) and calls awardLaneDelta. It awards 20, 10 or 6 PXP (lines 15-17), and the dedupe key `pxp:pvp_match:${matchId}:${userId}` (184) contains the client-chosen matchId. It then upserts user_stats with `user_display_name = excluded.user_display_name` (136).
+- The only dedupe is the matchId existence read (27-45), so a fresh matchId awards again.
+- No rate limit applies. takeRateLimitSlots is not used in pvp/ or worker.ts (lines 895-897 route straight to the handler).
+
+**It is reachable by any signed-in account.**
+- Cookie mutations need a trusted origin (auth/request.ts:98-99, 114-120), so a fetch from devtools on wamp.land works. So does an API token with runs:write, which any non-student can create.
+- Victim userIds must be real users, because pvp_match_players has a foreign key to users (migrations/0032_pvp_matches.sql:29). The global leaderboard publishes every entry's userId (globalLeaderboards.ts:46), so targets are easy to find.
+
+**Effects hold as stated.**
+- (a) persistProgressIncrement and refreshProgressLevels set player_level from total_pxp (laneEvents.ts:11-43). Level 10 needs 8,100 PXP (shared.ts:141-147), which is 405 scripted fake wins. That reaches the CryptoPunk generation gate at avatars/routes.ts:222-233; generation is queued at line 63. The victim also receives PXP and badge syncs.
+- (b) The leaderboard reads user_stats.user_display_name (globalLeaderboards.ts:46), and globalLeaderboardPanel.ts:188 renders it. The name is only rebuilt from users.display_name by the stats refresh at runs/points.ts:462-497.
+  - The PvP path also skips the 24-character limit and the uniqueness check that handleUpdateDisplayName enforces (auth/routes.ts:545-554). That brings back F045-style impersonation and allows unmoderated text on other people's rows.
+  - PvP does not change point totals or rank, since points come from point_events. Only the name and the PvP win/loss columns change.
+- (c) School users are blocked only on invites (presenceServer.ts:939, using the flag set at 844). The Worker route never checks school context. A student can set their own leaderboard name even though display-name changes are blocked at auth/routes.ts:537.
+
+**PvP room and fix plan.**
+- The PvP room takes its participants from the configure message (pvpMatchRuntime.ts:45-48). However, activatePvpMatchIfReady requires every listed participant to be connected. A fabricated room therefore never completes, which makes the fix plan's "status complete" check meaningful.
+- The fix's building blocks exist:
+  - PVP_STORAGE_KEY persistence (presenceServer.ts:107, 201-205, 1247-1258). Completed matches are never deleted.
+  - The internal token check (796-802; launchStats.ts:1277).
+  - The DO receives the full Env (durableObject.ts:73).
+- Implementation notes for the fixer:
+  - onRequest returns 404 for any non-metrics room (presenceServer.ts:225-228), and so does handleCloudflarePresence (durableObject.ts:52-56). Fetching results therefore needs a new internal path through env.PRESENCE_ROOMS.
+  - Probing a fabricated matchId instantiates a DO and writes NAME_KEY (durableObject.ts:97-100).
+  - A simpler alternative is to have the DO write the result to D1 inside finalizePvpMatch (1274-1283).
+  - Also add the school check at PvP-room connect.
+
+The client really does submit the snapshot from both browsers (pvpArenaController.ts:466-467, 517-559).
+
+**No duplicate.** No prior item covers PvP results. F198-F207 cover runs, Rush and ratings. F208 and F209 cover chat and invites only. The F209 write-up does not mention pvp/routes.
+
+Impact is high, consistent with F202, F203 and F209: unmoderated text on any player's public leaderboard row, unlimited XP, and a bypass of classroom shielding. Effort is medium: a server-authoritative result plus a school check, a name lookup and a rate limit.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). `pvp/store.ts` saves only matches the room finished, once per match id, with names from `users.display_name`. A forfeit before the match went active saves nothing. Remaining: two accounts one person controls can still trade wins within the caps, and a database error during the save is not retried. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F411: Anyone can make the shared database read every room's full data with one unauthenticated request
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** A public 'is this sprite used anywhere?' check searches the full saved data of every room and every guest draft, every time it is called. No sign-in, cache or rate limit stands in the way, and a one-letter sprite name matches almost every room. WAMP's database answers one query at a time, so a few of these per second from one laptop could slow or stall saving, playing and sign-in for everyone. Only the sprite's owner ever needs this check, so it can be locked to them and answered from a small index.
+
+**Technical detail.**
+
+GET /api/custom-sprites/:id/usage (customSprites/routes.ts:40-52) has no auth and returns 'private, no-store'. The route table marks /api/custom-sprites as auth:'public' (worker.ts:271). The id only has to match /^[a-zA-Z0-9_-]{1,96}$/ (routes.ts:20), so 'a' is valid. isCustomSpriteUsedInStoredRooms (customSprites/store.ts:13-35) runs `SELECT draft_json, published_json FROM rooms WHERE instr(draft_json, ?) > 0 OR instr(COALESCE(published_json,''), ?) > 0` plus the same over guest_room_drafts.snapshot_json. That is a full scan of every room's JSON with no index. For 'a' nearly every row matches, so D1 also ships every draft and published snapshot back to the Worker, which JSON.parses each one (store.ts:37-46). Scale: about 600-700 rooms (progress.md), two snapshots per row, up to ~190 KB per snapshot (details doc F-entry on editor history), so tens of MB read and transferred per request. The Worker can hit its 128 MB memory limit after D1 has already done the work. D1 runs one query at a time per database (noted in the first checkup), so the scan delays every other API call. The only caller is the sprite editor's delete flow for your own sprite (usageClient.ts:4-8, customSpriteEditor.ts:939-942). The same pattern, less severe, appears in two other public uncached endpoints. GET /api/background-images (handled with optional auth, routes.ts:212-242) runs `SELECT id, draft_json, published_json FROM rooms WHERE draft_json LIKE '%custom:%' OR published_json LIKE '%custom:%'` on every call (backgroundImages/routes.ts:799-816). GET /api/dashboard/stats (worker.ts:201; dashboard/routes.ts:24-33, 78-90) is 'no-store' and runs GROUP BY over all completed room_runs per request. Fix: (1) require requireCurrentSession and sprite ownership on /usage, and require a full sprite id length. (2) Maintain a room_custom_sprites(room_id, sprite_id) table at save/publish time, the same way rooms already store goal_type, and query it by index. (3) Cache background usage counts and dashboard stats with loadAnonymousPublicCache (20-60 s), or keep them in a counters table. About 40 lines.
+
+**Evidence.**
+- src/cloudflare/worker/customSprites/routes.ts:40-52 — /usage route with no auth check, Cache-Control private,no-store
+- src/cloudflare/worker/customSprites/routes.ts:20 — sprite id pattern accepts a single character
+- src/cloudflare/worker/customSprites/store.ts:13-35 — instr() full scans over rooms.draft_json, published_json and guest_room_drafts.snapshot_json
+- src/cloudflare/worker/customSprites/store.ts:37-46 — every matching row is JSON.parsed in the Worker
+- src/cloudflare/worker.ts:271 — /api/custom-sprites routed as auth:'public'
+- src/customSprites/usageClient.ts:4-8 — only client caller; used from customSpriteEditor.ts:939-942 when deleting your own sprite
+- src/cloudflare/worker/backgroundImages/routes.ts:799-816 — LIKE '%custom:%' scan of every room on each background list call
+- src/cloudflare/worker/dashboard/routes.ts:24-33 — public dashboard stats served no-store with GROUP BY over room_runs (:78-90)
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
+
+GET /api/custom-sprites/:id/usage is unauthenticated, uncached and not rate-limited. Every call makes D1 scan every room's draft and published JSON and every active guest draft. With a one-letter id nearly every row comes back to the Worker and is parsed: about 30-35 MB today, based on 666 published rooms at 15.4 MB, about 23 KB each, not 190 KB. Because D1 handles one query at a time, a loop of these calls would delay every other request. The memory-limit risk is speculative.
+
+Do not restrict /usage to the sprite's owner. It exists for local, unshared sprites (possibly a guest's) and for other people's catalog sprites, which have no server-side owner. Instead:
+- Add a per-IP and per-identity limit with core/rateLimit.ts takeRateLimitSlots.
+- Match the exact token in SQL ('custom_sprite:'||id or the sourceSpriteId value) so short ids cannot return every row.
+- Optionally require a realistic id length.
+- Later, add a room_custom_sprites index table. That table also removes the full scan from the signed-in DELETE path (catalogStore.ts:319).
+
+The background-images and dashboard endpoints are lesser versions of the same problem. The background query scans every row but returns only rooms with custom backgrounds; the dashboard returns a tiny aggregate. A short loadAnonymousPublicCache on each is enough.
+
+The core claim is real. An anonymous GET /api/custom-sprites/a/usage makes D1 return and the Worker parse every room's draft and published JSON, plus guest drafts: roughly 12-30 MB per call, with no cache or rate limit.
+
+Corrections:
+
+(a) Do not lock /usage to a signed-in owner. Its only caller is the delete path for local, non-catalog sprites, including guests (customSpriteEditor.ts:921-943). Owned catalog sprites already go through the authenticated DELETE. The right fix is to search for the exact JSON tokens instead of the bare id: instr(json, '"custom_sprite:<id>"') and instr(json, '"sourceSpriteId":"<id>"'). Optionally also require the generated id shape (sprite_<base36>_<base36>) or a minimum length. Then only true candidates come back and the amplification disappears. A room_custom_sprites index table is optional, because the remaining full scan costs about the same as many existing scans.
+
+(b) Impact should be medium, not high. Nobody hits this by accident. The anonymous, uncached /api/world?radius=32 already returns published_json for about 682 rooms per call, so this endpoint roughly doubles an existing lever rather than creating a new one. The general fix is per-IP rate limiting or caching for heavy public reads.
+
+(c) The 128 MB Worker memory risk is unlikely at today's sizes.
+
+(d) The background-images scan returns only rooms that use custom backgrounds. That makes it a low-severity full scan, not a bulk transfer.
+
+(e) Dashboard-stats caching is the known open leftover of F030. Track it there.
+
+The vulnerability is real: an unauthenticated, unthrottled request with a one-character sprite id makes D1 scan every room and active guest draft, return all of their JSON, and have the Worker parse every row. Requiring a session and sprite ownership is the wrong fix. /usage exists for local-only and guest sprites that have no catalog row (customSpriteEditor.ts:921-943), and owned catalog sprites already go through the authenticated DELETE path, which checks ownership.
+
+Small fix:
+(a) Accept only ids in the generated format, `sprite_<base36>_<6 chars>` (customSpriteEditor.ts:73), or set a minimum length of about 12.
+(b) Search for the exact serialized markers: instr(draft_json, '"custom_sprite:' || ? || '"') and instr(..., '"sourceSpriteId":"' || ? || '"'). Then only rows that really use the sprite come back.
+(c) Add a per-IP limit with a Workers Rate Limiting binding, which avoids the D1 writes of rate_limit_events, or a short cache keyed by id.
+
+(b) removes the transfer, parsing and memory cost. A full instr scan in D1 still runs on each call, which is why (c) matters. The room_custom_sprites index table is an optional follow-up of medium size, not part of a 40-line change.
+
+The dashboard-stats caching is F030's unfinished remainder, not a new finding. The background-images list scans every row but sends back only rooms with custom backgrounds; a 20-60 s anonymous cache or a counters table fixes it cheaply.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F413: Links in WAMP's emails can point at any website the sender picks, including the admin review email to Jonathan
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** When WAMP emails someone (a builder about a new comment, a player about a chat mention, Jonathan about something to review), the link's website address comes from the request that caused the email. A player using an API key can set that to any domain. Production appears to run without a fixed site address, so an attacker could make WAMP send Jonathan a genuine 'comment needs approval' email whose button opens a copy of the admin page that asks for the admin key. Locking every email link to https://wamp.land closes this.
+
+**Technical detail.**
+
+resolvePublicBaseUrl (auth/store.ts:1262-1273) returns APP_BASE_URL if set, otherwise the raw, unvalidated Origin request header. Cookie requests must carry a trusted Origin (request.ts:96-98). Bearer API-token requests skip that check entirely (request.ts:82-94), and any signed-in account can mint a token (auth/routes.ts:600-601). Outbound emails built from this value: the admin review email (reviewNotifications.ts:100-115, sent to ADMIN_REVIEW_EMAIL, default jonathan@jonathanmann.net, :5/:37). A T0 room comment triggers it (roomComments/routes.ts:148 accepts tokens, :205-225 builds 'Room link' and actionUrl '/launch-admin.html'), and so does a background upload finalize (backgroundImages/routes.ts:430-442). launch-admin.html:1219 is the page that asks for 'Paste ADMIN_API_KEY', which is exactly what a cloned phishing page would ask for. Also affected: builder comment emails (roomComments/email.ts:51-52), chat @mention emails to up to 5 users per message (chat/mentions.ts:105-106; chat posts accept tokens, chat/routes.ts:153), and World notifications (worlds/notifications.ts:31,47,72,87). Evidence that production has no APP_BASE_URL: it is absent from wrangler.jsonc vars (:28-44), and share/routes.ts:296-306 special-cases a resolved host of api.wamp.land, which only happens when APP_BASE_URL is unset and no Origin is present. I did not call production to confirm. Fix: add a resolveEmailBaseUrl() that returns APP_BASE_URL or, in production, a constant 'https://wamp.land'. If Origin is used at all, require isTrustedOrigin() and a non-localhost host. Use it in all six email builders, and set APP_BASE_URL=https://wamp.land in wrangler.jsonc vars. About 20 lines plus a test that sends Origin: https://evil.example with a bearer token and asserts the email link.
+
+**Evidence.**
+- src/cloudflare/worker/auth/store.ts:1262-1273 — resolvePublicBaseUrl falls back to the raw Origin header
+- src/cloudflare/worker/auth/request.ts:82-94 — bearer-token auth path performs no origin check
+- src/cloudflare/worker/roomComments/routes.ts:205-225 — admin review email actionUrl and room link built from the request
+- src/cloudflare/worker/admin/reviewNotifications.ts:100-115 — buildAdminReviewUrl/buildPublicAppUrl use resolvePublicBaseUrl
+- src/cloudflare/worker/chat/mentions.ts:105-106 — mention email chatUrl from resolvePublicBaseUrl
+- src/cloudflare/worker/roomComments/email.ts:51-52 — builder email room URL from resolvePublicBaseUrl
+- src/cloudflare/worker/share/routes.ts:296-306 — code expects resolvePublicBaseUrl to yield api.wamp.land in production
+- launch-admin.html:1219 — admin page prompts for ADMIN_API_KEY
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
+
+The code path is real: resolvePublicBaseUrl falls back to the raw Origin header, bearer-token requests skip the origin check, and admin, comment, mention and World email links are built from that value. Whether production is exploitable depends on dashboard config the repo cannot show. wrangler.jsonc:5 sets keep_vars: true, and other production vars are known to live only in the dashboard. The share/routes.ts api.wamp.land special case is defensive code, not proof that APP_BASE_URL is unset. Treat this as "exploitable if APP_BASE_URL is unset in the Cloudflare dashboard (check it), and a latent hazard otherwise."
+
+The attacker can already put free text in the admin email, so what this adds is the trusted button and room link. Add the World invitation email to arbitrary addresses (worlds/routes.ts:109-115) as the widest-reach vector.
+
+Simplest fix:
+- Add "APP_BASE_URL": "https://wamp.land" to the top-level vars in wrangler.jsonc. Safety is unaffected because env vars do not inherit and the safety deploy passes --var.
+- Make resolvePublicBaseUrl use the existing normalizeTrustedAuthRedirectBase for the Origin fallback instead of trusting raw Origin.
+- Add a bearer-token test with Origin: https://evil.example.
+
+The core flaw holds in code: resolvePublicBaseUrl (auth/store.ts:1262-1274) trusts a raw, unvalidated Origin whenever APP_BASE_URL is unset, and bearer-token requests skip the origin check (request.ts:82-94). That lets a token holder pick the link host in the admin review emails (comment and photo review) and in chat-mention emails.
+
+Whether production is exposed is unverified. wrangler.jsonc:5 has keep_vars, and prod config lives in the dashboard, so APP_BASE_URL may already be set there. The share/routes.ts api.wamp.land special case is defensive code and does not prove the variable is unset.
+
+Builder comment emails cannot be triggered by a new (T0) account, because only T1+ comments are auto-approved and notify the builder. World emails need world ownership or membership roles.
+
+Fix: validate Origin inside resolvePublicBaseUrl itself with isTrustedOrigin, reject localhost unless the request is local, and fall back to https://wamp.land for api.wamp.land or a missing Origin. That covers every caller, including wallet-challenge Domain and school URLs. Do not just add APP_BASE_URL to wrangler.jsonc vars: it may clash with an existing dashboard secret. Impact is medium, not high: exploiting it needs Jonathan to paste the admin key on a lookalike domain.
+
+The vulnerability is real in code. Whether production is exposed depends on whether APP_BASE_URL is set as a dashboard var. wrangler.jsonc uses keep_vars, so the var not appearing in the file proves nothing. Someone should check the Cloudflare dashboard, or the next admin-review email's link host, before calling this live.
+
+Exposure is broader than listed:
+- Any signed-in user can trigger the World builder-request email to World managers (worlds/routes.ts:125-129).
+- World invitation emails can go to arbitrary addresses (worlds/routes.ts:109-115).
+- Background-upload emails need a rooms:write token plus upload permission.
+
+Simpler and safer fix: harden resolvePublicBaseUrl itself rather than adding a separate resolveEmailBaseUrl at six call sites. Honor Origin only when isTrustedOrigin(origin, request.url) passes, its host is not a localhost host, and APP_BASE_URL is unset. Otherwise fall back to 'https://wamp.land' for api.wamp.land requests, and to request.url.origin elsewhere. That one roughly 10-line change also covers the share, school classroom-URL and wallet-challenge callers. Pages preview origins keep working, because isTrustedPagesHostname is in the allowlist.
+
+Also add APP_BASE_URL='https://wamp.land' to the top-level wrangler.jsonc vars. Named envs like safety do not inherit top-level vars. If APP_BASE_URL already exists as a secret, delete it first, or the deploy fails on the duplicate binding.
+
+Add a test that sends Origin: https://evil.example with a bearer token and asserts the email link host.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F415: Two public endpoints let one script fill the database: wallet sign-in challenges and guest heartbeats
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** Asking for a wallet sign-in message saves a new row in the database, needs no account, has no rate limit, and those rows are never cleaned up. The guest 'still here' heartbeat works the same way: a new made-up session id gives a new row, forever. A script could keep calling either one until the database hits its 10 GB limit, and then nobody can save, sign in or post. This is the same risk the guest-draft limit fixed (F188), through two other doors.
+
+**Technical detail.**
+
+POST /api/auth/wallet/challenge (auth/routes.ts:137-139 → walletRoutes.ts:32-52) needs no session (walletAuth returns null for anonymous callers, :16-24) and inserts a wallet_challenges row on every call (store.ts:741-760). The row holds id, address, nonce hash, ~200-byte message text and timestamps, about 0.5 KB with its two indexes (migrations/0001_create_auth.sql:40-51). pruneExpiredRecords (maintenance/pruneExpired.ts:12-20) deletes only sessions, magic_link_tokens and dispatched outbox rows. Nothing deletes wallet_challenges, even though idx_wallet_challenges_expires_at already exists for that purpose. POST /api/guest-activity/heartbeat (worker.ts:302; guestActivity/routes.ts:22-128) upserts guest_visits keyed by a client-chosen sessionId (8-80 chars, :131-143). It stores up to 260-char user agent and referrer, 220-char path and 48-char name, about 1 KB per new row, with no rate limit, and no code deletes guest_visits. Rough cost to fill 10 GB: about 20M challenge calls or 10M heartbeats. That is free for the attacker; WAMP pays roughly $20-30 in requests and D1 writes, then has an outage. Fix: (1) add `DELETE FROM wallet_challenges WHERE id IN (SELECT id FROM wallet_challenges WHERE expires_at <= ? LIMIT 5000)` to pruneExpiredRecords. (2) Rate-limit challenges per network with the existing takeRateLimitSlots (for example 30/hour, like sign-in emails). (3) Rate-limit new heartbeat sessions per network (for example 200/day) and prune guest_visits older than 90 days, the retention the first checkup suggested. About 25 lines.
+
+**Evidence.**
+- src/cloudflare/worker/auth/walletRoutes.ts:32-52 — anonymous challenge creation with no rate limit
+- src/cloudflare/worker/auth/store.ts:741-760 — every challenge inserts a wallet_challenges row
+- src/cloudflare/worker/maintenance/pruneExpired.ts:12-20 — hourly prune skips wallet_challenges
+- src/cloudflare/worker/guestActivity/routes.ts:22-128 — heartbeat inserts a guest_visits row per new client-chosen sessionId, no limit
+- src/cloudflare/worker/guestActivity/routes.ts:131-143 — sessionId is any 8-80 char token
+- src/cloudflare/worker/auth/walletRoutes.ts:33-53 — unauthenticated challenge creation, no rate limit
+- src/cloudflare/worker/auth/store.ts:741-760 — inserts a row per challenge
+- src/cloudflare/worker/maintenance/pruneExpired.ts:12-21 — hourly prune skips wallet_challenges
+- src/cloudflare/worker/core/http.ts:58-61 — a missing Origin header counts as trusted
+
+**Fact-check (partially confirmed).**
+
+The core claim holds: both endpoints accept unlimited anonymous writes that are never pruned. The proposal needs four corrections.
+
+1. Sizes: a wallet challenge is about 0.6-0.7 KB with its four B-trees, so about 15M calls fill 10 GB. A heartbeat row is at most about 1.3 KB, so about 8M calls fill 10 GB.
+2. Drop the Origin evidence. Requiring an Origin header would not stop a script, which can send any Origin it likes.
+3. Fix (3) should only rate-limit when the `existing` SELECT finds no row. Otherwise every heartbeat adds a rate_limit_events write. The 90-day guest_visits prune should be optional or a question for Jonathan, because F038 deliberately kept guest_visits as analytics history.
+4. Add one point: rate-limiting wallet challenges per network also caps wallet-signature account creation (users rows, F206). That makes fix (2) the most valuable part.
+
+Fix (1), pruning expired wallet_challenges in pruneExpiredRecords, is safe as proposed: the TTL is 10 minutes and an index on expires_at already exists.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). guest_visits rows are still kept indefinitely (F038 kept them on purpose); the F188 database-size alert warns well before the limit. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F414: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F417: details withheld
+### F417: Wamp-O-Gram stores whatever room the browser sends, skipping every room safety check, with no rate limit
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap review: Small untested features: Wamp-O-Gram, Playlists, Guestbook, Collections
+- **Type:** defect · **impact:** medium · **effort:** small
 
-### F410: details withheld
+**Summary.** When someone makes a Wamp-O-Gram, the server saves the room exactly as the browser describes it. It never checks that the room is real, that the sender owns it, or that it passes the rules normal rooms must pass, such as the trust level needed to embed a YouTube video. Anyone signed in can post a made-up room that claims to be any room, even the spawn room, and share it under a wamp.land link with WAMP's preview card. Nothing limits how many they make, and none can be deleted.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F409: details withheld
+POST /api/wamp-o-grams (src/cloudflare/worker/wampOGram/routes.ts:30-41) reads up to 65,536 bytes of JSON before it checks auth (line 31 runs before lines 33-38). It then calls createWampOGram. normalizeWampOGramCreateRequest (src/wampOGram/model.ts:63-80) only runs cloneRoomSnapshot on the client object. That fixes the shape, but it keeps `video` (roomModel.ts:781) and the inline customSprites/customTiles pixel data (roomModel.ts:789-790). store.ts:46-98 then writes snapshot.id, coordinates and the full JSON exactly as the client sent them.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+Normal room writes run several checks, and this path runs none of them:
+- enforceRoomMutationGuardrails, which applies the object and collectible caps per trust tier and the YouTube trust gate (rooms/guardrails.ts:25-35, 49-57; called on publish at rooms/store.ts:1026-1032).
+- assertCanPersistRoomVideo on draft save (rooms/store.ts:897).
+- The Lost Song placement check (rooms/store.ts:862).
+- The canSaveDraft ownership check.
+
+GET is public (routes.ts:58-68). launch.ts:30-47 then boots the recipient straight into OverworldPlayScene with that snapshot as a draftRoom at the coordinates the sender claimed. The share card's og:title and og:description come from the gram's own text (shareMetadata.ts:312-327).
+
+There is no takeRateLimitSlot call (compare guestbook/routes.ts:88), no delete route and no cleanup. At 64 KB per row, about 160k requests would fill D1's 10 GB.
+
+Fix:
+1. Change the body to {roomId, coordinates, postcard}. The server builds the snapshot itself: loadPublishedRoom for a published room, or for a draft, loadRoomRecordForMutation plus permissions.canSaveDraft, using the stored draft. The modal saves the draft first through the existing saveDraft path.
+2. Run enforceRoomMutationGuardrails on that snapshot.
+3. Call takeRateLimitSlots, for example 20 per hour per user and 60 per day per network. The unused index idx_wamp_o_grams_creator_created (migrations/0038:27-28) already supports a per-creator count.
+4. Move auth ahead of body parsing.
+
+This also removes the 64 KB upload behind the custom-sprite failure reported separately.
+
+**Evidence.**
+- src/cloudflare/worker/wampOGram/routes.ts:30-41 — body parsed (64 KB) before auth; no rate limit, guardrail or ownership call
+- src/wampOGram/model.ts:63-80 — create request only clones the client-supplied roomSnapshot
+- src/cloudflare/worker/wampOGram/store.ts:46-48,93-98 — client snapshot id/coordinates/JSON stored verbatim
+- src/cloudflare/worker/rooms/guardrails.ts:25-35,49-57 — object caps and YouTube trust gate that normal room writes enforce
+- src/cloudflare/worker/rooms/store.ts:1026-1032 — publish runs enforceRoomMutationGuardrails; Wamp-O-Gram never does
+- src/wampOGram/launch.ts:30-47 — recipient boots straight into the stored snapshot as draftRoom at the claimed coordinates
+- src/pages/shareMetadata.ts:312-327 — og title/description built from the gram's own text
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
+
+The real problems are an unthrottled, undeletable 64 KB insert and a bypass of the T1 YouTube trust gate. The remaining claims are overstated. The recipient always plays the gram as a draft, so Lost Songs, runs and leaderboards are practice-only and unaffected. Object and collectible caps apply only on publish, and draft saves skip them too. The Lost Song check only validates shape. A fake "spawn room" is local to the recipient's view and labeled as a Wamp-O-Gram. The guestbook uses count-based limits, not takeRateLimitSlot.
+
+A smaller first fix (small effort):
+1. Move auth ahead of parseJsonBody.
+2. Add takeRateLimitSlots per user and per network, or a count on idx_wamp_o_grams_creator_created.
+3. Call assertRoomVideoTrust(capabilities.trustTier, snapshot, storedRoom?.video ?? null), or strip `video` for T0 senders.
+4. Reject snapshots whose id doesn't match roomIdFromCoordinates(coordinates).
+5. Add a creator-only DELETE route.
+
+Rebuilding the snapshot on the server ({roomId} plus loadPublishedRoom/saveDraft) is a medium follow-up and changes behavior. Grams would no longer capture unsaved editor state. World rooms would need the worldId, and the 64 KB cap would have to change for rooms with custom sprites.
+
+Real but narrower than stated. Players using the normal UI never trigger it. The concrete risks are three:
+1. A signed-in script can insert unlimited 64 KB rows, with no rate limit.
+2. Gram content can't be taken down: there is no delete, admin, report or cleanup path.
+3. og:title is the raw gram title.
+
+The "spoofed spawn room" only shows in the recipient's own client, labeled as a Wamp-O-Gram. Skipping the object and collectible caps doesn't matter for an unranked draft postcard: launch.ts forces draft status, and Lost Song progress is checked on the server. The YouTube gate bypass is minor, since T1 is trivial to reach (F200). Parsing the body before auth is negligible at 64 KB.
+
+Fix step 1 (have the server rebuild the snapshot from the stored draft or published room, gated on canSaveDraft) overreaches. It drops the "postcard of what's in my editor" behavior with unsaved edits, adds a save round-trip, and blocks grams of rooms the sender can view but not save.
+
+Smaller fix:
+1. Call takeRateLimitSlots per user and per network, e.g. 20 an hour and 100 a day.
+2. Reuse validateRoomObjectsAgainstCapabilities and assertRoomVideoTrust on the submitted snapshot. Use the published room, or null, as previousRoom.
+3. Require integer coordinates and snapshot.id === roomIdFromCoordinates(coordinates).
+4. Add an admin hide/delete route, and add a wamp_o_gram report target.
+
+Suspension (F184) and the database-size alert (F188) on newer main already partly mitigate this.
+
+Real but narrower. The concrete risks are:
+
+- Any signed-in account or agent token can create unlimited 64 KB rows. There is no rate limit, no delete and no admin removal.
+- T0 users can bypass the YouTube trust gate. Anonymous guest drafts already bypass it publicly too.
+- Nothing checks that snapshot.id matches the claimed coordinates.
+
+Drop the Lost Song and ownership points. Grams launch as 'draft', so runs and Lost Songs are practice-only. canSaveDraft is already true for anyone on published unminted rooms. The claimed room id is only logged and only affects the recipient's local view. The og text is sender-authored by design, and the proposed fix wouldn't change it.
+
+Cheaper fix, small effort:
+1. Move auth ahead of parsing.
+2. Add takeRateLimitSlots: per user (say 20/hour), per network (60/day) and a global daily cap. The index on creator and created_at exists.
+3. Require snapshot.id === roomIdFromCoordinates(snapshot.coordinates), as guest drafts do.
+4. Run enforceRoomMutationGuardrails on the client snapshot, with previousRoom set to the stored published room.
+5. Add an admin delete or hide.
+
+Rebuilding the snapshot on the server (fix step 1) is optional and changes the feature, because grams of unsaved edits would stop working. Handle the 64 KB custom-sprite failure separately by raising maxBytes.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). There is no admin button or report target for grams yet. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F410: Anonymous guest rooms can embed any YouTube video, skipping the new trust-level-1 video rule
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** WAMP recently started requiring builder trust level 1 before a room can show a YouTube video (#222), so brand-new or anonymous people can't put shock videos in rooms. Guest room drafts are saved with no account and never pass that check. Once submitted, they appear in Explore's public Guest Rooms list, and opening one plays the guest's chosen video for any visitor, including students. The fix is to refuse or strip videos in guest drafts.
+
+**Technical detail.**
+
+The trust gate lives only in the account room path: assertCanPersistRoomVideo is called from rooms/store.ts:897 and enforceRoomMutationGuardrails from rooms/store.ts:1026 (guardrails.ts:37-57). PUT /api/guest-room-drafts/:roomId (guestRoomDrafts/routes.ts:118-142) accepts a 600 KB snapshot, and normalizeSnapshot (:171-186) only runs isRoomSnapshot and cloneRoomSnapshot. cloneRoomSnapshot keeps the video field (persistence/roomModel.ts:756-758, :781). The guardrail runs only later, when a signed-in user claims the draft (guestRoomDrafts/claims.ts:38). Submitted drafts are listed publicly with their full snapshot (guestRoomDrafts/store.ts:213-216, row mapping at :307). Explore opens them with openGuestDraftRoom(draft.snapshot) (ui/setup/exploreModal.ts:597-599), which loads EditorScene, and EditorScene gets the YouTube frame hooks (scenes/editorSceneLoader.ts:14-17; roomVideo/frameController.ts:301-330). The client hides the video tool from guests, but a direct API call bypasses that. Fix: in the guest draft PUT, reject when normalizeRoomVideo(snapshot.video) is non-null (or delete snapshot.video). Strip video when listing submitted drafts, as a safety net for existing rows. Run a one-off `SELECT id FROM guest_room_drafts WHERE json_extract(snapshot_json,'$.video') IS NOT NULL` to find any already published. About 10 lines plus a test.
+
+**Evidence.**
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:118-142 — anonymous PUT saves the snapshot with no capability or video checks
+- src/cloudflare/worker/guestRoomDrafts/routes.ts:171-186 — normalizeSnapshot only validates shape and clones
+- src/persistence/roomModel.ts:756-758 — cloneRoomSnapshot preserves room.video (used at :781)
+- src/cloudflare/worker/rooms/guardrails.ts:49-57 — the T1 video rule, called only from rooms/store.ts:897 and :1026 and from claims.ts:38
+- src/cloudflare/worker/guestRoomDrafts/store.ts:213-216 — submitted, public drafts are listed to everyone
+- src/ui/setup/exploreModal.ts:597-599 — Explore opens the guest snapshot in the editor
+- src/scenes/editorSceneLoader.ts:14-17 — room video hooks installed on EditorScene
+
+**Fact-check (partially confirmed).**
+
+Anonymous guest drafts do skip the T1 video rule, and a crafted PUT can save a YouTube video with any id and autoplay/trigger flags. That video reaches every visitor through Explore > Guest Rooms. Opening a guest room does not play it. The editor shows the YouTube iframe's poster or first frame, with autoplay off and no pointer events. The video starts when the visitor presses Play in that room, either at once if autoplay is set or when a pressure plate is pressed if trigger is set. The T1 check also runs from worlds/activation.ts:38, not only from rooms/store.ts and claims.ts. Cited lines are off by one to two lines (routes.ts PUT at 119, normalizeSnapshot at 173; store.ts row mapping at 299/336). The fix stands: strip or reject the video in the guest PUT's normalizeSnapshot, strip it again when listing submitted drafts, and run the audit query. About 10 lines plus a test. Optionally also run validateRoomObjectsAgainstCapabilities with T0 limits on guest drafts.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). Drafts already published with a video lose it on read; no data was changed. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F409: A rejected background photo can be brought back by its uploader, and rejected photos are never deleted
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** medium · **effort:** small
+
+**Summary.** When Jonathan rejects an uploaded background photo, the uploader can press 'finalize' again through the API. The server re-runs the AI check and overwrites the rejection: trusted uploaders get the photo approved and public again, and everyone else puts it back in Jonathan's queue with a fresh email. Rejected photos also stay in Cloudflare storage forever, because only the AI's 'block' verdict deletes anything. Rejection should be final and should delete the file.
+
+**Technical detail.**
+
+handleBackgroundImageFinalize (backgroundImages/routes.ts:323-418) checks only that the caller owns the row (:339). It never looks at row.status before calling waitForCloudflareImageUpload, validateUploadedBackground and moderateUploadedImage (:350). The UPDATE then sets status unconditionally (:366). nextStatus is 'approved' when moderation passes and autoApproveEligible is true (per-user permission or BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER, :733-738); otherwise it is 'pending_review', which re-sends the admin email because the old status was not pending (:407). The admin review handler (:583-626) only updates status and reason. deleteCloudflareImage has one caller, the AI 'blocked' branch (:358-360), so admin-rejected and abandoned 'upload_pending' images are kept indefinitely. If Jonathan ever rejects something illegal by hand, the platform keeps hosting it. Each finalize call is also a paid OpenRouter vision request plus a 2 MB blob fetch (:880-917; validateUpload.ts:39-66), with no per-user limit on repeats. Fix: (1) in finalize, return 409 unless row.status === 'upload_pending'. (2) On admin reject, call deleteCloudflareImage and set cloudflare_deleted_at; add a 'block' decision for the worst cases. (3) Add a takeRateLimitSlot per user on prepare and finalize (for example 20/day). (4) Add an hourly prune of upload_pending rows older than a day, deleting their Cloudflare images. About 30 lines.
+
+**Evidence.**
+- src/cloudflare/worker/backgroundImages/routes.ts:339 — finalize checks ownership only, not current status
+- src/cloudflare/worker/backgroundImages/routes.ts:350 — moderation (paid OpenRouter call) re-run on every finalize
+- src/cloudflare/worker/backgroundImages/routes.ts:366 — status overwritten unconditionally
+- src/cloudflare/worker/backgroundImages/routes.ts:407 — re-entering pending_review re-emails the admin
+- src/cloudflare/worker/backgroundImages/routes.ts:606-619 — admin reject only updates the row
+- src/cloudflare/worker/backgroundImages/routes.ts:358-360 — the only Cloudflare image deletion is the AI 'blocked' path
+- src/cloudflare/worker/backgroundImages/routes.ts:733-738 — auto-approve eligibility that turns a re-finalize into approval
+
+**Fact-check (partially confirmed).**
+
+Nothing is ever deleted from Cloudflare Images. moderateUploadedImage always returns blocked:false, so the 'blocked' branch at :351-360 never runs, and an AI 'block' decision only sends the photo to pending_review. A rejected photo comes back as 'approved' only when the uploader is auto-approve eligible: an admin-granted per-user auto_approve, or BACKGROUND_UPLOAD_AUTO_APPROVE_TRUST_TIER, which is blank in the documented config. For everyone else, finalizing again puts the photo back in the queue with one admin email per rejection cycle. Rejected images are not served through WAMP's proxy (:462), but they stay public on imagedelivery.net because requireSignedURLs=false, for anyone who has the account hash and image ID. The unlimited paid OpenRouter calls apply to repeat finalizes of any upload in any status, not only rejected ones. Finalize also skips the canUpload check, so a user whose upload permission was revoked can still re-finalize. The main fix is a status guard in finalize (409 unless status is 'upload_pending'), plus deleting the Cloudflare image on admin reject. The rate limit and prune job are optional.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). Per-user limits on prepare/finalize and pruning of stale pending uploads remain open. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F412: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F408: details withheld
+### F408: A chat ban doesn't reach players who are already connected; they keep posting in-room speech bubbles
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Bugs and data integrity: API, storage and realtime
+- **Type:** defect · **impact:** medium · **effort:** small
 
-### F420: details withheld
+**Summary.** Whether a player may use in-room chat bubbles is decided once, when their game connects to the multiplayer server. Banning someone from chat only writes to the database, so a banned player who keeps their tab open can keep chatting in rooms until they reload. The multiplayer server now runs alongside the database, so it can check bans itself.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F421: details withheld
+handleCreateChatBan (src/cloudflare/worker/chat/routes.ts:339-366) only inserts the ban (358). The bubble permission is set into the identity token when it is issued (src/cloudflare/worker/presence/routes.ts:52-57; the comment says 'The presence server cannot query the database'). It is copied into connection state at connect (partykit/presenceServer.ts:842). handleRoomChatSay checks only that cached flag plus a rate limit (presenceServer.ts:869-897, check at 875). The token has a 5-minute TTL (src/presence/identityToken.ts:2), but it is verified only in onBeforeConnect and at the DO upgrade (src/cloudflare/presence/durableObject.ts:105-108). Connection state survives hibernation through serializeAttachment, so a visible tab can hold the permission for hours. This reopens part of F190 ('chat bans … on the server'). The comment's premise is now false: PresenceDurableObject gets the API Env including DB (durableObject.ts:73). Fix (small): in handleRoomChatSay, if more than 5 minutes have passed since the connection's token was issued (store claims.exp in state), re-check chat_bans with one indexed D1 read before broadcasting. That read happens at most once per ROOM_CHAT_SEND_RATE_LIMIT_MS per sender. If the user is banned, set canSendRoomChat=false in the attachment. Alternatively, when the token expires, drop the message and send a 'reauth' frame so the client reconnects; the new token re-checks the ban at presence/routes.ts:57.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Evidence.**
+- src/cloudflare/worker/chat/routes.ts:339-366 — creating a ban only writes D1
+- src/cloudflare/worker/presence/routes.ts:52-57 — the ban is checked only when a token is issued; the comment says presence can't query the DB
+- partykit/presenceServer.ts:842 — canSendRoomChat is copied from token claims at connect
+- partykit/presenceServer.ts:875 — each bubble checks only the cached flag
+- src/cloudflare/presence/durableObject.ts:73 — the DO now has env (with DB)
+
+**Fact-check (confirmed).**
+
+Mostly a scope note. This is the residual F190 already recorded as open ("a ban takes effect on the next connection"), so it is a follow-up to F190, not a new discovery. What's new is that the Cloudflare DO host now has env.DB. The exposure is limited to a visible tab that stays connected to the same shard; hidden tabs (about 30s) and shard changes reconnect with a fresh, re-checked token.
+
+Implementation notes:
+(1) handleRoomChatSay is synchronous and shared with the PartyKit runtime, which has no DB (partykit.json is still present). The re-check must be optional: only when this.room.env.DB exists, otherwise fall back to the current behavior.
+(2) Update lastRoomChatSentAt before the await so concurrent messages can't race past the rate limit.
+(3) Store a lastBanCheckAt or token-exp field in ConnectionPresenceState so the read happens at most every about 5 minutes per sender.
+(4) An unban also needs a reconnect today, which the same re-check fixes if it also clears 'muted'.
+The alternative of closing the socket on token expiry would make every player reconnect every 5 minutes, so the D1 re-check is preferable.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). Production presence (Durable Object) only; an unban still needs a reconnect. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F420: Chain-reading endpoints have no rate limit, so one script can burn the paid RPC quota and break collecting for everyone
+
+- **Area:** Gap review: Collect & Lock: room collecting, wallet approvals and the crypto gate
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** Any signed-in account or agent token can call the 'refresh room ownership' endpoint in a loop for any room. Each call makes 3-5 calls to the paid Base RPC provider, including reading the full on-chain artwork. Nothing limits how often it can be called. If the provider starts refusing requests, Collect & Lock, ownership checks and the price quote fail for every player until it recovers. Adding per-account limits through the existing rate-limit helper is a small change.
+
+**Technical detail.**
+
+POST /api/rooms/:id/ownership/refresh (rooms/routes.ts:197-229) needs only requireAuthenticatedRequestAuth with rooms:write (203-208), which covers any account and agent tokens. Room id and coordinates are arbitrary. It runs loadRoomRecordForMutation(..., 'require-fresh'). For a minted room that means eth_chainId, eth_blockNumber, tokenIdForRoomCoordinates, ownerOf and tokenURI, which returns up to tens of KB (service.ts:163-173, 260-284). It then loads the room's full version history twice (routes.ts:210-225). Prepare (6 calls) and every draft save (2 calls) are also unmetered. The repo's RateLimitRule helper (core/rateLimit.ts) is used only for sign-in email, wrong codes, chat mentions and client errors (auth/routes.ts:178-185, ops/errors.ts:30). When the private provider throttles, assertRoomMintNetwork maps any probe failure to 503 'Room minting is temporarily unavailable' (network.ts:33-37), so prepare/confirm/refresh/price all fail globally. Saves fall back to stored ownership, which also widens the stale-owner window described in the confirm-ownership finding. Fix: add per-user buckets with the existing helper (e.g. 30 refreshes per 10 min, 10 prepares per 10 min, per user and per network). Short-circuit refresh for rooms with no mint state and no live authorization. Add the per-isolate caches from the save finding.
+
+**Evidence.**
+- src/cloudflare/worker/rooms/routes.ts:197-208 — ownership refresh needs only any authenticated account or agent token
+- src/cloudflare/worker/rooms/routes.ts:210-225 — each call runs a require-fresh chain sync and two full room loads
+- src/cloudflare/worker/mint/service.ts:260-284 — require-fresh reads block number, tokenId, ownerOf and tokenURI
+- src/cloudflare/worker/auth/routes.ts:178-185 — rate-limit rules exist only for sign-in email and code flows
+- src/cloudflare/worker/mint/network.ts:33-37 — any provider failure becomes a global 503 for minting
+
+**Fact-check (partially confirmed).**
+
+Real, but broader in one way and narrower in another. Any signed-in account or rooms:write token can drive unlimited Base RPC reads, 3 per call (5 for minted rooms). The way in is not only ownership/refresh and mint prepare. Draft save, commands, publish, revert and construction-preview routes also do it, because each calls loadRoomRecordForMutation before checking permissions, so it costs RPC calls even when the request ends in a 403. The price quote is behind a 20 s anonymous edge cache and is not an amplifier. Refresh does one full history load, plus a second only when the chain state changed; the summary read is compact. The 'paid' RPC is unverified. Effect of throttling: mint/Collect and metadata routes and owner refresh return 503 until the provider recovers. Saves fall back to stored ownership. Fix: a per-user chain-read budget at the syncRoomOwnershipFromChain/loadRoomRecordForMutation layer using takeRateLimitSlot (refresh-only limits leave the other routes open), plus a short per-room freshness skip so autosaves stop calling the RPC.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F421: Confirming a mint can overwrite the room's real owner with whoever owned it right after the mint
+
+- **Area:** Gap review: Collect & Lock: room collecting, wallet approvals and the crypto gate
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** The mint confirmation step checks the chain as it was in the block where the NFT was minted, then saves that wallet as the current owner. If the NFT has been sold since, a later confirmation, such as a recovered approval or a deliberate call with the old transaction ID, writes the seller back in as owner. This happens even though the server had just read the real current owner. Until the next successful chain check, the seller shows as the collector and can edit the buyer's room.
+
+**Technical detail.**
+
+handleRoomMintConfirm first runs loadRoomRecordForMutation(..., 'throw') (mint/routes.ts:108). That syncs and persists the current owner. verifyMintTransactionForRoom then reads ownerOf at receipt.blockNumber (service.ts:364-370, 415-421) and returns it with ownerSyncedAt = now (377). routes.ts:119 checks that it equals the caller's linked wallet, which is true for the original minter even after a sale. routes.ts:123 then calls persistRoomMintState, which unconditionally sets minted_owner_wallet_address to that historical owner (service.ts:464-493). Permissions come from the stored owner (rooms/store.ts:1825-1828), and collector attribution reads the same column (collections/store.ts:39-44). The claimer check (routes.ts:114) passes because builder credit is intentionally kept after transfers (F241). So a seller who kept the mint transaction hash can call confirm at any time and reassign D1 ownership to themselves. The next 'use-stored' sync corrects it only if the RPC is reachable (service.ts:174-192), and the unmetered RPC routes make an outage easy to induce. The client can also hit this path legitimately through resume() with an old hash (roomWalletActions.ts:252-259). Fix: use the mint-block owner only for the 'this wallet minted it' check. Persist the current owner from the pre-sync, or read ownerOf at latest, and skip persisting when the pre-sync already recorded this token.
+
+**Evidence.**
+- src/cloudflare/worker/mint/service.ts:415-421 — ownerOf is read at the mint receipt's block
+- src/cloudflare/worker/mint/service.ts:372-378 — that historical owner is returned with ownerSyncedAt = now
+- src/cloudflare/worker/mint/routes.ts:108 — the pre-sync already persisted the current owner
+- src/cloudflare/worker/mint/routes.ts:123 — persistRoomMintState then writes the historical owner
+- src/cloudflare/worker/mint/service.ts:464-473 — the UPDATE sets minted_owner_wallet_address unconditionally
+- src/cloudflare/worker/rooms/store.ts:1825-1828 — edit permission follows the stored owner column
+
+**Fact-check (partially confirmed).**
+
+The mechanism and every evidence line are correct. One thing is overstated: writing the seller back into D1 does not by itself let the seller edit the buyer's room. Every edit route reloads through loadRoomRecordForMutation('use-stored'), which reads ownerOf at latest and puts the buyer back before checking permissions. The seller gets edit rights only if that Base RPC read fails on the same save, right after a confirm that needed the RPC to work. The "easy to induce an outage" part is not shown in the code.
+
+The dependable effect is wrong attribution:
+- The collectors list (collections/store.ts:38-45) shows the seller.
+- The Collection shelf (collections/store.ts:66) moves the room from the buyer's profile to the seller's.
+- The HUD summary shows the seller as owner.
+
+This lasts indefinitely, because no cron reconciles ownership. It ends only when someone runs a mutation or an ownership refresh on that room (the buyer pressing Edit triggers one, via F241).
+
+Only the original minter, with the same wallet still linked, can trigger it. The legitimate client trigger is narrow: the user must click Collect or Add artwork while a stale pending mint entry is still stored. Automatic recovery uses ownership/refresh and is safe.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F418: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F419: details withheld
+### F419: A two-character room title breaks that room's share page and link preview
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** low · **effort:** small
 
-### F425: details withheld
+**Summary.** Share links like wamp.land/r/3/4 put the room's title into the page with a text-replace function that treats '$`' as a special command. A room titled with those two characters makes the page paste a copy of its own start-up code into the title and preview tags. The tab title and social preview then show raw code, and WAMP's start-up script runs twice. Anyone who can edit an unminted room's title could break its share link. It is a one-line fix per call.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Technical detail.**
 
-### F426: details withheld
+injectRoomMetadata, injectProfileMetadata, injectPlaylistMetadata and injectWampOGramMetadata (pages/shareAppShell.ts:228-279) call String.prototype.replace with a string replacement built from user text: `<title>${escapeHtml(metadata.title)}</title>` (:236) and buildRoomMetaTags(metadata) (:239). escapeHtml (:357-364) escapes & < > " ' but not $ or backtick, so '$`' (insert text before the match) and '$&' survive. Room titles are any 1-40 characters (persistence/roomModel.ts:387-397), and cleanText in shareMetadata.ts:456-458 only collapses whitespace. With title '$`', the og:title content attribute receives the whole document prefix. Its first quote closes the attribute, and the duplicated head, including the inline classic bootstrap script at dist/index.html:6, is parsed and run a second time. I traced the escaping and found no route to attacker-controlled script, because the injected markup is WAMP's own HTML. The impact is breakage and preview defacement. Display names (profiles) and playlist or Wamp-O-Gram titles go through the same functions. Fix: use function replacers, `.replace(re, () => replacement)`, at the 8 replace calls, or add `.replace(/\$/g, '&#36;')` to escapeHtml. Add a shareAppShell test with the title '$`x$&'.
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+**Evidence.**
+- src/pages/shareAppShell.ts:236 — title inserted via a string replacement pattern
+- src/pages/shareAppShell.ts:239 — meta tag block inserted via a string replacement pattern
+- src/pages/shareAppShell.ts:357-364 — escapeHtml leaves $ and ` untouched
+- src/persistence/roomModel.ts:387-397 — room titles allow any characters
+- dist/index.html:6 — inline classic bootstrap script in <head> that would be duplicated
 
-### F427: details withheld
+**Fact-check (confirmed).**
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+Every evidence line checks out on 2d540764.
+
+The bug:
+- src/pages/shareAppShell.ts:228-279 has four inject* functions. Each one makes two replace calls that carry user text: the title at :236/248/260/272, and the meta block at :239/251/263/275. That is 8 calls, and all of them pass a string as the replacement, so JavaScript's `$` codes still apply.
+- escapeHtml (:357-364) escapes & < > " ' only, so `$` and the backtick get through.
+- Nothing upstream removes the dollar sign. normalizeRoomTitle (src/persistence/roomModel.ts:387-397) only trims the title and cuts it at 40 characters. set_title in src/cloudflare/worker/rooms/commandCore.ts:529 uses it. The worker /meta builder returns `${title}[ by ${builder}] on WAMP` after only collapsing whitespace (src/cloudflare/worker/share/routes.ts:234-257, 310). cleanText in src/pages/shareMetadata.ts:456 also only collapses whitespace.
+- The path is live: src/pages/shareRoutes.ts:37 sends /r/x/y to renderRoomAppShell. Profile, playlist and Wamp-O-Gram pages go through the same pattern, via display name, bio, playlist title and message.
+
+I simulated it in Node with the exact escape and replace logic against the locally built dist/index.html (270,609 bytes):
+- With the title "$` on WAMP", <title> receives the 25,274-character document prefix as text, starting with "<!DOCTYPE html>\n<html lang=". The tab title shows raw code.
+- The og:title attribute ends at the quote in lang="en", so link previews show "<!DOCTYPE html> <html lang=".
+- Output grows to 618,266 bytes.
+- The inline classic bootstrap script, which vite.config.ts:157 injects at dist/index.html:6, appears 14 times in the output.
+- A function replacer gives back the literal "$` on WAMP".
+
+Mechanism correction: the bootstrap does not run "twice". On a room page six tags carry user text: og:title, og:description, og:image:alt, twitter:title, twitter:description and twitter:image:alt. The description also contains the title. Each tag pastes in a parsable copy of the head, so the bootstrap runs about 7 times. The copies inside <title> are plain text and never run. The module script (src="./assets/cache-v2/main-*.js") is deduplicated by the browser's module map, so it still runs once. Text fragments such as ` on WAMP">` also end up as visible text at the top of <body>.
+
+There is no attacker-controlled script, because the only markup duplicated is WAMP's own. In practice, whoever can set a title, display name, playlist title or Wamp-O-Gram text can deface their own share pages. It is a robustness bug rather than a security hole.
+
+This is not a duplicate. F041 was the open redirect in the worker share HTML (now fixed with the host allowlist at routes.ts:262-287), and F132 was about expanded-room titles. The worker's own buildRoomShareHtml uses array join, not replace, so it is not affected.
+
+Fix:
+- Use `() => replacement` for the 8 user-text calls. Leave the `<head$1>` base insertion alone; it uses `$1` on purpose and carries no user data.
+- Alternatively, have escapeHtml encode `$` as `&#36;`.
+- Add a case to the existing src/pages/shareAppShell.test.ts.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F425: One person can use up the whole day's bug-report and guest-replay budgets for everyone
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** Bug reports and guest gameplay recordings each have one shared daily allowance of 100. The per-person limits count a visitor id that the sender makes up, so a short script can use up both allowances. After that, no real player can send a bug report until tomorrow, even a signed-in one sending text only, and Jonathan's replay analytics go dark.
+
+**Technical detail.**
+
+Bug reports (bugReports/routes.ts:85-93) are inserted only when fewer than 100 reports exist in 24 h globally, under 5 per identity and under 10 per network per hour. For guests, the identity is `bug-guest:${body.visitor}`, a client-supplied UUID (:67; validation.ts:9). One IPv4 address fills the day in 10 hours, and a handful of IPv6 /64s fill it in minutes. The global cap applies even to text-only reports, though the error message suggests turning off attachments (:105). Guest replays (guestReplay/routes.ts:55-63) allow 100 sessions per 24 h globally and 10 per client-chosen visitor id, with no per-network limit. Ten made-up visitor ids exhaust the day in about 100 requests. Fix: give signed-in reporters their own allowance and exempt text-only reports from the evidence/global gate. Add a per-network cap to replay /start with the existing takeRateLimitSlots, and reserve most of the global replay budget for networks that haven't used any yet. About 20 lines.
+
+**Evidence.**
+- src/cloudflare/worker/bugReports/routes.ts:67 — guest identity derived from client-chosen visitor id
+- src/cloudflare/worker/bugReports/routes.ts:89-91 — global 100/day cap applies to every report
+- src/cloudflare/worker/guestReplay/routes.ts:58-63 — global 100/day replay cap and per-visitor cap only, no per-network cap
+
+**Fact-check (confirmed).**
+
+I checked this against the code at 2d540764. The mechanism and line references are correct.
+
+Bug reports (src/cloudflare/worker/bugReports/routes.ts)
+- Line 67: a guest's identity is `bug-guest:${body.visitor}`. The visitor value comes from the client. validation.ts:9 only checks that it is shaped like a UUID. The client mints it in localStorage (src/bugReports/reporter.ts:17-21), so a script can rotate it freely.
+- Lines 85-93: the atomic INSERT ... SELECT WHERE gate applies three counts to every report:
+  - fewer than 100 reports globally in 24 h (line 89)
+  - fewer than 5 per identity per day (line 90)
+  - fewer than 10 per network per hour (line 91)
+- Only the evidence clauses (line 92) are skipped for text-only reports (`? = 0 OR ...`).
+- Signed-in users get identity `bug-user:<id>`, but their reports still count against the same global 100.
+- When any gate fails, line 105 returns 429 with the message "turn off image attachments to send a written report". That advice is wrong whenever the global, identity or network cap is the reason.
+- networkKeyForIp (core/rateLimit.ts:22-35) is per IPv4 address or per IPv6 /64. One IPv4 address at 10 per hour fills the global 100 in about 10 hours. Ten /64s fill it almost at once.
+- requireTrustedOriginForMutation only checks the Origin header, which a script can set to anything.
+- The router (worker.ts:288-293) adds no other rate limit for these routes, and there is no Cloudflare rate-limit binding in wrangler.jsonc.
+
+Guest replays (src/cloudflare/worker/guestReplay/routes.ts)
+- Lines 51-71: /start has a global cap of 100 sessions per 24 h and a cap of 10 per client-chosen visitor_id. It has no per-network check, and it never reads CF-Connecting-IP.
+- So about 100 POSTs, spread over 10 made-up UUIDs, use up the day's budget.
+- On a 429, the recorder (src/analytics/replay/recorder.ts:129-134) quietly stops. Real players see nothing, but replay analytics stop for the rest of the day.
+
+Prior checklist
+- No prior item covers this. F038 is about replay storage, F187 about the email budget, and F249 is the bug-reporter delivery, which notes "atomic D1 gates bound reports" but not this lockout. The withheld security findings have no matching item either.
+
+Caveat on the proposed fix
+- Fully exempting text-only reports from the global gate is not a good idea. The global cap is also what stops a multi-IP flood from burying the admin inbox, which lists only the newest 100.
+- A better fix: count signed-in reports against a separate per-account allowance (for example, gate the global COUNT on user_id IS NULL), keep a guest-only global cap, and make the 429 message say which limit was hit.
+- For replays: compute getClientIp → networkKeyForIp → hashRateLimitKey and call takeRateLimitSlots on /start before the INSERT. This needs no migration.
+- "About 20 lines" is plausible.
+
+Impact is low because:
+- the lockout recovers by itself within 24 h
+- bug reports are a feedback channel and replays are analytics only
+- normal guest traffic may already use up the replay budget on busy days
+- there is little reason for anyone to attack it
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F426: The public error-report endpoint reads the whole upload before checking its size (gap in the F051 fix)
+
+- **Area:** Security and safety (new issues only)
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** The browser error beacon added in October reads the full request into memory before checking that it is under 8 KB, and only then applies its rate limit. Every other endpoint was moved to a capped reader by F051. One oversized anonymous request can tie up a lot of memory on the server instance before being refused.
+
+**Technical detail.**
+
+handleClientErrorReport (ops/errors.ts:47-49) does `const text = await request.text(); if (text.length > MAX_CLIENT_ERROR_BYTES) throw 413`. request.text() buffers up to the platform body limit (100 MB on most plans) inside a 128 MB isolate, and the per-network rate limit is taken only after parsing (:60-63). F051's fix added readRequestBodyTextWithLimit and parseJsonBody({maxBytes}) (core/http.ts:139-200), which check Content-Length and stream with a cap, but this endpoint, added the same week (F185), doesn't use them. The route is unauthenticated (worker.ts route '/api/client-errors', auth:'public'). Fix: replace the first three lines with `parseJsonBody<Record<string, unknown>>(request, { maxBytes: 8192 })`, or export readRequestBodyTextWithLimit, and take the rate-limit slot before reading the body. 5 lines.
+
+**Evidence.**
+- src/cloudflare/worker/ops/errors.ts:47-49 — full body read before the 8 KB length check
+- src/cloudflare/worker/ops/errors.ts:60-63 — rate limit applied after parsing
+- src/cloudflare/worker/core/http.ts:139-149 — capped body reader exists but is not used here
+
+**Fact-check (partially confirmed).**
+
+Real gap: handleClientErrorReport (ops/errors.ts:48-49) buffers the whole unauthenticated body before its 8 KB check, bypassing F051's capped reader. Fix: read through the capped reader, either by exporting readRequestBodyTextWithLimit or by calling parseJsonBody({ maxBytes: 8192 }) and keeping the object-shape check. That is about 3 lines. Keep the rate limit after validation: takeRateLimitSlot is a D1 write, so moving it earlier would make every junk request cost a D1 write and adds no memory protection once the read is capped.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
+
+### F427: Wiping a cheater's runs leaves their clears in builder stats, Explore 'popular' and difficulty labels, and Room of the Day picks
+
+- **Area:** Bugs and data integrity: API, storage and realtime
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** When an admin removes a cheater's runs, the runs and points go away, but copies of those runs kept elsewhere for statistics do not. The room's clear rate and median time, its 'recently played' count, its measured difficulty, and its eligibility for Room of the Day still count the cheated plays. The cleanup should remove those copies in the same step.
+
+**Technical detail.**
+
+The suspicious-activity invalidation batch deletes only room_runs, course_runs and point_events (src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-168, plus expanded runs at 740). Two projections built from those runs are left behind. (1) room_insight_attempts is maintained only by AFTER INSERT/UPDATE triggers (migrations/0056_room_insights.sql:44-56 and the course/expanded/guest equivalents); there is no AFTER DELETE. Builder insights therefore still count the deleted clears in completions, clear rate and median clear time (insights/store.ts:17-21,36-38). (2) discovery_run_players is upserted when a run finishes (runs/routes.ts:478; playableContentIndex/runMetrics.ts:26-45) and feeds recent_players and measured difficulty (runMetrics.ts:77-97). It also feeds Room of the Day eligibility (daily/store.ts:72-75). A cheated clear can keep a room 'popular', labelled 'easy', or eligible for the daily pick. This extends the open F205 (which lists XP, trust, badges and ratings) with these two read models. Fix: in the same batch add `DELETE FROM room_insight_attempts WHERE attempt_key IN ('room:'||?, 'course:'||?, 'expanded:'||?)`. Add a DELETE of discovery_run_players for (target_key, version_key, user_id) when that user has no remaining accepted run for the version, or recompute the row. Alternatively, add AFTER DELETE triggers that mirror the 0056 ones. Add a test: invalidate one run, then assert the insights and run_metrics totals drop.
+
+**Evidence.**
+- src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-168 — deletes only runs and point events
+- migrations/0056_room_insights.sql:44-56 — insight projection triggers are INSERT/UPDATE only
+- src/cloudflare/worker/insights/store.ts:17-21 — builder insights read room_insight_attempts
+- src/cloudflare/worker/playableContentIndex/runMetrics.ts:26-45,77-97 — discovery_run_players drives recent players and measured difficulty
+- src/cloudflare/worker/daily/store.ts:72-75 — Room of the Day eligibility uses discovery_run_players
+
+**Fact-check (confirmed).**
+
+I checked every evidence line on 2d540764 and all of them hold.
+
+- src/cloudflare/worker/admin/suspiciousInvalidation.ts:156-168: the batch deletes only room_runs, course_runs and point_events by id. It then calls deleteExpandedRoomRunsByAttemptIds (about line 730-750) and upsertUserStats. Nothing else is cleaned up.
+- room_insight_attempts: migrations/0056_room_insights.sql fills it only through AFTER INSERT and AFTER UPDATE triggers on expanded_room_runs (lines 29-40), room_runs (44-53), course_runs (57-66) and guest_run_attempts (70-79), plus a claim trigger. A repo-wide grep finds no other DELETE of this table outside tests, and no AFTER DELETE trigger in any later migration (0057-0068). So a deleted run's projection row survives.
+- insights/store.ts:17-21 builds `eligible` from room_insight_attempts, and lines 31-42 compute completions, clear rate, median clear and deaths from it. These summaries reach profile pages (profiles/store.ts:222, 449), discovery (runs/difficulty.ts:1726) and the insights route (insights/routes.ts:44).
+- discovery_run_players: written by recordDiscoveryRunPlayer (runMetrics.ts:25-45), called from runs/routes.ts:478, courses/routes.ts:626 and expandedRooms/runRoutes.ts:569. No code deletes from it; the only automatic removal is the FK cascade when a user is deleted (0054:5). DISCOVERY_RUN_METRICS_CTE (runMetrics.ts:74-98) derives recent_players and measured_difficulty from it. discovery.ts:45 sorts 'popular' by recent_players, and daily/store.ts:72-75 makes a room eligible for Room of the Day when any discovery_run_players row has sampled_at set, which means a completion.
+- So after an invalidation, a cheater's clear keeps counting in builder insights, in the 14-day popular count, in measured difficulty, and in daily eligibility.
+- Prior F205 (the private write-up in prior_findings.json) lists XP, trust, badges, ratings, trophies and the bulk-clear bind limit. It does not mention these two read models, so this is new information extending F205, not a duplicate.
+
+Caveat on the suggested alternative fix: do not add AFTER DELETE triggers that mirror all of 0056. The projection is meant to outlive its source rows (0056 line 1 calls it a "Durable" projection). pruneGuestRuns (guestRuns/attempts.ts:189-195) routinely deletes unclaimed guest attempts, both failed/abandoned ones and expired ones, so a guest_run_attempts delete trigger would wipe guest insights. Any trigger route must cover only room_runs, course_runs and expanded_room_runs. The preferred fix is the one the finding proposes: explicit deletes in the invalidation batch, keyed by attempt_key 'room:'/'course:'/'expanded:' plus the attempt id. For discovery_run_players, a plain delete is wrong if the user has other legitimate runs on that version, because the row merges failures and completions. Recompute the row by reusing scripts/sql/backfill_discovery_run_players.sql scoped to the affected (target, version, user).
+
+Why impact is lower than proposed:
+- Invalidation is a rarely used admin tool.
+- Each wiped player shifts a room's aggregates by one player.
+- Measured difficulty needs at least 3 samples, and 3 or more votes override it.
+- 'Popular' only counts the last 14 days (POPULAR_WINDOW_MS), so stale recent_players age out on their own.
+- The lasting effects are the insights totals and Room of the Day eligibility, for example a room that only the cheater has "cleared".
+
+Effort is small: a few statements in the existing batch, a scoped recompute, and one test against the real-SQLite fixture.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration). A cheater's claimed guest runs are not invalidated by this path. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F423: details withheld
 
@@ -6088,9 +6731,46 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F422: details withheld
+### F422: Guestbook spam limits are a weaker copy of the shared rate limiter, and its Turnstile secret name differs from the docs
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap review: Small untested features: Wamp-O-Gram, Playlists, Guestbook, Collections
+- **Type:** defect · **impact:** low · **effort:** small
+
+**Summary.** The guestbook has its own home-made spam limits instead of the shared ones the rest of WAMP uses, and they are easier to get around. It also reads the anti-bot secret under a different name than the Jam page and the setup docs use. Depending on which name is set in production, either every guestbook signature fails or the anti-bot check is silently off. Switching to the shared helpers fixes both and removes about 150 duplicated lines.
+
+**Technical detail.**
+
+Problems with assertGuestbookRateLimit (src/cloudflare/worker/guestbook/routes.ts:212-243):
+- It counts existing rows and then inserts (store.ts:112-148 counts, store.ts:37-66 inserts), so a parallel burst all passes. core/rateLimit.ts:61-79 does the check and the insert in one statement for this reason.
+- It keys on the exact IP. IPv6 clients control a whole /64, and networkKeyForIp (core/rateLimit.ts:22-35) exists for that.
+- The per-minute and per-day limits apply only when the client volunteers guestSessionId (228-230). Leaving it out leaves only 5 per hour per exact IP.
+- getRequestIp falls back to the client-controlled X-Forwarded-For (297-303). The shared getClientIp (core/rateLimit.ts:13-16) reads only CF-Connecting-IP.
+
+The guestbook's verifyTurnstileToken (245-295) reads env.TURNSTILE_SECRET and returns 503 whenever TURNSTILE_SITE_KEY is set without it (252-255). jam/routes.ts:292-324 has its own copy that reads TURNSTILE_SECRET_KEY, and docs/development/environment.md:64-65 documents only TURNSTILE_SITE_KEY plus TURNSTILE_SECRET_KEY. Following the docs therefore breaks guestbook posting with a 503. Setting neither secret means no Turnstile at all.
+
+jam/routes.ts:326-345 also duplicates getRequestIp, the hash function and normalizeHeaderValue.
+
+Fix:
+1. Use getClientIp, networkKeyForIp, hashRateLimitKey and takeRateLimitSlots, with buckets guestbook:network (5 per hour) and guestbook:user-or-session (1 per minute, 10 per day).
+2. Write one core/turnstile.ts verifyTurnstile(env, token, ip, expectedAction) that reads `TURNSTILE_SECRET_KEY ?? TURNSTILE_SECRET` and checks the siteverify `action`.
+
+This deletes about 100 lines from the guestbook and about 50 from jam.
+
+**Evidence.**
+- src/cloudflare/worker/guestbook/routes.ts:212-243 — count-then-insert limits; session limits skipped without guestSessionId
+- src/cloudflare/worker/guestbook/routes.ts:245-256 — reads TURNSTILE_SECRET; 503 when site key set without it
+- src/cloudflare/worker/guestbook/routes.ts:297-312 — X-Forwarded-For fallback and private IP hash
+- src/cloudflare/worker/jam/routes.ts:292-341 — second copy of Turnstile/IP/hash helpers using TURNSTILE_SECRET_KEY
+- src/cloudflare/worker/core/rateLimit.ts:13-35,51-79 — shared atomic, /64-aware helpers not used here
+- docs/development/environment.md:64-65 — docs list only TURNSTILE_SECRET_KEY
+
+**Fact-check (partially confirmed).**
+
+Guestbook POSTs already need a fresh Turnstile token in production. The intentional switch to TURNSTILE_SECRET (commit 0c9d8271) fails closed, so the parallel-burst race and exact-IP/IPv6 keying are defense-in-depth gaps that only matter to an attacker who can mint many Turnstile tokens. They are not an open spam hole. The X-Forwarded-For fallback is unreachable behind Cloudflare. The Turnstile name problem is a documentation mismatch, not a likely production failure: environment.md lists only TURNSTILE_SECRET_KEY, while .env.example lists both. Fix it by documenting TURNSTILE_SECRET for the guestbook or by reading `TURNSTILE_SECRET ?? TURNSTILE_SECRET_KEY`.
+
+The worthwhile fix is small: replace assertGuestbookRateLimit and the two count queries with takeRateLimitSlots, using a guestbook network bucket (networkKeyForIp(getClientIp), 5/hour) plus the existing session limits. Take the slots after Turnstile succeeds, or release them when it fails. Keep hashGuestbookIp for the stored ip_hash column. Leave the closed jam module alone. Net savings are closer to 60-80 lines than 150.
+
+**2026-10-22 delivered.** [PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2` (no migration).  [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F424: details withheld
 
@@ -7927,6 +8607,8 @@ Fix (about 10 minutes):
   - Changing .nvmrc also changes the Node version Cloudflare Pages uses for both automatic wamp and wampland production builds (from 20.19.4 to 22.22.0, unless a dashboard NODE_VERSION overrides it). The PR should say so and confirm both Pages build checks pass.
   
   Impact is medium, not high. The trap affects only developer and agent tooling, and an agent already hit it (docs/2026-07-29-gameplay-performance-plan.md:82).
+
+**2026-10-22 delivered.** PR #289. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 
 ### F487: Riskiest write paths barely tested: Expanded Room editing 0%, room save/publish 15%, agent tokens, Worlds
 

@@ -1,3 +1,7 @@
+## 2026-10-22 — Round 2: same-day fixes and the security batch
+
+Round-2 lane (Jonathan approved merging and deploying round 2, security fixes included). PRs #288 F374, #289 F485, #290 F388, #291 F251, #293 CI browser jobs in the Playwright image, #294 sixteen security items (F407 F408 F409 F410 F411 F413 F415 F417 F419 F420 F421 F422 F425 F426 F427 F382) with seven review follow-ups; API Worker `073f68a2`, no migration. F379 (#292) still in review; F483 needs Jonathan. Receipt: docs/review/wamp-round2-security-and-step1-2026-10-22.md.
+
 ## 2026-10-21 — F189 takedowns and F127 visitor attribution
 
 Same lane run (merge and deploy approved). Branches `claude/f189-takedowns` → `claude/f127-attribution` from main 80151ad1 (PRs #285–#286). Production D1 migrations 0072–0073 applied first, then API Worker `41a3c0f4` and world tile renderer Worker `3acf9926`, then the PRs merged for Pages. Receipt: docs/review/wamp-takedowns-and-attribution-2026-10-21.md.
