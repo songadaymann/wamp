@@ -3,6 +3,7 @@ import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
 import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { rankedFinishRequestInit } from './rankedFinishDelivery';
 import {
   invalidateStaleWhileRevalidateCache,
   loadWithStaleWhileRevalidate,
@@ -86,10 +87,7 @@ class ApiRunRepository implements RunRepository {
   }
 
   async finishRun(attemptId: string, body: RunFinishRequestBody): Promise<void> {
-    await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
     this.invalidateLeaderboards();
   }
 

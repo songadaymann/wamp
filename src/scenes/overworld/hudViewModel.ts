@@ -430,6 +430,9 @@ export function buildOverworldHudViewModel(
     && currentRoomLeaderboard?.difficulty.viewerCanVote
     && (!selectedSummary?.creatorUserId || selectedSummary.creatorUserId !== currentUserId),
   );
+  // A signed-in finish that failed to send keeps its status, and a Retry, on the run panel (F351).
+  const rankedFinishRun = activeCourseRun ?? activeRoomGoalRun;
+  const goalPanelSaveText = rankedFinishRun?.finishRetry ? rankedFinishRun.submissionMessage ?? '' : '';
   const goalPanelTone =
     activeRunResult === 'completed'
       ? 'complete'
@@ -602,6 +605,8 @@ export function buildOverworldHudViewModel(
       : activeRoomGoalRun
         ? getPlayGoalProgressText(activeRoomGoalRun)
         : '',
+    goalPanelSaveText,
+    goalPanelRetryVisible: Boolean(goalPanelSaveText) && rankedFinishRun?.finishRetry === 'waiting',
     signPanelVisible: mode === 'play' && Boolean(activeSignState?.text),
     signPanelLabelText: '',
     signPanelText: activeSignState?.text ?? '',

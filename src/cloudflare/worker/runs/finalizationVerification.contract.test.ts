@@ -57,7 +57,11 @@ afterEach(() => vi.useRealTimers());
 function database() {
   let loaded = false;
   const writes: { sql: string; values: unknown[] }[] = [];
-  const batch = vi.fn(async (statements: { sql: string; values: unknown[] }[]) => { writes.push(...statements); return []; });
+  // Each guarded finalize UPDATE claims the still-active row and returns it.
+  const batch = vi.fn(async (statements: { sql: string; values: unknown[] }[]) => {
+    writes.push(...statements);
+    return statements.map(() => ({ results: [{ attempt_id: 'attempt' }] }));
+  });
   const env = { DB: { batch, prepare: (sql: string) => {
     const statement = {
       sql, values: [] as unknown[],
@@ -93,6 +97,8 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       const status = scenario === 'relaxed' ? 'not_required' : scenario === 'missing_trace' ? 'failed' : scenario;
       const reason = scenario === 'failed' ? 'trace_goal' : scenario === 'missing_trace' ? 'missing_trace' : scenario === 'timeout' ? 'trace_timeout' : null;
       for (const write of writes) {
+        // Only a still-active row is finalized, so an overlapping resend cannot finalize it twice (F351).
+        expect(write.sql).toMatch(/WHERE attempt_id = \? AND result = 'active'/);
         expect(write.values.slice(8)).toEqual([status, reason, null, 1000, 'attempt']);
         expect(write.values.slice(5, 8)).toEqual(scenario === 'passed' ? [3, 4, 5] : scenario === 'not_required' ? [0, 0, 0] : [8, 7, 6]);
         expect(write.values[0]).toBe('2026-09-08T12:00:01.000Z');

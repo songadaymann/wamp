@@ -6,6 +6,7 @@ import type { GlobalLeaderboardResponse } from '../../../runs/model';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
+import { replayFinalizedRunFinish, runVerificationError, type RunFinishMessages } from './finishReplay';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -182,6 +183,13 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   return jsonResponse(request, responseBody);
 }
 
+const ROOM_RUN_FINISH_MESSAGES: RunFinishMessages = {
+  missingTrace: 'Missing verification trace for ranked run.',
+  unverified: 'Ranked run could not be verified.',
+  timedOut: 'Ranked run verification timed out.',
+  finalized: 'This run attempt has already been finalized.',
+};
+
 export async function handleRunFinish(
   request: Request,
   env: Env,
@@ -211,7 +219,7 @@ export async function handleRunFinish(
   }
 
   if (existing.result !== 'active') {
-    throw new HttpError(409, 'This run attempt has already been finalized.');
+    return replayFinalizedRunFinish(request, existing, body.result, ROOM_RUN_FINISH_MESSAGES);
   }
 
   const roomRecord = await loadRoomRankingRecord(env, existing.roomId, existing.roomCoordinates, {
@@ -406,7 +414,7 @@ export async function handleRunFinish(
     snapshot, finalBody, auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs)
     : null;
 
-  await env.DB.batch([
+  const [finalized] = await env.DB.batch<{ results: unknown[] }>([
     env.DB.prepare(
       `
         UPDATE room_runs
@@ -423,7 +431,8 @@ export async function handleRunFinish(
           verification_reason = ?,
           insight_deaths_json = ?,
           insight_play_ms = ?
-        WHERE attempt_id = ?
+        WHERE attempt_id = ? AND result = 'active'
+        RETURNING attempt_id
       `
     ).bind(
       finishedAt,
@@ -444,6 +453,10 @@ export async function handleRunFinish(
       source: 'room', userId: auth.user.id, deaths: finalBody.deaths, createdAt: finishedAt,
     })] : []),
   ]);
+  // A resend raced this request and finalized first; its rewards stand and this one adds none.
+  if (!finalized?.results.length) {
+    return replayFinalizedRunFinish(request, await loadRoomRunByAttemptId(env, attemptId), body.result, ROOM_RUN_FINISH_MESSAGES);
+  }
 
   if (verification.audit) {
     await recordRunVerificationAudit(env, {
@@ -456,20 +469,8 @@ export async function handleRunFinish(
     });
   }
 
-  if (verificationStatus === 'failed') {
-    throw new HttpError(
-      409,
-      verificationReason === 'missing_trace'
-        ? 'Missing verification trace for ranked run.'
-        : verificationReason === 'trace_client_outdated'
-          ? 'Client update required for ranked verification.'
-          : 'Ranked run could not be verified.',
-    );
-  }
-
-  if (verificationStatus === 'timeout') {
-    throw new HttpError(409, 'Ranked run verification timed out.');
-  }
+  const verificationError = runVerificationError(verificationStatus, verificationReason, ROOM_RUN_FINISH_MESSAGES);
+  if (verificationError) throw verificationError;
 
   const finalizedRun = await loadRoomRunByAttemptId(env, attemptId);
   if (!finalizedRun) {

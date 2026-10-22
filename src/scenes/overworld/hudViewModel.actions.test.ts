@@ -135,3 +135,18 @@ describe('collection reminder eligibility', () => {
     expect(card({ ...own, selectedCourse: { courseId: 'whole', courseTitle: 'Adventure', goalType: 'reach_exit', roomCount: 2 } }).collectionReminder?.expanded).toBe(true);
   });
 });
+
+describe('ranked clear waiting to send (F351)', () => {
+  const run = (finishRetry: 'waiting' | 'sending' | null) => ({ result: 'completed', roomCoordinates: { x: 0, y: 0 },
+    goal: { type: 'reach_exit' }, finishRetry, submissionMessage: finishRetry === 'sending'
+      ? 'Saving your clear...' : 'Saving your clear... no connection, will retry.' }) as never;
+  it('shows the status with a Retry button only while the clear waits for another try', () => {
+    expect(card({ mode: 'play', activeRoomGoalRun: run('waiting') })).toMatchObject({
+      goalPanelSaveText: 'Saving your clear... no connection, will retry.', goalPanelRetryVisible: true });
+    expect(card({ mode: 'play', activeRoomGoalRun: run('sending') })).toMatchObject({
+      goalPanelSaveText: 'Saving your clear...', goalPanelRetryVisible: false });
+    expect(card({ mode: 'play', activeRoomGoalRun: run(null) })).toMatchObject({ goalPanelSaveText: '', goalPanelRetryVisible: false });
+    expect(card({ mode: 'play', activeCourseRun: { ...(run('waiting') as object), course: { title: 'Adventure', goal: null } } as never }))
+      .toMatchObject({ goalPanelRetryVisible: true });
+  });
+});

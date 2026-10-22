@@ -7,6 +7,7 @@ import {
 } from '../../multiplayer/model';
 import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
 import type { GhostRaceInfo } from './ghostRace';
+import { retryPendingRankedFinishes } from '../../runs/rankedFinishDelivery';
 
 interface OverworldHudRuntimeConfig {
   onShareRoom: () => void | Promise<void>;
@@ -194,6 +195,8 @@ export interface OverworldHudViewModel {
   goalPanelGoalText: string;
   goalPanelTimerText: string;
   goalPanelProgressText: string;
+  goalPanelSaveText: string;
+  goalPanelRetryVisible: boolean;
   signPanelVisible: boolean;
   signPanelLabelText: string;
   signPanelText: string;
@@ -271,6 +274,9 @@ export class OverworldHudBridge {
   private readonly goalPanelGoalEl: HTMLElement | null;
   private readonly goalPanelTimerEl: HTMLElement | null;
   private readonly goalPanelProgressEl: HTMLElement | null;
+  private readonly goalPanelSaveEl: HTMLElement | null;
+  private readonly goalPanelSaveTextEl: HTMLElement | null;
+  private readonly goalRetryButton: HTMLButtonElement | null;
   private readonly signPanelEl: HTMLElement | null;
   private readonly signPanelLabelEl: HTMLElement | null;
   private readonly signPanelTextEl: HTMLElement | null;
@@ -384,6 +390,8 @@ export class OverworldHudBridge {
   private readonly handleRestartRunClick = (): void => {
     void runtimeConfig.onRestartRun();
   };
+
+  private readonly handleGoalRetryClick = (): void => { retryPendingRankedFinishes(); };
 
   private readonly handlePlayCourseClick = (): void => {
     void runtimeConfig.onPlayCourse();
@@ -518,6 +526,9 @@ export class OverworldHudBridge {
     this.goalPanelGoalEl = this.doc.getElementById('world-goal-panel-goal');
     this.goalPanelTimerEl = this.doc.getElementById('world-goal-panel-timer');
     this.goalPanelProgressEl = this.doc.getElementById('world-goal-panel-progress');
+    this.goalPanelSaveEl = this.doc.getElementById('world-goal-panel-save');
+    this.goalPanelSaveTextEl = this.doc.getElementById('world-goal-panel-save-text');
+    this.goalRetryButton = this.doc.getElementById('btn-world-goal-retry') as HTMLButtonElement | null;
     this.signPanelEl = this.doc.getElementById('world-sign-panel');
     this.signPanelLabelEl = this.doc.getElementById('world-sign-panel-label');
     this.signPanelTextEl = this.doc.getElementById('world-sign-panel-text');
@@ -537,6 +548,7 @@ export class OverworldHudBridge {
     this.shareButton?.addEventListener('click', this.handleShareRoomClick);
     this.mobileShareButton?.addEventListener('click', this.handleShareRoomClick);
     this.restartButton?.addEventListener('click', this.handleRestartRunClick);
+    this.goalRetryButton?.addEventListener('click', this.handleGoalRetryClick);
     this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.addEventListener('click', this.handleRoomRushClick);
     this.roomCommentButton?.addEventListener('click', this.handleRoomCommentClick);
@@ -699,6 +711,7 @@ export class OverworldHudBridge {
     this.shareButton?.removeEventListener('click', this.handleShareRoomClick);
     this.mobileShareButton?.removeEventListener('click', this.handleShareRoomClick);
     this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
+    this.goalRetryButton?.removeEventListener('click', this.handleGoalRetryClick);
     this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.removeEventListener('click', this.handleRoomRushClick);
     this.roomCommentButton?.removeEventListener('click', this.handleRoomCommentClick);
@@ -1242,6 +1255,9 @@ export class OverworldHudBridge {
     this.setText(this.goalPanelGoalEl, viewModel.goalPanelGoalText);
     this.setText(this.goalPanelTimerEl, viewModel.goalPanelTimerText);
     this.setText(this.goalPanelProgressEl, viewModel.goalPanelProgressText);
+    this.goalPanelSaveEl?.classList.toggle('hidden', !viewModel.goalPanelSaveText);
+    this.setText(this.goalPanelSaveTextEl, viewModel.goalPanelSaveText);
+    this.goalRetryButton?.classList.toggle('hidden', !viewModel.goalPanelRetryVisible);
     this.renderMobileGoalFooter(viewModel);
   }
 

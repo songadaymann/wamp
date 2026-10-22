@@ -2,6 +2,7 @@ import { deathLocationsJson } from '../insights/deathLocations';
 import { assertSoloCourseRun } from '../runs/coopPolicy';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
+import { replayFinalizedRunFinish, runVerificationError, type RunFinishMessages } from '../runs/finishReplay';
 import {
   cloneCourseGoal,
   cloneCourseSnapshot,
@@ -264,6 +265,13 @@ export async function handleExpandedRoomRunStart(
   return jsonResponse(request, responseBody);
 }
 
+const EXPANDED_ROOM_RUN_FINISH_MESSAGES: RunFinishMessages = {
+  missingTrace: 'Missing verification trace for ranked expanded room run.',
+  unverified: 'Ranked expanded room run could not be verified.',
+  timedOut: 'Ranked expanded room run verification timed out.',
+  finalized: 'This expanded room run attempt has already been finalized.',
+};
+
 export async function handleExpandedRoomRunFinish(
   request: Request,
   env: Env,
@@ -288,7 +296,7 @@ export async function handleExpandedRoomRunFinish(
   }
 
   if (existing.result !== 'active') {
-    throw new HttpError(409, 'This expanded room run attempt has already been finalized.');
+    return replayFinalizedRunFinish(request, existing, body.result, EXPANDED_ROOM_RUN_FINISH_MESSAGES);
   }
 
   const context = await resolveLegacyExpandedRoomCourseContext(
@@ -467,7 +475,7 @@ export async function handleExpandedRoomRunFinish(
     finalScore = computeCourseRunScore(snapshot.goal, finalBody);
   }
 
-  await env.DB.batch([
+  const [finalized] = await env.DB.batch<{ results: unknown[] }>([
     env.DB.prepare(
       `
         UPDATE expanded_room_runs
@@ -484,7 +492,8 @@ export async function handleExpandedRoomRunFinish(
           verification_reason = ?,
           insight_deaths_json = ?,
           insight_play_ms = ?
-        WHERE attempt_id = ?
+        WHERE attempt_id = ? AND result = 'active'
+        RETURNING attempt_id
       `
     ).bind(
       finishedAt,
@@ -517,7 +526,7 @@ export async function handleExpandedRoomRunFinish(
           verification_reason = ?,
           insight_deaths_json = ?,
           insight_play_ms = ?
-        WHERE attempt_id = ?
+        WHERE attempt_id = ? AND result = 'active'
       `
     ).bind(
       finishedAt,
@@ -535,6 +544,11 @@ export async function handleExpandedRoomRunFinish(
       attemptId,
     ),
   ]);
+  // A resend raced this request and finalized first; its rewards stand and this one adds none.
+  if (!finalized?.results.length) {
+    return replayFinalizedRunFinish(request, await loadExpandedRoomRunByAttemptId(env, attemptId), body.result,
+      EXPANDED_ROOM_RUN_FINISH_MESSAGES);
+  }
 
   if (verification.audit) {
     await recordRunVerificationAudit(env, {
@@ -547,20 +561,8 @@ export async function handleExpandedRoomRunFinish(
     });
   }
 
-  if (verificationStatus === 'failed') {
-    throw new HttpError(
-      409,
-      verificationReason === 'missing_trace'
-        ? 'Missing verification trace for ranked expanded room run.'
-        : verificationReason === 'trace_client_outdated'
-          ? 'Client update required for ranked verification.'
-          : 'Ranked expanded room run could not be verified.',
-    );
-  }
-
-  if (verificationStatus === 'timeout') {
-    throw new HttpError(409, 'Ranked expanded room run verification timed out.');
-  }
+  const verificationError = runVerificationError(verificationStatus, verificationReason, EXPANDED_ROOM_RUN_FINISH_MESSAGES);
+  if (verificationError) throw verificationError;
 
   const finalizedRun = await loadExpandedRoomRunByAttemptId(env, attemptId);
   if (!finalizedRun) {

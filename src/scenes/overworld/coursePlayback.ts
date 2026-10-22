@@ -53,6 +53,7 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import { deliverRankedFinish } from '../../runs/rankedFinishDelivery';
 import type { GuestRunPlaybackController } from './guestRunPlayback';
 import type { RunFinishRequestBody } from '../../runs/model';
 import type { PostRunRatingRequestDetail } from '../../progression/postRunRatingEvents';
@@ -380,12 +381,18 @@ export class OverworldCoursePlaybackController {
       verificationTrace,
     };
 
+    const submissionTarget = activeCourseRun.submissionTarget;
     try {
-      if (activeCourseRun.submissionTarget === 'expanded_room') {
-        await this.expandedRoomRepository.finishRun(attemptId, body);
-      } else {
-        await this.courseRepository.finishRun(attemptId, body);
-      }
+      // The body holds its own trace copy, so the recorder is released once a send fails.
+      await deliverRankedFinish(activeCourseRun, result, () => submissionTarget === 'expanded_room'
+        ? this.expandedRoomRepository.finishRun(attemptId, body)
+        : this.courseRepository.finishRun(attemptId, body), {
+        onChange: () => {
+          if (this.host.getActiveCourseRun() !== activeCourseRun) return;
+          this.host.clearVerificationTrace?.();
+          this.host.renderHud();
+        },
+      });
       const currentActiveCourseRun = this.host.getActiveCourseRun();
       if (!currentActiveCourseRun || currentActiveCourseRun.attemptId !== attemptId) {
         return;

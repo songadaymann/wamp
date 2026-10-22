@@ -55,6 +55,15 @@
     font-size: var(--ui-text-small, 10px);
   }
 
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .world-goal-panel-save {
+    grid-column: 1 / -1;
+  }
+
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] .world-goal-panel-save-text {
+    color: var(--mobile-portrait-console-ink);
+    font-size: var(--ui-text-small, 8px);
+  }
+
   body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #mobile-play-controls {
     position: fixed;
     top: auto;
