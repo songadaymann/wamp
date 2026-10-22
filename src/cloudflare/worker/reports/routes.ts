@@ -12,7 +12,7 @@ import {
 } from '../../../reports/model';
 import { sendAdminReviewNotificationEmail } from '../admin/reviewNotifications';
 import { loadOptionalRequestAuth, requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
-import { resolvePublicBaseUrl } from '../auth/store';
+import { resolveEmailBaseUrl } from '../auth/store';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import {
   getClientIp,
@@ -157,7 +157,7 @@ async function handleReportSubmit(
       heading: 'A player sent a report',
       intro: `${REPORT_REASON_LABELS[body.reason]} — ${body.targetType.replace('_', ' ')}.`,
       details: [clip(target.label, LABEL_LIMIT), ...(body.details ? [`Details: ${body.details}`] : [])],
-      actionUrl: `${resolvePublicBaseUrl(request, env)}/suspicious-admin.html`,
+      actionUrl: `${resolveEmailBaseUrl(request, env)}/suspicious-admin.html`,
       actionLabel: 'Review reports',
     }).then((result) => {
       if (result.error) console.error(JSON.stringify({ event: 'content-report-email-failed', error: result.error }));

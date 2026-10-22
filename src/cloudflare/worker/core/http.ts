@@ -98,6 +98,12 @@ function isSafetyWorkerHostname(hostname: string): boolean {
   return hostname === 'everybodys-platformer-safety.novox-robot.workers.dev';
 }
 
+/** Loopback and private-network hosts, where only local development runs. */
+export function isLocalOrPrivateHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return isLocalDevHostname(lower) || isPrivateDevHostname(lower);
+}
+
 function isPrivateDevHostname(hostname: string): boolean {
   return (
     /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||

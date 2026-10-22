@@ -10,6 +10,7 @@ import { isRoomMinted, type RoomCoordinates, type RoomRecord } from '../../../pe
 import { normalizeAddress } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { Env, RoomMintChainState, RoomMintConfig } from '../core/types';
+import { recordRoomChainRead, takeRoomChainRead } from './chainReadBudget';
 import { createRoomMintPublicClient, createVerifiedRoomMintPublicClient, type MintReadTransportOptions } from './network';
 export { createRoomMintPublicClient } from './network';
 import { observeRoomTokenMetadata, persistRoomTokenMetadataState, type RoomTokenMetadataObservation } from './metadata';
@@ -159,6 +160,21 @@ export async function syncRoomOwnershipFromChain(
     return record;
   }
 
+  // Without a linked wallet only an admin can edit a minted room, whoever holds its token now.
+  if (onChainError === 'use-stored' && isRoomMinted(record) && !actor?.walletAddress && !record.permissions.canSaveDraft) {
+    return record;
+  }
+  if (!await takeRoomChainRead(env, record.draft.id, actor?.id ?? null, onChainError, isRoomMinted(record))) return record;
+  return syncRoomOwnershipWithConfig(env, config, record, actor, onChainError);
+}
+
+async function syncRoomOwnershipWithConfig(
+  env: Env,
+  config: RoomMintConfig,
+  record: RoomRecord,
+  actor: AuthUser | null,
+  onChainError: RoomChainSyncFailureMode,
+): Promise<RoomRecord> {
   let chainState: RoomMintObservedState | null;
   const abort = onChainError === 'require-fresh' ? new AbortController() : null;
   // The operation deadline also covers a provider stalling after response headers.
@@ -194,6 +210,18 @@ export async function syncRoomOwnershipFromChain(
     if (deadline !== null) clearTimeout(deadline);
   }
 
+  const synced = await storeRoomChainState(env, record, chainState, actor, onChainError);
+  await recordRoomChainRead(env, record.draft.id);
+  return synced;
+}
+
+async function storeRoomChainState(
+  env: Env,
+  record: RoomRecord,
+  chainState: RoomMintObservedState | null,
+  actor: AuthUser | null,
+  onChainError: RoomChainSyncFailureMode,
+): Promise<RoomRecord> {
   if (!chainState) {
     if (onChainError === 'require-fresh' && isRoomMinted(record)) {
       throw new HttpError(409, 'This room token could not be verified on the configured network.');
@@ -490,6 +518,28 @@ export async function persistRoomMintState(
       claimedAt,
       record.draft.id
     ),
+  ]);
+}
+
+/** Gives the minter builder credit on a minted room with no claimer, while D1 still records them as its owner. */
+export async function persistMintedRoomClaimer(
+  env: Env,
+  record: RoomRecord,
+  actor: AuthUser & { walletAddress: string },
+  claimedAt: string,
+): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        UPDATE rooms
+        SET
+          claimer_user_id = ?,
+          claimer_principal_type = COALESCE(claimer_principal_type, 'user'),
+          claimer_display_name = COALESCE(claimer_display_name, ?),
+          claimed_at = COALESCE(claimed_at, ?)
+        WHERE id = ? AND claimer_user_id IS NULL AND minted_owner_wallet_address = ?
+      `
+    ).bind(actor.id, actor.displayName, claimedAt, record.draft.id, normalizeAddress(actor.walletAddress)),
   ]);
 }
 

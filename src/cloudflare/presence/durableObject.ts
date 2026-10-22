@@ -4,6 +4,7 @@ import PresenceServer from '../../../partykit/presenceServer';
 import type { ConnectionPresenceState } from '../../partykit/presenceProtocol';
 import { METRICS_ROOM_ID } from '../../partykit/shardMetricsRuntime';
 import type { Env } from '../worker/core/types';
+import { recordPvpMatchResult } from '../worker/pvp/store';
 
 declare const WebSocketPair: new () => { 0: WorkerWebSocket; 1: WorkerWebSocket };
 const NAME_KEY = '__wamp_presence_room';
@@ -86,7 +87,11 @@ export class PresenceDurableObject {
       } }) } } },
     };
     // This explicit compatibility boundary reuses the full auth/chat/preview/PvP implementation.
-    this.core = new PresenceServer(room as unknown as Party.Room, { waitUntil: (work) => ctx.waitUntil(work) });
+    this.core = new PresenceServer(room as unknown as Party.Room, {
+      waitUntil: (work) => ctx.waitUntil(work),
+      // PvP results are saved from the room's finished match, never from what a browser reports.
+      recordPvpResult: async (snapshot) => { if (env.DB) await recordPvpMatchResult(env, snapshot); },
+    });
     this.ready = ctx.blockConcurrencyWhile(async () => {
       this.roomName = await ctx.storage.get<string>(NAME_KEY) ?? '';
       if (this.roomName) await this.core.onStart();

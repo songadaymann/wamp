@@ -17,6 +17,8 @@ describe('school-managed accounts are blocked from public and personal-account a
     ['../auth/routes.ts', "assertNotSchoolRestricted(existingAuth, 'add an email address')"],
     ['../auth/walletRoutes.ts', "assertNotSchoolRestricted(auth, 'link a wallet')"],
     ['../auth/request.ts', 'if (auth.school) {'],
+    ['../pvp/store.ts', 'loadSchoolAuthContextForUser(env, participant.userId)'],
+    ['../../../../partykit/presenceServer.ts', "if (this.isPvpRoom() && identity.school) {"],
   ])('%s keeps %s', (path, check) => {
     expect(read(path)).toContain(check);
   });

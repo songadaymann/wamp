@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   loadRecord: vi.fn(),
   verifyMint: vi.fn(),
   persist: vi.fn(),
+  persistClaimer: vi.fn(),
 }));
 vi.mock('../auth/request', () => ({ requireWalletLinkedRequestAuth: mocks.auth }));
 vi.mock('../rooms/store', () => ({ loadRoomRecordForMutation: mocks.loadForMutation, loadRoomRecord: mocks.loadRecord }));
@@ -17,13 +18,17 @@ vi.mock('./service', async (importOriginal) => ({
   requireRoomMintConfig: () => ({ chainId: 8453 }),
   verifyMintTransactionForRoom: mocks.verifyMint,
   persistRoomMintState: mocks.persist,
+  persistMintedRoomClaimer: mocks.persistClaimer,
 }));
 
+import type { RoomRecord } from '../../../persistence/roomModel';
+import { fixture } from '../activity/testDatabase';
 import { handleRoomMintConfirm } from './routes';
 
 const coordinates = { x: 3, y: -2 };
 const TX = `0x${'ab'.repeat(32)}`;
 const WALLET = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const CONTRACT = '0x1111111111111111111111111111111111111111';
 const builder = { id: 'user-1', walletAddress: WALLET };
 
 function confirm(txHash: string = TX) {
@@ -90,5 +95,56 @@ describe('room mint confirmation (F064)', () => {
     const response = await confirm();
     expect(response.status).toBe(200);
     expect(mocks.persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the current owner when the minter confirms after the token changed hands', async () => {
+    const buyer = '0x3333333333333333333333333333333333333333';
+    mocks.loadForMutation.mockResolvedValue(roomRecord({
+      permissions: { canMint: false }, mintedChainId: 8453, mintedContractAddress: CONTRACT,
+      mintedTokenId: '42', mintedOwnerWalletAddress: buyer,
+    }));
+    mocks.verifyMint.mockResolvedValue({ chainId: 8453, contractAddress: CONTRACT, ownerWalletAddress: WALLET, tokenId: '42' });
+    mocks.loadRecord.mockResolvedValue({ id: '3,-2', mintedTokenId: '42', mintedOwnerWalletAddress: buyer });
+    const response = await confirm();
+    expect(response.status).toBe(200);
+    expect(mocks.persist).not.toHaveBeenCalled();
+    expect(mocks.persistClaimer).not.toHaveBeenCalled();
+    expect(await response.json()).toMatchObject({ mintedOwnerWalletAddress: buyer });
+  });
+
+  it.each([[WALLET, true], ['0x3333333333333333333333333333333333333333', false]] as const)(
+    'gives builder credit on a mint an earlier sync recorded without a claimer when the owner is %s: %s',
+    async (owner, credited) => {
+      const record = roomRecord({
+        claimerUserId: null, permissions: { canMint: false }, mintedChainId: 8453, mintedContractAddress: CONTRACT,
+        mintedTokenId: '42', mintedOwnerWalletAddress: owner,
+      });
+      mocks.loadForMutation.mockResolvedValue(record);
+      mocks.verifyMint.mockResolvedValue({ chainId: 8453, contractAddress: CONTRACT, ownerWalletAddress: WALLET, tokenId: '42', ownerSyncedAt: '2026-10-22T00:00:00.000Z' });
+      expect((await confirm()).status).toBe(200);
+      expect(mocks.persist).not.toHaveBeenCalled();
+      expect(mocks.persistClaimer.mock.calls).toEqual(credited
+        ? [[{}, record, expect.objectContaining({ id: 'user-1', walletAddress: WALLET }), '2026-10-22T00:00:00.000Z']] : []);
+    },
+  );
+});
+
+describe('persistMintedRoomClaimer', () => {
+  it('sets the claimer only on an unclaimed room still recorded as owned by that wallet', async () => {
+    const { persistMintedRoomClaimer } = await vi.importActual<typeof import('./service')>('./service');
+    const f = fixture();
+    try {
+      const claimer = () => f.sqlite.prepare('SELECT claimer_user_id, claimer_principal_type, claimer_display_name, claimed_at FROM rooms WHERE id = ?').get('0,0');
+      f.sqlite.prepare('UPDATE rooms SET claimer_user_id = NULL, minted_chain_id = 8453, minted_contract_address = ?, minted_token_id = ?, minted_owner_wallet_address = ? WHERE id = ?')
+        .run(CONTRACT, '42', '0x3333333333333333333333333333333333333333', '0,0');
+      const record = { draft: { id: '0,0' } } as RoomRecord, minter = { id: 'p1', displayName: 'p1', email: null, walletAddress: WALLET };
+      await persistMintedRoomClaimer(f.env, record, minter, '2026-10-22T00:00:00.000Z');
+      expect(claimer()).toMatchObject({ claimer_user_id: null });
+      f.sqlite.prepare('UPDATE rooms SET minted_owner_wallet_address = ? WHERE id = ?').run(WALLET, '0,0');
+      await persistMintedRoomClaimer(f.env, record, minter, '2026-10-22T00:00:00.000Z');
+      expect(claimer()).toEqual({ claimer_user_id: 'p1', claimer_principal_type: 'user', claimer_display_name: 'p1', claimed_at: '2026-10-22T00:00:00.000Z' });
+      await persistMintedRoomClaimer(f.env, record, { ...minter, id: 'p2' }, '2026-10-23T00:00:00.000Z');
+      expect(claimer()).toMatchObject({ claimer_user_id: 'p1' });
+    } finally { f.sqlite.close(); }
   });
 });

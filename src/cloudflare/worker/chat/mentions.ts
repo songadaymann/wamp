@@ -2,7 +2,7 @@ import { Resend } from 'resend';
 import type { AuthUser } from '../../../auth/model';
 import type { ChatMessageRecord } from '../../../chat/model';
 import { normalizeProfileUsername, validateProfileUsername } from '../../../profiles/username';
-import { DEFAULT_AUTH_EMAIL_FROM, findUserByUsername, resolvePublicBaseUrl } from '../auth/store';
+import { DEFAULT_AUTH_EMAIL_FROM, findUserByUsername, resolveEmailBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 import { hashRateLimitKey, releaseRateLimitSlots, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
 
@@ -102,7 +102,7 @@ export async function sendChatMentionNotificationEmails(
 
   const resend = new Resend(apiKey);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
-  const baseUrl = resolvePublicBaseUrl(request, env).replace(/\/+$/, '');
+  const baseUrl = resolveEmailBaseUrl(request, env).replace(/\/+$/, '');
   const chatUrl = `${baseUrl}/`;
   const excerpt = trimForEmail(message.body, CHAT_EMAIL_BODY_MAX_LENGTH);
 

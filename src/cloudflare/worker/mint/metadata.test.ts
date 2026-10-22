@@ -48,8 +48,9 @@ describe('canonical room artwork observations and recovery', () => {
     try {
       expect(await (await f.refresh()).json()).toMatchObject({ mintedMetadataRoomVersion: 6, mintedMetadataHash: await sha256Hex(f.provider.state.tokenUri) });
       expect(f.stored()).toMatchObject({ minted_metadata_room_version: 6, minted_owner_wallet_address: wallet, claimer_user_id: 'builder' });
-      const before = f.stored(), writes = f.sqlite.prepare('SELECT total_changes() AS n').get();
-      await f.refresh(); expect(f.stored()).toEqual(before); expect(f.sqlite.prepare('SELECT total_changes() AS n').get()).toEqual(writes);
+      const before = f.stored(), writes: string[] = [], prepare = f.env.DB.prepare.bind(f.env.DB);
+      f.env.DB.prepare = (sql: string) => { if (/^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql) && !/rate_limit_events/.test(sql)) writes.push(sql); return prepare(sql); };
+      await f.refresh(); expect(f.stored()).toEqual(before); expect(writes).toEqual([]);
       const calls = f.requests.filter(q => q.method === 'eth_call'); expect(calls).toHaveLength(6); expect(calls.every(q => q.params?.[1] === '0x10')).toBe(true);
     } finally { f.sqlite.close(); }
   });

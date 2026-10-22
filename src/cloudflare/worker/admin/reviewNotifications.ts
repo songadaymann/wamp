@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
+import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 
 export const DEFAULT_ADMIN_REVIEW_EMAIL = 'jonathan@jonathanmann.net';
@@ -111,7 +111,7 @@ export function buildPublicAppUrl(
   path: string,
 ): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${resolvePublicBaseUrl(request, env).replace(/\/+$/, '')}${normalizedPath}`;
+  return `${resolveEmailBaseUrl(request, env).replace(/\/+$/, '')}${normalizedPath}`;
 }
 
 export function logAdminReviewNotificationFailure(

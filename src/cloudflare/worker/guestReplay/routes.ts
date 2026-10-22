@@ -1,12 +1,15 @@
 import { REPLAY_ACTIONS, REPLAY_IMAGE_LIMIT, REPLAY_SECONDS, replayPosition, type ReplaySample } from '../../../analytics/replay/model';
 import { requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
+import { getClientIp, hashRateLimitKey, networkKeyForIp, releaseRateLimitSlots, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { deleteReplaySession, loadReplaySamples, saveReplaySamples } from './frames';
 export { purgeGuestReplays } from './frames';
 
 const DAY = 86400000;
 const ID = /^[a-f0-9-]{36}$/;
+/** Visitor ids are chosen by the browser, so each network also has its own daily share of recordings. */
+const REPLAY_STARTS_PER_NETWORK: RateLimitRule = { bucket: 'guest-replay-start:network', limit: 10, windowMs: DAY };
 const reply = (request: Request, body: unknown) => jsonResponse(request, body, { headers: { 'Cache-Control': 'no-store' } });
 
 export function validateReplaySample(input: unknown): ReplaySample {
@@ -50,6 +53,10 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
   const body = await parseJsonBody<Record<string, unknown>>(request, { maxBytes: 60_000 });
   if (url.pathname === '/api/guest-replays/start') {
     if (typeof body.visitor !== 'string' || !ID.test(body.visitor)) throw new HttpError(400, 'Invalid visitor.');
+    const ip = getClientIp(request);
+    const slots = await takeRateLimitSlots(env, ip
+      ? [{ rule: REPLAY_STARTS_PER_NETWORK, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []);
+    if (slots.limitedBy) throw new HttpError(429, 'Recording budget reached.');
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
     const now = new Date();
@@ -67,7 +74,10 @@ export async function handleGuestReplay(request: Request, url: URL, env: Env): P
       since, body.visitor, since,
     )]);
     const accepted = await env.DB.prepare('SELECT id FROM guest_replay_sessions WHERE id = ?').bind(id).first();
-    if (!accepted) throw new HttpError(429, 'Recording budget reached.');
+    if (!accepted) {
+      await releaseRateLimitSlots(env, slots.ids);
+      throw new HttpError(429, 'Recording budget reached.');
+    }
     return reply(request, { id, token });
   }
   if (typeof body.id !== 'string' || typeof body.token !== 'string' || !ID.test(body.id) || !ID.test(body.token)) throw new HttpError(403, 'Invalid recording token.');

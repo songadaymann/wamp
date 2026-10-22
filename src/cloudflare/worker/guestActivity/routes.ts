@@ -1,5 +1,6 @@
 import { requireAuthenticatedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
+import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
 import type { Env } from '../core/types';
 
 const SIGNUP_LINK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
@@ -49,6 +50,14 @@ interface GuestVisitRow {
 }
 
 const MAX_TRACKED_DELTA_SECONDS = 60;
+/**
+ * Each new visit id adds a guest_visits row before anyone signs in, so new visits are capped per
+ * network (F415). A visit is one tab, renewed after half an hour idle, so the cap leaves room for
+ * a busy shared network, and a sitewide ceiling bounds them in all. Heartbeats for a visit that
+ * is already recorded are not limited.
+ */
+const NEW_GUEST_VISITS_PER_NETWORK: RateLimitRule = { bucket: 'guest-visit-create:network', limit: 120, windowMs: 60 * 60 * 1000 };
+const NEW_GUEST_VISITS_IN_ALL: RateLimitRule = { bucket: 'guest-visit-create:all', limit: 5000, windowMs: 60 * 60 * 1000 };
 
 export async function handleGuestActivityHeartbeat(
   request: Request,
@@ -75,6 +84,9 @@ export async function handleGuestActivityHeartbeat(
   )
     .bind(sessionId)
     .first<GuestVisitRow>();
+  if (!existing) {
+    await takeNewGuestVisitSlot(request, env);
+  }
 
   const creditedMode = normalizeGuestActivityMode(existing?.mode, false) ?? mode;
   const deltaSeconds = existing
@@ -167,6 +179,21 @@ export async function handleGuestActivityHeartbeat(
   ]);
 
   return jsonResponse(request, { ok: true });
+}
+
+async function takeNewGuestVisitSlot(request: Request, env: Env): Promise<void> {
+  const ip = getClientIp(request);
+  const keyHash = await hashRateLimitKey(env, ip ? networkKeyForIp(ip) : 'network:unknown');
+  const { limitedBy } = await takeRateLimitSlots(env, [
+    { rule: NEW_GUEST_VISITS_PER_NETWORK, keyHash },
+    { rule: NEW_GUEST_VISITS_IN_ALL, keyHash: 'all' },
+  ]);
+  if (limitedBy === NEW_GUEST_VISITS_PER_NETWORK) {
+    throw new HttpError(429, 'Too many new visits from this network. Try again later.');
+  }
+  if (limitedBy) {
+    throw new HttpError(429, 'Too many new visits right now. Try again later.');
+  }
 }
 
 function normalizeSessionId(value: unknown): string {

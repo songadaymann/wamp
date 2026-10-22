@@ -4,6 +4,8 @@ import { handleCloudflarePresence, PresenceDurableObject, presenceRoomFromUrl } 
 import type { Env } from '../worker/core/types';
 import { createTestIdentityToken, presencePayload, testIdentity } from '../../partykit/presenceServer.testHarness';
 import type { ConnectionPresenceState } from '../../partykit/presenceProtocol';
+const recordPvpMatchResult = vi.hoisted(() => vi.fn(async () => 'recorded'));
+vi.mock('../worker/pvp/store', () => ({ recordPvpMatchResult }));
 
 const secret = 'cloudflare-presence-local-test';
 class Socket {
@@ -21,8 +23,8 @@ class Socket {
   messages() { return this.sent.map(m => JSON.parse(m)); }
   worker() { return this as unknown as WorkerWebSocket; }
 }
-function context(sockets: Socket[]) {
-  const data = new Map<string, unknown>([['__wamp_presence_room', '0,0']]);
+function context(sockets: Socket[], roomName = '0,0') {
+  const data = new Map<string, unknown>([['__wamp_presence_room', roomName]]);
   const ctx = { storage: {
     get: async (key: string) => data.get(key), put: async (key: string, value: unknown) => { data.set(key, value); },
     list: async ({prefix}: {prefix:string}) => new Map([...data.entries()].filter(([key])=>key.startsWith(prefix))),
@@ -75,5 +77,14 @@ describe('Cloudflare presence routing and hibernation adapter', () => {
     expect(peer.attachment.state.presence).toBeNull();expect(peer.closes).toEqual([]);
     await room.webSocketMessage(peer.worker(),'é'.repeat(600000));expect(peer.closes).toEqual([1009]);
     expect((await room.fetch(new Request('https://presence.test/parties/main/1,0'))).status).toBe(404);
+  });
+  it('saves a finished PvP match from the room state with the Worker database', async () => {
+    const alice=new Socket('alice'),bob=new Socket('bob'),env={DB:{}} as Env;
+    const room=new PresenceDurableObject(context([alice,bob],'pvp:m1'),env);
+    const configure=JSON.stringify({type:'pvp:match:configure',matchId:'m1',mode:'arena',roomId:'0,0',roomCoordinates:{x:0,y:0},participants:[]});
+    await room.webSocketMessage(alice.worker(),configure);await room.webSocketMessage(bob.worker(),configure);
+    await room.webSocketMessage(bob.worker(),JSON.stringify({type:'pvp:match:leave'}));
+    await vi.waitFor(()=>expect(recordPvpMatchResult).toHaveBeenCalledTimes(1));
+    expect(recordPvpMatchResult).toHaveBeenCalledWith(env,expect.objectContaining({matchId:'m1',status:'complete',winnerUserId:'user-alice',loserUserId:'user-bob'}));
   });
 });

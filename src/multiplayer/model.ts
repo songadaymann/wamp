@@ -396,19 +396,9 @@ export interface MultiplayerMatchSubmissionParticipant {
   hits: number;
 }
 
+/** The presence room saves results itself; clients only name the match to look it up. */
 export interface MultiplayerMatchSubmissionRequestBody {
   matchId: string;
-  mode: MultiplayerModeId;
-  roomId: string;
-  roomCoordinates: RoomCoordinates;
-  startedAt: string;
-  finishedAt: string;
-  durationMs: number;
-  result: 'win' | 'draw';
-  winnerUserId: string | null;
-  loserUserId: string | null;
-  participants: MultiplayerMatchSubmissionParticipant[];
-  finalSnapshot: MultiplayerInstanceSnapshot;
 }
 
 export interface MultiplayerMatchSubmissionResponse {

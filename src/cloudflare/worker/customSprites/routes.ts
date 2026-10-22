@@ -16,8 +16,10 @@ import {
   saveCustomSpriteCatalogEntry,
 } from './catalogStore';
 import { isCustomSpriteUsedInStoredRooms } from './store';
+import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlot, type RateLimitRule } from '../core/rateLimit';
 
 const CUSTOM_SPRITE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,96}$/;
+const SPRITE_USAGE_RULE: RateLimitRule = { bucket: 'custom_sprite_usage', limit: 60, windowMs: 60 * 60 * 1000 };
 
 export async function handleCustomSpriteRequest(
   request: Request,
@@ -41,6 +43,11 @@ export async function handleCustomSpriteRequest(
   if (usageMatch) {
     if (request.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
     const spriteId = decodeSpriteId(usageMatch[1]);
+    // Each check searches every stored room, so one network gets a modest hourly allowance (F411).
+    const ip = getClientIp(request);
+    if (ip && await takeRateLimitSlot(env, SPRITE_USAGE_RULE, await hashRateLimitKey(env, networkKeyForIp(ip))) === null) {
+      throw new HttpError(429, 'Too many sprite checks. Try again in a little while.');
+    }
     const response: CustomSpriteUsageResponse = {
       inUse: await isCustomSpriteUsedInStoredRooms(env, spriteId),
     };

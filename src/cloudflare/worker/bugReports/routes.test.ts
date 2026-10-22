@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const auth = vi.hoisted(() => ({ id: null as string | null }));
 vi.mock('../auth/request', async importActual => ({ ...await importActual<object>(),
   loadOptionalRequestAuth: async () => auth.id ? { user: { id: auth.id } } : null }));
+import { hashRateLimitKey } from '../core/rateLimit';
 import { handleBugReports, purgeBugReports } from './routes';
 import { validateBugReport } from './validation';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
@@ -16,6 +17,7 @@ function statement(sql: string, values: unknown[] = []): D1PreparedStatement {
 beforeEach(() => {
   auth.id = null; db = new DatabaseSync(':memory:'); db.exec('PRAGMA foreign_keys=ON');
   db.exec(readFileSync('migrations/0060_bug_reports.sql','utf8'));
+  db.exec(readFileSync('migrations/0049_rate_limit_events.sql','utf8'));
   const database: D1Database = { prepare: statement, async batch<T>(statements: D1PreparedStatement[]): Promise<T[]> {
     db.exec('BEGIN'); try { const results = []; for (const query of statements) results.push(await query.all()); db.exec('COMMIT'); return results as T[]; }
     catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -80,4 +82,31 @@ it('rejects foreign mutation origins, oversized/malformed images and unbounded r
     expect(() => validateBugReport({ ...body(), evidence })).toThrow();
   await expect(handleBugReports(new Request(url, { method: 'POST', headers: { Origin: 'https://wamp.land', 'Content-Length': '2000000' }, body: '{}' }),url,env))
     .rejects.toMatchObject({ status: 413 });
+});
+it('gives signed-in reporters their own daily allowance and caps guest reports per network (F425)', async () => {
+  const post = (report: unknown, ip: string) => {
+    const url = new URL('https://api.wamp.land/api/bug-reports');
+    return handleBugReports(new Request(url, { method: 'POST', headers: { Origin: 'https://wamp.land', 'CF-Connecting-IP': ip },
+      body: JSON.stringify(report) }), url, env);
+  };
+  const written = () => ({ ...body(), evidence: { samples: [], screenshot: null, reason: 'disabled' } });
+  const slots = () => (db.prepare("SELECT COUNT(*) n FROM rate_limit_events WHERE bucket = 'bug-report-guest:network'").get() as { n: number }).n;
+  const insert = db.prepare(`INSERT INTO bug_reports (id, identity_hash, network_hash, submission_hash, user_id, notes, created_at, expires_at,
+    build, context_json, device_json, errors_json, evidence_reason, frames, duration_ms, has_screenshot)
+    VALUES (?, 'old', 'old', 'old', NULL, 'old', ?, '2999-01-01', 'b', '{}', '{}', '[]', 'disabled', 0, 0, 0)`);
+  for (let i = 0; i < 100; i++) insert.run(crypto.randomUUID(), new Date().toISOString());
+  // The guest allowance is used up, and the refused report gives back its network slot.
+  await expect(post(written(), '198.51.100.1')).rejects.toMatchObject({ status: 429, message: 'Report limit reached. Try again later.' });
+  expect(slots()).toBe(0);
+  auth.id = 'verified-user';
+  expect((await post(written(), '198.51.100.1')).status).toBe(200);
+  db.exec("DELETE FROM bug_reports WHERE notes = 'old'");
+  auth.id = null;
+  const network = await hashRateLimitKey(env, 'ip:203.0.113.9');
+  for (let i = 0; i < 10; i++) db.prepare("INSERT INTO rate_limit_events (bucket, key_hash, created_at) VALUES ('bug-report-guest:network', ?, ?)")
+    .run(network, new Date().toISOString());
+  await expect(post(written(), '203.0.113.9')).rejects.toMatchObject({ status: 429 });
+  expect((await post(written(), '192.0.2.7')).status).toBe(200);
+  auth.id = 'verified-user';
+  expect((await post(written(), '203.0.113.9')).status).toBe(200);
 });
