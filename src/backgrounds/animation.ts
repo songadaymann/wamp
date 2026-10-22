@@ -125,6 +125,10 @@ const animatedTextures = new WeakMap<
   Set<BackgroundObject>
 >();
 
+export const isAnimatedBackgroundTexture = (
+  texture: Phaser.Textures.Texture,
+): boolean => animatedTextures.has(texture);
+
 export function observeAnimatedBackground(
   object: BackgroundObject,
   texture: Phaser.Textures.Texture,
