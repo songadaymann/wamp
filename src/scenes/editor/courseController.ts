@@ -28,6 +28,12 @@ import {
 } from './courseEditing';
 import { getSelectedCoursePreviewForPlay } from './playMode';
 
+export interface CourseRoomSessionSyncOptions {
+  published: boolean;
+  baseUpdatedAt?: string | null;
+  unsaved?: boolean;
+}
+
 interface EditorCourseControllerHost {
   getRoomId(): string;
   updateGoalUi(): void;
@@ -97,14 +103,11 @@ export class EditorCourseController {
   }
 
   /**
-   * `baseUpdatedAt` is the server version the room was loaded or last saved at and `unsaved` whether it
-   * holds edits not saved yet, so the Expanded Room editor neither overwrites newer work with this copy
-   * nor drops it as stale (F379).
+   * `baseUpdatedAt` is the server version this copy was loaded or saved at and `unsaved` whether the copy
+   * holds edits not saved yet, so the Expanded Room editor neither overwrites newer work with it nor
+   * drops it as stale (F379).
    */
-  syncActiveCourseRoomSessionSnapshot(
-    room: RoomSnapshot,
-    options: { published: boolean; baseUpdatedAt?: string | null; unsaved?: boolean },
-  ): void {
+  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void {
     const courseEdit = this.activeCourseMarkerEdit;
     if (!courseEdit || getActiveCourseDraftSessionCourseId() !== courseEdit.courseId) {
       return;

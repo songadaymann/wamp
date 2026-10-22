@@ -2152,6 +2152,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private takeServerVersion(slice: CourseRoomSlice, record: RoomRecord): void {
+    // An older copy kept on this device would otherwise offer itself over this version on the next open.
+    this.draftBackup.forgetRoom(this.courseRecord?.draft.id ?? '', slice.roomId);
     this.roomBackupBases.set(slice.roomId, { id: record.draft.id, updatedAt: record.draft.updatedAt, version: record.draft.version });
     this.applyStoredRoomRecordToSlice(slice, record, { keepDirty: false, keepOverride: false });
   }

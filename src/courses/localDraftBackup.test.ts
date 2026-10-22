@@ -122,6 +122,18 @@ describe('expanded draft backup persistence and recovery', () => {
     expect(values.size).toBe(0);
   });
 
+  it('forgets a cell backup whatever it holds, leaving other cells alone (F379)', () => {
+    const { backup, values } = storageFixture();
+    const remote = room();
+    const other = createDefaultRoomSnapshot('9,9', { x: 9, y: 9 });
+    backup.writeRoom('course:one', { ...remote, title: 'Older local copy' }, remote);
+    backup.writeRoom('course:one', { ...other, title: 'Other cell' }, other);
+    backup.forgetRoom('course:one', remote.id);
+    expect(backup.recoverRoom('course:one', remote).status).toBe('none');
+    expect(values.size).toBe(1);
+    expect(() => new ExpandedRoomDraftBackup('alice', () => { throw new Error('Denied'); }).forgetRoom('course:one', remote.id)).not.toThrow();
+  });
+
   it('uses editable content revisions independent of field ordering and server timestamps', () => {
     const first = room();
     const second = { ...Object.fromEntries(Object.entries(first).reverse()), id: first.id, updatedAt: '2099-01-01T00:00:00.000Z', version: 100 };

@@ -615,7 +615,7 @@ describe('the same room saved from another tab or device', () => {
     return record;
   }
 
-  async function openedEditor(saveDraft: RoomRepository['saveDraft'], latest: RoomRecord) {
+  async function openedEditor(saveDraft: RoomRepository['saveDraft'], latest: RoomRecord, onDraftSaved?: (record: RoomRecord) => void) {
     let dirty = false;
     const mine = serverRecord(loadedAt, 1);
     mine.draft.tileData.terrain[9][9] = 77;
@@ -628,7 +628,7 @@ describe('the same room saved from another tab or device', () => {
       applyRoomSnapshot, exportRoomSnapshot: () => mine.draft,
       getPublishValidationError: () => null, getRoomDirty: () => dirty,
       setRoomDirty: (value: boolean) => { dirty = value; }, getLastDirtyAt: () => 100, refreshUi: vi.fn(),
-      refreshSurroundingRoomPreviews: vi.fn(),
+      refreshSurroundingRoomPreviews: vi.fn(), onDraftSaved,
     });
     session.currentRoomId = roomId;
     session.currentRoomCoordinates = coordinates;
@@ -647,6 +647,18 @@ describe('the same room saved from another tab or device', () => {
     expect(repository.saveDraft).toHaveBeenCalledWith(expect.anything(), { baseUpdatedAt: loadedAt });
     await session.saveDraft(true);
     expect(repository.saveDraft).toHaveBeenLastCalledWith(expect.anything(), { baseUpdatedAt: theirsAt });
+  });
+
+  it('reports every draft the server accepts, autosave included, and none it refuses (F379)', async () => {
+    const saved = serverRecord(theirsAt, 77);
+    const onDraftSaved = vi.fn();
+    const { session } = await openedEditor(async () => saved, serverRecord(theirsAt, 5), onDraftSaved);
+    await session.saveDraft(true);
+    expect(onDraftSaved).toHaveBeenCalledWith(saved);
+    const refused = await openedEditor(async () => { throw conflict(); }, serverRecord(theirsAt, 5), onDraftSaved);
+    onDraftSaved.mockClear();
+    await refused.session.saveDraft(true);
+    expect(onDraftSaved).not.toHaveBeenCalled();
   });
 
   it('stops autosave, keeps a copy here, and asks which version to keep', async () => {

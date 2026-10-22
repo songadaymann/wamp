@@ -79,3 +79,18 @@ describe('explicit first publication', () => {
     await f.controller.publishRoom(); expect(f.host.onRoomPublished).not.toHaveBeenCalled();
   });
 });
+
+describe('course session copy after a room editor save (F379)', () => {
+  it('marks a copy saved only on this device as unsaved, and leaves server saves to the room session', async () => {
+    const f = fixture('Cell');
+    const session = f.session as unknown as { saveDraft: () => Promise<unknown>; currentServerDraftUpdatedAt: string | null };
+    session.saveDraft = vi.fn(async () => f.record);
+    session.currentServerDraftUpdatedAt = null;
+    await f.controller.saveDraft(true);
+    expect(f.host.syncActiveCourseRoomSessionSnapshot).toHaveBeenCalledWith(f.record.draft, { published: false, baseUpdatedAt: null, unsaved: true });
+    vi.mocked(f.host.syncActiveCourseRoomSessionSnapshot).mockClear();
+    session.currentServerDraftUpdatedAt = f.record.draft.updatedAt;
+    await f.controller.saveDraft(true);
+    expect(f.host.syncActiveCourseRoomSessionSnapshot).not.toHaveBeenCalled();
+  });
+});

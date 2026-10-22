@@ -136,6 +136,15 @@ export class ExpandedRoomDraftBackup {
     return this.discard(this.key(sent.id), sent);
   }
 
+  /** Drops a cell's backup whatever it holds, for when the cell was replaced with the server's version. */
+  forgetRoom(courseId: string, roomId: string): void {
+    try {
+      this.getStorage().removeItem(this.key(courseId, roomId));
+    } catch {
+      // Storage unavailable: nothing to forget.
+    }
+  }
+
   discardRoom(courseId: string, sent: RoomSnapshot): boolean {
     // The backup holds a normalized copy and `sent` is the raw editor snapshot, so compare normalized.
     return this.discard(this.key(courseId, sent.id), sent, roomContentRevision);

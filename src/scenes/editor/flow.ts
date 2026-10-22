@@ -3,6 +3,7 @@ import {
   promptForSignIn,
 } from '../../auth/client';
 import type { CourseSnapshot } from '../../courses/model';
+import type { CourseRoomSessionSyncOptions } from './courseController';
 import type {
   RoomCoordinates,
   RoomPermissions,
@@ -34,7 +35,7 @@ interface EditorSceneFlowHost {
   getPublishedVersion(): number;
   getRoomCoordinates(): RoomCoordinates;
   buildCourseEditedRoomData(): CourseEditedRoomData | null;
-  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void;
+  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void;
   hideObjectInspectorUi(): void;
   clearEditorPresence(): void;
   sleepEditorScene(): void;
@@ -69,6 +70,8 @@ export class EditorSceneFlowController {
 
   async startPlayMode(practiceStart?: { x: number; y: number }): Promise<void> {
     this.host.cancelClipboardPastePreview();
+    // A save still uploading would replace the course session copy below with an older draft (F379).
+    await this.roomSession.waitForSaveToSettle();
     const coursePreview = this.host.getSelectedCoursePreviewForPlay();
     if (this.host.getRoomPermissions().canSaveDraft) {
       void this.host.saveDraft(true);
@@ -80,6 +83,8 @@ export class EditorSceneFlowController {
       !this.roomSession.hasDraftPreviewInWorld();
     this.host.syncActiveCourseRoomSessionSnapshot(currentRoomSnapshot, {
       published: usePublishedCourseRoomVersion,
+      baseUpdatedAt: this.roomSession.currentServerDraftUpdatedAt,
+      unsaved: this.host.getRoomDirty(),
     });
     const playData: OverworldPlaySceneData = buildEditorPlayModeData({
       roomCoordinates: this.host.getRoomCoordinates(),

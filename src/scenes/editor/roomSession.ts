@@ -50,6 +50,8 @@ interface EditorRoomSessionHost {
   getLastDirtyAt(): number;
   refreshUi(): void;
   refreshSurroundingRoomPreviews(): void;
+  /** Every draft the server accepted, autosaves included, so a course cell's session copy follows it (F379). */
+  onDraftSaved?(record: RoomRecord): void;
 }
 
 export interface EditorHistoryState {
@@ -661,6 +663,7 @@ export class EditorRoomSession {
       }
       this.autoSaveBackoff = null;
       this.syncRoomMetadata(record, this.host.getLastDirtyAt() !== saveStartedAt);
+      if (this.shouldClearLocalDraftAfterRepositoryMutation()) this.host.onDraftSaved?.(record);
       if (this.host.getLastDirtyAt() === saveStartedAt) {
         this.host.setRoomDirty(false);
         if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
