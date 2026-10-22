@@ -3,6 +3,7 @@ import type { CourseSnapshot } from '../../courses/model';
 import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
 import { hasDeadlyBottomEdge } from './pits';
 import {
+  hasOpenDropBelow,
   isBodySupportedAwayFromVerticalSeam,
   resolveVerticalApproach,
   TransitionFloorMemory,
@@ -23,6 +24,8 @@ interface OverworldRoomTransitionHost {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getPlayerFacing(): -1 | 1;
   getPlayerGravityEnvironment?(): TransitionApproachEnvironment | null;
+  /** Solid terrain of the current room at a world point. */
+  isSolidTerrainAt?(worldX: number, worldY: number): boolean;
   getCurrentRoomCoordinates(): RoomCoordinates;
   setCurrentRoomCoordinates(coordinates: RoomCoordinates): void;
   setSelectedCoordinates(coordinates: RoomCoordinates): void;
@@ -340,15 +343,20 @@ export class OverworldRoomTransitionController {
     const origin = this.host.getRoomOrigin(currentRoomCoordinates);
     // Only a vertical seam the player can actually reach competes with the
     // room ahead. A floor underfoot, a hop that lands back on it, or a jump
-    // that peaks short of the top seam keeps the horizontal room (F350).
+    // that peaks far short of the top seam keeps the horizontal room (F350).
+    const roomBottom = origin.y + ROOM_PX_HEIGHT;
+    const isSolidTerrainAt = this.host.isSolidTerrainAt?.bind(this.host);
     const verticalDirection = resolveVerticalApproach({
       body: playerBody,
       environment: this.host.getPlayerGravityEnvironment?.() ?? null,
       playerY: player.y,
       feetY,
       roomTop: origin.y,
-      roomBottom: origin.y + ROOM_PX_HEIGHT,
+      roomBottom,
       floorMemory: this.floorMemory,
+      hasOpenDropBelow: isSolidTerrainAt
+        ? () => hasOpenDropBelow(isSolidTerrainAt, playerBody.left, playerBody.right, feetY, roomBottom)
+        : undefined,
     });
     if (playerBody.velocity.x > MOVEMENT_EPSILON) {
       this.prepareApproachingNeighbor(

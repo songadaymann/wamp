@@ -482,7 +482,10 @@ describe('transition prediction follows reachable seams (F350)', () => {
       gravity: { y: 0 },
       world: { gravity: { y: GRAVITY } },
       blocked: { up: false, down: false },
-      get top() { return harness.player.y - harness.body.height * 0.5; },
+    });
+    Object.defineProperties(physicalBody, {
+      left: { configurable: true, get: () => harness.player.x - physicalBody.width * 0.5 },
+      right: { configurable: true, get: () => harness.player.x + physicalBody.width * 0.5 },
     });
     const requested = (coordinates: { x: number; y: number }) =>
       harness.host.prefetchPlayableRoomForTransition.mock.calls
@@ -599,6 +602,63 @@ describe('transition prediction follows reachable seams (F350)', () => {
 
     expect(host.preparePlayableRoomForTransition).toHaveBeenCalledTimes(3);
     expect(host.preparePlayableRoomForTransition).toHaveBeenLastCalledWith({ x: 0, y: 1 });
+  });
+
+  it.each([
+    ['gets the room above from one jump short of the seam', 100, 1],
+    ['does not get it from a jump far below the seam', 150, 0],
+  ])('a climbing wall jump %s', (_label, centerY, expected) => {
+    const { physicalBody, player, requested, controller } = createPhysicalHarness();
+    player.y = centerY;
+    physicalBody.velocity.x = -205;
+    physicalBody.velocity.y = -265;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(requested({ x: 0, y: -1 })).toBe(expected);
+  });
+
+  it('predicts the room below as soon as a run leaves the floor over a bottom-row hole', () => {
+    const { controller, host, physicalBody, player, requested, stand } = createPhysicalHarness();
+    // Bottom-row floor with a 32 px hole at x 320-352.
+    const halfWidth = physicalBody.width * 0.5;
+    const overHole = () => player.x - halfWidth >= 320 && player.x + halfWidth <= 352;
+    Object.assign(host, {
+      isSolidTerrainAt: vi.fn((x: number, y: number) => y >= LOW_FLOOR_FEET_Y && !(x >= 320 && x < 352)),
+    });
+    player.x = 300;
+    stand(LOW_FLOOR_FEET_Y);
+    controller.maybeAdvancePlayerRoom();
+
+    let firstBelowFeetY: number | null = null;
+    for (let frame = 0; frame < 30 && player.y < 352; frame += 1) {
+      player.x += physicalBody.velocity.x * FRAME_SECONDS;
+      if (overHole() || !physicalBody.blocked.down) {
+        physicalBody.blocked.down = false;
+        physicalBody.velocity.y += GRAVITY * FRAME_SECONDS;
+        player.y += physicalBody.velocity.y * FRAME_SECONDS;
+      }
+      controller.maybeAdvancePlayerRoom();
+      if (firstBelowFeetY === null && requested({ x: 0, y: 1 }) > 0) firstBelowFeetY = physicalBody.bottom;
+    }
+
+    expect(firstBelowFeetY).not.toBeNull();
+    expect(firstBelowFeetY!).toBeLessThanOrEqual(LOW_FLOOR_FEET_Y + 1);
+  });
+
+  it('does not predict the room below for a jump inside an up-gravity zone', () => {
+    const { host, physicalBody, player, requested, controller } = createPhysicalHarness();
+    Object.assign(host, {
+      getPlayerGravityEnvironment: vi.fn(() => ({ gravityDirection: 'up' as const, inWater: false })),
+    });
+    physicalBody.allowGravity = false;
+    player.y = 176;
+    physicalBody.velocity.y = 280;
+
+    controller.maybeAdvancePlayerRoom();
+
+    expect(requested({ x: 0, y: 1 })).toBe(0);
+    expect(requested({ x: 1, y: 0 })).toBe(1);
   });
 
   it('keeps swimming predictions on the direction of travel', () => {
