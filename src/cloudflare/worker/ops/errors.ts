@@ -1,4 +1,4 @@
-import { HttpError, jsonResponse, noContentResponse } from '../core/http';
+import { HttpError, jsonResponse, noContentResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlot, type RateLimitRule } from '../core/rateLimit';
 
@@ -45,16 +45,12 @@ export function redactClientErrorText(value: unknown, limit: number): string | n
  * Logged as `{ kind: 'client_error', ... }` for Workers Logs; nothing is stored.
  */
 export async function handleClientErrorReport(request: Request, env: Env): Promise<Response> {
-  const text = await request.text();
-  if (text.length > MAX_CLIENT_ERROR_BYTES) throw new HttpError(413, 'Error report too large.');
-  let body: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
-    body = parsed as Record<string, unknown>;
-  } catch {
-    throw new HttpError(400, 'Invalid error report.');
-  }
+  // Capped while reading, so an oversized anonymous upload is refused before it is buffered (F426).
+  const parsed = await parseJsonBody<unknown>(request, { maxBytes: MAX_CLIENT_ERROR_BYTES }).catch((error: unknown) => {
+    throw error instanceof HttpError && error.status === 413 ? new HttpError(413, 'Error report too large.') : new HttpError(400, 'Invalid error report.');
+  });
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new HttpError(400, 'Invalid error report.');
+  const body = parsed as Record<string, unknown>;
   const message = redactClientErrorText(body.message, 300);
   if (!message) throw new HttpError(400, 'Invalid error report.');
 
