@@ -15,6 +15,7 @@ import {
   type CustomSpriteCatalogEntry,
   type CustomSpriteCatalogRemixSource,
 } from './catalog';
+import { BLOCKED_ART_COLOR, isCustomSpriteBlocked, onBlockedCustomSpritesChanged } from './blocklist';
 
 export const CUSTOM_SPRITES_CHANGED_EVENT = 'custom-sprites-changed';
 
@@ -23,6 +24,8 @@ const STORAGE_KEY = 'wamp.customSprites.v2';
 const DATA_URL_CACHE_LIMIT = 256;
 const spriteById = new Map<string, CustomSpriteDefinition>();
 const dataUrlById = new Map<string, string>();
+// The game's texture manager, so a sprite blocked or restored mid-session is redrawn in place.
+let knownTextureManager: Phaser.Textures.TextureManager | null = null;
 const localSpriteIds = new Set<string>();
 const localMetadataById = new Map<string, LocalCustomSpriteMetadata>();
 const catalogMetadataById = new Map<string, CatalogCustomSpriteMetadata>();
@@ -227,7 +230,7 @@ export function getCustomSpriteDefinitionByObjectId(objectId: string | null | un
 
 export function listCustomSpriteDefinitions(): CustomSpriteDefinition[] {
   return Array.from(spriteById.values())
-    .filter((sprite) => sprite.status !== 'blocked')
+    .filter((sprite) => sprite.status !== 'blocked' && !isCustomSpriteBlocked(sprite.id))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
 }
 
@@ -455,6 +458,11 @@ export function createCustomSpriteCanvas(sprite: CustomSpriteDefinition): HTMLCa
 
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, sprite.size, sprite.size);
+  if (isCustomSpriteBlocked(sprite.id)) {
+    context.fillStyle = BLOCKED_ART_COLOR;
+    context.fillRect(0, 0, sprite.size, sprite.size);
+    return canvas;
+  }
   for (let index = 0; index < sprite.pixels.length; index += 1) {
     const color = sprite.pixels[index];
     if (!color) {
@@ -557,6 +565,7 @@ export function ensureCustomSpriteTexture(
     ? objectConfigOrId
     : objectConfigOrId?.id;
   const sprite = getCustomSpriteDefinitionByObjectId(objectId);
+  knownTextureManager = scene.textures;
   if (!sprite || scene.textures.exists(`custom_sprite:${sprite.id}`)) {
     return;
   }
@@ -576,14 +585,23 @@ export function refreshCustomSpriteTexture(
     return;
   }
 
+  knownTextureManager = scene.textures;
+  redrawCustomSpriteTexture(scene.textures, sprite, true);
+}
+
+function redrawCustomSpriteTexture(
+  textures: Phaser.Textures.TextureManager,
+  sprite: CustomSpriteDefinition,
+  addIfMissing: boolean,
+): void {
   const textureKey = `custom_sprite:${sprite.id}`;
-  const sourceCanvas = createCustomSpriteCanvas(sprite);
-  if (!scene.textures.exists(textureKey)) {
-    scene.textures.addCanvas(textureKey, sourceCanvas);
+  if (!textures.exists(textureKey)) {
+    if (addIfMissing) textures.addCanvas(textureKey, createCustomSpriteCanvas(sprite));
     return;
   }
 
-  const texture = scene.textures.get(textureKey) as Phaser.Textures.CanvasTexture;
+  const sourceCanvas = createCustomSpriteCanvas(sprite);
+  const texture = textures.get(textureKey) as Phaser.Textures.CanvasTexture;
   if (
     typeof texture.setSize === 'function' &&
     texture.context instanceof CanvasRenderingContext2D
@@ -594,3 +612,12 @@ export function refreshCustomSpriteTexture(
     texture.refresh();
   }
 }
+
+// Cached previews and textures of a newly blocked or restored sprite are drawn again.
+onBlockedCustomSpritesChanged((changed) => {
+  for (const id of changed) {
+    dataUrlById.delete(id);
+    const sprite = spriteById.get(id);
+    if (sprite && knownTextureManager) redrawCustomSpriteTexture(knownTextureManager, sprite, false);
+  }
+});

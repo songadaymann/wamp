@@ -403,6 +403,32 @@ export async function loadPublishedRoomSnapshot(
   }
 }
 
+/** Community sprites an admin blocked (F189), from the edge-cached world tile config; null if it can't load. */
+export async function loadBlockedCustomSpriteIds(
+  request: Request,
+  env: PagesWorkerEnv,
+  url: URL,
+  timeoutMs: number,
+): Promise<Set<string> | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL('/api/world/tiles/config', resolveApiBaseUrl(env, url)).toString(), {
+      headers: { Accept: 'application/json', 'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer' },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const config = await response.json() as { blockedCustomSpriteIds?: unknown };
+    return new Set(Array.isArray(config.blockedCustomSpriteIds)
+      ? config.blockedCustomSpriteIds.filter((id): id is string => typeof id === 'string')
+      : []);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeMetadata(
   value: unknown,
   fallback: RoomShareMetadata,

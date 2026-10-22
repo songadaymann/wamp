@@ -12,6 +12,7 @@ import {
   schedulePlayableContentIndexRefresh,
 } from '../playableContentIndex/store';
 import { revertRoom, type RoomMutationActor } from '../rooms/store';
+import { prepareHiddenCanonicalVersionReset, prepareRoomVersionRedaction, prepareUserVersionsRedaction } from '../rooms/versionRedaction';
 
 /** Each revert is several D1 round trips, so one request stays well inside Worker limits. */
 const MAX_REVERTS_PER_REQUEST = 25;
@@ -128,6 +129,7 @@ interface EditedRoomRow {
   latest_by: string | null;
   others_since: number;
   newer_draft: number;
+  hideable_versions: number;
 }
 
 /**
@@ -152,11 +154,14 @@ async function planEditReverts(env: Env, userId: string, since: string): Promise
        e.first_version, e.edit_count,
        (SELECT MAX(p.version) FROM room_versions p
          WHERE p.room_id = e.room_id AND p.version < e.first_version
+           AND p.redacted_at IS NULL
            AND (p.published_by_user_id IS NULL OR p.published_by_user_id <> ?)) AS target_version,
        l.version AS latest_version, l.published_by_user_id AS latest_by,
        (SELECT COUNT(*) FROM room_versions m WHERE m.room_id = e.room_id AND m.version > e.first_version
          AND (m.published_by_user_id IS NULL OR m.published_by_user_id <> ?)) AS others_since,
-       CASE WHEN json_extract(r.draft_json, '$.updatedAt') > l.created_at THEN 1 ELSE 0 END AS newer_draft
+       CASE WHEN json_extract(r.draft_json, '$.updatedAt') > l.created_at THEN 1 ELSE 0 END AS newer_draft,
+       (SELECT COUNT(*) FROM room_versions h WHERE h.room_id = e.room_id AND h.published_by_user_id = ?
+         AND h.created_at >= ? AND h.redacted_at IS NULL AND h.version <> l.version) AS hideable_versions
      FROM edited e
      JOIN rooms r ON r.id = e.room_id
      JOIN room_versions l ON l.room_id = e.room_id
@@ -164,7 +169,7 @@ async function planEditReverts(env: Env, userId: string, since: string): Promise
      ORDER BY CASE WHEN l.published_by_user_id = ? THEN 0 ELSE 1 END, e.room_id
      LIMIT ?`,
   )
-    .bind(userId, since, userId, userId, userId, MAX_PLANNED_ROOMS)
+    .bind(userId, since, userId, userId, userId, since, userId, MAX_PLANNED_ROOMS)
     .all<EditedRoomRow>();
   return rows.results.map((row) => {
     const base = {
@@ -175,6 +180,7 @@ async function planEditReverts(env: Env, userId: string, since: string): Promise
       editCount: row.edit_count,
       latestVersion: row.latest_version,
       targetVersion: row.target_version,
+      hideableVersions: row.hideable_versions,
     };
     // Publishing over an unclaimed room claims it, so "their own room" means they built it first.
     if (row.claimer_user_id === userId && row.first_publisher === userId) return { ...base, action: 'skip', reason: 'own_room' };
@@ -211,25 +217,45 @@ export async function handleAdminRevertUserEdits(
       try {
         await revertRoom(env, room.roomId, { x: room.x, y: room.y }, room.targetVersion!, MODERATION_ACTOR, true,
           { expectedLatestVersion: room.latestVersion });
-        if (room.releaseClaim) {
-          // They took the claim by publishing over an unclaimed room; give the room back to nobody.
-          await env.DB.batch([env.DB.prepare(`UPDATE rooms SET claimer_user_id = NULL, claimer_principal_type = NULL,
+        // Their restored-over versions leave History and every pinned or shared view too (F189),
+        // and a claim they took by publishing over an unclaimed room goes back to nobody.
+        await env.DB.batch([
+          prepareUserVersionsRedaction(env, room.roomId, userId, { afterVersion: room.targetVersion! }, new Date().toISOString()),
+          prepareHiddenCanonicalVersionReset(env, room.roomId),
+          ...(room.releaseClaim ? [env.DB.prepare(`UPDATE rooms SET claimer_user_id = NULL, claimer_principal_type = NULL,
             claimer_agent_id = NULL, claimer_display_name = NULL, claimed_at = NULL WHERE id = ? AND claimer_user_id = ?`)
-            .bind(room.roomId, userId)]);
-        }
+            .bind(room.roomId, userId)] : []),
+        ]);
         reverted.push({ roomId: room.roomId, fromVersion: room.latestVersion, toVersion: room.targetVersion! });
         schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, room.roomId));
       } catch (error) {
         failed.push({ roomId: room.roomId, error: error instanceof Error ? error.message : String(error) });
       }
     }
-    if (reverted.length > 0 || failed.length > 0) {
+    // Rooms someone else has published over since are not restored, but this user's versions of
+    // them from the window still leave History. Rooms with nothing left to hide are skipped.
+    const overtaken = rooms.filter((room) => room.reason === 'changed_since' && (room.hideableVersions ?? 0) > 0)
+      .slice(0, MAX_REVERTS_PER_REQUEST);
+    let hiddenOvertaken = 0;
+    if (overtaken.length > 0) {
+      const now = new Date().toISOString();
+      try {
+        await env.DB.batch(overtaken.flatMap((room) => [
+          prepareUserVersionsRedaction(env, room.roomId, userId, { since }, now),
+          prepareHiddenCanonicalVersionReset(env, room.roomId),
+        ]));
+        hiddenOvertaken = overtaken.length;
+      } catch (error) {
+        failed.push(...overtaken.map((room) => ({ roomId: room.roomId, error: error instanceof Error ? error.message : String(error) })));
+      }
+    }
+    if (reverted.length > 0 || failed.length > 0 || hiddenOvertaken > 0) {
       await env.DB.batch([prepareModerationAuditStatement(env, {
         action: 'revert_edits',
         targetUserId: userId,
         operatorLabel: optionalText(body.operatorLabel, 80) ?? 'Admin',
         reason: optionalText(body.reason, 500),
-        details: { since, reverted, failed },
+        details: { since, reverted, failed, hiddenOvertaken },
         createdAt: new Date().toISOString(),
       })]);
     }
@@ -245,3 +271,30 @@ export async function handleAdminRevertUserEdits(
   };
   return jsonResponse(request, response);
 }
+
+/** Hide or show one published version of a room (F189); the current version must be restored first. */
+export async function handleAdminRoomVersionVisibility(
+  request: Request,
+  env: Env,
+  roomId: string,
+  version: number,
+  hidden: boolean,
+): Promise<Response> {
+  requireAdminRequest(env, request, `${hidden ? 'hide' : 'show'} version ${version} of room ${roomId}`);
+  const body = await parseJsonBody<{ reason?: unknown; operatorLabel?: unknown }>(request);
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    await prepareRoomVersionRedaction(env, roomId, version, hidden, now),
+    prepareHiddenCanonicalVersionReset(env, roomId),
+    prepareModerationAuditStatement(env, {
+      action: hidden ? 'version_hide' : 'version_show',
+      targetRoomId: roomId,
+      operatorLabel: optionalText(body.operatorLabel, 80) ?? 'Admin',
+      reason: optionalText(body.reason, 500),
+      details: { version },
+      createdAt: now,
+    }),
+  ]);
+  return jsonResponse(request, { roomId, version, hidden });
+}
+

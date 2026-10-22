@@ -1,4 +1,5 @@
 import { initializeGuestReplay } from './analytics/replay/recorder';
+import { startBlockedCustomSpriteSync } from './customSprites/blocklistSync';
 import { initializeBugReporter } from './bugReports/runtime';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
@@ -423,6 +424,7 @@ window.render_game_to_text = () =>
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
+startBlockedCustomSpriteSync();
 const bugReporter = initializeBugReporter(game);
 initializeGuestReplay({
   canvas: game.canvas,

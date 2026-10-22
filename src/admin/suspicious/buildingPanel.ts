@@ -62,8 +62,9 @@ export function createBuildingPanel(
       const failed = response.failed.find((entry) => entry.roomId === room.roomId);
       row.textContent = done ? `${name}: restored v${done.toVersion}`
         : failed ? `${name}: failed — ${failed.error}`
-          : room.action === 'revert' ? `${name}: ${room.editCount} edit(s), will restore v${room.targetVersion}`
-            : `${name}: skipped (${SKIP_REASON_TEXT[room.reason!]})`;
+          : room.action === 'revert' ? `${name}: ${room.editCount} edit(s), will restore v${room.targetVersion} and hide their versions`
+            : `${name}: skipped (${SKIP_REASON_TEXT[room.reason!]})${room.reason === 'changed_since' && room.hideableVersions
+              ? `; ${room.hideableVersions} version(s) of theirs will be hidden` : ''}`;
       return row;
     }));
   }
@@ -126,7 +127,7 @@ export function createBuildingPanel(
       const pending = response.rooms.filter((room) => room.action === 'revert').length;
       previewed = execute ? null : { ...plan, pending };
       setStatus(execute
-        ? `Restored ${reverted.length} room(s); ${response.failed.length} failed.`
+        ? `Restored ${reverted.length} room(s) and hid this user's versions of them; ${response.failed.length} failed.`
         : `${pending} room(s) to restore, ${response.rooms.length - pending} skipped${response.truncated ? ' (first 500 rooms only; run again after restoring)' : ''}.`);
     } catch (error) {
       if (current === generation) setStatus(error instanceof Error ? error.message : 'Could not check room edits.');
@@ -134,6 +135,31 @@ export function createBuildingPanel(
       busy = false; syncButtons();
     }
   }
+
+  // One version at a time, for content the bulk restore did not cover. The room's current version
+  // cannot be hidden; restore an earlier one from History first.
+  const versionRoomInput = document.getElementById('building-version-room-input') as HTMLInputElement | null;
+  const versionNumberInput = document.getElementById('building-version-number-input') as HTMLInputElement | null;
+  const versionStatus = document.getElementById('building-version-status');
+  async function setVersionHidden(hidden: boolean): Promise<void> {
+    const roomId = versionRoomInput?.value.trim() ?? '';
+    const version = Number(versionNumberInput?.value);
+    if (!/^-?\d+,-?\d+$/.test(roomId) || !Number.isInteger(version) || version < 1) {
+      if (versionStatus) versionStatus.textContent = 'Enter a room id like 3,-2 and a version number.';
+      return;
+    }
+    try {
+      await client.request(`/api/admin/rooms/${encodeURIComponent(roomId)}/versions/${version}/${hidden ? 'hide' : 'show'}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reasonInput?.value.trim() ?? '', operatorLabel: getOperatorLabel() }),
+      });
+      if (versionStatus) versionStatus.textContent = `Version ${version} of room ${roomId} is now ${hidden ? 'hidden' : 'shown'}.`;
+    } catch (error) {
+      if (versionStatus) versionStatus.textContent = error instanceof Error ? error.message : 'Could not change that version.';
+    }
+  }
+  document.getElementById('building-version-hide-button')?.addEventListener('click', () => { void setVersionHidden(true); });
+  document.getElementById('building-version-show-button')?.addEventListener('click', () => { void setVersionHidden(false); });
 
   suspendButton?.addEventListener('click', () => { void toggleSuspension(); });
   previewButton?.addEventListener('click', () => { void revertEdits(false); });

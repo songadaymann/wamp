@@ -48,6 +48,7 @@ import { handleAdminMapCapture } from './mapScreenshot';
 import {
   handleAdminBuildingModeration,
   handleAdminRevertUserEdits,
+  handleAdminRoomVersionVisibility,
   handleAdminUserSuspension,
 } from './buildingModeration';
 import { prepareModerationAuditStatement } from '../moderation/suspension';
@@ -183,6 +184,12 @@ export async function handleAdminRequest(
     if (buildingMatch[2] === 'revert-edits' && request.method === 'POST') {
       return handleAdminRevertUserEdits(request, env, targetUserId, context);
     }
+  }
+
+  const versionVisibilityMatch = /^\/api\/admin\/rooms\/([^/]+)\/versions\/(\d+)\/(hide|show)$/.exec(url.pathname);
+  if (versionVisibilityMatch && request.method === 'POST') {
+    return handleAdminRoomVersionVisibility(request, env, decodeURIComponent(versionVisibilityMatch[1]),
+      Number(versionVisibilityMatch[2]), versionVisibilityMatch[3] === 'hide');
   }
 
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);

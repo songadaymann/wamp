@@ -538,6 +538,16 @@
               </div>
               <div id="building-status" class="status"></div>
               <div id="building-rooms" class="audit-list"></div>
+              <div class="field">
+                <label for="building-version-room-input">Hide one published version of a room (room id like 3,-2, then the version number)</label>
+                <input id="building-version-room-input" type="text" placeholder="3,-2" />
+                <input id="building-version-number-input" type="number" min="1" step="1" placeholder="Version" />
+              </div>
+              <div class="actions">
+                <button id="building-version-hide-button" type="button" class="danger">Hide Version</button>
+                <button id="building-version-show-button" type="button" class="secondary">Show Version</button>
+              </div>
+              <div id="building-version-status" class="status"></div>
             </section>
 
             <section class="card stack">

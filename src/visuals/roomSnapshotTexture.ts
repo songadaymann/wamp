@@ -1,4 +1,5 @@
 import { getSceneObjectTexture } from '../assets/sceneArt';
+import { getBlockedCustomSpritesGeneration } from '../customSprites/blocklist';
 import Phaser from 'phaser';
 import {
   decodeTileDataValue,
@@ -87,6 +88,7 @@ export function buildRoomTextureKey(
     options.includedLayers?.join('_') ?? 'all-layers',
     options.showConstructionOverlay ? `construction-${sanitizeTextureKey(options.constructionLabel ?? 'building')}` : 'clean',
     `ct-${hashStringToSeed(getCustomRoomTileSignature(room.customTiles)).toString(36)}`,
+    `bl-${getBlockedCustomSpritesGeneration()}`,
     room.version,
     sanitizeTextureKey(room.updatedAt),
   ].join('-');

@@ -526,3 +526,13 @@ interface PublishReadyBase {
 function changed(value: number | undefined): boolean {
   return typeof value === 'number' && value > 0;
 }
+
+/** Which of these community sprite ids an admin blocked (F189). */
+export async function loadBlockedCustomSpriteIdsAmong(db: D1Database, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.prepare(
+    `SELECT id FROM custom_sprites WHERE status = 'blocked' AND id IN (SELECT value FROM json_each(?))`,
+  ).bind(JSON.stringify(ids)).all<{ id: string }>();
+  return new Set(rows.results.map((row) => row.id));
+}
+

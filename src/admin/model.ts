@@ -369,6 +369,8 @@ export interface AdminRevertEditsRoom {
   reason: 'own_room' | 'minted' | 'no_earlier_version' | 'changed_since' | 'newer_draft' | null;
   /** The user claimed the room only by publishing over it while it was unclaimed. */
   releaseClaim?: boolean;
+  /** Versions of theirs from the window that are still shown and can be hidden (F189). */
+  hideableVersions?: number;
 }
 
 export interface AdminRevertEditsResponse {

@@ -24,7 +24,7 @@ export async function assertAccountNotSuspended(env: Env, userId: string): Promi
   }
 }
 
-export type ModerationAuditAction = 'suspend' | 'unsuspend' | 'revert_edits' | 'room_clear';
+export type ModerationAuditAction = 'suspend' | 'unsuspend' | 'revert_edits' | 'room_clear' | 'version_hide' | 'version_show';
 
 export function prepareModerationAuditStatement(
   env: Env,

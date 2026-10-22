@@ -4,6 +4,7 @@ import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { HttpError, jsonResponse } from '../core/http';
 import { loadInsightDeathMap, loadInsightSummaries } from './store';
+import { HIDDEN_VERSION_TITLE } from '../rooms/versionRedaction';
 
 interface Metadata { target: RoomInsightTarget; title: string | null; cells: RoomCoordinates[] }
 interface PublishedRow { id: string; published_json: string; published_version?: number; legacy_course_id?: string | null }
@@ -21,7 +22,8 @@ export async function resolveInsightMetadata(env: Env, input: RoomInsightTarget)
   const version = input.version ?? row.published_version ?? published.version;
   const table = contentType === 'room' ? 'room_versions' : contentType === 'course' ? 'course_versions' : 'expanded_room_versions';
   const idColumn = contentType === 'room' ? 'room_id' : contentType === 'course' ? 'course_id' : 'expanded_room_id';
-  const stored = await env.DB.prepare(`SELECT snapshot_json FROM ${table} WHERE ${idColumn} = ? AND version = ?`).bind(contentId,version).first<VersionRow>();
+  const stored = await env.DB.prepare(`SELECT snapshot_json${contentType === 'room' ? ', redacted_at' : ''} FROM ${table} WHERE ${idColumn} = ? AND version = ?`)
+    .bind(contentId,version).first<VersionRow & { redacted_at?: string | null }>();
   if (!stored) throw new HttpError(404, 'Published level version not found.');
   const snapshot = JSON.parse(stored.snapshot_json) as { title: string | null; coordinates?: RoomCoordinates; roomRefs?: { coordinates: RoomCoordinates }[] };
   let target: RoomInsightTarget = { ...input, version };
@@ -33,7 +35,7 @@ export async function resolveInsightMetadata(env: Env, input: RoomInsightTarget)
     const rows = await env.DB.prepare('SELECT room_x AS x,room_y AS y FROM expanded_room_cells WHERE expanded_room_id = ? AND expanded_room_version = ? ORDER BY cell_order').bind(contentId,version).all<RoomCoordinates>();
     cells = rows.results;
   }
-  return { target, title: snapshot.title ?? null, cells };
+  return { target, title: stored.redacted_at ? HIDDEN_VERSION_TITLE : snapshot.title ?? null, cells };
 }
 export async function handleRoomInsights(request: Request, url: URL, env: Env, type: RoomInsightTarget['contentType'], id: string): Promise<Response> {
   const raw = url.searchParams.get('version'); const version = raw === null ? undefined : Number(raw);

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AdminBuildingModerationResponse, AdminRevertEditsResponse } from '../../../admin/model';
 import { fixture } from '../activity/testDatabase';
 import { assertAccountNotSuspended } from '../moderation/suspension';
-import { handleAdminBuildingModeration, handleAdminRevertUserEdits, handleAdminUserSuspension } from './buildingModeration';
+import { handleAdminBuildingModeration, handleAdminRevertUserEdits, handleAdminRoomVersionVisibility, handleAdminUserSuspension } from './buildingModeration';
+import { handleRoomRequest } from '../rooms/routes';
+import { loadRoomSnapshotsByReferences, loadRoomVersionPage, revertRoom, setCanonicalRoomVersion } from '../rooms/store';
 
 const opened: ReturnType<typeof fixture>[] = [];
 function setup() {
@@ -114,6 +116,11 @@ describe('building moderation', () => {
     await handleAdminRevertUserEdits(adminRequest('/x', { since, execute: true }), f.env, 'p1');
     expect(f.sqlite.prepare('SELECT claimer_user_id, published_title FROM rooms WHERE id = ?').get(hijacked))
       .toEqual({ claimer_user_id: null, published_title: 'Orphan' });
+    expect(preview.rooms.find((entry) => entry.roomId === mixed)?.hideableVersions).toBe(1);
+    // The room someone repaired is left as it is, but the user's older version still leaves History.
+    expect(f.sqlite.prepare('SELECT version, title FROM room_versions WHERE room_id = ? ORDER BY version').all(mixed)).toEqual([
+      { version: 1, title: 'Good' }, { version: 2, title: 'Hidden by moderation' }, { version: 3, title: 'Repair' }, { version: 4, title: 'Defaced again' },
+    ]);
   });
 
   it('refuses to restore a room that was published again after the plan was made', async () => {
@@ -136,6 +143,58 @@ describe('building moderation', () => {
     await handleAdminUserSuspension(adminRequest('/x', { suspended: true, reason: 'raid' }), f.env, 'p1');
     expect(f.sqlite.prepare('SELECT revoked_at IS NOT NULL AS revoked FROM api_tokens').get()).toEqual({ revoked: 1 });
     expect(f.sqlite.prepare('SELECT revoked_at IS NOT NULL AS revoked FROM agent_tokens').get()).toEqual({ revoked: 1 });
+  });
+
+  it('hides restored-over versions everywhere players can see them, and never restores to them (F189)', async () => {
+    const f = setup();
+    const room = addRoom(f, 9, 'p2', [['p2', 'Good'], ['p1', 'Rude title']]);
+    await handleAdminRevertUserEdits(adminRequest('/x', { since: '2026-10-05T00:30:00.000Z', execute: true }), f.env, 'p1');
+    expect(f.sqlite.prepare('SELECT version, redacted_at IS NOT NULL AS hidden FROM room_versions WHERE room_id = ? ORDER BY version').all(room))
+      .toEqual([{ version: 1, hidden: 0 }, { version: 2, hidden: 1 }, { version: 3, hidden: 0 }]);
+    const page = await loadRoomVersionPage(f.env, room, 10, null);
+    expect(page.versions.map((entry) => entry.title)).toEqual(['Good', 'Hidden by moderation', 'Good']);
+    const url = new URL(`https://api.wamp.land/api/rooms/${encodeURIComponent(room)}/versions/2`);
+    const response = await handleRoomRequest(new Request(url, { headers: { Origin: 'https://wamp.land' } }), url, f.env);
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300');
+    const exact = await response.json() as { snapshot: { title: string; placedObjects: unknown[] } };
+    expect(exact.snapshot.title).toBe('Hidden by moderation');
+    const referenced = await loadRoomSnapshotsByReferences(f.env, [{ kind: 'version', roomId: room, version: 2 }]);
+    expect(referenced.snapshots[0].snapshot.title).toBe('Hidden by moderation');
+    await expect(revertRoom(f.env, room, { x: 9, y: 0 }, 2, {
+      ownerUser: null, principalKind: 'user', principalAgentId: null, principalDisplayName: 'WAMP moderation', requestAuthSource: null,
+    }, true)).rejects.toMatchObject({ status: 409 });
+    await expect(handleAdminRoomVersionVisibility(adminRequest('/x', {}), f.env, room, 3, true)).rejects.toMatchObject({ status: 409 });
+    expect(f.sqlite.prepare('SELECT title, redacted_title FROM room_versions WHERE room_id = ? AND version = 2').get(room))
+      .toEqual({ title: 'Hidden by moderation', redacted_title: 'Rude title' });
+    const recordUrl = new URL(`https://api.wamp.land/api/rooms/${encodeURIComponent(room)}`);
+    const record = await (await handleRoomRequest(new Request(recordUrl, { headers: { Origin: 'https://wamp.land' } }), recordUrl, f.env))
+      .json() as { versions: Array<{ version: number; snapshot: { title: string } }> };
+    expect(record.versions.map((entry) => entry.snapshot.title)).toEqual(['Good', 'Hidden by moderation', 'Good']);
+    expect((await handleAdminRoomVersionVisibility(adminRequest('/x', { reason: 'mistake' }), f.env, room, 2, false)).status).toBe(200);
+    expect(f.sqlite.prepare('SELECT redacted_at, title, redacted_title FROM room_versions WHERE room_id = ? AND version = 2').get(room))
+      .toEqual({ redacted_at: null, title: 'Rude title', redacted_title: null });
+  });
+
+  it('hides every version the user published over the restore target, even before the undo window (F189)', async () => {
+    const f = setup();
+    const room = addRoom(f, 10, 'p2', [['p2', 'Good'], ['p1', 'Early'], ['p1', 'Late']]);
+    f.sqlite.prepare('UPDATE rooms SET canonical_version = 2 WHERE id = ?').run(room);
+    await handleAdminRevertUserEdits(adminRequest('/x', { since: '2026-10-05T01:30:00.000Z', execute: true }), f.env, 'p1');
+    // A leaderboard pinned to a hidden version goes back to the default, and can't be pinned there again.
+    expect(f.sqlite.prepare('SELECT canonical_version FROM rooms WHERE id = ?').get(room)).toEqual({ canonical_version: null });
+    await expect(setCanonicalRoomVersion(f.env, room, { x: 10, y: 0 }, 2, {
+      ownerUser: null, principalKind: 'user', principalAgentId: null, principalDisplayName: 'WAMP moderation', requestAuthSource: null,
+    }, true)).rejects.toMatchObject({ status: 409 });
+    expect(f.sqlite.prepare('SELECT version, title FROM room_versions WHERE room_id = ? ORDER BY version').all(room)).toEqual([
+      { version: 1, title: 'Good' }, { version: 2, title: 'Hidden by moderation' }, { version: 3, title: 'Hidden by moderation' },
+      { version: 4, title: 'Good' },
+    ]);
+    // A later bulk restore never picks a hidden version as its target.
+    const again = addRoom(f, 11, 'p2', [['p2', 'Good'], ['p3', 'Other vandal'], ['p1', 'Defaced']]);
+    await handleAdminRoomVersionVisibility(adminRequest('/x', {}), f.env, again, 2, true);
+    const preview = await (await handleAdminRevertUserEdits(adminRequest('/x', { since: '2026-10-05T01:30:00.000Z' }), f.env, 'p1'))
+      .json() as AdminRevertEditsResponse;
+    expect(preview.rooms.find((entry) => entry.roomId === again)?.targetVersion).toBe(1);
   });
 
   it('rejects a missing or invalid start time', async () => {

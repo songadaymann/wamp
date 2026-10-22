@@ -35,6 +35,7 @@ import type {
   WorldTileLevel,
   WorldTileManifest,
 } from '../scenes/overworld/worldTiles/types';
+import { setBlockedCustomSpriteIds } from '../customSprites/blocklist';
 
 export interface WorldRepository {
   loadWorldWindow(center: RoomCoordinates, radius: number): Promise<WorldWindow>;
@@ -280,7 +281,9 @@ export class ApiWorldRepository implements WorldRepository {
       const details = await response.text();
       throw new WorldApiError(details || `World tile config failed with status ${response.status}.`, response.status);
     }
-    return parseWorldTileConfig(await response.json());
+    const config = parseWorldTileConfig(await response.json());
+    setBlockedCustomSpriteIds(config.blockedCustomSpriteIds ?? []);
+    return config;
   }
 
   async loadWorldTileManifest(
