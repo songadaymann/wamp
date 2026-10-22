@@ -1,11 +1,13 @@
 import { loadOptionalRequestAuth, requireAdminRequest, requireTrustedOriginForMutation } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
-import { getClientIp, hashRateLimitKey, networkKeyForIp } from '../core/rateLimit';
+import { getClientIp, hashRateLimitKey, networkKeyForIp, releaseRateLimitSlots, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { BUG_EVIDENCE_LIMIT, type BugEvidence, type BugReportDetail, type BugReportSummary } from '../../../bugReports/model';
 import { BUG_REPORT_ID, validateBugReport } from './validation';
 
 const DAY = 86_400_000;
+/** A guest's visitor id is chosen by the browser, so guest reports also have a daily allowance per network. */
+const GUEST_REPORTS_PER_NETWORK: RateLimitRule = { bucket: 'bug-report-guest:network', limit: 10, windowMs: DAY };
 const reply = (request: Request, value: unknown) => jsonResponse(request, value, { headers: { 'Cache-Control': 'no-store' } });
 interface ReportRow {
   id: string; notes: string; status: 'open' | 'resolved'; created_at: string; user_id: string | null;
@@ -75,18 +77,19 @@ export async function handleBugReports(request: Request, url: URL, env: Env): Pr
     if (existing.identity_hash !== identity || existing.submission_hash !== submissionHash) throw new HttpError(409, 'This report identity was already used.');
     return reply(request, { id: body.id, stored: true });
   }
+  const guestSlots = auth || !ip ? [] : await takeGuestReportSlot(env, network);
   const now = new Date(), since = new Date(now.getTime() - DAY).toISOString();
   const evidenceJson = JSON.stringify(body.evidence);
   const hasEvidence = body.evidence.samples.length > 0 || Boolean(body.evidence.screenshot);
   const evidenceBytes = hasEvidence ? evidenceJson.length : 0;
   const evidenceExpiry = hasEvidence ? new Date(now.getTime() + 7 * DAY).toISOString() : null;
-  // Atomic metadata/evidence gates: 100 reports/day, 5 per identity/day,
+  // Atomic metadata/evidence gates: 100 guest and 100 signed-in reports/day, 5 per identity/day,
   // 10 per network/hour, 200 clips and 128 MB of replay JSON. Notes last 30 days.
   await db.batch([
     db.prepare(`INSERT OR IGNORE INTO bug_reports (${SUMMARY_COLUMNS}, identity_hash, network_hash, submission_hash, expires_at,
       device_json, errors_json, evidence_reason)
       SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
-      WHERE (SELECT COUNT(*) FROM bug_reports WHERE created_at > ?) < 100
+      WHERE (SELECT COUNT(*) FROM bug_reports WHERE created_at > ? AND (user_id IS NULL) = (? IS NULL)) < 100
         AND (SELECT COUNT(*) FROM bug_reports WHERE identity_hash = ? AND created_at > ?) < 5
         AND (SELECT COUNT(*) FROM bug_reports WHERE network_hash = ? AND created_at > ?) < 10
         AND (? = 0 OR ((SELECT COUNT(*) FROM bug_report_evidence WHERE expires_at > ?) < 200
@@ -94,7 +97,7 @@ export async function handleBugReports(request: Request, url: URL, env: Env): Pr
       .bind(body.id, body.notes, 'open', now.toISOString(), auth?.user.id ?? null, body.build, JSON.stringify(body.context),
         body.evidence.samples.length, body.evidence.samples.at(-1)?.time ?? 0, body.evidence.screenshot ? 1 : 0, evidenceExpiry,
         identity, network, submissionHash, new Date(now.getTime() + 30 * DAY).toISOString(), JSON.stringify(body.device), JSON.stringify(body.errors), body.evidence.reason,
-        since, identity, since, network, new Date(now.getTime() - 3_600_000).toISOString(), evidenceBytes,
+        since, auth?.user.id ?? null, identity, since, network, new Date(now.getTime() - 3_600_000).toISOString(), evidenceBytes,
         now.toISOString(), now.toISOString(), evidenceBytes),
     ...(hasEvidence ? [db.prepare(`INSERT OR IGNORE INTO bug_report_evidence (report_id,payload,bytes,expires_at)
       SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM bug_reports WHERE id = ? AND identity_hash = ? AND submission_hash = ?)`)
@@ -102,7 +105,16 @@ export async function handleBugReports(request: Request, url: URL, env: Env): Pr
   ]);
   const stored = await db.prepare('SELECT identity_hash, submission_hash FROM bug_reports WHERE id = ?').bind(body.id)
     .first<{ identity_hash: string; submission_hash: string }>();
-  if (!stored) throw new HttpError(429, 'Report limit reached. Try later, or turn off image attachments to send a written report.');
-  if (stored.identity_hash !== identity || stored.submission_hash !== submissionHash) throw new HttpError(409, 'This report identity was already used.');
+  const accepted = stored?.identity_hash === identity && stored.submission_hash === submissionHash;
+  if (!accepted) await releaseRateLimitSlots(env, guestSlots);
+  if (!stored) throw new HttpError(429, hasEvidence
+    ? 'Report limit reached. Try later, or turn off image attachments to send a written report.'
+    : 'Report limit reached. Try again later.');
+  if (!accepted) throw new HttpError(409, 'This report identity was already used.');
   return reply(request, { id: body.id, stored: true });
+}
+async function takeGuestReportSlot(env: Env, networkHash: string): Promise<number[]> {
+  const { ids, limitedBy } = await takeRateLimitSlots(env, [{ rule: GUEST_REPORTS_PER_NETWORK, keyHash: networkHash }]);
+  if (limitedBy) throw new HttpError(429, 'Too many reports from this network today. Sign in to send more, or try again tomorrow.');
+  return ids;
 }
