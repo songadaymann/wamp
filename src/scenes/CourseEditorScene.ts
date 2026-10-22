@@ -97,7 +97,10 @@ import {
 import { clearLocalRoomStorageEntry } from '../persistence/browserStorage';
 import { setAppMode } from '../ui/appMode';
 import { getAppFeedbackDebugState, hideBusyOverlay, showBusyError, showBusyOverlay } from '../ui/appFeedback';
-import { describeSliceEditConflicts, writeSliceAgainstBase, type SliceWriteProgress } from './courseEditor/sliceEditConflict';
+import {
+  createSliceWriteProgress, describeSliceEditConflicts, describeSliceWriteSuccess, hasStoredRoomDraft, sliceContentRevision,
+  writeSliceAgainstBase, type SliceWriteProgress,
+} from './courseEditor/sliceEditConflict';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
 import { requestSignTextEdit } from '../signs/events';
 import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
@@ -1290,12 +1293,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     showBusyOverlay('Saving expanded room cells...', `Saving ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}...`);
-    const progress: SliceWriteProgress = { kind: 'save', written: 0, conflicts: [], lastRecord: null };
+    const progress = createSliceWriteProgress('save');
     try {
       if (!(await this.writeSlices(dirtySlices, progress))) return progress.lastRecord;
       this.backupDebouncer.flush();
       if (progress.conflicts.length > 0) return this.reportSliceEditConflicts(progress);
-      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Saved ${dirtySlices.length} room draft${dirtySlices.length === 1 ? '' : 's'}.`;
+      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : describeSliceWriteSuccess(progress);
       this.renderUi();
       return progress.lastRecord;
     } catch (error) {
@@ -1345,7 +1348,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     showBusyOverlay('Publishing expanded room cells...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
-    const progress: SliceWriteProgress = { kind: 'publish', written: 0, conflicts: [], lastRecord: null };
+    const progress = createSliceWriteProgress('publish');
     try {
       await refreshAuthSession();
       if (!getAuthDebugState().authenticated) {
@@ -1369,7 +1372,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         if (progress.written > 0) await this.musicWorkflow.handleRoomPublished();
         return this.reportSliceEditConflicts(progress);
       }
-      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : `Published ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}.`;
+      this.statusText = this.localBackupFailed ? BACKUP_FAILED_TEXT : describeSliceWriteSuccess(progress);
       await this.musicWorkflow.handleRoomPublished();
       this.renderUi();
       return progress.lastRecord;
@@ -1954,15 +1957,19 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       : null;
     if (this.roomSlices.get(slice.roomId) !== slice || this.isShuttingDown) return;
     // A clean session copy of a cell saved elsewhere since would publish stale content against a stale base.
-    if (!recovered) dropStaleActiveCourseDraftSessionRoomOverride(slice.roomId, remote.updatedAt);
+    if (!recovered) dropStaleActiveCourseDraftSessionRoomOverride(slice.roomId, { updatedAt: remote.updatedAt, stored: hasStoredRoomDraft(record) });
     const override = record.permissions.canSaveDraft
       ? recovered ?? (this.draftBackup.mayRestoreSessionRoom(slice.roomId) ? getActiveCourseDraftSessionRoomOverride(slice.roomId) : null)
       : null;
-    const overrideDirty = Boolean(recovered) || (Boolean(override) && isActiveCourseDraftSessionRoomUnsaved(slice.roomId));
     // A cell restored from this session keeps the server version it was edited from, so a change
     // saved elsewhere since then is caught when it saves (F379).
     const overrideBase = !recovered && override ? getActiveCourseDraftSessionRoomOverrideBase(slice.roomId) : null;
     if (overrideBase) this.roomBackupBases.set(slice.roomId, { id: remote.id, updatedAt: overrideBase, version: remote.version });
+    // A copy the room editor left carries no base or unsaved mark; it is unsaved work unless the server holds it.
+    if (override && !recovered && !overrideBase && sliceContentRevision(override) !== sliceContentRevision(remote)) {
+      setActiveCourseDraftSessionRoomUnsaved(slice.roomId, true);
+    }
+    const overrideDirty = Boolean(recovered) || (Boolean(override) && isActiveCourseDraftSessionRoomUnsaved(slice.roomId));
     const snapshot = override ?? record.draft ?? record.published ?? null;
     if (!snapshot) {
       return;
@@ -2066,9 +2073,9 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   /**
    * Writes each cell against the server version it was loaded or last saved at, so a stale tab never
-   * overwrites newer work (F379). A cell changed elsewhere is skipped and its version backed up on
-   * this device, tied to that older version, so reopening offers the choice between the two.
-   * False when the scene closed or the cell was replaced mid-write.
+   * overwrites newer work (F379). A cell with edits here that changed elsewhere is skipped and its
+   * version backed up on this device, tied to that older version, so reopening offers the choice
+   * between the two. False when the scene closed or the cell was replaced mid-write.
    */
   private async writeSlices(slices: CourseRoomSlice[], progress: SliceWriteProgress): Promise<boolean> {
     for (const slice of slices) {
@@ -2077,17 +2084,26 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       this.backupDebouncer.flush();
       // Remembered until the server answers, so a reply lost to a timeout is not later mistaken for a conflict.
       const unconfirmed = this.unconfirmedSliceWrites.get(slice.roomId) ?? null;
-      this.unconfirmedSliceWrites.set(slice.roomId, draftBackupRevision(sent));
+      this.unconfirmedSliceWrites.set(slice.roomId, sliceContentRevision(sent));
       const outcome = await writeSliceAgainstBase(progress.kind, sent, this.roomBackupBases.get(slice.roomId)?.updatedAt, {
         write: (room, options) => progress.kind === 'save' ? this.roomRepository.saveDraft(room, options) : this.roomRepository.publish(room, options),
         loadLatest: () => this.roomRepository.loadRoom(slice.roomId, slice.coordinates),
       }, unconfirmed);
       if (this.isShuttingDown || this.roomSlices.get(slice.roomId) !== slice) return false;
       this.unconfirmedSliceWrites.delete(slice.roomId);
+      const label = `${slice.coordinates.x},${slice.coordinates.y}`;
+      if (outcome.status === 'conflict' && !slice.runtime.isRoomDirty && !isActiveCourseDraftSessionRoomUnsaved(slice.roomId)) {
+        // Never edited here (a copy kept from the Composer): take the newer version rather than offer this one over it.
+        const latest = outcome.latest.draft;
+        this.roomBackupBases.set(slice.roomId, { id: latest.id, updatedAt: latest.updatedAt, version: latest.version });
+        this.applyStoredRoomRecordToSlice(slice, outcome.latest, { keepDirty: false, keepOverride: false });
+        progress.refreshed.push(label);
+        continue;
+      }
       if (outcome.status === 'conflict') {
         const base = this.roomBackupBases.get(slice.roomId);
         const kept = Boolean(base && this.courseRecord && this.draftBackup.writeRoom(this.courseRecord.draft.id, slice.runtime.exportRoomSnapshot(), base));
-        progress.conflicts.push({ label: `${slice.coordinates.x},${slice.coordinates.y}`, kept });
+        progress.conflicts.push({ label, kept });
         continue;
       }
       this.applySavedSliceResponse(slice, sent, outcome.record, progress.kind === 'save');
@@ -2100,7 +2116,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   private reportSliceEditConflicts(progress: SliceWriteProgress, error?: unknown): null {
     const stoppedBy = error === undefined ? undefined : error instanceof Error ? error.message : 'The remaining cells were not written.';
-    this.statusText = describeSliceEditConflicts(progress.conflicts, { kind: progress.kind, written: progress.written, error: stoppedBy });
+    this.statusText = describeSliceEditConflicts(progress, stoppedBy);
     showBusyError(this.statusText, { title: 'Changed somewhere else' });
     this.renderUi();
     return null;

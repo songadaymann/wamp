@@ -105,15 +105,18 @@ describe('expanded-room cell overrides remember their server version (F379)', ()
     setActiveCourseDraftSessionRoomUnsaved('3,4', true);
     setActiveCourseDraftSessionRoomOverride(createDefaultRoomSnapshot('5,6', { x: 5, y: 6 }));
 
-    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', base)).toBe(false);
-    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', newer)).toBe(true);
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', { updatedAt: base, stored: true })).toBe(false);
+    // Nothing stored on the server yet: its timestamp is new on every load, so the copy is kept.
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', { updatedAt: newer, stored: false })).toBe(false);
+    expect(getActiveCourseDraftSessionRoomOverride('1,2')).not.toBeNull();
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('1,2', { updatedAt: newer, stored: true })).toBe(true);
     expect(getActiveCourseDraftSessionRoomOverride('1,2')).toBeNull();
     expect(getActiveCourseDraftSessionRoomOverrideBase('1,2')).toBeNull();
     // Edited: kept, so the save is refused and the conflict offered instead of losing the edit.
-    expect(dropStaleActiveCourseDraftSessionRoomOverride('3,4', newer)).toBe(false);
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('3,4', { updatedAt: newer, stored: true })).toBe(false);
     expect(getActiveCourseDraftSessionRoomOverride('3,4')).not.toBeNull();
     // No recorded base (made by the single-room editor): nothing to compare, so kept.
-    expect(dropStaleActiveCourseDraftSessionRoomOverride('5,6', newer)).toBe(false);
+    expect(dropStaleActiveCourseDraftSessionRoomOverride('5,6', { updatedAt: newer, stored: true })).toBe(false);
     expect(getActiveCourseDraftSessionRoomOverride('5,6')).not.toBeNull();
   });
 

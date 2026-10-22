@@ -187,11 +187,15 @@ export function getActiveCourseDraftSessionRoomOverrideBase(roomId: string): str
 /**
  * Drops this session's copy of a cell when it holds no unsaved edits and the server copy was saved
  * after it was taken (another tab or device), so the newer server version loads instead of a stale
- * copy that every later Publish would send against an out-of-date base (F379). True when dropped.
+ * copy that every later Publish would send against an out-of-date base (F379). A cell with nothing
+ * stored on the server yet is never dropped: its draft timestamp is new on every load. True when dropped.
  */
-export function dropStaleActiveCourseDraftSessionRoomOverride(roomId: string, serverUpdatedAt: string): boolean {
+export function dropStaleActiveCourseDraftSessionRoomOverride(
+  roomId: string,
+  server: { updatedAt: string; stored: boolean },
+): boolean {
   const base = getActiveCourseDraftSessionRoomOverrideBase(roomId);
-  if (!base || base === serverUpdatedAt || activeUnsavedRoomIds.has(roomId)) return false;
+  if (!server.stored || !base || base === server.updatedAt || activeUnsavedRoomIds.has(roomId)) return false;
   clearActiveCourseDraftSessionRoomOverride(roomId);
   return true;
 }
