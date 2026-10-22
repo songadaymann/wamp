@@ -1,6 +1,6 @@
 import { chromium, webkit } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { crc32, inflateRawSync } from 'node:zlib';
 import assert from 'node:assert/strict';
 import { createMapCaptureFixture } from './lib/mapCaptureFixture.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:4198', output = process.argv[3] || 'output/web-game/map-capture';
@@ -24,7 +24,7 @@ for (const [name, engine, width, height, touch] of [
     await noOverflow();
     const downloadLink = page.getByRole('link', { name: 'Download all (ZIP)' });
     const [zip] = await Promise.all([page.waitForEvent('download'), touch ? downloadLink.tap() : downloadLink.click()]);
-    const zipPath = `${output}/${name}-maps.zip`; await zip.saveAs(zipPath); execFileSync('unzip', ['-t', zipPath]);
+    const zipPath = `${output}/${name}-maps.zip`; await zip.saveAs(zipPath); assertZipIntact(readFileSync(zipPath));
     await noOverflow(); await page.screenshot({ path: `${output}/${name}-gallery.png`, fullPage: true });
     await page.goto(base + '/launch-admin.html#map-capture'); await page.locator('#map-capture-button').waitFor();
     assert(await page.locator('#map-capture-button').isDisabled());
@@ -62,3 +62,26 @@ for (const [name, engine, width, height, touch] of [
   } finally { if (fixture) fixture.state.closing = true; await browser.close(); await fixture?.close(); }
 }
 writeFileSync(`${output}/report.json`, JSON.stringify(reports, null, 2));
+
+/** Same check as `unzip -t`, without needing unzip: every entry inflates to its stored size and CRC-32. */
+function assertZipIntact(bytes) {
+  const end = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  assert(end >= 0, 'zip end record missing');
+  let offset = bytes.readUInt32LE(end + 16);
+  const entries = bytes.readUInt16LE(end + 10);
+  assert(entries > 0, 'zip is empty');
+  for (let index = 0; index < entries; index += 1) {
+    assert.equal(bytes.readUInt32LE(offset), 0x02014b50, 'zip central directory entry');
+    const method = bytes.readUInt16LE(offset + 10), crc = bytes.readUInt32LE(offset + 16);
+    const packed = bytes.readUInt32LE(offset + 20), size = bytes.readUInt32LE(offset + 24);
+    const nameLength = bytes.readUInt16LE(offset + 28), local = bytes.readUInt32LE(offset + 42);
+    const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+    const data = bytes.subarray(start, start + packed);
+    const content = method === 8 ? inflateRawSync(data) : data;
+    assert(method === 0 || method === 8, `zip entry method ${method}`);
+    assert.equal(content.length, size, 'zip entry size');
+    assert.equal(crc32(content) >>> 0, crc, 'zip entry CRC');
+    offset += 46 + nameLength + bytes.readUInt16LE(offset + 30) + bytes.readUInt16LE(offset + 32);
+  }
+}
+
