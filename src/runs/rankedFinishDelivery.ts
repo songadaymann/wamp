@@ -1,7 +1,12 @@
 import type { RunResult } from './model';
 
-/** A stalled cellular request must not leave the HUD on "Submitting run..." for minutes. */
+/**
+ * A stalled cellular request must not leave the HUD on "Submitting run..." for minutes, but the
+ * deadline includes the upload: a long trace on a weak link gets 1 s more per 8 KB, up to 2 minutes.
+ */
 export const RANKED_FINISH_TIMEOUT_MS = 15_000;
+const RANKED_FINISH_UPLOAD_MS_PER_8KB = 1_000;
+const RANKED_FINISH_MAX_TIMEOUT_MS = 120_000;
 // Browsers reject a keepalive request whose body would exceed their 64 KiB budget; long traces do.
 const KEEPALIVE_MAX_BODY_BYTES = 60_000;
 /**
@@ -26,14 +31,20 @@ export interface RankedFinishRetryEnvironment {
   clearTimeout(handle: unknown): void;
 }
 
+export function rankedFinishTimeoutMs(bodyBytes: number): number {
+  return Math.min(RANKED_FINISH_MAX_TIMEOUT_MS,
+    RANKED_FINISH_TIMEOUT_MS + Math.ceil(bodyBytes / 8_192) * RANKED_FINISH_UPLOAD_MS_PER_8KB);
+}
+
 export function rankedFinishRequestInit(body: unknown): RequestInit {
   const json = JSON.stringify(body);
+  const bytes = new TextEncoder().encode(json).byteLength;
   return {
     method: 'POST',
     body: json,
-    signal: AbortSignal.timeout(RANKED_FINISH_TIMEOUT_MS),
+    signal: AbortSignal.timeout(rankedFinishTimeoutMs(bytes)),
     // keepalive lets a short finish complete after the phone locks; a long trace sends without it.
-    keepalive: new TextEncoder().encode(json).byteLength <= KEEPALIVE_MAX_BODY_BYTES,
+    keepalive: bytes <= KEEPALIVE_MAX_BODY_BYTES,
   };
 }
 

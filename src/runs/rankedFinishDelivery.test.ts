@@ -4,6 +4,7 @@ import {
   isRetryableRankedFinishError,
   RankedFinishDelivery,
   rankedFinishRequestInit,
+  rankedFinishTimeoutMs,
   retryPendingRankedFinishes,
   type RankedFinishRetryEnvironment,
   type RankedFinishRunStatus,
@@ -51,6 +52,17 @@ describe('ranked finish request', () => {
     expect(short.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(short.body as string)).toMatchObject({ result: 'completed' });
     expect(rankedFinishRequestInit({ trace: 'x'.repeat(70_000) }).keepalive).toBe(false);
+  });
+
+  it('gives a long trace more time to upload, up to two minutes', () => {
+    expect(rankedFinishTimeoutMs(0)).toBe(15_000);
+    expect(rankedFinishTimeoutMs(8_192)).toBe(16_000);
+    expect(rankedFinishTimeoutMs(400 * 1024)).toBe(65_000);
+    expect(rankedFinishTimeoutMs(4 * 1024 * 1024)).toBe(120_000);
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    rankedFinishRequestInit({ trace: 'x'.repeat(400 * 1024 - 12) });
+    expect(timeout).toHaveBeenLastCalledWith(65_000);
+    timeout.mockRestore();
   });
 
   it('resends only unanswered requests, server errors, 408, 425 and 429', () => {
