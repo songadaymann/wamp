@@ -45,6 +45,12 @@ import { handleAdminDaily } from '../daily/routes';
 import { handleAdminGhostArchive } from '../runs/ghostArchiveAdmin';
 import { handleAdminPublishedGoalIssues } from './publishedGoalIssues';
 import { handleAdminMapCapture } from './mapScreenshot';
+import {
+  handleAdminBuildingModeration,
+  handleAdminRevertUserEdits,
+  handleAdminUserSuspension,
+} from './buildingModeration';
+import { prepareModerationAuditStatement } from '../moderation/suspension';
 
 export async function handleAdminRequest(
   request: Request,
@@ -167,6 +173,16 @@ export async function handleAdminRequest(
   }
   if (adminProgressionUserMatch && request.method === 'POST') {
     return handleAdminProgressionUserCapsUpdate(request, env, decodeURIComponent(adminProgressionUserMatch[1]));
+  }
+
+  const buildingMatch = /^\/api\/admin\/users\/([^/]+)\/(building|suspension|revert-edits)$/.exec(url.pathname);
+  if (buildingMatch) {
+    const targetUserId = decodeURIComponent(buildingMatch[1]);
+    if (buildingMatch[2] === 'building' && request.method === 'GET') return handleAdminBuildingModeration(request, env, targetUserId);
+    if (buildingMatch[2] === 'suspension' && request.method === 'POST') return handleAdminUserSuspension(request, env, targetUserId);
+    if (buildingMatch[2] === 'revert-edits' && request.method === 'POST') {
+      return handleAdminRevertUserEdits(request, env, targetUserId, context);
+    }
   }
 
   const clearMatch = /^\/api\/admin\/rooms\/([^/]+)\/clear$/.exec(url.pathname);
@@ -358,6 +374,14 @@ async function handleAdminRoomClear(
     );
   }
 
+  statements.push(prepareModerationAuditStatement(env, {
+    action: 'room_clear',
+    targetUserId: roomRow.claimer_user_id,
+    targetRoomId: roomId,
+    operatorLabel: 'Admin',
+    details: { publishers: versionsResult.results.map((row) => row.published_by_user_id), runs: attemptIds.length },
+    createdAt: new Date().toISOString(),
+  }));
   await env.DB.batch(statements);
 
   for (const userId of affectedUserIds) {

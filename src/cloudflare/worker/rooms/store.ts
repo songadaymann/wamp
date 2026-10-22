@@ -223,6 +223,8 @@ export interface RoomMutationOptions {
   // The record this request already loaded for the same room with loadRoomRecordForMutation,
   // so saveDraft does not sync ownership from Base and load the full history a second time.
   loadedRecord?: RoomRecord;
+  // Revert only: refuse with a 409 if someone published after the caller planned the revert.
+  expectedLatestVersion?: number;
 }
 
 interface CompactRoomRow extends RoomRow {
@@ -1195,6 +1197,9 @@ export async function revertRoom(
   const target = existing.versions.find((version) => version.version === targetVersion) ?? null;
   if (!target) {
     throw new HttpError(404, `Version ${targetVersion} was not found.`);
+  }
+  if (options.expectedLatestVersion !== undefined && existing.versions.at(-1)?.version !== options.expectedLatestVersion) {
+    throw new HttpError(409, 'This room was published again since the restore was planned.');
   }
 
   const now = new Date().toISOString();

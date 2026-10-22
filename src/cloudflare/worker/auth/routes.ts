@@ -628,7 +628,7 @@ export async function handleDeleteApiToken(
   env: Env,
   tokenId: string
 ): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'manage API tokens');
+  const session = await requireCurrentSession(env, request, 'manage API tokens', { allowSuspended: true });
   if (!tokenId) {
     throw new HttpError(400, 'Token id is required.');
   }

@@ -497,6 +497,27 @@
               <div id="action-status" class="status"></div>
             </section>
 
+            <section id="building-card" class="card stack" hidden>
+              <h3>Building Controls</h3>
+              <div class="field">
+                <label for="building-reason-input">Moderation Reason</label>
+                <textarea id="building-reason-input" placeholder="Why this account is being suspended or its edits undone."></textarea>
+              </div>
+              <div class="actions">
+                <button id="building-suspend-button" type="button" class="danger">Suspend Account</button>
+              </div>
+              <div class="field">
+                <label for="building-since-input">Undo this user's edits to other builders' rooms since</label>
+                <input id="building-since-input" type="datetime-local" />
+              </div>
+              <div class="actions">
+                <button id="building-preview-button" type="button" class="secondary">Preview Room Restores</button>
+                <button id="building-revert-button" type="button" class="danger" disabled>Restore Rooms</button>
+              </div>
+              <div id="building-status" class="status"></div>
+              <div id="building-rooms" class="audit-list"></div>
+            </section>
+
             <section class="card stack">
               <h3>Room Runs</h3>
               <table>

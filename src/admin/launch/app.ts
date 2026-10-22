@@ -580,19 +580,19 @@ async function loadProgressionUser(userId: string): Promise<void> {
 
 function populateProgressionForm(user: AdminProgressionUserCapsResponse | null): void {
   if (progressionClaimInput) {
-    progressionClaimInput.value = user?.override.claimLimitPerDay ? String(user.override.claimLimitPerDay) : '';
+    progressionClaimInput.value = user?.override.claimLimitPerDay != null ? String(user.override.claimLimitPerDay) : '';
   }
   if (progressionPublishInput) {
-    progressionPublishInput.value = user?.override.publishLimitPerDay ? String(user.override.publishLimitPerDay) : '';
+    progressionPublishInput.value = user?.override.publishLimitPerDay != null ? String(user.override.publishLimitPerDay) : '';
   }
   if (progressionObjectInput) {
-    progressionObjectInput.value = user?.override.objectLimit ? String(user.override.objectLimit) : '';
+    progressionObjectInput.value = user?.override.objectLimit != null ? String(user.override.objectLimit) : '';
   }
   if (progressionCollectibleInput) {
-    progressionCollectibleInput.value = user?.override.collectibleLimit ? String(user.override.collectibleLimit) : '';
+    progressionCollectibleInput.value = user?.override.collectibleLimit != null ? String(user.override.collectibleLimit) : '';
   }
   if (progressionExpandedRoomInput) {
-    progressionExpandedRoomInput.value = user?.override.expandedRoomCellLimit ? String(user.override.expandedRoomCellLimit) : '';
+    progressionExpandedRoomInput.value = user?.override.expandedRoomCellLimit != null ? String(user.override.expandedRoomCellLimit) : '';
   }
   if (progressionReasonInput) {
     progressionReasonInput.value = user?.override.reason ?? '';
@@ -1932,8 +1932,8 @@ function readOptionalPositiveInteger(input: HTMLInputElement | null): number | n
     return null;
   }
   const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
-    throw new Error(`Invalid positive integer: "${trimmed}".`);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`Invalid limit (use 0 or more): "${trimmed}".`);
   }
   return parsed;
 }

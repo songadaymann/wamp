@@ -10,6 +10,7 @@ import type {
 } from '../model';
 import { createAdminApiClient } from '../adminApiClient';
 import { createPublishedGoalsPanel } from './publishedGoalsPanel';
+import { createBuildingPanel } from './buildingPanel';
 import {
   countSuspiciousQueueTabs,
   filterSuspiciousUsers,
@@ -113,6 +114,7 @@ const state: ViewState = {
 };
 const apiClient = createAdminApiClient(() => state.adminKey);
 const publishedGoalsPanel = createPublishedGoalsPanel(() => state.adminKey);
+const buildingPanel = createBuildingPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin');
 
 if (adminKeyInput) {
   adminKeyInput.value = state.adminKey;
@@ -147,6 +149,7 @@ refreshButton?.addEventListener('click', () => {
 clearKeyButton?.addEventListener('click', () => {
   state.adminKey = '';
   publishedGoalsPanel.reset();
+  buildingPanel.show(null);
   state.lastError = null;
   state.summary = null;
   state.usersScope = 'review_window';
@@ -282,6 +285,7 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
   }
 
   state.selectedUserId = userId;
+  buildingPanel.show(userId);
   state.detailLoading = true;
   state.preview = null;
   render();
