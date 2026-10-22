@@ -14,14 +14,17 @@ interface ActivityRow {
   content_version: number; x: number | null; y: number | null; quality_stars: number | null; created_at: string;
 }
 // Both feeds exclude removed awards, moderated comments and unpublished targets.
-const PUBLIC_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
+const CONTENT_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
   AND (e.id IS NULL OR e.archived_at IS NULL)
-  AND (r.published_json IS NOT NULL OR c.published_json IS NOT NULL OR e.published_json IS NOT NULL)
-  AND (a.source_kind = 'bxp' AND EXISTS (SELECT 1 FROM bxp_events WHERE id = a.source_id)
+  AND (r.published_json IS NOT NULL OR c.published_json IS NOT NULL OR e.published_json IS NOT NULL)`;
+const PUBLIC_SOURCE = `(a.source_kind = 'bxp' AND EXISTS (SELECT 1 FROM bxp_events WHERE id = a.source_id)
     OR a.source_kind = 'pxp' AND EXISTS (SELECT 1 FROM pxp_events WHERE id = a.source_id)
     OR a.source_kind = 'comment' AND EXISTS (SELECT 1 FROM room_comments WHERE id = a.source_id AND status = 'approved')
     OR a.source_kind = 'guest')`;
-const VISIBLE = `a.recipient_user_id = ? AND ${PUBLIC_VISIBLE}`;
+const PUBLIC_VISIBLE = `${CONTENT_VISIBLE} AND ${PUBLIC_SOURCE}`;
+// Edits by other builders are a private notice for the room's claimer, never public activity.
+const VISIBLE = `a.recipient_user_id = ? AND ${CONTENT_VISIBLE} AND (${PUBLIC_SOURCE}
+    OR a.source_kind = 'edit' AND EXISTS (SELECT 1 FROM room_versions WHERE room_id = a.content_id AND version = a.content_version))`;
 const ROOM_VISIBLE = `${VISIBLE} AND COALESCE(rv.published_by_user_id, ev.published_by_user_id,
   cv.published_by_user_id, r.last_published_by_user_id, r.claimer_user_id, e.owner_user_id, c.owner_user_id) = a.recipient_user_id`;
 const JOINS = `FROM builder_activity a

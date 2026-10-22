@@ -34,6 +34,9 @@ export async function resolveWorldMutationAccess(
   if (requestedWorld?.id === WAMP_PRIME_WORLD_ID) {
     throw new HttpError(400, 'WAMP 0 uses the standard room workflow.');
   }
+  if (claimedWorld?.id === WAMP_PRIME_WORLD_ID && requestedWorld) {
+    throw new HttpError(409, 'This room belongs to WAMP 0.');
+  }
   if (numberedClaimedWorld && requestedWorld && numberedClaimedWorld.id !== requestedWorld.id) {
     throw new HttpError(409, 'This room belongs to a different World.');
   }

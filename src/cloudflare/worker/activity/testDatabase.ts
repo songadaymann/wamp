@@ -34,7 +34,7 @@ export function fixture(includeActivity = true) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../../../../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
-    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_'))) continue;
+    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_') || file.startsWith('0069_'))) continue;
     sqlite.exec(readFileSync(new URL(file, directory), 'utf8'));
   }
   for (const user of ['builder', 'p1', 'p2', 'p3', 'generated']) sqlite.prepare('INSERT INTO users (id,email,display_name,created_at,updated_at) VALUES (?,?,?,?,?)')
@@ -51,6 +51,7 @@ export function fixture(includeActivity = true) {
     sqlite.exec(readFileSync(new URL('0055_builder_activity.sql', directory), 'utf8'));
     sqlite.exec(readFileSync(new URL('0057_daily_rooms.sql', directory), 'utf8'));
     sqlite.exec(readFileSync(new URL('0066_guest_activity_index.sql', directory), 'utf8'));
+    sqlite.exec(readFileSync(new URL('0069_room_edit_activity.sql', directory), 'utf8'));
   } };
 }
 export function award(f: ReturnType<typeof fixture>, id: string, kind = 'unique_completion_room', actor = 'p1', at = NOW, structured = true): void {

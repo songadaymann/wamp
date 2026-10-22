@@ -57,6 +57,8 @@ import {
   awardRoomPublishPoints,
   upsertUserStats,
 } from '../runs/points';
+import { releaseRateLimitSlots } from '../core/rateLimit';
+import { isEditOfOthersRoom, takeOthersRoomEditSlot } from './othersRoomEdits';
 import {
   handleBrowseRoomCommentSummaries,
   handleRoomCommentCreate,
@@ -414,13 +416,20 @@ export async function handleRoomRequest(
     if (!bypassDailyPublishLimit) {
       await assertUserCanPublishContent(env, auth.user.id, auth.source);
     }
+    const publishOptions = { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) };
+    const othersRoomEditSlot = isEditOfOthersRoom(previousRecord, auth.user.id, auth.isAdmin)
+      ? await takeOthersRoomEditSlot(env, auth.user.id, previousRecord.draft.id, auth.source)
+      : null;
     const record = await publishRoom(
       env,
       snapshot,
       buildRoomMutationActor(auth),
       auth.isAdmin,
-      { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
-    );
+      publishOptions,
+    ).catch(async (error: unknown) => {
+      await releaseRateLimitSlots(env, [othersRoomEditSlot]);
+      throw error;
+    });
     await awardRoomPublishPoints(
       env,
       auth.user.id,

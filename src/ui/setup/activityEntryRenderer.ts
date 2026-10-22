@@ -17,5 +17,11 @@ export function createActivityEntry(doc: Document, entry: BuilderActivity, guest
   link.textContent = guestView || entry.guestActivityRef !== undefined ? description.slice(entry.actorName.length + 1) : description;
   const time = doc.createElement('div'); time.className = 'history-modal-meta';
   time.textContent = `v${entry.contentVersion} · ${new Date(entry.createdAt).toLocaleString()}`;
-  row.append(link, time); return row;
+  row.append(link, time);
+  if (entry.kind === 'edited' && !guestView) {
+    const hint = doc.createElement('div'); hint.className = 'history-modal-meta';
+    hint.textContent = "Not what you wanted? Open the room's History to restore your version.";
+    row.append(hint);
+  }
+  return row;
 }

@@ -9,6 +9,7 @@ import {
   loadWorldAccessByRoomId,
   prepareWorldDailyUsageStatement,
 } from './access';
+import { resolveWorldMutationAccess } from './roomMutationIntegration';
 
 const migrationSql = readFileSync(
   new URL('../../../../migrations/0045_worlds_pilot.sql', import.meta.url),
@@ -66,6 +67,20 @@ describe('World access and quota contracts', () => {
     await expect(assertWorldFrontierClaim(env, 'world-1', { x: 129, y: 128 })).rejects.toMatchObject({
       status: 409,
     });
+  });
+
+  it('refuses to treat a WAMP 0 room as a numbered-World room through a requested World', async () => {
+    sqlite.exec(`INSERT INTO rooms (id, x, y, draft_json, published_json, claimer_user_id, claimed_at)
+      VALUES ('3,4', 3, 4, '{}', '{}', 'other', '${NOW}');
+      INSERT INTO world_room_claims (room_id, x, y, world_id, first_builder_user_id, claimed_at)
+      VALUES ('3,4', 3, 4, 'wamp-prime', 'other', '${NOW}');`);
+    const record = createDefaultRoomRecord('3,4', { x: 3, y: 4 });
+    record.claimerUserId = 'other';
+    record.published = { ...record.draft, status: 'published' };
+    await expect(resolveWorldMutationAccess(env, record, 'world-1', 'owner', false)).rejects.toMatchObject({ status: 409 });
+    await expect(resolveWorldMutationAccess(env, record, null, 'owner', false)).resolves.toBeNull();
+    const frontier = createDefaultRoomRecord('130,0', { x: 130, y: 0 });
+    await expect(resolveWorldMutationAccess(env, frontier, 'world-1', 'owner', false)).resolves.toMatchObject({ id: 'world-1' });
   });
 
   it('rolls back all daily usage changes when a batch exceeds the configured ceiling', async () => {

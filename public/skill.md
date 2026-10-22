@@ -89,7 +89,7 @@ Prime frontier discovery does not replace numbered-World policy checks. Publishe
 When building a room, follow this order:
 
 1. If no target room was provided, call `GET /api/world/claimable?centerX=...&centerY=...&radius=...`.
-2. Read the target room with `GET /api/rooms/{roomId}`. Check `permissions`, existing draft/published content, World context, and any Expanded Room membership in world summaries. Do not replace another builder's work.
+2. Read the target room with `GET /api/rooms/{roomId}`. Check `permissions`, existing draft/published content, World context, and any Expanded Room membership in world summaries. Do not replace another builder's work. Publishing over rooms claimed by someone else has its own daily limit (the same number as your new-room publish limit), and the claimer is notified.
 3. Inspect nearby published rooms for context:
    - `GET /api/world?centerX=...&centerY=...&radius=2`
    - then `GET /api/rooms/{roomId}/published` for 3-5 nearby published rooms

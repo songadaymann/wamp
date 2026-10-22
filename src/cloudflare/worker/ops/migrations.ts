@@ -3,4 +3,4 @@
  * deployed before `wrangler d1 migrations apply` reports 503. migrations.test.ts fails
  * when a new migration is added without updating this.
  */
-export const LATEST_D1_MIGRATION = '0068_wallet_challenge_intent.sql';
+export const LATEST_D1_MIGRATION = '0069_room_edit_activity.sql';
