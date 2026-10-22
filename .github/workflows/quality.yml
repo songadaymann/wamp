@@ -33,15 +33,21 @@ jobs:
   mobile-smoke:
     # Phone and tablet layouts against a production build, with recorded API responses (F089).
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -52,15 +58,21 @@ jobs:
 
   expanded-leaderboards:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --expanded-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -71,15 +83,21 @@ jobs:
 
   gameplay-pause:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --pause-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -90,15 +108,21 @@ jobs:
 
   assist-mode:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --assist-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -109,15 +133,21 @@ jobs:
 
   keyboard-controls:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --keyboard-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -128,15 +158,21 @@ jobs:
 
   auth-state:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --auth-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -147,15 +183,21 @@ jobs:
 
   chat-identity:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --identity-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -166,15 +208,21 @@ jobs:
 
   map-capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:map-capture:service
       - run: npm run smoke:mobile:ci -- --map-capture-only
       - if: failure()
@@ -189,7 +237,11 @@ jobs:
   wallet-recovery:
     name: wallet-recovery-${{ matrix.profile }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     strategy:
       fail-fast: false
       matrix:
@@ -198,12 +250,14 @@ jobs:
       ARTWORK_PROFILES: ${{ matrix.profile }}
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --wallet-recovery-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -214,15 +268,21 @@ jobs:
 
   collection-costs:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --costs-only
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -233,15 +293,21 @@ jobs:
 
   wallet-authentication:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:wallet-auth:service
       - run: npm run smoke:mobile:ci -- --wallet-auth-only
       - if: failure()
@@ -255,15 +321,21 @@ jobs:
 
   mint-network:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mint-network:service
       - run: npm run smoke:mobile:ci -- --mint-network-only
       - run: npm run smoke:mobile:ci -- --ownership-only --skip-build
@@ -281,15 +353,21 @@ jobs:
 
   room-protection:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:room-protection:service
       - run: npm run smoke:mobile:ci -- --protection-only
       - run: npm run smoke:mobile:ci -- --protected-discovery-only --skip-build
@@ -305,15 +383,21 @@ jobs:
 
   collections:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:collections:service
       - run: npm run smoke:mobile:ci -- --collections-only
       - if: failure()
