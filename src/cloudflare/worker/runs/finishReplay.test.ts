@@ -6,27 +6,47 @@ import type { RunFinishRequestBody, RunStartResponse } from '../../../runs/model
 import { createSession } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
-import { replayFinalizedRunFinish } from './finishReplay';
+import { assertReplayableRunFinish, finalizeStatementWon, runPastDisconnect } from './finishReplay';
 import { handleRunFinish, handleRunStart } from './routes';
 
 class Statement implements D1PreparedStatement {
   values: (string | number | null)[] = [];
   constructor(readonly owner: Database, readonly sql: string) {}
   bind(...values: unknown[]): this { this.values = values as typeof this.values; return this; }
-  async first<T>(): Promise<T | null> { return this.owner.db.prepare(this.sql).get(...this.values) as T ?? null; }
-  async all<T>(): Promise<{ results: T[] }> { return { results: this.owner.db.prepare(this.sql).all(...this.values) as T[] }; }
+  async first<T>(): Promise<T | null> { this.owner.read(); return this.owner.db.prepare(this.sql).get(...this.values) as T ?? null; }
+  async all<T>(): Promise<{ results: T[] }> { this.owner.read(); return { results: this.owner.db.prepare(this.sql).all(...this.values) as T[] }; }
 }
+/** node:sqlite behind D1's batch shape: RETURNING rows in `results`, the change count in `meta` (as Miniflare's D1 does). */
 class Database implements D1Database {
   beforeBatch: ((sql: string[]) => Promise<void>) | null = null;
+  /** Fail the first read after the finalize commit, as a D1 blip in the post-commit steps would. */
+  failAfterFinalize = false;
+  private failNextRead = false;
   constructor(readonly db: DatabaseSync) {}
   prepare(sql: string): Statement { return new Statement(this, sql); }
   withSession(): this { return this; }
+  read(): void {
+    if (!this.failNextRead) return;
+    this.failNextRead = false;
+    throw new Error('D1 unavailable');
+  }
   async batch<T>(statements: D1PreparedStatement[]): Promise<T[]> {
-    await this.beforeBatch?.(statements.map((statement) => (statement as Statement).sql));
+    const sql = statements.map((statement) => (statement as Statement).sql);
+    await this.beforeBatch?.(sql);
+    this.read();
     this.db.exec('BEGIN');
     try {
-      const results = statements.map((statement) => ({ results: this.db.prepare((statement as Statement).sql).all(...(statement as Statement).values) }) as T);
-      this.db.exec('COMMIT'); return results;
+      const results = statements.map((statement) => {
+        const rows = this.db.prepare((statement as Statement).sql).all(...(statement as Statement).values);
+        const { n } = this.db.prepare('SELECT changes() AS n').get() as { n: number };
+        return { results: rows, meta: { changes: n } } as T;
+      });
+      this.db.exec('COMMIT');
+      if (this.failAfterFinalize && sql.some((statement) => statement.includes('UPDATE room_runs'))) {
+        this.failAfterFinalize = false;
+        this.failNextRead = true;
+      }
+      return results;
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
 }
@@ -47,6 +67,8 @@ beforeEach(async () => {
   const json = JSON.stringify(room);
   sqlite.prepare("INSERT INTO rooms (id,x,y,draft_json,published_json,claimer_user_id) VALUES ('0,0',0,0,?,?,'builder')").run(json, json);
   sqlite.prepare("INSERT INTO room_versions (room_id,version,snapshot_json,created_at,published_by_user_id) VALUES ('0,0',1,?,?,'builder')").run(json, NOW.toISOString());
+  sqlite.prepare(`INSERT INTO daily_rooms (date,target_key,target_type,content_id,version,room_id,room_version,room_x,room_y,title,builder_user_id,builder_display_name,goal_json,cell_count,picked_by,picked_at)
+    VALUES ('2026-10-09','room:0,0','room','0,0',1,'0,0',1,0,0,'Room','builder','builder',?,1,'automatic',?)`).run(JSON.stringify(goal), NOW.toISOString());
   session = await createSession(env, 'player');
 });
 afterEach(() => { sqlite.close(); vi.useRealTimers(); vi.restoreAllMocks(); });
@@ -64,28 +86,60 @@ async function startRun() {
 }
 async function finish(attemptId: string, body: RunFinishRequestBody, deferred: Promise<unknown>[] = []) {
   const context = { waitUntil: (promise: Promise<unknown>) => { deferred.push(promise); } };
-  return handleRunFinish(request(body), env, attemptId, context).catch((error: unknown) => error);
+  const response = await handleRunFinish(request(body), env, attemptId, context).catch((error: unknown) => error);
+  await Promise.all(deferred);
+  return response;
 }
 const count = (sql: string) => Number((sqlite.prepare(sql).get() as { n: number }).n);
-const firstClearAwards = () => count(`SELECT COUNT(*) AS n FROM pxp_events WHERE user_id = 'player' AND event_type = 'room_clear_first'`);
+const awards = () => ({
+  firstClear: count(`SELECT COUNT(*) AS n FROM pxp_events WHERE user_id = 'player' AND event_type = 'room_clear_first'`),
+  dailyClear: count(`SELECT COUNT(*) AS n FROM pxp_events WHERE user_id = 'player' AND event_type = 'daily_clear'`),
+  builder: count(`SELECT COUNT(*) AS n FROM bxp_events WHERE user_id = 'builder' AND event_type = 'unique_completion_room'`),
+  finalized: count(`SELECT COUNT(*) AS n FROM point_events WHERE user_id = 'player' AND event_type = 'run_finalized'`),
+});
+const once = { firstClear: 1, dailyClear: 1, builder: 1, finalized: 1 };
+const progressMatchesEvents = () => {
+  const pxp = sqlite.prepare(`SELECT total_pxp AS total, (SELECT SUM(amount) FROM pxp_events WHERE user_id = 'player') AS events
+    FROM user_progress WHERE user_id = 'player'`).get() as { total: number; events: number };
+  return pxp.total === pxp.events;
+};
 
 describe('resent ranked finishes (F351)', () => {
   it('answers a resend of a counted clear with 204 and awards nothing twice', async () => {
     const { attemptId, body } = await startRun();
-    const deferred: Promise<unknown>[] = [];
-    expect(await finish(attemptId, body, deferred)).toMatchObject({ status: 204 });
-    await Promise.all(deferred);
+    expect(await finish(attemptId, body)).toMatchObject({ status: 204 });
+    expect(awards()).toEqual(once);
     const finishedAt = (sqlite.prepare('SELECT finished_at AS at FROM room_runs WHERE attempt_id = ?').get(attemptId) as { at: string }).at;
 
-    vi.setSystemTime(NOW.getTime() + 40_000); // the client's 15s timeout, then its retries
+    vi.setSystemTime(NOW.getTime() + 40_000); // the client's timeout, then its retries
     const resent: Promise<unknown>[] = [];
     expect(await finish(attemptId, body, resent)).toMatchObject({ status: 204 });
-    await Promise.all(resent);
     expect(resent).toHaveLength(0);
-    expect(firstClearAwards()).toBe(1);
+    expect(awards()).toEqual(once);
     expect(count(`SELECT COUNT(*) AS n FROM room_runs WHERE result = 'completed'`)).toBe(1);
     // The resend did not move the recorded finish onto its later server clock.
     expect((sqlite.prepare('SELECT finished_at AS at FROM room_runs WHERE attempt_id = ?').get(attemptId) as { at: string }).at).toBe(finishedAt);
+  });
+
+  it('awards a clear exactly once when a step after the commit threw and the client resent', async () => {
+    const { attemptId, body } = await startRun();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    database.failAfterFinalize = true;
+    expect(await finish(attemptId, body)).toMatchObject({ message: 'D1 unavailable' });
+    expect(count(`SELECT COUNT(*) AS n FROM room_runs WHERE result = 'completed'`)).toBe(1);
+    expect(awards()).toEqual({ firstClear: 0, dailyClear: 0, builder: 0, finalized: 0 });
+
+    vi.setSystemTime(NOW.getTime() + 10_000); // the client's 1s retry
+    expect(await finish(attemptId, body)).toMatchObject({ status: 204 });
+    expect(awards()).toEqual(once);
+    // Keyed to the original clear's day, not the resend's clock.
+    expect(count(`SELECT COUNT(*) AS n FROM pxp_events WHERE event_type = 'daily_clear' AND source_id = '2026-10-09'`)).toBe(1);
+    expect(progressMatchesEvents()).toBe(true);
+
+    const again: Promise<unknown>[] = [];
+    expect(await finish(attemptId, body, again)).toMatchObject({ status: 204 });
+    expect(again).toHaveLength(0);
+    expect(awards()).toEqual(once);
   });
 
   it('replays a stored verification failure rather than reporting the resend as saved', async () => {
@@ -97,7 +151,6 @@ describe('resent ranked finishes (F351)', () => {
 
   it('lets only one of two overlapping finishes for the same attempt finalize it', async () => {
     const { attemptId, body } = await startRun();
-    const deferred: Promise<unknown>[][] = [[], []];
     // The original is still verifying when the client's timed-out resend arrives: hold the first
     // finalize until the second request has also passed its "still active" check.
     let releaseFirst: (() => void) | null = null;
@@ -106,13 +159,13 @@ describe('resent ranked finishes (F351)', () => {
       if (!releaseFirst) await new Promise<void>((resolve) => { releaseFirst = resolve; });
       else releaseFirst();
     };
-    const [original, resend] = await Promise.all([finish(attemptId, body, deferred[0]), finish(attemptId, body, deferred[1])]);
-    await Promise.all(deferred.flat());
+    const [original, resend] = await Promise.all([finish(attemptId, body), finish(attemptId, body)]);
     expect(original).toMatchObject({ status: 204 });
     expect(resend).toMatchObject({ status: 204 });
-    // Only the request whose guarded UPDATE claimed the row schedules rewards.
-    expect(deferred.filter(scheduled => scheduled.length > 0)).toHaveLength(1);
-    expect(firstClearAwards()).toBe(1);
+    // The loser neither rewrote the row nor recorded a second verification audit.
+    expect(count(`SELECT COUNT(*) AS n FROM run_verification_audit WHERE attempt_id = '${attemptId}'`)).toBe(1);
+    expect(awards()).toEqual(once);
+    expect(progressMatchesEvents()).toBe(true);
   });
 
   it('keeps a finish with a different result than the stored one a conflict', async () => {
@@ -122,24 +175,44 @@ describe('resent ranked finishes (F351)', () => {
   });
 });
 
-describe('replayFinalizedRunFinish', () => {
+describe('finish replay helpers', () => {
   const messages = { missingTrace: 'missing', unverified: 'unverified', timedOut: 'timed out', finalized: 'finalized' };
-  const replay = (stored: Parameters<typeof replayFinalizedRunFinish>[1], requested: 'completed' | 'abandoned' = 'completed') => {
-    try { return replayFinalizedRunFinish(new Request('https://api.wamp.land/finish'), stored, requested, messages).status; } catch (error) {
+  const replay = (stored: Parameters<typeof assertReplayableRunFinish>[0], requested: 'completed' | 'abandoned' = 'completed') => {
+    try { assertReplayableRunFinish(stored, requested, messages); return 'counted'; } catch (error) {
       return error instanceof HttpError ? `${error.status} ${error.message}` : error;
     }
   };
 
   it('maps the stored outcome to the answer the original request gave', () => {
-    expect(replay({ result: 'completed', verificationStatus: 'passed' })).toBe(204);
-    expect(replay({ result: 'completed', verificationStatus: 'not_required' })).toBe(204);
-    expect(replay({ result: 'abandoned', verificationStatus: null }, 'abandoned')).toBe(204);
+    expect(replay({ result: 'completed', verificationStatus: 'passed' })).toBe('counted');
+    expect(replay({ result: 'completed', verificationStatus: 'not_required' })).toBe('counted');
+    expect(replay({ result: 'abandoned', verificationStatus: null }, 'abandoned')).toBe('counted');
     expect(replay({ result: 'completed', verificationStatus: 'failed', verificationReason: 'missing_trace' })).toBe('409 missing');
     expect(replay({ result: 'completed', verificationStatus: 'failed', verificationReason: 'trace_client_outdated' }))
       .toBe('409 Client update required for ranked verification.');
     expect(replay({ result: 'completed', verificationStatus: 'failed', verificationReason: 'trace_goal' })).toBe('409 unverified');
     expect(replay({ result: 'completed', verificationStatus: 'timeout' })).toBe('409 timed out');
     expect(replay({ result: 'failed', verificationStatus: 'not_required' })).toBe('409 finalized');
+    expect(replay({ result: 'active' }, 'completed')).toBe('409 finalized');
     expect(replay(null)).toBe('409 finalized');
+  });
+
+  it('reads a won finalize from RETURNING rows or from D1\'s change count', () => {
+    expect(finalizeStatementWon({ results: [{ attempt_id: 'a' }], meta: { changes: 1 } })).toBe(true);
+    expect(finalizeStatementWon({ results: [], meta: { changes: 1 } })).toBe(true);
+    expect(finalizeStatementWon({ results: [{ attempt_id: 'a' }] })).toBe(true);
+    expect(finalizeStatementWon({ results: [], meta: { changes: 0 } })).toBe(false);
+    expect(finalizeStatementWon(undefined)).toBe(false);
+  });
+
+  it('keeps post-commit work alive past a disconnect while the reply still waits for it', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const kept: Promise<unknown>[] = [];
+    const context = { waitUntil: (promise: Promise<unknown>) => { kept.push(promise); } };
+    await runPastDisconnect(context, 'attempt', Promise.resolve());
+    expect(kept).toHaveLength(1);
+    await expect(runPastDisconnect(context, 'attempt', Promise.reject(new Error('D1 unavailable')))).rejects.toThrow('D1 unavailable');
+    await Promise.all(kept);
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining('"event":"run-finish-settle-failed"'));
   });
 });

@@ -1,5 +1,6 @@
 import type { RunResult } from '../../../runs/model';
-import { HttpError, noContentResponse } from '../core/http';
+import { HttpError } from '../core/http';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
 import type { RunVerificationStatus } from './verification';
 
 export interface RunFinishMessages {
@@ -33,19 +34,48 @@ export function runVerificationError(
 
 /**
  * A resent finish (lost reply, client timeout, or a resend racing the original) gets the stored
- * outcome rather than a second finalize: 204 when the same result already counted, the original
- * verification 409 when it did not. Rewards were scheduled once, by the request that finalized (F351).
+ * outcome instead of a second finalize. This throws the original verification 409, or "already
+ * finalized" for a different result, and returns when the same result already counted (F351).
  */
-export function replayFinalizedRunFinish(
-  request: Request,
+export function assertReplayableRunFinish(
   stored: StoredRunOutcome | null,
   requested: RunResult,
   messages: RunFinishMessages,
-): Response {
+): void {
   if (!stored || stored.result === 'active' || stored.result !== requested) {
     throw new HttpError(409, messages.finalized);
   }
   const error = runVerificationError(stored.verificationStatus, stored.verificationReason, messages);
   if (error) throw error;
-  return noContentResponse(request);
+}
+
+/** Whether this guarded finalize statement claimed the still-active row (RETURNING rows, or D1's change count). */
+export function finalizeStatementWon(result: { results?: unknown[]; meta?: { changes?: number } } | undefined): boolean {
+  return (result?.results?.length ?? 0) > 0 || (result?.meta?.changes ?? 0) > 0;
+}
+
+/**
+ * The finish's deferred rewards write the run_finalized point event last, so its presence means
+ * the rewards finished. Without it, a resend runs the settle step again; every award is keyed.
+ */
+export async function runFinishSettled(env: Env, attemptId: string): Promise<boolean> {
+  const row = await env.DB.prepare(`SELECT 1 AS settled FROM point_events
+    WHERE event_type = 'run_finalized' AND source_key = ? LIMIT 1`).bind(attemptId).first<{ settled: number }>();
+  return Boolean(row);
+}
+
+/**
+ * Work after the finalize commit. The reply still waits for it, but a client that disconnects
+ * (Workers cancel the handler, not waitUntil work) cannot cut it off halfway.
+ */
+export async function runPastDisconnect(
+  context: WorkerExecutionContextLike | undefined,
+  attemptId: string,
+  work: Promise<void>,
+): Promise<void> {
+  context?.waitUntil(work.catch((error: unknown) => {
+    console.error(JSON.stringify({ event: 'run-finish-settle-failed', attemptId,
+      message: error instanceof Error ? error.message : String(error) }));
+  }));
+  await work;
 }

@@ -54,22 +54,29 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-function database() {
+const activeRow = { attempt_id: 'attempt', room_id: 'room', room_x: 0, room_y: 0, room_version: 1, course_id: 'course', course_version: 1, expanded_room_id: 'expanded', expanded_room_version: 1, legacy_course_attempt_id: 'attempt', goal_json: JSON.stringify(goal), user_id: 'user', user_display_name: 'User', started_at: '2026-09-08T12:00:00Z', result: 'active', verification_nonce: 'nonce', verification_snapshot_hash: 'hash' };
+
+function database(overrides: {
+  first?: (sql: string) => unknown;
+  batchResults?: (statements: { sql: string }[]) => unknown[];
+} = {}) {
   let loaded = false;
   const writes: { sql: string; values: unknown[] }[] = [];
   // Each guarded finalize UPDATE claims the still-active row and returns it.
   const batch = vi.fn(async (statements: { sql: string; values: unknown[] }[]) => {
     writes.push(...statements);
-    return statements.map(() => ({ results: [{ attempt_id: 'attempt' }] }));
+    return overrides.batchResults?.(statements) ?? statements.map(() => ({ results: [{ attempt_id: 'attempt' }] }));
   });
   const env = { DB: { batch, prepare: (sql: string) => {
     const statement = {
       sql, values: [] as unknown[],
       bind(...values: unknown[]) { statement.values = values; return statement; },
       async first() {
+        const override = overrides.first?.(sql);
+        if (override !== undefined) return override;
         if (!/WHERE attempt_id = \?/.test(sql) || loaded) return null;
         loaded = true;
-        return { attempt_id: 'attempt', room_id: 'room', room_x: 0, room_y: 0, room_version: 1, course_id: 'course', course_version: 1, expanded_room_id: 'expanded', expanded_room_version: 1, legacy_course_attempt_id: 'attempt', goal_json: JSON.stringify(goal), user_id: 'user', user_display_name: 'User', started_at: '2026-09-08T12:00:00Z', result: 'active', verification_nonce: 'nonce', verification_snapshot_hash: 'hash' };
+        return activeRow;
       },
       async all() { return { results: [] }; },
     };
@@ -172,3 +179,33 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
     });
   });
 }
+
+describe('Expanded Room course_runs copy (F351)', () => {
+  it('does not award an Expanded Room run whose course_runs copy a course finish already finalized', async () => {
+    const db = database({
+      batchResults: (statements) => statements.map(() => ({ results: [], meta: { changes: 0 } })),
+      first: (sql) => sql.includes('FROM expanded_room_runs') ? activeRow
+        : sql.includes('FROM course_runs') ? { result: 'completed', verificationStatus: 'passed', verificationReason: null }
+          : undefined,
+    });
+    const response = await handleExpandedRoomRunFinish(new Request('https://example.test/finish'), db.env, 'attempt');
+    expect(response.status).toBe(204);
+    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.writes[0].sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM course_runs\s+WHERE course_runs.attempt_id = expanded_room_runs.attempt_id AND course_runs.result <> 'active'/);
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it('does not settle rewards from a course finish of a copy an Expanded Room finish owns', async () => {
+    const db = database({
+      first: (sql) => sql.includes('FROM point_events') ? null
+        : sql.includes('FROM expanded_room_runs') ? { finalized: 1 }
+          : sql.includes('FROM course_runs')
+            ? { ...activeRow, result: 'completed', verification_status: 'passed', finished_at: '2026-09-08T12:00:01Z' }
+            : undefined,
+    });
+    const response = await handleCourseRunFinish(new Request('https://example.test/finish'), db.env, 'attempt');
+    expect(response.status).toBe(204);
+    expect(db.batch).not.toHaveBeenCalled();
+    expect(mocks.verify).not.toHaveBeenCalled();
+  });
+});

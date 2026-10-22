@@ -6,7 +6,10 @@ import type { GlobalLeaderboardResponse } from '../../../runs/model';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
-import { replayFinalizedRunFinish, runVerificationError, type RunFinishMessages } from './finishReplay';
+import {
+  assertReplayableRunFinish, finalizeStatementWon, runFinishSettled, runPastDisconnect, runVerificationError,
+  type RunFinishMessages,
+} from './finishReplay';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -218,8 +221,11 @@ export async function handleRunFinish(
     throw new HttpError(403, 'You can only finish your own run attempts.');
   }
 
-  if (existing.result !== 'active') {
-    return replayFinalizedRunFinish(request, existing, body.result, ROOM_RUN_FINISH_MESSAGES);
+  // A resend of a finished attempt replays its stored answer (F351).
+  const resend = existing.result !== 'active';
+  if (resend) {
+    assertReplayableRunFinish(existing, body.result, ROOM_RUN_FINISH_MESSAGES);
+    if (await runFinishSettled(env, attemptId)) return noContentResponse(request);
   }
 
   const roomRecord = await loadRoomRankingRecord(env, existing.roomId, existing.roomCoordinates, {
@@ -232,6 +238,17 @@ export async function handleRunFinish(
   if (!snapshot.goal) {
     throw new HttpError(409, 'This room version no longer has a leaderboard goal.');
   }
+  const settlement = { attemptId, userId: auth.user.id, goal: snapshot.goal, roomRecord,
+    rewardScope: resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id) };
+  // An earlier finish committed, then threw or was cut off before its rewards finished.
+  const settleResend = async (): Promise<Response> => {
+    if (!(await runFinishSettled(env, attemptId))) {
+      await runPastDisconnect(executionContext, attemptId,
+        settleRoomRunFinish(env, executionContext, { ...settlement, completedGhost: null }));
+    }
+    return noContentResponse(request);
+  };
+  if (resend) return settleResend();
 
   const metricCaps = getRunMetricCapsForSnapshot(snapshot);
   const clampedMetrics = clampRunMetricsToSnapshot(snapshot, {
@@ -264,7 +281,7 @@ export async function handleRunFinish(
     roomRecord,
     existing.roomVersion,
   );
-  const rewardScope = resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id);
+  const { rewardScope } = settlement;
   const provisionalScore =
     clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
   const provisionalPreviousBest =
@@ -414,7 +431,7 @@ export async function handleRunFinish(
     snapshot, finalBody, auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs)
     : null;
 
-  const [finalized] = await env.DB.batch<{ results: unknown[] }>([
+  const [finalized] = await env.DB.batch<{ results?: unknown[]; meta?: { changes?: number } }>([
     env.DB.prepare(
       `
         UPDATE room_runs
@@ -453,53 +470,80 @@ export async function handleRunFinish(
       source: 'room', userId: auth.user.id, deaths: finalBody.deaths, createdAt: finishedAt,
     })] : []),
   ]);
-  // A resend raced this request and finalized first; its rewards stand and this one adds none.
-  if (!finalized?.results.length) {
-    return replayFinalizedRunFinish(request, await loadRoomRunByAttemptId(env, attemptId), body.result, ROOM_RUN_FINISH_MESSAGES);
-  }
-
-  if (verification.audit) {
-    await recordRunVerificationAudit(env, {
-      attemptId,
-      kind: 'room',
-      ...verification.audit,
-      // Unverified (skipped) runs keep their recording so they can be reviewed later.
-      trace: finalBody.verificationTrace ?? null,
-      createdAt: finishedAt,
-    });
+  if (!finalizeStatementWon(finalized)) {
+    // A resend raced this request and finalized first: replay its answer. Its awards are keyed.
+    assertReplayableRunFinish(await loadRoomRunByAttemptId(env, attemptId), body.result, ROOM_RUN_FINISH_MESSAGES);
+    return settleResend();
   }
 
   const verificationError = runVerificationError(verificationStatus, verificationReason, ROOM_RUN_FINISH_MESSAGES);
+  await runPastDisconnect(executionContext, attemptId, (async () => {
+    if (verification.audit) {
+      await recordRunVerificationAudit(env, {
+        attemptId,
+        kind: 'room',
+        ...verification.audit,
+        // Unverified (skipped) runs keep their recording so they can be reviewed later.
+        trace: finalBody.verificationTrace ?? null,
+        createdAt: finishedAt,
+      });
+    }
+    if (!verificationError) await settleRoomRunFinish(env, executionContext, { ...settlement, completedGhost });
+  })());
   if (verificationError) throw verificationError;
+  return noContentResponse(request);
+}
 
+interface RoomRunSettlement {
+  attemptId: string;
+  userId: string;
+  goal: RoomGoal;
+  roomRecord: Awaited<ReturnType<typeof loadRoomRankingRecord>>;
+  rewardScope: ReturnType<typeof resolveRoomClearRewardScope>;
+  /** Only the request that finalized the run holds its built ghost; a resend skips the PB ghost. */
+  completedGhost: Awaited<ReturnType<typeof buildVerifiedRoomGhost>> | null;
+}
+
+/**
+ * Everything after the finalize commit: discovery, reward flags, the PB ghost, the daily clear and
+ * the deferred rewards. Every award is keyed, so a resend runs this again when an earlier try threw
+ * or was cut off after the commit. The run_finalized point event goes last, as the marker (F351).
+ */
+async function settleRoomRunFinish(
+  env: Env,
+  executionContext: WorkerExecutionContextLike | undefined,
+  { attemptId, userId, goal, roomRecord, rewardScope, completedGhost }: RoomRunSettlement,
+): Promise<void> {
   const finalizedRun = await loadRoomRunByAttemptId(env, attemptId);
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized run.');
   }
+  // The stored finish time keeps a resend's day and week reward keys on the original clear.
+  const finishedAt = finalizedRun.finishedAt ?? new Date().toISOString();
   await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
-    env, 'room:' + existing.roomId, existing.roomVersion, auth.user.id, { ...finalBody, finishedAt },
+    env, 'room:' + finalizedRun.roomId, finalizedRun.roomVersion, userId,
+    { ...finalizedRun, elapsedMs: finalizedRun.elapsedMs ?? 0, finishedAt },
   ));
 
   // The personal-best ghost follows this exact version; rewards follow the reward scope.
   let isNewPersonalBest = false;
   let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
-    const goal = snapshot.goal;
     const isBetterThan = (best: RoomRunRecord | null) => best === null
       || sortCompletedRunsForLeaderboard([finalizedRun, best], goal)[0]?.attemptId === finalizedRun.attemptId;
     const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
       env,
-      auth.user.id,
+      userId,
       finalizedRun.roomId,
       finalizedRun.roomVersion,
-      snapshot.goal,
+      goal,
       finalizedRun.attemptId
     );
     isNewPersonalBest = isBetterThan(previousBest);
     const rewardBest = rewardScope.versions.length === 1 && rewardScope.versions[0] === finalizedRun.roomVersion
       ? previousBest
       : await loadBestCompletedRunForUserAndRoomVersion(
-          env, auth.user.id, finalizedRun.roomId, rewardScope.versions, snapshot.goal, finalizedRun.attemptId,
+          env, userId, finalizedRun.roomId, rewardScope.versions, goal, finalizedRun.attemptId,
         );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: rewardBest === null,
@@ -517,9 +561,7 @@ export async function handleRunFinish(
   if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
   await awardRunDailyClear(env, finalizedRun,
     { type: 'room', id: finalizedRun.roomId, version: finalizedRun.roomVersion }, finishedAt);
-  const goal = snapshot.goal;
   await scheduleRunRewards(executionContext, attemptId, async () => {
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardRoomCreatorCompletionPoints(env, {
@@ -544,9 +586,10 @@ export async function handleRunFinish(
       ownContent: rewardScope.ownContent,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    await upsertUserStats(env, auth.user.id);
+    // Last award: runFinishSettled reads this event as "rewards finished".
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
+    await upsertUserStats(env, userId);
   });
-  return noContentResponse(request);
 }
 
 export async function handleRoomLeaderboard(
