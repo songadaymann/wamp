@@ -157,8 +157,9 @@ export class OverworldChunkPreviewRenderer {
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
   private readonly roomArt: RoomPreviewArtLoader;
-  // Rooms on screen as previews keep their custom backgrounds, so an eviction cannot make a
-  // visible chunk's signature change and refetch the background in a loop (F352).
+  // Previews that draw custom backgrounds (tile size >= 4, in every mode) hold them for rooms
+  // on screen. A drawn photo then never falls back to the plain fill, and an eviction cannot
+  // change a visible chunk's signature and refetch the background in a loop (F352).
   private readonly customBackgroundLeases: CustomBackgroundTextureLeaseSet;
 
   constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
@@ -399,6 +400,7 @@ export class OverworldChunkPreviewRenderer {
   private syncChunkImages(): void {
     const nextVisiblePreviewRoomIds = new Set<string>();
     const customBackgroundKeys = new Set<string>();
+    const holdCustomBackgrounds = this.shouldDrawCustomBackgroundImages(this.getPreviewTileSize());
     const activeChunkIds = new Set(this.chunkStatesByChunkId.keys());
 
     for (const [chunkId, chunkState] of this.getPrioritizedChunkStates()) {
@@ -411,7 +413,7 @@ export class OverworldChunkPreviewRenderer {
 
       for (const room of visibleRooms) {
         nextVisiblePreviewRoomIds.add(room.id);
-        const backgroundId = getCustomBackgroundId(room);
+        const backgroundId = holdCustomBackgrounds ? getCustomBackgroundId(room) : null;
         if (backgroundId) customBackgroundKeys.add(getCustomBackgroundTextureKey(backgroundId));
       }
 
@@ -446,7 +448,7 @@ export class OverworldChunkPreviewRenderer {
     const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
     const schedulePreviewWork = this.shouldSchedulePreviewWork();
 
-    if (this.shouldDrawCustomBackgroundImages(previewTileSize) && !schedulePreviewWork) {
+    if (this.shouldLoadCustomBackgroundImages(previewTileSize)) {
       this.ensureCustomBackgroundsForChunk(rooms);
     }
 
@@ -1459,6 +1461,15 @@ export class OverworldChunkPreviewRenderer {
 
   private shouldDrawCustomBackgroundImages(previewTileSize: number): boolean {
     return previewTileSize >= CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE;
+  }
+
+  /** Play-mode previews draw only backgrounds already resident; immediate ones load them. */
+  private shouldLoadCustomBackgroundImages(previewTileSize: number): boolean {
+    return this.shouldDrawCustomBackgroundImages(previewTileSize) && !this.shouldSchedulePreviewWork();
+  }
+
+  releaseCustomBackgroundLeases(): void {
+    this.customBackgroundLeases.releaseAll();
   }
 
   private shouldDrawDetailedRoomPreviews(previewTileSize: number): boolean {

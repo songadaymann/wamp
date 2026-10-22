@@ -471,6 +471,39 @@ describe('sparse overworld chunk preview textures', () => {
     renderer.reset();
     expect(leases.getSnapshot().leases).toEqual({});
   });
+
+  it.each([
+    ['zoomed-out overview previews', 2, false, {}],
+    ['play previews, which draw resident photos without loading them', 4, true, { custom_background_abcdefgh: 1 }],
+  ] as const)(
+    'holds backgrounds only where previews draw them: %s',
+    (_name, tileSize, scheduled, expectedLeases) => {
+      const scene = createScene();
+      const renderer = new OverworldChunkPreviewRenderer({
+        scene: scene.value,
+        getPreviewTileSize: () => tileSize,
+        getRoomOrigin: (coordinates) => ({
+          x: coordinates.x * ROOM_PX_WIDTH,
+          y: coordinates.y * ROOM_PX_HEIGHT,
+        }),
+        isFullRoomLoaded: () => false,
+        workScheduler: scheduled ? new FrameWorkCoordinator() : undefined,
+        shouldScheduleWork: () => true,
+        createCanvas: scene.createDetachedCanvas,
+      });
+      const leases = getCustomBackgroundTextureLeases(
+        (scene.value as { textures: Phaser.Textures.TextureManager }).textures,
+      );
+      const customRoom = room(5, 3);
+      customRoom.background = 'custom:abcdefgh';
+
+      renderer.renderChunkPreviews([customRoom]);
+
+      expect(mocks.ensureCustomBackgroundTexture).not.toHaveBeenCalled();
+      expect(leases.getSnapshot().leases).toEqual(expectedLeases);
+      renderer.reset();
+    },
+  );
 });
 
 function createScene(): {

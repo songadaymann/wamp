@@ -8,6 +8,7 @@ vi.mock('phaser', () => ({
   },
 }));
 
+import { animateBackgroundTexture, type BackgroundAnimation } from './animation';
 import {
   CustomBackgroundTexturePreparation,
   createCustomBackgroundObject,
@@ -397,6 +398,30 @@ describe('tiled custom backgrounds', () => {
 
     f.scene.textures.remove(f.key);
     expect(f.scene.textures.exists(tileKey)).toBe(false);
+  });
+
+  it('keeps an animated tiled background on its own texture, even a large one', () => {
+    const f = tiledScene(1280, 768);
+    const texture = f.scene.textures.get(f.key) as unknown as Phaser.Textures.CanvasTexture;
+    const animationScene = {
+      game: { events: { on: vi.fn(), once: vi.fn() } },
+      textures: { once: vi.fn() },
+    } as unknown as Phaser.Scene;
+    animateBackgroundTexture(animationScene, texture, {
+      width: 1280,
+      height: 768,
+      frames: [],
+      durations: [100],
+      loops: 0,
+      close: vi.fn(),
+    } as BackgroundAnimation);
+
+    createCustomBackgroundObject(f.scene as unknown as Phaser.Scene, f.layer, 0, 0, 640, 352, 9);
+
+    // Frames are redrawn into the original, so a one-off tile copy would freeze the animation.
+    expect(f.scene.textures.addImage).not.toHaveBeenCalled();
+    expect(f.scene.add.tileSprite).toHaveBeenCalledWith(0, 0, 640, 352, f.key);
+    expect(f.sprite.setTileScale).toHaveBeenCalledWith(0.1, 0.1);
   });
 
   it('keeps small tiled backgrounds on their own texture', () => {

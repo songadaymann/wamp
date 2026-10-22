@@ -2059,7 +2059,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private clearDisplayState(): void {
-    for (const roomId of Array.from(this.loadedFullRoomsById.keys())) {
+    // Previews give up their backgrounds first and the current room goes last, so the idle
+    // background kept on a phone (one slot) is the current room's (F352).
+    this.previewRenderer.releaseCustomBackgroundLeases();
+    const currentRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
+    const roomIds = Array.from(this.loadedFullRoomsById.keys())
+      .sort((left, right) => Number(left === currentRoomId) - Number(right === currentRoomId));
+    for (const roomId of roomIds) {
       this.destroyFullRoom(roomId);
     }
 

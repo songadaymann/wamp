@@ -820,6 +820,40 @@ function createDormantBackgroundObject() {
   };
 }
 
+describe('world streaming display reset', () => {
+  it('releases preview backgrounds first and destroys the current room last', () => {
+    const order: string[] = [];
+    const harness = Object.assign(createWorldStreamingHarness(), {
+      loadedFullRoomsById: new Map([
+        ['1,0', {}],
+        ['0,0', {}],
+        ['2,0', {}],
+      ]),
+      options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
+      previewRenderer: {
+        releaseCustomBackgroundLeases: () => order.push('release-previews'),
+        clear: () => order.push('clear-previews'),
+      },
+      destroyFullRoom: (roomId: string) => order.push(`destroy:${roomId}`),
+    });
+
+    (
+      OverworldWorldStreamingController.prototype as unknown as {
+        clearDisplayState(): void;
+      }
+    ).clearDisplayState.call(harness);
+
+    // On a phone the one idle slot then keeps the current room's background.
+    expect(order).toEqual([
+      'release-previews',
+      'destroy:1,0',
+      'destroy:2,0',
+      'destroy:0,0',
+      'clear-previews',
+    ]);
+  });
+});
+
 function callQueuePreparedBackground(harness: object, preparation: object): void {
   const method = (
     OverworldWorldStreamingController.prototype as unknown as {

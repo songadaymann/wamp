@@ -2,7 +2,8 @@ import type Phaser from 'phaser';
 import { getPerformanceProfile } from '../ui/deviceLayout';
 
 // Unused custom backgrounds kept decoded so walking straight back into a room does not
-// refetch and redecode it. A 1280x768 still holds about 12 MB, so phones keep one (F352).
+// refetch and redecode it. A 1280x768 still holds about 8 MB (its canvas and GPU copy), so
+// phones keep one (F352).
 const REDUCED_IDLE_CUSTOM_BACKGROUNDS = 1;
 const DEFAULT_IDLE_CUSTOM_BACKGROUNDS = 4;
 
@@ -12,7 +13,10 @@ export interface CustomBackgroundTextureLeaseOptions {
   isResident: (key: string) => boolean;
   remove: (key: string) => void;
   getIdleCapacity: () => number;
-  /** Runs eviction after the current task, so a release followed by a re-acquire keeps the texture. */
+  /**
+   * Defers eviction (a microtask by default), so a release followed by a re-acquire in the
+   * same synchronous step keeps the texture.
+   */
   schedule?: (callback: () => void) => void;
 }
 

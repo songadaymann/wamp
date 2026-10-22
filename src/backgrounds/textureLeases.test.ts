@@ -59,7 +59,7 @@ describe('CustomBackgroundTextureLeases', () => {
     expect(leases.getSnapshot().idle).toEqual(['c']);
   });
 
-  it('waits a task before evicting, so a room rebuilt in the same step keeps its texture', () => {
+  it('defers eviction, so a room rebuilt in the same synchronous step keeps its texture', () => {
     const { leases, resident, removed, scheduled, flush } = harness(0);
     resident.add('a');
     leases.acquire('a')();
