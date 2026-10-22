@@ -2,7 +2,7 @@ import { formatAccountIdentity } from '../../../auth/displayIdentity';
 import { Resend } from 'resend';
 import { escapeEmailHtml as escapeHtml } from '../email/delivery';
 import type { AdminRoomCommentRecord } from '../../../roomComments/model';
-import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
+import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 
 export interface RoomCommentEmailResult {
@@ -48,7 +48,7 @@ export async function sendRoomCommentApprovedEmail(
     comment.roomTitle?.trim()
       ? `"${comment.roomTitle.trim()}"`
       : `Room ${comment.roomCoordinates.x},${comment.roomCoordinates.y}`;
-  const baseUrl = resolvePublicBaseUrl(request, env).replace(/\/+$/, '');
+  const baseUrl = resolveEmailBaseUrl(request, env).replace(/\/+$/, '');
   const roomUrl = `${baseUrl}/r/${comment.roomCoordinates.x}/${comment.roomCoordinates.y}`;
   const resend = new Resend(env.RESEND_API_KEY);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;

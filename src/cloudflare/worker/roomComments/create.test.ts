@@ -44,9 +44,9 @@ afterEach(() => { f.sqlite.close(); vi.useRealTimers(); });
 function setTrust(score: number) {
   f.sqlite.prepare('UPDATE user_progress SET hidden_trust_score = ? WHERE user_id = ?').run(score, 'p1');
 }
-function create(body: Record<string, unknown> = {}) {
+function create(body: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
   const request = new Request('https://api.wamp.land/api/rooms/0,0/comments', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify({ roomVersion: 1, body: 'Great room!', position: { x: 20, y: 40 }, ...body }),
   });
   return handleRoomCommentCreate(request, new URL(request.url), f.env, '0,0');
@@ -85,6 +85,15 @@ describe('room comment trust approval on the migrated database', () => {
     expect((await loadActivity(f.env.DB, 'builder', true)).entries).toEqual([]);
     expect(sendAdminReviewNotificationEmail).toHaveBeenCalledOnce();
     expect(sendRoomCommentApprovedEmail).not.toHaveBeenCalled();
+  });
+
+  it('links the admin review email to the site rather than the Origin a token request sends', async () => {
+    setTrust(0);
+    await create({}, { Authorization: 'Bearer epat_test-token', Origin: 'https://evil.example' });
+    expect(sendAdminReviewNotificationEmail).toHaveBeenCalledExactlyOnceWith(f.env, expect.objectContaining({
+      actionUrl: 'https://wamp.land/launch-admin.html',
+      details: expect.arrayContaining(['Room link: https://wamp.land/r/0/0']),
+    }));
   });
 
   it('keeps a high-score new account pending during the existing trust hold', async () => {

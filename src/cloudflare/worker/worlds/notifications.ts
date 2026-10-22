@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
+import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import { sendAdminReviewNotificationEmail } from '../admin/reviewNotifications';
 import type { Env } from '../core/types';
 
@@ -28,7 +28,7 @@ export async function sendWorldGrantEmail(
     subject: 'Your WAMP World is ready to build',
     heading: 'You have a WAMP World grant',
     body: 'Sign in with this email, open Worlds, and start the seed room. Your World number is assigned when you publish it.',
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/?worlds=mine`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/?worlds=mine`,
     actionLabel: 'Start your World',
   });
 }
@@ -44,7 +44,7 @@ export async function sendWorldInvitationEmail(
     subject: `You're invited to build in ${label}`,
     heading: 'Build together in WAMP',
     body: `You have been invited to build in ${label}. Sign in with this email to accept the invitation.`,
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/w/${params.worldNumber}?worlds=mine`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/w/${params.worldNumber}?worlds=mine`,
     actionLabel: 'Open the World',
   });
 }
@@ -69,7 +69,7 @@ export async function sendWorldManagerActionEmail(
     subject: `${label} has a new ${action}`,
     heading: `New ${action}`,
     body: `${params.requester} needs a decision in ${label}.`,
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/w/${params.worldNumber}?worlds=manage`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/w/${params.worldNumber}?worlds=manage`,
     actionLabel: 'Review in Worlds',
   });
 }
@@ -84,7 +84,7 @@ export async function sendWorldNameReviewEmail(
     heading: 'World name review',
     intro: `WAMP ${params.worldNumber} requested a new public name.`,
     details: [`Proposed name: ${params.proposedName}`],
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/worlds-admin.html`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/worlds-admin.html`,
     actionLabel: 'Review World names',
   });
   return { attempted: result.attempted, sent: result.sent, error: result.error };
