@@ -908,6 +908,20 @@ export async function submitCourseRating(
   };
 }
 
+/** Recomputes a quality trophy and the owner's counts after ratings were removed (F205). */
+export async function refreshRatedContentTrophy(
+  env: Env,
+  kind: 'room' | 'course',
+  contentId: string,
+  versionKey: number,
+): Promise<void> {
+  const rows = kind === 'room'
+    ? await loadRoomRatingsForVersionKey(env, contentId, versionKey)
+    : await loadCourseRatingsForVersionKey(env, contentId, versionKey);
+  await syncContentTrophy(env, kind, contentId, versionKey, summarizeQualityRatings(rows));
+  await refreshContentOwnerProgressCounts(env, kind, contentId, versionKey);
+}
+
 export async function loadRoomAggregateRatingSummaryForVersion(
   env: Env,
   roomRecord: RoomRecordView,

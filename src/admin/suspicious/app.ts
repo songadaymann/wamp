@@ -866,6 +866,7 @@ function renderPreview(): void {
   previewMeta.innerHTML = `
     <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} expanded room runs</div>
     <div>${preview.summary.selectedPointEventsDeleted} selected point events · ${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
+    ${preview.progress ? `<div>Also removed: ${preview.progress.pxp} player XP · ${preview.progress.bxp} builder XP · ${preview.progress.cxp} curator XP · ${preview.progress.trust} trust · ${preview.progress.ratingsRemoved} ratings, plus badges that no longer qualify</div>` : ''}
   `;
 
   previewUsers.innerHTML = preview.affectedUsers

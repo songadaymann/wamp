@@ -414,6 +414,15 @@ export interface SuspiciousInvalidationPreviewResponse {
     runPointEventsDeleted: number;
     creatorPointEventsDeleted: number;
   };
+  /** XP, trust and ratings that only the invalidated runs supported; removed with them. */
+  progress?: {
+    eventsRemoved: number;
+    ratingsRemoved: number;
+    pxp: number;
+    bxp: number;
+    cxp: number;
+    trust: number;
+  };
 }
 
 export interface SuspiciousInvalidationResult extends SuspiciousInvalidationPreviewResponse {

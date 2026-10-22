@@ -350,6 +350,36 @@ async function syncBadgeAndTrophyCounts(env: Env, userId: string): Promise<void>
     WHERE user_id = ?`).bind(badgeRows.length, trophyCount, new Date().toISOString(), userId)]);
 }
 
+/** Play, builder and curator badges a player's current counts support (founder and publish badges excluded). */
+export async function loadQualifyingActivityBadges(env: Env, userId: string): Promise<Set<string>> {
+  const metrics = await loadBackfillSeedMetrics(env, userId);
+  const hasEvent = async (eventType: string) => Boolean(await env.DB.prepare(
+    'SELECT 1 AS found FROM pxp_events WHERE user_id = ? AND event_type = ? LIMIT 1',
+  ).bind(userId, eventType).first<{ found: number }>());
+  const totalClears = metrics.roomClearCount + metrics.courseClearCount;
+  return new Set([
+    ...(totalClears >= 1 ? ['player_first_clear'] : []),
+    ...(totalClears >= 10 ? ['player_10_clears'] : []),
+    ...(totalClears >= 100 ? ['player_100_clears'] : []),
+    ...(await hasEvent('top10_entry') ? ['player_top10_entrant'] : []),
+    ...(await hasEvent('top1_take') ? ['player_top1_finisher'] : []),
+    ...(metrics.creatorUniqueCompletionCount >= 10 ? ['builder_10_unique_players'] : []),
+    ...(metrics.creatorUniqueCompletionCount >= 100 ? ['builder_100_unique_players'] : []),
+    ...(await countOwnedTrophies(env, userId) ? ['builder_first_trophy_room'] : []),
+    ...(metrics.ratingCount >= 1 ? ['curator_first_rating'] : []),
+    ...(metrics.ratingCount >= 50 ? ['curator_50_ratings'] : []),
+    ...(metrics.ratingCount >= 200 ? ['curator_200_ratings'] : []),
+  ]);
+}
+
+/** Badges are only ever awarded elsewhere; an admin cheat cleanup (F205) takes these back. */
+export async function revokeBadges(env: Env, userId: string, badgeIds: string[]): Promise<void> {
+  if (badgeIds.length === 0) return;
+  await env.DB.batch([env.DB.prepare('DELETE FROM badge_awards WHERE user_id = ? AND badge_id IN (SELECT value FROM json_each(?))')
+    .bind(userId, JSON.stringify(badgeIds))]);
+  await syncBadgeAndTrophyCounts(env, userId);
+}
+
 export async function syncUserBadges(env: Env, userId: string): Promise<void> {
   const progress = await loadOrBackfillUserProgress(env, userId);
   const now = new Date().toISOString();
