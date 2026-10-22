@@ -141,7 +141,7 @@ import {
 } from './worker/worldTiles/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
-import { handleWampOGramRequest } from './worker/wampOGram/routes';
+import { handleAdminWampOGramRequest, handleWampOGramRequest } from './worker/wampOGram/routes';
 import { handleCustomSpriteRequest } from './worker/customSprites/routes';
 import { handleWorldGrantRequest, handleWorldsRequest } from './worker/worlds/routes';
 
@@ -240,6 +240,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: { prefix: '/api/admin/guest-room-drafts' },
     auth: 'admin',
     handler: ({ request, url, env }) => handleAdminGuestRoomDrafts(request, url, env),
+  },
+  {
+    methods: ['DELETE'],
+    pattern: { prefix: '/api/admin/wamp-o-grams/' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminWampOGramRequest(request, url, env),
   },
   {
     methods: ['GET', 'PATCH'],

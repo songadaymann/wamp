@@ -4,12 +4,14 @@ import {
   type WampOGramCreateRequest,
   type WampOGramRecord,
 } from '../../../wampOGram/model';
-import type { RoomStatus } from '../../../persistence/roomModel';
+import type { RoomSnapshot, RoomStatus } from '../../../persistence/roomModel';
 import { cloneRoomSnapshot } from '../../../persistence/roomModel';
+import { roomVideoChangeNeedsTrust } from '../../../roomVideo/access';
 import type { RequestAuth } from '../core/types';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
 import { parseStoredSnapshot } from '../rooms/store';
+import { assertCanPersistRoomVideo } from '../rooms/guardrails';
 
 interface WampOGramRow {
   id: string;
@@ -110,6 +112,37 @@ export async function createWampOGram(
   }
 
   return created;
+}
+
+/**
+ * A gram can show the video already saved on its room. Adding or changing a video needs the
+ * same builder trust as saving one to the room.
+ */
+export async function assertWampOGramVideoAllowed(
+  env: Env,
+  snapshot: RoomSnapshot,
+  auth: RequestAuth,
+): Promise<void> {
+  if (!snapshot.video) {
+    return;
+  }
+
+  const stored = await env.DB.prepare('SELECT draft_json, published_json FROM rooms WHERE id = ? LIMIT 1')
+    .bind(snapshot.id)
+    .first<{ draft_json: string | null; published_json: string | null }>();
+  const keepsStoredVideo = [stored?.draft_json, stored?.published_json]
+    .filter((json): json is string => typeof json === 'string')
+    .some((json) => !roomVideoChangeNeedsTrust(snapshot.video, parseStoredSnapshot(json, 'room').video));
+  if (!keepsStoredVideo) {
+    await assertCanPersistRoomVideo(env, snapshot, null, auth.user.id, auth.source);
+  }
+}
+
+export async function deleteWampOGramBySlug(env: Env, slug: string): Promise<boolean> {
+  const row = await env.DB.prepare('DELETE FROM wamp_o_grams WHERE slug = ? RETURNING id')
+    .bind(slug)
+    .first<{ id: string }>();
+  return row !== null;
 }
 
 export async function loadWampOGramBySlug(
