@@ -281,6 +281,11 @@ export async function submitOwnedGuestRoomDraft(
             submitted_at = COALESCE(submitted_at, ?),
             updated_at = ?,
             moderation_status = CASE
+              -- A guest whose shared room an admin hid keeps sharing into hiding.
+              WHEN moderation_status = 'private' AND EXISTS (
+                SELECT 1 FROM guest_room_drafts hidden
+                WHERE hidden.guest_user_id = guest_room_drafts.guest_user_id AND hidden.moderation_status = 'hidden'
+              ) THEN 'hidden'
               WHEN moderation_status = 'private' THEN 'public'
               ELSE moderation_status
             END

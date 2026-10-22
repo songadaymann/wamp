@@ -16,6 +16,7 @@ import { handleGuestReplay } from './worker/guestReplay/routes';
 import { runHourlyMaintenance } from './worker/maintenance/hourly';
 import { handleBugReports } from './worker/bugReports/routes';
 import { handleContentReports } from './worker/reports/routes';
+import { handleAdminGuestRoomDrafts } from './worker/guestRoomDrafts/adminRoutes';
 import { handleLostSongs } from './worker/lostSongs/routes';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -233,6 +234,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: { prefix: '/api/admin/bug-reports' },
     auth: 'admin',
     handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST'],
+    pattern: { prefix: '/api/admin/guest-room-drafts' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminGuestRoomDrafts(request, url, env),
   },
   {
     methods: ['GET', 'PATCH'],

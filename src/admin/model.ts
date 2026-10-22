@@ -483,3 +483,13 @@ export interface AdminProgressionCapsUpdateRequest {
 export interface AdminProgressionCapsUpdateResponse extends AdminProgressionUserCapsResponse {
   ok: true;
 }
+
+export interface AdminGuestRoomDraft {
+  id: string;
+  title: string | null;
+  guestDisplayName: string;
+  roomX: number;
+  roomY: number;
+  submittedAt: string | null;
+  hidden: boolean;
+}

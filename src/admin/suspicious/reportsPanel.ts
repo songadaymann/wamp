@@ -21,6 +21,7 @@ export function createReportsPanel(
   getAdminKey: () => string,
   getOperatorLabel: () => string,
   inspectUser: (userId: string) => void,
+  hideGuestRoom: (draftId: string) => Promise<boolean>,
 ): { reset(): void; load(): Promise<void> } {
   const list = document.getElementById('reports-list');
   const status = document.getElementById('reports-status');
@@ -64,6 +65,24 @@ export function createReportsPanel(
       inspect.textContent = 'Inspect player';
       inspect.addEventListener('click', () => inspectUser(report.targetUserId!));
       actions.append(inspect);
+    }
+    if (report.targetType === 'guest_room' && report.status === 'open') {
+      const hide = document.createElement('button');
+      hide.type = 'button';
+      hide.className = 'danger';
+      hide.textContent = 'Hide guest room';
+      hide.addEventListener('click', () => {
+        hide.disabled = true;
+        void hideGuestRoom(report.targetId).then(async (hidden) => {
+          if (hidden) {
+            await close(report, 'resolved');
+            return;
+          }
+          hide.disabled = false;
+          if (status) status.textContent = 'The guest room could not be hidden (see Guest Rooms); the report is still open.';
+        });
+      });
+      actions.append(hide);
     }
     if (report.status === 'open') {
       for (const [next, text] of [['resolved', 'Handled'], ['dismissed', 'Dismiss']] as const) {
