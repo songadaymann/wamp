@@ -1,3 +1,7 @@
+## 2026-10-21 — F189 takedowns and F127 visitor attribution
+
+Same lane run (merge and deploy approved). Branches `claude/f189-takedowns` → `claude/f127-attribution` from main 80151ad1 (PRs #285–#286). Production D1 migrations 0072–0073 applied first, then API Worker `41a3c0f4` and world tile renderer Worker `3acf9926`, then the PRs merged for Pages. Receipt: docs/review/wamp-takedowns-and-attribution-2026-10-21.md.
+
 ## 2026-10-21 — F205 cheat cleanup takes back what removed runs earned
 
 Same lane run (merge and deploy approved). Branch `claude/f205-cheat-cleanup` from main 5511a5ea, PR #284, API Worker `723f525c` (no migration). Receipt: docs/review/wamp-cheat-cleanup-2026-10-21.md.

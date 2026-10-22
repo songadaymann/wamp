@@ -6793,9 +6793,38 @@ Fix the citations: the submit handler is guestRoomDrafts/routes.ts:57-72 (not 11
 
 **2026-10-21 delivered.** PR #281 / `f5b34d21` and API Worker `bc00ef00`. `/api/admin/guest-room-drafts` lists recent shared guest rooms and `…/:id/hide|show` flips `moderation_status` without touching `updated_at`, so the guest's own saves and claims keep working. Submitting from a guest who already has a hidden room keeps the new room hidden. The share limit releases its slot unless the request actually shared the room. Production had 6 shared guest rooms and at most one share a day. [Receipt](wamp-vandal-safeguards-2026-10-21.md).
 
-### F189: details withheld
+### F189: Takedowns leave the bad content reachable: room history, embedded sprites, and guest rooms
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Trust & safety, moderation, ops & observability
+- **Type:** defect · **impact:** medium · **effort:** medium
+
+**Summary.** Restoring a vandalized room puts the good version back, but the vandal's version stays in the public History list and at its own link, cached for a year. Hiding a community sprite only removes it from the sprite picker; rooms that already use it keep showing it. Anonymous Guest Rooms go public in Explore instantly, and there's no admin button to hide one.
+
+**Technical detail.**
+
+Exact versions are public, with `Cache-Control: public, max-age=31536000, immutable` (rooms/routes.ts:566-576). The History modal lists every version to every viewer and gates only the revert buttons (historyModal.ts:454). Custom sprite moderation flips the catalog row's status (catalogStore.ts:330-349; the admin UI literally says 'Hide from Community', custom-sprite-admin.ts:133). Rooms embed full sprite definitions in their snapshot (persistence/roomModel.ts:133, 759), and the only status check is in mint metadata rendering, against the embedded copy (mint/roomMetadataRender.ts:416). Guest drafts become `moderation_status='public'` on submit (guestRoomDrafts/store.ts:263-265). The public listing respects `hidden_at` (store.ts:194-197), and the columns exist (migrations/0037_guest_room_drafts.sql:21-23), but no route ever sets `hidden_at`. Fix: (1) add `room_versions.redacted_at`. Redacted versions return a placeholder snapshot from /versions/:n and the share image routes, and drop the immutable cache header (use max-age=300). (2) Add a tiny public `GET /api/custom-sprites/blocked-ids` (cached 60s) that the room renderer uses to replace blocked ids with a neutral placeholder, or have block rewrite published_json for rooms found by the existing usage scan. (3) Add `POST /api/admin/guest-room-drafts/:id/hide` and an Explore-queue view in launch-admin. Consider defaulting guest submissions to review for the first submission per IP.
+
+**Evidence.**
+- src/cloudflare/worker/rooms/routes.ts:566-576 — any exact version served publicly with 1-year immutable cache
+- src/ui/setup/historyModal.ts:454 — history list shown to all viewers; only revert is gated
+- src/custom-sprite-admin.ts:133 — sprite moderation is 'Hide from Community' (catalog only)
+- src/persistence/roomModel.ts:133 — rooms embed `customSprites?: CustomSpriteDefinition[]`
+- src/cloudflare/worker/guestRoomDrafts/store.ts:263-265 — submit flips guest drafts straight to public
+- migrations/0037_guest_room_drafts.sql:21-23 — hidden_at/hidden_by columns exist but nothing writes them
+
+**Fact-check (partially confirmed).**
+
+1) "Stays in the public History list" overstates it. The History modal (`historyModal.ts:378-450`) shows only the version number, date and publisher, never the room content. `roomSession.ts:365-391` does download every version's snapshot into the browser of anyone who opens History, but nothing renders it. No player-facing URL loads an old version. The places where an old version is actually shown are courses pinned to it (`courses/roomRefs.ts:29-41`) and expanded-room share cells (`share/routes.ts:138-178`). The redaction fix must cover `loadRoomSnapshotsByReferences` / `queryRoomSnapshots` (`rooms/routes.ts:670`, `rooms/store.ts:367-388`), not just `/versions/:n`.
+
+2) "Cached for a year" means browser and intermediate caches only. The exact-version route sets `X-WAMP-Cache: bypass` and is not wrapped in `loadAnonymousPublicCache`, so Cloudflare does not cache it at the edge. Copies already fetched still persist, which is why changing the header still matters.
+
+3) A takedown path does exist, though a crude one: `POST /api/admin/rooms/:id/clear` (`admin/routes.ts:242+`, admin-key only, no UI) deletes all versions of a room. It cannot remove one version while keeping the good history.
+
+4) The mint renderer (`roomMetadataRender.ts:416`) is not the only status check. `customSprites/registry.ts:91` and `:230` and `customTiles/model.ts:134` also check `status !== 'blocked'`, but all of them read the embedded or local copy, so the conclusion stands. Sprites already converted into room tiles (`customTiles` in `roomModel.ts:134`) would also escape a blocked-ids filter and need handling too.
+
+5) The "default guest submissions to review" idea conflicts with the stated policy in `product-requirements.md:616` ("No pre-approval queue"). The hide button and admin queue are the right priority.
+
+**2026-10-21 delivered.** PR #285 / `00ac533f`, migration 0072, API Worker `41a3c0f4` and world tile renderer Worker `3acf9926`. Hidden versions: `room_versions.redacted_at`, with the title column swapped to "Hidden by moderation" (original in `redacted_title`) so every list that reads it hides it; snapshots are masked where content is served (room record, exact version, pinned and shared references, insights, leaderboards). A bulk restore hides that user's versions after the restore target, and in rooms someone else has published over since, their versions from the undo window; hidden versions can't be restored, pinned, made canonical or used as a restore target, and a canonical version that gets hidden is cleared. Building Controls can hide or show one version; exact-version links are cached for 5 minutes. Blocked sprites: ids are served in `/api/world/tiles/config`, the game keeps its own copy current, and `src/customSprites/blocklist.ts` / `blockedArt.ts` paint them as a flat placeholder in the game, the map tile renderer, the API and site share images and token images, without changing stored rooms. A trigger re-renders the map tiles of rooms that embed a sprite when it is blocked or restored. Not covered: the minted-room page, browser copies of version links fetched before release, and the same pixels re-uploaded under a new id. Two adversarial reviews and a follow-up pass found 12 issues, all fixed before release. [Receipt](wamp-takedowns-and-attribution-2026-10-21.md).
 
 ### F192: The health check reports 'OK' without checking anything, and no outside monitor watches it
 
@@ -6875,9 +6904,52 @@ Security, safety or anti-cheat item; details withheld from this public repo unti
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
 
-### F127: details withheld
+### F127: The admin dashboard can't show where players come from or whether they come back
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** New-player experience, retention & community loop
+- **Type:** defect · **impact:** medium · **effort:** medium
+
+**Summary.** The admin dashboard counts visits, signups, and plays, but it can't answer the important questions: did people from Reddit or Discord stay, how many guests who beat a room went on to sign up, and how many visitors returned a week later? The 'referrer' it saves is always WAMP's own address, and the landing page gets overwritten as the player moves, so every growth experiment is guesswork.
+
+**Technical detail.**
+
+guest_visits.referrer is filled from the Referer header of the heartbeat fetch (guestActivity/routes.ts:104). That header is the WAMP page itself, not document.referrer. last_path is overwritten on every heartbeat (routes.ts:83), and setFocusedCoordinatesInUrl rewrites the path as the player moves, so the landing page is lost. The replay recorder does capture the real referrer host and entry path (analytics/replay/recorder.ts:135-137), but only for replay sessions, which are deleted after 7 days. users has no link to the guest identity used before signup (migrations/0001: id/email/wallet/display_name only). LaunchStatsActivityWindow (admin/model.ts:46-65) holds window counters only: no conversion or cohort retention. Fix: (1) Client: on the first heartbeat of a session, send landingPath, the document.referrer host, and utm_source/utm_campaign. Add guest_visits columns first_landing_path, first_referrer_host, utm_source, set once. (2) At sign-in, send X-Guest-User-Id (the same call as the guest-claim endpoint) and stamp users.signup_guest_user_id, signup_landing_path, signup_referrer_host. (3) Add a Launch Admin 'Funnel' card for 7/30 days: visitors → played a room → cleared a room → built (edit_seconds>0) → signed up → published. Split by referrer host and device class (phone/desktop from user_agent). Add D1/D7 return rate: guest_user_id or user seen on ≥2 distinct UTC days. (4) Add ?from=share|tweet|gram to every share URL builder (runShare.ts, roomShareLinks.ts, Wamp-O-Gram links) so shared-link arrivals can be counted. This is the instrumentation needed to know whether the other findings work.
+
+**Evidence.**
+- src/cloudflare/worker/guestActivity/routes.ts:104 — referrer = request.headers.get('Referer') of the API heartbeat (WAMP's own page), not the external referrer
+- src/cloudflare/worker/guestActivity/routes.ts:83 — last_path = excluded.last_path overwrites the landing path every 15 s
+- src/analytics/guestActivity.ts:95-102 — heartbeat body has no referrer/landing/utm fields
+- src/analytics/replay/recorder.ts:135-137 — the real document.referrer is captured only for 7-day replay sessions
+- src/admin/model.ts:46-65 — LaunchStatsActivityWindow: counts only, no conversion or retention metrics
+- migrations/0001 (users table) — no guest/landing/referrer attribution columns
+
+**Fact-check (partially confirmed, partially confirmed, partially confirmed).**
+
+The Referer read is at guestActivity/routes.ts:110, not :104. The referrer column is set-once via COALESCE at :84; the problem is that the value is always the WAMP origin (https://wamp.land/), because the heartbeat goes cross-origin to api.wamp.land under the default referrer policy. Replay capture is limited by more than the 7-day expiry: it is capped at 100 sessions per day across all visitors and skipped for DNT/GPC users and opt-outs. Partial funnel data already exists for each sampled replay session (played/moved/signup/signed_in/built/visits in guestReplay/routes.ts:45-50), and a guest-to-user link exists only through guest_room_drafts.claimed_by_user_id. Heartbeats stop for signed-in players (guestActivity.ts:80), so their retention has to come from sessions/users instead. D1/D7 guest return can already be computed from existing guest_visits rows (guest_user_id plus first_seen_at/last_seen_at).
+
+Overstated: the claim says the team can't see where players come from. Cloudflare Web Analytics is live on wamp.land (vite.config.ts:121-142; the beacon is in production HTML), so aggregate referrer hosts, landing paths and device split already exist outside the Launch Admin. Guest replay sessions (guestReplay/routes.ts:45-70, admin/replays.ts:50) record the real referrer host and entry path per visit, plus played, built, signup-opened and signed-in flags and visits per week. That covers up to 100 sessions a day for 7 days.
+
+What is actually missing:
+- a durable guest-to-account link at signup (guest_room_drafts.claimed_by_user_id exists but nothing writes it)
+- a combined visit → play → build → signup → publish funnel in the Launch Admin
+- D1/D7 return rates (guest returns are computable today from guest_visits, grouping guest_user_id by distinct UTC day of first_seen_at, with no client change)
+- source tags on share links
+
+The fix can drop most of step (1): reuse the replay recorder's existing referrer and entry-path capture in the first heartbeat instead of building a new channel. Minor detail: the Referer bind is at routes.ts:110, not :104. With the default referrer policy it holds the wamp.land origin.
+
+1. The referrer column is not overwritten. It is set once (COALESCE, routes.ts:84), but it always holds only the "https://wamp.land/" origin, because the browser trims the Referer header on cross-origin requests. Admin never shows it. The bind is at routes.ts:110, not 104.
+2. Some of this data already exists, so the "every growth experiment is guesswork" line is overstated:
+   - Cloudflare Web Analytics is live on production. It gives aggregate referrer hosts, paths and device types.
+   - Guest replays store the real referrer_host, entry_path, the played/signup/signed_in flags and a 7-day visit count for up to 100 guest sessions a day, all reachable from Launch Admin.
+   - guest_user_id persists in localStorage, so D1/D7 guest return rates can be computed and backfilled from the existing guest_visits rows with a query alone.
+3. What is really missing:
+   - attribution kept per visit and per user, for all traffic rather than a 7-day sample
+   - a stored link from guest identity to a new account at sign-in, outside of guest-draft claims
+   - aggregated funnel and cohort cards in Launch Admin
+   - any retention tracking for signed-in users, since guest heartbeats stop at sign-in
+4. Kind: this is mostly an improvement. The only defect is the referrer column, which never stores useful data.
+
+**2026-10-21 delivered.** PR #286 / `be0af7f0`, migration 0073 and API Worker `41a3c0f4`. The heartbeat sends a `landing` object read from the original navigation (path only, referrer host, `from`/`utm_source`, or `daily`); the server stores it once per visit. A tab idle for 30 minutes starts a new visit. `POST /api/guest-activity/link-account` links accounts under two days old to their guest, once, retried on later signed-in loads. `/api/admin/launch-funnel` (admin key) follows each guest's first visit in the window, leaves crawlers out, labels pre-release visits "unknown", counts a return as a separate visit 12 hours to 2 or 7 days after the first, and notes that guest clears are pruned after 14 days. Wamp-O-Gram links carry `from=gram`. Not covered: sign-ups finished in a phone mail app's own browser stay unlinked, and accounts made before this release are never linked. An adversarial review and a follow-up pass found 11 issues, all fixed before release. [Receipt](wamp-takedowns-and-attribution-2026-10-21.md).
 
 ### F197: details withheld
 
