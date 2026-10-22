@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PvpMatchSnapshot } from '../../../pvp/model';
+import {
+  activatePvpMatchIfReady, createPvpMatchState, finalizePvpMatch, getPvpSnapshot, markPvpForfeit, upsertPvpParticipant,
+} from '../../../partykit/pvpMatchRuntime';
 import { fixture, NOW } from '../activity/testDatabase';
 import { recordPvpMatchResult } from './store';
 
@@ -90,7 +93,7 @@ describe('recordPvpMatchResult', () => {
     expect(pxp('p1')).toBe(0);
   });
 
-  it('caps PvP PXP per day and saved matches per hour', async () => {
+  it('caps PvP PXP per day and PXP-earning matches per hour, still saving every result', async () => {
     for (let index = 0; index < 11; index += 1) {
       expect(await recordPvpMatchResult(f.env, snapshot(`arena-cap-${index}`))).toBe('recorded');
     }
@@ -101,11 +104,33 @@ describe('recordPvpMatchResult', () => {
     for (let index = 11; index < 20; index += 1) {
       expect(await recordPvpMatchResult(f.env, snapshot(`arena-cap-${index}`))).toBe('recorded');
     }
-    expect(await recordPvpMatchResult(f.env, snapshot('arena-cap-20'))).toBe('limited');
-    expect(count('SELECT COUNT(*) AS n FROM pvp_matches')).toBe(20);
+    expect(pxp('p2')).toBe(120);
+    expect(await recordPvpMatchResult(f.env, snapshot('arena-cap-20'))).toBe('recorded');
+    expect(count('SELECT COUNT(*) AS n FROM pvp_matches')).toBe(21);
+    expect(count('SELECT pvp_wins AS n FROM user_stats WHERE user_id = ?', 'p1')).toBe(21);
+    expect(count('SELECT pvp_losses AS n FROM user_stats WHERE user_id = ?', 'p2')).toBe(21);
+    expect(count('SELECT COALESCE(SUM(xp_awarded), 0) AS n FROM pvp_match_players WHERE match_id = ?', 'arena-cap-20')).toBe(0);
+    expect(pxp('p2')).toBe(120);
 
     vi.setSystemTime(Date.parse(NOW) + 61 * 60 * 1000);
     expect(await recordPvpMatchResult(f.env, snapshot('arena-cap-21'))).toBe('recorded');
+    expect(count('SELECT xp_awarded AS n FROM pvp_match_players WHERE match_id = ? AND user_id = ?', 'arena-cap-21', 'p2')).toBe(6);
+  });
+
+  it('records no win and no PXP for a match left during the countdown', async () => {
+    const [one, two] = ['p1', 'p2'].map(userId => ({ userId, displayName: userId, avatarId: 'default-player' }));
+    const match = createPvpMatchState({ type: 'pvp:match:configure', matchId: 'arena-countdown', mode: 'arena', roomId: '0,0',
+      roomCoordinates: { x: 0, y: 0 }, participants: [one, two] }, one)!;
+    upsertPvpParticipant(match, one);
+    upsertPvpParticipant(match, two);
+    expect(activatePvpMatchIfReady(match, Date.now())).toBe(true);
+    markPvpForfeit(match, match.participants[1]!);
+    finalizePvpMatch(match, Date.now());
+    expect(match.winnerUserId).toBe('p1');
+    expect(await recordPvpMatchResult(f.env, getPvpSnapshot(match))).toBe('invalid');
+    expect(count('SELECT COUNT(*) AS n FROM pvp_matches')).toBe(0);
+    expect(count('SELECT COUNT(*) AS n FROM user_stats')).toBe(0);
+    expect(pxp('p1')).toBe(0);
   });
 });
 

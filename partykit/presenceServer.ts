@@ -1325,7 +1325,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     this.pvpFinalizeAt = null;
-    markPvpForfeit(match, participant, Date.now());
+    markPvpForfeit(match, participant);
     this.finalizePvpMatch();
   }
 

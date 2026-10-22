@@ -2,7 +2,7 @@ import type { PvpMatchSnapshot, PvpMatchSubmissionParticipant } from '../../../p
 import { getMultiplayerModeDefinition } from '../../../multiplayer/model';
 import { awardCappedLaneDelta, persistProgressIncrement } from '../progression/laneEvents';
 import { syncUserBadges } from '../progression/store';
-import { hashRateLimitKey, releaseRateLimitSlots, takeRateLimitSlots, type RateLimitRule } from '../core/rateLimit';
+import { hashRateLimitKey, releaseRateLimitSlots, takeRateLimitSlot, type RateLimitRule } from '../core/rateLimit';
 import { loadSchoolAuthContextForUser } from '../school/store';
 import type { Env } from '../core/types';
 
@@ -10,12 +10,12 @@ const PVP_LOSS_PXP = 6;
 const PVP_DRAW_PXP = 10;
 const PVP_WIN_PXP = 20;
 const MAX_MATCH_DURATION_MS = 60 * 60 * 1000;
-// PvP earns at most this much PXP per UTC day, and each player has at most this many
-// matches saved per hour; matches past the hourly limit are not saved.
+// PvP earns at most this much PXP per UTC day, and each player earns PXP from at most this many
+// matches per hour. Matches past the hourly limit are still saved, with their wins and losses.
 const PVP_PXP_CAP = { eventTypes: ['pvp_match_win', 'pvp_match_draw', 'pvp_match_loss'], dailyCap: 200 } as const;
-const PVP_MATCHES_PER_PLAYER: RateLimitRule = { bucket: 'pvp-match-saved', limit: 20, windowMs: 60 * 60 * 1000 };
+const PVP_XP_MATCHES_PER_PLAYER: RateLimitRule = { bucket: 'pvp-match-xp', limit: 20, windowMs: 60 * 60 * 1000 };
 
-export type PvpMatchRecordOutcome = 'recorded' | 'duplicate' | 'invalid' | 'ineligible' | 'limited';
+export type PvpMatchRecordOutcome = 'recorded' | 'duplicate' | 'invalid' | 'ineligible';
 
 /**
  * Saves a match the presence room ran to completion. Participants come from the room's
@@ -43,27 +43,22 @@ export async function recordPvpMatchResult(env: Env, match: PvpMatchSnapshot): P
     participant.userDisplayName = names.get(participant.userId) ?? participant.userDisplayName;
   }
 
-  const slots = await takeRateLimitSlots(env, await Promise.all(participants.map(async ({ userId }) => ({
-    rule: PVP_MATCHES_PER_PLAYER,
-    keyHash: await hashRateLimitKey(env, `pvp-match:${userId}`),
-  }))));
-  if (slots.limitedBy) {
-    return 'limited';
-  }
+  const xpSlots = await Promise.all(participants.map(async ({ userId }) =>
+    takeRateLimitSlot(env, PVP_XP_MATCHES_PER_PLAYER, await hashRateLimitKey(env, `pvp-match:${userId}`))));
 
   const createdAt = new Date().toISOString();
   try {
     await insertPvpMatch(env, match, participants, createdAt);
   } catch (error) {
-    await releaseRateLimitSlots(env, slots.ids);
+    await releaseRateLimitSlots(env, xpSlots);
     if (await pvpMatchExists(env, match.matchId)) {
       return 'duplicate';
     }
     throw error;
   }
 
-  for (const participant of participants) {
-    const awarded = await awardPvpParticipantProgression(env, match.matchId, participant, createdAt);
+  for (const [index, participant] of participants.entries()) {
+    const awarded = xpSlots[index] === null ? 0 : await awardPvpParticipantProgression(env, match.matchId, participant, createdAt);
     await env.DB.batch([
       env.DB.prepare(
         `
