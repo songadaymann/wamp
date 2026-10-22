@@ -4,12 +4,14 @@ const sheets: { onload: (() => void) | null; onerror: (() => void) | null;
   dataset: Record<string, string>; remove: ReturnType<typeof vi.fn> }[] = [];
 const shared = {};
 const insert = vi.fn();
+const dispatched = vi.fn();
 beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers();
   sheets.length = 0;
   insert.mockClear();
-  vi.stubGlobal('window', { setTimeout, clearTimeout });
+  dispatched.mockClear();
+  vi.stubGlobal('window', { setTimeout, clearTimeout, dispatchEvent: dispatched });
   vi.stubGlobal('document', {
     createElement: () => {
       const sheet = { onload: null, onerror: null, dataset: {}, remove: vi.fn() };
@@ -43,6 +45,8 @@ it('removes a failed sheet and allows a fresh editor request to retry', async ()
   sheets[0].onerror?.();
   await failed;
   expect(sheets[0].remove).toHaveBeenCalledOnce();
+  // A failed download may mean this tab's build was replaced by a release (F374).
+  expect(dispatched).toHaveBeenCalledWith(expect.objectContaining({ type: 'wamp:stale-asset' }));
   const retry = ensureEditorStylesReady();
   sheets[1].onload?.();
   await retry;

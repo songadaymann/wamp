@@ -114,6 +114,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController());
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal']);
+  const roomRushResultModal = new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game));
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
   game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new LazyRunRatingController(async () => new (await import('./runRatingModal')).RunRatingModalController(game));
@@ -151,8 +152,13 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     xpReceipts: new XpReceiptController(),
     rewardStingCatchup: new RewardStingCatchupController(),
     roomGoalIntroModal: new RoomGoalIntroModalController(),
-    roomRushModal: new LazyModal(async () => new (await import('./roomRushModal')).RoomRushModalController(game)),
-    roomRushResultModal: new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game)),
+    roomRushModal: new LazyModal(async () => {
+      // A Rush's score is sent from its result dialog, so download that while this tab's build is
+      // still live; after a release the run would otherwise end with nowhere to send it (F374).
+      void roomRushResultModal.ensure().catch(() => undefined);
+      return new (await import('./roomRushModal')).RoomRushModalController(game);
+    }),
+    roomRushResultModal,
     runRatingModal,
     postRunReminder: new PostRunReminderController({
       openUnrated: () => { void exploreModal.open('unrated'); },

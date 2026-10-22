@@ -10,6 +10,7 @@ import {
   type GuestActivityMode,
 } from './analytics/guestActivity';
 import { installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from './ui/modalState';
+import { installStaleBuildRecovery } from './main/staleBuildRecovery';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { sharedAudioEngine } from './audio/engine';
 import { runOverworldLodStress } from './debug/overworldLodStress';
@@ -328,6 +329,16 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
       level: phase === 'restored' ? 'info' : 'warn',
       force: true,
     },
+  ),
+});
+installStaleBuildRecovery({
+  canShowOffer: () => {
+    const feedback = getAppFeedbackDebugState();
+    return !feedback.busyVisible || feedback.busyState === 'error';
+  },
+  showReloadOffer: () => showBusyError(
+    'A new version of WAMP came out while this tab was open, so this part can\'t load. Save anything you are working on, then reload.',
+    { title: 'WAMP was updated', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: () => window.location.reload() },
   ),
 });
 const getGraphicsDebugState = (): GraphicsDebugState => {
