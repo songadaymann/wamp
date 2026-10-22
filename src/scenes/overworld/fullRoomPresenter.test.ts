@@ -81,6 +81,7 @@ function display(tile = false) {
 function fixture() {
   const room = createDefaultRoomSnapshot('0,0', { x: 0, y: 0 });
   room.background = 'solid:#123456';
+  room.tileData.foreground[2][3] = 1;
   const images: ReturnType<typeof display>[] = [],
     rectangles: ReturnType<typeof display>[] = [];
   const lifecycle = { destroyed: false, player: null as object | null };
@@ -276,6 +277,38 @@ describe('full-room presentation ownership', () => {
       'stream.buildFullRoomTexture.terrain',
       'stream.buildFullRoomTexture.foreground',
     ]);
+  });
+
+  it('builds no foreground texture or image for a room without foreground tiles', () => {
+    const f = fixture(),
+      ready = new Set<string>();
+    f.room.tileData.foreground[2][3] = -1;
+    f.scene.textures.exists.mockImplementation((key) => ready.has(key));
+    const build = vi
+      .spyOn(roomTextures, 'buildRoomSnapshotTexture')
+      .mockImplementation((_scene, _room, key) => {
+        ready.add(key);
+        return key;
+      });
+    const result = f.presenter.createImmediate(f.room, 'published')!;
+    expect(build.mock.calls.map((call) => call[2])).toEqual(['terrain']);
+    expect(result.foregroundTextureKey).toBeNull();
+    expect(result.loadedRoom.foregroundTextureKey).toBeNull();
+    expect(result.loadedRoom.foregroundImage).toBeNull();
+    expect(f.images).toHaveLength(1);
+    expect(f.images[0].setDepth).toHaveBeenCalledWith(10);
+  });
+
+  it('activates a prepared shell that has no foreground image', () => {
+    const f = fixture(),
+      loaded = f.presenter.createDormantShell({ ...f.identity, foregroundTextureKey: null });
+    expect(loaded.foregroundImage).toBeNull();
+    expect(loaded.foregroundTextureKey).toBeNull();
+    expect(f.images).toHaveLength(1);
+    f.presenter.prepareBackground(loaded, f.identity);
+    f.presenter.activatePrepared(loaded);
+    expect(loaded.image.visible).toBe(true);
+    expect(() => f.presenter.destroyDisplay(loaded)).not.toThrow();
   });
 
   it('retains captured cache keys when a live-object callback mutates the allocated runtime', () => {

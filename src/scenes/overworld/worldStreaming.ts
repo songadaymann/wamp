@@ -97,7 +97,7 @@ import {
   type PreviewSelectionCandidate,
 } from './previewStreaming';
 import { RoomArtifactCache } from './roomArtifactCache';
-import { RoomTexturePreparation } from './roomTexturePreparation';
+import { RoomTexturePreparation, roomLayerHasTiles } from './roomTexturePreparation';
 import {
   SelectedExactPrefetchLifecycle,
   type SelectedExactPrefetchRequest,
@@ -163,7 +163,7 @@ interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   texturePreparation: RoomTexturePreparation | null;
   customTilePreparation: CustomRoomTileTexturePreparation | null;
   textureKey: string;
-  foregroundTextureKey: string;
+  foregroundTextureKey: string | null;
   committedTextureKeys: string[];
   loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> | null;
   replacementRoom: LoadedFullRoom<TLiveObject, TEdgeWall> | null;
@@ -3432,7 +3432,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private getFullRoomArtifactByteSize(room: RoomSnapshot): number {
-    const roomTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4 * 2;
+    const roomTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4
+      * (roomLayerHasTiles(room, 'foreground') ? 2 : 1);
     if ((room.customTiles?.length ?? 0) === 0) return roomTextureBytes;
     const customTileTextureBytes =
       CUSTOM_ROOM_TILE_ATLAS_COLUMNS
@@ -3446,14 +3447,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private getFullRoomArtifactResourceByteSizes(
     room: RoomSnapshot,
     textureKey: string,
-    foregroundTextureKey: string,
+    foregroundTextureKey: string | null,
     customRoomTileTextureKey: string | null,
   ): Readonly<Record<string, number>> {
     const roomLayerTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4;
     const resourceByteSizes: Record<string, number> = {
       [textureKey]: roomLayerTextureBytes,
-      [foregroundTextureKey]: roomLayerTextureBytes,
     };
+    if (foregroundTextureKey) resourceByteSizes[foregroundTextureKey] = roomLayerTextureBytes;
     if (customRoomTileTextureKey && (room.customTiles?.length ?? 0) > 0) {
       resourceByteSizes[customRoomTileTextureKey] =
         CUSTOM_ROOM_TILE_ATLAS_COLUMNS
@@ -3718,13 +3719,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       includeObjects: false,
       includedLayers: ['background', 'terrain'],
     });
-    const foregroundTextureKey = this.buildScopedRoomTextureKey(renderableRoom.room, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['foreground'],
-    });
+    // Rooms without foreground tiles get no foreground texture or image (F307).
+    const foregroundTextureKey = roomLayerHasTiles(renderableRoom.room, 'foreground')
+      ? this.buildScopedRoomTextureKey(renderableRoom.room, {
+          includeBackground: false,
+          includeObjects: false,
+          includedLayers: ['foreground'],
+        })
+      : null;
     const texturesReady = this.options.scene.textures.exists(textureKey)
-      && this.options.scene.textures.exists(foregroundTextureKey);
+      && (!foregroundTextureKey || this.options.scene.textures.exists(foregroundTextureKey));
     const resolvedBackground = resolveRoomBackground(renderableRoom.room.background);
     const customRoomTileTextureKey = this.getCustomRoomTileTextureKey(renderableRoom.room);
     const customTilePreparation = customRoomTileTextureKey
@@ -4499,7 +4503,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
     this.syncRoomArtifactCachePolicy();
-    const resourceKeys = [preparation.textureKey, preparation.foregroundTextureKey];
+    const resourceKeys = [preparation.textureKey];
+    if (preparation.foregroundTextureKey) resourceKeys.push(preparation.foregroundTextureKey);
     const customTextureKey = this.getCustomRoomTileTextureKey(preparation.room);
     if (customTextureKey) resourceKeys.push(customTextureKey);
     this.roomArtifactCache.record({

@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   default: {
+    Math: {
+      Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+    },
     Textures: {
       FilterMode: {
         LINEAR: 'linear',
@@ -92,6 +95,65 @@ describe('world streaming dormant destination lifecycle', () => {
     expect(customImage).toMatchObject({ active: false, visible: false });
     expect(preparation.backgroundPrepared).toBe(true);
     expect(queuePreparedTerrainBatch).toHaveBeenCalledWith(preparation);
+  });
+
+  it('draws and uploads only the terrain texture for a room without foreground tiles', () => {
+    const room = createDefaultRoomSnapshot('3,4', { x: 3, y: 4 });
+    const registered = new Set<string>();
+    const context = { clearRect: vi.fn(), imageSmoothingEnabled: true };
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => ({ width: 0, height: 0, getContext: () => context })),
+    });
+    const frameWorkCoordinator = new FrameWorkCoordinator();
+    const scene = {
+      textures: {
+        exists: vi.fn((key: string) => registered.has(key)),
+        addImage: vi.fn((key: string) => registered.add(key)),
+      },
+    };
+    const buildScopedRoomTextureKey = vi.fn(() => 'terrain-only');
+    const queuePreparedCustomTiles = vi.fn();
+    const harness = Object.assign(createWorldStreamingHarness(), {
+      destroyed: false,
+      loadedFullRoomsById: new Map(),
+      pendingFullRoomPreparationsById: new Map(),
+      pendingFullRoomTeardownsById: new Map(),
+      predictedPreparationRoomId: null,
+      frameWorkCoordinator,
+      options: { getMode: () => 'play', scene },
+      buildFullRoomPreparationIdentity: vi.fn(() => 'terrain-only'),
+      buildFullRoomArtifactKey: vi.fn(() => 'terrain-only-artifact'),
+      buildScopedRoomTextureKey,
+      getCustomRoomTileTextureKey: vi.fn(() => null),
+      syncRoomArtifactCachePolicy: vi.fn(),
+      queuePreparedCustomTiles,
+    });
+
+    try {
+      const preparation = callBeginPreparedRoom(
+        harness,
+        { id: room.id, coordinates: room.coordinates, room, source: 'published' },
+        'predicted-visuals-objects',
+        false,
+        false,
+      ) as unknown as { foregroundTextureKey: string | null; committedTextureKeys: string[] };
+
+      expect(preparation.foregroundTextureKey).toBeNull();
+      expect(buildScopedRoomTextureKey).toHaveBeenCalledOnce();
+      const labels: string[] = [];
+      for (let frame = 0; frame < 40 && queuePreparedCustomTiles.mock.calls.length === 0; frame += 1) {
+        const result = frameWorkCoordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+        labels.push(...result.executed.map((job) => job.label));
+      }
+
+      expect(queuePreparedCustomTiles).toHaveBeenCalledOnce();
+      expect(labels.filter((label) => label.startsWith('upload-room-texture'))).toHaveLength(1);
+      expect(scene.textures.addImage).toHaveBeenCalledOnce();
+      expect(scene.textures.addImage).toHaveBeenCalledWith('terrain-only', expect.anything());
+      expect(preparation.committedTextureKeys).toEqual(['terrain-only']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('prepares and atomically activates a cold custom-background destination', async () => {
