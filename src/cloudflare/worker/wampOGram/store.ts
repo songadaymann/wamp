@@ -6,11 +6,10 @@ import {
 } from '../../../wampOGram/model';
 import type { RoomSnapshot, RoomStatus } from '../../../persistence/roomModel';
 import { cloneRoomSnapshot } from '../../../persistence/roomModel';
-import { roomVideoChangeNeedsTrust } from '../../../roomVideo/access';
 import type { RequestAuth } from '../core/types';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
-import { parseStoredSnapshot } from '../rooms/store';
+import { loadRoomRecord, parseStoredSnapshot } from '../rooms/store';
 import { assertCanPersistRoomVideo } from '../rooms/guardrails';
 
 interface WampOGramRow {
@@ -115,27 +114,34 @@ export async function createWampOGram(
 }
 
 /**
- * A gram can show the video already saved on its room. Adding or changing a video needs the
- * same builder trust as saving one to the room.
+ * The room a gram shows. A published room is always shown as it was published, whatever the
+ * request sent. A room that is not published yet can be sent only by someone who can save its
+ * draft, with the content they sent; a video in it needs the same builder trust as a room draft.
  */
-export async function assertWampOGramVideoAllowed(
+export async function resolveWampOGramRoomSnapshot(
   env: Env,
-  snapshot: RoomSnapshot,
+  requested: RoomSnapshot,
   auth: RequestAuth,
-): Promise<void> {
-  if (!snapshot.video) {
-    return;
+): Promise<RoomSnapshot> {
+  const record = await loadRoomRecord(
+    env,
+    requested.id,
+    requested.coordinates,
+    auth.user.id,
+    auth.user.walletAddress,
+    auth.isAdmin,
+  );
+  if (record.published) {
+    return cloneRoomSnapshot(record.published);
+  }
+  if (!record.permissions.canSaveDraft) {
+    throw new HttpError(403, 'Only the room claimer can send this unpublished room as a Wamp-O-Gram.');
   }
 
-  const stored = await env.DB.prepare('SELECT draft_json, published_json FROM rooms WHERE id = ? LIMIT 1')
-    .bind(snapshot.id)
-    .first<{ draft_json: string | null; published_json: string | null }>();
-  const keepsStoredVideo = [stored?.draft_json, stored?.published_json]
-    .filter((json): json is string => typeof json === 'string')
-    .some((json) => !roomVideoChangeNeedsTrust(snapshot.video, parseStoredSnapshot(json, 'room').video));
-  if (!keepsStoredVideo) {
-    await assertCanPersistRoomVideo(env, snapshot, null, auth.user.id, auth.source);
-  }
+  const snapshot = cloneRoomSnapshot(requested);
+  snapshot.status = 'draft';
+  await assertCanPersistRoomVideo(env, snapshot, null, auth.user.id, auth.source);
+  return snapshot;
 }
 
 export async function deleteWampOGramBySlug(env: Env, slug: string): Promise<boolean> {

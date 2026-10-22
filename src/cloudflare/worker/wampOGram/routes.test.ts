@@ -17,17 +17,17 @@ import { handleAdminWampOGramRequest, handleWampOGramRequest } from './routes';
 
 const VIDEO = normalizeRoomVideo({ youtubeId: 'dQw4w9WgXcQ', x: 0, y: 0, width: 320 }) as RoomVideo;
 let f: ReturnType<typeof fixture>;
+const authFor = (id: string): RequestAuth => ({
+  source: 'session', user: { id, displayName: id, email: `${id}@example.test`, walletAddress: null },
+  principal: { kind: 'user', id, displayName: id, ownerUserId: id, agentId: null },
+  agent: null, session: null, school: null, scopes: null, apiToken: null, agentToken: null, isAdmin: false,
+});
 
 beforeEach(async () => {
   vi.clearAllMocks();
   f = fixture();
   await loadOrBackfillUserProgress(f.env, 'p1');
-  const auth: RequestAuth = {
-    source: 'session', user: { id: 'p1', displayName: 'p1', email: 'p1@example.test', walletAddress: null },
-    principal: { kind: 'user', id: 'p1', displayName: 'p1', ownerUserId: 'p1', agentId: null },
-    agent: null, session: null, school: null, scopes: null, apiToken: null, agentToken: null, isAdmin: false,
-  };
-  vi.mocked(requireAuthenticatedRequestAuth).mockResolvedValue(auth);
+  vi.mocked(requireAuthenticatedRequestAuth).mockResolvedValue(authFor('p1'));
 });
 afterEach(() => f.sqlite.close());
 
@@ -49,6 +49,8 @@ async function create(roomSnapshot: unknown, ip = '203.0.113.7'): Promise<{ stat
   }
 }
 const gramCount = () => (f.sqlite.prepare('SELECT COUNT(*) AS n FROM wamp_o_grams').get() as { n: number }).n;
+const storedGram = (slug: string) => f.sqlite.prepare('SELECT title, room_status, room_version, snapshot_json FROM wamp_o_grams WHERE slug = ?')
+  .get(slug) as { title: string; room_status: string; room_version: number; snapshot_json: string };
 
 describe('Wamp-O-Gram creation (F417)', () => {
   it('checks sign-in before reading the body', async () => {
@@ -63,15 +65,35 @@ describe('Wamp-O-Gram creation (F417)', () => {
     expect(gramCount()).toBe(1);
   });
 
-  it('needs builder trust level 1 to add a video, but keeps the video already saved on the room', async () => {
+  it('needs builder trust level 1 to add a video to an unpublished room, but keeps a published room\'s video', async () => {
     expect((await create(room('1,0', { video: VIDEO }))).status).toBe(403);
     f.sqlite.prepare("UPDATE rooms SET published_json = json_set(published_json, '$.video', json(?)) WHERE id = '0,0'")
       .run(JSON.stringify(VIDEO));
     expect((await create(room('0,0', { video: VIDEO }))).status).toBe(200);
-    expect((await create(room('0,0', { video: { ...VIDEO, youtubeId: 'aaaaaaaaaaa' } }))).status).toBe(403);
     f.sqlite.prepare('UPDATE user_progress SET hidden_trust_score = 40 WHERE user_id = ?').run('p1');
     expect((await create(room('1,0', { video: VIDEO }))).status).toBe(200);
     expect(gramCount()).toBe(2);
+  });
+
+  it('shows a published room as it was published, whatever content was sent', async () => {
+    f.sqlite.prepare("UPDATE rooms SET published_json = json_set(published_json, '$.video', json(?)) WHERE id = '0,0'")
+      .run(JSON.stringify(VIDEO));
+    const { status, slug } = await create(room('0,0', { title: 'Not this room', video: { ...VIDEO, youtubeId: 'aaaaaaaaaaa' } }));
+    expect(status).toBe(200);
+    const gram = storedGram(slug!);
+    expect(gram).toMatchObject({ title: 'Hi', room_status: 'published', room_version: 1 });
+    expect(JSON.parse(gram.snapshot_json)).toMatchObject({ title: 'Lava Gauntlet', status: 'published', video: { youtubeId: VIDEO.youtubeId } });
+  });
+
+  it('refuses an unpublished room claimed by someone else, and lets its claimer send it', async () => {
+    f.sqlite.prepare("INSERT INTO rooms (id,x,y,draft_json,claimer_user_id) VALUES ('2,0',2,0,?,'builder')")
+      .run(JSON.stringify(room('2,0', { title: 'Work in progress' })));
+    expect((await create(room('2,0', { title: 'Copied' }))).status).toBe(403);
+    expect(gramCount()).toBe(0);
+    vi.mocked(requireAuthenticatedRequestAuth).mockResolvedValue(authFor('builder'));
+    const { status, slug } = await create(room('2,0', { title: 'Builder draft', status: 'published' }));
+    expect(status).toBe(200);
+    expect(JSON.parse(storedGram(slug!).snapshot_json)).toMatchObject({ title: 'Builder draft', status: 'draft' });
   });
 
   it('limits each account to 20 grams an hour', async () => {

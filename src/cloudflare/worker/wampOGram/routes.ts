@@ -30,10 +30,10 @@ import {
 } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import {
-  assertWampOGramVideoAllowed,
   createWampOGram,
   deleteWampOGramBySlug,
   loadWampOGramBySlug,
+  resolveWampOGramRoomSnapshot,
 } from './store';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -60,9 +60,9 @@ export async function handleWampOGramRequest(
     const input = parseCreateRequest(body);
     // The same id, tile and object checks a room save gets.
     validateRoomSnapshotForWrite(input.roomSnapshot, input.roomSnapshot.id);
+    const roomSnapshot = await resolveWampOGramRoomSnapshot(env, input.roomSnapshot, auth);
     await takeWampOGramSlots(request, env, auth.user.id);
-    await assertWampOGramVideoAllowed(env, input.roomSnapshot, auth);
-    const record = await createWampOGram(env, input, auth);
+    const record = await createWampOGram(env, { ...input, roomSnapshot }, auth);
     return jsonResponse(request, record);
   }
 
