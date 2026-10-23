@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { maskBlockedCustomArt } from '../../../customSprites/blockedArt';
+import { BLOCKED_ART_COLOR } from '../../../customSprites/blocklist';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
 import type { WampOGramPublicRecord, WampOGramRecord } from '../../../wampOGram/model';
 import worker from '../../worker';
@@ -10,7 +12,7 @@ import { hashRateLimitKey } from '../core/rateLimit';
 let f: ReturnType<typeof fixture>;
 let sessions: Map<string, string>;
 beforeEach(() => { f = fixture(); sessions = new Map(); });
-afterEach(() => f.sqlite.close());
+afterEach(() => { vi.restoreAllMocks(); f.sqlite.close(); });
 
 type Caller = string | null | { bearer: string };
 type Body = WampOGramRecord & { error?: string };
@@ -129,6 +131,48 @@ describe('Wamp-O-Gram senders', () => {
     expect((await call('POST', '/api/wamp-o-grams', { body: { roomSnapshot: room() }, origin: 'https://evil.example' })).status).toBe(403);
     expect(count('wamp_o_grams')).toBe(0);
     expect((await send(undefined, await token(['rooms:write']))).status).toBe(200);
+  });
+});
+
+describe('Wamp-O-Gram records the game plays', () => {
+  it('masks blocked community art in the record, read fresh each time', async () => {
+    const { body: { slug } } = await send();
+    const stored = JSON.parse((f.sqlite.prepare('SELECT snapshot_json FROM wamp_o_grams').get() as { snapshot_json: string }).snapshot_json) as RoomSnapshot;
+    const withArt: RoomSnapshot = {
+      ...stored,
+      customTiles: [{
+        id: 'tile_vandal', name: 'Vandal', pixels: Array.from({ length: 256 }, () => '#00ff00'), collision: 'solid',
+        sourceSpriteId: 'vandal-art', createdAt: NOW, updatedAt: NOW,
+      }],
+    };
+    f.sqlite.prepare('UPDATE wamp_o_grams SET snapshot_json = ?').run(JSON.stringify(withArt));
+    f.sqlite.prepare(`INSERT INTO custom_sprites (id, definition_json, name, normalized_name, kind, size, status, created_at, updated_at)
+      VALUES ('vandal-art', '{}', 'vandal-art', 'vandal-art', 'decoration', 16, 'blocked', ?, ?)`).run(NOW, NOW);
+
+    const blocked = await read(slug);
+    expect(blocked.headers.get('Cache-Control')).toBe('no-store');
+    expect(blocked.body.roomSnapshot).toEqual(maskBlockedCustomArt(withArt, new Set(['vandal-art'])));
+    expect(new Set(blocked.body.roomSnapshot.customTiles?.[0].pixels)).toEqual(new Set([BLOCKED_ART_COLOR]));
+
+    f.sqlite.prepare("UPDATE custom_sprites SET status = 'active' WHERE id = 'vandal-art'").run();
+    expect((await read(slug)).body.roomSnapshot.customTiles?.[0].pixels[0]).toBe('#00ff00');
+  });
+
+  it('gives back the slots when a gram cannot be saved', async () => {
+    await send();
+    expect(count("rate_limit_events WHERE bucket LIKE 'wamp-o-gram:%'")).toBe(3);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const batch = f.env.DB.batch.bind(f.env.DB);
+    const failed: string[] = [];
+    vi.spyOn(f.env.DB, 'batch').mockImplementation(async (statements) => {
+      const sql = statements.map((statement) => (statement as unknown as { sql: string }).sql).join(';');
+      if (sql.includes('INSERT INTO wamp_o_grams')) { failed.push(sql); throw new Error('Storage unavailable'); }
+      return batch(statements);
+    });
+    expect((await send()).status).toBe(500);
+    expect(failed).toHaveLength(1);
+    expect(count('wamp_o_grams')).toBe(1);
+    expect(count("rate_limit_events WHERE bucket LIKE 'wamp-o-gram:%'")).toBe(3);
   });
 });
 
