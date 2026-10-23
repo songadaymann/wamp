@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG } from '../config';
 import type { PagesWorkerEnv } from './model';
 import { decodePng } from './roomImagePrimitives';
@@ -24,7 +25,9 @@ function emptyLayer(): number[][] {
   );
 }
 
-function createEnv(fetchAsset = vi.fn(async () => new Response('unexpected'))): PagesWorkerEnv {
+function createEnv(
+  fetchAsset: PagesWorkerEnv['ASSETS']['fetch'] = vi.fn(async () => new Response('unexpected')),
+): PagesWorkerEnv {
   return {
     ASSETS: { fetch: fetchAsset },
     ROOM_SHARE_API_BASE_URL: 'https://api.example.test',
@@ -155,6 +158,23 @@ describe('room image renderer orchestration', () => {
     const image = await decodePng(png);
     expect(fetchAsset).toHaveBeenCalled();
     expect(Array.from(image.pixels).filter((_, i) => i % 4 === 0).some((red, i) => red === 252 && image.pixels[i*4+1] === 234)).toBe(true);
+  });
+
+  it('draws a real-art room with the same pixels as before in a compressed PNG (F332)', async () => {
+    const snapshot = JSON.parse(readFileSync('test/fixtures/smart-autotiling/references/desert-x-7-y-3.room.json', 'utf8'))
+      .snapshot as PublishedRoomSnapshot;
+    const fetchAsset = vi.fn(async (request: Request) => {
+      const path = `public${decodeURIComponent(new URL(request.url).pathname)}`;
+      return existsSync(path) ? new Response(new Uint8Array(readFileSync(path))) : new Response('missing', { status: 404 });
+    });
+    const png = await renderRoomSharePreviewPng(new Request(PAGE_URL), createEnv(fetchAsset), PAGE_URL, snapshot);
+    const image = await decodePng(png);
+
+    expect(fetchAsset).toHaveBeenCalled();
+    // Decoded pixels of the uncompressed 3 MB encoder before F332; update only when the drawing changes.
+    expect(createHash('sha256').update(image.pixels).digest('hex'))
+      .toBe('f88ded5b570a6923568028dc6d2e262c177ca583937bb1c1b10d6cffb2a6be3f');
+    expect(png.length).toBeLessThan(120_000);
   });
 
   it('draws an eligible custom sprite in its configured object layer', async () => {

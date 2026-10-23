@@ -1,6 +1,6 @@
 import { buildPlaylistSharePath } from '../playlists/model';
 import { buildProfileSharePath } from '../profiles/username';
-import { buildWampOGramSharePath } from '../wampOGram/links';
+import { buildWampOGramPreviewPath, buildWampOGramSharePath } from '../wampOGram/links';
 import type { PagesWorkerEnv } from './model';
 
 const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
@@ -245,7 +245,7 @@ function buildFallbackWampOGramMetadata(
     title: 'Wamp-O-Gram',
     description: 'Open this playable WAMP level postcard.',
     url: publicUrl,
-    imageUrl: new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}/preview.png`, apiBaseUrl).toString(),
+    imageUrl: new URL(buildWampOGramPreviewPath(slug), apiBaseUrl).toString(),
     imageWidth: ROOM_SHARE_IMAGE_WIDTH,
     imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
   };

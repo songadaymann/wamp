@@ -13,16 +13,16 @@ import {
 } from './roomImageAssets';
 import {
   createCanvas,
-  encodePng,
   fillRect,
 } from './roomImagePrimitives';
+import { encodePng } from '../utils/pngEncoder';
 
-function pngResponse(
+async function pngResponse(
   pixels = new Uint8Array([11, 22, 33, 255]),
   width = 1,
   height = 1,
-): Response {
-  return new Response(encodePng(width, height, pixels).buffer as ArrayBuffer, {
+): Promise<Response> {
+  return new Response((await encodePng(width, height, pixels)).buffer as ArrayBuffer, {
     headers: { 'Content-Type': 'image/png' },
   });
 }

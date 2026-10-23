@@ -19,6 +19,7 @@ import {
   type RoomCoordinates,
   type RoomSnapshot,
 } from '../../../persistence/roomModel';
+import { encodePng } from '../../../utils/pngEncoder';
 
 export const ROOM_SHARE_IMAGE_WIDTH = 1200;
 export const ROOM_SHARE_IMAGE_HEIGHT = 630;
@@ -78,7 +79,7 @@ const BACKGROUND_COLORS: Record<string, { sky: number; far: number; near: number
   desert: { sky: 0xf2c986, far: 0xd89d58, near: 0x9d6438 },
 };
 
-export function renderRoomSharePreviewPng(snapshot: RoomSnapshot): Uint8Array {
+export function renderRoomSharePreviewPng(snapshot: RoomSnapshot): Promise<Uint8Array> {
   const canvas = createCanvas(ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT);
   drawBackground(canvas, snapshot);
   drawRoomFrame(canvas, DEFAULT_ROOM_PREVIEW_LAYOUT);
@@ -88,7 +89,7 @@ export function renderRoomSharePreviewPng(snapshot: RoomSnapshot): Uint8Array {
   return encodePng(canvas.width, canvas.height, canvas.pixels);
 }
 
-export function renderExpandedRoomSharePreviewPng(cells: ExpandedRoomSharePreviewCell[]): Uint8Array {
+export function renderExpandedRoomSharePreviewPng(cells: ExpandedRoomSharePreviewCell[]): Promise<Uint8Array> {
   if (cells.length <= 1) {
     return renderRoomSharePreviewPng(cells[0]?.snapshot ?? createDefaultRoomSnapshot());
   }
@@ -717,122 +718,4 @@ function hashString(value: string): number {
 
 function nextSeed(seed: number): number {
   return (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-}
-
-function encodePng(width: number, height: number, rgba: Uint8Array): Uint8Array {
-  const bytesPerRow = width * 4;
-  const scanlines = new Uint8Array((bytesPerRow + 1) * height);
-  for (let row = 0; row < height; row += 1) {
-    const targetOffset = row * (bytesPerRow + 1);
-    scanlines[targetOffset] = 0;
-    scanlines.set(rgba.subarray(row * bytesPerRow, row * bytesPerRow + bytesPerRow), targetOffset + 1);
-  }
-
-  return concatUint8Arrays([
-    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    createPngChunk('IHDR', createIhdrData(width, height)),
-    createPngChunk('IDAT', createZlibUncompressedBlockStream(scanlines)),
-    createPngChunk('IEND', new Uint8Array(0)),
-  ]);
-}
-
-function createIhdrData(width: number, height: number): Uint8Array {
-  const data = new Uint8Array(13);
-  writeUint32(data, 0, width);
-  writeUint32(data, 4, height);
-  data[8] = 8;
-  data[9] = 6;
-  data[10] = 0;
-  data[11] = 0;
-  data[12] = 0;
-  return data;
-}
-
-function createPngChunk(type: string, data: Uint8Array): Uint8Array {
-  const typeBytes = asciiBytes(type);
-  const chunk = new Uint8Array(12 + data.length);
-  writeUint32(chunk, 0, data.length);
-  chunk.set(typeBytes, 4);
-  chunk.set(data, 8);
-  writeUint32(chunk, 8 + data.length, crc32(typeBytes, data));
-  return chunk;
-}
-
-function createZlibUncompressedBlockStream(data: Uint8Array): Uint8Array {
-  const blockCount = Math.max(1, Math.ceil(data.length / 65535));
-  const output = new Uint8Array(2 + data.length + blockCount * 5 + 4);
-  let offset = 0;
-  output[offset++] = 0x78;
-  output[offset++] = 0x01;
-
-  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
-    const blockStart = blockIndex * 65535;
-    const blockLength = Math.min(65535, data.length - blockStart);
-    const isFinal = blockIndex === blockCount - 1;
-    output[offset++] = isFinal ? 0x01 : 0x00;
-    output[offset++] = blockLength & 0xff;
-    output[offset++] = (blockLength >> 8) & 0xff;
-    const nlen = (~blockLength) & 0xffff;
-    output[offset++] = nlen & 0xff;
-    output[offset++] = (nlen >> 8) & 0xff;
-    output.set(data.subarray(blockStart, blockStart + blockLength), offset);
-    offset += blockLength;
-  }
-
-  writeUint32(output, offset, adler32(data));
-  return output;
-}
-
-function asciiBytes(value: string): Uint8Array {
-  const bytes = new Uint8Array(value.length);
-  for (let index = 0; index < value.length; index += 1) {
-    bytes[index] = value.charCodeAt(index) & 0xff;
-  }
-  return bytes;
-}
-
-function concatUint8Arrays(parts: Uint8Array[]): Uint8Array {
-  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
-  const output = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.length;
-  }
-  return output;
-}
-
-function writeUint32(target: Uint8Array, offset: number, value: number): void {
-  target[offset] = (value >>> 24) & 0xff;
-  target[offset + 1] = (value >>> 16) & 0xff;
-  target[offset + 2] = (value >>> 8) & 0xff;
-  target[offset + 3] = value & 0xff;
-}
-
-function crc32(typeBytes: Uint8Array, data: Uint8Array): number {
-  let crc = 0xffffffff;
-  crc = updateCrc32(crc, typeBytes);
-  crc = updateCrc32(crc, data);
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function updateCrc32(initial: number, data: Uint8Array): number {
-  let crc = initial;
-  for (const byte of data) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return crc >>> 0;
-}
-
-function adler32(data: Uint8Array): number {
-  let a = 1;
-  let b = 0;
-  for (const byte of data) {
-    a = (a + byte) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) >>> 0;
 }

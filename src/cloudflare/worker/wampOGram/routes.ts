@@ -4,18 +4,12 @@ import {
   normalizeWampOGramSlug,
 } from '../../../wampOGram/model';
 import {
-  ROOM_SHARE_IMAGE_HEIGHT,
-  ROOM_SHARE_IMAGE_WIDTH,
-  renderRoomSharePreviewPng,
-} from '../share/roomPreviewImage';
-import {
   requireAdminRequest,
   requireAuthenticatedRequestAuth,
   requireTrustedOriginForMutation,
 } from '../auth/request';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import {
-  corsHeaders,
   HttpError,
   jsonResponse,
   parseJsonBody,
@@ -28,13 +22,14 @@ import {
   takeRateLimitSlots,
   type RateLimitRule,
 } from '../core/rateLimit';
-import type { Env } from '../core/types';
+import type { Env, WorkerExecutionContextLike } from '../core/types';
 import {
   createWampOGram,
   deleteWampOGramBySlug,
   loadWampOGramBySlug,
   resolveWampOGramRoomSnapshot,
 } from './store';
+import { wampOGramPreviewResponse } from './preview';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -47,6 +42,7 @@ export async function handleWampOGramRequest(
   request: Request,
   url: URL,
   env: Env,
+  context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   if (url.pathname === '/api/wamp-o-grams' && request.method === 'POST') {
     const auth = await requireAuthenticatedRequestAuth(
@@ -80,14 +76,13 @@ export async function handleWampOGramRequest(
     throw new HttpError(400, 'Wamp-O-Gram slug is invalid.');
   }
 
+  if (match[2]) {
+    return wampOGramPreviewResponse(request, url, env, slug, context);
+  }
+
   const record = await loadWampOGramBySlug(env, slug);
   if (!record) {
     throw new HttpError(404, 'Wamp-O-Gram not found.');
-  }
-
-  const target = match[2] ?? 'record';
-  if (target === 'preview' || target === 'preview.png') {
-    return wampOGramPreviewResponse(request, record.roomSnapshot);
   }
 
   return jsonResponse(request, makePublicWampOGramRecord(record));
@@ -136,35 +131,4 @@ function parseCreateRequest(body: unknown): ReturnType<typeof normalizeWampOGram
       error instanceof Error ? error.message : 'Invalid Wamp-O-Gram request.',
     );
   }
-}
-
-function wampOGramPreviewResponse(
-  request: Request,
-  roomSnapshot: Parameters<typeof renderRoomSharePreviewPng>[0],
-): Response {
-  const headers = new Headers({
-    'Content-Type': 'image/png',
-    'Cache-Control': 'public, max-age=300, s-maxage=3600',
-    'X-Wamp-Image-Width': String(ROOM_SHARE_IMAGE_WIDTH),
-    'X-Wamp-Image-Height': String(ROOM_SHARE_IMAGE_HEIGHT),
-    ...corsHeaders(request),
-  });
-
-  if (request.method === 'HEAD') {
-    return new Response(null, {
-      status: 200,
-      headers,
-    });
-  }
-
-  const bytes = renderRoomSharePreviewPng(roomSnapshot);
-  const body = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength,
-  ) as ArrayBuffer;
-
-  return new Response(body, {
-    status: 200,
-    headers,
-  });
 }

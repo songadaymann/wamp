@@ -559,6 +559,6 @@ describe('share metadata normalization edge cases', () => {
 
     expect(result.title).toBe('A Wamp-O-Gram for Ada Lovelace');
     expect(result.description).toBe('Fixture Creator made a playable WAMP level postcard.');
-    expect(result.imageUrl).toBe(`${API_ORIGIN}/api/wamp-o-grams/abcdefghijkl/preview.png`);
+    expect(result.imageUrl).toBe(`${API_ORIGIN}/api/wamp-o-grams/abcdefghijkl/preview.png?renderer=1`);
   });
 });

@@ -38,6 +38,17 @@ export async function loadAnonymousPublicCache(
   return response;
 }
 
+/** The stored copy of a GET for this URL, as a hit returns it, or null; never loads anything. */
+export async function matchAnonymousPublicCache(
+  request: Request,
+  context: WorkerExecutionContextLike | undefined,
+): Promise<Response | null> {
+  const cache = (globalThis.caches as WorkerCacheStorage | undefined)?.default;
+  if (!cache || !context) return null;
+  const cached = await cache.match(new Request(request.url, { method: 'GET' }));
+  return cached ? withCacheDiagnostic(applyRequestCors(cached, request), 'hit') : null;
+}
+
 function stripRequestCors(response: Response): Response {
   const headers = new Headers(response.headers);
   const cacheControl = headers.get('Cache-Control');

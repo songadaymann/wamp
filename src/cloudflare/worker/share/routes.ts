@@ -18,7 +18,7 @@ import {
   renderExpandedRoomSharePreviewPng,
   renderRoomSharePreviewPng,
 } from './roomPreviewImage';
-import { listEmbeddedCustomSpriteIds, maskBlockedCustomArt } from '../../../customSprites/blockedArt';
+import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
 
 interface RoomShareMetadata {
   roomId: string;
@@ -191,20 +191,18 @@ async function loadShareCellSnapshot(
 
 /** Share images never show a community sprite an admin blocked (F189). */
 async function maskBlockedShareArt(env: Env, target: RoomShareTarget): Promise<RoomShareTarget> {
-  const ids = [...new Set([target.focusSnapshot, ...target.previewCells.map((cell) => cell.snapshot)].flatMap(listEmbeddedCustomSpriteIds))];
-  if (ids.length === 0) return target;
-  const rows = await env.DB.prepare(`SELECT id FROM custom_sprites WHERE status = 'blocked' AND id IN (SELECT value FROM json_each(?))`)
-    .bind(JSON.stringify(ids)).all<{ id: string }>();
-  const blocked = new Set(rows.results.map((row) => row.id));
-  if (blocked.size === 0) return target;
+  const [focusSnapshot, ...cellSnapshots] = await maskBlockedArtInSnapshots(
+    env,
+    [target.focusSnapshot, ...target.previewCells.map((cell) => cell.snapshot)],
+  );
   return {
     ...target,
-    focusSnapshot: maskBlockedCustomArt(target.focusSnapshot, blocked),
-    previewCells: target.previewCells.map((cell) => ({ ...cell, snapshot: maskBlockedCustomArt(cell.snapshot, blocked) })),
+    focusSnapshot,
+    previewCells: target.previewCells.map((cell, index) => ({ ...cell, snapshot: cellSnapshots[index] })),
   };
 }
 
-function roomShareImageResponse(request: Request, target: RoomShareTarget): Response {
+async function roomShareImageResponse(request: Request, target: RoomShareTarget): Promise<Response> {
   const headers = new Headers({
     'Content-Type': 'image/png',
     // An hour at the edge, so a sprite blocked by moderation leaves cached share images soon (F189).
@@ -217,8 +215,8 @@ function roomShareImageResponse(request: Request, target: RoomShareTarget): Resp
   }
 
   const bytes = target.expandedRoom && target.previewCells.length > 1
-    ? renderExpandedRoomSharePreviewPng(target.previewCells)
-    : renderRoomSharePreviewPng(target.focusSnapshot);
+    ? await renderExpandedRoomSharePreviewPng(target.previewCells)
+    : await renderRoomSharePreviewPng(target.focusSnapshot);
   const body = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
