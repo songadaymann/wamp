@@ -16,6 +16,7 @@ const SWORDSMAN_AI_COLLECT_NODE_COIN_BONUS = 48;
 const SWORDSMAN_AI_COLLECT_CURRENT_SWEEP_BEHIND_GRACE_PX = 18;
 const SWORDSMAN_AI_COLLECT_PRODUCTIVE_SWEEP_BACKTRACK_PX = 56;
 export const SWORDSMAN_AI_COLLECT_ROUTE_COMMIT_MS = 7200;
+const SWORDSMAN_AI_COLLECT_NO_ROUTE_RETRY_MS = 1000;
 const SWORDSMAN_AI_COLLECT_ROUTE_EDGE_WEIGHT = 720;
 const SWORDSMAN_AI_COLLECT_ROUTE_COST_WEIGHT = 0.35;
 const SWORDSMAN_AI_COLLECT_ROUTE_SETUP_WEIGHT = 2.1;
@@ -60,7 +61,8 @@ export type CollectNodeStats = {
 export type CollectTarget = { collectible: LoadedRoomObject; objectiveTarget: SwordsmanObjectiveTarget };
 export type CollectSelectionState = Pick<LoadedRoomObjectRuntimeState,
   'aiCollectState' | 'aiCollectRouteTargetNodeId' | 'aiCollectRouteExpiresAt' |
-  'aiCollectRouteScore' | 'aiCollectRouteValue' | 'aiCollectRoutePenalty'>;
+  'aiCollectRouteScore' | 'aiCollectRouteValue' | 'aiCollectRoutePenalty' |
+  'aiCollectNoRouteKey' | 'aiCollectNoRouteUntil'>;
 export interface CollectCandidateInventory {
   groupedCandidates: Map<string, CollectNodeCandidate>;
   currentSweepCandidates: CollectSweepCandidate[];
@@ -97,6 +99,8 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
     aiCollectRouteScore: runtime.aiCollectRouteScore,
     aiCollectRouteValue: runtime.aiCollectRouteValue,
     aiCollectRoutePenalty: runtime.aiCollectRoutePenalty,
+    aiCollectNoRouteKey: runtime.aiCollectNoRouteKey,
+    aiCollectNoRouteUntil: runtime.aiCollectNoRouteUntil,
   };
   const clearRoute = (): void => {
     state.aiCollectRouteTargetNodeId = null;
@@ -219,7 +223,19 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
 
     clearRoute();
 
-    const bestRouteTarget = selectBestCollectRoute(input, candidates, currentSurfaceIsDepleted);
+    // With no committable route every frame would plan every coin ledge again. While every input
+    // to that answer is unchanged, planning again gives the same answer, so it is kept for up to a
+    // second instead (F302): a hunter left standing with no reachable coin stops re-planning.
+    const routeSearchKey = buildCollectRouteSearchKey(input);
+    const skipRouteSearch =
+      state.aiCollectNoRouteKey === routeSearchKey && now < state.aiCollectNoRouteUntil;
+    const bestRouteTarget = skipRouteSearch
+      ? null
+      : selectBestCollectRoute(input, candidates, currentSurfaceIsDepleted);
+    if (!bestRouteTarget && !skipRouteSearch) {
+      state.aiCollectNoRouteKey = routeSearchKey;
+      state.aiCollectNoRouteUntil = now + SWORDSMAN_AI_COLLECT_NO_ROUTE_RETRY_MS;
+    }
 
     if (
       bestRouteTarget &&
@@ -463,6 +479,44 @@ function selectBestCollectRoute(
   }
 
   return bestRouteTarget;
+}
+
+/**
+ * Every input that decides whether any coin ledge has a committable route: the room version, the
+ * hunter's exact body and nodes, each coin group's exact pickup point and node, the coin ledges
+ * and the blocked edges. Route scores (facing, setup coins, wall failures) do not change it.
+ */
+function buildCollectRouteSearchKey(input: CollectSelectionInput): string {
+  const coinGroups = Array.from(input.groupedCandidates, ([nodeKey, candidate]) => [
+    nodeKey,
+    candidate.targetNodeId,
+    candidate.collectible.key,
+    candidate.collectibleCount,
+    formatSnapshotKey(candidate.targetSnapshot),
+  ].join('='));
+  const coinLedges = Array.from(input.collectNodeStats, ([nodeId, stats]) => `${nodeId}x${stats.count}`);
+  return [
+    input.graph.cacheKey,
+    `${input.bodyWidth}x${input.bodyHeight}`,
+    input.currentContext.currentNodeId,
+    input.currentContext.startNodeIds.join(','),
+    formatSnapshotKey(input.enemySnapshot),
+    coinGroups.sort().join(';'),
+    coinLedges.sort().join(','),
+    Array.from(input.blockedEdgeIds).sort().join(','),
+  ].join('\n');
+}
+
+function formatSnapshotKey(snapshot: SwordsmanBodySnapshot): string {
+  return [
+    snapshot.centerX,
+    snapshot.centerY,
+    snapshot.left,
+    snapshot.right,
+    snapshot.bottom,
+    snapshot.onFloor ? 1 : 0,
+    snapshot.wallContactSide,
+  ].join(',');
 }
 
 function selectCurrentSweepTarget(

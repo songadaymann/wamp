@@ -171,21 +171,115 @@ export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
 }
 
 export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
-  const surfaceSegments = buildSurfaceSegments(room);
-  const wallSegments = buildWallSegments(room);
-  const ladderSegments = buildLadderSegments(room);
+  const build = startSwordsmanTraversalGraphBuild(room);
+  let graph = build.buildNextPiece();
+  while (!graph) {
+    graph = build.buildNextPiece();
+  }
+  return graph;
+}
+
+// Rooms whose Sword Hunters updated in the last couple of seconds. The graph cache and the edge
+// simulation cache never evict them (F302).
+const ROOM_IN_PLAY_PROTECTION_MS = 2000;
+const ROOMS_IN_PLAY_LIMIT = 64;
+const roomsInPlay = new Map<string, { markedAt: number }>();
+
+/** Marks a room version in play; called every frame its Sword Hunters update. */
+export function markSwordsmanTraversalRoomInPlay(graphCacheKey: string, now = performance.now()): void {
+  const mark = roomsInPlay.get(graphCacheKey);
+  if (mark) {
+    // Updated in place, so the map's order is not recency; pruning goes by timestamp.
+    mark.markedAt = now;
+    return;
+  }
+
+  if (roomsInPlay.size >= ROOMS_IN_PLAY_LIMIT) {
+    let oldestKey: string | null = null;
+    let oldestAt = Number.POSITIVE_INFINITY;
+    for (const [key, oldMark] of roomsInPlay) {
+      if (now - oldMark.markedAt >= ROOM_IN_PLAY_PROTECTION_MS) {
+        roomsInPlay.delete(key);
+      } else if (oldMark.markedAt < oldestAt) {
+        oldestKey = key;
+        oldestAt = oldMark.markedAt;
+      }
+    }
+    if (roomsInPlay.size >= ROOMS_IN_PLAY_LIMIT && oldestKey !== null) {
+      roomsInPlay.delete(oldestKey);
+    }
+  }
+  roomsInPlay.set(graphCacheKey, { markedAt: now });
+}
+
+export function isSwordsmanTraversalRoomInPlay(graphCacheKey: string, now = performance.now()): boolean {
+  const mark = roomsInPlay.get(graphCacheKey);
+  return mark !== undefined && now - mark.markedAt < ROOM_IN_PLAY_PROTECTION_MS;
+}
+
+// One graph per room version, shared by every scene's Sword Hunters and the jump warm-up, least
+// recently used first; rooms in play are never evicted (F302).
+const TRAVERSAL_GRAPH_CACHE_LIMIT = 64;
+const traversalGraphsByCacheKey = new Map<string, SwordsmanTraversalGraph>();
+let lastTraversalGraphCacheKey: string | null = null;
+
+/** The room's cached graph, built now if no hunter or warm-up has built it yet. */
+export function getSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph {
+  return peekSwordsmanTraversalGraphForRoom(room)
+    ?? rememberSwordsmanTraversalGraph(buildSwordsmanTraversalGraph(room));
+}
+
+export function peekSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph | null {
+  const cacheKey = getSwordsmanTraversalGraphCacheKey(room);
+  const graph = traversalGraphsByCacheKey.get(cacheKey);
+  if (graph && cacheKey !== lastTraversalGraphCacheKey) {
+    // Hunters read their room's graph many times a frame; only a change of room reorders.
+    traversalGraphsByCacheKey.delete(cacheKey);
+    traversalGraphsByCacheKey.set(cacheKey, graph);
+    lastTraversalGraphCacheKey = cacheKey;
+  }
+  return graph ?? null;
+}
+
+/** Caches a graph built elsewhere, unless one for that room version is already cached. */
+export function rememberSwordsmanTraversalGraph(graph: SwordsmanTraversalGraph): SwordsmanTraversalGraph {
+  const cached = traversalGraphsByCacheKey.get(graph.cacheKey);
+  if (cached) {
+    return cached;
+  }
+  traversalGraphsByCacheKey.set(graph.cacheKey, graph);
+  if (traversalGraphsByCacheKey.size > TRAVERSAL_GRAPH_CACHE_LIMIT) {
+    const now = performance.now();
+    for (const cacheKey of traversalGraphsByCacheKey.keys()) {
+      if (cacheKey !== graph.cacheKey && !isSwordsmanTraversalRoomInPlay(cacheKey, now)) {
+        traversalGraphsByCacheKey.delete(cacheKey);
+        break;
+      }
+    }
+  }
+  return graph;
+}
+
+/** A graph built a piece at a time, so the work can be spread over frames (F302). */
+export interface SwordsmanTraversalGraphBuild {
+  /** Builds one piece; returns the finished graph after the last one. */
+  buildNextPiece(): SwordsmanTraversalGraph | null;
+}
+
+/**
+ * Builds the same graph as buildSwordsmanTraversalGraph, in the same order, one piece per call:
+ * the surfaces, the walls and the ladders, then each surface's outgoing jumps, each wall's, and
+ * the ladder edges last.
+ */
+export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): SwordsmanTraversalGraphBuild {
+  let surfaceSegments: SwordsmanSurfaceSegment[] = [];
+  let wallSegments: SwordsmanWallSegment[] = [];
+  let ladderSegments: SwordsmanLadderSegment[] = [];
   const nodesById = new Map<string, SwordsmanTraversalNode>();
   const edgesByNodeId = new Map<string, SwordsmanTraversalEdge[]>();
   const edgesById = new Map<string, SwordsmanTraversalEdge>();
-
-  for (const segment of surfaceSegments) {
-    nodesById.set(segment.id, segment);
-    edgesByNodeId.set(segment.id, []);
-  }
-  for (const wall of wallSegments) {
-    nodesById.set(wall.id, wall);
-    edgesByNodeId.set(wall.id, []);
-  }
+  let nextPiece = 0;
+  let graph: SwordsmanTraversalGraph | null = null;
 
   const addEdge = (edge: SwordsmanTraversalEdge | null): void => {
     if (!edge) {
@@ -195,40 +289,76 @@ export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTrave
     edgesById.set(edge.id, edge);
   };
 
-  for (const source of surfaceSegments) {
-    for (const target of surfaceSegments) {
-      if (source.id === target.id) {
-        continue;
+  const buildPiece = (piece: number): void => {
+    if (piece === 0) {
+      surfaceSegments = buildSurfaceSegments(room);
+      for (const segment of surfaceSegments) {
+        nodesById.set(segment.id, segment);
+        edgesByNodeId.set(segment.id, []);
+      }
+      return;
+    }
+    if (piece === 1) {
+      wallSegments = buildWallSegments(room);
+      for (const wall of wallSegments) {
+        nodesById.set(wall.id, wall);
+        edgesByNodeId.set(wall.id, []);
+      }
+      return;
+    }
+    if (piece === 2) {
+      ladderSegments = buildLadderSegments(room);
+      return;
+    }
+
+    const source = surfaceSegments[piece - 3];
+    if (source) {
+      for (const target of surfaceSegments) {
+        if (source.id === target.id) {
+          continue;
+        }
+
+        addEdge(buildJumpUpEdge(source, target, surfaceSegments));
+        for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
+          addEdge(dropEdge);
+        }
       }
 
-      addEdge(buildJumpUpEdge(source, target, surfaceSegments));
-      for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
-        addEdge(dropEdge);
+      for (const wall of wallSegments) {
+        addEdge(buildJumpToWallEdge(source, wall));
       }
+      return;
     }
 
-    for (const wall of wallSegments) {
-      addEdge(buildJumpToWallEdge(source, wall));
+    const wall = wallSegments[piece - 3 - surfaceSegments.length];
+    if (wall) {
+      for (const target of surfaceSegments) {
+        addEdge(buildWallJumpEdge(wall, target));
+      }
+      return;
     }
-  }
 
-  for (const wall of wallSegments) {
-    for (const target of surfaceSegments) {
-      addEdge(buildWallJumpEdge(wall, target));
+    for (const edge of buildLadderEdges(ladderSegments, surfaceSegments)) {
+      addEdge(edge);
     }
-  }
-
-  for (const edge of buildLadderEdges(ladderSegments, surfaceSegments)) {
-    addEdge(edge);
-  }
+    graph = {
+      cacheKey: getSwordsmanTraversalGraphCacheKey(room),
+      surfaceSegments,
+      wallSegments,
+      nodesById,
+      edgesByNodeId,
+      edgesById,
+    };
+  };
 
   return {
-    cacheKey: getSwordsmanTraversalGraphCacheKey(room),
-    surfaceSegments,
-    wallSegments,
-    nodesById,
-    edgesByNodeId,
-    edgesById,
+    buildNextPiece() {
+      if (!graph) {
+        buildPiece(nextPiece);
+        nextPiece += 1;
+      }
+      return graph;
+    },
   };
 }
 

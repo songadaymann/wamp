@@ -67,6 +67,7 @@ import { LiveObjectHazardController } from './liveObjects/hazardController';
 import { LiveObjectJumpFeatherController } from './liveObjects/jumpFeather';
 import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
 import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController';
+import { LazySwordsmanEdgeWarmup, type SwordsmanEdgeWarmupOptions } from './liveObjects/swordsmanEdgeWarmupLoader';
 import {
   getLiveObjectBehavior,
   liveObjectBehaviorCanSleepAtDistance,
@@ -178,6 +179,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   tryConsumeHeldKey: () => boolean;
   touchQuicksand: () => void;
   grantExternalLaunchGrace: (durationMs: number) => void;
+  enqueueBackgroundCpuWork?: SwordsmanEdgeWarmupOptions['enqueueBackgroundCpuWork'];
   getPlayerGravityDirection?: () => PlayerGravityDirection;
   launchPlayerFromSpring?: (x: number, y: number, durationMs: number) => void;
   grantPlayerAirJump?: () => boolean;
@@ -276,6 +278,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
+  /** Run starts, respawns and portal arrivals call finishRoom before the room's hunters first plan. */
+  readonly swordsmanEdgeWarmup = new LazySwordsmanEdgeWarmup({
+    enqueueBackgroundCpuWork: (...args) => this.options.enqueueBackgroundCpuWork?.(...args) ?? null,
+  }, () => this.options.getLoadedFullRooms());
   private readonly riderCarryOptions = {
     getDynamicBody: (sprite: Phaser.GameObjects.Sprite) => this.getDynamicBody(sprite),
     getPlayerBody: () => this.options.getPlayerBody(),
@@ -557,6 +563,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     dormant: boolean,
   ): void {
     this.lifecycleController.finalizeCreation(loadedRoom, dormant);
+    this.swordsmanEdgeWarmup.queueRoom(loadedRoom);
   }
   setLoadedRoomLiveObjectsDormant(
     loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
@@ -928,6 +935,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               this.updatePatrolEnemy(loadedRoom.room, liveObject);
               break;
             case 'swordsman':
+              this.swordsmanEdgeWarmup.noteActiveRoom(loadedRoom, this.options.getCurrentTime());
               this.swordsmanController.updateEnemy(loadedRoom, liveObject);
               break;
             case 'frog':

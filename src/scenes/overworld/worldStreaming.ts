@@ -70,8 +70,11 @@ import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
 import {
   FRAME_WORK_PRIORITIES,
+  enqueueGameplayWarmupWork,
   FrameWorkCoordinator,
+  getFrameWorkBudget,
   type FrameWorkGeneration,
+  type GameplayFrameWorkPriority,
   type FrameWorkJobHandle,
   type FrameWorkPriority,
   type RunFrameWorkResult,
@@ -413,6 +416,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomTeardownReconciliationGeneration: number | null = null;
   private retainedFullRoomIds = new Set<string>();
   private transitionPreparationSeamUrgent = false;
+  private frameWorkRunning = false;
+  private afterFrameWorkCallbacks: Array<() => void> | null = null;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
@@ -1182,6 +1187,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return true;
   }
 
+  /**
+   * Queues one atomic CPU job of at most about 1 ms in a gameplay queue, for caches worth filling
+   * before a room is played (Sword Hunter jump physics, F302); see enqueueGameplayWarmupWork. It
+   * also runs in Browse frames (for the room kept from the last run), always within the device
+   * profile's CPU cap.
+   */
+  enqueueBackgroundCpuWork(
+    label: string,
+    execute: () => void,
+    onCancelled?: () => void,
+    priority?: GameplayFrameWorkPriority,
+  ): FrameWorkJobHandle | null {
+    return this.destroyed
+      ? null
+      : enqueueGameplayWarmupWork(this.frameWorkCoordinator, label, execute, onCancelled, priority);
+  }
+
   private hasUrgentDestinationFrameWork(): boolean {
     return this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
       || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision');
@@ -1191,29 +1213,61 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     criticalFrameElapsedMs: number,
     sharedBudgetConsumedMs = 0,
   ): RunFrameWorkResult | null {
-    if (this.destroyed || this.options.getMode() !== 'play') {
+    const browsing = this.options.getMode() !== 'play';
+    if (
+      this.destroyed
+      || (browsing
+        && !this.frameWorkCoordinator.hasQueuedWorkAtPriority('gameplay-catch-up')
+        && !this.frameWorkCoordinator.hasQueuedWorkAtPriority('gameplay-warmup'))
+    ) {
       this.lastDiscretionaryFrameWorkResult = null;
       return null;
     }
     const policy = this.getResolvedPerformancePolicy();
-    const frameWorkProfile = policy.transitionUrgency === 'seam-critical'
-      ? 'normal'
-      : policy.activeRuntimeProfile === 'reduced'
-        ? 'reduced'
-        : 'normal';
+    // Gameplay warm-up stays within the device's own profile even when a seam-critical
+    // transition lifts the rest of the frame's work to normal (F302).
+    const deviceProfile = policy.activeRuntimeProfile === 'reduced' ? 'reduced' : 'normal';
+    const gameplayCpuCapMs = getFrameWorkBudget(deviceProfile).cpuSubCapMs;
+    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
+    if (browsing) {
+      // Browse loads no full rooms, so this only finishes warming the room retained from the
+      // last run, ready for the next; streaming work waits for Play.
+      this.frameWorkRunning = true;
+      try {
+        this.frameWorkCoordinator.runFrame({
+          profile: deviceProfile,
+          criticalHeadroomMs,
+          sharedBudgetConsumedMs,
+          cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+          gameplayCpuCapMs,
+          gameplayOnly: true,
+        });
+      } finally {
+        this.finishFrameWork();
+      }
+      this.lastDiscretionaryFrameWorkResult = null;
+      return null;
+    }
+    const frameWorkProfile = policy.transitionUrgency === 'seam-critical' ? 'normal' : deviceProfile;
     const memoryProfile = policy.memoryProfile === 'reduced' ? 'reduced' : 'normal';
     if (memoryProfile !== this.roomArtifactCacheProfile) {
       this.syncRoomArtifactCachePolicy();
     }
-    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
-    const result = this.measure('stream.frameWorkCoordinator', () =>
-      this.frameWorkCoordinator.runFrame({
-        profile: frameWorkProfile,
-        criticalHeadroomMs,
-        sharedBudgetConsumedMs,
-        cpuBudgetConsumedMs: sharedBudgetConsumedMs,
-      }),
-    );
+    let result: RunFrameWorkResult | null | undefined;
+    this.frameWorkRunning = true;
+    try {
+      result = this.measure('stream.frameWorkCoordinator', () =>
+        this.frameWorkCoordinator.runFrame({
+          profile: frameWorkProfile,
+          criticalHeadroomMs,
+          sharedBudgetConsumedMs,
+          cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+          gameplayCpuCapMs,
+        }),
+      );
+    } finally {
+      this.finishFrameWork();
+    }
     if (!result) {
       this.lastDiscretionaryFrameWorkResult = null;
       return null;
@@ -1223,6 +1277,32 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     this.lastDiscretionaryFrameWorkResult = result;
     return result;
+  }
+
+  /**
+   * Runs `callback` now, or, while a frame-work job runs (a prepared room's commit can spawn the
+   * player), right after the coordinator's frame, so its time is not charged to that job. Either
+   * way it runs before the next frame's live-object update.
+   */
+  runOutsideFrameWork(callback: () => void): void {
+    if (this.frameWorkRunning !== true) {
+      callback();
+      return;
+    }
+    (this.afterFrameWorkCallbacks ??= []).push(callback);
+  }
+
+  private finishFrameWork(): void {
+    this.frameWorkRunning = false;
+    const callbacks = this.afterFrameWorkCallbacks;
+    this.afterFrameWorkCallbacks = null;
+    for (const callback of callbacks ?? []) {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Deferred overworld work failed after the frame-work frame.', error);
+      }
+    }
   }
 
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {

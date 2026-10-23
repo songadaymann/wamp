@@ -8,7 +8,7 @@ const OVERSIZED_FILE_LINES = {
   'src/scenes/overworld/worldStreaming.ts': 5765,
   'src/scenes/CourseEditorScene.ts': 3464,
   'src/scenes/editor/editRuntime.ts': 3287,
-  'src/scenes/overworld/liveObjects/swordsmanController.ts': 2608,
+  'src/scenes/overworld/liveObjects/swordsmanController.ts': 2596,
   'src/scenes/overworld/liveObjects.ts': 2342,
   'src/scenes/editor/uiBridge.ts': 2257,
   'src/scenes/EditorScene.ts': 1984,

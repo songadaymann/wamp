@@ -34,6 +34,7 @@ import { OverworldRespawnCheckpointController } from '../respawnCheckpoints';
 import { OverworldRespawnController } from '../respawnController';
 import { OverworldSessionResetController } from '../sessionReset';
 import type { OverworldCompositionPorts } from './ports';
+import { finishRoomWarmupForArrival } from './roomArrival';
 
 export function createQuicksandController(host: Pick<OverworldCompositionPorts, 'scene' | 'showTransientStatus'>): OverworldQuicksandController {
   return new OverworldQuicksandController({
@@ -350,7 +351,7 @@ export function createRespawnController(
     | 'cameraController' | 'playerPresentationController' | 'playerHealthController'
     | 'gameFeelController' | 'getCurrentRankedRunTraceFrame' | 'rankedRunTraceRecorder'
     | 'refreshAroundIfNeededOrFromCache' | 'destroyPlayer' | 'shouldRespawnPlayer'
-    | 'refreshAround'
+    | 'refreshAround' | 'liveObjectController' | 'worldStreamingController'
   >,
 ): OverworldRespawnController {
   return new OverworldRespawnController({
@@ -374,6 +375,7 @@ export function createRespawnController(
       host.shouldCenterCamera = true;
       setFocusedCoordinatesInUrl(coordinates);
     },
+    prepareRoomArrival: (roomId) => finishRoomWarmupForArrival(host, roomId, 'spawn'),
     respawnPlayerToRoom: (room, entities) => host.playerLifecycleController.respawnPlayerToRoom(room, entities),
     presentRespawn: () => {
       host.cameraController.resetFollowAnchor();

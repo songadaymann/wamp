@@ -140,6 +140,7 @@ function createHarness() {
     requestPortalTargetRoomPreparation: vi.fn((roomId: string) => adapter.request(roomId)),
     clearPortalTargetRoomPreparation: vi.fn((roomId: string) => adapter.clear(roomId)),
     authorizeRoomTransition: vi.fn(),
+    prepareRoomArrival: vi.fn(),
     teleportPlayerTo: vi.fn(),
     playPortalFx: vi.fn(),
   };
@@ -202,11 +203,25 @@ describe('OverworldPortalObjectController cold destinations', () => {
     expect(harness.host.authorizeRoomTransition).toHaveBeenCalledWith({ x: 2, y: 0 });
     expect(harness.host.teleportPlayerTo).toHaveBeenCalledWith(1_296, 16, { x: 75, y: -40 });
     expect(harness.host.playPortalFx).toHaveBeenCalledWith(1_296, 16, { x: 2, y: 0 });
+    // The destination's Sword Hunters finish their jump warm-up before the player lands (F302).
+    expect(harness.host.prepareRoomArrival).toHaveBeenCalledOnce();
+    expect(harness.host.prepareRoomArrival).toHaveBeenCalledWith('2,0');
+    expect(harness.host.prepareRoomArrival.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.host.teleportPlayerTo.mock.invocationCallOrder[0]);
 
     setBodyPosition(harness.body, 200, 200);
     harness.controller.update();
     expect(harness.clearPortalTargetRoomPreparation).toHaveBeenCalledOnce();
     expect(harness.clearPortalTargetRoomPreparation).toHaveBeenCalledWith('2,0');
+  });
+
+  it('teleports within one room without stalling to ready it again (F302)', () => {
+    const harness = createHarness();
+    harness.sourcePortal.linkedTargetRoomId = '0,0';
+    harness.rooms.get('0,0')!.liveObjects.push(createPortalObject('portal_b', 'target-portal', 300, 16));
+    harness.controller.update();
+    expect(harness.host.teleportPlayerTo).toHaveBeenCalledWith(300, 16, { x: 75, y: -40 });
+    expect(harness.host.prepareRoomArrival).not.toHaveBeenCalled();
   });
 
   it('clears retained preparation when a link becomes invalid', () => {
