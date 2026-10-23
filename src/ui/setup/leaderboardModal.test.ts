@@ -15,21 +15,32 @@ class Item extends EventTarget {
   replaceChildren() {} appendChild<T>(child: T) { return child; }
 }
 const button = (data: Record<string, string>) => Object.assign(new Item(), { dataset: data });
-function fixture() {
+// The shared error box, which renderFriendlyError fills with a message and a Try again button.
+class ErrorBox extends Item {
+  children: Item[] = []; ownerDocument = { createElement: () => new Item() };
+  constructor() { super(); Object.defineProperty(this, 'textContent', { get: () => this.children.map(child => child.textContent).join('') }); }
+  override replaceChildren() { this.children = []; }
+  append(child: Item) { this.children.push(child); }
+  get shown() { return this.classes.has('hidden') ? '' : this.children.map(child => child.textContent).join(''); }
+}
+function fixture(runRepository: object = {}) {
   const stars = ['1', '2', '3', '4', '5'].map(roomQualityStars => button({ roomQualityStars }));
   const difficulties = ['easy', 'medium', 'hard', 'extreme'].map(roomDifficulty => button({ roomDifficulty }));
   const rushModes = ['hard:weekly', 'easy:selected', 'hard:selected'].map(roomRushLeaderboardMode => button({ roomRushLeaderboardMode }));
   const items = new Map<string, Item>();
   const get = (id: string) => { if (!items.has(id)) items.set(id, new Item()); return items.get(id)!; };
+  const error = new ErrorBox();
+  items.set('leaderboard-modal-error', error);
   const doc = Object.assign(new EventTarget(), {
     getElementById: get,
     querySelectorAll: (selector: string) => selector.includes('quality') ? stars
       : selector.includes('difficulty') ? difficulties : selector.includes('room-rush-modes') ? rushModes : [],
     createElement: () => new Item(),
   });
-  const leaderboard = new LeaderboardModalController({} as never, {} as never, {} as never, {} as never, doc as unknown as Document, {} as never);
-  const state = leaderboard as unknown as Record<string, unknown> & { render(): void; renderRoomPanel(): void };
-  return { stars, difficulties, rushModes, get, state };
+  const leaderboard = new LeaderboardModalController({} as never, runRepository as never, {} as never, {} as never, doc as unknown as Document, {} as never);
+  const state = leaderboard as unknown as Record<string, unknown> & { render(): void; renderRoomPanel(): void;
+    setError(message: string | null, retry?: () => void, tab?: string): void; activateTab(tab: string): Promise<void> };
+  return { stars, difficulties, rushModes, get, error, state };
 }
 function roomBoard(rating: { stars: number | null; vote: string | null; canVote: boolean; needsRun: boolean }) {
   return {
@@ -70,5 +81,47 @@ describe('Leaderboard shows your own rating and the open tab (F464)', () => {
     expect(tabs).toEqual(['false', 'false', 'false', 'true']);
     expect(f.get('leaderboard-global-panel').classes.has('hidden')).toBe(false);
     expect(pressed(f.rushModes)).toEqual([false, true, false]);
+  });
+});
+
+describe('a Leaderboard error stays with its tab (F471)', () => {
+  const published = { state: 'published', roomId: 'room-1', coordinates: { x: 0, y: 0 } };
+
+  it('drops a room error when another tab opens, and loads the room again on return', async () => {
+    const runs = { loadRoomLeaderboard: vi.fn(async () => { throw new Error('Failed to fetch'); }) };
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const f = fixture(runs);
+    Object.assign(f.state, { activeTab: 'room', roomContext: published, roomLoaded: true });
+    f.state.setError("Couldn't load room leaderboard. Please try again.", () => {}, 'room');
+    f.state.render();
+    expect(f.error.shown).toContain("Couldn't load room leaderboard.");
+    await f.state.activateTab('global');
+    expect(f.error.children).toEqual([]);
+    await f.state.activateTab('room');
+    expect(runs.loadRoomLeaderboard).toHaveBeenCalledOnce();
+    expect(f.error.shown).toContain("Couldn't load room leaderboard.");
+    logged.mockRestore();
+  });
+
+  it('neither shows a background tab error nor lets another tab clear the open one', () => {
+    const f = fixture();
+    Object.assign(f.state, { activeTab: 'roomRush', roomContext: published });
+    f.state.setError("Couldn't load room leaderboard. Please try again.", undefined, 'room');
+    expect(f.error.children).toEqual([]);
+    f.state.setError("Couldn't load Room Rush leaderboards. Please try again.", undefined, 'roomRush');
+    f.state.setError(null, undefined, 'room');
+    f.state.render();
+    expect(f.error.shown).toContain('Room Rush');
+  });
+
+  it('drops a room error when the room tab falls back to Global, so it never shows there later', () => {
+    const f = fixture();
+    Object.assign(f.state, { activeTab: 'room', roomContext: published });
+    f.state.setError("Couldn't submit room rating update. Please try again.", undefined, 'room');
+    Object.assign(f.state, { roomContext: null });
+    f.state.render();
+    expect(f.get('btn-leaderboard-tab-global').getAttribute('aria-pressed')).toBe('true');
+    expect(f.error.children).toEqual([]);
+    expect(f.error.classes.has('hidden')).toBe(true);
   });
 });

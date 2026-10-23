@@ -2,7 +2,7 @@ import { createProfileCollectionController, renderProfileTabs, type ProfileColle
 import { CollectionAttributionController } from './collectionAttribution';
 import { renderProfileEmptyActions, setupProfileEmptyStates } from './profileEmptyStates';
 import { setProfileTabStops, setupProfileTabs } from './profileTabs';
-import { friendlyError, renderFriendlyError, setFeedbackText } from '../friendlyError';
+import { friendlyError, renderFriendlyError, setLiveMessage } from '../friendlyError';
 import Phaser from 'phaser';
 import {
   getEffectiveCryptopunkViewerLevel,
@@ -1683,7 +1683,7 @@ export class ProfileModalController {
   }
 
   private setSaveStatus(message: string): void {
-    setFeedbackText(this.elements.saveStatus, message);
+    setLiveMessage(this.elements.saveStatus, message, 'status');
   }
 
   private setPlaylistStatus(message: string): void {

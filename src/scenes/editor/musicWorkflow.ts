@@ -1228,7 +1228,7 @@ export class EditorMusicWorkflowCoordinator {
         ? `Create a new named version of this ${activeInstrumentLabel} phrase.`
         : `Name this ${activeInstrumentLabel} phrase before saving it to your library.`;
     }
-    setLiveMessage(phraseSaveModalError, phraseState.savePromptError);
+    setLiveMessage(phraseSaveModalError, phraseState.savePromptError, 'error', { rerender: true });
     if (phraseSaveModalInput) {
       phraseSaveModalInput.value = phraseState.savePromptName;
       phraseSaveModalInput.disabled = !showPhraseSaveModal || phraseState.saveInFlight;

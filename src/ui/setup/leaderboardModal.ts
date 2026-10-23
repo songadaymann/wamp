@@ -84,6 +84,7 @@ type LeaderboardModalElements = {
 export class LeaderboardModalController {
   private readonly elements: LeaderboardModalElements;
   private activeTab: LeaderboardTab = 'room';
+  private errorTab: LeaderboardTab | null = null;
   private roomVersionOptions: RoomLeaderboardVersionOption[] = [];
   private currentPublishedVersion: number | null = null;
   private selectedVersion: number | null = null;
@@ -366,12 +367,12 @@ export class LeaderboardModalController {
   private async ensureTabLoaded(tab: LeaderboardTab): Promise<void> {
     switch (tab) {
       case 'room':
-        if (!this.roomLoaded && !this.roomLoading) {
+        if ((!this.roomLoaded || !this.roomLeaderboard) && !this.roomLoading) {
           await this.loadRoomLeaderboard();
         }
         return;
       case 'course':
-        if (!this.courseLoaded && !this.courseLoading) {
+        if ((!this.courseLoaded || this.courseFailed) && !this.courseLoading) {
           await this.loadCourseLeaderboard();
         }
         return;
@@ -434,11 +435,11 @@ export class LeaderboardModalController {
       this.selectedVersion = this.roomVersionOptions.find((option) =>
         option.equivalentVersions.includes(response.roomVersion)
       )?.value ?? response.displayRoomVersion;
-      this.setError(null);
+      this.setError(null, undefined, 'room');
     } catch (error) {
       console.error('Failed to load room leaderboard', error);
       this.roomLeaderboard = null;
-      this.setError(friendlyError('load room leaderboard', { error }), () => this.loadRoomLeaderboard());
+      this.setError(friendlyError('load room leaderboard', { error }), () => this.loadRoomLeaderboard(), 'room');
     } finally {
       this.roomLoading = false;
       this.roomLoaded = true;
@@ -466,13 +467,13 @@ export class LeaderboardModalController {
       );
       if (request !== this.courseRequest) return;
       this.courseLeaderboard = response;
-      this.setError(null);
+      this.setError(null, undefined, 'course');
     } catch (error) {
       if (request !== this.courseRequest) return;
       this.courseFailed = true;
       console.error('Failed to load expanded room leaderboard', error);
       this.courseLeaderboard = null;
-      this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard());
+      this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard(), 'course');
     } finally {
       if (request === this.courseRequest) {
         this.courseLoading = false;
@@ -503,11 +504,11 @@ export class LeaderboardModalController {
       if (!this.roomRushLoadedModes.has(modeKey)) {
         this.roomRushFailedModes.add(modeKey);
       }
-      this.setError(null);
+      this.setError(null, undefined, 'roomRush');
     } catch (error) {
       console.error('Failed to load Room Rush leaderboards', error);
       this.roomRushFailedModes.add(modeKey);
-      this.setError(friendlyError('load Room Rush leaderboards', { error }));
+      this.setError(friendlyError('load Room Rush leaderboards', { error }), undefined, 'roomRush');
     } finally {
       this.roomRushLoading = false;
       this.render();
@@ -604,12 +605,10 @@ export class LeaderboardModalController {
         contentTitle: this.roomLeaderboard?.roomTitle ?? roomTitle,
         reason: roomTitle?.trim() ? `Rated ${roomTitle}` : 'Rated a room',
       });
-      this.setError(null);
+      this.setError(null, undefined, 'room');
     } catch (error) {
       console.error('Failed to submit room rating update', error);
-      this.setError(
-        friendlyError('submit room rating update', { error })
-      );
+      this.setError(friendlyError('submit room rating update', { error }), undefined, 'room');
     } finally {
       this.voteSubmitting = false;
       this.render();
@@ -617,8 +616,6 @@ export class LeaderboardModalController {
   }
 
   private render(): void {
-    this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
-    this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
     const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
     const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
     if (this.elements.roomTabButton) {
@@ -633,7 +630,10 @@ export class LeaderboardModalController {
     if (!courseAvailable && this.activeTab === 'course') {
       this.activeTab = roomAvailable ? 'room' : 'global';
     }
-    // Marked after the fallback above, so the pressed tab is always the panel on screen.
+    // Marked after the fallback above, so the pressed tab and the lines shown match the panel on screen.
+    this.dropStaleError();
+    this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
+    this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
     setToggleState(this.elements.roomTabButton, this.activeTab === 'room');
     setToggleState(this.elements.courseTabButton, this.activeTab === 'course');
     setToggleState(this.elements.roomRushTabButton, this.activeTab === 'roomRush');
@@ -1236,8 +1236,19 @@ export class LeaderboardModalController {
     return parts.join(' · ');
   }
 
-  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+  /** `tab` is the tab a load or vote was for: it neither shows an error elsewhere nor clears another tab's. */
+  private setError(message: string | null, retry?: () => void | Promise<void>, tab?: LeaderboardTab): void {
+    if (tab && tab !== (message ? this.activeTab : this.errorTab)) return;
+    this.errorTab = message ? tab ?? this.activeTab : null;
     renderFriendlyError(this.elements.error, message, retry);
     if (message) this.elements.error?.classList.toggle('hidden', this.activeTab === 'global');
+  }
+
+  // An error belongs to the tab that raised it. Once another tab is open it is dropped, not just
+  // hidden, so it can't come back and be read out again; a tab that failed loads again when chosen.
+  private dropStaleError(): void {
+    if (this.errorTab === null || this.errorTab === this.activeTab) return;
+    this.errorTab = null;
+    renderFriendlyError(this.elements.error, null);
   }
 }
