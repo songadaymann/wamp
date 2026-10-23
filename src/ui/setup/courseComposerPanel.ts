@@ -138,6 +138,13 @@ export class CourseComposerPanelController {
     this.elements.backButton?.addEventListener('click', () => {
       void getActiveCourseComposerScene(this.game)?.returnToWorld();
     });
+    // The composer keeps Phaser's Space key, which would swallow Space on a clicked button.
+    this.elements.sheetButton?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.code !== 'Space') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) this.elements.sheetButton?.click();
+    });
     this.elements.sheetButton?.addEventListener('click', () => {
       const collapse = this.elements.panel?.dataset.sheet !== 'collapsed';
       const apply = () => this.setSheetCollapsed(collapse);

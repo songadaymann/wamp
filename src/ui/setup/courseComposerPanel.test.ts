@@ -6,6 +6,7 @@ vi.mock('phaser', () => ({ default: {} }));
 
 class Control extends EventTarget {
   dataset: Record<string, string> = {};
+  click(): void { this.dispatchEvent(new Event('click')); }
   textContent = '';
   readonly attributes = new Map<string, string>();
   readonly classList = { toggle: vi.fn() };
@@ -44,6 +45,26 @@ describe('Expanded Room setup sheet on phones (F365)', () => {
     expect(h.handle.getAttribute('aria-expanded')).toBe('true');
     // The layout change runs inside the scene's measurement, never before or after it.
     expect(h.seen).toEqual(['open', 'collapsed', 'collapsed', 'open']);
+  });
+
+  it('folds on Space and Enter even though the composer keeps Phaser\'s Space key', () => {
+    const h = harness(true);
+    const key = (code: string, repeat = false) => {
+      const event = Object.assign(new Event('keydown', { cancelable: true }), { key: code === 'Space' ? ' ' : code, code, repeat });
+      h.handle.dispatchEvent(event);
+      return event;
+    };
+    const space = key('Space');
+    // Handled here and kept from the window, where Phaser would cancel it.
+    expect(space.defaultPrevented).toBe(true);
+    expect(space.cancelBubble).toBe(true);
+    expect(h.panel.dataset.sheet).toBe('collapsed');
+    key('Space', true);
+    expect(h.panel.dataset.sheet).toBe('collapsed');
+    key('Enter');
+    expect(h.panel.dataset.sheet).toBe('open');
+    expect(key('Tab').defaultPrevented).toBe(false);
+    expect(h.panel.dataset.sheet).toBe('open');
   });
 
   it('still toggles while the map scene is not running', () => {

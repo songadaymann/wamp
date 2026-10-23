@@ -309,18 +309,23 @@
   }
 
   /* Phones: the setup panel is a sheet that leaves the map usable beside it, and its handle
-     folds it down to the selected cell (F365). */
+     folds it down to the selected cell (F365). The whole sheet scrolls under the handle, so
+     every control stays reachable on short screens. */
   body[data-device-class='phone'] .course-editor-panel {
+    --course-sheet-viewport: min(100dvh, var(--app-viewport-height, 100dvh));
     top: auto;
     left: var(--safe-left);
     right: var(--safe-right);
     bottom: 0;
     width: auto;
     height: min(46dvh, 400px);
-    /* Keep the setup header and World button below the account controls. */
-    max-height: calc(100dvh - 96px - var(--safe-top));
+    /* Keep the sheet below the account controls. */
+    max-height: calc(var(--course-sheet-viewport) - 96px - var(--safe-top));
     gap: 10px;
     padding: 0 12px calc(12px + var(--safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: 52px;
     border-width: 3px 0 0;
     box-shadow: 0 -3px 0 var(--course-editor-shadow);
   }
@@ -344,9 +349,32 @@
 
   body[data-device-class='phone'][data-orientation-state='landscape'] .course-editor-panel[data-sheet='collapsed'] {
     bottom: auto;
+    max-height: calc(var(--course-sheet-viewport) - 104px - var(--safe-top) - var(--safe-bottom));
+  }
+
+  /* In the sheet the sections are in normal flow; the sheet itself scrolls. */
+  body[data-device-class='phone'] .course-editor-scroll {
+    flex: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  body[data-device-class='phone'] #course-editor-shell .history-modal-kicker {
+    display: none;
+  }
+
+  body[data-device-class='phone'] #course-editor-shell .history-modal-title {
+    font-size: var(--ui-text-body, 12px);
+  }
+
+  body[data-device-class='phone'] .course-editor-header > .bar-btn {
+    flex: none;
   }
 
   body[data-device-class='phone'] .course-editor-sheet-handle {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-local-header);
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
@@ -381,7 +409,6 @@
 
   body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] :is(
     .course-editor-toolbar,
-    .history-modal-kicker,
     .history-modal-title,
     .course-editor-scroll > .about-section:not(.course-editor-selected-cell),
     .course-editor-selected-cell > .about-section-title,

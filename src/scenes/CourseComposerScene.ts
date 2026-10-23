@@ -115,6 +115,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private loading = false;
+  private pinchUiAt = 0;
   private roomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
   private readonly touch = new ComposerTouchController({
     beginPan: (point) => this.beginPan(point),
@@ -127,6 +128,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       const scroll = getScrollForScreenAnchor(anchor.x, anchor.y, x, y, camera);
       camera.setScroll(scroll.x, scroll.y);
       this.constrainInspectCamera();
+      // Keep the zoom readout live without rebuilding the panel on every finger move.
+      if (this.time.now - this.pinchUiAt < 100) return;
+      this.pinchUiAt = this.time.now;
+      this.renderUi();
     },
     select: (pointer) => this.handlePointerAction(pointer),
     settle: () => this.settleCamera(),
@@ -758,6 +763,9 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       }
 
       if (this.draftBackup.recoveryStatus) this.statusText = this.draftBackup.recoveryStatus;
+      // On the first open the renderUi above ran while the scene was still being created, so
+      // the panel stayed hidden. Show it before measuring the map it leaves visible.
+      this.renderUi();
       if (this.record?.draft.roomRefs.length) {
         this.fitCourseToView(false);
       } else {
@@ -1486,8 +1494,13 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private getUncoveredMapArea(): MapArea {
     const canvas = this.game.canvas;
-    const panel = canvas.ownerDocument.querySelector<HTMLElement>('.course-editor-panel');
-    return uncoveredMapArea(canvas.getBoundingClientRect(), panel?.getBoundingClientRect() ?? null, this.scale.width, this.scale.height);
+    const doc = canvas.ownerDocument;
+    const panel = doc.querySelector<HTMLElement>('.course-editor-panel');
+    // The phone account controls span the top of the map; an open menu counts as its top row.
+    const account = doc.getElementById('auth-panel');
+    const accountBar = account?.classList.contains('menu-open') ? account.querySelector('.auth-panel-topline') : account;
+    return uncoveredMapArea(canvas.getBoundingClientRect(), panel?.getBoundingClientRect() ?? null, this.scale.width, this.scale.height,
+      accountBar?.getBoundingClientRect() ?? null);
   }
 
   private syncCameraBounds(): void {

@@ -18,8 +18,11 @@ describe('Expanded Room setup map touch (F365)', () => {
   it('drags the map with one finger without selecting, and a tap still selects a cell', () => {
     const { touch, host } = harness();
     touch.down(pointer(1));
-    expect(host.beginPan).toHaveBeenCalledWith(expect.objectContaining({ x: 100, y: 100 }));
     touch.move(pointer(1, 106));
+    expect(host.beginPan).not.toHaveBeenCalled();
+    // The drag starts where the finger crosses the tap threshold, so the map does not jump.
+    touch.move(pointer(1, 112));
+    expect(host.beginPan).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ x: 112, y: 100 }));
     expect(host.pan).not.toHaveBeenCalled();
     touch.move(pointer(1, 160, 140));
     expect(host.pan).toHaveBeenLastCalledWith(expect.objectContaining({ x: 160, y: 140 }));
@@ -52,6 +55,19 @@ describe('Expanded Room setup map touch (F365)', () => {
     expect(host.settle).toHaveBeenCalledOnce();
   });
 
+  it('measures a new finger pair afresh when the first of three fingers lifts', () => {
+    const { touch, host } = harness();
+    touch.down(pointer(1, 100, 100));
+    touch.down(pointer(2, 200, 100));
+    touch.down(pointer(3, 300, 100));
+    touch.up(pointer(1, 100, 100));
+    // The new pair is measured where it stands, not against the old pair's distance and midpoint.
+    touch.move(pointer(3, 400, 100));
+    expect(host.pinch).not.toHaveBeenCalled();
+    touch.move(pointer(3, 500, 100));
+    expect(host.pinch).toHaveBeenLastCalledWith(1.5, { x: 1200, y: 400 }, 350, 100);
+  });
+
   it('never selects on a cancelled touch or a release off the canvas, and forgets fingers on blur', () => {
     const { touch, host } = harness();
     touch.down(pointer(1));
@@ -77,6 +93,15 @@ describe('map area beside the Expanded Room setup panel', () => {
       .toEqual({ x: 0, y: 0, width: 390, height: 456 });
     expect(uncoveredMapArea({ left: 0, top: 0, width: 1280, height: 800 }, { left: 16, top: 16, width: 380, height: 768 }, 1280, 800))
       .toEqual({ x: 396, y: 0, width: 884, height: 800 });
+  });
+
+  it('leaves out the phone account controls across the top', () => {
+    const sheet = { left: 0, top: 456, width: 390, height: 388 };
+    expect(uncoveredMapArea(canvas, sheet, 390, 844, { left: 8, top: 12, width: 374, height: 44 }))
+      .toEqual({ x: 0, y: 56, width: 390, height: 400 });
+    // The desktop account box covers only a corner of the map right of the column.
+    expect(uncoveredMapArea({ left: 0, top: 0, width: 1280, height: 800 }, { left: 16, top: 16, width: 380, height: 768 }, 1280, 800,
+      { left: 944, top: 16, width: 320, height: 60 })).toEqual({ x: 396, y: 0, width: 884, height: 800 });
   });
 
   it('uses the whole map when the panel is hidden or off the canvas, and maps CSS pixels to the camera', () => {
