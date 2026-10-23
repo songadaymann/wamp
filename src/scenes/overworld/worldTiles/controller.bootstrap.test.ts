@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorldRepository } from '../../../persistence/worldRepository';
 import { buildWorldTileCoverageKey, WorldTileClientController } from './controller';
+import { resolveWorldTileDisplayPlan } from './displayPlan';
 import { decodeWorldTileBlob } from './phaserLayer';
 import { WORLD_TILE_COVERAGE_TIMEOUT_MS } from './retryFallback';
 import type {
@@ -10,6 +11,11 @@ import type {
   WorldTileLevel,
   WorldTileManifest,
 } from './types';
+
+vi.mock('./displayPlan', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./displayPlan')>();
+  return { ...actual, resolveWorldTileDisplayPlan: vi.fn(actual.resolveWorldTileDisplayPlan) };
+});
 
 vi.mock('./phaserLayer', () => ({
   decodeWorldTileBlob: vi.fn(),
@@ -545,6 +551,63 @@ describe('world tile controller bootstrap ownership', () => {
     });
     expect(sharpReady).toBe(true);
     await expect(sharpPromise).resolves.toBe(true);
+    controller.destroy();
+  });
+
+  it('reuses display plans while a still camera keeps the same coverage', async () => {
+    let nowMs = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    const camera = createCamera();
+    camera.zoom = 0.18;
+    const controller = createController({
+      loadWorldTileConfig: vi.fn(async () => config),
+      loadWorldTileManifest: vi.fn(async (
+        level: WorldTileLevel,
+        bounds: WorldTileBounds,
+      ) => readyEmptyManifest(level, bounds)),
+      camera,
+    });
+    await controller.prepare();
+    await controller.ensureInitialCoverage(camera);
+    controller.update(camera);
+    await flushMicrotasks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    nowMs += 81;
+    controller.update(camera);
+    expect(controller.isTargetLodReady(camera)).toBe(true);
+    const settled = controller.getDebugSnapshot();
+    expect(settled).toMatchObject({ committedLevel: 1, targetCoveragePercentage: 100 });
+
+    const planCalls = vi.mocked(resolveWorldTileDisplayPlan);
+    planCalls.mockClear();
+    for (let frame = 0; frame < 30; frame += 1) {
+      nowMs += 16;
+      controller.update(camera);
+      expect(controller.isTargetLodReady(camera)).toBe(true);
+    }
+    expect(planCalls).not.toHaveBeenCalled();
+    expect(controller.getDebugSnapshot()).toEqual(settled);
+
+    // A changed availability entry invalidates the reused plan immediately.
+    const internals = controller as unknown as {
+      availabilityByKey: Map<string, unknown>;
+      desiredVisibleTargets: Array<{ rendererVersion: string; level: number; x: number; y: number }>;
+    };
+    const target = internals.desiredVisibleTargets[0]!;
+    internals.availabilityByKey.set(`${target.rendererVersion}:${target.level}:${target.x}:${target.y}`, { state: 'pending' });
+    expect(controller.isTargetLodReady(camera)).toBe(false);
+    expect(planCalls).toHaveBeenCalled();
+    nowMs += 16;
+    controller.update(camera);
+    expect(controller.isTargetLodReady(camera)).toBe(true);
+    expect(controller.getDebugSnapshot()).toEqual(settled);
+
+    planCalls.mockClear();
+    camera.scrollX += 640 * 32;
+    nowMs += 16;
+    controller.update(camera);
+    expect(planCalls).toHaveBeenCalled();
+    expect(controller.isTargetLodReady(camera)).toBe(false);
     controller.destroy();
   });
 

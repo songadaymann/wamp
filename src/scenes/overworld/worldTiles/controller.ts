@@ -13,7 +13,7 @@ import {
   type WorldTileRequestKind,
 } from './bootstrapPriority';
 import { WorldTileByteCache } from './byteCache';
-import { type WorldTileAvailability } from './coverage';
+import { WorldTileAvailabilityMap, WorldTileDisplayPlanCache } from './displayPlanCache';
 import {
   isWorldTileTargetReplacementComplete,
   resolveWorldTileDisplayPlan,
@@ -205,7 +205,8 @@ export class WorldTileClientController {
   private coverageCandidateKeys: ReadonlySet<string> = new Set();
   private coverageCandidateSource: ReadonlySet<string> | null = null;
   private coverageCandidatePreviousVersion: string | null = null;
-  private availabilityByKey = new Map<string, WorldTileAvailability>();
+  private readonly availabilityByKey = new WorldTileAvailabilityMap();
+  private readonly displayPlans = new WorldTileDisplayPlanCache(this.availabilityByKey, () => this.previousRendererVersion);
   private fetchQueue: FetchTask[] = [];
   private decodeQueue: DecodeTask[] = [];
   private uploadQueue: UploadTask[] = [];
@@ -1403,11 +1404,7 @@ export class WorldTileClientController {
 
   private syncCoverage(nowMs: number): void {
     if (!this.activeRendererVersion || this.desiredVisibleTargets.length === 0) return;
-    const desiredPlan = resolveWorldTileDisplayPlan({
-      targets: this.desiredVisibleTargets,
-      availabilityByKey: this.availabilityByKey,
-      previousRendererVersion: this.previousRendererVersion,
-    });
+    const desiredPlan = this.displayPlans.resolve(this.desiredVisibleTargets);
     const replacementCoverageComplete = isWorldTileTargetReplacementComplete(desiredPlan);
     const levelDecision = selectWorldTileDisplayLevel({
       committedLevel: this.committedLevel,
@@ -1425,24 +1422,10 @@ export class WorldTileClientController {
 
     const displayPlan = levelDecision.displayLevel === this.desiredLevel
       ? desiredPlan
-      : resolveWorldTileDisplayPlan({
-          targets: this.visibleTargets,
-          availabilityByKey: this.availabilityByKey,
-          previousRendererVersion: this.previousRendererVersion,
-        });
-    const displayGuardPlan = resolveWorldTileDisplayPlan({
-      targets: this.guardTargets,
-      availabilityByKey: this.availabilityByKey,
-      previousRendererVersion: this.previousRendererVersion,
-    });
+      : this.displayPlans.resolve(this.visibleTargets);
+    const displayGuardPlan = this.displayPlans.resolve(this.guardTargets);
     const coverageComplete = displayPlan.uncoveredTargetKeys.length === 0;
-    this.targetReadyCount = this.desiredVisibleTargets.filter((target) => (
-      isWorldTileTargetReplacementComplete(resolveWorldTileDisplayPlan({
-        targets: [target],
-        availabilityByKey: this.availabilityByKey,
-        previousRendererVersion: this.previousRendererVersion,
-      }))
-    )).length;
+    this.targetReadyCount = this.displayPlans.countReplacementCompleteTargets(this.desiredVisibleTargets);
     if (coverageComplete) {
       this.fallback.markCoverageComplete();
       this.coarseCoverageComplete = true;
@@ -1777,11 +1760,8 @@ export class WorldTileClientController {
       worldRectToTileBounds(requiredLevel, getCameraWorldRect(camera)),
     );
     if (!sameWorldTileAddresses(expectedTargets, this.desiredVisibleTargets)) return false;
-    return isWorldTileTargetReplacementComplete(resolveWorldTileDisplayPlan({
-      targets: expectedTargets,
-      availabilityByKey: this.availabilityByKey,
-      previousRendererVersion: this.previousRendererVersion,
-    }));
+    // The same address set resolves to the same readiness, so reuse the desired plan.
+    return isWorldTileTargetReplacementComplete(this.displayPlans.resolve(this.desiredVisibleTargets));
   }
 
   private resolveReadyTargetLodWaiters(): void {

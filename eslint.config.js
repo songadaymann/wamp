@@ -12,7 +12,7 @@ const OVERSIZED_FILE_LINES = {
   'src/scenes/overworld/liveObjects.ts': 2342,
   'src/scenes/editor/uiBridge.ts': 2257,
   'src/scenes/EditorScene.ts': 1984,
-  'src/scenes/overworld/worldTiles/controller.ts': 1975,
+  'src/scenes/overworld/worldTiles/controller.ts': 1955,
   'src/cloudflare/worker/rooms/store.ts': 1819,
   'src/admin/launch/app.ts': 1816,
   'src/cloudflare/worker/runs/difficulty.ts': 1762,
