@@ -1,5 +1,6 @@
 import { EDITOR_AUTO_COLLAPSE_EVENT, EDITOR_SHELL_ESCAPE_REQUESTED_EVENT } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
+import { EditorPhoneToolSwitch } from './editorPhoneToolSwitch';
 
 /** Phone presentation of the shared dock: existing controls retain their listeners and state. */
 export class EditorPhoneDock {
@@ -7,8 +8,10 @@ export class EditorPhoneDock {
   private collapsed = false;
   private menuOpen = false;
   private readonly moved: Array<{ element: HTMLElement; home: Comment }> = [];
+  private readonly toolSwitch: EditorPhoneToolSwitch;
 
   constructor(private readonly doc: Document, private readonly cancelSpawn: () => void, private readonly closePopovers: () => void) {
+    this.toolSwitch = new EditorPhoneToolSwitch(doc, () => this.active);
     for (const id of ['btn-editor-phone-menu', 'btn-editor-phone-account', 'btn-mobile-editor-toggle']) {
       doc.getElementById(id)?.addEventListener('keydown', event => {
         if (!this.active || (event.key !== 'Enter' && event.code !== 'Space')) return;
@@ -150,6 +153,7 @@ export class EditorPhoneDock {
     const menu = this.doc.getElementById('editor-phone-menu');
     menu?.classList.toggle('hidden', !this.menuOpen || locked);
     menu?.setAttribute('aria-hidden', this.menuOpen && !locked ? 'false' : 'true');
+    this.toolSwitch.render();
   }
 
   private resize(): void {

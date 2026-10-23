@@ -1,7 +1,8 @@
 @layer responsive {
   #editor-shell-phone-bar,
   #editor-phone-menu,
-  #editor-phone-tools {
+  #editor-phone-tools,
+  #editor-phone-draw-switch {
     display: none;
   }
 
@@ -154,6 +155,32 @@
     overflow-x: auto;
     border-top: 2px solid var(--editor-retro-cream);
     z-index: var(--z-phone-editor-dock);
+  }
+
+  /* Draw and Erase stay one tap away at the stage's corner while the library sheet is hidden (F369).
+   Placing Spawn, object settings and linking have their own Cancel or Done instead. */
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true'], [data-editor-spawn-placement='true'], [data-editor-phone-inspector='true'], [data-editor-phone-linking='true']) #editor-phone-draw-switch {
+    position: fixed;
+    top: calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - 52px);
+    left: calc(8px + var(--safe-left));
+    display: flex;
+    gap: 4px;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-draw-switch > button {
+    flex: 0 0 auto;
+    min-width: 56px;
+    min-height: 44px;
+    height: 44px;
+    padding: 2px 6px;
+    font-size: var(--ui-text-small, 10px);
+    box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-draw-switch > button > span:first-child {
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-dock-grid {

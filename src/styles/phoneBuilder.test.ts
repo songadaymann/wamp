@@ -42,3 +42,24 @@ describe('the phone tileset picker scrolls by touch (F368)', () => {
     expect(declarations(rulesFor(`${PHONE_DOCK} #tileset-section`)[0]).flex).toBe('0 0 auto');
   });
 });
+
+describe('the phone Draw/Erase switch stays on the stage (F369)', () => {
+  const shown = allRules.find(rule => rule.selector.endsWith('#editor-phone-draw-switch') && declarations(rule).position === 'fixed')!;
+
+  it('is phone-only and sits just above the bottom of the stage, sheet open or not', () => {
+    expect(declarations(rulesFor('#editor-phone-draw-switch')[0]).display).toBe('none');
+    expect(shown.selector.startsWith(PHONE_DOCK)).toBe(true);
+    expect(declarations(shown).top).toBe('calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - 52px)');
+  });
+
+  it('steps aside for focused modes that bring their own Cancel or Done', () => {
+    for (const mode of ['music-mode', 'sprite-mode', 'spawn-placement', 'phone-inspector', 'phone-linking']) {
+      expect(shown.selector).toContain(`[data-editor-${mode}='true']`);
+    }
+  });
+
+  it('keeps 44px touch targets', () => {
+    const [button] = rulesFor(`${PHONE_DOCK} #editor-phone-draw-switch > button`);
+    expect(declarations(button)).toMatchObject({ 'min-width': '56px', 'min-height': '44px' });
+  });
+});
