@@ -7,12 +7,13 @@ export class WorldsView {
   private readonly title: HTMLElement;
 
   constructor(root: HTMLElement, onClose: () => void) {
+    // A shared dialog (history-modal): focus, Tab, Escape, game keys and the pause follow it (F406).
     root.innerHTML = `
-      <section class="worlds-modal hidden" aria-hidden="true">
+      <section class="history-modal worlds-modal hidden" aria-hidden="true">
         <div class="worlds-panel" role="dialog" aria-modal="true" aria-labelledby="worlds-title">
           <header class="worlds-header">
             <div><span class="worlds-kicker">The shared WAMP grid</span><h2 id="worlds-title">Worlds</h2></div>
-            <button class="bar-btn bar-btn-small" type="button" data-world-action="close">Close</button>
+            <button class="bar-btn bar-btn-small" type="button" data-world-action="close" data-dialog-close>Close</button>
           </header>
           <nav class="worlds-tabs" aria-label="Worlds sections">
             <button class="bar-btn bar-btn-small" type="button" data-world-tab="browse">Browse</button>
@@ -40,6 +41,10 @@ export class WorldsView {
   close(): void {
     this.modal.classList.add('hidden');
     this.modal.setAttribute('aria-hidden', 'true');
+  }
+
+  isOpen(): boolean {
+    return !this.modal.classList.contains('hidden');
   }
 
   setTitle(value: string): void {

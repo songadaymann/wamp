@@ -12,12 +12,25 @@ let countdownTimeout: number | null = null;
 let damageFlashOverlay: HTMLElement | null = null;
 let damageFlashTimeout: number | null = null;
 
+/**
+ * PvP pop-ups are shared dialogs (history-modal, F406): focus, Tab, game keys and the pause
+ * follow them, and Escape presses their [data-dialog-close] button instead of leaving the room.
+ */
+function closeOnEscape(modal: HTMLElement, close: HTMLButtonElement): void {
+  close.dataset.dialogClose = '';
+  const handleKeydown = (event: KeyboardEvent): void => {
+    if (!modal.isConnected) document.removeEventListener('keydown', handleKeydown);
+    else if (event.key === 'Escape') close.click();
+  };
+  document.addEventListener('keydown', handleKeydown);
+}
+
 export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 'decline'> {
   activeInviteModal?.remove();
 
   return new Promise((resolve) => {
     const modal = document.createElement('div');
-    modal.className = 'pvp-modal pvp-modal-invite';
+    modal.className = 'history-modal pvp-modal pvp-modal-invite';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
 
@@ -86,6 +99,7 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
     modal.append(panel);
     document.body.append(modal);
     activeInviteModal = modal;
+    closeOnEscape(modal, decline);
     accept.focus();
 
     window.setTimeout(() => {
@@ -100,7 +114,7 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
   activeResultModal?.remove();
 
   const modal = document.createElement('div');
-  modal.className = 'pvp-modal pvp-modal-result';
+  modal.className = 'history-modal pvp-modal pvp-modal-result';
   modal.dataset.result = snapshot.draw
     ? 'draw'
     : snapshot.winnerUserId === localUserId
@@ -152,6 +166,7 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
   modal.append(panel);
   document.body.append(modal);
   activeResultModal = modal;
+  closeOnEscape(modal, close);
   close.focus();
 }
 

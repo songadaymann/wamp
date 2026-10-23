@@ -1,5 +1,13 @@
-const MODAL_SELECTOR = '.history-modal';
-const CLOSE_BUTTON_SELECTOR = 'button[id*="close" i], button[class*="close" i], button[aria-label^="Close" i]';
+/**
+ * Every WAMP dialog: the shared `.history-modal` dialogs (Worlds and PvP included), and the shared
+ * pop-up while it shows buttons (appFeedback marks it aria-modal then).
+ */
+const MODAL_SELECTOR = '.history-modal, #busy-overlay[aria-modal="true"]';
+/** The elements watched for opening and closing, whatever state they are in now. */
+const DIALOG_ROOT_SELECTOR = '.history-modal, #busy-overlay';
+const DIALOG_ATTRIBUTES = ['class', 'aria-hidden', 'aria-modal'];
+/** The button Escape presses on the top dialog; `data-dialog-close` marks one not named "close". */
+const CLOSE_BUTTON_SELECTOR = 'button[id*="close" i], button[class*="close" i], button[aria-label^="Close" i], button[data-dialog-close]';
 
 function isOpenModal(element: HTMLElement): boolean {
   return !element.classList.contains('hidden') && element.getAttribute('aria-hidden') !== 'true';
@@ -15,9 +23,58 @@ export function openModalsInStackOrder(doc: Document = document): HTMLElement[] 
     .map(({ element }) => element);
 }
 
-/** Whether any WAMP dialog (every dialog uses `.history-modal`) is open. */
+/** Whether any WAMP dialog is open. */
 export function hasBlockingModalOpen(doc: Document = document): boolean {
   return Array.from(doc.querySelectorAll<HTMLElement>(MODAL_SELECTOR)).some(isOpenModal);
+}
+
+type ModalWatch = { listeners: Set<() => void>; stop(): void };
+const modalWatches = new WeakMap<Document, ModalWatch>();
+
+/**
+ * Calls `onChange` when a dialog opens or closes, or joins or leaves the page. Dialogs added after
+ * boot count too: on-demand templates (LazyModal) and dialogs built in code (Worlds, PvP, the room
+ * goal intro). Focus, stacked dimming, game keys and the pause share this one watch, so none of
+ * them can miss a dialog that arrives late (F380).
+ */
+export function watchModals(doc: Document, onChange: () => void): () => void {
+  const watch = modalWatches.get(doc) ?? startModalWatch(doc);
+  watch.listeners.add(onChange);
+  return () => {
+    if (!watch.listeners.delete(onChange) || watch.listeners.size > 0) return;
+    watch.stop();
+    modalWatches.delete(doc);
+  };
+}
+
+function startModalWatch(doc: Document): ModalWatch {
+  const listeners = new Set<() => void>();
+  const notify = (): void => { for (const listener of [...listeners]) listener(); };
+  const watched = new WeakSet<Element>();
+  const attributes = new MutationObserver(notify);
+  const watch = (element: Element): void => {
+    if (watched.has(element)) return;
+    watched.add(element);
+    attributes.observe(element, { attributes: true, attributeFilter: DIALOG_ATTRIBUTES });
+  };
+  // Only dialogs joining or leaving the page, not every class change in the game UI.
+  const additions = new MutationObserver((records) => {
+    let changed = false;
+    for (const record of records) {
+      for (const node of [...record.addedNodes, ...record.removedNodes]) {
+        if (!(node instanceof Element)) continue;
+        const dialogs = [...node.querySelectorAll(DIALOG_ROOT_SELECTOR)];
+        if (node.matches(DIALOG_ROOT_SELECTOR)) dialogs.push(node);
+        for (const dialog of dialogs) { if (dialog.isConnected) watch(dialog); changed = true; }
+      }
+    }
+    if (changed) notify();
+  });
+  for (const element of doc.querySelectorAll(DIALOG_ROOT_SELECTOR)) watch(element);
+  additions.observe(doc.body, { childList: true, subtree: true });
+  const modalWatch = { listeners, stop: () => { attributes.disconnect(); additions.disconnect(); } };
+  modalWatches.set(doc, modalWatch);
+  return modalWatch;
 }
 
 /**
@@ -28,16 +85,22 @@ export function hasBlockingModalOpen(doc: Document = document): boolean {
  *
  * With dialogs stacked (a profile opened from the leaderboard), every dialog's own
  * Escape handler would close at once; the guard instead closes only the top one, through
- * its close button, and stops the event there.
+ * its close button, and stops the event there. A top dialog marked
+ * `data-escape-closes="false"` (a question Escape must not answer) just keeps the key.
  */
 export function installDialogEscapeGuard(doc: Document = document): () => void {
   const handleKeydown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape') return;
     const open = openModalsInStackOrder(doc);
-    if (open.length === 0) return;
+    const top = open[open.length - 1];
+    if (!top) return;
     event.preventDefault();
+    if (top.dataset.escapeCloses === 'false') {
+      event.stopImmediatePropagation();
+      return;
+    }
     if (open.length < 2) return;
-    const close = open[open.length - 1].querySelector<HTMLButtonElement>(CLOSE_BUTTON_SELECTOR);
+    const close = top.querySelector<HTMLButtonElement>(CLOSE_BUTTON_SELECTOR);
     if (!close) return;
     event.stopImmediatePropagation();
     close.click();
@@ -53,23 +116,18 @@ export function installModalStackBackdrops(doc: Document = document): () => void
     scheduled = false;
     const open = openModalsInStackOrder(doc);
     const covered = new Set(open.slice(0, -1));
-    for (const element of doc.querySelectorAll<HTMLElement>(MODAL_SELECTOR)) {
+    for (const element of doc.querySelectorAll<HTMLElement>(DIALOG_ROOT_SELECTOR)) {
       if (covered.has(element)) element.dataset.modalCovered = 'true';
       else delete element.dataset.modalCovered;
     }
   };
-  const observer = new MutationObserver(() => {
+  const stop = watchModals(doc, () => {
     if (scheduled) return;
     scheduled = true;
     queueMicrotask(sync);
   });
-  // Watch the dialogs themselves (they are in the page from the start), not every
-  // class change in the game UI.
-  for (const element of doc.querySelectorAll<HTMLElement>(MODAL_SELECTOR)) {
-    observer.observe(element, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
-  }
   sync();
-  return () => observer.disconnect();
+  return stop;
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -115,6 +173,19 @@ export function installModalFocusManagement(doc: Document = document): () => voi
   const view = doc.defaultView;
   const returnFocus = new Map<HTMLElement, HTMLElement | null>();
   let open = new Set<HTMLElement>();
+  // Each focused element, and the element it took focus from (focusin's relatedTarget).
+  const focusCameFrom = new WeakMap<Element, Element | null>();
+
+  // Where focus was before the dialog opened. A dialog that focuses its own control as it
+  // opens (PvP, the pop-up's wallet consent) has moved focus before this sees the change,
+  // so follow focus back out of the dialog.
+  const focusBefore = (modal: HTMLElement): HTMLElement | null => {
+    let origin: Element | null = doc.activeElement;
+    for (let step = 0; origin && origin !== doc.body && modal.contains(origin) && step < 8; step++) {
+      origin = focusCameFrom.get(origin) ?? null;
+    }
+    return origin instanceof HTMLElement && origin !== doc.body && !modal.contains(origin) ? origin : null;
+  };
 
   const focusInto = (modal: HTMLElement): void => {
     if (!open.has(modal) || modal.contains(doc.activeElement)) return;
@@ -132,8 +203,7 @@ export function installModalFocusManagement(doc: Document = document): () => voi
     const now = new Set(openModalsInStackOrder(doc));
     for (const modal of now) {
       if (open.has(modal)) continue;
-      const active = doc.activeElement;
-      returnFocus.set(modal, active instanceof HTMLElement && active !== doc.body ? active : null);
+      returnFocus.set(modal, focusBefore(modal));
       // Let the dialog's own open code run first; it may focus a field itself.
       view?.requestAnimationFrame(() => focusInto(modal));
     }
@@ -175,6 +245,9 @@ export function installModalFocusManagement(doc: Document = document): () => voi
   // Backstop for anything the Tab handler misses: focus that lands outside the top dialog
   // while it is open goes back in.
   const handleFocusIn = (event: FocusEvent): void => {
+    if (event.target instanceof Element) {
+      focusCameFrom.set(event.target, event.relatedTarget instanceof Element ? event.relatedTarget : null);
+    }
     const stack = openModalsInStackOrder(doc);
     const top = stack[stack.length - 1];
     if (!top || !(event.target instanceof Node) || top.contains(event.target)) return;
@@ -184,10 +257,7 @@ export function installModalFocusManagement(doc: Document = document): () => voi
     else focusInto(top);
   };
 
-  const observer = new MutationObserver(sync);
-  for (const element of doc.querySelectorAll<HTMLElement>(MODAL_SELECTOR)) {
-    observer.observe(element, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
-  }
+  const stopWatching = watchModals(doc, sync);
   doc.addEventListener('keydown', handleKeydown, { capture: true });
   doc.addEventListener('focusin', handleFocusIn);
   open = new Set(openModalsInStackOrder(doc));
@@ -196,7 +266,7 @@ export function installModalFocusManagement(doc: Document = document): () => voi
     view?.requestAnimationFrame(() => focusInto(modal));
   }
   return () => {
-    observer.disconnect();
+    stopWatching();
     doc.removeEventListener('keydown', handleKeydown, { capture: true });
     doc.removeEventListener('focusin', handleFocusIn);
   };

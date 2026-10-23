@@ -16,6 +16,8 @@ type FeedbackElements = {
 };
 
 type BusyErrorVariant = 'default' | 'danger';
+/** How a message reads: a problem (the default), good news, or a neutral question or notice. */
+type BusyTone = 'error' | 'success' | 'choice';
 
 let elements: FeedbackElements | null = null;
 let initialized = false;
@@ -60,6 +62,37 @@ async function runHandler(handler: (() => void | Promise<void>) | null): Promise
   await handler();
 }
 
+/**
+ * While the pop-up shows buttons it is a dialog like the others (modalState): focus moves in and
+ * back, Tab stays inside, Escape stays with it, and the game behind it gives up its keys.
+ */
+function setBusyDialog(refs: FeedbackElements, dialog: boolean, escapeCloses = true): void {
+  const root = refs.busyRoot;
+  if (!root) return;
+  if (dialog) {
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    root.setAttribute('aria-labelledby', 'busy-overlay-title');
+    root.setAttribute('aria-describedby', 'busy-overlay-status');
+  } else {
+    for (const name of ['role', 'aria-modal', 'aria-labelledby', 'aria-describedby']) root.removeAttribute(name);
+  }
+  if (dialog && !escapeCloses) root.dataset.escapeCloses = 'false';
+  else delete root.dataset.escapeCloses;
+}
+
+/** Retry keeps its green play colour and Close the neutral one; red only marks a button that throws work away. */
+function setBusyButtonRoles(refs: FeedbackElements, destructive?: 'retry' | 'close'): void {
+  if (destructive === 'retry') refs.busyRetry?.setAttribute('data-button-variant', 'danger');
+  else refs.busyRetry?.removeAttribute('data-button-variant');
+  refs.busyClose?.setAttribute('data-button-variant', destructive === 'close' ? 'danger' : 'neutral');
+}
+
+function isBusyDialogOpen(refs: FeedbackElements): boolean {
+  return Boolean(refs.busyRoot && !refs.busyRoot.classList.contains('hidden')
+    && refs.busyRoot.getAttribute('aria-modal') === 'true');
+}
+
 export function initializeAppFeedback(doc: Document = document): void {
   if (initialized) {
     return;
@@ -76,6 +109,15 @@ export function initializeAppFeedback(doc: Document = document): void {
   });
 
   refs.busyClose?.addEventListener('click', () => {
+    void runHandler(busyCloseHandler);
+  });
+
+  // Escape presses Close, and nothing else (the chat, the game) sees it. With dialogs stacked,
+  // or for a choice Escape must not answer, installDialogEscapeGuard handles it first.
+  doc.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !isBusyDialogOpen(refs) || refs.busyRoot?.dataset.escapeCloses === 'false') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
     void runHandler(busyCloseHandler);
   });
 
@@ -150,6 +192,7 @@ export function showBusyOverlay(title: string, status = 'Please wait...', contro
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
   refs.busyRoot?.removeAttribute('data-busy-variant');
+  refs.busyRoot?.removeAttribute('data-busy-tone');
   if (refs.busyTitle) {
     refs.busyTitle.textContent = title;
   }
@@ -163,6 +206,8 @@ export function showBusyOverlay(title: string, status = 'Please wait...', contro
   if (refs.busyClose) refs.busyClose.textContent = 'Close';
   busyRetryHandler = controls?.showCheck === false ? null : controls?.check ?? null;
   busyCloseHandler = controls?.close ?? null;
+  setBusyButtonRoles(refs);
+  setBusyDialog(refs, Boolean(controls));
 }
 
 export function updateBusyOverlay(title: string, status = 'Please wait...'): void {
@@ -175,13 +220,21 @@ export function updateBusyOverlay(title: string, status = 'Please wait...'): voi
   }
 }
 
+/**
+ * Shows a message with buttons. `tone` sets its look: an error (the default), good news, or a
+ * neutral choice. `destructive` names the button that throws work away; only it is red. In a
+ * choice whose Close button is an answer (it has its own handler), Escape picks neither.
+ * The state stays 'error' for every message, since other code reads it as "no spinner".
+ */
 export function showBusyError(
   message: string,
   options: {
     title?: string;
+    tone?: BusyTone;
     variant?: BusyErrorVariant;
     closeLabel?: string;
     retryLabel?: string;
+    destructive?: 'retry' | 'close';
     retryHandler?: (() => void | Promise<void>) | null;
     closeHandler?: (() => void | Promise<void>) | null;
   } = {}
@@ -190,9 +243,11 @@ export function showBusyError(
   const refs = getElements();
   const title = options.title?.trim() || 'Something went wrong';
   const variant = options.variant ?? 'default';
+  const tone = options.tone ?? 'error';
   refs.busyRoot?.classList.remove('hidden');
   refs.busyRoot?.setAttribute('data-busy-state', 'error');
   refs.busyRoot?.setAttribute('data-busy-variant', variant);
+  refs.busyRoot?.setAttribute('data-busy-tone', tone);
   if (refs.busyTitle) {
     refs.busyTitle.textContent = title;
   }
@@ -210,6 +265,8 @@ export function showBusyError(
   }
   refs.busyRetry?.classList.toggle('hidden', !busyRetryHandler);
   refs.busyClose?.classList.toggle('hidden', !busyCloseHandler);
+  setBusyButtonRoles(refs, options.destructive);
+  setBusyDialog(refs, true, !(tone === 'choice' && options.closeHandler));
 }
 
 export function hideBusyOverlay(): void {
@@ -218,6 +275,8 @@ export function hideBusyOverlay(): void {
   refs.busyRoot?.classList.add('hidden');
   refs.busyRoot?.removeAttribute('data-busy-state');
   refs.busyRoot?.removeAttribute('data-busy-variant');
+  refs.busyRoot?.removeAttribute('data-busy-tone');
+  setBusyDialog(refs, false);
   busyRetryHandler = null;
   busyCloseHandler = null;
   if (refs.busyClose) {
@@ -245,11 +304,6 @@ export function requestBusyConfirmation(title: string, message: string, options:
       if (settled) return;
       settled = true;
       options.signal.removeEventListener('abort', abort);
-      refs.busyRoot?.removeEventListener('keydown', onKey);
-      refs.busyRoot?.removeAttribute('role');
-      refs.busyRoot?.removeAttribute('aria-modal');
-      refs.busyRoot?.removeAttribute('aria-labelledby');
-      refs.busyRoot?.removeAttribute('aria-describedby');
       release();
       if (busyDismissHandler === dismiss) {
         busyDismissHandler = null;
@@ -260,24 +314,13 @@ export function requestBusyConfirmation(title: string, message: string, options:
     };
     const abort = () => finish(false);
     const dismiss = () => finish(false);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        (document.activeElement === refs.busyRetry ? refs.busyClose : refs.busyRetry)?.focus();
-      }
-    };
+    // A dialog with controls: Escape cancels, and the shared trap (modalState) keeps Tab inside.
     showBusyOverlay(title, message, { close: () => finish(false), check: () => finish(true) });
     busyDismissHandler = dismiss;
     refs.busyRoot?.setAttribute('data-busy-state', 'confirmation');
-    refs.busyRoot?.setAttribute('role', 'dialog');
-    refs.busyRoot?.setAttribute('aria-modal', 'true');
-    refs.busyRoot?.setAttribute('aria-labelledby', 'busy-overlay-title');
-    refs.busyRoot?.setAttribute('aria-describedby', 'busy-overlay-status');
     refs.busySpinner?.classList.add('hidden');
     refs.busyRetry!.textContent = options.confirmLabel;
     refs.busyClose!.textContent = options.cancelLabel ?? 'Cancel';
-    refs.busyRoot?.addEventListener('keydown', onKey);
     options.signal.addEventListener('abort', abort, { once: true });
     if (options.signal.aborted) finish(false);
     else refs.busyClose?.focus();

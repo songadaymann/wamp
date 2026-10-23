@@ -45,13 +45,13 @@
     </div>
   </div>
   <div id="busy-overlay" class="app-feedback app-busy-overlay hidden" aria-live="polite">
-    <div class="app-feedback-card app-busy-card">
+    <div class="app-feedback-card app-busy-card" tabindex="-1" data-autofocus>
       <div id="busy-overlay-title" class="app-busy-title">Working...</div>
       <div id="busy-overlay-status" class="app-feedback-status">Please wait...</div>
       <div id="busy-overlay-spinner" class="app-busy-spinner" aria-hidden="true"></div>
       <div class="app-busy-actions">
         <button id="btn-busy-retry" class="bar-btn hidden" type="button">Retry</button>
-        <button id="btn-busy-close" class="bar-btn hidden" type="button">Close</button>
+        <button id="btn-busy-close" class="bar-btn hidden" type="button" data-button-variant="neutral">Close</button>
       </div>
     </div>
   </div>

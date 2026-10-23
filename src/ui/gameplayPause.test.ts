@@ -55,11 +55,13 @@ describe('solo pause ownership', () => {
     expect(f.status.textContent).toBe(''); f.destroy();
   });
   it('includes deferred dialogs, removal, background tabs and safe teardown', () => {
-    const f = fixture(), lazy = new FakeElement(true); lazy.classes.delete('hidden'); f.modals.push(lazy);
-    f.callbacks[1]([{ addedNodes: [lazy], removedNodes: [] }] as unknown as MutationRecord[], {} as MutationObserver);
+    // Observers: the menu, then the shared dialog watch (modalState): attributes, page additions.
+    const f = fixture(), lazy = new FakeElement(true), added = f.callbacks[2];
+    lazy.classes.delete('hidden'); f.modals.push(lazy);
+    added([{ addedNodes: [lazy], removedNodes: [] }] as unknown as MutationRecord[], {} as MutationObserver);
     expect(f.request).toHaveBeenLastCalledWith(true);
     f.modals.pop(); lazy.isConnected = false;
-    f.callbacks[1]([{ addedNodes: [], removedNodes: [lazy] }] as unknown as MutationRecord[], {} as MutationObserver);
+    added([{ addedNodes: [], removedNodes: [lazy] }] as unknown as MutationRecord[], {} as MutationObserver);
     expect(f.request).toHaveBeenLastCalledWith(false);
     f.doc.visibilityState = 'hidden'; f.doc.dispatchEvent(new Event('visibilitychange'));
     expect(f.request).toHaveBeenLastCalledWith(true);

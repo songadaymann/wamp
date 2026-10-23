@@ -1168,10 +1168,12 @@ export class EditorRoomSession {
     };
     showBusyError('This device has unsaved changes, and the account draft has changed. Choose which draft to continue editing.', {
       title: 'Recover your room draft',
+      tone: 'choice',
       retryLabel: 'Restore Local',
       retryHandler: () => resolve(true),
       closeLabel: 'Use Account Draft',
       closeHandler: () => resolve(false),
+      destructive: 'close',
     });
   }
 
@@ -1295,6 +1297,8 @@ export class EditorRoomSession {
         + 'Keep Mine saves the version here over it.',
       {
         title: 'This Room Changed Somewhere Else',
+        tone: 'choice',
+        destructive: 'retry',
         retryLabel: 'Load Latest',
         retryHandler: () => this.resolveEditConflict(generation, 'load-latest'),
         closeLabel: 'Keep Mine',

@@ -11,10 +11,12 @@ export function chooseLocalDraftRecovery(label: string): Promise<boolean> {
       `The account draft for ${label} changed after this device's backup was made. Restore the local changes for review, or use the account draft?`,
       {
         title: 'Recover unsaved changes?',
+        tone: 'choice',
         retryLabel: 'Restore Local',
         retryHandler: () => finish(true),
         closeLabel: 'Use Account Draft',
         closeHandler: () => finish(false),
+        destructive: 'close',
       },
     );
   });

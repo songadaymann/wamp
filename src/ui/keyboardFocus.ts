@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { hasBlockingModalOpen } from './modalState';
+import { hasBlockingModalOpen, watchModals } from './modalState';
 
 function isEditableInputType(type: string): boolean {
   const normalized = type.toLowerCase();
@@ -129,9 +129,5 @@ export function syncGameKeyboardFocus(game: Phaser.Game): void {
  * handled where the game is created; a dialog can open without moving focus.
  */
 export function installDialogKeyboardSync(game: Phaser.Game, doc: Document = document): () => void {
-  const observer = new MutationObserver(() => syncGameKeyboardFocus(game));
-  for (const element of doc.querySelectorAll('.history-modal')) {
-    observer.observe(element, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
-  }
-  return () => observer.disconnect();
+  return watchModals(doc, () => syncGameKeyboardFocus(game));
 }

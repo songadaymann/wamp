@@ -2128,8 +2128,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     // Cells that could not be backed up would fail every Save, so offer to take the newer version now.
     const lost = progress.conflicts.filter((conflict) => !conflict.kept).map((conflict) => conflict.roomId);
     showBusyError(this.statusText, lost.length === 0 ? { title: 'Changed somewhere else' } : {
-      title: 'Changed somewhere else', retryLabel: 'Load Newer Version', closeLabel: 'Keep Editing',
-      retryHandler: () => this.loadNewerSliceVersions(lost),
+      title: 'Changed somewhere else', tone: 'choice', retryLabel: 'Load Newer Version', closeLabel: 'Keep Editing',
+      destructive: 'retry', retryHandler: () => this.loadNewerSliceVersions(lost),
     });
     this.renderUi();
     return null;
