@@ -15,6 +15,7 @@ import {
   validatePlaylistSlug,
   validatePlaylistTitle,
 } from '../../../playlists/model';
+import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
@@ -23,7 +24,6 @@ import {
   loadPublishedExpandedRoomMembershipsForRoomIds,
   resolveExpandedRoomAtCoordinates,
 } from '../expandedRooms/store';
-import { parseStoredSnapshot } from '../rooms/store';
 
 interface PlaylistRow {
   id: string;
@@ -47,7 +47,9 @@ interface PlaylistItemRow {
   room_x: number | string | null;
   room_y: number | string | null;
   version_title: string | null;
-  snapshot_json: string;
+  snapshot_title: unknown;
+  goal_type: unknown;
+  published_at: unknown;
   version_created_at: string | null;
 }
 
@@ -62,10 +64,37 @@ interface PublishedRoomVersionRow {
   room_version: number | string | null;
   room_x: number | string | null;
   room_y: number | string | null;
+  redacted_at: string | null;
 }
 
 const PROFILE_PLAYLIST_LIMIT = 12;
-const MY_PLAYLIST_LIMIT = 50;
+/** "My playlists" lists up to this many, so an account can have this many and see them all. */
+const PLAYLISTS_PER_ACCOUNT = 50;
+const ROOMS_PER_PLAYLIST = 200;
+
+/** Items whose stored version can be read; the page and every count use the same test. */
+const READABLE_ITEM_VERSION = 'json_valid(room_versions.snapshot_json)';
+
+const PLAYLIST_SUMMARY_COLUMNS = `
+  room_playlists.id,
+  room_playlists.owner_user_id,
+  users.display_name AS owner_display_name,
+  users.username AS owner_username,
+  room_playlists.title,
+  room_playlists.slug,
+  room_playlists.description,
+  room_playlists.created_at,
+  room_playlists.updated_at,
+  (
+    SELECT COUNT(*)
+    FROM room_playlist_items
+    INNER JOIN room_versions
+      ON room_versions.room_id = room_playlist_items.room_id
+     AND room_versions.version = room_playlist_items.room_version
+    WHERE room_playlist_items.playlist_id = room_playlists.id
+      AND ${READABLE_ITEM_VERSION}
+  ) AS room_count
+`;
 
 export async function loadPublicPlaylistSummariesForUser(
   env: Env,
@@ -74,34 +103,12 @@ export async function loadPublicPlaylistSummariesForUser(
 ): Promise<RoomPlaylistSummary[]> {
   const rows = await env.DB.prepare(
     `
-      SELECT
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name AS owner_display_name,
-        users.username AS owner_username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at,
-        COUNT(room_playlist_items.id) AS room_count
+      SELECT ${PLAYLIST_SUMMARY_COLUMNS}
       FROM room_playlists
       INNER JOIN users
         ON users.id = room_playlists.owner_user_id
-      LEFT JOIN room_playlist_items
-        ON room_playlist_items.playlist_id = room_playlists.id
       WHERE room_playlists.owner_user_id = ?
         AND room_playlists.visibility = 'public'
-      GROUP BY
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name,
-        users.username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at
       ORDER BY room_playlists.updated_at DESC, room_playlists.created_at DESC
       LIMIT ?
     `
@@ -116,7 +123,7 @@ export async function loadMyPlaylistSummaries(
   env: Env,
   userId: string,
 ): Promise<RoomPlaylistSummary[]> {
-  return loadPublicPlaylistSummariesForUser(env, userId, MY_PLAYLIST_LIMIT);
+  return loadPublicPlaylistSummariesForUser(env, userId, PLAYLISTS_PER_ACCOUNT);
 }
 
 export async function loadPlaylistBySlug(
@@ -131,34 +138,12 @@ export async function loadPlaylistBySlug(
 
   const row = await env.DB.prepare(
     `
-      SELECT
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name AS owner_display_name,
-        users.username AS owner_username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at,
-        COUNT(room_playlist_items.id) AS room_count
+      SELECT ${PLAYLIST_SUMMARY_COLUMNS}
       FROM room_playlists
       INNER JOIN users
         ON users.id = room_playlists.owner_user_id
-      LEFT JOIN room_playlist_items
-        ON room_playlist_items.playlist_id = room_playlists.id
       WHERE room_playlists.slug = ?
         AND room_playlists.visibility = 'public'
-      GROUP BY
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name,
-        users.username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at
       LIMIT 1
     `
   )
@@ -186,35 +171,13 @@ export async function loadPlaylistByIdForOwner(
 ): Promise<RoomPlaylistResponse | null> {
   const row = await env.DB.prepare(
     `
-      SELECT
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name AS owner_display_name,
-        users.username AS owner_username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at,
-        COUNT(room_playlist_items.id) AS room_count
+      SELECT ${PLAYLIST_SUMMARY_COLUMNS}
       FROM room_playlists
       INNER JOIN users
         ON users.id = room_playlists.owner_user_id
-      LEFT JOIN room_playlist_items
-        ON room_playlist_items.playlist_id = room_playlists.id
       WHERE room_playlists.id = ?
         AND room_playlists.owner_user_id = ?
         AND room_playlists.visibility = 'public'
-      GROUP BY
-        room_playlists.id,
-        room_playlists.owner_user_id,
-        users.display_name,
-        users.username,
-        room_playlists.title,
-        room_playlists.slug,
-        room_playlists.description,
-        room_playlists.created_at,
-        room_playlists.updated_at
       LIMIT 1
     `
   )
@@ -261,26 +224,35 @@ export async function createRoomPlaylist(
     throw new HttpError(400, slugValidation);
   }
 
-  const slug = await claimUniquePlaylistSlug(env, requestedSlug);
   const now = new Date().toISOString();
   const playlistId = crypto.randomUUID();
-  await env.DB.prepare(
-    `
-      INSERT INTO room_playlists (
-        id,
-        owner_user_id,
-        title,
-        slug,
-        description,
-        visibility,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, 'public', ?, ?)
-    `
-  )
-    .bind(playlistId, owner.id, title, slug, description, now, now)
-    .all();
+  await claimUniquePlaylistSlug(requestedSlug, async (slug) => {
+    // One statement checks the account's count and the name, so parallel creates cannot pass either.
+    const created = await env.DB.prepare(
+      `
+        INSERT OR IGNORE INTO room_playlists (
+          id,
+          owner_user_id,
+          title,
+          slug,
+          description,
+          visibility,
+          created_at,
+          updated_at
+        )
+        SELECT ?, ?, ?, ?, ?, 'public', ?, ?
+        WHERE (SELECT COUNT(*) FROM room_playlists WHERE owner_user_id = ?) < ?
+        RETURNING id
+      `
+    )
+      .bind(playlistId, owner.id, title, slug, description, now, now, owner.id, PLAYLISTS_PER_ACCOUNT)
+      .first<{ id: string }>();
+    if (created) return true;
+    if (await countOwnedPlaylists(env, owner.id) >= PLAYLISTS_PER_ACCOUNT) {
+      throw new HttpError(409, `You can have up to ${PLAYLISTS_PER_ACCOUNT} playlists. Delete one to make another.`);
+    }
+    return false;
+  });
 
   const playlist = await loadPlaylistByIdForOwner(env, playlistId, owner.id);
   if (!playlist) {
@@ -327,22 +299,29 @@ export async function updateRoomPlaylist(
   if (slugValidation) {
     throw new HttpError(400, slugValidation);
   }
-  const slug =
-    requestedSlug === existing.slug
-      ? existing.slug
-      : await claimUniquePlaylistSlug(env, requestedSlug);
   const now = new Date().toISOString();
-
-  await env.DB.prepare(
-    `
-      UPDATE room_playlists
-      SET title = ?, slug = ?, description = ?, updated_at = ?
-      WHERE id = ?
-        AND owner_user_id = ?
-    `
-  )
-    .bind(title, slug, description, now, playlistId, owner.id)
-    .all();
+  const saveAs = async (slug: string): Promise<boolean> => {
+    // OR IGNORE: a name another playlist took a moment ago leaves this row alone.
+    const saved = await env.DB.prepare(
+      `
+        UPDATE OR IGNORE room_playlists
+        SET title = ?, slug = ?, description = ?, updated_at = ?
+        WHERE id = ?
+          AND owner_user_id = ?
+        RETURNING id
+      `
+    )
+      .bind(title, slug, description, now, playlistId, owner.id)
+      .first<{ id: string }>();
+    if (saved) return true;
+    await requirePlaylistOwner(env, playlistId, owner.id);
+    return false;
+  };
+  if (requestedSlug === existing.slug) {
+    await saveAs(existing.slug);
+  } else {
+    await claimUniquePlaylistSlug(requestedSlug, saveAs);
+  }
 
   const playlist = await loadPlaylistByIdForOwner(env, playlistId, owner.id);
   if (!playlist) {
@@ -388,6 +367,9 @@ export async function addRoomToPlaylist(
   if (!room) {
     throw new HttpError(404, 'Published room version not found.');
   }
+  if (room.redacted_at) {
+    throw new HttpError(409, 'That room version was hidden by moderation and cannot be added to a playlist.');
+  }
 
   const storedRoomCoordinates = {
     x: parseRowNumber(room.room_x),
@@ -412,33 +394,43 @@ export async function addRoomToPlaylist(
   }
 
   const now = new Date().toISOString();
-  const itemId = crypto.randomUUID();
-  const position = await loadNextPlaylistPosition(env, playlistId);
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT OR IGNORE INTO room_playlist_items (
-          id,
-          playlist_id,
-          room_id,
-          room_version,
-          position,
-          added_by_user_id,
-          added_at,
-          note
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
-      `
-    ).bind(itemId, playlistId, room.room_id, storedRoomVersion, position, owner.id, now),
-    env.DB.prepare(
+  // One statement picks the next position and checks the room count, so parallel adds get their own.
+  const added = await env.DB.prepare(
+    `
+      INSERT OR IGNORE INTO room_playlist_items (
+        id,
+        playlist_id,
+        room_id,
+        room_version,
+        position,
+        added_by_user_id,
+        added_at,
+        note
+      )
+      SELECT ?, ?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM room_playlist_items WHERE playlist_id = ?), ?, ?, NULL
+      WHERE (SELECT COUNT(*) FROM room_playlist_items WHERE playlist_id = ?) < ?
+      RETURNING id
+    `
+  )
+    .bind(
+      crypto.randomUUID(), playlistId, room.room_id, storedRoomVersion, playlistId, owner.id, now,
+      playlistId, ROOMS_PER_PLAYLIST,
+    )
+    .first<{ id: string }>();
+  if (added) {
+    await env.DB.prepare(
       `
         UPDATE room_playlists
         SET updated_at = ?
         WHERE id = ?
           AND owner_user_id = ?
       `
-    ).bind(now, playlistId, owner.id),
-  ]);
+    )
+      .bind(now, playlistId, owner.id)
+      .all();
+  } else if (await countPlaylistItems(env, playlistId) >= ROOMS_PER_PLAYLIST) {
+    throw new HttpError(409, `A playlist can hold up to ${ROOMS_PER_PLAYLIST} rooms.`);
+  }
 
   const playlist = await loadPlaylistByIdForOwner(env, playlistId, owner.id);
   if (!playlist) {
@@ -494,7 +486,9 @@ async function loadPlaylistItems(env: Env, playlistId: string): Promise<RoomPlay
         rooms.x AS room_x,
         rooms.y AS room_y,
         room_versions.title AS version_title,
-        room_versions.snapshot_json,
+        json_extract(room_versions.snapshot_json, '$.title') AS snapshot_title,
+        COALESCE(room_versions.goal_type, json_extract(room_versions.snapshot_json, '$.goal.type')) AS goal_type,
+        json_extract(room_versions.snapshot_json, '$.publishedAt') AS published_at,
         room_versions.created_at AS version_created_at
       FROM room_playlist_items
       INNER JOIN rooms
@@ -503,21 +497,15 @@ async function loadPlaylistItems(env: Env, playlistId: string): Promise<RoomPlay
         ON room_versions.room_id = room_playlist_items.room_id
        AND room_versions.version = room_playlist_items.room_version
       WHERE room_playlist_items.playlist_id = ?
+        AND ${READABLE_ITEM_VERSION}
       ORDER BY room_playlist_items.position ASC, room_playlist_items.added_at ASC
     `
   )
     .bind(playlistId)
     .all<PlaylistItemRow>();
 
-  const items: RoomPlaylistItem[] = [];
-  for (const row of rows.results) {
-    try {
-      items.push(mapPlaylistItemRow(row));
-    } catch (error) {
-      console.warn('Skipping malformed playlist room item.', row.id, error);
-    }
-  }
-  return hydratePlaylistItemsWithExpandedRooms(env, items);
+  // The few fields shown are read in the query, so a view never loads or parses whole rooms.
+  return hydratePlaylistItemsWithExpandedRooms(env, rows.results.map(mapPlaylistItemRow));
 }
 
 async function hydratePlaylistSummaryCounts(
@@ -584,6 +572,7 @@ async function loadPlaylistCountItemRows(
         ON room_versions.room_id = room_playlist_items.room_id
        AND room_versions.version = room_playlist_items.room_version
       WHERE room_playlist_items.playlist_id IN (${placeholders})
+        AND ${READABLE_ITEM_VERSION}
       ORDER BY room_playlist_items.playlist_id ASC, room_playlist_items.position ASC, room_playlist_items.added_at ASC
     `,
   )
@@ -605,7 +594,8 @@ async function loadPublishedRoomVersionForPlaylist(
         rooms.id AS room_id,
         room_versions.version AS room_version,
         rooms.x AS room_x,
-        rooms.y AS room_y
+        rooms.y AS room_y,
+        room_versions.redacted_at
       FROM rooms
       INNER JOIN room_versions
         ON room_versions.room_id = rooms.id
@@ -643,24 +633,22 @@ async function requirePlaylistOwner(
   }
 }
 
-async function claimUniquePlaylistSlug(env: Env, requestedSlug: string): Promise<string> {
+/**
+ * Offers the requested URL name, then numbered ones, to `save` until it stores one. `save` writes
+ * in a single statement that leaves a taken name alone and returns false, so a name another
+ * request took a moment earlier moves on to the next number instead of failing.
+ */
+async function claimUniquePlaylistSlug(
+  requestedSlug: string,
+  save: (slug: string) => Promise<boolean>,
+): Promise<string> {
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate =
       suffix === 0
         ? requestedSlug
         // A cut that ends at a hyphen would give "--", which the link's lookup folds to "-".
         : `${requestedSlug.slice(0, Math.max(1, 47 - String(suffix).length)).replace(/-+$/, '')}-${suffix}`;
-    const existing = await env.DB.prepare(
-      `
-        SELECT 1 AS found
-        FROM room_playlists
-        WHERE slug = ?
-        LIMIT 1
-      `
-    )
-      .bind(candidate)
-      .first<{ found: number | string | null }>();
-    if (Number(existing?.found ?? 0) !== 1) {
+    if (await save(candidate)) {
       return candidate;
     }
   }
@@ -668,18 +656,18 @@ async function claimUniquePlaylistSlug(env: Env, requestedSlug: string): Promise
   throw new HttpError(409, 'Could not find an available playlist URL name.');
 }
 
-async function loadNextPlaylistPosition(env: Env, playlistId: string): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COALESCE(MAX(position), -1) + 1 AS next_position
-      FROM room_playlist_items
-      WHERE playlist_id = ?
-    `
-  )
-    .bind(playlistId)
-    .first<{ next_position: number | string | null }>();
+async function countOwnedPlaylists(env: Env, ownerUserId: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM room_playlists WHERE owner_user_id = ?')
+    .bind(ownerUserId)
+    .first<{ count: number | string | null }>();
+  return parseRowNumber(row?.count);
+}
 
-  return parseRowNumber(row?.next_position);
+async function countPlaylistItems(env: Env, playlistId: string): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM room_playlist_items WHERE playlist_id = ?')
+    .bind(playlistId)
+    .first<{ count: number | string | null }>();
+  return parseRowNumber(row?.count);
 }
 
 function mapPlaylistSummaryRow(row: PlaylistRow): RoomPlaylistSummary {
@@ -698,8 +686,8 @@ function mapPlaylistSummaryRow(row: PlaylistRow): RoomPlaylistSummary {
 }
 
 function mapPlaylistItemRow(row: PlaylistItemRow): RoomPlaylistItem {
-  const snapshot = parseStoredSnapshot(row.snapshot_json, 'playlist room');
   const roomVersion = parseRowNumber(row.room_version);
+  const snapshotTitle = typeof row.snapshot_title === 'string' ? row.snapshot_title.trim() : '';
   return {
     id: row.id,
     roomId: row.room_id,
@@ -707,10 +695,10 @@ function mapPlaylistItemRow(row: PlaylistItemRow): RoomPlaylistItem {
       x: parseRowNumber(row.room_x),
       y: parseRowNumber(row.room_y),
     },
-    roomTitle: row.version_title?.trim() || snapshot.title?.trim() || null,
+    roomTitle: row.version_title?.trim() || snapshotTitle || null,
     roomVersion,
-    goalType: snapshot.goal?.type ?? null,
-    publishedAt: snapshot.publishedAt ?? row.version_created_at,
+    goalType: normalizeItemGoalType(row.goal_type),
+    publishedAt: typeof row.published_at === 'string' ? row.published_at : row.version_created_at,
     position: parseRowNumber(row.position),
     addedAt: row.added_at,
     expandedRoom: null,
@@ -851,6 +839,10 @@ function getExpandedRoomPlaylistTargetKey(target: ResolvedExpandedRoomTarget): s
 
 function getStandalonePlaylistTargetKey(roomId: string, roomVersion: number): string {
   return `room:${roomId}:v${roomVersion}`;
+}
+
+function normalizeItemGoalType(value: unknown): RoomGoalType | null {
+  return ROOM_GOAL_TYPES.find((type) => type === value) ?? null;
 }
 
 function normalizeResolvedRoomVersion(value: unknown): number | null {

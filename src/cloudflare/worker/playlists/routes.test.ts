@@ -3,6 +3,8 @@ import type { RoomPlaylistItem, RoomPlaylistListResponse, RoomPlaylistResponse }
 import worker from '../../worker';
 import { NOW } from '../activity/testDatabase';
 import { API_TOKEN_PREFIX, createApiTokenForUser, createSession, generateOpaqueToken, hashToken } from '../auth/store';
+import { hashRateLimitKey } from '../core/rateLimit';
+import type { WorkerExecutionContextLike } from '../core/types';
 import { discoveryFixture } from '../runs/discoveryTestDatabase';
 import { loadPublicPlaylistSummariesForUser } from './store';
 
@@ -11,13 +13,13 @@ import { loadPublicPlaylistSummariesForUser } from './store';
 let f: ReturnType<typeof discoveryFixture>;
 let sessions: Map<string, string>;
 beforeEach(() => { f = discoveryFixture(); sessions = new Map(); });
-afterEach(() => { vi.restoreAllMocks(); f.sqlite.close(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); f.sqlite.close(); });
 
 type Caller = string | null | { bearer: string };
 type Body = RoomPlaylistResponse & { error?: string };
-interface CallOptions { as?: Caller; body?: unknown; origin?: string }
+interface CallOptions { as?: Caller; body?: unknown; origin?: string; context?: WorkerExecutionContextLike }
 
-async function call<T = Body>(method: string, path: string, options: CallOptions = {}): Promise<{ status: number; body: T }> {
+async function call<T = Body>(method: string, path: string, options: CallOptions = {}): Promise<{ status: number; body: T; headers: Headers }> {
   const headers = new Headers({ Origin: options.origin ?? 'https://wamp.land' });
   const caller = options.as === undefined ? 'p1' : options.as;
   if (typeof caller === 'string') {
@@ -31,8 +33,8 @@ async function call<T = Body>(method: string, path: string, options: CallOptions
     headers.set('Content-Type', 'application/json');
     body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
   }
-  const response = await worker.fetch(new Request(`https://api.wamp.land${path}`, { method, headers, body }), f.env);
-  return { status: response.status, body: await response.json() as T };
+  const response = await worker.fetch(new Request(`https://api.wamp.land${path}`, { method, headers, body }), f.env, options.context);
+  return { status: response.status, body: await response.json() as T, headers: response.headers };
 }
 const create = (body: unknown, as?: Caller) => call('POST', '/api/playlists', { body, as });
 const update = (id: string, body: unknown, as?: Caller) => call('PATCH', `/api/playlists/${id}`, { body, as });
@@ -41,7 +43,8 @@ const add = (id: string, x: number, roomVersion = 1, as?: Caller) =>
   call('POST', `/api/playlists/${id}/items`, { body: { roomId: `${x},0`, roomCoordinates: { x, y: 0 }, roomVersion }, as });
 const addBody = (id: string, body: unknown) => call('POST', `/api/playlists/${id}/items`, { body });
 const removeItem = (id: string, itemId: string, as?: Caller) => call('DELETE', `/api/playlists/${id}/items/${itemId}`, { as });
-const bySlug = (slug: string, as: Caller = null) => call('GET', `/api/playlists/by-slug/${slug}`, { as });
+const bySlug = (slug: string, as: Caller = null, context?: WorkerExecutionContextLike) =>
+  call('GET', `/api/playlists/by-slug/${slug}`, { as, context });
 const mine = (as: Caller = 'p1') => call<RoomPlaylistListResponse & { error?: string }>('GET', '/api/playlists/me', { as });
 
 async function made(title = 'Mix', as?: Caller): Promise<RoomPlaylistResponse> {
@@ -55,6 +58,17 @@ const insertItem = (playlistId: string, roomId: string, version: number, positio
   (id,playlist_id,room_id,room_version,position,added_by_user_id,added_at) VALUES (?,?,?,?,?,'p1',?)`).run(crypto.randomUUID(), playlistId, roomId, version, position, NOW);
 const insertPlaylist = (slug: string, owner = 'p2', updatedAt = NOW) => f.sqlite.prepare(`INSERT INTO room_playlists
   (id,owner_user_id,title,slug,visibility,created_at,updated_at) VALUES (?,?,?,?,'public',?,?)`).run(crypto.randomUUID(), owner, slug, slug, NOW, updatedAt);
+
+/** Runs `write` once, just before the next statement matching `sql`, as another request would. */
+function beforeStatement(sql: RegExp, write: () => void): void {
+  const database = f.env.DB;
+  const prepare = (Object.getPrototypeOf(database) as typeof database).prepare.bind(database);
+  let pending = true;
+  vi.spyOn(database, 'prepare').mockImplementation((query: string) => {
+    if (pending && sql.test(query)) { pending = false; write(); }
+    return prepare(query);
+  });
+}
 
 async function apiToken(scopes: Array<'rooms:read' | 'rooms:write'>): Promise<{ bearer: string }> {
   const token = API_TOKEN_PREFIX + generateOpaqueToken(32);
@@ -106,7 +120,7 @@ describe('playlist routes: making, editing and deleting', () => {
   it('stops numbering after 99 clashes', async () => {
     insertPlaylist('mix');
     for (let suffix = 1; suffix <= 99; suffix += 1) insertPlaylist(`mix-${suffix}`);
-    expect(await create({ title: 'Mix' })).toEqual({ status: 409, body: { error: 'Could not find an available playlist URL name.' } });
+    expect(await create({ title: 'Mix' })).toMatchObject({ status: 409, body: { error: 'Could not find an available playlist URL name.' } });
     expect(count('room_playlists')).toBe(100);
   });
 
@@ -121,7 +135,7 @@ describe('playlist routes: making, editing and deleting', () => {
       [{ title: 'Mix', slug: '!!' }, 'Playlist URL name is required.'],
       ['{"title":', 'Request body must be valid JSON.'],
     ] as const;
-    for (const [body, error] of refused) expect(await create(body)).toEqual({ status: 400, body: { error } });
+    for (const [body, error] of refused) expect(await create(body)).toMatchObject({ status: 400, body: { error } });
     expect(count('room_playlists')).toBe(0);
     expect((await create({ title: 'x'.repeat(60), description: 'd'.repeat(280) })).status).toBe(201);
   });
@@ -147,7 +161,7 @@ describe('playlist routes: making, editing and deleting', () => {
   it('deletes a playlist together with its rooms', async () => {
     const playlist = await made();
     await add(playlist.id, 1);
-    expect(await remove(playlist.id)).toEqual({ status: 200, body: { ok: true } });
+    expect(await remove(playlist.id)).toMatchObject({ status: 200, body: { ok: true } });
     expect((await bySlug('mix')).status).toBe(404);
     expect((await mine()).body.playlists).toEqual([]);
     expect(count('room_playlist_items')).toBe(0);
@@ -155,8 +169,8 @@ describe('playlist routes: making, editing and deleting', () => {
   });
 
   it('refuses an invalid URL name and reports an unknown one as not found', async () => {
-    expect(await bySlug('ab')).toEqual({ status: 400, body: { error: 'Playlist URL name must be 3-48 characters.' } });
-    expect(await bySlug('no-such-playlist')).toEqual({ status: 404, body: { error: 'Playlist not found.' } });
+    expect(await bySlug('ab')).toMatchObject({ status: 400, body: { error: 'Playlist URL name must be 3-48 characters.' } });
+    expect(await bySlug('no-such-playlist')).toMatchObject({ status: 404, body: { error: 'Playlist not found.' } });
   });
 
   it("lists up to 50 of a player's playlists, most recently changed first", async () => {
@@ -193,7 +207,7 @@ describe('playlist routes: who can change a playlist', () => {
     for (const response of [
       await update(playlist.id, { title: 'Hijacked' }, 'p2'), await remove(playlist.id, 'p2'),
       await add(playlist.id, 2, 1, 'p2'), await removeItem(playlist.id, itemId, 'p2'),
-    ]) expect(response).toEqual({ status: 404, body: { error: 'Playlist not found.' } });
+    ]) expect(response).toMatchObject({ status: 404, body: { error: 'Playlist not found.' } });
     expect((await bySlug('mix')).body).toMatchObject({ title: 'Mix', items: [expect.objectContaining({ id: itemId })] });
     expect((await mine('p2')).body.playlists).toEqual([]);
   });
@@ -215,7 +229,7 @@ describe('playlist routes: who can change a playlist', () => {
       VALUES ('student-1','class-1','p3','ada','hash',0,?,?,?)`).run(NOW, NOW, NOW);
     insertPlaylist('from-before', 'p3');
     const { id } = f.sqlite.prepare("SELECT id FROM room_playlists WHERE slug = 'from-before'").get() as { id: string };
-    expect(await create({ title: 'Mine' }, 'p3')).toEqual({ status: 403, body: { error: 'School-managed student accounts cannot create playlists.' } });
+    expect(await create({ title: 'Mine' }, 'p3')).toMatchObject({ status: 403, body: { error: 'School-managed student accounts cannot create playlists.' } });
     expect((await update(id, { title: 'Renamed' }, 'p3')).status).toBe(403);
     expect((await add(id, 1, 1, 'p3')).status).toBe(403);
     expect((await bySlug('from-before', 'p3')).body).toMatchObject({ title: 'from-before', roomCount: 0 });
@@ -276,13 +290,13 @@ describe('playlist rooms', () => {
       [{ roomId: '1,0', roomVersion: 1 }, 'roomCoordinates are required.'],
       [{ roomId: '1,0', roomCoordinates: { x: 1.5, y: 0 }, roomVersion: 1 }, 'roomCoordinates must be integers.'],
     ] as const;
-    for (const [body, error] of malformed) expect(await addBody(playlist.id, body)).toEqual({ status: 400, body: { error } });
+    for (const [body, error] of malformed) expect(await addBody(playlist.id, body)).toMatchObject({ status: 400, body: { error } });
     for (const body of [
       { roomId: '1,0', roomCoordinates: { x: 2, y: 0 }, roomVersion: 1 },
       { roomId: '1,0', roomCoordinates: { x: 1, y: 0 }, roomVersion: 9 },
       { roomId: '20,0', roomCoordinates: { x: 20, y: 0 }, roomVersion: 1 },
       { roomId: '99,0', roomCoordinates: { x: 99, y: 0 }, roomVersion: 1 },
-    ]) expect(await addBody(playlist.id, body)).toEqual({ status: 404, body: { error: 'Published room version not found.' } });
+    ]) expect(await addBody(playlist.id, body)).toMatchObject({ status: 404, body: { error: 'Published room version not found.' } });
     expect(count('room_playlist_items')).toBe(0);
   });
 
@@ -300,8 +314,7 @@ describe('playlist rooms', () => {
     expect((await bySlug('mix')).body.items).toEqual([expect.objectContaining({ roomId: '1,0', roomTitle: 'Hidden by moderation' })]);
   });
 
-  it('leaves out a room whose stored version cannot be read, without failing the page', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('leaves out a room whose stored version cannot be read, on the page and in "my playlists"', async () => {
     const playlist = await made();
     for (const x of [1, 2, 3]) await add(playlist.id, x);
     f.sqlite.prepare("UPDATE room_versions SET snapshot_json = 'not json' WHERE room_id = '2,0'").run();
@@ -309,7 +322,146 @@ describe('playlist rooms', () => {
     expect(status).toBe(200);
     expect(roomIds(body.items)).toEqual(['1,0', '3,0']);
     expect(body.roomCount).toBe(2);
-    expect(warn).toHaveBeenCalledWith('Skipping malformed playlist room item.', expect.any(String), expect.anything());
+    expect((await mine()).body.playlists[0].roomCount).toBe(2);
+    f.env.EXPANDED_ROOMS_ENABLED = 'off';
+    expect((await mine()).body.playlists[0].roomCount).toBe(2);
+  });
+
+  it("reads each room's title and goal from its version row, falling back to the stored room", async () => {
+    const playlist = await made();
+    await add(playlist.id, 1);
+    await add(playlist.id, 2);
+    f.sqlite.prepare("UPDATE room_versions SET goal_type = 'survival' WHERE room_id = '1,0'").run();
+    f.sqlite.prepare("UPDATE room_versions SET title = NULL, goal_type = NULL WHERE room_id = '2,0'").run();
+    expect((await bySlug('mix')).body.items.map((item) => [item.roomTitle, item.goalType, item.publishedAt])).toEqual([
+      ['Public room 1', 'survival', NOW], ['Public room 2', 'reach_exit', NOW],
+    ]);
+  });
+
+  it('refuses a room version hidden by moderation', async () => {
+    const playlist = await made();
+    f.sqlite.prepare("UPDATE room_versions SET redacted_at = ?, redacted_title = title, title = 'Hidden by moderation' WHERE room_id = '1,0'").run(NOW);
+    expect(await add(playlist.id, 1)).toMatchObject({
+      status: 409, body: { error: 'That room version was hidden by moderation and cannot be added to a playlist.' },
+    });
+    expect(count('room_playlist_items')).toBe(0);
+  });
+
+  it('gives rooms added at the same moment their own places', async () => {
+    const playlist = await made();
+    beforeStatement(/INTO room_playlist_items/, () => insertItem(playlist.id, '2,0', 1, 0));
+    expect((await add(playlist.id, 1)).body.items.map((item) => [item.roomId, item.position])).toEqual([['2,0', 0], ['1,0', 1]]);
+    const results = await Promise.all([3, 4, 5].map((x) => add(playlist.id, x)));
+    expect(results.map((result) => result.status)).toEqual([201, 201, 201]);
+    expect((await bySlug('mix')).body.items.map((item) => item.position)).toEqual([0, 1, 2, 3, 4]);
+  });
+});
+
+describe('playlist limits', () => {
+  const playlistKey = () => hashRateLimitKey(f.env, 'playlist-user:p1');
+  async function fill(bucket: string, slots: number) {
+    const key = await playlistKey();
+    const insert = f.sqlite.prepare('INSERT INTO rate_limit_events (bucket, key_hash, created_at) VALUES (?, ?, ?)');
+    for (let index = 0; index < slots; index += 1) insert.run(bucket, key, new Date().toISOString());
+  }
+
+  it('limits playlists per account', async () => {
+    for (let index = 0; index < 49; index += 1) insertPlaylist(`kept-${index}`, 'p1');
+    const fiftieth = await made('Fiftieth');
+    expect(await create({ title: 'One more' })).toMatchObject({
+      status: 409, body: { error: 'You can have up to 50 playlists. Delete one to make another.' },
+    });
+    expect(count("room_playlists WHERE owner_user_id = 'p1'")).toBe(50);
+    expect((await mine()).body.playlists).toHaveLength(50);
+    expect((await made('Mine', 'p2')).slug).toBe('mine');
+    expect((await remove(fiftieth.id)).status).toBe(200);
+    expect((await made('One more')).slug).toBe('one-more');
+  });
+
+  it('limits rooms per playlist', async () => {
+    const playlist = await made();
+    const insertRoom = f.sqlite.prepare("INSERT INTO rooms (id,x,y,draft_json,published_json,claimer_user_id) VALUES (?,?,0,?,?,'builder')");
+    const insertVersion = f.sqlite.prepare('INSERT INTO room_versions (room_id,version,snapshot_json,title,created_at) VALUES (?,1,?,?,?)');
+    for (let x = 20; x < 221; x += 1) {
+      const json = JSON.stringify({ ...f.record.published!, id: `${x},0`, coordinates: { x, y: 0 }, title: `Room ${x}` });
+      insertRoom.run(`${x},0`, x, json, json);
+      insertVersion.run(`${x},0`, json, `Room ${x}`, NOW);
+      if (x < 219) insertItem(playlist.id, `${x},0`, 1, x - 20);
+    }
+    const { status, body } = await add(playlist.id, 219);
+    expect(status).toBe(201);
+    expect(body.roomCount).toBe(200);
+    expect(body.items.at(-1)).toMatchObject({ roomId: '219,0', position: 199 });
+    expect(await add(playlist.id, 220)).toMatchObject({ status: 409, body: { error: 'A playlist can hold up to 200 rooms.' } });
+    // A room already in a full playlist is still a quiet no-op.
+    expect((await add(playlist.id, 20)).status).toBe(201);
+    await removeItem(playlist.id, body.items[0].id);
+    expect((await add(playlist.id, 220)).body.roomCount).toBe(200);
+  }, 15_000);
+
+  it('limits how often an account makes and changes playlists, but never deleting', async () => {
+    const playlist = await made();
+    await fill('playlist:create-hour', 19);
+    expect(await create({ title: 'Too many' })).toMatchObject({ status: 429, body: { error: 'You have made a lot of playlists lately. Try again later.' } });
+    expect((await update(playlist.id, { title: 'Renamed' })).status).toBe(200);
+    expect((await add(playlist.id, 1)).status).toBe(201);
+
+    await fill('playlist:write-hour', 297);
+    const tooOften = { status: 429, body: { error: 'You have changed your playlists a lot lately. Try again later.' } };
+    expect(await update(playlist.id, { title: 'Again' })).toMatchObject(tooOften);
+    expect(await add(playlist.id, 2)).toMatchObject(tooOften);
+    expect((await removeItem(playlist.id, (await bySlug('mix')).body.items[0].id)).status).toBe(200);
+    expect((await remove(playlist.id)).status).toBe(200);
+    expect((await made('Other account', 'p2')).slug).toBe('other-account');
+  });
+
+  it('gives back the slot when a change is refused', async () => {
+    const playlist = await made();
+    expect((await create({ title: '' })).status).toBe(400);
+    expect((await update(playlist.id, { title: 'x'.repeat(61) })).status).toBe(400);
+    expect((await add(playlist.id, 99)).status).toBe(404);
+    expect((await update(playlist.id, { title: 'Hijacked' }, 'p2')).status).toBe(404);
+    expect(count("rate_limit_events WHERE bucket LIKE 'playlist:%'")).toBe(2);
+  });
+
+  it('gives creates of one name at the same moment their own numbers', async () => {
+    beforeStatement(/INTO room_playlists /, () => insertPlaylist('mix'));
+    expect(await create({ title: 'Mix' })).toMatchObject({ status: 201, body: { slug: 'mix-1' } });
+    beforeStatement(/UPDATE (OR IGNORE )?room_playlists\s+SET title/, () => insertPlaylist('party'));
+    expect(await update((await bySlug('mix-1')).body.id, { slug: 'party' })).toMatchObject({ status: 200, body: { slug: 'party-1' } });
+    const results = await Promise.all([1, 2, 3].map(() => create({ title: 'Mix' })));
+    expect(results.map((result) => result.status)).toEqual([201, 201, 201]);
+    expect(results.map((result) => result.body.slug).sort()).toEqual(['mix-1', 'mix-2', 'mix-3']);
+  });
+});
+
+describe('playlist page caching', () => {
+  it('keeps a signed-out view at the edge for 20 seconds, and never a signed-in one', async () => {
+    const stored = new Map<string, Response>();
+    vi.stubGlobal('caches', { default: {
+      match: async (request: Request) => stored.get(request.url)?.clone(),
+      put: async (request: Request, response: Response) => { stored.set(request.url, response.clone()); },
+    } });
+    const waits: Promise<unknown>[] = [];
+    const context = { waitUntil: (promise: Promise<unknown>) => { waits.push(promise); } };
+    const playlist = await made();
+    await add(playlist.id, 1);
+
+    const first = await bySlug('mix', null, context);
+    await Promise.all(waits.splice(0));
+    expect(first.headers.get('Cache-Control')).toBe('public, max-age=20');
+    expect(first.headers.get('X-WAMP-Cache')).toBe('miss');
+    expect(first.body.viewerCanEdit).toBe(false);
+    const second = await bySlug('mix', null, context);
+    expect(second.headers.get('X-WAMP-Cache')).toBe('hit');
+    expect(second.body).toEqual(first.body);
+
+    const owner = await bySlug('mix', 'p1', context);
+    expect(owner.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(owner.headers.get('X-WAMP-Cache')).toBeNull();
+    expect(owner.body.viewerCanEdit).toBe(true);
+    expect([...stored.keys()]).toEqual(['https://api.wamp.land/api/playlists/by-slug/mix']);
+    expect(JSON.stringify(await stored.get('https://api.wamp.land/api/playlists/by-slug/mix')!.clone().json())).toContain('"viewerCanEdit":false');
   });
 });
 
