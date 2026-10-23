@@ -20,6 +20,14 @@ Also merged: [#298](https://github.com/songadaymann/wamp/pull/298). Jonathan ask
 - Map capture, Expanded Room, assist and auth smokes passed where relevant.
 - For F351, migration 0074 was applied before API Worker `d1bf600c` and backfilled about 64,000 settlement rows. `/api/health` reports 0074.
 
+## Verified on real traffic (2026-10-23)
+
+- F351, read-only production checks. By about 19:30 UTC, 95 room finishes had arrived since API Worker `d1bf600c` went out at 02:47 UTC, Jonathan's two signed-in clears of -17,-5 among them.
+  - Every finish has a `finalize_seq`: 1 to 95, with no gaps or repeats.
+  - Each finish has exactly one `run_settlements` row.
+  - Rewards can't be paid twice. `point_events` is unique on event type and source, and `pxp_events`, `bxp_events` and `cxp_events` are unique on their dedupe key.
+- This releases F333 (step 4), which was waiting on this check.
+
 ## Only Jonathan can check
 
 - **F350:** on a phone, run along a floor and hop into the next room; there should be no hold at the edge.
@@ -27,4 +35,4 @@ Also merged: [#298](https://github.com/songadaymann/wamp/pull/298). Jonathan ask
 - **F358:** drift your thumb slightly down while running; the hero should keep running and still jump.
 - **F354:** on an iPad, type in chat; the layout should stay the tablet one.
 - **F352/F357:** walk between photo-background rooms on a phone, then open one in the editor.
-- **F351:** finish a ranked run with the connection dropping, and the clear should still count.
+- **F351:** finish a ranked run with the connection dropping, and the clear should still count. Normal finishes are verified on real traffic (above); this checks the resend.
