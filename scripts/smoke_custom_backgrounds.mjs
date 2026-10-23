@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from "playwright";
 import { createApiFixtures } from "./lib/apiFixtures.mjs";
 import { installMobileSignedFixture } from "./lib/mobileSignedFixture.mjs";

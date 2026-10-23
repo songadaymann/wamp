@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import { award, fixture, guestClear, NOW, top1 } from '../src/cloudflare/worker/activity/testDatabase';
 import { handleAllActivity, handleMyActivity } from '../src/cloudflare/worker/activity/routes';

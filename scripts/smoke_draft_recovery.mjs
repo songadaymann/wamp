@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 // Synthetic editor fixtures only. This probe requires a local development

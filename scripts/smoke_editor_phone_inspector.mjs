@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 const base=process.argv[2]||'http://127.0.0.1:3031';
 assert.ok(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Fixtures are local only.');

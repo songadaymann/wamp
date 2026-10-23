@@ -1,4 +1,5 @@
 import { createServer } from 'vite';
+import './mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';

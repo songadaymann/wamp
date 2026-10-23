@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:3000/';

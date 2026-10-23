@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import PartySocket from 'partysocket';
 import WebSocket from 'ws';

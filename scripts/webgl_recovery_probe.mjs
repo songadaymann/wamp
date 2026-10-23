@@ -1,3 +1,4 @@
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const url = process.argv[2] ?? 'http://127.0.0.1:4518/?worldTiles=force&webglRecoveryProbe=1';

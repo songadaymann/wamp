@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 const target=new URL(process.argv[2] || 'http://127.0.0.1:3000/');
 target.searchParams.set('previewSmoke','1');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createApiFixtures } from './lib/apiFixtures.mjs';

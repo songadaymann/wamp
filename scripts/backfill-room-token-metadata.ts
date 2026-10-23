@@ -94,6 +94,7 @@ function buildRoomPreviewUrl(roomId: string): string {
 function renderPublishedRoomImage(roomId: string): string {
   const previewUrl = buildRoomPreviewUrl(roomId);
   const inlineScript = `
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import { renderRoomPreviewDataUrl } from ${JSON.stringify(renderHelperUrl)};
 
