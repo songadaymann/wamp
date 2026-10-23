@@ -9,7 +9,6 @@ vi.mock('../auth/request', async actual => ({ ...await actual<object>(),
   loadOptionalRequestAuth: async () => auth.id ? { user: { id: auth.id }, source: 'session' } : null,
   requireAuthenticatedRequestAuth: async () => { if (!auth.id) throw new Error('Sign in'); return { user: { id: auth.id }, source: 'session' }; },
 }));
-vi.mock('../generatedUsers/leaderboardIsolation', async actual => ({ ...await actual<object>(), assertWampLeaderboardWriteAllowed: async () => {} }));
 vi.mock('../expandedRooms/store', async actual => ({ ...await actual<object>(), loadExpandedRoomTarget: async () => expanded.value }));
 vi.mock('../progression/progressRows', async actual => ({ ...await actual<object>(),
   loadOrBackfillUserProgress: async (env: Env, id: string) => {

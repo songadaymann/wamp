@@ -44,7 +44,6 @@ import {
 } from '../playableContentIndex/store';
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadExactRoomVersion } from '../rooms/store';
-import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
 import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -101,7 +100,6 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunStartBody(request);
   const exactVersion = await loadExactRoomVersion(env, body.roomId, body.roomVersion);
   if (!exactVersion) throw new HttpError(404, `Room version ${body.roomVersion} was not found.`);
@@ -206,7 +204,6 @@ export async function handleRunFinish(
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunFinishBody(request);
   const existing = await loadRoomRunByAttemptId(env, attemptId);
 

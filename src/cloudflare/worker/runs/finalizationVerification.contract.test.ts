@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   room: vi.fn(), course: vi.fn(), body: vi.fn(), rooms: vi.fn(),
 }));
 vi.mock('../auth/request', async (original) => ({ ...await original<typeof import('../auth/request')>(), requireAuthenticatedRequestAuth: mocks.auth }));
-vi.mock('../generatedUsers/leaderboardIsolation', async (original) => ({ ...await original<typeof import('../generatedUsers/leaderboardIsolation')>(), assertWampLeaderboardWriteAllowed: vi.fn() }));
 vi.mock('../progression/store', async (original) => ({ ...await original<typeof import('../progression/store')>(), loadEffectiveTrustTier: mocks.tier }));
 vi.mock('./verification', async (original) => ({ ...await original<typeof import('./verification')>(), verifyRoomRunTrace: mocks.verify, verifyCourseRunTrace: mocks.verify, createRoomVerificationTrigger: mocks.trigger, createCourseVerificationTrigger: mocks.trigger, recordRunVerificationAudit: mocks.audit }));
 vi.mock('../rooms/store', async (original) => ({ ...await original<typeof import('../rooms/store')>(), loadRoomRecord: mocks.room, loadRoomSnapshotsByReferences: mocks.rooms }));

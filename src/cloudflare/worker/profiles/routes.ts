@@ -20,7 +20,6 @@ import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { loadAnonymousPublicCache } from '../core/publicCache';
 import { findUserByDisplayName, findUserById, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
-import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
@@ -130,8 +129,6 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
   const auth = await requireAuthenticatedRequestAuth(env, request, 'update your profile');
   assertNotSchoolRestricted(auth, 'edit profile text');
   const body = await parseProfileUpdateBody(request);
-
-  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);
 
   const existingUser = await findUserByDisplayName(env, body.displayName);
   if (existingUser && existingUser.id !== auth.user.id) {
