@@ -22,4 +22,4 @@ These routes require the existing admin key. Reads are private and uncached; mut
 - `POST /api/admin/run-ghost-archive/flush`: retry at most 25 pending uploads.
 - `POST /api/admin/run-ghost-archive/check-cost`: perform the actual cost check; it sends only above the threshold.
 
-After release, verify configured binding/alerts, the intended recipient and cycle, drained migration backfill, an actual R2 payload, protected routes and unchanged public record selection. Tests use the fully migrated SQLite schema and fake R2/email delivery; actual browser completion checks use an isolated local backend. Evidence and release versions are recorded in `progress.md`.
+After release, verify configured binding/alerts, the intended recipient and cycle, drained migration backfill, an actual R2 payload, protected routes and unchanged public record selection. Tests use the fully migrated SQLite schema and fake R2/email delivery; actual browser completion checks use an isolated local backend. Evidence and release versions are recorded in `docs/history/progress-2026.md`.
