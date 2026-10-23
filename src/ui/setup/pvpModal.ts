@@ -3,9 +3,10 @@ import {
   type PvpInviteOffer,
   type PvpMatchSnapshot,
 } from '../../pvp/model';
+import { dialogOnTopFor } from '../modalState';
 
-let activeInviteModal: HTMLElement | null = null;
-let activeResultModal: HTMLElement | null = null;
+let activeInviteClose: ((result: 'accept' | 'decline') => void) | null = null;
+let activeResultClose: (() => void) | null = null;
 let activeCountdownOverlay: HTMLElement | null = null;
 let countdownFrame: number | null = null;
 let countdownTimeout: number | null = null;
@@ -13,24 +14,24 @@ let damageFlashOverlay: HTMLElement | null = null;
 let damageFlashTimeout: number | null = null;
 
 /**
- * PvP pop-ups are shared dialogs (history-modal, F406): focus, Tab, game keys and the pause
- * follow them, and Escape presses their [data-dialog-close] button instead of leaving the room.
+ * PvP pop-ups are shared dialogs (modalState counts .pvp-modal, F406): focus, Tab, game keys and
+ * the pause follow them, and Escape presses their [data-dialog-close] button instead of leaving
+ * the room. The listener goes when the pop-up closes (signal).
  */
-function closeOnEscape(modal: HTMLElement, close: HTMLButtonElement): void {
+function closeOnEscape(modal: HTMLElement, close: HTMLButtonElement, signal: AbortSignal): void {
   close.dataset.dialogClose = '';
-  const handleKeydown = (event: KeyboardEvent): void => {
-    if (!modal.isConnected) document.removeEventListener('keydown', handleKeydown);
-    else if (event.key === 'Escape') close.click();
-  };
-  document.addEventListener('keydown', handleKeydown);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && dialogOnTopFor(event) === modal) close.click();
+  }, { signal });
 }
 
 export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 'decline'> {
-  activeInviteModal?.remove();
+  // A newer challenge replaces the open one, whose inviter hears a decline.
+  activeInviteClose?.('decline');
 
   return new Promise((resolve) => {
     const modal = document.createElement('div');
-    modal.className = 'history-modal pvp-modal pvp-modal-invite';
+    modal.className = 'pvp-modal pvp-modal-invite';
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
 
@@ -84,10 +85,13 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
     decline.className = 'bar-btn';
     decline.textContent = 'Decline';
 
+    const keys = new AbortController();
+    let expiry = 0;
     const close = (result: 'accept' | 'decline') => {
-      if (activeInviteModal === modal) {
-        activeInviteModal = null;
-      }
+      if (activeInviteClose !== close) return;
+      activeInviteClose = null;
+      keys.abort();
+      window.clearTimeout(expiry);
       modal.remove();
       resolve(result);
     };
@@ -98,23 +102,19 @@ export function showPvpInvitePrompt(invite: PvpInviteOffer): Promise<'accept' | 
     panel.append(header, body, actions);
     modal.append(panel);
     document.body.append(modal);
-    activeInviteModal = modal;
-    closeOnEscape(modal, decline);
-    accept.focus();
-
-    window.setTimeout(() => {
-      if (activeInviteModal === modal) {
-        close('decline');
-      }
-    }, Math.max(1_000, invite.expiresAt - Date.now()));
+    activeInviteClose = close;
+    closeOnEscape(modal, decline, keys.signal);
+    // Decline, never Accept: a reflexive Space or Enter must not start a duel.
+    decline.focus();
+    expiry = window.setTimeout(() => close('decline'), Math.max(1_000, invite.expiresAt - Date.now()));
   });
 }
 
 export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: string): void {
-  activeResultModal?.remove();
+  activeResultClose?.();
 
   const modal = document.createElement('div');
-  modal.className = 'history-modal pvp-modal pvp-modal-result';
+  modal.className = 'pvp-modal pvp-modal-result';
   modal.dataset.result = snapshot.draw
     ? 'draw'
     : snapshot.winnerUserId === localUserId
@@ -154,19 +154,20 @@ export function showPvpResultModal(snapshot: PvpMatchSnapshot, localUserId: stri
   close.type = 'button';
   close.className = 'bar-btn primary';
   close.textContent = 'Close';
-  close.addEventListener('click', () => {
-    if (activeResultModal === modal) {
-      activeResultModal = null;
-    }
+  const keys = new AbortController();
+  const dismiss = (): void => {
+    if (activeResultClose === dismiss) activeResultClose = null;
+    keys.abort();
     modal.remove();
-  });
+  };
+  close.addEventListener('click', dismiss);
 
   actions.append(close);
   panel.append(header, body, actions);
   modal.append(panel);
   document.body.append(modal);
-  activeResultModal = modal;
-  closeOnEscape(modal, close);
+  activeResultClose = dismiss;
+  closeOnEscape(modal, close, keys.signal);
   close.focus();
 }
 

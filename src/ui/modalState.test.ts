@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installDialogKeyboardSync } from './keyboardFocus';
-import { hasBlockingModalOpen, installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from './modalState';
+import { hasBlockingModalOpen, installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops, watchModals } from './modalState';
 import { LazyModal } from './setup/lazyModal';
 import { installFakeDom, type FakeDom, type FakeTemplate } from './testing/fakeDom';
 
@@ -84,6 +84,23 @@ describe('dialogs added to the page after boot (F380)', () => {
     expect(dom.doc.activeElement).toBe(launcher);
     expect(system.keyboard.enabled).toBe(true);
     system.stop();
+  });
+
+  it('keeps telling the other managers when one of them throws', async () => {
+    const dom = installFakeDom();
+    const doc = dom.doc as unknown as Document;
+    const dialog = sharedDialog(dom, 'settings-modal');
+    dom.doc.body.append(dialog.modal);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const stopBroken = watchModals(doc, () => { throw new Error('broken listener'); });
+    const system = installDialogSystem(dom);
+    dialog.show();
+    await dom.settle();
+    expect(system.keyboard.enabled).toBe(false);
+    expect(error).toHaveBeenCalled();
+    stopBroken();
+    system.stop();
+    error.mockRestore();
   });
 
   it('notices a dialog built in code and removed again', async () => {

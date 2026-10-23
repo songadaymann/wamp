@@ -8,6 +8,11 @@
   background: rgba(5, 5, 5, 0.78);
 }
 
+/* Under another dialog, the screen dims once (installModalStackBackdrops). */
+.worlds-modal[data-modal-covered='true'] {
+  background: transparent;
+}
+
 .worlds-panel {
   width: min(980px, 100%);
   max-height: min(820px, calc(100vh - 36px));
@@ -17,6 +22,11 @@
   color: #18161c;
   box-shadow: 8px 8px 0 #050505;
   font-family: "HomeVideo", monospace;
+}
+
+/* The dialog takes focus itself when it opens (F175); no ring for that. */
+.worlds-panel:focus {
+  outline: none;
 }
 
 .worlds-header,

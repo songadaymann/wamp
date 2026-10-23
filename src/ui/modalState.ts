@@ -1,16 +1,38 @@
 /**
- * Every WAMP dialog: the shared `.history-modal` dialogs (Worlds and PvP included), and the shared
- * pop-up while it shows buttons (appFeedback marks it aria-modal then).
+ * Every WAMP dialog: the shared `.history-modal` dialogs, the Worlds window and PvP pop-ups (which
+ * keep their own layout), and the shared pop-up while it asks something (appFeedback marks it
+ * aria-modal then).
  */
-const MODAL_SELECTOR = '.history-modal, #busy-overlay[aria-modal="true"]';
+const MODAL_SELECTOR = '.history-modal, .worlds-modal, .pvp-modal, #busy-overlay[aria-modal="true"]';
 /** The elements watched for opening and closing, whatever state they are in now. */
-const DIALOG_ROOT_SELECTOR = '.history-modal, #busy-overlay';
+const DIALOG_ROOT_SELECTOR = '.history-modal, .worlds-modal, .pvp-modal, #busy-overlay';
 const DIALOG_ATTRIBUTES = ['class', 'aria-hidden', 'aria-modal'];
 /** The button Escape presses on the top dialog; `data-dialog-close` marks one not named "close". */
 const CLOSE_BUTTON_SELECTOR = 'button[id*="close" i], button[class*="close" i], button[aria-label^="Close" i], button[data-dialog-close]';
+/** The wallet's own window (AppKit, shadow DOM, its own key listener): its focus and keys stay its own. */
+const WALLET_WINDOW_SELECTOR = 'w3m-modal, appkit-modal';
 
 function isOpenModal(element: HTMLElement): boolean {
   return !element.classList.contains('hidden') && element.getAttribute('aria-hidden') !== 'true';
+}
+
+/** Whether an event target or focused element is inside the wallet's window. */
+export function isInWalletWindow(node: unknown): boolean {
+  return node instanceof Element && node.closest(WALLET_WINDOW_SELECTOR) !== null;
+}
+
+/** The dialog each Escape began on top of, kept by the guard before any dialog closes. */
+const escapeTops = new WeakMap<Event, HTMLElement | null>();
+
+/**
+ * The dialog that was on top when this Escape was pressed, or null. A dialog's own Escape
+ * listener acts only when this is its dialog; checking afterwards would see the next one up once
+ * the top closed.
+ */
+export function dialogOnTopFor(event: Event, doc: Document = document): HTMLElement | null {
+  if (escapeTops.has(event)) return escapeTops.get(event) ?? null;
+  const open = openModalsInStackOrder(doc);
+  return open[open.length - 1] ?? null;
 }
 
 /** Open dialogs, bottom to top: higher z-index first, then later in the page. */
@@ -49,7 +71,12 @@ export function watchModals(doc: Document, onChange: () => void): () => void {
 
 function startModalWatch(doc: Document): ModalWatch {
   const listeners = new Set<() => void>();
-  const notify = (): void => { for (const listener of [...listeners]) listener(); };
+  // One failing listener must not leave focus, dimming or the game keys behind for this change.
+  const notify = (): void => {
+    for (const listener of [...listeners]) {
+      try { listener(); } catch (error) { console.error('Dialog listener failed', error); }
+    }
+  };
   const watched = new WeakSet<Element>();
   const attributes = new MutationObserver(notify);
   const watch = (element: Element): void => {
@@ -87,12 +114,15 @@ function startModalWatch(doc: Document): ModalWatch {
  * Escape handler would close at once; the guard instead closes only the top one, through
  * its close button, and stops the event there. A top dialog marked
  * `data-escape-closes="false"` (a question Escape must not answer) just keeps the key.
+ * Escape in the wallet's window is left to the wallet.
  */
 export function installDialogEscapeGuard(doc: Document = document): () => void {
   const handleKeydown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape') return;
-    const open = openModalsInStackOrder(doc);
+    const inWallet = isInWalletWindow(event.target) || isInWalletWindow(doc.activeElement);
+    const open = inWallet ? [] : openModalsInStackOrder(doc);
     const top = open[open.length - 1];
+    escapeTops.set(event, top ?? null);
     if (!top) return;
     event.preventDefault();
     if (top.dataset.escapeCloses === 'false') {
@@ -136,6 +166,7 @@ const FOCUSABLE_SELECTOR = [
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
+  'summary',
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
@@ -221,7 +252,7 @@ export function installModalFocusManagement(doc: Document = document): () => voi
 
   let lastTabBackward = false;
   const handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Tab') return;
+    if (event.key !== 'Tab' || isInWalletWindow(event.target) || isInWalletWindow(doc.activeElement)) return;
     lastTabBackward = event.shiftKey;
     const stack = openModalsInStackOrder(doc);
     const top = stack[stack.length - 1];
@@ -235,8 +266,9 @@ export function installModalFocusManagement(doc: Document = document): () => voi
     }
     const first = items[0];
     const last = items[items.length - 1];
-    const inside = active instanceof HTMLElement && top.contains(active);
-    if (!inside || (event.shiftKey && (active === first || active === dialogPanel(top))) || (!event.shiftKey && active === last)) {
+    // A focused panel or card is not a Tab stop: from there Tab wraps like from outside.
+    const inside = active instanceof HTMLElement && items.includes(active);
+    if (!inside || (event.shiftKey && active === first) || (!event.shiftKey && active === last)) {
       event.preventDefault();
       (event.shiftKey ? last : first).focus({ preventScroll: true });
     }
@@ -248,6 +280,7 @@ export function installModalFocusManagement(doc: Document = document): () => voi
     if (event.target instanceof Element) {
       focusCameFrom.set(event.target, event.relatedTarget instanceof Element ? event.relatedTarget : null);
     }
+    if (isInWalletWindow(event.target)) return;
     const stack = openModalsInStackOrder(doc);
     const top = stack[stack.length - 1];
     if (!top || !(event.target instanceof Node) || top.contains(event.target)) return;

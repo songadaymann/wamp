@@ -37,7 +37,7 @@ export class WorldsController {
       tab.addEventListener('click', () => void this.open(tab.dataset.worldTab === 'mine' ? 'mine' : 'browse'));
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this.view?.isOpen()) this.close();
+      if (event.key === 'Escape' && this.view?.ownsEscape(event)) this.close();
     });
     void this.probe(button);
   }

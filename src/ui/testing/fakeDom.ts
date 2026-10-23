@@ -38,12 +38,18 @@ export class FakeEvent {
 class FakeEventTarget {
   private readonly listeners = new Map<string, Listener[]>();
 
-  addEventListener(type: string, callback: Callback, options?: boolean | { capture?: boolean }): void {
+  addEventListener(type: string, callback: Callback, options?: boolean | { capture?: boolean; signal?: AbortSignal }): void {
     const capture = typeof options === 'boolean' ? options : Boolean(options?.capture);
+    const signal = typeof options === 'object' ? options.signal : undefined;
+    if (signal?.aborted) return;
     const list = this.listeners.get(type) ?? [];
     if (!list.some((listener) => listener.callback === callback && listener.capture === capture)) list.push({ callback, capture });
     this.listeners.set(type, list);
+    signal?.addEventListener('abort', () => this.removeEventListener(type, callback, { capture }), { once: true });
   }
+
+  /** How many listeners of a type this node has (to check that closing a pop-up removes its own). */
+  listenerCount(type: string): number { return this.listeners.get(type)?.length ?? 0; }
 
   removeEventListener(type: string, callback: Callback, options?: boolean | { capture?: boolean }): void {
     const capture = typeof options === 'boolean' ? options : Boolean(options?.capture);

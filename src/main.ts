@@ -335,7 +335,8 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
 installStaleBuildRecovery({
   canShowOffer: () => {
     const feedback = getAppFeedbackDebugState();
-    return !feedback.busyVisible || feedback.busyState === 'error';
+    // Never over an open choice (an edit conflict, a draft recovery): its answer would be lost.
+    return !feedback.busyVisible || (feedback.busyState === 'error' && feedback.busyTone !== 'choice');
   },
   showReloadOffer: () => showBusyError(
     'A new version of WAMP came out while this tab was open, so this part can\'t load. Save anything you are working on, then reload.',

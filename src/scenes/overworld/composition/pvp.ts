@@ -36,7 +36,7 @@ export function createPvpArenaController(
     | 'handlePeerRoomStateEvent' | 'combatPresentationController' | 'maybeApplyPvpStartingPosition'
     | 'applyPvpArenaCameraLock' | 'syncPvpLocalHeartLabel' | 'playPvpLocalDamageFeedback'
     | 'clearPvpSceneRuntime' | 'returnToWorld' | 'renderHud'
-    | 'showTransientStatus'
+    | 'showTransientStatus' | 'mode'
   >,
 ): OverworldPvpArenaController {
   return new OverworldPvpArenaController({
@@ -71,6 +71,7 @@ export function createPvpArenaController(
     returnToWorld: () => host.returnToWorld(),
     renderHud: () => host.renderHud(),
     showTransientStatus: (message) => host.showTransientStatus(message),
+    canPromptForInvite: () => host.mode === 'browse' && document.body.dataset.appMode === 'world',
     onSetupStateChanged: (inProgress) => {
       getPerformanceSuggestionModalController()?.handlePvpSetupStateChanged(inProgress);
     },

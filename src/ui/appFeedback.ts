@@ -1,3 +1,4 @@
+import { isInWalletWindow } from './modalState';
 import { beginPendingDialog } from './pendingDialog';
 
 const APP_READY_EVENT = 'wamp:app-ready';
@@ -63,8 +64,10 @@ async function runHandler(handler: (() => void | Promise<void>) | null): Promise
 }
 
 /**
- * While the pop-up shows buttons it is a dialog like the others (modalState): focus moves in and
- * back, Tab stays inside, Escape stays with it, and the game behind it gives up its keys.
+ * While the pop-up asks something (a message or a consent) it is a dialog like the others
+ * (modalState): focus moves in and back, Tab stays inside, Escape stays with it, and the game
+ * behind it gives up its keys. A loading state with Close is not: the wallet's own window can open
+ * over "Approve in your wallet", and needs the keyboard.
  */
 function setBusyDialog(refs: FeedbackElements, dialog: boolean, escapeCloses = true): void {
   const root = refs.busyRoot;
@@ -113,9 +116,11 @@ export function initializeAppFeedback(doc: Document = document): void {
   });
 
   // Escape presses Close, and nothing else (the chat, the game) sees it. With dialogs stacked,
-  // or for a choice Escape must not answer, installDialogEscapeGuard handles it first.
+  // or for a choice Escape must not answer, installDialogEscapeGuard handles it first. Escape in
+  // the wallet's window is the wallet's.
   doc.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape' || !isBusyDialogOpen(refs) || refs.busyRoot?.dataset.escapeCloses === 'false') return;
+    if (event.key !== 'Escape' || !isBusyDialogOpen(refs) || refs.busyRoot?.dataset.escapeCloses === 'false'
+      || isInWalletWindow(event.target) || isInWalletWindow(doc.activeElement)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     void runHandler(busyCloseHandler);
@@ -207,7 +212,7 @@ export function showBusyOverlay(title: string, status = 'Please wait...', contro
   busyRetryHandler = controls?.showCheck === false ? null : controls?.check ?? null;
   busyCloseHandler = controls?.close ?? null;
   setBusyButtonRoles(refs);
-  setBusyDialog(refs, Boolean(controls));
+  setBusyDialog(refs, false);
 }
 
 export function updateBusyOverlay(title: string, status = 'Please wait...'): void {
@@ -314,9 +319,10 @@ export function requestBusyConfirmation(title: string, message: string, options:
     };
     const abort = () => finish(false);
     const dismiss = () => finish(false);
-    // A dialog with controls: Escape cancels, and the shared trap (modalState) keeps Tab inside.
     showBusyOverlay(title, message, { close: () => finish(false), check: () => finish(true) });
     busyDismissHandler = dismiss;
+    // A dialog: Escape cancels, and the shared trap (modalState) keeps Tab inside.
+    setBusyDialog(refs, true);
     refs.busyRoot?.setAttribute('data-busy-state', 'confirmation');
     refs.busySpinner?.classList.add('hidden');
     refs.busyRetry!.textContent = options.confirmLabel;
@@ -341,6 +347,7 @@ export function getAppFeedbackDebugState(): Record<string, unknown> {
     bootState: refs.bootRoot?.getAttribute('data-boot-state') ?? null,
     busyState: refs.busyRoot?.getAttribute('data-busy-state') ?? null,
     busyVariant: refs.busyRoot?.getAttribute('data-busy-variant') ?? null,
+    busyTone: refs.busyRoot?.getAttribute('data-busy-tone') ?? null,
     bootStatus: refs.bootStatus?.textContent ?? null,
     busyTitle: refs.busyTitle?.textContent ?? null,
     busyStatus: refs.busyStatus?.textContent ?? null,

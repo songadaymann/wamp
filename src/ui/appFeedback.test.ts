@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom, type FakeElement } from './testing/fakeDom';
 
+vi.mock('phaser', () => ({ default: {} }));
 afterEach(() => vi.unstubAllGlobals());
 
 // The pop-up's real markup, so the test sees its data-autofocus card and button roles.
@@ -75,6 +76,9 @@ describe('the shared pop-up (F467)', () => {
     expect(f.blocking()).toBe(true);
     expect(f.dom.doc.activeElement).toBe(f.card);
 
+    // From the focused card, Shift+Tab wraps to the last button instead of leaving the page.
+    f.dom.press('Tab', { shiftKey: true });
+    expect(f.dom.doc.activeElement).toBe(f.close);
     f.dom.press('Tab');
     expect(f.dom.doc.activeElement).toBe(f.retry);
     f.dom.press('Tab');
@@ -107,10 +111,53 @@ describe('the shared pop-up (F467)', () => {
     expect(useAccount).not.toHaveBeenCalled();
     expect(f.blocking()).toBe(true);
 
+    // The stale-build reload offer reads this, and never replaces an open choice.
+    expect(f.feedback.getAppFeedbackDebugState()).toMatchObject({ busyState: 'error', busyTone: 'choice' });
+
     f.feedback.showBusyError('A new version of WAMP came out.', { title: 'WAMP was updated', tone: 'choice', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: vi.fn() });
     expect(f.dom.press('Escape').defaultPrevented).toBe(true);
     await f.dom.settle();
     expect(f.blocking()).toBe(false);
+  });
+
+  it('is not a dialog while it waits on the wallet, so the wallet window keeps the keyboard', async () => {
+    const f = await setup();
+    const close = vi.fn();
+    f.feedback.showBusyOverlay('Approve in your wallet', 'Waiting for your wallet...', { close, check: vi.fn() });
+    await f.dom.settle();
+    expect(f.root.getAttribute('role')).toBeNull();
+    expect(f.blocking()).toBe(false);
+    expect(f.dom.doc.activeElement).toBe(f.launcher);
+    expect(f.dom.press('Escape').defaultPrevented).toBe(false);
+    expect(close).not.toHaveBeenCalled();
+
+    // Typing in the wallet window's search box (in its shadow root, so the page sees the window
+    // itself as focused): the game lets go of its keys.
+    const { isGameKeyboardYielded } = await import('./keyboardFocus');
+    const wallet = f.dom.element('w3m-modal', { tabindex: '-1' });
+    f.dom.doc.body.append(wallet);
+    expect(isGameKeyboardYielded(f.dom.doc as unknown as Document)).toBe(false);
+    wallet.focus();
+    expect(isGameKeyboardYielded(f.dom.doc as unknown as Document)).toBe(true);
+  });
+
+  it('leaves focus, Tab and Escape inside the wallet window to the wallet, even over a dialog', async () => {
+    const f = await setup();
+    const close = vi.fn();
+    f.feedback.showBusyError('Could not check the room approval.', { closeHandler: close });
+    await f.dom.settle();
+    const search = f.dom.element('input', { type: 'text' });
+    const wallet = f.dom.element('w3m-modal', {}, search, f.dom.element('button', { type: 'button' }));
+    f.dom.doc.body.append(wallet);
+
+    search.focus();
+    await f.dom.settle();
+    expect(f.dom.doc.activeElement).toBe(search);
+    expect(f.dom.press('Tab').defaultPrevented).toBe(false);
+    search.focus();
+    expect(f.dom.press('Escape').defaultPrevented).toBe(false);
+    expect(close).not.toHaveBeenCalled();
+    expect(f.blocking()).toBe(true);
   });
 
   it('closes only itself over another dialog, which drops its own backdrop meanwhile', async () => {

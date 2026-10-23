@@ -297,6 +297,12 @@
     box-shadow: var(--shadow-6);
   }
 
+  /* The pop-up takes focus on its card when it asks something (F467); no ring for that. */
+
+  .app-busy-card:focus {
+    outline: none;
+  }
+
   .app-busy-title {
     color: var(--wamp-ink);
     font-family: var(--font-display);

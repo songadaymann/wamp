@@ -10,6 +10,12 @@
     backdrop-filter: none;
   }
 
+  /* Under another dialog, the screen dims once (installModalStackBackdrops). */
+
+  .pvp-modal[data-modal-covered='true'] {
+    background: transparent;
+  }
+
   .pvp-modal-panel {
     width: min(440px, calc(100vw - 36px));
     display: flex;

@@ -4,6 +4,7 @@ import { installDialogKeyboardSync } from '../keyboardFocus';
 import { hasBlockingModalOpen, installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from '../modalState';
 import { installFakeDom, type FakeElement } from '../testing/fakeDom';
 import { WorldsController } from './controller';
+import { WorldsView } from './view';
 
 vi.mock('phaser', () => ({ default: {} }));
 vi.mock('../setup/sceneBridge', () => ({ getActiveOverworldScene: () => null }));
@@ -61,10 +62,29 @@ describe('the Worlds window is a shared dialog (F406)', () => {
     expect(signIn.classList.contains('hidden')).toBe(true);
     expect(worlds.classList.contains('hidden')).toBe(false);
 
+    // A window on top that closes itself on Escape, with no close button the guard knows:
+    // Worlds' own listener runs first and leaves the key to it.
+    const report: FakeElement = dom.element('div', { class: 'history-modal' }, dom.element('div', { role: 'dialog' }));
+    report.zIndex = 10002;
+    dom.doc.addEventListener('keydown', (event) => { if (event.key === 'Escape') report.classList.add('hidden'); });
+    dom.doc.body.append(report);
+    await dom.settle();
+    dom.press('Escape');
+    await dom.settle();
+    expect(report.classList.contains('hidden')).toBe(true);
+    expect(worlds.classList.contains('hidden')).toBe(false);
+
     expect(dom.press('Escape').defaultPrevented).toBe(true);
     await dom.settle();
     expect(worlds.classList.contains('hidden')).toBe(true);
     expect(dom.doc.activeElement).toBe(button);
     expect(keyboard.enabled).toBe(true);
+  });
+
+  it('keeps its own layout instead of borrowing the shared dialog class', () => {
+    installFakeDom();
+    const root = document.createElement('div');
+    new WorldsView(root, () => undefined);
+    expect(root.querySelector('.worlds-modal')?.classList.contains('history-modal')).toBe(false);
   });
 });
