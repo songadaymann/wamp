@@ -20,8 +20,13 @@ export class LazySwordsmanEdgeWarmup {
   private warmup: SwordsmanEdgeWarmup | null = null;
   readonly ready: Promise<void>;
 
-  constructor(options: SwordsmanEdgeWarmupOptions, getLoadedRooms: () => Iterable<WarmupRoom>) {
-    this.ready = import('./swordsmanEdgeWarmup')
+  /** `load` imports the module; tests pass their own to choose when it arrives. */
+  constructor(
+    options: SwordsmanEdgeWarmupOptions,
+    getLoadedRooms: () => Iterable<WarmupRoom>,
+    load: () => Promise<{ SwordsmanEdgeWarmup: typeof SwordsmanEdgeWarmup }> = () => import('./swordsmanEdgeWarmup'),
+  ) {
+    this.ready = load()
       .then(({ SwordsmanEdgeWarmup: Warmup }) => {
         const warmup = new Warmup(options);
         for (const loadedRoom of getLoadedRooms()) {

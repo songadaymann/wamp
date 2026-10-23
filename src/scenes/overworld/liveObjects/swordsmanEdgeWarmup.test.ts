@@ -526,16 +526,23 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
 
 describe('lazy-loaded Sword Hunter jump warm-up (F302)', () => {
   it('does nothing until its module arrives, then queues the rooms already loaded', async () => {
-    const coordinator = new FrameWorkCoordinator();
+    // The module arrives when the test says so, and the clock stands still, so the spawn finish
+    // below is never cut short by its 250 ms budget on a slow machine.
+    const now = () => 1_000;
+    const coordinator = new FrameWorkCoordinator({ now });
     const loaded = loadedRoom();
+    let arrive!: (module: { SwordsmanEdgeWarmup: typeof SwordsmanEdgeWarmup }) => void;
     const lazy = new LazySwordsmanEdgeWarmup({
       enqueueBackgroundCpuWork: (label, execute, onCancelled, priority) =>
         enqueueGameplayWarmupWork(coordinator, label, execute, onCancelled, priority),
-    }, () => [loaded]);
+      now,
+    }, () => [loaded], () => new Promise((resolve) => { arrive = resolve; }));
     lazy.noteActiveRoom(loaded, 1);
     lazy.finishRoom(loaded.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(coordinator.getDiagnostics().queueDepth).toBe(0);
 
+    arrive({ SwordsmanEdgeWarmup });
     await lazy.ready;
     expect(coordinator.getDiagnostics().queueDepth).toBe(1);
     lazy.finishRoom(loaded.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
