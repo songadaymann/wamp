@@ -70,6 +70,6 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
   reference checks. The September 2026 cleanup removed two unused forwarding
   modules after checking callers, without removing catalog or test contracts.
 - Image probe scripts import the direct development dependency `sharp`.
-  The report also identifies the manual `remote_rollout_check.mjs` script's
-  undeclared `ethers` import and the atlas generator's external ImageMagick
-  `magick` command; these are separate tooling prerequisites, not app code.
+  The atlas generator's external ImageMagick `magick` command is a separate
+  tooling prerequisite, not app code. (`remote_rollout_check.mjs` signs with
+  `viem`, a declared dependency, since F480.)

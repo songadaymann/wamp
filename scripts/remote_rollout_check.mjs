@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { Wallet } from 'ethers';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 const BASE_URL =
   process.env.ROLL_OUT_BASE_URL ??
@@ -119,7 +119,7 @@ class SessionClient {
 }
 
 async function authenticateWallet(label) {
-  const wallet = Wallet.createRandom();
+  const wallet = privateKeyToAccount(generatePrivateKey());
   const client = new SessionClient(label);
   const challenge = await client.request('/api/auth/wallet/challenge', {
     method: 'POST',
@@ -129,7 +129,7 @@ async function authenticateWallet(label) {
     throw new Error(`${label} wallet challenge failed: ${challenge.status} ${challenge.text}`);
   }
 
-  const signature = await wallet.signMessage(challenge.json.message);
+  const signature = await wallet.signMessage({ message: challenge.json.message });
   const verify = await client.request('/api/auth/wallet/verify', {
     method: 'POST',
     body: JSON.stringify({
@@ -311,6 +311,10 @@ async function issuePresenceToken(account) {
 }
 
 function d1Exec(sql) {
+  // A local target cleans up its own local D1, never the remote safety database.
+  const target = classifyTargetHost(new URL(BASE_URL).hostname) === 'local'
+    ? ['--local', ...(process.env.ROLL_OUT_PERSIST_TO ? ['--persist-to', process.env.ROLL_OUT_PERSIST_TO] : [])]
+    : ['--remote', '--env', process.env.ROLL_OUT_WRANGLER_ENV?.trim() || 'safety'];
   return execFileSync(
     'npx',
     [
@@ -318,9 +322,7 @@ function d1Exec(sql) {
       'd1',
       'execute',
       'DB',
-      '--remote',
-      '--env',
-      process.env.ROLL_OUT_WRANGLER_ENV?.trim() || 'safety',
+      ...target,
       '--command',
       sql,
     ],
