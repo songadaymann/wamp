@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 4: F302 Sword Hunter first plan
+
+Round-2 lane. PR #310 F302: Sword Hunter jump simulations are warmed ahead of the first plan (lowest frame-work queue within the device cap, an on-the-spot finish at run start and portals, catch-up for the room in play), with routes identical to main. Five adversarial review rounds. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 5: one way to end a run
 
 Round-2 lane. PR #309 F378, F385, F383 and F375: every stop input goes through `stopCurrentPlay()`; Escape is handled once, in order; a jump mid-run ends the run first (or gives way to a Rush result); and room music stops when a test run returns to the editor. Two adversarial reviews. Receipt: docs/review/wamp-round2-where-features-meet-2026-10-23.md.

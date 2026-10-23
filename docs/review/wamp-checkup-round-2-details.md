@@ -2202,6 +2202,8 @@ Fix plan: (1) precompute edge simulations as a budgeted frame-work job (frameWor
   2. A per-frame cap or budget on cold edge simulations (medium effort).
   3. A heap and parent pointers in the planner (optional).
 
+**2026-10-23 delivered.** [PR #310](https://github.com/songadaymann/wamp/pull/310). A coin-collecting Sword Hunter's jump simulations and route graph are warmed ahead of its first plan instead of all at once on that plan, and it picks exactly main's route warm or cold (a golden test of 100+ plans recorded on main). Warm-up runs in small pieces in the lowest frame-work queue within the device's own cap (1 ms on phones, 2 ms otherwise), never delaying room preparation, teardown or preview uploads; run start and respawn into another room finish the arrival room's warm-up on the spot (up to 250 ms, about 39 ms on a Mac for a dense room), portals within 50 ms, and portal destinations, the predicted next room and the room in play jump to a catch-up queue. A dense room warms in about 105 phone frames, including on 1 ms (Safari, Firefox) and 100 ms clocks. The warm-up module loads after boot (boot JavaScript 668.4 KB). Five adversarial review rounds, every finding fixed; `npm run check` (650 files, 5,593 tests) and the muted default (68/68), Expanded Room and map-capture smokes passed. Live on wamp.land (Pages `40556218`, main `96addc6`): desktop Chromium and iPhone WebKit play a room with no errors, and the warm-up chunk loads. [Receipt](wamp-round2-speed-2026-10-23.md).
+
 ### F306: World-map tile system still re-plans its whole display every frame, while you play and while the map sits still
 
 - **Area:** Performance: frame rate and smoothness (reviewer: Runtime performance: frame rate, GC and memory)
