@@ -4,17 +4,19 @@ import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { loadDailyResponse, overrideDailyPick, type DailyShared, type DailySharedCache } from './store';
 
 const DAILY_SHARED_CACHE_SECONDS = 30;
+const edgeCache = () => (globalThis.caches as (CacheStorage & { default?: Cache }) | undefined)?.default;
+const dailySharedCacheKey = (request: Request, date: string) => new Request(new URL(`/__wamp-cache/daily-shared-v1/${date}`, request.url));
 
 /**
  * Keeps the pick, recent picks and top ten for 30 seconds per date in the edge cache, so
  * panel reloads stop re-running the daily queries. Viewer completions and rank stay fresh.
  */
 function dailySharedCache(request: Request, context?: WorkerExecutionContextLike): { load: DailySharedCache; status: () => string } | null {
-  const cache = (globalThis.caches as (CacheStorage & { default?: Cache }) | undefined)?.default;
+  const cache = edgeCache();
   if (!cache || !context) return null;
   let status = 'bypass';
   return { status: () => status, load: async (date, load) => {
-    const key = new Request(new URL(`/__wamp-cache/daily-shared-v1/${date}`, request.url));
+    const key = dailySharedCacheKey(request, date);
     const cached = await cache.match(key);
     if (cached) { status = 'hit'; return await cached.json() as DailyShared; }
     const value = await load(); status = 'miss';
@@ -40,7 +42,9 @@ export async function handleAdminDaily(request: Request, env: Env): Promise<Resp
     const body = await parseJsonBody<{ roomId?: unknown }>(request,{maxBytes:1024});
     if (!body || typeof body.roomId !== 'string' || !/^-?\d+,-?\d+$/.test(body.roomId)
       || body.roomId.length > 40) throw new HttpError(400,'Enter the room coordinates as x,y.');
-    await overrideDailyPick(scoped,body.roomId);
+    const date = await overrideDailyPick(scoped,body.roomId);
+    // Show the new pick at once in this location; other locations catch up within the cache lifetime.
+    await edgeCache()?.delete(dailySharedCacheKey(request,date));
   }
   return jsonResponse(request,await loadDailyResponse(scoped,null),{headers:{'Cache-Control':'no-store'}});
 }

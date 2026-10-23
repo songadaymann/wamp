@@ -64,6 +64,17 @@ describe('Room of the Day reloads (F331)', () => {
     expect(f.repository.load).toHaveBeenCalledTimes(2);
   });
 
+  it('reloads a panel left over from yesterday when any run ends, then compares against today\'s pick', async () => {
+    const yesterday = { ...daily(pick), resetsAt: '2000-01-01T00:00:00.000Z' };
+    const f = fixture(yesterday); await tick(); f.repository.load.mockResolvedValue(daily(pick));
+    f.emit(POST_RUN_RATING_REQUEST_EVENT, { contentType: 'room', contentId: '1,0', version: 3 }); await tick();
+    expect(f.repository.load).toHaveBeenCalledTimes(2);
+    f.emit(POST_RUN_RATING_REQUEST_EVENT, { contentType: 'room', contentId: '1,0', version: 3 }); f.emit('guest-progress'); await tick();
+    expect(f.repository.load).toHaveBeenCalledTimes(2);
+    const g = fixture(yesterday); await tick(); g.emit('guest-progress'); await tick();
+    expect(g.repository.load).toHaveBeenCalledTimes(2);
+  });
+
   it('matches an Expanded Room pick by its id or its legacy course id', async () => {
     signIn('p1');
     const f = fixture(daily({ ...pick, targetKey: 'expanded_room:course:level', contentType: 'expanded_room', contentId: 'course:level', version: 7, legacyCourseId: 'level' }));

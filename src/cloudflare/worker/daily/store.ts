@@ -248,7 +248,8 @@ export async function loadDailyResponse(env: Env, userId: string | null, now = n
   }
   return { ...response,leaderboard,viewer:{completed:Boolean(completed?.today),completedLast7:completed?.count ?? 0,rank} };
 }
-export async function overrideDailyPick(env: Env, roomId: string, now = new Date().toISOString()): Promise<void> {
+/** Repicks today's room and returns its date. */
+export async function overrideDailyPick(env: Env, roomId: string, now = new Date().toISOString()): Promise<string> {
   const { date, start, end } = dailyWindow(now);
   const candidate = (await loadCandidates(env,now,roomId))[0];
   if (!candidate) throw new HttpError(409,'Choose a public published goal level with a verified clear.');
@@ -279,6 +280,7 @@ export async function overrideDailyPick(env: Env, roomId: string, now = new Date
     .bind(...values,...Array.from({length:4},()=>[date,start,end]).flat()).first<{ date: string }>();
   if (!result) throw new HttpError(409,'Today’s challenge has already started or its builder has been notified. Choose tomorrow’s pick after midnight UTC.');
   await env.DB.batch(featureStatements(env,date));
+  return date;
 }
 export async function awardDailyClear(env: Env, userId: string, type: 'room' | 'course', id: string, version: number, completedAt: string,
   options: LaneAwardOptions = {}): Promise<number> {

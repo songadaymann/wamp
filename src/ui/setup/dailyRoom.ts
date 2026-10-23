@@ -112,13 +112,16 @@ export class DailyRoomController {
     if (id === this.accountId) { this.render(); return; }
     this.accountId=id; this.generation++; this.busy=false; this.response=null; this.board?.replaceChildren(); this.render(); void this.refresh();
   };
+  /** After midnight UTC the stored pick is yesterday's, so a finished run reloads instead of comparing against it. */
+  private expired(): boolean { return Boolean(this.response && this.response.resetsAt <= new Date().toISOString()); }
   // Guest runs never change the server response: guest daily progress comes from local records.
-  private readonly onGuestProgress = () => this.render();
+  private readonly onGuestProgress = () => { this.render(); if (this.expired()) void this.refresh(); };
   private readonly onClear = (event: Event) => {
     this.render();
     const auth=getAuthDebugState(), pick=this.response?.pick;
-    // Only a signed-in finish of today's level can move the board, rank or completion.
-    if (!auth.authenticated || auth.source!=='session' || pick && !isDailyPickRun(pick,(event as CustomEvent<PostRunRatingRequestDetail>).detail)) return;
+    // Otherwise only a signed-in finish of today's level can move the board, rank or completion.
+    if (!this.expired() && (!auth.authenticated || auth.source!=='session'
+      || pick && !isDailyPickRun(pick,(event as CustomEvent<PostRunRatingRequestDetail>).detail))) return;
     this.lastLoaded=0; void this.refresh();
   };
   private readonly onMode = () => {

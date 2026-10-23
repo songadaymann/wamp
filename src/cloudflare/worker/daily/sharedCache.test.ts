@@ -5,7 +5,7 @@ import { createSession } from '../auth/store';
 import type { WorkerExecutionContextLike } from '../core/types';
 import type { DailyResponse } from '../../../daily/model';
 import { ensureDailyPick, loadDailyResponse } from './store';
-import { handleDaily } from './routes';
+import { handleAdminDaily, handleDaily } from './routes';
 
 let f: ReturnType<typeof fixture>;
 let stored: Map<string, { response: Response; expires: number }>;
@@ -24,6 +24,7 @@ beforeEach(async () => {
       const maxAge = Number(/max-age=(\d+)/.exec(response.headers.get('Cache-Control') ?? '')?.[1] ?? 0);
       stored.set(key.url, { response: response.clone(), expires: Date.now() + maxAge * 1000 });
     },
+    async delete(key: Request) { return stored.delete(key.url); },
   } });
   statements = [];
   const prepare = f.env.DB.prepare.bind(f.env.DB);
@@ -79,6 +80,26 @@ describe('Room of the Day shared cache (F331)', () => {
     expect((await daily()).body.leaderboard).toHaveLength(1);
     vi.setSystemTime(new Date(Date.parse(NOW) + 31_000));
     expect((await daily()).body.leaderboard).toHaveLength(2);
+  });
+
+  it('drops this location\'s cached day when an admin repicks it', async () => {
+    const yesterday = '2026-10-03T12:00:00.000Z';
+    const json = JSON.stringify({ ...f.record.published, id: '1,0', coordinates: { x: 1, y: 0 }, title: 'Second Level' });
+    f.sqlite.prepare(`INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id,last_published_by_user_id,last_published_by_display_name)
+      VALUES ('1,0',1,0,?,?,'Second Level','builder','builder','builder')`).run(json, json);
+    f.sqlite.prepare("INSERT INTO room_versions (room_id,version,snapshot_json,title,created_at,published_by_user_id) VALUES ('1,0',1,?,'Second Level',?,'builder')").run(json, NOW);
+    f.sqlite.prepare(`INSERT INTO room_runs (attempt_id,room_id,room_x,room_y,room_version,goal_type,goal_json,user_id,user_display_name,started_at,finished_at,result,elapsed_ms,verification_status)
+      VALUES ('second-clear','1,0',1,0,1,'reach_exit','{"type":"reach_exit"}','p1','p1',?,?,'completed',9000,'passed')`).run(yesterday, yesterday);
+    await refreshPlayableContentIndexForRoom(f.env, '1,0');
+    // Nobody has started today's challenge yet, so it can still be repicked.
+    f.sqlite.prepare("UPDATE room_runs SET started_at = ? WHERE attempt_id = 'seed'").run(yesterday);
+    expect((await daily()).body.pick?.roomId).toBe('0,0'); expect((await daily()).cache).toBe('hit');
+    f.env.ADMIN_API_KEY = 'admin-test';
+    const admin = await handleAdminDaily(new Request('https://api.wamp.land/api/admin/daily', { method: 'PUT',
+      headers: { 'x-admin-key': 'admin-test', Origin: 'https://wamp.land', 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId: '1,0' }) }), f.env);
+    expect((await admin.json() as DailyResponse).pick?.roomId).toBe('1,0');
+    const after = await daily();
+    expect(after.cache).toBe('miss'); expect(after.body.pick).toMatchObject({ roomId: '1,0', title: 'Second Level' });
   });
 
   it('keeps uncached reads (no edge cache) unchanged', async () => {
