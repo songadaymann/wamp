@@ -1,8 +1,8 @@
 import { AUTH_STATE_CHANGED_EVENT, AUTH_SESSION_REFRESHED_EVENT, getAuthDebugState, promptForSignIn } from '../../auth/client';
 import { GUEST_RUN_PROGRESS_CHANGED_EVENT } from '../../guestRooms/runService';
-import { POST_RUN_GUEST_CLAIM_REQUEST_EVENT, POST_RUN_RATING_REQUEST_EVENT } from '../../progression/postRunRatingEvents';
+import { POST_RUN_GUEST_CLAIM_REQUEST_EVENT, POST_RUN_RATING_REQUEST_EVENT, type PostRunRatingRequestDetail } from '../../progression/postRunRatingEvents';
 import { loadGuestRunProgress } from '../../progression/guestRunProgress';
-import type { DailyResponse } from '../../daily/model';
+import type { DailyPick, DailyResponse } from '../../daily/model';
 import { guestDailyProgress } from '../../daily/guestProgress';
 import { createDailyRepository, type DailyRepository } from '../../daily/repository';
 import { APP_MODE_CHANGED_EVENT } from '../appMode';
@@ -10,6 +10,15 @@ import { createModalLifecycle } from './modalLifecycle';
 import { asyncListener } from '../asyncListener';
 
 const DISMISSED = 'wamp_daily_dismissed_v1';
+const GUEST_PROGRESS_EVENTS = [POST_RUN_GUEST_CLAIM_REQUEST_EVENT,GUEST_RUN_PROGRESS_CHANGED_EVENT];
+/** Whether a finished run was today's exact level and version, including its legacy course id. */
+function isDailyPickRun(pick: DailyPick, detail: PostRunRatingRequestDetail | null | undefined): boolean {
+  if (!detail || detail.version !== pick.version) return false;
+  if (pick.contentType === 'room') return detail.contentType === 'room' && detail.contentId === pick.contentId;
+  const ids = detail.contentType === 'room' ? [] : [detail.contentId, detail.expandedRoomId,
+    detail.contentType === 'expanded_room' ? detail.legacyCourseId : null];
+  return ids.includes(pick.contentId) || pick.legacyCourseId !== null && ids.includes(pick.legacyCourseId);
+}
 export class DailyRoomController {
   private readonly modal;
   private readonly chip;
@@ -37,6 +46,7 @@ export class DailyRoomController {
   private returnFocus: HTMLElement | null = null;
   private dismissedDate: string | null = null;
   private pendingOpen = false;
+  private accountId = getAuthDebugState().user?.id;
   constructor(private readonly doc: Document = document, private readonly win: Window = window,
     private readonly repository: DailyRepository = createDailyRepository()) {
     this.modal = doc.getElementById('daily-room-modal'); this.chip = doc.getElementById('daily-room-chip');
@@ -57,7 +67,8 @@ export class DailyRoomController {
     this.retry?.addEventListener('click',this.onRetry); this.copy?.addEventListener('click',this.onCopy);
     this.save?.addEventListener('click',this.onSave); this.play?.addEventListener('click',this.onPlay);
     for (const name of [AUTH_STATE_CHANGED_EVENT,AUTH_SESSION_REFRESHED_EVENT]) this.win.addEventListener(name,this.onAuth);
-    for (const name of [POST_RUN_RATING_REQUEST_EVENT,POST_RUN_GUEST_CLAIM_REQUEST_EVENT,GUEST_RUN_PROGRESS_CHANGED_EVENT]) this.win.addEventListener(name,this.onClear);
+    for (const name of GUEST_PROGRESS_EVENTS) this.win.addEventListener(name,this.onGuestProgress);
+    this.win.addEventListener(POST_RUN_RATING_REQUEST_EVENT,this.onClear);
     this.win.addEventListener(APP_MODE_CHANGED_EVENT,this.onMode); this.win.addEventListener('focus',this.onWake);
     this.win.addEventListener('daily-room-open-request',this.onOpen);
     this.win.addEventListener('online',this.onWake); this.doc.addEventListener('visibilitychange',this.onWake);
@@ -74,7 +85,8 @@ export class DailyRoomController {
     this.retry?.removeEventListener('click',this.onRetry); this.copy?.removeEventListener('click',this.onCopy);
     this.save?.removeEventListener('click',this.onSave); this.play?.removeEventListener('click',this.onPlay);
     for (const name of [AUTH_STATE_CHANGED_EVENT,AUTH_SESSION_REFRESHED_EVENT]) this.win.removeEventListener(name,this.onAuth);
-    for (const name of [POST_RUN_RATING_REQUEST_EVENT,POST_RUN_GUEST_CLAIM_REQUEST_EVENT,GUEST_RUN_PROGRESS_CHANGED_EVENT]) this.win.removeEventListener(name,this.onClear);
+    for (const name of GUEST_PROGRESS_EVENTS) this.win.removeEventListener(name,this.onGuestProgress);
+    this.win.removeEventListener(POST_RUN_RATING_REQUEST_EVENT,this.onClear);
     this.win.removeEventListener(APP_MODE_CHANGED_EVENT,this.onMode); this.win.removeEventListener('focus',this.onWake);
     this.win.removeEventListener('daily-room-open-request',this.onOpen);
     this.win.removeEventListener('online',this.onWake); this.doc.removeEventListener('visibilitychange',this.onWake);
@@ -94,8 +106,21 @@ export class DailyRoomController {
     this.renderEntry();
   };
   private readonly onRetry = () => { void this.refresh(); };
-  private readonly onAuth = () => { this.generation++; this.busy=false; this.response=null; this.board?.replaceChildren(); this.render(); void this.refresh(); };
-  private readonly onClear = () => { this.render(); this.lastLoaded=0; void this.refresh(); };
+  private readonly onAuth = () => {
+    // Session refreshes and repeated auth renders keep the same viewer, whose response is unchanged.
+    const id = getAuthDebugState().user?.id;
+    if (id === this.accountId) { this.render(); return; }
+    this.accountId=id; this.generation++; this.busy=false; this.response=null; this.board?.replaceChildren(); this.render(); void this.refresh();
+  };
+  // Guest runs never change the server response: guest daily progress comes from local records.
+  private readonly onGuestProgress = () => this.render();
+  private readonly onClear = (event: Event) => {
+    this.render();
+    const auth=getAuthDebugState(), pick=this.response?.pick;
+    // Only a signed-in finish of today's level can move the board, rank or completion.
+    if (!auth.authenticated || auth.source!=='session' || pick && !isDailyPickRun(pick,(event as CustomEvent<PostRunRatingRequestDetail>).detail)) return;
+    this.lastLoaded=0; void this.refresh();
+  };
   private readonly onMode = () => {
     this.renderEntry();
     if (!['world','play-world'].includes(this.doc.body.dataset.appMode ?? '')) this.close(false);
