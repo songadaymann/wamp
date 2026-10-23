@@ -118,6 +118,7 @@ export function createLiveObjectController(
     | 'sessionResetController' | 'handleEnemyDefeated' | 'handleNpcDefeated'
     | 'handleCollectibleCollected' | 'handleEnemyCollectibleCollected' | 'handleLiveObjectRemovedForMultiplayer'
     | 'handleRoomSwitchStateChangedForMultiplayer' | 'roomAudioController' | 'fxController'
+    | 'worldStreamingController'
   >,
 ): OverworldLiveObjectController<RoomEdgeWall> {
   return new OverworldLiveObjectController({
@@ -203,6 +204,9 @@ export function createLiveObjectController(
     grantExternalLaunchGrace: (durationMs) => {
       host.externalLaunchGraceUntil = Math.max(host.externalLaunchGraceUntil, gameplayNow(host.scene) + durationMs);
     },
+    // Streaming is created after this controller; jobs are only queued once rooms load.
+    enqueueBackgroundCpuWork: (label, execute) =>
+      host.worldStreamingController?.enqueueBackgroundCpuWork(label, execute) ?? null,
     getPlayerGravityDirection: () => host.specialTilesController.getPlayerEnvironment().gravityDirection,
     launchPlayerFromSpring: (x, y, durationMs) => host.movementController.launchFromSpring(x, y, durationMs),
     grantPlayerAirJump: () => host.movementController.grantAirJump(),

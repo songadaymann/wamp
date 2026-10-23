@@ -1390,7 +1390,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     );
   }
 
-  private getSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
+  getSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
     const cacheKey = getSwordsmanTraversalGraphCacheKey(room);
     const cached = this.swordsmanTraversalGraphs.get(cacheKey);
     if (cached) {

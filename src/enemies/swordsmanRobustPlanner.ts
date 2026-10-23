@@ -47,8 +47,6 @@ export interface SwordsmanRobustTraversalPlan {
   /** Edges this plan had to physically simulate because no earlier plan had. */
   coldSimulatedEdges: number;
   planDurationMs: number;
-  /** The search stopped to leave the remaining edge physics to later frames; it has no route yet. */
-  pending?: boolean;
 }
 
 export interface SwordsmanRobustTraversalRequest {
@@ -59,11 +57,6 @@ export interface SwordsmanRobustTraversalRequest {
   blockedEdgeIds: ReadonlySet<string>;
   bodyWidth: number;
   bodyHeight: number;
-  /**
-   * Run uncached edge physics only while this frame's share is left and otherwise return a
-   * pending plan, so a room's first plans are spread over frames instead of freezing one (F302).
-   */
-  deferColdEdgeSimulations?: boolean;
 }
 
 export interface SwordsmanTraversalEdgeSimulationDebug {
@@ -116,14 +109,12 @@ const OUT_OF_BOUNDS_PADDING_PX = 64;
 const SURFACE_PROBE_INSET_PX = 1;
 const EPSILON = 0.01;
 const EDGE_SIMULATION_CACHE_LIMIT = 4096;
-// Uncached edge physics may use up to this much time in one go, refilling at this share of the
-// time that passes: about 3 ms of each 60 Hz frame. Plans that defer stop when it runs out.
-const COLD_SIMULATION_BURST_MS = 3;
-const COLD_SIMULATION_TIME_SHARE = COLD_SIMULATION_BURST_MS / (1000 / 60);
 
-const edgeSimulationCache = new Map<string, EdgeSimulationResult>();
-let coldSimulationAllowanceMs = COLD_SIMULATION_BURST_MS;
-let coldSimulationAllowanceUpdatedAt = Number.NEGATIVE_INFINITY;
+// Simulated edges, one bucket per room version and body size, least recently used first. Whole
+// rooms are evicted past the limit, so the room being played keeps all of its edges (F302).
+const edgeSimulationsByRoom = new Map<string, Map<string, EdgeSimulationResult>>();
+let edgeSimulationCount = 0;
+let lastEdgeSimulationRoomKey: string | null = null;
 let coldSimulationCount = 0;
 const terrainProfilesByRoom = new WeakMap<RoomSnapshot, {
   graphCacheKey: string;
@@ -145,7 +136,6 @@ export function planSwordsmanRobustTraversal(
     blockedEdgeIds,
     bodyWidth,
     bodyHeight,
-    deferColdEdgeSimulations = false,
   } = request;
   const coldSimulationCountAtStart = coldSimulationCount;
   const currentContext = getSwordsmanTraversalContext(graph, enemy);
@@ -219,25 +209,7 @@ export function planSwordsmanRobustTraversal(
         edge,
         bodyWidth,
         bodyHeight,
-        deferColdEdgeSimulations,
       );
-      if (!simulation) {
-        // Out of physics time for this frame. Searching on without this edge could pick a
-        // different route than a full search, so the caller waits for a later frame instead.
-        return {
-          edges: [],
-          currentNodeId: currentContext.currentNodeId,
-          targetNodeId: targetContext.targetNodeId,
-          targetNodeIds: targetContext.targetNodeIds,
-          exactRoute: false,
-          routeCost: 0,
-          expandedStates,
-          simulatedEdges,
-          coldSimulatedEdges: coldSimulationCount - coldSimulationCountAtStart,
-          planDurationMs: performance.now() - startedAt,
-          pending: true,
-        };
-      }
       if (!simulation.success) {
         continue;
       }
@@ -317,12 +289,28 @@ export function debugSimulateSwordsmanTraversalEdge(
   bodyWidth: number,
   bodyHeight: number,
 ): SwordsmanTraversalEdgeSimulationDebug {
-  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight)!;
+  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
   return {
     edgeId: edge.id,
     success: result.success,
     travelMs: Math.round(result.travelMs),
   };
+}
+
+/**
+ * Simulates one edge for a body size ahead of planning, so plans for that room find it cached.
+ * Returns whether it had to be simulated now.
+ */
+export function prepareSwordsmanTraversalEdgeSimulation(
+  room: RoomSnapshot,
+  graph: SwordsmanTraversalGraph,
+  edge: SwordsmanTraversalEdge,
+  bodyWidth: number,
+  bodyHeight: number,
+): boolean {
+  const coldSimulationCountBefore = coldSimulationCount;
+  simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
+  return coldSimulationCount > coldSimulationCountBefore;
 }
 
 function estimateRemainingCost(
@@ -425,42 +413,20 @@ function simulateTraversalEdge(
   edge: SwordsmanTraversalEdge,
   bodyWidth: number,
   bodyHeight: number,
-  deferIfOutOfTime = false,
-): EdgeSimulationResult | null {
-  const cacheKey = buildEdgeSimulationCacheKey(graph.cacheKey, edge.id, bodyWidth, bodyHeight);
-  const cached = edgeSimulationCache.get(cacheKey);
+): EdgeSimulationResult {
+  const roomKey = buildEdgeSimulationRoomKey(graph.cacheKey, bodyWidth, bodyHeight);
+  const simulations = getEdgeSimulationRoom(roomKey);
+  const cached = simulations.get(edge.id);
   if (cached) {
     return cached;
   }
 
-  const startedAt = performance.now();
-  refillColdSimulationAllowance(startedAt);
-  if (deferIfOutOfTime && coldSimulationAllowanceMs <= 0) {
-    return null;
-  }
-
   const result = runTraversalEdgeSimulation(room, graph, edge, bodyWidth, bodyHeight);
-  const endedAt = performance.now();
-  // A plan that does not defer can run far past the share; the debt stays at one burst so
-  // deferring plans resume within a frame or two.
-  coldSimulationAllowanceMs = Math.max(
-    -COLD_SIMULATION_BURST_MS,
-    coldSimulationAllowanceMs - (endedAt - startedAt),
-  );
-  coldSimulationAllowanceUpdatedAt = endedAt;
   coldSimulationCount += 1;
-  return rememberEdgeSimulation(cacheKey, result);
-}
-
-function refillColdSimulationAllowance(now: number): void {
-  const elapsedMs = now - coldSimulationAllowanceUpdatedAt;
-  if (elapsedMs > 0) {
-    coldSimulationAllowanceMs = Math.min(
-      COLD_SIMULATION_BURST_MS,
-      coldSimulationAllowanceMs + elapsedMs * COLD_SIMULATION_TIME_SHARE,
-    );
-  }
-  coldSimulationAllowanceUpdatedAt = now;
+  simulations.set(edge.id, result);
+  edgeSimulationCount += 1;
+  evictLeastRecentEdgeSimulationRooms(roomKey);
+  return result;
 }
 
 function runTraversalEdgeSimulation(
@@ -885,24 +851,38 @@ function getBottom(body: SimBody, bodyHeight: number): number {
   return body.centerY + bodyHeight * 0.5;
 }
 
-function buildEdgeSimulationCacheKey(
+function buildEdgeSimulationRoomKey(
   graphCacheKey: string,
-  edgeId: string,
   bodyWidth: number,
   bodyHeight: number,
 ): string {
-  return `${graphCacheKey}:${edgeId}:${Math.round(bodyWidth)}:${Math.round(bodyHeight)}`;
+  return `${graphCacheKey}:${Math.round(bodyWidth)}:${Math.round(bodyHeight)}`;
 }
 
-function rememberEdgeSimulation(
-  key: string,
-  value: EdgeSimulationResult,
-): EdgeSimulationResult {
-  if (edgeSimulationCache.size >= EDGE_SIMULATION_CACHE_LIMIT) {
-    edgeSimulationCache.clear();
+function getEdgeSimulationRoom(roomKey: string): Map<string, EdgeSimulationResult> {
+  let simulations = edgeSimulationsByRoom.get(roomKey);
+  if (!simulations) {
+    simulations = new Map();
+    edgeSimulationsByRoom.set(roomKey, simulations);
+  } else if (roomKey !== lastEdgeSimulationRoomKey) {
+    edgeSimulationsByRoom.delete(roomKey);
+    edgeSimulationsByRoom.set(roomKey, simulations);
   }
-  edgeSimulationCache.set(key, value);
-  return value;
+  lastEdgeSimulationRoomKey = roomKey;
+  return simulations;
+}
+
+function evictLeastRecentEdgeSimulationRooms(keepRoomKey: string): void {
+  for (const [roomKey, simulations] of edgeSimulationsByRoom) {
+    if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
+      return;
+    }
+    if (roomKey === keepRoomKey) {
+      continue;
+    }
+    edgeSimulationsByRoom.delete(roomKey);
+    edgeSimulationCount -= simulations.size;
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {

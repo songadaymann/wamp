@@ -224,23 +224,17 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
     clearRoute();
 
     // With no committable route every frame would plan every coin ledge again, so the same answer
-    // is kept for a moment while the ledge, coins and blocked edges stay the same (F302).
+    // is kept for a moment while the room, ledge, spot, coins and blocked edges stay the same (F302).
     const routeSearchKey = buildCollectRouteSearchKey(input);
     const skipRouteSearch =
       state.aiCollectNoRouteKey === routeSearchKey && now < state.aiCollectNoRouteUntil;
-    const routeSearch = skipRouteSearch
+    const bestRouteTarget = skipRouteSearch
       ? null
       : selectBestCollectRoute(input, candidates, currentSurfaceIsDepleted);
-    if (routeSearch === 'pending') {
-      // The room's jumps are still being simulated over frames. Wait for the full search rather
-      // than act on part of it, so the route taken is the one it would have picked.
-      return null;
-    }
-    if (!routeSearch && !skipRouteSearch) {
+    if (!bestRouteTarget && !skipRouteSearch) {
       state.aiCollectNoRouteKey = routeSearchKey;
       state.aiCollectNoRouteUntil = now + SWORDSMAN_AI_COLLECT_NO_ROUTE_RETRY_MS;
     }
-    const bestRouteTarget = routeSearch;
 
     if (
       bestRouteTarget &&
@@ -374,12 +368,8 @@ function selectBestCollectRoute(
       blockedEdgeIds,
       bodyWidth: bodyWidth,
       bodyHeight: bodyHeight,
-      deferColdEdgeSimulations: true,
     });
 
-    if (plan?.pending) {
-      return 'pending';
-    }
     if (!plan || plan.edges.length === 0) {
       continue;
     }
@@ -490,10 +480,17 @@ function selectBestCollectRoute(
   return bestRouteTarget;
 }
 
+/** Everything a no-route answer depends on; the spot on the ledge is kept to the tile. */
 function buildCollectRouteSearchKey(input: CollectSelectionInput): string {
+  const coinGroups = Array.from(
+    input.groupedCandidates,
+    ([nodeKey, candidate]) => `${nodeKey}=${candidate.collectible.key}x${candidate.collectibleCount}`,
+  );
   return [
+    input.graph.cacheKey,
     input.currentContext.startNodeIds.join(','),
-    Array.from(input.groupedCandidates.keys()).sort().join(','),
+    Math.floor(input.enemySnapshot.centerX / TILE_SIZE),
+    coinGroups.sort().join(','),
     Array.from(input.blockedEdgeIds).sort().join(','),
   ].join('\n');
 }

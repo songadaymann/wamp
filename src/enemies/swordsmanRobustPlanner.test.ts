@@ -1,51 +1,42 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getTilesetByKey, ROOM_HEIGHT, ROOM_WIDTH, TILE_SIZE } from '../config';
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { getTilesetByKey, ROOM_HEIGHT, ROOM_WIDTH } from '../config';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 import { buildSwordsmanTraversalGraph, type SwordsmanBodySnapshot } from './swordsmanTraversal';
 import {
   debugSimulateSwordsmanTraversalEdge,
   planSwordsmanRobustTraversal,
+  prepareSwordsmanTraversalEdgeSimulation,
   type SwordsmanRobustTraversalPlan,
 } from './swordsmanRobustPlanner';
 
-const GROUND = getTilesetByKey('forest')!.firstGid + 14;
-const FRAME_MS = 1000 / 60;
-let roomSerial = 0;
-
 type Layout = {
   ledges: Array<[tileY: number, fromTileX: number, toTileX: number]>;
-  walls?: Array<[tileX: number, fromTileY: number, toTileY: number]>;
-  enemy: [tileX: number, tileY: number];
-  target: [tileX: number, tileY: number];
+  walls: Array<[tileX: number, fromTileY: number, toTileY: number]>;
+};
+type PlanSummary = ReturnType<typeof summarize>;
+
+/** Plans recorded from origin/main's planner (before F302), each on a room with nothing simulated. */
+const recorded = JSON.parse(readFileSync(
+  new URL('./__fixtures__/robustPlannerMainPlans.json', import.meta.url),
+  'utf8',
+)) as {
+  layouts: Record<string, Layout>;
+  cases: Array<{
+    layout: string;
+    enemy: SwordsmanBodySnapshot;
+    target: SwordsmanBodySnapshot;
+    blockedEdgeIds: string[];
+    bodyWidth: number;
+    bodyHeight: number;
+    plan: PlanSummary;
+  }>;
 };
 
-const DENSE: Layout = {
-  ledges: [17, 14, 11, 8, 5].flatMap((tileY) => {
-    const ledges: Array<[number, number, number]> = [];
-    for (let tileX = tileY % 2 ? 1 : 3; tileX < 38; tileX += 5) ledges.push([tileY, tileX, tileX + 2]);
-    return ledges;
-  }),
-  enemy: [2, 20],
-  target: [36, 5],
-};
-const TYPICAL: Layout = {
-  ledges: [
-    [17, 3, 7], [17, 12, 16], [17, 24, 28], [17, 33, 37],
-    [14, 0, 4], [14, 9, 13], [14, 18, 22], [14, 28, 32],
-    [11, 4, 8], [11, 14, 18], [11, 24, 28], [11, 34, 38],
-    [8, 10, 14], [8, 26, 30],
-  ],
-  walls: [[20, 2, 7]],
-  enemy: [2, 20],
-  target: [28, 8],
-};
-const STAIRCASE: Layout = {
-  ledges: Array.from({ length: 6 }, (_, step) => [17 - step * 2, 4 + step * 5, 7 + step * 5] as [number, number, number]),
-  enemy: [1, 20],
-  target: [33, 7],
-};
+const GROUND = getTilesetByKey('forest')!.firstGid + 14;
+let roomSerial = 0;
 
-/** A new room id each time, so its edges start out unsimulated. */
+/** A new room id each time, so none of its edges are simulated yet. */
 function freshRoom(layout: Layout): RoomSnapshot {
   roomSerial += 1;
   const room = createDefaultRoomSnapshot(`robust-planner-${roomSerial}`, { x: roomSerial, y: 0 });
@@ -56,97 +47,69 @@ function freshRoom(layout: Layout): RoomSnapshot {
   for (const [tileY, fromTileX, toTileX] of layout.ledges) {
     for (let tileX = fromTileX; tileX <= toTileX; tileX += 1) room.tileData.terrain[tileY][tileX] = GROUND;
   }
-  for (const [tileX, fromTileY, toTileY] of layout.walls ?? []) {
+  for (const [tileX, fromTileY, toTileY] of layout.walls) {
     for (let tileY = fromTileY; tileY <= toTileY; tileY += 1) room.tileData.terrain[tileY][tileX] = GROUND;
   }
   return room;
 }
 
-function standingAt([tileX, tileY]: [number, number]): SwordsmanBodySnapshot {
-  const centerX = tileX * TILE_SIZE + TILE_SIZE / 2;
-  const bottom = tileY * TILE_SIZE;
-  return { centerX, centerY: bottom - 16, left: centerX - 8, right: centerX + 8, bottom, onFloor: true, wallContactSide: 0 };
-}
-
-function plan(room: RoomSnapshot, layout: Layout, deferColdEdgeSimulations: boolean) {
-  return planSwordsmanRobustTraversal({
-    room,
-    graph: buildSwordsmanTraversalGraph(room),
-    enemy: standingAt(layout.enemy),
-    target: standingAt(layout.target),
-    blockedEdgeIds: new Set(),
-    bodyWidth: 16,
-    bodyHeight: 32,
-    deferColdEdgeSimulations,
-  });
-}
-
-function routeOf(result: SwordsmanRobustTraversalPlan | null) {
-  return result && {
-    edgeIds: result.edges.map((edge) => edge.id),
-    targetNodeId: result.targetNodeId,
-    exactRoute: result.exactRoute,
-    routeCost: result.routeCost,
-    expandedStates: result.expandedStates,
-    simulatedEdges: result.simulatedEdges,
+function summarize(plan: SwordsmanRobustTraversalPlan | null) {
+  return plan && {
+    edgeIds: plan.edges.map((edge) => edge.id),
+    currentNodeId: plan.currentNodeId,
+    targetNodeId: plan.targetNodeId,
+    targetNodeIds: plan.targetNodeIds,
+    exactRoute: plan.exactRoute,
+    routeCost: plan.routeCost,
+    expandedStates: plan.expandedStates,
+    simulatedEdges: plan.simulatedEdges,
   };
 }
 
-/** Every clock read moves time on by `stepMs`, so each edge simulation costs at least that. */
-function useSteppingClock(stepMs: number): { nextFrame: () => void } {
-  let now = 1_000_000 + roomSerial * 100_000;
-  vi.spyOn(performance, 'now').mockImplementation(() => (now += stepMs));
-  return { nextFrame: () => { now += FRAME_MS; } };
+function warmEveryEdge(room: RoomSnapshot, bodyWidth = 16, bodyHeight = 32): number {
+  const graph = buildSwordsmanTraversalGraph(room);
+  let simulated = 0;
+  for (const edge of graph.edgesById.values()) {
+    if (prepareSwordsmanTraversalEdgeSimulation(room, graph, edge, bodyWidth, bodyHeight)) simulated += 1;
+  }
+  return simulated;
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+function planIn(room: RoomSnapshot, testCase: typeof recorded.cases[number]) {
+  return planSwordsmanRobustTraversal({
+    room,
+    graph: buildSwordsmanTraversalGraph(room),
+    enemy: testCase.enemy,
+    target: testCase.target,
+    blockedEdgeIds: new Set(testCase.blockedEdgeIds),
+    bodyWidth: testCase.bodyWidth,
+    bodyHeight: testCase.bodyHeight,
+  });
+}
 
-describe('collect-mode robust planning in a room it has not simulated yet (F302)', () => {
-  it.each([
-    ['dense ledge grid', DENSE],
-    ['typical room with a wall', TYPICAL],
-    ['staircase', STAIRCASE],
-  ])('spreads the first plan in a %s over frames and lands on the full search route', (_name, layout) => {
-    const clock = useSteppingClock(0.5);
-    const fullSearch = plan(freshRoom(layout), layout, false);
-    expect(fullSearch?.pending).toBeUndefined();
-    expect(fullSearch?.edges.length).toBeGreaterThan(0);
-    clock.nextFrame();
-    clock.nextFrame();
-
-    const room = freshRoom(layout);
-    let result = plan(room, layout, true);
-    const coldSimulationsPerFrame = [result!.coldSimulatedEdges];
-    while (result?.pending && coldSimulationsPerFrame.length < 500) {
-      clock.nextFrame();
-      result = plan(room, layout, true);
-      coldSimulationsPerFrame.push(result!.coldSimulatedEdges);
+describe('robust Sword Hunter planning (F302)', () => {
+  it('plans exactly like origin/main in a room it has not simulated yet', () => {
+    expect(recorded.cases.length).toBeGreaterThan(100);
+    expect(recorded.cases.filter((testCase) => testCase.plan?.edgeIds.length).length).toBeGreaterThan(80);
+    for (const testCase of recorded.cases) {
+      expect(summarize(planIn(freshRoom(recorded.layouts[testCase.layout]), testCase))).toEqual(testCase.plan);
     }
-
-    // 3 ms of physics a frame at 0.5 ms an edge, less what the clock refills between edges.
-    expect(Math.max(...coldSimulationsPerFrame)).toBeLessThanOrEqual(8);
-    expect(coldSimulationsPerFrame.length).toBeGreaterThan(1);
-    expect(result?.pending).toBeUndefined();
-    expect(routeOf(result)).toEqual(routeOf(fullSearch));
-    expect(coldSimulationsPerFrame.reduce((sum, count) => sum + count, 0)).toBe(fullSearch!.coldSimulatedEdges);
   });
 
-  it('still simulates every edge at once for plans that do not defer', () => {
-    const clock = useSteppingClock(0.5);
-    clock.nextFrame();
-    const deferred = plan(freshRoom(DENSE), DENSE, true);
-    expect(deferred).toMatchObject({ pending: true, edges: [] });
-    expect(deferred!.coldSimulatedEdges).toBeGreaterThan(0);
-    const result = plan(freshRoom(DENSE), DENSE, false);
-    expect(result?.pending).toBeUndefined();
-    expect(result!.coldSimulatedEdges).toBeGreaterThan(100);
+  it('plans exactly like origin/main from edges simulated ahead, simulating nothing itself', () => {
+    for (const testCase of recorded.cases) {
+      const room = freshRoom(recorded.layouts[testCase.layout]);
+      warmEveryEdge(room, testCase.bodyWidth, testCase.bodyHeight);
+      const plan = planIn(room, testCase);
+      expect(summarize(plan)).toEqual(testCase.plan);
+      expect(plan?.coldSimulatedEdges ?? 0).toBe(0);
+    }
   });
 
   it('simulates each jump the same whichever tiles were read first', () => {
-    const forwardRoom = freshRoom(TYPICAL);
-    const reverseRoom = freshRoom(TYPICAL);
+    const layout = recorded.layouts.typical;
+    const forwardRoom = freshRoom(layout);
+    const reverseRoom = freshRoom(layout);
     const forwardGraph = buildSwordsmanTraversalGraph(forwardRoom);
     const reverseGraph = buildSwordsmanTraversalGraph(reverseRoom);
     const forwardEdges = Array.from(forwardGraph.edgesById.values());
@@ -156,5 +119,23 @@ describe('collect-mode robust planning in a room it has not simulated yet (F302)
     expect(forwardEdges.filter((edge) => forward.get(edge.id)!.success).length).toBeGreaterThan(20);
     expect(new Map([...reverse].sort(([left], [right]) => left.localeCompare(right))))
       .toEqual(new Map([...forward].sort(([left], [right]) => left.localeCompare(right))));
+  });
+
+  it('evicts whole least-recently-planned rooms past 4,096 edges instead of clearing every room', () => {
+    const dense = recorded.layouts.dense;
+    const denseCase = recorded.cases.find((testCase) => testCase.layout === 'dense' && testCase.plan?.edgeIds.length
+      && testCase.bodyWidth === 16 && testCase.blockedEdgeIds.length === 0)!;
+    const played = freshRoom(dense);
+    const edgesPerRoom = warmEveryEdge(played);
+    expect(edgesPerRoom).toBeGreaterThan(500);
+    // Seven dense rooms fit under the limit; an eighth pushes the least recently used one out.
+    const others = Array.from({ length: 6 }, () => freshRoom(dense));
+    for (const room of others) warmEveryEdge(room);
+    expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
+    warmEveryEdge(freshRoom(dense));
+
+    expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
+    expect(planIn(others[1], denseCase)?.coldSimulatedEdges).toBe(0);
+    expect(planIn(others[0], denseCase)?.coldSimulatedEdges).toBeGreaterThan(0);
   });
 });

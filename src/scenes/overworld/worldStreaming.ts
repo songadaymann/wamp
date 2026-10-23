@@ -1182,6 +1182,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return true;
   }
 
+  /**
+   * Queues one atomic CPU job of at most about 1 ms beside predicted-room object preparation, for
+   * gameplay caches worth filling before a room is played (Sword Hunter jump physics, F302).
+   */
+  enqueueBackgroundCpuWork(label: string, execute: () => void): FrameWorkJobHandle | null {
+    if (this.destroyed) {
+      return null;
+    }
+    return this.frameWorkCoordinator.enqueue({
+      label,
+      priority: 'predicted-visuals-objects',
+      costKind: 'cpu',
+      estimatedCostMs: 1,
+      execute,
+    });
+  }
+
   private hasUrgentDestinationFrameWork(): boolean {
     return this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
       || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision');
