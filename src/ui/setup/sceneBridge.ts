@@ -250,6 +250,8 @@ export interface CourseComposerSceneBridge {
   zoomIn: () => void;
   zoomOut: () => void;
   fitCourseToView: () => void;
+  /** Runs a setup panel layout change without moving the middle of the visible map. */
+  keepMapCenterWhile: (change: () => void) => void;
   saveCourseDraft: () => Promise<void>;
   publishCourseDraft: () => Promise<void>;
   unpublishCourse: () => Promise<void>;

@@ -36,6 +36,8 @@ const requiredIdsByController = {
     'btn-first-publish-x', 'btn-first-publish-wampogram', 'btn-first-publish-play', 'first-publish-status'],
   'EditorDockShellController': [
     'editor-shell-top',
+    'btn-editor-phone-fit',
+    'btn-mobile-editor-fit',
     'editor-shell-title-slot',
     'editor-shell-status-slot',
     'editor-share-popover',
@@ -73,6 +75,8 @@ const requiredIdsByController = {
   ],
   'CourseComposerPanelController': [
     'course-editor-shell',
+    'course-workbench-panel',
+    'btn-course-workbench-sheet',
     'course-workbench-title-input',
     'course-workbench-pits-deadly',
     'course-workbench-status',

@@ -1,7 +1,16 @@
 import type Phaser from 'phaser';
 import { EditorTouchCandidate, EditorTouchGesture, type TouchGesturePoint, type TouchEditScheduler } from './touchGesture';
 
-type TouchAction = 'brush' | 'draw' | 'objects' | 'tap' | 'bend';
+type TouchAction = 'brush' | 'draw' | 'objects' | 'tap' | 'bend' | 'move';
+
+/** The Move tool, which claims a first finger only while it is the active tool. */
+interface TouchMoveTool {
+  claims(): boolean;
+  down(pointer: Phaser.Input.Pointer, at?: { x: number; y: number }): boolean;
+  move(pointer: Phaser.Input.Pointer): boolean;
+  up(pointer: Phaser.Input.Pointer, outside?: boolean): boolean;
+  stopGesture(): boolean;
+}
 
 interface CourseTouchHost {
   signature(): string;
@@ -16,6 +25,7 @@ interface CourseTouchHost {
   cancel(): void;
   worldPoint(x: number, y: number): { x: number; y: number };
   pinch(factor: number, anchor: { x: number; y: number }, x: number, y: number): void;
+  moveTool: TouchMoveTool;
 }
 
 /** Keeps multi-finger navigation separate from edits in the multi-cell workspace. */
@@ -46,6 +56,20 @@ export class CourseTouchController {
     }
     if (result !== 'edit') return;
     this.start = { id: pointer.id, x: pointer.x, y: pointer.y };
+    // Move starts only once the finger drags or holds, so a second finger can still pinch
+    // before Move drops the selection or switches the selected cell (F371).
+    if (this.host.moveTool.claims()) {
+      const start = { x: pointer.x, y: pointer.y };
+      this.action = 'move';
+      this.signature = this.host.signature();
+      this.candidate.down(pointer, () => {
+        this.validate();
+        if (this.action !== 'move') return;
+        this.host.moveTool.down(pointer, start);
+        this.signature = this.host.signature();
+      });
+      return;
+    }
     this.signature = this.host.signature();
     this.action = this.host.classify(pointer);
     if (this.action === 'draw') this.host.begin(pointer);
@@ -72,6 +96,11 @@ export class CourseTouchController {
       return;
     }
     if (result !== 'edit' || !this.action) return;
+    if (this.action === 'move') {
+      this.candidate.move(pointer);
+      if (this.candidate.isStarted) this.host.moveTool.move(pointer);
+      return;
+    }
     if (this.action === 'objects' && !this.objectsStarted && this.gesture.isDrag && this.start) {
       this.host.beginObjects(this.start);
       this.objectsStarted = true;
@@ -81,7 +110,7 @@ export class CourseTouchController {
       || (this.action === 'brush' && this.candidate.isStarted)) this.host.move(pointer);
   }
 
-  up(pointer: Phaser.Input.Pointer): void {
+  up(pointer: Phaser.Input.Pointer, outside = false): void {
     this.validate();
     const result = this.gesture.up(pointer);
     if (pointer.event?.type === 'touchcancel') {
@@ -89,8 +118,9 @@ export class CourseTouchController {
       return;
     }
     if (result === 'ignore') return;
-    if (this.action === 'brush') this.candidate.activate();
-    if (this.action === 'tap' || (this.action === 'objects' && !this.objectsStarted)) {
+    if (this.action === 'brush' || this.action === 'move') this.candidate.activate();
+    if (this.action === 'move') this.host.moveTool.up(pointer, outside);
+    else if (this.action === 'tap' || (this.action === 'objects' && !this.objectsStarted)) {
       if (result === 'tap') this.host.tap(pointer);
     } else if (this.action) this.host.finish(pointer, this.action === 'bend');
     this.action = null;
@@ -104,6 +134,7 @@ export class CourseTouchController {
   }
 
   cancel(): void {
+    if (this.action === 'move') this.host.moveTool.stopGesture();
     this.candidate.cancel();
     this.host.cancel();
     this.gesture.suppress();

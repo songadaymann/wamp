@@ -7,6 +7,8 @@ import {
 
 type CourseEditorPanelElements = {
   shell: HTMLElement | null;
+  panel: HTMLElement | null;
+  sheetButton: HTMLButtonElement | null;
   titleInput: HTMLInputElement | null;
   pitsInput: HTMLInputElement | null;
   heartsSelect: HTMLSelectElement | null;
@@ -53,6 +55,8 @@ export class CourseComposerPanelController {
   ) {
     this.elements = {
       shell: this.doc.getElementById('course-editor-shell'),
+      panel: this.doc.getElementById('course-workbench-panel'),
+      sheetButton: this.doc.getElementById('btn-course-workbench-sheet') as HTMLButtonElement | null,
       titleInput: this.doc.getElementById('course-workbench-title-input') as HTMLInputElement | null,
       pitsInput: this.doc.getElementById('course-workbench-pits-deadly') as HTMLInputElement | null,
       heartsSelect: this.doc.getElementById('course-workbench-player-hearts') as HTMLSelectElement | null,
@@ -133,6 +137,20 @@ export class CourseComposerPanelController {
     });
     this.elements.backButton?.addEventListener('click', () => {
       void getActiveCourseComposerScene(this.game)?.returnToWorld();
+    });
+    // The composer keeps Phaser's Space key, which would swallow Space on a clicked button.
+    this.elements.sheetButton?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.code !== 'Space') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) this.elements.sheetButton?.click();
+    });
+    this.elements.sheetButton?.addEventListener('click', () => {
+      const collapse = this.elements.panel?.dataset.sheet !== 'collapsed';
+      const apply = () => this.setSheetCollapsed(collapse);
+      const scene = getActiveCourseComposerScene(this.game);
+      if (scene) scene.keepMapCenterWhile(apply);
+      else apply();
     });
 
     this.elements.roomList?.addEventListener('click', (event) => {
@@ -231,6 +249,13 @@ export class CourseComposerPanelController {
     this.setText(this.elements.unpublishReason, state.unpublishCourseDisabledReason ?? '');
     this.setHidden(this.elements.unpublishReason, !state.unpublishCourseDisabledReason);
     this.setText(this.elements.zoomText, state.zoomText);
+  }
+
+  /** Phones only: the handle folds the setup sheet down to the selected cell (F365). */
+  private setSheetCollapsed(collapsed: boolean): void {
+    if (this.elements.panel) this.elements.panel.dataset.sheet = collapsed ? 'collapsed' : 'open';
+    this.setButtonText(this.elements.sheetButton, collapsed ? 'Show setup' : 'Hide setup');
+    this.elements.sheetButton?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   }
 
   private renderRoomEntries(entries: CourseEditorRoomEntry[]): void {

@@ -145,6 +145,7 @@ export const SCENE_CAPABILITY_METHODS = {
     zoomIn: true,
     zoomOut: true,
     fitCourseToView: true,
+    keepMapCenterWhile: true,
     saveCourseDraft: true,
     publishCourseDraft: true,
     unpublishCourse: true,

@@ -307,6 +307,10 @@ export class EditorDockShellController {
           case 'publish':
             this.clickExistingButton('btn-publish-room');
             break;
+          case 'fit':
+            // Phones hide the zoom row, so More carries its Fit (F371).
+            this.clickExistingButton('btn-mobile-editor-fit');
+            break;
           default:
             break;
         }
@@ -790,6 +794,7 @@ export class EditorDockShellController {
       ['test', 'btn-test-play'],
       ['save', 'btn-save-draft'],
       ['publish', 'btn-publish-room'],
+      ['fit', 'btn-mobile-editor-fit'],
     ];
     for (const [action, targetId] of proxyTargets) {
       const proxy = this.doc.querySelector<HTMLButtonElement>(`[data-editor-shell-action="${action}"]`);

@@ -668,6 +668,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       },
       cancel: () => this.cancelTouchBatches(),
       worldPoint: (x, y) => getScreenAnchorWorldPoint(x, y, this.cameras.main),
+      moveTool: this.objectMoveController,
       pinch: (factor, anchor, x, y) => {
         const camera = this.cameras.main;
         this.inspectZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
@@ -2506,9 +2507,10 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.events.on('sleep', this.handleTouchBlur);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
+      // Touch reaches Move through the touch controls, so a second finger pinches (F371).
+      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
       else if (this.objectMoveController.down(pointer)) return;
-      if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
       }
@@ -2537,8 +2539,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.objectMoveController.move(pointer)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
+      if (this.objectMoveController.move(pointer)) return;
       if (mouseButtonsReleased(pointer) && this.hasMousePointerAction(pointer)) {
         this.handlePointerRelease(pointer, true);
         return;
@@ -2588,8 +2590,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   // A release over a panel or outside the window arrives as 'pointerupoutside'; it
   // finishes the stroke, shape or pan like a release over the canvas.
   private handlePointerRelease(pointer: Phaser.Input.Pointer, outside = false): void {
+    if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer, outside); return; }
     if (this.objectMoveController.up(pointer, outside)) return;
-    if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer); return; }
     if (this.pendingRightClickPanPointerId === pointer.id) {
       this.pendingRightClickPanPointerId = null;
       if (!outside) this.handleSecondaryPointerClick(pointer);
