@@ -4,6 +4,7 @@ import worker from '../../worker';
 import { NOW } from '../activity/testDatabase';
 import { API_TOKEN_PREFIX, createApiTokenForUser, createSession, generateOpaqueToken, hashToken } from '../auth/store';
 import { discoveryFixture } from '../runs/discoveryTestDatabase';
+import { loadPublicPlaylistSummariesForUser } from './store';
 
 // Rooms 1,0 to 13,0 are published by "builder" (6,0 has versions 1 and 2). Cells 7,0 and 8,0 form the
 // Expanded Room "native" and 9,0 and 10,0 form "course:legacy", each at version 3 with cells at version 1.
@@ -167,6 +168,9 @@ describe('playlist routes: making, editing and deleting', () => {
     expect(playlists).toHaveLength(50);
     expect(playlists[0].slug).toBe('list-51');
     expect(playlists.every((playlist) => playlist.ownerUserId === 'p1')).toBe(true);
+    // A profile shows the twelve most recent.
+    const profile = (await loadPublicPlaylistSummariesForUser(f.env, 'p1')).map((playlist) => playlist.slug);
+    expect([profile.length, profile[0], profile[11]]).toEqual([12, 'list-51', 'list-40']);
   });
 });
 
