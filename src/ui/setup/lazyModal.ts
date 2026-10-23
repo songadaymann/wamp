@@ -97,7 +97,8 @@ export class LazyModal<T extends ModalController> {
  * A menu's `onLoadError`: a card that names the menu and offers a reload. Browsers keep a failed
  * download for the life of the page, so trying again without one would fail the same way. It is
  * an error card, so after a release F374's update offer replaces it; like that offer, it never
- * covers a choice or a save in progress. The failure is reported either way.
+ * covers a choice or a save in progress. The failure is reported either way. `menu` reads as it
+ * would mid-sentence ("version history", "Leaderboard"); the card's title starts it with a capital.
  */
 export function explainMenuLoadFailure(menu: string, reload: () => void = () => window.location.reload()): (error: unknown) => void {
   return (error) => {
@@ -109,7 +110,7 @@ export function explainMenuLoadFailure(menu: string, reload: () => void = () => 
     });
     if (!canReplaceBusyCard()) return;
     showBusyError(`The ${menu} couldn't load. Check your connection, then reload WAMP. Save anything you are working on first.`, {
-      title: menu, retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: reload,
+      title: menu.charAt(0).toUpperCase() + menu.slice(1), retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: reload,
     });
   };
 }

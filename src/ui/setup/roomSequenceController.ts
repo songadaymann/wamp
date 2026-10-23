@@ -6,8 +6,10 @@ import {
   POST_RUN_RATING_SUBMITTED_EVENT,
   type PostRunRatingSubmittedDetail,
 } from '../../progression/postRunRatingEvents';
+import { friendlyError } from '../friendlyError';
 import { getActiveOverworldScene } from './sceneBridge';
 import type { LeaderboardModalController } from './leaderboardModal';
+import type { LazyModal } from './lazyModal';
 import type { PlaylistIntroModalController } from './playlistIntroModal';
 import type { WelcomeModalController } from './welcomeModal';
 import type { FirstStepsSummaryController } from './firstStepsSummary';
@@ -148,7 +150,7 @@ export class RoomSequenceController {
 
   constructor(
     private readonly game: Phaser.Game,
-    private readonly leaderboardModal: Pick<LeaderboardModalController, 'open' | 'close'>,
+    private readonly leaderboardModal: Pick<LazyModal<LeaderboardModalController>, 'open' | 'close' | 'loaded'>,
     private readonly playlistIntroModal: PlaylistIntroModalController,
     private readonly welcomeModal: Pick<WelcomeModalController, 'close'>,
     private readonly doc: Document = document,
@@ -345,13 +347,21 @@ export class RoomSequenceController {
       } else {
         if (this.ratingModal) await this.ratingModal.openForSequence(entry);
         else await this.leaderboardModal.open('room');
+        // A Leaderboard that failed to download shows its own card, and no rating can come from it.
+        if (!this.ratingModal && !this.leaderboardModal.loaded) {
+          if (this.activeSequence !== sequence) return;
+          sequence.statusText = 'The Leaderboard couldn\'t load. Use Next for another room.';
+          sequence.statusTone = 'error';
+          return;
+        }
         sequence.statusText = 'Rate this room, then the queue will advance.';
       }
       sequence.statusTone = 'default';
     } catch (error) {
       if (this.activeSequence !== sequence) return;
       console.error('Failed to present room sequence entry.', error);
-      sequence.statusText = error instanceof Error ? error.message : 'Failed to load this room.';
+      // Plain messages thrown above read as they are; a failed download or network error doesn't.
+      sequence.statusText = friendlyError('load this room', { error, nextStep: 'Use Next for another room.' });
       sequence.statusTone = 'error';
     } finally {
       if (this.activeSequence === sequence) {

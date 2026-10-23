@@ -112,15 +112,19 @@ function createUiControllers(game: Phaser.Game): UiControllers {
   // Rarely opened pop-ups load on first open (F019).
   const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game), ['leaderboard-modal'],
     explainMenuLoadFailure('Leaderboard'));
-  const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController());
+  const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController(), [],
+    explainMenuLoadFailure('controls list'));
   const playlistIntroModal = new PlaylistIntroModalController();
-  const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal']);
-  const roomRushResultModal = new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game));
+  const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal'],
+    explainMenuLoadFailure('Explore'));
+  const roomRushResultModal = new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game), [],
+    explainMenuLoadFailure('Room Rush results'));
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();
   game.events.once('destroy', () => buildPrompts.destroy());
   const runRatingModal = new LazyRunRatingController(async () => new (await import('./runRatingModal')).RunRatingModalController(game));
   game.events.once('destroy', () => runRatingModal.destroy());
-  const guestProgressClaimModal = new LazyRecoveryController(async () => new (await import('./guestProgressClaimModal')).GuestProgressClaimModalController(), 'btn-auth-guest-progress', 200);
+  const guestProgressClaimModal = new LazyRecoveryController(async () => new (await import('./guestProgressClaimModal')).GuestProgressClaimModalController(), 'btn-auth-guest-progress', 200,
+    explainMenuLoadFailure('Guest Clears list'));
   const openExplore = () => exploreModal.open();
   const welcomeModal = new WelcomeModalController(game, undefined, undefined, undefined, undefined, undefined, { explore: openExplore });
   const firstStepsSummary = new FirstStepsSummaryController({
@@ -133,20 +137,28 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     firstPublishModal: new LazyFirstPublishController(async () => new (await import('./firstPublishModal')).FirstPublishModalController()),
     activityInbox: new ActivityInboxController(),
     roomInsights: new RoomInsightsController(game),
-    historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game), ['room-history-modal']),
+    historyModal: new LazyModal(async () => new (await import('./historyModal')).RoomHistoryModalController(game), ['room-history-modal'],
+      explainMenuLoadFailure('version history')),
     leaderboardModal,
     exploreModal,
     roomSequence: new RoomSequenceController(game, leaderboardModal, playlistIntroModal, welcomeModal, undefined, undefined, firstStepsSummary, runRatingModal),
-    guestBuilderClaimModal: new LazyModal(async () => new (await import('./guestBuilderClaimModal')).GuestBuilderClaimModalController()),
-    guestRoomRecoveryModal: new LazyRecoveryController(async () => new (await import('./guestRoomRecoveryModal')).GuestRoomRecoveryModalController(game), 'btn-auth-guest-drafts', 200),
+    guestBuilderClaimModal: new LazyModal(async () => new (await import('./guestBuilderClaimModal')).GuestBuilderClaimModalController(), [],
+      explainMenuLoadFailure('sign-in prompt')),
+    guestRoomRecoveryModal: new LazyRecoveryController(async () => new (await import('./guestRoomRecoveryModal')).GuestRoomRecoveryModalController(game), 'btn-auth-guest-drafts', 200,
+      explainMenuLoadFailure('Guest Drafts list')),
     guestProgressClaimModal,
-    guestbookModal: new LazyModal(async () => new (await import('./guestbookModal')).GuestbookModalController()),
+    guestbookModal: new LazyModal(async () => new (await import('./guestbookModal')).GuestbookModalController(), [],
+      explainMenuLoadFailure('Guestbook')),
     settingsModal: new SettingsModalController(),
     controlsModal,
-    aboutModal: new LazyModal(async () => new (await import('./aboutModal')).AboutModalController()),
-    chatModerationModal: new LazyModal(async () => new (await import('./chatModerationModal')).ChatModerationModalController()),
-    profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game), ['profile-modal', 'avatar-picker-modal']),
-    playlistModal: new LazyModal(async () => new (await import('./playlistModal')).PlaylistModalController(game)),
+    aboutModal: new LazyModal(async () => new (await import('./aboutModal')).AboutModalController(), [],
+      explainMenuLoadFailure('About page')),
+    chatModerationModal: new LazyModal(async () => new (await import('./chatModerationModal')).ChatModerationModalController(), [],
+      explainMenuLoadFailure('chat moderation tools')),
+    profileModal: new LazyModal(async () => new (await import('./profileModal')).ProfileModalController(game), ['profile-modal', 'avatar-picker-modal'],
+      explainMenuLoadFailure('profile')),
+    playlistModal: new LazyModal(async () => new (await import('./playlistModal')).PlaylistModalController(game), [],
+      explainMenuLoadFailure('playlist')),
     playlistIntroModal,
     performanceSuggestionModal: new PerformanceSuggestionModalController(game),
     rewardStings: new RewardStingController(),
@@ -158,7 +170,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
       // still live; after a release the run would otherwise end with nowhere to send it (F374).
       void roomRushResultModal.ensure().catch(() => undefined);
       return new (await import('./roomRushModal')).RoomRushModalController(game);
-    }),
+    }, [], explainMenuLoadFailure('Room Rush')),
     roomRushResultModal,
     runRatingModal,
     postRunReminder: new PostRunReminderController({
@@ -166,8 +178,10 @@ function createUiControllers(game: Phaser.Game): UiControllers {
       openGuestHistory: () => { void guestProgressClaimModal.invoke(controller => controller.openFromReminder()); },
       beforeOpen: () => runRatingModal.close(),
     }),
-    signTextModal: new LazyModal(async () => new (await import('./signTextModal')).SignTextModalController(game)),
-    wampOGramModal: new LazyModal(async () => new (await import('./wampOGramModal')).WampOGramModalController(game)),
+    signTextModal: new LazyModal(async () => new (await import('./signTextModal')).SignTextModalController(game), [],
+      explainMenuLoadFailure('sign editor')),
+    wampOGramModal: new LazyModal(async () => new (await import('./wampOGramModal')).WampOGramModalController(game), [],
+      explainMenuLoadFailure('Wamp-O-Gram')),
     welcomeModal,
     chatPanel: new ChatPanelController(),
     mobileUi: new MobileUiController(game),

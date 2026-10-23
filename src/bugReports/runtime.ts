@@ -8,7 +8,7 @@ import { bugRecordingAllowed, setBugRecordingAllowed } from './recordingPreferen
 import { canCaptureBugReportImages, pauseForBugReport, readBugGameContext } from './gameContext';
 import { installLazyBugReportDialog } from './lazyDialog';
 import { resetTouchInputState } from '../ui/mobile/touchControls';
-import { hideBusyOverlay, showBusyError } from '../ui/appFeedback';
+import { explainMenuLoadFailure } from '../ui/setup/lazyModal';
 
 export function initializeBugReporter(game: Phaser.Game) {
   const replay = new RecentBugReplay(() => canCaptureBugReportImages(game) ? captureReplayCanvas(game.canvas, {
@@ -22,9 +22,7 @@ export function initializeBugReporter(game: Phaser.Game) {
       pause: () => { resetTouchInputState(); return pauseForBugReport(game); },
       resumeCapture: () => { resetTouchInputState(); replay.setFrozen(false); },
     }),
-    showLoadError: retry => showBusyError('The bug report form could not load. Check your connection, then try again.', {
-      title: 'Report a bug', retryLabel: 'Try again', retryHandler: () => { hideBusyOverlay(); retry(); },
-    }),
+    onLoadError: explainMenuLoadFailure('bug report form'),
   });
   // The Settings toggle works before the form has ever downloaded.
   const recording = document.getElementById('bug-recording-enabled') as HTMLInputElement | null;
