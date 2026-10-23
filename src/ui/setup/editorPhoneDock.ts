@@ -1,6 +1,7 @@
 import { EDITOR_AUTO_COLLAPSE_EVENT, EDITOR_SHELL_ESCAPE_REQUESTED_EVENT } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { EditorPhoneToolSwitch } from './editorPhoneToolSwitch';
+import { trackScrollEdges } from './scrollEdges';
 
 /** Phone presentation of the shared dock: existing controls retain their listeners and state. */
 export class EditorPhoneDock {
@@ -9,6 +10,7 @@ export class EditorPhoneDock {
   private menuOpen = false;
   private readonly moved: Array<{ element: HTMLElement; home: Comment }> = [];
   private readonly toolSwitch: EditorPhoneToolSwitch;
+  private stopScrollEdges: Array<() => void> = [];
 
   constructor(private readonly doc: Document, private readonly cancelSpawn: () => void, private readonly closePopovers: () => void) {
     this.toolSwitch = new EditorPhoneToolSwitch(doc, () => this.active);
@@ -105,9 +107,15 @@ export class EditorPhoneDock {
     for (const id of ['editor-shell-pencil-picker', 'editor-shell-eraser-size-picker', 'editor-shell-randomize-picker', 'editor-shell-copy-picker']) {
       this.move(this.doc.getElementById(id), this.doc.getElementById('editor-phone-tools'));
     }
+    for (const [scroller, host] of [['#editor-shell-dock .editor-shell-dock-grid', 'editor-shell-dock'], ['#editor-phone-tools .editor-shell-tools', 'editor-phone-tools']]) {
+      const element = this.doc.querySelector<HTMLElement>(scroller);
+      const hostElement = this.doc.getElementById(host);
+      if (element && hostElement) this.stopScrollEdges.push(trackScrollEdges(element, hostElement));
+    }
   }
 
   private restore(): void {
+    for (const stop of this.stopScrollEdges.splice(0)) stop();
     for (const { element, home } of this.moved.reverse()) home.replaceWith(element);
     this.moved.length = 0;
     this.doc.getElementById('btn-mobile-editor-toggle')?.classList.remove('editor-shell-chunky-button');
