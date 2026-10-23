@@ -4951,6 +4951,8 @@ Fix: add a single scene command, e.g. stopCurrentPlay(), that does `activeRoomRu
 - **confirmed.** No correction.
 - **confirmed.** The core claim holds. I'd lower the impact to medium, because a lost run can be replayed and the visible Stop, touch and gamepad paths all work. The fix should also cover a fifth stop path the reviewer missed: the HUD Room Rush button (sceneCommands.ts:233-234), which already ends the Rush correctly. The InspectInput host interface needs a new stopCurrentPlay method. The Controls label for P ('Return to browse', keyBindings.ts:6) could change to 'Stop' to match.
 
+**2026-10-23 delivered.** [PR #309](https://github.com/songadaymann/wamp/pull/309). Every stop input (P, Escape, touch Stop, gamepad Select, the HUD button, the room sequence's Stop, the end of First Steps, and "find a build spot" during a Rush) goes through one `stopCurrentPlay()` path, so a Room Rush ends with its result and leaderboard save instead of being thrown away. A stop during the death beat of a Hard or Weekly Rush lets the death fail the run, and Escape leaves play alone while the game menu is open. Two adversarial reviews, every finding fixed; `npm run check` (651 files, 5,575 tests) and the muted default (68/68), keyboard, pause and assist smokes passed. Live on wamp.land: Escape behind the open game menu keeps the run, and Escape and P each stop play. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F385: Pressing Escape to close the room-chat or comment box also kicks you out of the room and ends your run
 
 - **Area:** Bugs and regressions (reviewer: Bugs and regressions: gameplay, editor and UI)
@@ -4985,6 +4987,8 @@ Fix (about 10 lines): merge the two ESC listeners into one ordered handler (comm
   The test should emit ESC through the scene keyboard with both listeners registered. Impact is medium: desktop keyboard players only, and only with a composer open.
 - **confirmed.** No correction.
 - **partially confirmed.** Real and still open on main. The only working fix is one ordered Escape handler: comment composer, then chat composer, then modal check, then returnToWorld. For example, remove the scene's keydown-ESC listener and have handleReturnToWorldKeydown call a host hook that closes the composers first and returns true if it closed one. Adding an isComposerOpen() check to handleReturnToWorldKeydown would not help: the scene listener runs first and has already closed the composer. Impact is medium, not high. It only affects signed-in desktop keyboard players who click the canvas while a composer is open, and the path existed before 82defd8d through HUD-button clicks. F168's fact-check, note (3), already flagged this gap, but F168's fix left it out.
+
+**2026-10-23 delivered.** [PR #309](https://github.com/songadaymann/wamp/pull/309). Escape is handled once, in order: comment box, chat box, dialogs, the open game menu, then stop. Closing the chat or comment box with Escape after clicking the game no longer ends the run. Two adversarial reviews, every finding fixed; `npm run check` (651 files, 5,575 tests) and the muted default (68/68), keyboard, pause and assist smokes passed. Live on wamp.land: Escape behind the open game menu keeps the run, and Escape and P each stop play. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F383: Opening a room from Profile, My Rooms, Explore or a playlist mid-run leaves the old run half-alive
 
@@ -5029,6 +5033,8 @@ Fix: in OverworldPlayScene.jumpToCoordinates, `if (this.mode === 'play') this.re
   
   Fix: in OverworldPlayScene.jumpToCoordinates, when mode === 'play', clear the PvP match and both return targets, then call resetPlaySession and clearTouchGestureState before delegating. Calling returnToWorld directly would trigger the editor wake. Add tests for a stale course run after jump and for sequence Next across two expanded rooms.
 
+**2026-10-23 delivered.** [PR #309](https://github.com/songadaymann/wamp/pull/309). Jumping to a room from Profile, My Rooms, Explore, a playlist or the collection shelf mid-run ends the run first, as Stop does (Expanded Room run, room overrides, duel, editor test-return target). During a Room Rush the result takes the jump's place: the jump reports it and shows "Room Rush ended. Open the room again to play it.", and callers that jump and then play (online-players Join, playlists, Welcome Build, the collection shelf) stop there. The Worlds warp waits until the Rush is over. Two adversarial reviews, every finding fixed; `npm run check` (651 files, 5,575 tests) and the muted default (68/68), keyboard, pause and assist smokes passed. Live on wamp.land: Escape behind the open game menu keeps the run, and Escape and P each stop play. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F375: After a test run, Stop/Escape returns to the room editor with the room's music still playing, and a later test can start silent
 
 - **Area:** Bugs and regressions (reviewer: Room music and audio)
@@ -5056,6 +5062,8 @@ Mechanism: OverworldFlowController.returnToWorld sets mode 'browse' and then que
 **Fact-check.**
 
 - **confirmed.** Two refinements, but the core claim stands. (1) The leak is unconditional. It is not limited to DOM-triggered Stop: touch and gamepad Stop run in the frame 'commands' phase after the music stage, so they also never get a 'browse' sync before the queued sleep. (2) The silent second test has a more common trigger than ▶ then ⏹. Pressing ▶ in the editor and then Test also causes it, because startPlayMode stops the preview while the overworld controller still believes the same key is playing.
+
+**2026-10-23 delivered.** [PR #309](https://github.com/songadaymann/wamp/pull/309). Returning to the room editor after a test run stops the room music and resets the music controller, so the next test plays again; the editor also stops its own preview when it wakes, as the Expanded Room editor already did. Two adversarial reviews, every finding fixed; `npm run check` (651 files, 5,575 tests) and the muted default (68/68), keyboard, pause and assist smokes passed. Live on wamp.land: Escape behind the open game menu keeps the run, and Escape and P each stop play. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F380: Five dialogs moved into on-demand templates lost the keyboard-focus, stacked-dimming and game-key fixes (F175/F116 regressed)
 

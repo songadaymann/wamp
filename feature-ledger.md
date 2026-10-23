@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 5: one way to end a run
+
+Round-2 lane. PR #309 F378, F385, F383 and F375: every stop input goes through `stopCurrentPlay()`; Escape is handled once, in order; a jump mid-run ends the run first (or gives way to a Rush result); and room music stops when a test run returns to the editor. Two adversarial reviews. Receipt: docs/review/wamp-round2-where-features-meet-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 4: speed (first part)
 
 Round-2 lane. PRs #302 F301, #303 F306, #304 F363, #308 F305 (client), and #305 F329, #306 F331, #307 F330 (API Worker `4d03ca81`, no migration; F330 is forward-only). Every branch adversarially reviewed. F302 and F332 are still in progress, and F333 waits on F351. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.
