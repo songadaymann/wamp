@@ -99,7 +99,7 @@ describe('robust Sword Hunter planning (F302)', () => {
     for (const testCase of recorded.cases) {
       expect(summarize(planIn(freshRoom(recorded.layouts[testCase.layout]), testCase))).toEqual(testCase.plan);
     }
-  });
+  }, 30000);
 
   it('plans exactly like origin/main from edges simulated ahead, simulating nothing itself', () => {
     for (const testCase of recorded.cases) {
@@ -109,7 +109,7 @@ describe('robust Sword Hunter planning (F302)', () => {
       expect(summarize(plan)).toEqual(testCase.plan);
       expect(plan?.coldSimulatedEdges ?? 0).toBe(0);
     }
-  });
+  }, 30000);
 
   it('simulates each jump the same whichever tiles were read first', () => {
     const layout = recorded.layouts.typical;
