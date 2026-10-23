@@ -81,19 +81,26 @@ assert(
   `Health database check failed: ${JSON.stringify(healthJson?.checks?.database ?? null)}`,
 );
 
-let mainBundleContainsPartyKitHost = null;
-let mainBundleUrl = null;
-if (mainScriptUrl) {
-  mainBundleUrl = new URL(mainScriptUrl, FRONTEND_URL).toString();
-  const mainBundleResponse = await fetch(mainBundleUrl, {
+const mainBundleUrl = mainScriptUrl ? new URL(mainScriptUrl, FRONTEND_URL).toString() : null;
+// A build-time VITE_PARTYKIT_HOST beats the Worker's presence host (src/auth/runtimeConfig.ts) and is
+// inlined into a boot chunk, not always the entry, so read every script the page loads up front.
+const bootScriptUrls = extractBootScriptUrls(frontendHtml, FRONTEND_URL);
+const bootScriptsWithRetiredPresenceHost = [];
+for (const scriptUrl of bootScriptUrls) {
+  const scriptResponse = await fetch(scriptUrl, {
     headers: {
       'Cache-Control': 'no-cache',
     },
   });
-  assert(mainBundleResponse.ok, `Main bundle request failed: ${mainBundleResponse.status} ${mainBundleResponse.statusText}`);
-  const mainBundleText = await mainBundleResponse.text();
-  mainBundleContainsPartyKitHost = mainBundleText.includes(EXPECTED_PARTYKIT_HOST);
+  assert(scriptResponse.ok, `Boot script request failed: ${scriptResponse.status} ${scriptResponse.statusText} ${scriptUrl}`);
+  if ((await scriptResponse.text()).includes('partykit.dev')) {
+    bootScriptsWithRetiredPresenceHost.push(scriptUrl);
+  }
 }
+assert(
+  bootScriptsWithRetiredPresenceHost.length === 0,
+  `Frontend scripts bake in a retired PartyKit presence host; clear VITE_PARTYKIT_HOST in the Pages env and redeploy: ${bootScriptsWithRetiredPresenceHost.join(', ')}`
+);
 
 const summary = {
   ok: true,
@@ -101,7 +108,7 @@ const summary = {
   apiBaseUrl: API_BASE_URL,
   metaApiBase,
   mainBundleUrl,
-  mainBundleContainsPartyKitHost,
+  bootScriptsChecked: bootScriptUrls.length,
   expectedPartykitHost: EXPECTED_PARTYKIT_HOST,
   sessionPartykitHost: sessionPartykitHost || null,
   sessionPartykitParty:
@@ -149,6 +156,15 @@ function extractMainScriptUrl(html, baseUrl) {
     scripts[0]?.[1] ||
     null;
   return chosen ? new URL(chosen, baseUrl).toString() : null;
+}
+
+function extractBootScriptUrls(html, baseUrl) {
+  const origin = new URL(baseUrl).origin;
+  const urls = [
+    ...html.matchAll(/<script[^>]*src=["']([^"']+\.js)["'][^>]*>/gi),
+    ...html.matchAll(/<link[^>]*rel=["']modulepreload["'][^>]*href=["']([^"']+\.js)["'][^>]*>/gi),
+  ].map((match) => new URL(match[1], baseUrl));
+  return [...new Set(urls.filter((url) => url.origin === origin).map((url) => url.toString()))];
 }
 
 function escapeRegExp(value) {

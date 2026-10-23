@@ -37,9 +37,9 @@ Recommended source of truth for wallet sign-in:
 - `/api/auth/session` now returns that public id so deployed frontends do not depend on whoever ran `vite build`
 - keep `VITE_REOWN_PROJECT_ID` only as an optional local/frontend build override for development or unusual Pages-only builds
 
-Frontend env vars Pages should still have when needed:
+Presence host:
 
-- `VITE_PARTYKIT_HOST=everybodys-platformer-presence.songadaymann.partykit.dev`
+- leave `VITE_PARTYKIT_HOST` unset in Pages. `/api/auth/session` returns the Worker's `PARTYKIT_HOST` (`api.wamp.land`, where the API Worker serves presence), and a build-time value would override it. `npm run smoke:prod` fails if a boot script contains a `partykit.dev` host.
 
 Frontend API base guidance:
 
