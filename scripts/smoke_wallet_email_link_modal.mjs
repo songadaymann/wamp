@@ -107,11 +107,9 @@ await expectText(
 
 await page.fill('#auth-email-input', 'wallet-player@example.com');
 await page.click('#btn-auth-email');
-await page.waitForFunction(
-  () => document.querySelector('#auth-status')?.textContent
-    === 'Check your email for a code or link to finish adding it.',
-);
-await page.locator('#email-code-modal:not(.hidden)').waitFor();
+// Since 5a79b35b the code box opens inline in the sign-in menu and names the address.
+await page.locator('#auth-email-code:not(.hidden)').waitFor();
+await expectText(page, '#email-code-address', 'wallet-player@example.com');
 await expectText(page, '#email-code-status', 'Debug code: 123456');
 const linkedEmailRequest = await page.evaluate(() => window.__walletEmailLinkRequest);
 if (linkedEmailRequest?.email !== 'wallet-player@example.com') {
@@ -123,7 +121,7 @@ await page.screenshot({
 });
 await page.fill('#email-code-input', '123456');
 await page.click('#email-code-submit');
-await page.locator('#email-code-modal').waitFor({ state: 'hidden' });
+await page.locator('#auth-email-code').waitFor({ state: 'hidden' });
 await page.waitForFunction(() => document.querySelector('#auth-session-summary-value')?.textContent?.includes('Wallet Player'));
 
 await page.reload({ waitUntil: 'domcontentloaded' });
