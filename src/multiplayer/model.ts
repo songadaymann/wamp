@@ -28,6 +28,8 @@ export interface MultiplayerModeCopy {
   inviteKicker: string;
   inviteTitle: string;
   inviteBody: (inviterDisplayName: string) => string;
+  /** A challenge that arrived during a run, which is offered once the player is back in browse. */
+  inviteHeld: (inviterDisplayName: string) => string;
   countdownKicker: string;
   countdownTitle: string;
   countdownRule: string;
@@ -90,6 +92,7 @@ export const ARENA_MULTIPLAYER_MODE: MultiplayerModeDefinition = {
     inviteKicker: 'PVP Challenge',
     inviteTitle: 'Arena Duel',
     inviteBody: (inviterDisplayName) => `${inviterDisplayName} invited you to duel.`,
+    inviteHeld: (inviterDisplayName) => `${inviterDisplayName} invited you to duel. Finish your run to answer.`,
     countdownKicker: 'PVP Starting',
     countdownTitle: 'Arena Duel',
     countdownRule: 'First to lose all hearts loses!',

@@ -14,6 +14,7 @@ import {
 } from '../../multiplayer/model';
 import { MultiplayerInstanceClient } from '../../multiplayer/instanceClient';
 import { createPvpRepository } from '../../pvp/repository';
+import { APP_MODE_CHANGED_EVENT } from '../../ui/appMode';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import {
   hidePvpCountdownOverlay,
@@ -67,6 +68,8 @@ interface OverworldPvpArenaControllerHost {
   returnToWorld: () => void;
   renderHud: () => void;
   showTransientStatus: (message: string) => void;
+  /** Whether a challenge pop-up may open now: in browse, not during a run or in the editor. */
+  canPromptForInvite: () => boolean;
   onSetupStateChanged?: (inProgress: boolean) => void;
 }
 
@@ -81,6 +84,7 @@ export class OverworldPvpArenaController {
   private lastSubmittedPvpMatchId: string | null = null;
   private nextPvpSetupGeneration = 0;
   private activePvpSetupGeneration: number | null = null;
+  private heldInvite: { invite: PvpInviteOffer; release: () => void } | null = null;
 
   constructor(private readonly host: OverworldPvpArenaControllerHost) {}
 
@@ -239,6 +243,15 @@ export class OverworldPvpArenaController {
       this.host.showTransientStatus('Sign in to accept ranked PVP.');
       return;
     }
+    // A challenge never interrupts a run: it waits, and is offered back in browse.
+    if (!this.host.canPromptForInvite()) {
+      this.holdInvite(invite);
+      return;
+    }
+    if (invite.expiresAt <= Date.now()) {
+      this.host.declinePvpInvite(invite);
+      return;
+    }
 
     const mode = getMultiplayerModeDefinition(invite.mode);
     const decision = await showPvpInvitePrompt(invite);
@@ -260,6 +273,36 @@ export class OverworldPvpArenaController {
       roomCoordinates: invite.roomCoordinates,
       opponent: invite.inviter,
     });
+  }
+
+  /** Keeps only the latest challenge, until the player is back in browse or it expires. */
+  private holdInvite(invite: PvpInviteOffer): void {
+    this.dropHeldInvite();
+    this.host.showTransientStatus(getMultiplayerModeDefinition(invite.mode).copy.inviteHeld(invite.inviter.displayName));
+    const offer = (): void => {
+      if (!this.host.canPromptForInvite() || this.heldInvite?.invite !== invite) return;
+      this.heldInvite.release();
+      this.heldInvite = null;
+      void this.handleInvite(invite);
+    };
+    const expiry = window.setTimeout(() => this.dropHeldInvite(), Math.max(0, invite.expiresAt - Date.now()));
+    window.addEventListener(APP_MODE_CHANGED_EVENT, offer);
+    this.heldInvite = {
+      invite,
+      release: () => {
+        window.clearTimeout(expiry);
+        window.removeEventListener(APP_MODE_CHANGED_EVENT, offer);
+      },
+    };
+  }
+
+  /** Forgets the held challenge; its inviter hears a decline, as when the pop-up times out. */
+  private dropHeldInvite(): void {
+    const held = this.heldInvite;
+    if (!held) return;
+    this.heldInvite = null;
+    held.release();
+    this.host.declinePvpInvite(held.invite);
   }
 
   async handleInviteAccepted(

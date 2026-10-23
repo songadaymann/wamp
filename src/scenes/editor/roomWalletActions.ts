@@ -299,6 +299,7 @@ export class RoomWalletActions {
         : 'The wallet approval is not confirmed yet. Check again before starting another approval.';
       this.host.setStatusText(text);
       showBusyError(text, { title: 'Room approval', closeLabel: 'Back to room', retryLabel: 'Check again',
+        tone: result.status === 'complete' ? 'success' : result.status === 'reverted' ? 'error' : 'choice',
         retryHandler: result.status === 'pending' ? () => this.checkPending(pending) : null });
     } catch {
       if (!same() || controller.signal.aborted) return;

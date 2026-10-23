@@ -100,6 +100,7 @@ function createHarness(options: {
     returnToWorld: vi.fn(),
     renderHud: vi.fn(),
     showTransientStatus: vi.fn(),
+    canPromptForInvite: vi.fn(() => true),
     onSetupStateChanged,
   };
   const controller = new OverworldPvpArenaController(host);

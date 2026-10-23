@@ -313,6 +313,7 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
     'The browser paused the game graphics. Your current room is still here; reload to restore the picture.',
     {
       title: 'Graphics paused',
+      tone: 'choice',
       closeLabel: 'Keep waiting',
       retryHandler: () => window.location.reload(),
     },
@@ -330,11 +331,12 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
 installStaleBuildRecovery({
   canShowOffer: () => {
     const feedback = getAppFeedbackDebugState();
-    return !feedback.busyVisible || feedback.busyState === 'error';
+    // Never over an open choice (an edit conflict, a draft recovery): its answer would be lost.
+    return !feedback.busyVisible || (feedback.busyState === 'error' && feedback.busyTone !== 'choice');
   },
   showReloadOffer: () => showBusyError(
     'A new version of WAMP came out while this tab was open, so this part can\'t load. Save anything you are working on, then reload.',
-    { title: 'WAMP was updated', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: () => window.location.reload() },
+    { title: 'WAMP was updated', tone: 'choice', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: () => window.location.reload() },
   ),
 });
 const getGraphicsDebugState = (): GraphicsDebugState => {
