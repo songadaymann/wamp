@@ -1,40 +1,10 @@
-import type { BuilderDiscoveryEntry, BuilderDiscoverySort, RoomDifficulty, RoomDifficultyCounts, RoomDiscoveryEntry, RoomDiscoverySort } from '../../../runs/model';
+import type { BuilderDiscoveryEntry, BuilderDiscoverySort, RoomDifficulty, RoomDiscoveryEntry, RoomDiscoverySort } from '../../../runs/model';
 import {
   normalizeBuilderDiscoverySort,
   normalizeRoomDifficulty,
   normalizeRoomDiscoverySort,
-  ROOM_DIFFICULTIES,
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
-
-export function createEmptyRoomDifficultyCounts(): RoomDifficultyCounts {
-  return {
-    easy: 0,
-    medium: 0,
-    hard: 0,
-    extreme: 0,
-  };
-}
-
-export function getRoomDifficultyVoteTotal(counts: RoomDifficultyCounts): number {
-  return counts.easy + counts.medium + counts.hard + counts.extreme;
-}
-
-export function resolveRoomDifficultyConsensus(
-  counts: RoomDifficultyCounts,
-): RoomDifficulty | null {
-  let bestDifficulty: RoomDifficulty | null = null;
-  let bestCount = 0;
-  for (const difficulty of ROOM_DIFFICULTIES) {
-    const nextCount = counts[difficulty];
-    if (nextCount > bestCount) {
-      bestCount = nextCount;
-      bestDifficulty = difficulty;
-    }
-  }
-
-  return bestCount > 0 ? bestDifficulty : null;
-}
 
 export function encodeRoomDiscoveryCursor(sort: RoomDiscoverySort, offset: number): string {
   return btoa(JSON.stringify({ version: 1, sort, offset }))

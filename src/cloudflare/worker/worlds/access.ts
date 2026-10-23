@@ -188,24 +188,6 @@ function worldRoomContext(access: WorldAccess): NonNullable<RoomRecord['world']>
   };
 }
 
-export async function requireWorldForMutation(
-  env: Env,
-  worldId: string,
-  viewerUserId: string | null,
-  viewerIsAdmin = false,
-): Promise<WorldAccess> {
-  if (worldId === WAMP_PRIME_WORLD_ID) {
-    throw new HttpError(400, 'WAMP 0 uses the standard room workflow.');
-  }
-  const access = await loadWorldAccessById(env, worldId, viewerUserId, viewerIsAdmin);
-  if (!access) throw new HttpError(404, 'World was not found.');
-  if (access.number === 0) throw new HttpError(400, 'WAMP 0 uses the standard room workflow.');
-  if (access.entitlementStatus !== 'active') {
-    throw new HttpError(403, 'This World is currently play-only.');
-  }
-  return access;
-}
-
 export async function assertWorldFrontierClaim(
   env: Env,
   worldId: string,

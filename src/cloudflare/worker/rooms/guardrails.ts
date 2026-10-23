@@ -55,14 +55,3 @@ export function assertRoomVideoTrust(
   if (builderCanUseRoomVideo(tier)) return;
   throw new HttpError(403, ROOM_VIDEO_TRUST_MESSAGE);
 }
-
-export async function enforcePublishLimitForUser(
-  env: Env,
-  userId: string,
-  requestAuthSource: RequestAuthSource | null,
-): Promise<void> {
-  const capabilities = await resolveRoomCapabilities(env, userId, requestAuthSource);
-  if (capabilities.publishLimitPerDay <= 0) {
-    throw new HttpError(429, 'Publishing is unavailable for this trust tier.');
-  }
-}

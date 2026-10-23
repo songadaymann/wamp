@@ -1,5 +1,4 @@
 import {
-  GAME_TILE_PX,
   PADDING_ROOMS,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -59,14 +58,6 @@ export function roomBoundsToWorldPixels(bounds: Pick<PublishedRoomBounds, 'minX'
 
 export function roomsPerAxisForLevel(level: WorldTileLevel): number {
   return 2 ** (4 - level);
-}
-
-export function pixelsPerGameTileForLevel(level: WorldTileLevel): number {
-  return 2 ** level;
-}
-
-export function worldPixelsPerContentPixel(level: WorldTileLevel): number {
-  return GAME_TILE_PX / pixelsPerGameTileForLevel(level);
 }
 
 export function floorDivide(value: number, divisor: number): number {

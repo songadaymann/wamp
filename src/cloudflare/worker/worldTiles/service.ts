@@ -8,7 +8,6 @@ import {
   expandWorldTileManifestCoordinates,
   getWorldTileRoomBounds,
   worldTileCoordinateKey,
-  type WorldTileAddress,
   type WorldTileBounds,
   type WorldTileConfig,
   type WorldTileCoordinate,
@@ -385,13 +384,4 @@ function compareRoomIdsByCoordinates(left: string, right: string): number {
   const [leftX, leftY] = left.split(',').map(Number);
   const [rightX, rightY] = right.split(',').map(Number);
   return leftY - rightY || leftX - rightX || left.localeCompare(right);
-}
-
-export function worldTileAddressFromOutbox(row: WorldRenderTileOutboxRow): WorldTileAddress {
-  return {
-    rendererVersion: row.renderer_version,
-    level: row.level,
-    x: Number(row.tile_x),
-    y: Number(row.tile_y),
-  };
 }

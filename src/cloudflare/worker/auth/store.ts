@@ -565,36 +565,6 @@ export async function loadUserStatsRow(env: Env, userId: string) {
     .first<UserStatsRow>();
 }
 
-export async function loadAllUserStatsRows(env: Env) {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        pvp_wins,
-        pvp_losses,
-        pvp_draws,
-        best_score,
-        fastest_clear_ms,
-        updated_at
-      FROM user_stats
-      WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
-    `
-  ).all<UserStatsRow>();
-
-  return result.results;
-}
-
 export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
   const result = await env.DB.prepare(
     `
