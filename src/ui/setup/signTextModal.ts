@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import { getActiveEditorScene } from './sceneBridge';
 import {
   SIGN_TEXT_EDIT_REQUEST_EVENT,
@@ -212,11 +213,6 @@ export class SignTextModalController {
   }
 
   private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    this.elements.error.textContent = message ?? '';
-    this.elements.error.classList.toggle('hidden', !message);
+    setLiveMessage(this.elements.error, message);
   }
 }

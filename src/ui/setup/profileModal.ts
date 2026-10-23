@@ -1,7 +1,8 @@
 import { createProfileCollectionController, renderProfileTabs, type ProfileCollectionController, type ProfileTabId } from './profileCollection';
 import { CollectionAttributionController } from './collectionAttribution';
 import { renderProfileEmptyActions, setupProfileEmptyStates } from './profileEmptyStates';
-import { friendlyError, renderFriendlyError, setFeedbackText } from '../friendlyError';
+import { setProfileTabStops, setupProfileTabs } from './profileTabs';
+import { friendlyError, renderFriendlyError, setLiveMessage } from '../friendlyError';
 import Phaser from 'phaser';
 import {
   getEffectiveCryptopunkViewerLevel,
@@ -348,15 +349,11 @@ export class ProfileModalController {
     this.elements.usernameInput?.addEventListener('input', () => {
       this.renderShareControls();
     });
-    for (const [tabId, button] of Object.entries(this.elements.tabButtons) as Array<
-      [ProfileTabId, HTMLButtonElement | null]
-    >) {
-      button?.addEventListener('click', () => {
-        this.activeTab = tabId;
-        this.activeTabAutoSelected = true;
-        this.renderTabs();
-      });
-    }
+    setupProfileTabs(this.elements.tabButtons, this.elements.panels, (tabId) => {
+      this.activeTab = tabId;
+      this.activeTabAutoSelected = true;
+      this.renderTabs();
+    });
     this.openProfileFromCurrentPath();
   }
 
@@ -1678,6 +1675,7 @@ export class ProfileModalController {
 
   private renderTabs(): void {
     this.activeTab = renderProfileTabs(this.elements, this.activeTab, this.currentProfile, this.loading, this.collection, this.attribution);
+    setProfileTabStops(this.elements.tabButtons, this.activeTab);
   }
 
   private setError(message: string | null, retry?: () => void | Promise<void>): void {
@@ -1685,7 +1683,7 @@ export class ProfileModalController {
   }
 
   private setSaveStatus(message: string): void {
-    setFeedbackText(this.elements.saveStatus, message);
+    setLiveMessage(this.elements.saveStatus, message, 'status');
   }
 
   private setPlaylistStatus(message: string): void {

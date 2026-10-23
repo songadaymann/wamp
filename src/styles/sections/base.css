@@ -976,11 +976,18 @@
     cursor: pointer;
   }
 
-  .profile-trigger:hover,
-  .profile-trigger:focus-visible {
+  /* :where() keeps this rule's weight unchanged. */
+  .profile-trigger:hover:not(:where(:focus-visible)) {
     color: var(--accent-cool);
     text-decoration: underline;
-    outline: none;
+  }
+
+  /* Keyboard focus keeps the name's own colour, which already reads on its panel, and rings it
+     in that colour (F477). Hover doesn't recolour a focused name, so the ring never fades. */
+  .profile-trigger:focus-visible {
+    text-decoration: underline;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
   }
 
   #auth-email-input {
