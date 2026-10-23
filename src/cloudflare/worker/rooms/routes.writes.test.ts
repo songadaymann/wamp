@@ -223,6 +223,37 @@ describe('publishing rooms and version history', () => {
   });
 });
 
+describe('draft commands and the leaderboard version', () => {
+  it('builds a draft from commands, as bots do, and keeps the same claim rules', async () => {
+    const builder = await api.signIn('builder');
+    const commands = (base: string) => ({ base, commands: [
+      { type: 'set_title', title: 'Made by commands' },
+      { type: 'place_object', ref: 'coin', objectId: 'coin_gold', tileX: 3, tileY: 3 },
+    ] });
+    const saved = await api.call(`${room(1, 0)}/draft/commands`, { session: builder, body: commands('blank') });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toMatchObject({ claimerUserId: 'builder', published: null, draft: { title: 'Made by commands' } });
+    expect(saved.body.draft.placedObjects.map((placed: { instanceId: string }) => placed.instanceId)).toEqual([saved.body.commandRefs.coin]);
+
+    expect((await api.call(`${room(1, 0)}/draft/commands`, { session: builder, body: commands('published') })).status).toBe(409);
+    expect((await api.call(`${room(1, 0)}/draft/commands`, { session: await api.signIn('p1'), body: commands('current_draft') })).status).toBe(403);
+    expect((await api.call(`${room(1, 0)}/draft/commands`, { body: commands('blank') })).status).toBe(401);
+    expect((await api.call(`${room(1, 0)}/draft/commands`, { session: builder, body: { base: 'blank', commands: [{ type: 'teleport' }] } })).status).toBe(400);
+  });
+
+  it('lets the claimer choose which version the leaderboard uses', async () => {
+    const builder = await api.signIn('builder');
+    tick();
+    await publishRoomSnapshot(api, builder, roomSnapshot(0, 0, { title: 'Second' }));
+    const pinned = await api.call(`${room(0, 0)}/canonical`, { session: builder, body: { targetVersion: 1 } });
+    expect(pinned.status).toBe(200);
+    expect(pinned.body).toMatchObject({ canonicalVersion: 1, published: { version: 2 } });
+    expect((await api.call(`${room(0, 0)}/canonical`, { session: await api.signIn('p1'), body: { targetVersion: 2 } })).status).toBe(403);
+    expect((await api.call(`${room(0, 0)}/canonical`, { session: builder, body: { targetVersion: 7 } })).status).toBe(404);
+    expect((await api.call(room(0, 0))).body.canonicalVersion).toBe(1);
+  });
+});
+
 describe('publish limits', () => {
   it('refuses a goal that cannot be finished, and creates no version', async () => {
     const builder = await api.signIn('builder');
