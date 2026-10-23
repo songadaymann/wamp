@@ -38,7 +38,8 @@ const LEGACY_GENERATED_USER_LINKS_TABLE = `${RETIRED_SOURCE_NAME}_user_links`;
 
 const INTERNAL_TABLES = new Set(['_cf_KV', 'd1_migrations']);
 // Nothing reads or writes these any more (F264); they stay in the schema until a drop migration.
-// The snapshot admin routes don't accept them, so the refresh leaves them alone.
+// F264 took the first two out of the snapshot routes' table list (room_version_attribution was
+// never in it), so the refresh leaves all three alone instead of trying to import them.
 const RETIRED_TABLES = new Set([
   `${RETIRED_SOURCE_NAME}_point_sync`,
   'room_difficulty_votes',
