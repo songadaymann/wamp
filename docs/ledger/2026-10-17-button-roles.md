@@ -1,0 +1,1 @@
+| 2026-10-17 | F114 | [#231](https://github.com/songadaymann/wamp/pull/231) | [receipt](docs/review/wamp-button-roles-2026-10-17.md) | Consistent button roles in rooms and both editors, with a clear Publish |

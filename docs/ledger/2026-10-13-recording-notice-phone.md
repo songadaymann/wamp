@@ -1,0 +1,1 @@
+| 2026-10-13 | F089 | [#194](https://github.com/songadaymann/wamp/pull/194) | [receipt](docs/review/wamp-recording-notice-phone-2026-10-13.md) | The recording notice stays clear of phone play controls |

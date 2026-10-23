@@ -1,0 +1,1 @@
+| 2026-10-20 | F237 | [#265](https://github.com/songadaymann/wamp/pull/265) | [receipt](docs/review/wamp-mint-artwork-2026-10-20.md) | Room collection leads into artwork with safe retries (software only; historic updates unsigned) |

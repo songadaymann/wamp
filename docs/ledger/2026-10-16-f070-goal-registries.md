@@ -1,0 +1,1 @@
+| 2026-10-16 | F070 | [#224](https://github.com/songadaymann/wamp/pull/224) | [receipt](docs/review/wamp-f070-final-2026-10-16.md) | Each goal type's data, checks, scoring, display, clocks and editor rules live in one registry (PRs from #205) |

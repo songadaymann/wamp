@@ -1,0 +1,1 @@
+| 2026-10-20 | F050 | [#261](https://github.com/songadaymann/wamp/pull/261)–[#262](https://github.com/songadaymann/wamp/pull/262) | [receipt](docs/review/wamp-map-capture-2026-10-19.md) | Protected map capture and streamed public archives; map zoom recovers from daily history |

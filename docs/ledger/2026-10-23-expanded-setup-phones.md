@@ -1,0 +1,1 @@
+| 2026-10-23 | F365, F371 | [#315](https://github.com/songadaymann/wamp/pull/315) | [receipt](docs/review/wamp-round2-phone-building-2026-10-23.md) | Expanded Room setup as a phone bottom sheet with a touch map; Move keeps pinch-zoom; Fit room on phones |

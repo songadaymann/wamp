@@ -1,0 +1,1 @@
+| 2026-10-14 | F006 | [#196](https://github.com/songadaymann/wamp/pull/196) | [receipt](docs/review/wamp-special-tile-cache-2026-10-13.md) | Special tiles are cached, and duplicate actor scans are gone |

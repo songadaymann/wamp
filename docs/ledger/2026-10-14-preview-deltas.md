@@ -1,0 +1,1 @@
+| 2026-10-14 | F035 | [#198](https://github.com/songadaymann/wamp/pull/198) | [receipt](docs/review/wamp-preview-deltas-2026-10-14.md) | Builders' room previews are sent only when the room changes, and client snapshots are reused |

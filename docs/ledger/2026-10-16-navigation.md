@@ -1,0 +1,1 @@
+| 2026-10-16 | F112 | [#229](https://github.com/songadaymann/wamp/pull/229)–[#230](https://github.com/songadaymann/wamp/pull/230) | [receipt](docs/review/wamp-navigation-2026-10-16.md) | Room actions, browse navigation and the account menu are separate; the phone editor menu clears its toolbar |

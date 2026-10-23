@@ -1,0 +1,1 @@
+| 2026-10-09 | F226 | [#105](https://github.com/songadaymann/wamp/pull/105) | [receipt](docs/review/wamp-music-overlay-cache-2026-10-09.md) | The music grid redraws a layer only when what it shows changes |

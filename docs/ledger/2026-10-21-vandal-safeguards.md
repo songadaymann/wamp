@@ -1,0 +1,1 @@
+| 2026-10-21 | F182, F184, F183, F049, F188, F213 | [#278](https://github.com/songadaymann/wamp/pull/278)–[#283](https://github.com/songadaymann/wamp/pull/283) | [receipt](docs/review/wamp-vandal-safeguards-2026-10-21.md) | Edit allowance on others' rooms, suspensions, player reports, guest room hiding, abuse limits, World edges |

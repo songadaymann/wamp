@@ -1,0 +1,1 @@
+| 2026-10-19 | F074 | [#257](https://github.com/songadaymann/wamp/pull/257) | [receipt](docs/review/wamp-css-architecture-2026-10-19.md) | Shared UI cascade and stacking roles; 142 !important flags removed |

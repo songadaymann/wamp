@@ -1,0 +1,1 @@
+| 2026-10-13 | F021 | [#190](https://github.com/songadaymann/wamp/pull/190) | [receipt](docs/review/wamp-asset-cache-versioning-2026-10-13.md) | Public assets carry content versions, so updated art reaches returning players |

@@ -1,0 +1,1 @@
+| 2026-10-20 | F242 | [#266](https://github.com/songadaymann/wamp/pull/266) | [receipt](docs/review/wamp-metadata-reconcile-2026-10-20.md) | Room artwork records reconciled from canonical chain metadata |

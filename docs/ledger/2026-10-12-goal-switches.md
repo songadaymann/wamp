@@ -1,0 +1,1 @@
+| 2026-10-12 | F070 | [#183](https://github.com/songadaymann/wamp/pull/183) | [receipt](docs/review/wamp-goal-switches-2026-10-12.md) | Unknown goal types fail verification, and lint flags switches with missing cases (F070 part) |

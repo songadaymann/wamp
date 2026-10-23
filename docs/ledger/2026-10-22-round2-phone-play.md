@@ -1,0 +1,1 @@
+| 2026-10-22 | F354, F358, F304, F307, F352, F357, F350, F355, F351 | [#295](https://github.com/songadaymann/wamp/pull/295)–[#301](https://github.com/songadaymann/wamp/pull/301) | [receipt](docs/review/wamp-round2-phone-play-2026-10-22.md) | Phone play: tablet keyboard layout, stick crawl, memory, next-room guess, loading notice, ranked clear retry |

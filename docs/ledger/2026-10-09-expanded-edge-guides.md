@@ -1,0 +1,1 @@
+| 2026-10-09 | F166 | [#106](https://github.com/songadaymann/wamp/pull/106) | [receipt](docs/review/wamp-expanded-edge-guides-2026-10-09.md) | Neighbor edge guides around Expanded Rooms in the editor |

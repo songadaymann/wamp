@@ -1,0 +1,1 @@
+| 2026-10-23 | F378, F385, F383, F375 | [#309](https://github.com/songadaymann/wamp/pull/309) | [receipt](docs/review/wamp-round2-where-features-meet-2026-10-23.md) | Every stop input ends a run the same way; Escape is handled once; music stops on return to the editor |

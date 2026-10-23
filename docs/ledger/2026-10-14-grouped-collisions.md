@@ -1,0 +1,1 @@
+| 2026-10-14 | F008 | [#197](https://github.com/songadaymann/wamp/pull/197) | [receipt](docs/review/wamp-grouped-collisions-2026-10-14.md) | World obstacle collisions use spatial groups (856 to 431 collision links in a busy area) |

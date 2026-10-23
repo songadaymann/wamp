@@ -1,0 +1,1 @@
+| 2026-10-11 | F012, F018, F188, F205, F222, F035 | [#171](https://github.com/songadaymann/wamp/pull/171)–[#176](https://github.com/songadaymann/wamp/pull/176) | [receipt](docs/review/wamp-frames-prefetch-limits-2026-10-11.md) | Fewer per-frame allocations, arrival area fetched before boot; parts of F188, F205, F222, F035 |

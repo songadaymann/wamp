@@ -1,0 +1,1 @@
+| 2026-10-19 | F243 | [#258](https://github.com/songadaymann/wamp/pull/258) | [receipt](docs/review/wamp-wallet-network-info-2026-10-19.md) | Wallet network metadata is kept separate from the server transport |

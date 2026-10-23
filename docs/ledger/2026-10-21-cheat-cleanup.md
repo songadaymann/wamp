@@ -1,0 +1,1 @@
+| 2026-10-21 | F205 | [#284](https://github.com/songadaymann/wamp/pull/284) | [receipt](docs/review/wamp-cheat-cleanup-2026-10-21.md) | Removing cheated runs takes back the XP, trust, ratings and badges only those runs earned |

@@ -1,0 +1,1 @@
+| 2026-10-10 | F201 | [#111](https://github.com/songadaymann/wamp/pull/111) | [receipt](docs/review/wamp-republish-rewards-2026-10-10.md) | Republishing no longer resets clear rewards, and your own room gives none |

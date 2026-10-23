@@ -1,0 +1,1 @@
+| 2026-10-20 | F244 | [#269](https://github.com/songadaymann/wamp/pull/269) | [receipt](docs/review/wamp-collectible-artwork-2026-10-20.md) | Clearer collectible room artwork and Play Room links (historic updates unsigned) |

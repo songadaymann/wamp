@@ -1,0 +1,1 @@
+| 2026-10-10 | F076, F086 | [#127](https://github.com/songadaymann/wamp/pull/127) | [receipt](docs/review/wamp-ios-viewport-2026-10-10.md) | iPhone text fields no longer zoom the page, and full-screen panels stay on the visible screen |

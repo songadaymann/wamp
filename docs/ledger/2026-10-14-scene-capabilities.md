@@ -1,0 +1,1 @@
+| 2026-10-14 | F062 | [#202](https://github.com/songadaymann/wamp/pull/202) | [receipt](docs/review/wamp-required-scene-capabilities-2026-10-14.md) | Scenes must provide the UI capabilities they declare, checked by the compiler |

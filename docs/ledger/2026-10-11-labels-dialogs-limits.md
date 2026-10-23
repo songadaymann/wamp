@@ -1,0 +1,1 @@
+| 2026-10-11 | F180, F115, F175, F051, F193, F204, F119, F064 | [#146](https://github.com/songadaymann/wamp/pull/146)–[#153](https://github.com/songadaymann/wamp/pull/153) | [receipt](docs/review/wamp-keyboard-dialogs-limits-2026-10-11.md) | Labels, paper dialogs, dialog focus, body size cap, deploy guards, rejected runs; parts of F119, F064 |

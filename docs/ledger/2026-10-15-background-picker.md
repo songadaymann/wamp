@@ -1,0 +1,1 @@
+| 2026-10-15 | — | [#204](https://github.com/songadaymann/wamp/pull/204) | [receipt](docs/review/wamp-background-thumbnails-2026-10-14.md) | Background picker previews fixed, and the picker is reachable on short phones |
