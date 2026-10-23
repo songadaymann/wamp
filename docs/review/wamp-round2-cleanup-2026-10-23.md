@@ -25,6 +25,16 @@ Delivers round-2 items F252, F387, F256, F486 and F493, and the safe parts of F2
 - #321: `npm run check` passed (688 files, 5,779 tests). It was rebased onto #320 so that PR's code is in the baseline; `npm run dead-code:check` found nothing new.
 - Muted `smoke:progression-rating`, whose socket stub changed, passed against a local Worker. `smoke:wampos-window` fails on an editor tool-state check, the same way on main and before #316, so it was already out of date.
 
+## Also shipped: menus that fail to load
+
+[#322](https://github.com/songadaymann/wamp/pull/322) follows the parent session's [#320](https://github.com/songadaymann/wamp/pull/320). #320 fixed one case: Jonathan's "Rate Room does nothing" report, most likely a Leaderboard download that failed silently.
+
+- **Every on-demand menu:** when its code fails to download, the menu now says "The <menu> couldn't load. Check your connection, then reload WAMP." and offers Reload or Not now, and reports the failure once. That covers Explore, Room Rush, Profile, playlists, Guestbook, the report and bug report forms, the guest prompts and the rest. A test fails if a new on-demand menu skips it.
+- **Video backdrops:** a failed room video backdrop download no longer raises an error every frame.
+- **Playlists:** they no longer show the browser's raw module error.
+- **Checks:** `npm run check` passed (691 files, 5,804 tests). The muted default (68/68), pause and keyboard smokes passed.
+- **Live check:** on wamp.land, with script downloads blocked after boot in a muted browser, Explore showed the error-tone card with Reload and Not now.
+
 ## Waiting on Jonathan
 
 - **F497 follow-up:** whether to run the 782-item export sweep. 568 items only need `export` dropped and 214 are unused. It touches hundreds of files, so pick a quiet moment for the other lanes.

@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-23 | — | [#320](https://github.com/songadaymann/wamp/pull/320), [#322](https://github.com/songadaymann/wamp/pull/322) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | A menu whose code fails to download explains itself and offers a reload instead of doing nothing |
 | 2026-10-23 | F497, F498 | [#321](https://github.com/songadaymann/wamp/pull/321) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | CI fails on new dead code (knip baseline), and file-size pins match each file with 25 lines of slack |
 | 2026-10-23 | — | [#320](https://github.com/songadaymann/wamp/pull/320) | — | Leaderboard load failures show a Reload card, and a rejected rating shows its reason under the vote buttons |
 | 2026-10-23 | F256, F264, F272 | [#319](https://github.com/songadaymann/wamp/pull/319) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | About 494 lines of dead Worker code and checks that can no longer fire removed; frozen tables kept |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-13 | — | [#189](https://github.com/songadaymann/wamp/pull/189) | — | Planted goal flags are allowed, and editor tilesets are grouped |
 | 2026-10-13 | F013 | [#188](https://github.com/songadaymann/wamp/pull/188) | [receipt](docs/review/wamp-room-art-loading-2026-10-13.md) | Room decorations and background art load on demand |
 | 2026-10-13 | F056, F098, F117, F119, F120, F174 | [#187](https://github.com/songadaymann/wamp/pull/187) | [receipt](docs/review/wamp-approved-small-fixes-2026-10-13.md) | Six approved UI and draft fixes |
-| 2026-10-13 | — | [#186](https://github.com/songadaymann/wamp/pull/186) | [receipt](docs/review/wamp-restart-keyboard-focus-2026-10-13.md) | Space keeps jumping after repeated Restart clicks |
