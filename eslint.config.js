@@ -1,11 +1,11 @@
 import tseslint from 'typescript-eslint';
 
 // New files stay under 1,500 non-blank lines. Files already over it are pinned at their size so
-// they can shrink but not grow (F067). A pin must equal its file's current size, counted as
-// max-lines counts it (non-blank lines, comments included): when a pinned file shrinks, lower its
-// pin in the same change, and delete the pin once the file is at or under 1,500. A pin never goes
-// up. `npm run max-lines:pins -- --write` does both, and scripts/check_max_lines_pins.test.ts
-// fails `npm test` when a pin sits above its file (F498).
+// they can shrink but not grow (F067). A pin must match its file's current size, counted as
+// max-lines counts it (non-blank lines, comments included), give or take 25 lines: when a pinned
+// file shrinks by more, lower its pin, and delete the pin once the file is at or under 1,500. A pin
+// never goes up. `npm run max-lines:pins -- --write` does both, and scripts/check_max_lines_pins.test.ts
+// fails `npm test` when a pin sits more than 25 lines above its file (F498).
 const MAX_LINES = 1500;
 const OVERSIZED_FILE_LINES = {
   'src/scenes/OverworldPlayScene.ts': 5144,

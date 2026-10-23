@@ -12,8 +12,9 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const CONFIG_FILE = 'eslint.config.js';
-// How far a pin may sit above its file. 0: lower the pin in the change that shrinks the file.
-export const SLACK = 0;
+// How far a pin may sit above its file. A small shrink needn't touch eslint.config.js, but a pinned
+// file can never regrow by more than this.
+export const SLACK = 25;
 const REPO = resolve(fileURLToPath(import.meta.url), '../..');
 const BLOCK = /(const OVERSIZED_FILE_LINES = \{\n)([\s\S]*?)(\};)/;
 const PIN = /^ {2}'([^']+)': (\d+),$/;

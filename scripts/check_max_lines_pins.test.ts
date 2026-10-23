@@ -50,9 +50,13 @@ describe('max-lines pins', () => {
   });
 
   it('lowers stale pins, never raises one, and deletes pins the default covers', () => {
-    fixture({ 'shrank.ts': 40, 'grew.ts': 45, 'exact.ts': 20, 'small.ts': 12, 'gone.ts': 30 }, { 'shrank.ts': 30, 'grew.ts': 50, 'exact.ts': 20, 'small.ts': 8 });
+    fixture(
+      { 'shrank.ts': 80, 'trimmed.ts': 40, 'grew.ts': 45, 'exact.ts': 20, 'small.ts': 12, 'gone.ts': 30 },
+      { 'shrank.ts': 30, 'trimmed.ts': 30, 'grew.ts': 50, 'exact.ts': 20, 'small.ts': 8 },
+    );
+    // trimmed.ts sits 10 lines above its file, within the slack, so it isn't an error yet.
     expect(pinErrors(root)).toEqual([
-      'shrank.ts has 30 lines but is pinned at 40; lower the pin to 30.',
+      'shrank.ts has 30 lines but is pinned at 80; lower the pin to 30.',
       'small.ts has 8 lines, within the 10 default; delete its pin (12).',
       'gone.ts is gone; delete its pin (30).',
       'npm run max-lines:pins -- --write fixes these in eslint.config.js.',
@@ -60,6 +64,7 @@ describe('max-lines pins', () => {
     writePins(root);
     expect(readPins(readFileSync(join(root, CONFIG_FILE), 'utf8')).pins).toEqual([
       { file: 'shrank.ts', pin: 30 },
+      { file: 'trimmed.ts', pin: 30 },
       { file: 'grew.ts', pin: 45 },
       { file: 'exact.ts', pin: 20 },
     ]);
