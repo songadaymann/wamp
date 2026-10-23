@@ -8937,6 +8937,8 @@ OVERSIZED_FILE_LINES (eslint.config.js:6-27) counts non-blank lines (`skipBlankL
 
 - **partially confirmed.** The core claim holds. The F066 refactors on 2026-10-19 (ba02037f, 3f9389bd, 969b5f83) never lowered the file-size caps, which still date from aafc986e on 2026-10-14. That leaves 2,512 lines of slack: OverworldPlayScene 1,227, worldStreaming 793, difficulty 146, CourseEditorScene 136, EditorScene 96, rooms/store 65. Drop the claim that the seven files at their exact cap are a problem: being pinned at current size is the stated design, and the script would not change it. The fix is to set each cap to min(cap, current non-blank count) now: 5128, 4972, 3328, 1888, 1754, 1616, and so on. Optionally add a `--write` ratchet script, plus a check in lint or CI that fails when a cap is more than ~10 lines above the file's size and names the number to change. Do not delete entries that fall under 1,500. musicWorkflow (1488) and roomComments (1483) are pinned below the default, and removing their entries would loosen them.
 
+**2026-10-23 delivered.** [PR #321](https://github.com/songadaymann/wamp/pull/321). Every max-lines pin is lowered to its file's real size, removing 2,068 lines of room to regrow (OverworldPlayScene 6355 to 5144, worldStreaming 5765 to 5095), and `scripts/check_max_lines_pins.test.ts` fails when a pin sits more than 25 lines above its file. `npm run max-lines:pins -- --write` lowers pins and never raises one. `npm run check` passed (688 files, 5,779 tests; boot 664.6 KB), and `npm run dead-code:check` found nothing new after rebasing onto #320. [Receipt](wamp-round2-cleanup-2026-10-23.md).
+
 ### F497: The dead-code report keeps growing because nothing enforces it (481 to 513 unused exports in 17 days)
 
 - **Area:** Code health, tests and tooling (reviewer: Dead code: game client)
@@ -8975,6 +8977,8 @@ Plan: (1) one PR that drops the 480 needless exports; (2) delete the dead groups
   5. Drop the `--production` idea unless entries are marked with `!` first; today it reports no exports. Also drop the harness ignore entries that knip never flags.
   
   The client count of exports used only in their own file is 465 by knip's measure, not 480. Overlaps F067 item (4), whose Knip part was left not done.
+
+**2026-10-23 delivered.** [PR #321](https://github.com/songadaymann/wamp/pull/321). `scripts/dead_code_baseline.txt` records today's 786 knip findings (503 exports, 279 types, 3 duplicates, 1 file), and `npm run dead-code:check` runs in `npm run check` and the required `quality` job (about 3 s). It fails only on a finding not in the baseline, naming the fix, and `npm run dead-code:shrink` drops findings that are gone. The 782-item export sweep is a separate follow-up. `npm run check` passed (688 files, 5,779 tests; boot 664.6 KB), and `npm run dead-code:check` found nothing new after rebasing onto #320. [Receipt](wamp-round2-cleanup-2026-10-23.md).
 
 ### F489: scripts/ is outside type checking and real linting; two scripts already disagree with the game's types
 

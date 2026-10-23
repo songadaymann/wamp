@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 63 of 248 done.**
+**Progress: 65 of 248 done.**
 
 ## How to use this file
 
@@ -417,8 +417,8 @@ The code is strongly typed and the tests are fast and green, but the safety net 
 - [ ] **F480** 48 of 69 smoke and probe scripts never run in CI, and at least five are broken on main · medium impact · medium effort — _also covers: 40 of 62 smoke tests never run in CI, and wiring in a new one takes edits in six places_
 - [ ] **F482** Browser checks fail at random in about 4% of CI runs, mostly on harmless console noise · medium impact · small effort
 - [x] **F486** progress.md and feature-ledger.md grew 6x since Oct 3, copy each other, and 71% of commits edit them · medium impact · small effort — **done 2026-10-23** ([PR #317](https://github.com/songadaymann/wamp/pull/317)): progress.md is archived unchanged to `docs/history/progress-2026.md` and untracked, and the old ledger to `docs/history/feature-ledger-2026.md`. `feature-ledger.md` is now one row per delivery, built by `npm run ledger` from one file per entry in `docs/ledger/` with a union merge, so parallel PRs don't conflict; `scripts/ledger.test.ts` checks it. [Receipt](wamp-round2-cleanup-2026-10-23.md).
-- [ ] **F498** The file-size limits were never lowered after this week's big refactors: the two largest files can regrow by 2,000 lines unnoticed · low impact · small effort — _also covers: File-size ratchet never tightens: shrunk files can regrow by 2,500 lines with no lint error_
-- [ ] **F497** The dead-code report keeps growing because nothing enforces it (481 to 513 unused exports in 17 days) · low impact · small effort
+- [x] **F498** The file-size limits were never lowered after this week's big refactors: the two largest files can regrow by 2,000 lines unnoticed · low impact · small effort — _also covers: File-size ratchet never tightens: shrunk files can regrow by 2,500 lines with no lint error_ — **done 2026-10-23** ([PR #321](https://github.com/songadaymann/wamp/pull/321)): every max-lines pin is lowered to its file's real size, removing 2,068 lines of room to regrow (OverworldPlayScene 6355 to 5144, worldStreaming 5765 to 5095), and `scripts/check_max_lines_pins.test.ts` fails when a pin sits more than 25 lines above its file. `npm run max-lines:pins -- --write` lowers pins and never raises one. [Receipt](wamp-round2-cleanup-2026-10-23.md).
+- [x] **F497** The dead-code report keeps growing because nothing enforces it (481 to 513 unused exports in 17 days) · low impact · small effort — **done 2026-10-23** ([PR #321](https://github.com/songadaymann/wamp/pull/321)): `scripts/dead_code_baseline.txt` records today's 786 knip findings (503 exports, 279 types, 3 duplicates, 1 file), and `npm run dead-code:check` runs in `npm run check` and the required `quality` job (about 3 s). It fails only on a finding not in the baseline, naming the fix, and `npm run dead-code:shrink` drops findings that are gone. The 782-item export sweep is a separate follow-up. [Receipt](wamp-round2-cleanup-2026-10-23.md).
 - [ ] **F489** scripts/ is outside type checking and real linting; two scripts already disagree with the game's types · medium impact · small effort
 - [ ] **F490** Startup code grew 30 KB in a week with nothing to flag it until the budget breaks; the size check needs per-change attribution and more boundaries · medium impact · small effort
 - [ ] **F488** Room Video swaps out the editor's save/load methods at runtime, hidden from readers and tests · medium impact · medium effort
