@@ -80,7 +80,7 @@ const SHARE_PAGE_ROUTES = [
       title: 'Safety &lt;Postcard&gt; &amp; &quot;Friends&quot;',
       description: 'A &lt;postcard&gt; &amp; &quot;description&quot;',
       canonicalUrl: 'https://preview.wamp.land/wamp-o-gram/abcdefghijkl',
-      imageUrl: 'https://api.example.test/api/wamp-o-grams/abcdefghijkl/preview.png?v=1',
+      imageUrl: 'https://api.example.test/api/wamp-o-grams/abcdefghijkl/preview.png?renderer=1',
       ogType: 'website',
     },
   },
@@ -135,7 +135,7 @@ const FALLBACK_ROUTE_CASES = [
       title: 'Wamp-O-Gram',
       description: 'Open this playable WAMP level postcard.',
       canonicalUrl: 'https://preview.wamp.land/wamp-o-gram/abcdefghijkl',
-      imageUrl: 'https://api.example.test/api/wamp-o-grams/abcdefghijkl/preview.png?v=1',
+      imageUrl: 'https://api.example.test/api/wamp-o-grams/abcdefghijkl/preview.png?renderer=1',
     },
   },
   {

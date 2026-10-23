@@ -16,7 +16,8 @@ async function decodedPixelHash(png: Uint8Array): Promise<string> {
 }
 
 // Hashes of the decoded pixels from the uncompressed 3 MB encoder before F332: compression must not
-// change a single pixel. Update them only when the drawing itself changes on purpose.
+// change a single pixel. Update them only when the drawing itself changes on purpose, and bump
+// WAMP_O_GRAM_PREVIEW_VERSION, since the API keeps each version's gram previews for good (F348).
 describe('API share preview PNGs (F332)', () => {
   it('draws the same pixels as before in a compressed PNG', async () => {
     const defaultCard = await renderRoomSharePreviewPng(createDefaultRoomSnapshot('0,0', { x: 0, y: 0 }));

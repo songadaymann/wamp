@@ -11,6 +11,7 @@ import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
 import { loadRoomRecord, parseStoredSnapshot } from '../rooms/store';
 import { assertCanPersistRoomVideo } from '../rooms/guardrails';
+import { hiddenVersionSnapshot } from '../rooms/versionRedaction';
 
 interface WampOGramRow {
   id: string;
@@ -34,7 +35,17 @@ interface WampOGramRow {
   sent_at: string | null;
   created_at: string;
   updated_at: string;
+  room_version_redacted_at: string | null;
 }
+
+/** Whether a gram can be shown, and whether moderation has since hidden the room version it shows. */
+export type WampOGramVisibility = 'missing' | 'shown' | 'room-version-hidden';
+
+/** Joins the gram's published room version, so hiding that version hides it in grams too. */
+const ROOM_VERSION_REDACTED_AT = `(
+  SELECT rv.redacted_at FROM room_versions rv
+  WHERE rv.room_id = wamp_o_grams.room_id AND rv.version = wamp_o_grams.room_version AND wamp_o_grams.room_status = 'published'
+)`;
 
 export async function createWampOGram(
   env: Env,
@@ -151,12 +162,13 @@ export async function deleteWampOGramBySlug(env: Env, slug: string): Promise<boo
   return row !== null;
 }
 
-/** Whether a gram exists, without reading its stored room. */
-export async function wampOGramExists(env: Env, slug: string): Promise<boolean> {
-  const row = await env.DB.prepare('SELECT 1 AS found FROM wamp_o_grams WHERE slug = ? LIMIT 1')
+/** One indexed read, without the stored room: run before any cache so deletes and hides apply at once. */
+export async function loadWampOGramVisibility(env: Env, slug: string): Promise<WampOGramVisibility> {
+  const row = await env.DB.prepare(`SELECT ${ROOM_VERSION_REDACTED_AT} AS redacted_at FROM wamp_o_grams WHERE slug = ? LIMIT 1`)
     .bind(slug)
-    .first<{ found: number }>();
-  return row !== null;
+    .first<{ redacted_at: string | null }>();
+  if (!row) return 'missing';
+  return row.redacted_at ? 'room-version-hidden' : 'shown';
 }
 
 export async function loadWampOGramBySlug(
@@ -186,7 +198,8 @@ export async function loadWampOGramBySlug(
         delivery_error,
         sent_at,
         created_at,
-        updated_at
+        updated_at,
+        ${ROOM_VERSION_REDACTED_AT} AS room_version_redacted_at
       FROM wamp_o_grams
       WHERE slug = ?
       LIMIT 1
@@ -199,7 +212,9 @@ export async function loadWampOGramBySlug(
 }
 
 function mapWampOGramRow(row: WampOGramRow): WampOGramRecord {
-  const roomSnapshot = parseStoredSnapshot(row.snapshot_json, 'Wamp-O-Gram room snapshot');
+  const storedSnapshot = parseStoredSnapshot(row.snapshot_json, 'Wamp-O-Gram room snapshot');
+  // A hidden version shows as the same placeholder players get for it.
+  const roomSnapshot = row.room_version_redacted_at ? hiddenVersionSnapshot(storedSnapshot) : storedSnapshot;
   return cloneWampOGramRecord({
     id: row.id,
     slug: row.slug,
