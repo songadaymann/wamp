@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 6: the room editor's phone dock
+
+Round-2 lane. PR #316 F368 (touch-scrolling tile picker with tap, hold-to-block and fling-stop), F369 (one-tap Draw/Erase switch, kept off the room in both editors), F367 (all dock buttons in reach at 360–390 px, scroll cue below). Reviewed adversarially; phone dock smoke extended. Step 6 complete. Receipt: docs/review/wamp-round2-phone-building-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 6: Expanded Room setup and Move on phones
 
 Round-2 lane. PR #315 F365 (setup bottom sheet and side column that scroll as a whole; touch drag, pinch and tap on the composer map) and F371 (touch Move waits for a drag or hold so a pinch keeps the selection; Fit room on phones). Reviewed adversarially. Receipt: docs/review/wamp-round2-phone-building-2026-10-23.md.
