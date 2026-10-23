@@ -13,12 +13,15 @@ vi.mock('../ui/modalState', async (importOriginal) => ({
 import { OverworldPlayScene } from './OverworldPlayScene';
 import { createDefaultRoomSnapshot } from '../persistence/roomModel';
 import { createInspectInputController } from './overworld/composition/ui';
+import { OverworldSceneFlowController } from './overworld/flow';
 import { OverworldRoomRushModeController } from './overworld/roomRushMode';
 import type { OverworldRoomRushRunController } from './overworld/roomRushRuns';
+import { OverworldSessionResetController } from './overworld/sessionReset';
 
 type Harness = Record<string, unknown> & {
   stopCurrentPlay(): void;
   playSelectedRoom(): void | Promise<void>;
+  jumpToCoordinates(coordinates: { x: number; y: number }): Promise<void>;
 };
 
 function scene(fields: Record<string, unknown>): Harness {
@@ -104,5 +107,84 @@ describe('Escape after a composer lost focus (F385)', () => {
     expect(h.chat).not.toHaveBeenCalled();
     h.escape();
     expect(h.stopCurrentPlay).not.toHaveBeenCalled();
+  });
+});
+
+describe('jumping to a room mid-run (F383)', () => {
+  function jumpHarness(options: { rush?: boolean; mode?: 'browse' | 'play' } = {}) {
+    const order: string[] = [];
+    const state: Record<string, unknown> = {
+      activeCourseRun: { result: 'active', course: { roomRefs: [] } },
+      editorPlaytestReturnTarget: { roomCoordinates: { x: 3, y: 1 } },
+      courseEditorReturnTarget: { courseId: 'course-1' },
+    };
+    const finalizeActiveCourseRun = vi.fn();
+    const clearActiveCourseRoomOverrides = vi.fn();
+    const abandonGoalRun = vi.fn();
+    const sessionReset = new OverworldSessionResetController({
+      getActiveCourseRun: () => state.activeCourseRun,
+      getActiveRoomRushRun: () => null,
+      getCurrentGoalRun: () => null,
+      abandonGoalRun, abandonRoomRushRun: vi.fn(), finalizeActiveCourseRun,
+      setActiveCourseRun: (run: unknown) => { state.activeCourseRun = run; },
+      clearActiveCourseRoomOverrides,
+      resetTransientPlayState: vi.fn(), resetGoalRunController: vi.fn(),
+      resetRoomRushController: vi.fn(), redrawGoalMarkers: vi.fn(),
+    } as never);
+    const scenes = { wake: vi.fn(), sleep: vi.fn(), run: vi.fn(), bringToTop: vi.fn(), isSleeping: () => true, isPaused: () => false, isActive: () => false };
+    const flow = new OverworldSceneFlowController({ scene: scenes } as never, {
+      setCourseEditorReturnTarget: (target: unknown) => { state.courseEditorReturnTarget = target; },
+      setEditorPlaytestReturnTarget: (target: unknown) => { state.editorPlaytestReturnTarget = target; },
+      resetPlaySession: () => { order.push('reset'); sessionReset.resetPlaySession(); },
+      clearTouchGestureState: vi.fn(),
+    } as never);
+    const endRush = vi.fn();
+    const clearActiveMatch = vi.fn(() => order.push('pvp'));
+    const jump = vi.fn(async () => { order.push('jump'); });
+    const harness = scene({
+      mode: options.mode ?? 'play',
+      flowController: flow,
+      pvpArenaController: { clearActiveMatch },
+      roomRushModeController: { getCurrentRun: () => options.rush ? { result: 'active' } : null, end: endRush },
+      selectionController: { jumpToCoordinates: jump },
+    });
+    return { harness, state, order, scenes, finalizeActiveCourseRun, clearActiveCourseRoomOverrides, abandonGoalRun, clearActiveMatch, endRush, jump };
+  }
+
+  it('ends the Expanded Room run, its overrides and the duel before moving, like Stop', async () => {
+    const h = jumpHarness();
+    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    expect(h.state.activeCourseRun).toBeNull();
+    expect(h.finalizeActiveCourseRun).toHaveBeenCalledWith('abandoned');
+    expect(h.clearActiveCourseRoomOverrides).toHaveBeenCalled();
+    expect(h.abandonGoalRun).toHaveBeenCalled();
+    expect(h.clearActiveMatch).toHaveBeenCalledWith(true);
+    expect(h.order).toEqual(['pvp', 'reset', 'jump']);
+    expect(h.jump).toHaveBeenCalledWith({ x: 9, y: 4 });
+  });
+
+  it('forgets an editor test run without waking the editor', async () => {
+    const h = jumpHarness();
+    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    expect(h.state.editorPlaytestReturnTarget).toBeNull();
+    expect(h.state.courseEditorReturnTarget).toBeNull();
+    expect(h.scenes.wake).not.toHaveBeenCalled();
+    expect(h.scenes.run).not.toHaveBeenCalled();
+    expect(h.scenes.sleep).not.toHaveBeenCalled();
+  });
+
+  it('ends a Room Rush through its result, which takes the place of the jump', async () => {
+    const h = jumpHarness({ rush: true });
+    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    expect(h.endRush).toHaveBeenCalledOnce();
+    expect(h.order).toEqual([]);
+    expect(h.jump).not.toHaveBeenCalled();
+  });
+
+  it('jumps straight from browse without touching a session', async () => {
+    const h = jumpHarness({ mode: 'browse' });
+    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    expect(h.order).toEqual(['jump']);
+    expect(h.state.activeCourseRun).not.toBeNull();
   });
 });

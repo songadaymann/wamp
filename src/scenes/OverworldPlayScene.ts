@@ -2019,6 +2019,16 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
+    if (this.mode === 'play') {
+      // End the run as Stop does (F383). A Rush shows its result instead: that dialog
+      // saves the score and drives the camera to the route, so the jump yields to it.
+      if (this.activeRoomRushRun) {
+        this.endRoomRushRun();
+        return;
+      }
+      this.clearActivePvpMatch();
+      this.flowController.endPlaySession();
+    }
     await this.selectionController.jumpToCoordinates(coordinates);
   }
 
