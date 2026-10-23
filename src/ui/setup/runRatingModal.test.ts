@@ -12,7 +12,7 @@ function fixture() {
   const elements = new Map<string, ReturnType<typeof element>>();
   function element() {
     const classes = new Set(['hidden']);
-    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
+    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), getAttribute: vi.fn(() => null), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
       classList: { contains: (name: string) => classes.has(name), add: (...names: string[]) => names.forEach(name => classes.add(name)),
         remove: (...names: string[]) => names.forEach(name => classes.delete(name)), toggle: (name: string, force: boolean) => force ? classes.add(name) : classes.delete(name) } });
   }

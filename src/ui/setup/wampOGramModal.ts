@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import {
   getAuthDebugState,
   promptForSignIn,
@@ -352,8 +353,7 @@ export class WampOGramModalController {
       return;
     }
 
-    this.elements.status.textContent = text;
-    this.elements.status.classList.toggle('hidden', !text);
+    setLiveMessage(this.elements.status, text, tone === 'error' ? 'error' : 'status');
     this.elements.status.dataset.wampOGramTone = tone;
   }
 

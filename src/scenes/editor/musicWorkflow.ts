@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../../ui/friendlyError';
 import { playSfx } from '../../audio/sfx';
 import { editorState, updateEditorState } from '../../config';
 import { globalRoomMusicController } from '../../music/controller';
@@ -1227,10 +1228,7 @@ export class EditorMusicWorkflowCoordinator {
         ? `Create a new named version of this ${activeInstrumentLabel} phrase.`
         : `Name this ${activeInstrumentLabel} phrase before saving it to your library.`;
     }
-    if (phraseSaveModalError) {
-      phraseSaveModalError.textContent = phraseState.savePromptError ?? '';
-      phraseSaveModalError.classList.toggle('hidden', !phraseState.savePromptError);
-    }
+    setLiveMessage(phraseSaveModalError, phraseState.savePromptError);
     if (phraseSaveModalInput) {
       phraseSaveModalInput.value = phraseState.savePromptName;
       phraseSaveModalInput.disabled = !showPhraseSaveModal || phraseState.saveInFlight;

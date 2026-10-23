@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn } from '../../auth/client';
 import {
   createCourseRepository,
@@ -1140,13 +1141,7 @@ export class RunRatingModalController {
   }
 
   private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    const normalized = message?.trim() ?? '';
-    this.elements.error.textContent = normalized;
-    this.elements.error.classList.toggle('hidden', normalized.length === 0);
+    setLiveMessage(this.elements.error, message?.trim());
   }
 
   private async loadBaselineProgression(loadToken: number): Promise<void> {

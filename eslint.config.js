@@ -21,7 +21,7 @@ const OVERSIZED_FILE_LINES = {
   'src/ui/setup/paletteController.ts': 1590,
   'src/ui/setup/profileModal.ts': 1555,
   'src/scenes/editor/musicPatternEditor.ts': 1528,
-  'src/scenes/editor/musicWorkflow.ts': 1488,
+  'src/scenes/editor/musicWorkflow.ts': 1486,
   'src/scenes/overworld/roomComments.ts': 1483,
   'src/autotiling/solver.ts': 1503,
 };

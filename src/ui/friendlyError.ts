@@ -8,6 +8,21 @@ export function friendlyError(action: string, { error, nextStep = 'Please try ag
   return `${message.replace(/[.!?]?$/, '.')} ${nextStep}`;
 }
 
+/**
+ * Show or clear a menu's error or status line so screen readers announce it (F471). Errors are
+ * alerts, which are read even when the line was hidden a moment ago; progress and success lines are
+ * polite status. Text that hasn't changed isn't rewritten, so a re-render doesn't read it again.
+ */
+export function setLiveMessage(element: HTMLElement | null, message: string | null | undefined,
+  tone: 'error' | 'status' = 'error'): void {
+  if (!element) return;
+  const text = message ?? '';
+  const role = tone === 'error' ? 'alert' : 'status';
+  if (element.getAttribute('role') !== role) element.setAttribute('role', role);
+  if (element.textContent !== text) element.textContent = text;
+  element.classList.toggle('hidden', !text);
+}
+
 /** Render a retry action beside an error without injecting server text as HTML. */
 export function renderFriendlyError(element: HTMLElement | null, message: string | null,
   retry?: () => void | Promise<void>): void {
@@ -15,8 +30,9 @@ export function renderFriendlyError(element: HTMLElement | null, message: string
   element.replaceChildren();
   element.classList.toggle('hidden', !message);
   if (!message) return;
+  // The message is the alert, not the whole box, so 'Try again' isn't read out as part of it.
   const copy = element.ownerDocument.createElement('div');
-  copy.textContent = message;
+  setLiveMessage(copy, message);
   element.append(copy);
   if (!retry) return;
   const button = element.ownerDocument.createElement('button');

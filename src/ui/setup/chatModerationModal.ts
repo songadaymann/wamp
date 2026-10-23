@@ -1,5 +1,6 @@
 import { formatAccountIdentity } from '../../auth/displayIdentity';
 import { ChatAdminPicker } from './chatAdminPicker';
+import { setLiveMessage } from '../friendlyError';
 import {
   AUTH_STATE_CHANGED_EVENT,
   getAuthDebugState,
@@ -405,8 +406,7 @@ export class ChatModerationModalController {
       return;
     }
 
-    this.elements.status.textContent = message;
-    this.elements.status.classList.toggle('hidden', !message);
+    setLiveMessage(this.elements.status, message, isError ? 'error' : 'status');
     this.elements.status.classList.toggle('history-modal-error', Boolean(message) && isError);
     this.elements.status.classList.toggle('chat-moderation-status-success', Boolean(message) && !isError);
   }
