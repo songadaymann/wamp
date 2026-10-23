@@ -165,6 +165,8 @@ describe('world-tile leaf', { timeout: RENDER_TIMEOUT_MS }, () => {
     await expect(renderWorldTileLeaf(unknownTile)).rejects.toThrow('unknown tile gid 9999');
     const unknownObject = { ...roomWith(feature, {}), placedObjects: [{ id: 'not_an_object', x: 8, y: 8, instanceId: 'x' }] };
     await expect(renderWorldTileLeaf(unknownObject)).rejects.toThrow('unknown object not_an_object');
+    const missingSprite = { ...roomWith(feature, {}), placedObjects: [{ id: 'custom_sprite:missing', x: 8, y: 8, instanceId: 'x' }] };
+    await expect(renderWorldTileLeaf(missingSprite)).rejects.toThrow('unknown object custom_sprite:missing');
   });
 });
 
@@ -300,7 +302,9 @@ describe('blocked community art and hidden versions', { timeout: RENDER_TIMEOUT_
     expect(everyPixelIs(cell(card, tileColumn, tileRow), placeholder)).toBe(true);
   });
 
-  it.fails('the world tile paints a blocked custom tile as the placeholder and leaves out the blocked sprite (it throws on the sprite in strict mode)', async () => {
+  // The world-tile Worker draws in strict mode, which used to throw on the blocked sprite as an
+  // unknown object, so those map tiles were never redrawn.
+  it('the world tile paints a blocked custom tile as the placeholder and leaves out the blocked sprite', async () => {
     const masked = maskBlockedCustomArt(withBlockableArt(), blocked);
     const leaf = crop(await renderWorldTileLeaf(masked), 1, 1, 640, 352);
     expect(everyPixelIs(cell(leaf, tileColumn, tileRow), placeholder)).toBe(true);
