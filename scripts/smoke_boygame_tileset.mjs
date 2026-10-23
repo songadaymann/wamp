@@ -30,6 +30,8 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1100
 await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+  // Smokes don't record guest replays (the local API rate-limits them per address).
+  window.localStorage.setItem('wamp_replay_opt_out', '1');
 });
 const page = await context.newPage();
 
@@ -55,6 +57,10 @@ try {
   assert.equal(fixture?.ok, true, `Boygame editor fixture failed: ${JSON.stringify(fixture)}`);
   await waitForState(page, (state) => state?.activeScene?.scene === 'editor', 'editor');
 
+  // Raw tilesets live under Terrain > Advanced > Tilesets.
+  await page.click('[data-editor-dock="terrain"]');
+  await page.click('[data-builder-mode-choice="advanced"]');
+  await page.click('.palette-tab[data-mode="tiles"]');
   await page.selectOption('#tileset-select', 'boygame');
   await page.waitForFunction(() => {
     const select = document.querySelector('#tileset-select');
@@ -94,14 +100,22 @@ try {
     path: path.join(outputDir, 'boygame-palette-panel.png'),
   });
 
-  await page.click('.palette-tab[data-mode="objects"]');
-  await page.fill('#object-search-input', 'Boygame');
-  await page.waitForFunction(
-    () => document.querySelectorAll('.object-item[data-object-id^="boygame_"]').length === 16,
-  );
-  summary.objects = await page.locator('.object-item[data-object-id^="boygame_"]').evaluateAll(
-    (items) => items.map((item) => item.getAttribute('data-object-id')),
-  );
+  // The dock splits objects by kind: Boygame's 3 collectibles are under Stuff > Collect, its 13
+  // props under Deco.
+  summary.objects = [];
+  for (const [dock, count] of [['stuff', 3], ['deco', 13]]) {
+    await page.click(`[data-editor-dock="${dock}"]`);
+    if (dock === 'stuff') await page.click('.obj-cat-tab[data-category="collectible"]');
+    await page.fill('#object-search-input', 'Boygame');
+    await page.waitForFunction(
+      (expected) => document.querySelectorAll('.object-item[data-object-id^="boygame_"]').length === expected,
+      count,
+    );
+    summary.objects.push(...await page.locator('.object-item[data-object-id^="boygame_"]').evaluateAll(
+      (items) => items.map((item) => item.getAttribute('data-object-id')),
+    ));
+  }
+  assert.equal(new Set(summary.objects).size, 16);
   assert.ok(summary.objects.includes('boygame_coin'));
   assert.ok(summary.objects.includes('boygame_heart'));
   assert.ok(summary.objects.includes('boygame_wall_torch'));
@@ -111,13 +125,16 @@ try {
   });
   await setCanvasVisibility(page, true);
 
+  await page.click('[data-editor-dock="terrain"]');
   await page.click('.palette-tab[data-mode="tiles"]');
   await page.selectOption('#tileset-select', 'boygame');
+  const tilePaletteBox = await paletteCanvas.boundingBox();
+  assert.ok(tilePaletteBox, 'Boygame palette canvas was not visible after returning to Tilesets.');
 
   // Choose local tile 10 (column 2, row 1) and stamp it into the synthetic room.
   await page.mouse.click(
-    paletteBox.x + paletteBox.width * (2.5 / 8),
-    paletteBox.y + paletteBox.height * (1.5 / 7),
+    tilePaletteBox.x + tilePaletteBox.width * (2.5 / 8),
+    tilePaletteBox.y + tilePaletteBox.height * (1.5 / 7),
   );
   const gameCanvas = await page.evaluate(() => Array.from(document.querySelectorAll('canvas'))
     .filter((canvas) => canvas.id !== 'palette-canvas' && canvas.id !== 'tile-preview-canvas')
@@ -134,15 +151,17 @@ try {
   );
   await waitForState(page, (state) => state?.activeScene?.roomDirty === true, 'Boygame tile placement');
 
-  await page.click('.editor-feature-btn[data-editor-feature="lighting"]');
-  await page.selectOption('#lighting-mode-select', 'playerAuraDark');
+  // Lighting is under Room Setup > Environment.
+  await page.click('[data-editor-shell-action="room"]');
+  await page.click('[data-editor-room-section="environment"]');
+  await page.click('[data-lighting-mode-value="playerAuraDark"]');
   await waitForState(
     page,
     (state) => state?.activeScene?.lighting?.rendererPath === 'webgl',
     'Boygame dark-room lighting preview',
   );
 
-  await page.click('#btn-test-play');
+  await page.click('[data-editor-shell-action="test"]');
   const runtimeState = await waitForState(
     page,
     (state) => state?.activeScene?.scene === 'overworld-play'
@@ -165,7 +184,11 @@ try {
     boygame_heart: new Set(),
   };
   const animationSampleStartedAt = Date.now();
-  while (Date.now() - animationSampleStartedAt < 1400) {
+  const animationComplete = () => observedAnimationFrames.boygame_coin.size >= 3
+    && observedAnimationFrames.boygame_coin_small.size >= 3
+    && observedAnimationFrames.boygame_heart.size >= 6;
+  // Sample until every loop has shown its frames; the ceiling covers slow CI machines.
+  while (!animationComplete() && Date.now() - animationSampleStartedAt < 15_000) {
     const sampleState = await readState(page);
     for (const object of boygameObjects(sampleState)) {
       const frames = observedAnimationFrames[object.id];

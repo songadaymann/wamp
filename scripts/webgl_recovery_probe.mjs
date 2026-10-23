@@ -1,3 +1,8 @@
+// Developer probe, not scheduled (F480): loses and restores the WebGL context and checks the
+// rendered world-tile map comes back. It needs a frontend whose API serves an active world-tile
+// map (production or safety data, e.g. `npm run dev:frontend:remote`); an empty local stack has
+// no tiles, so the first wait times out.
+//   npm run perf:webgl:recovery -- 'http://127.0.0.1:3000/?worldTiles=force&webglRecoveryProbe=1'
 import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 

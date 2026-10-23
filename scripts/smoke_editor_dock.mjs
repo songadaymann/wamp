@@ -553,7 +553,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
 
   const roomTrigger = page.locator('[data-editor-shell-action="room"]');
   await roomTrigger.click();
-  await page.locator('[data-editor-room-section="music"]').click();
+  await page.locator('button[data-editor-room-section="music"]').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'true');
   const [musicHeadingBox, musicCloseBox, musicStripBox, musicSwingBox] = await Promise.all([
     page.locator('#editor-music-overlay .editor-workbench-heading').boundingBox(),
@@ -763,16 +763,18 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
 
   const roomTrigger = page.locator('[data-editor-shell-action="room"]');
   await roomTrigger.click();
-  await page.locator('[data-editor-room-section="background"]').click();
+  await page.locator('button[data-editor-room-section="background"]').click();
   assert.equal(await page.locator('#background-card-grid').isVisible(), true);
   assert.ok(await page.locator('#background-card-grid .background-card').count() > 5);
-  assert.equal(await page.locator('#background-upload-controls').isVisible(), true);
-  await page.locator('[data-editor-room-section="environment"]').click();
+  // Photos and Upload are cards in the grid since 23e65952; their controls open on demand.
+  assert.equal(await page.locator('#background-card-grid [data-background-id="photo"]').isVisible(), true);
+  assert.equal(await page.locator('#background-card-grid #background-upload-card').isVisible(), true);
+  await page.locator('button[data-editor-room-section="environment"]').click();
   assert.deepEqual(await page.locator('[data-lighting-mode-value]').allTextContents(), ['Normal', 'Dark Aura']);
   assert.deepEqual(await page.locator('[data-weather-mode-value]').allTextContents(), ['Clear', 'Rain', 'Snow', 'Fog']);
   await page.screenshot({ path: path.join(viewportOutputDir, 'room-environment.png') });
 
-  await page.locator('[data-editor-room-section="music"]').click();
+  await page.locator('button[data-editor-room-section="music"]').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'true');
   assert.equal(await page.locator('#editor-music-overlay').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-music-close').isVisible(), true);
@@ -827,7 +829,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   });
   await page.waitForFunction(() => (
     document.querySelector('[data-editor-share-action="collect"] [data-editor-share-label]')?.textContent?.trim()
-      === 'Refresh Room Metadata'
+      === 'Add/update artwork'
   ));
   assert.equal(
     await page.locator('[data-editor-share-action="collect"]').isDisabled(),

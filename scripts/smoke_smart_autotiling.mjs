@@ -39,6 +39,15 @@ function assertCyberLocalIndex(value, allowedLocalIndices, message) {
   );
 }
 
+// Cyber v3 picks a convex Concrete corner from a pool of equivalent art (14, 25, or 30 mirrored;
+// CANONICAL_CONCRETE_PICKS in src/autotiling/cyberEdgeMatcher.ts). Check the orientation too.
+function assertCyberOrientedTile(value, allowed, message) {
+  const token = value > 0
+    ? `${decodedBaseGid(value) - 1633}${value & FLIP_X ? 'X' : ''}${value & FLIP_Y ? 'Y' : ''}`
+    : String(value);
+  assert.ok(allowed.includes(token), `${message}: expected one of ${allowed.join(', ')}, received ${token}`);
+}
+
 function isCloudflareInsightsRumCorsNoise(message) {
   const text = message.text();
   const locationUrl = message.location().url ?? '';
@@ -175,6 +184,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1100
 await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+  window.localStorage.setItem('wamp_replay_opt_out', '1');
   window.localStorage.setItem('wamp.settings.builderMode', 'beginner');
 });
 const page = await context.newPage();
@@ -465,8 +475,10 @@ try {
   ]);
   assert.equal(cyberStructure.smartTerrain.version, 2);
   assert.equal(cyberStructure.smartTerrain.semanticCells['terrain:32,2'].brushId, 'cyber.concrete');
-  assert.equal(cyberStructure.tileData.terrain[2][32], 1633 + 14);
-  assert.equal(cyberStructure.tileData.terrain[2][39], 1633 + 14 + FLIP_X);
+  assertCyberOrientedTile(cyberStructure.tileData.terrain[2][32], ['14', '25', '30X'],
+    'Cyber rectangle top-left uses convex Concrete corner art');
+  assertCyberOrientedTile(cyberStructure.tileData.terrain[2][39], ['14X', '25X', '30'],
+    'Cyber rectangle top-right uses mirrored convex Concrete corner art');
   assertCyberLocalIndex(
     cyberStructure.tileData.terrain[4][35],
     [64, 82, 83],
@@ -527,8 +539,10 @@ try {
   assert.equal(cyberCopyHistoryRepair.redoneCount, cyberCopyHistoryRepair.copiedCount);
   assert.equal(cyberCopyHistoryRepair.carved.smartTerrain.semanticCells['terrain:35,8'], undefined);
   assert.equal(cyberCopyHistoryRepair.carved.tileData.terrain[8][35], -1);
+  // A 1-cell tunnel gets A10 Foreground ties on its four diagonal corners
+  // ('overlays A10 on enclosed 1-cell tunnel corners' in cyberEdgeMatcher.test.ts).
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[7].slice(34, 37), [
-    -1, -1, -1,
+    1633 + 9, -1, 1633 + 9 + FLIP_X,
   ]);
   assertCyberLocalIndex(
     cyberCopyHistoryRepair.carved.tileData.terrain[7][34],
@@ -564,7 +578,7 @@ try {
     'Cyber tunnel lower-right uses matched concave Concrete art',
   );
   assert.deepEqual(cyberCopyHistoryRepair.carved.tileData.foreground[9].slice(34, 37), [
-    -1, -1, -1,
+    1633 + 9 + FLIP_Y, -1, 1633 + 9 + FLIP_X + FLIP_Y,
   ]);
   summary.checks.cyberCopyUndoEraseRepair = true;
   await runEditorCommands(page, [{ op: 'setCamera', zoom: 1, centerTileX: 35, centerTileY: 8 }]);
@@ -667,8 +681,9 @@ try {
   assert.deepEqual(cyberSupport.complete.tileData.background.slice(4, 8).map((row) => row[18]), [
     1633 + 36, 1633 + 48, 1633 + 60, 1633 + 72,
   ]);
+  // Short spans end on the foot since Cyber v3 (8276c629): one cell is 72, two are 60 and 72.
   assert.deepEqual(cyberSupport.repaired.tileData.background.slice(4, 8).map((row) => row[18]), [
-    1633 + 36, -1, 1633 + 36, 1633 + 60,
+    1633 + 72, -1, 1633 + 60, 1633 + 72,
   ]);
   assert.deepEqual(cyberSupport.bank.tileData.background.slice(18, 21).map((row) => row.slice(32, 36)), [
     [1633 + 36, 1633 + 36 + FLIP_X, 1633 + 36 + FLIP_X, 1633 + 36],
@@ -693,13 +708,19 @@ try {
     { op: 'commitBatch' },
     { op: 'capture', name: 'restored' },
   ]);
+  // Since Cyber v3 (8276c629) Neon is letter-matched, not a 3-cell-minimum strip: a run in the
+  // void uses 51 caps and unflipped 50 between them, and erasing one cell keeps its neighbors.
   assert.deepEqual(cyberNeon.complete.tileData.terrain[8].slice(20, 25), [
-    1633 + 49, 1633 + 50, 1633 + 73, 1633 + 74, 1633 + 51,
+    1633 + 51 + FLIP_X, 1633 + 50, 1633 + 50, 1633 + 50, 1633 + 51,
   ]);
-  assert.deepEqual(cyberNeon.repaired.tileData.terrain[8].slice(20, 25), [-1, -1, -1, -1, -1]);
-  assert.deepEqual(cyberNeon.restored.tileData.terrain[8].slice(20, 25), [
-    1633 + 49, 1633 + 50, 1633 + 73, 1633 + 74, 1633 + 51,
-  ]);
+  assert.equal(cyberNeon.repaired.tileData.terrain[8][22], -1);
+  assert.equal(cyberNeon.repaired.smartTerrain.semanticCells['terrain:22,8'], undefined);
+  for (const x of [20, 21, 23, 24]) {
+    assert.ok(cyberNeon.repaired.tileData.terrain[8][x] > 0, `Neon at ${x},8 survives the erase`);
+    assert.equal(cyberNeon.repaired.smartTerrain.semanticCells[`terrain:${x},8`]?.brushId, 'cyber.neon');
+  }
+  assert.deepEqual(cyberNeon.restored.tileData.terrain[8].slice(20, 25),
+    cyberNeon.complete.tileData.terrain[8].slice(20, 25));
 
   await page.locator('#smart-material-select').selectOption('cyber.rubble');
   const cyberRubble = await runEditorCommands(page, [
@@ -712,21 +733,25 @@ try {
     { op: 'commitBatch' },
     { op: 'capture', name: 'repaired' },
   ]);
-  assert.deepEqual(cyberRubble.complete.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
+  // Rubble body cells take variety flips since Cyber v3 (8276c629); compare the art, not the flip.
+  assert.deepEqual(cyberRubble.complete.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23).map(decodedBaseGid)), [
     [1645, 1645, 1645], [1645, 1645, 1645],
   ]);
-  assert.deepEqual(cyberRubble.complete.tileData.foreground[9].slice(20, 23), [
+  // Border tiles may mirror only along their edge (cyberRubbleEdgeFlipAxes): top and bottom
+  // flip X, sides flip Y. Strip that one axis and keep the other flip in the comparison.
+  const alongEdge = (axis) => (value) => (value > 0 ? value & ~axis : value);
+  assert.deepEqual(cyberRubble.complete.tileData.foreground[9].slice(20, 23).map(alongEdge(FLIP_X)), [
     1633, 1633, 1633,
   ]);
   assert.deepEqual(cyberRubble.complete.tileData.foreground.slice(10, 12).map((row) => (
-    [row[19], row[23]]
+    [row[19], row[23]].map(alongEdge(FLIP_Y))
   )), [
     [1633 + 1, 1633 + 13], [1633 + 1, 1633 + 13],
   ]);
-  assert.deepEqual(cyberRubble.complete.tileData.foreground[12].slice(20, 23), [
+  assert.deepEqual(cyberRubble.complete.tileData.foreground[12].slice(20, 23).map(alongEdge(FLIP_X)), [
     1633 + 24, 1633 + 24, 1633 + 24,
   ]);
-  assert.deepEqual(cyberRubble.repaired.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23)), [
+  assert.deepEqual(cyberRubble.repaired.tileData.terrain.slice(10, 12).map((row) => row.slice(20, 23).map(decodedBaseGid)), [
     [1645, -1, 1645], [1645, 1645, 1645],
   ]);
   assert.equal(cyberRubble.repaired.tileData.foreground[10][21], 1633 + 10 + FLIP_X);
@@ -757,13 +782,15 @@ try {
   ]);
   const countFramedPanelRecipes = (snapshot) => Object.values(snapshot.smartTerrain.recipes)
     .filter(({ brushId }) => brushId === 'cyber.fence').length;
+  // Since Cyber v3 (8276c629) Fence stamps only the painted cells: a one-row stroke is a one-row
+  // panel, so copying that row copies the whole panel and the paste is a third recipe.
   assert.equal(countFramedPanelRecipes(cyberPanelClipboard.complete), 2);
-  assert.equal(countFramedPanelRecipes(cyberPanelClipboard.partial), 2);
+  assert.equal(countFramedPanelRecipes(cyberPanelClipboard.partial), 3);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[3].slice(26, 31), [
     1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
   ]);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[4].slice(26, 31), [
-    1717 + 56, 1717 + 57, 1717 + 57, 1717 + 57, 1717 + 58,
+    -1, -1, -1, -1, -1,
   ]);
   assert.deepEqual(cyberPanelClipboard.complete.tileData.foreground[12].slice(26, 31), [
     1717 + 44, 1717 + 45, 1717 + 45, 1717 + 45, 1717 + 46,
@@ -787,7 +814,8 @@ try {
   await page.locator('#smart-material-select').selectOption('cyber.fence');
   const smartErasureAndReload = await runEditorCommands(page, [
     { op: 'beginBatch' },
-    { op: 'eraseCells', cells: [{ x: 28, y: 4 }] },
+    // Smart-erase a cell of the first (one-row) panel; that panel's recipe dissolves.
+    { op: 'eraseCells', cells: [{ x: 28, y: 3 }] },
     { op: 'commitBatch' },
     { op: 'capture', name: 'smartErased' },
     { op: 'applyCapture', name: 'smartErased' },
@@ -797,7 +825,14 @@ try {
   assert.ok(cyberSuppressionAndReload.suppressed.smartTerrain.suppressedOutputParts.some(
     (entry) => entry.endsWith(':row-0:column-1'),
   ));
-  assert.equal(countFramedPanelRecipes(cyberSuppressionAndReload.smartErased), 1);
+  // The erased cell leaves its panel, which restamps the painted cells as two capped pieces.
+  assert.equal(countFramedPanelRecipes(cyberSuppressionAndReload.smartErased), 3);
+  assert.equal(Object.values(cyberSuppressionAndReload.smartErased.smartTerrain.recipes)
+    .find(({ ownerId }) => ownerId === 'cyber:recipe:cyber-panel-1')
+    ?.sourceCells.some(({ x, y }) => x === 28 && y === 3), false);
+  assert.deepEqual(cyberSuppressionAndReload.smartErased.tileData.foreground[3].slice(26, 31), [
+    1717 + 44, 1717 + 46, -1, 1717 + 44, 1717 + 46,
+  ]);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.smartTerrain, cyberSuppressionAndReload.smartErased.smartTerrain);
   assert.deepEqual(cyberSuppressionAndReload.reloaded.tileData, cyberSuppressionAndReload.smartErased.tileData);
   assertCyberLocalIndex(
@@ -817,8 +852,8 @@ try {
   assert.equal(await page.locator('#smart-material-select').inputValue(), 'forest.ground');
   assert.equal(await page.locator('#smart-style-row').isVisible(), false);
 
-  await page.locator('#btn-editor-top-tool-more').click();
-  const ellipseButton = page.locator('#editor-top-more-tools-panel [data-tool="ellipse"]');
+  // Circle sits directly in the dock shell's tool row.
+  const ellipseButton = page.locator('.editor-shell-tools [data-tool="ellipse"]');
   await ellipseButton.click();
   assert.equal(await ellipseButton.getAttribute('class').then((value) => value?.includes('active')), true);
   const { smartEllipse } = await runEditorCommands(page, [
@@ -834,15 +869,11 @@ try {
   const shapeKeepBuilding = page.locator('#btn-guest-builder-claim-continue');
   if (await shapeKeepBuilding.isVisible()) await shapeKeepBuilding.click();
   await ellipseButton.click();
+  // Selecting Circle again switches to Outlined: a hollow icon and the second mode pip.
+  assert.equal((await ellipseButton.locator('.tool-icon').textContent())?.trim(), '○');
   assert.equal(
-    await ellipseButton.locator('[data-part="filled"]').getAttribute('class')
-      .then((value) => value?.includes('is-dim')),
-    true,
-  );
-  assert.equal(
-    await ellipseButton.locator('[data-part="outlined"]').getAttribute('class')
-      .then((value) => value?.includes('is-dim')),
-    false,
+    await ellipseButton.locator('.tool-mode-pips > span').evaluateAll((pips) => pips.map((pip) => pip.classList.contains('is-active'))).then(String),
+    'false,true',
   );
   const { smartOutlines } = await runEditorCommands(page, [
     { op: 'clearCurrentLayer' },
@@ -1001,13 +1032,14 @@ try {
   });
   assert.deepEqual(edgeCaseAtlasRuntime.seam, [64, 16]);
   assert.deepEqual(edgeCaseAtlasRuntime.artist, [192, 96]);
+  // Public assets carry a content hash (src/build/publicAssetHashes.ts), not a dated version.
   assert.match(
     requestedUrls.find((requestUrl) => requestUrl.includes('autotile-edge-cases-desert.png')),
-    /autotile-edge-cases-desert\.png\?v=2026-08-25-authored-ledges-1$/,
+    /autotile-edge-cases-desert\.png\?v=[0-9a-f]{8,}$/,
   );
   assert.match(
     requestedUrls.find((requestUrl) => requestUrl.includes('rr_extras.png')),
-    /rr_extras\.png\?v=2026-08-29-artist-ledges-v2$/,
+    /rr_extras\.png\?v=[0-9a-f]{8,}$/,
   );
   summary.checks.desertCompositeEdgeCases = true;
   summary.checks.sequentialDesertCompositeEdges = true;
@@ -1281,6 +1313,7 @@ try {
   await courseContext.addInitScript(() => {
     window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
     window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+    window.localStorage.setItem('wamp_replay_opt_out', '1');
     window.localStorage.setItem('wamp.settings.builderMode', 'advanced');
   });
   const coursePage = await courseContext.newPage();
@@ -1310,7 +1343,11 @@ try {
   });
   assert.equal(await coursePage.locator('[data-tool="ellipse"]').first().isEnabled(), true);
   assert.equal(await coursePage.locator('[data-tool="fill"]').first().isEnabled(), true);
-  await coursePage.locator('#btn-editor-top-tool-more').click();
+  // The dock shell shows Circle and Fill directly (the old top rail's More menu is gone).
+  for (const tool of ['ellipse', 'fill']) {
+    assert.equal(await coursePage.locator(`.editor-shell-tools [data-tool="${tool}"]`).isVisible(), true);
+    assert.equal(await coursePage.locator(`.editor-shell-tools [data-tool="${tool}"]`).isEnabled(), true);
+  }
   await coursePage.screenshot({ path: path.join(outputDir, 'cyber-course-support-tools.png') });
   await courseContext.close();
   summary.checks.cyberCourseRegistryUi = true;
@@ -1318,6 +1355,7 @@ try {
   const welcomeContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   await welcomeContext.addInitScript(() => {
     window.localStorage.setItem('wamp.settings.builderMode', 'unselected');
+    window.localStorage.setItem('wamp_replay_opt_out', '1');
     window.localStorage.removeItem('wamp_welcome_modal_seen_v1');
   });
   const welcomePage = await welcomeContext.newPage();

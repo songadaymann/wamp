@@ -86,6 +86,8 @@ export function installPreviewSmokeActions(
   ) {
     return;
   }
+  // Smokes inspect scenes through the game object; dev builds expose it in main.ts.
+  window.__EVERYBODYS_PLATFORMER_GAME__ = game;
   window.run_preview_smoke_action = async (action: PreviewSmokeAction, payload?: PreviewSmokePayload) => {
     switch (action) {
       case 'selectEditableRoom':

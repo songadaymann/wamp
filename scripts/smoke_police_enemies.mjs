@@ -29,6 +29,8 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1100
 await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+  // Smokes don't record guest replays (the local API rate-limits them per address).
+  window.localStorage.setItem('wamp_replay_opt_out', '1');
 });
 const page = await context.newPage();
 
@@ -54,7 +56,8 @@ try {
   assert.equal(fixture?.ok, true, `Police editor fixture failed: ${JSON.stringify(fixture)}`);
   await waitForState(page, (state) => state?.activeScene?.scene === 'editor', 'editor');
 
-  await page.click('.palette-tab[data-mode="objects"]');
+  // Police officers live in the Characters dock (the enemy category).
+  await page.click('[data-editor-dock="characters"]');
   await page.fill('#object-search-input', 'Police');
   await page.waitForFunction(() => document.querySelectorAll('.object-item[data-object-id^="police"]').length === 2);
   await page.screenshot({ path: path.join(outputDir, 'police-palette.png') });
@@ -103,7 +106,10 @@ try {
   await page.uncheck('#police-patrol-shoots-checkbox');
   assert.equal(await page.isChecked('#police-patrol-shoots-checkbox'), false);
 
-  await page.click('#btn-test-play');
+  // Rooms default to one heart, so the first hunter shot would end the run mid-cycle. Three
+  // hearts keep the player alive while both firing cycles are observed.
+  await page.locator('#room-player-hearts').selectOption('3', { force: true });
+  await page.click('[data-editor-shell-action="test"]');
   await waitForState(
     page,
     (state) => state?.activeScene?.scene === 'overworld-play' && state?.activeScene?.mode === 'play',
@@ -136,7 +142,8 @@ try {
   let maxPatrolDisplacement = 0;
   const runtimeSamples = [];
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 4000) {
+  // The loop stops as soon as every state is seen; the long ceiling covers slow CI machines.
+  while (Date.now() - startedAt < 20_000) {
     const state = await readState(page);
     lastObservedState = state;
     const police = policeObjects(state);

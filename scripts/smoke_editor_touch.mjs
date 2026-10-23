@@ -1,3 +1,6 @@
+// Touch gesture ownership in both editors (tablet, phone, phone landscape). It sets editor tools
+// and modes by importing /src/config.ts, which only the Vite dev server serves, so run it against
+// a test-enabled dev server (npm run dev -- --port 3031), not a production or test-hook build.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import './lib/mutedBrowsers.mjs';
@@ -58,7 +61,8 @@ try {
           if (document.body.dataset.deviceClass === 'phone' && document.body.dataset.mobileEditorCollapsed !== 'true') {
             document.getElementById('btn-mobile-editor-toggle')?.click();
           }
-          const { editorState, resetEditorPaletteSelection } = await import('/src/config.ts');
+          // Vite dev only: production bundles can't import /src (see the header note).
+          const { editorState, updateEditorState, resetEditorPaletteSelection } = await import('/src/config.ts');
           resetEditorPaletteSelection();
           updateEditorState({ paletteMode: extra.objects ? 'objects' : extra.smart ? 'smart' : 'tiles' });
           updateEditorState({ activeTool: tool });
