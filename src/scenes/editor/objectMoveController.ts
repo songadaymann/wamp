@@ -76,7 +76,13 @@ export class EditorObjectMoveController {
     if (this.selection && !this.area && this.selection.runtime.documentRevision !== this.selection.revision) this.clearSelection();
   }
 
-  down(pointer: Phaser.Input.Pointer): boolean {
+  /** Whether Move would take a pointer, without changing anything yet. */
+  claims(): boolean {
+    return editorState.activeTool === 'move' && this.host.isEnabled();
+  }
+
+  /** `at` is the screen point the press began at, when a touch starts Move after it moved. */
+  down(pointer: Phaser.Input.Pointer, at: { x: number; y: number } = pointer): boolean {
     this.validate();
     if (editorState.activeTool !== 'move' || !this.host.isEnabled()) return false;
     if (this.drag && this.drag.pointerId !== pointer.id) { this.cancel(); return true; }
@@ -85,7 +91,7 @@ export class EditorObjectMoveController {
       this.stopGesture(); return false;
     }
     if (this.area && this.area.pointerId !== pointer.id) { this.cancel(); return true; }
-    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const world = this.scene.cameras.main.getWorldPoint(at.x, at.y);
     const runtime = this.host.getRuntimeAt(world.x, world.y);
     const tile = runtime ? this.toTile(runtime, world) : null;
     const selection = this.selection;

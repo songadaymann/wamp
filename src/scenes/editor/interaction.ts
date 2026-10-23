@@ -1177,10 +1177,18 @@ export class EditorInteractionController {
       return true;
     }
     if (action !== 'edit') return true;
-    // Move drags with one finger and keeps its selection when a second finger pinches.
-    if (this.host.objectMove?.down(pointer)) {
+    // Move starts only once the finger drags or holds, like a brush, so a second finger can
+    // still pinch before Move drops the selection or shows a status (F371).
+    if (this.host.objectMove?.claims()) {
+      const start = { x: pointer.x, y: pointer.y };
       this.touchAction = 'move';
       this.touchToolKey = editorTouchToolKey();
+      this.touchCandidate.down(pointer, () => {
+        this.validateTouchEdit();
+        if (this.touchAction !== 'move') return;
+        this.host.objectMove?.down(pointer, start);
+        this.touchToolKey = editorTouchToolKey();
+      });
       return true;
     }
 
@@ -1236,7 +1244,8 @@ export class EditorInteractionController {
     }
     if (action !== 'edit' || !this.touchAction) return true;
     if (this.touchAction === 'move') {
-      this.host.objectMove?.move(pointer);
+      this.touchCandidate.move(pointer);
+      if (this.touchCandidate.isStarted) this.host.objectMove?.move(pointer);
       return true;
     }
     if (this.touchAction === 'bend') {
@@ -1279,7 +1288,7 @@ export class EditorInteractionController {
       return true;
     }
     if (result === 'ignore') return true;
-    if (this.touchAction === 'tiles') this.touchCandidate.activate();
+    if (this.touchAction === 'tiles' || this.touchAction === 'move') this.touchCandidate.activate();
     this.touchCandidate.cancel();
     const action = this.touchAction;
     this.touchAction = null;

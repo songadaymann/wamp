@@ -1,14 +1,21 @@
 import type Phaser from 'phaser';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { editorState, updateEditorState } from '../../config';
 import { CourseTouchController } from './courseTouch';
+import { objectMoveFixture } from './objectMoveController.testSupport';
+
+const savedTool = editorState.activeTool;
+afterEach(() => { updateEditorState({ activeTool: savedTool }); vi.useRealTimers(); });
 
 function pointer(id: number, x = 40, y = 40, type = 'touchstart'): Phaser.Input.Pointer {
   return { id, x, y, event: { type } } as Phaser.Input.Pointer;
 }
 
-function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend', moveSelected = false) {
+function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend', moveSelected = false,
+  moveTool: ConstructorParameters<typeof CourseTouchController>[0]['moveTool'] = {
+    claims: () => moveSelected, down: vi.fn(() => moveSelected), move: vi.fn(() => true), up: vi.fn(() => true), stopGesture: vi.fn(() => true),
+  }) {
   let signature = 'initial';
-  const moveTool = { down: vi.fn(() => moveSelected), move: vi.fn(() => true), up: vi.fn(() => true), stopGesture: vi.fn(() => true) };
   const host = {
     moveTool,
     signature: () => signature, classify: () => action,
@@ -102,8 +109,10 @@ describe('expanded editor touch ownership', () => {
   it('lets Move drag with one finger and gives a second finger the pinch (F371)', () => {
     const { controller, host } = harness('draw', true);
     controller.down(pointer(1, 20));
+    expect(host.moveTool.down).not.toHaveBeenCalled();
     controller.move(pointer(1, 30));
-    expect(host.moveTool.down).toHaveBeenCalledOnce();
+    // Move starts at the original press once the finger has dragged past 6px.
+    expect(host.moveTool.down).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 1 }), { x: 20, y: 40 });
     expect(host.moveTool.move).toHaveBeenCalledOnce();
     controller.down(pointer(2, 60));
     // The drag stops (its selection stays) and nothing reaches the edit handlers.
@@ -122,6 +131,44 @@ describe('expanded editor touch ownership', () => {
     controller.move(pointer(3, 50));
     controller.up(pointer(3, 50), true);
     expect(host.moveTool.up).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 3 }), true);
+  });
+
+  it('keeps an area selection and the selected cell when a pinch lands outside it (F371)', () => {
+    vi.useFakeTimers();
+    updateEditorState({ activeTool: 'move' });
+    const move = objectMoveFixture({ getWorldPoint: (x, y) => ({ x, y }) });
+    const { controller, host } = harness('draw', true, move.controller);
+    const touch = (id: number, x: number, y: number) => ({ ...pointer(id, x, y, 'touchmove'), wasTouch: true }) as Phaser.Input.Pointer;
+    controller.down(touch(1, 40, 40));
+    controller.move(touch(1, 100, 90));
+    controller.up(touch(1, 100, 90));
+    expect(move.controller.selectedArea).toEqual({ minX: 2, minY: 2, maxX: 6, maxY: 5 });
+    move.host.prepare.mockClear();
+    move.host.showStatus.mockClear();
+    // Phaser delivers the two fingers one after another; the first lands outside the selection.
+    controller.down(touch(2, 300, 200));
+    controller.down(touch(3, 400, 200));
+    controller.move(touch(3, 450, 200));
+    controller.up(touch(3, 450, 200));
+    controller.up(touch(2, 300, 200));
+    vi.advanceTimersByTime(200);
+    expect(host.pinch).toHaveBeenCalled();
+    expect(move.controller.selectedArea).toEqual({ minX: 2, minY: 2, maxX: 6, maxY: 5 });
+    // prepare would switch the selected cell and close the inspector; no status flashes either.
+    expect(move.host.prepare).not.toHaveBeenCalled();
+    expect(move.host.showStatus).not.toHaveBeenCalled();
+  });
+
+  it('starts Move after a 90ms hold even if the finger stays still', () => {
+    vi.useFakeTimers();
+    const { controller, host } = harness('draw', true);
+    controller.down(pointer(1, 20));
+    vi.advanceTimersByTime(89);
+    expect(host.moveTool.down).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(host.moveTool.down).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 1 }), { x: 20, y: 40 });
+    controller.up(pointer(1, 20));
+    expect(host.moveTool.up).toHaveBeenCalledOnce();
   });
 
   it('cancels a Move drag on a native interruption without releasing it', () => {

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH, editorState, updateEditorState } from '../../config';
 import { EditorInteractionController } from './interaction';
+import { objectMoveFixture } from './objectMoveController.testSupport';
+import type { EditorObjectMoveController } from './objectMoveController';
 
 vi.mock('phaser', () => ({ default: {
   Geom: { Rectangle: class Rectangle {} },
@@ -19,7 +21,11 @@ vi.mock('../../ui/deviceLayout', async (importOriginal) => ({
 type Handler = (...args: unknown[]) => void;
 const saved = { activeTool: editorState.activeTool, paletteMode: editorState.paletteMode, zoom: editorState.zoom, isPlaying: editorState.isPlaying };
 beforeEach(() => { updateEditorState({ activeTool: 'move' }); updateEditorState({ paletteMode: 'tiles', zoom: 1, isPlaying: false }); });
-afterEach(() => { updateEditorState(saved); Object.assign(layout, { deviceClass: 'desktop', orientationState: 'landscape', coarsePointer: false }); });
+afterEach(() => {
+  updateEditorState(saved);
+  Object.assign(layout, { deviceClass: 'desktop', orientationState: 'landscape', coarsePointer: false });
+  vi.useRealTimers();
+});
 
 /** A camera with Phaser's scroll, zoom and origin arithmetic. */
 function camera(width: number, height: number) {
@@ -39,8 +45,8 @@ function camera(width: number, height: number) {
   return cam;
 }
 
-/** The room editor's pointer handlers on a fake scene, with the Move tool recorded. */
-function harness(width = 400, height = 300) {
+/** The room editor's pointer handlers on a fake scene, with the Move tool recorded (or a real one). */
+function harness(width = 400, height = 300, realMove = false) {
   const handlers = new Map<string, Handler>();
   const register = (prefix: string) => ({ on: vi.fn((event: string, fn: Handler) => handlers.set(prefix + event, fn)), off: vi.fn() });
   const cam = camera(width, height);
@@ -50,8 +56,11 @@ function harness(width = 400, height = 300) {
     events: register('scene:'),
     scale: { width, height },
     cameras: { main: cam },
+    time: { delayedCall: (delay: number, callback: () => void) => { const timer = setTimeout(callback, delay); return { remove: () => clearTimeout(timer) }; } },
   };
-  const objectMove = {
+  const real = realMove ? objectMoveFixture(cam) : null;
+  const objectMove = real?.controller ?? {
+    claims: () => editorState.activeTool === 'move',
     down: vi.fn(() => editorState.activeTool === 'move'), move: vi.fn(() => true), up: vi.fn(() => true),
     stopGesture: vi.fn(() => true), validate: vi.fn(), hover: vi.fn(),
   };
@@ -62,7 +71,7 @@ function harness(width = 400, height = 300) {
   const controller = new EditorInteractionController(scene as never, host as never, { getElementById: () => null } as never);
   controller.setupInput(() => {});
   const fire = (name: string, ...args: unknown[]) => handlers.get(name)!(...args);
-  return { fire, cam, objectMove, controller };
+  return { fire, cam, objectMove: objectMove as Exclude<typeof objectMove, EditorObjectMoveController>, controller, real };
 }
 
 function touch(id: number, x: number, y: number, type = 'touchmove') {
@@ -75,8 +84,10 @@ describe('Move tool on a touch screen (F371)', () => {
   it('drags with one finger, then lets two fingers zoom and pan the room', () => {
     const h = harness();
     h.fire('input:pointerdown', touch(1, 100, 150, 'touchstart'));
+    expect(h.objectMove.down).not.toHaveBeenCalled();
     h.fire('input:pointermove', touch(1, 120, 150));
-    expect(h.objectMove.down).toHaveBeenCalledOnce();
+    // Move starts at the original press once the finger has dragged past 6px.
+    expect(h.objectMove.down).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 1 }), { x: 100, y: 150 });
     expect(h.objectMove.move).toHaveBeenCalledOnce();
 
     h.fire('input:pointerdown', touch(2, 300, 150, 'touchstart'));
@@ -118,6 +129,31 @@ describe('Move tool on a touch screen (F371)', () => {
     h.fire('input:pointerdown', mouse);
     h.fire('input:pointerupoutside', { ...mouse, event: { type: 'mouseup' } });
     expect(h.objectMove.up).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 9 }), true);
+  });
+});
+
+describe('Move selection through a pinch (F371)', () => {
+  it('keeps an area selection when the first pinch finger lands outside it', () => {
+    vi.useFakeTimers();
+    const h = harness(400, 300, true);
+    const move = h.real!;
+    h.fire('input:pointerdown', touch(1, 40, 40, 'touchstart'));
+    h.fire('input:pointermove', touch(1, 100, 90));
+    h.fire('input:pointerup', touch(1, 100, 90, 'touchend'));
+    expect(move.controller.selectedArea).toEqual({ minX: 2, minY: 2, maxX: 6, maxY: 5 });
+    move.host.prepare.mockClear();
+    move.host.showStatus.mockClear();
+    // Phaser delivers the two fingers one after another; the first lands outside the selection.
+    h.fire('input:pointerdown', touch(2, 300, 200, 'touchstart'));
+    h.fire('input:pointerdown', touch(3, 360, 200, 'touchstart'));
+    h.fire('input:pointermove', touch(3, 390, 200));
+    h.fire('input:pointerup', touch(3, 390, 200, 'touchend'));
+    h.fire('input:pointerup', touch(2, 300, 200, 'touchend'));
+    vi.advanceTimersByTime(200);
+    expect(editorState.zoom).toBeCloseTo(1.5, 2);
+    expect(move.controller.selectedArea).toEqual({ minX: 2, minY: 2, maxX: 6, maxY: 5 });
+    expect(move.host.prepare).not.toHaveBeenCalled();
+    expect(move.host.showStatus).not.toHaveBeenCalled();
   });
 });
 
