@@ -78,12 +78,21 @@ function computeState(): DeviceLayoutState {
   const touchPrimary = window.matchMedia('(pointer: coarse)').matches;
   const coarsePointer = touchPrimary || navigator.maxTouchPoints > 0;
   // An open keyboard or pinch zoom shrinks the visual viewport but not the layout
-  // viewport. Orientation follows the layout viewport, so typing in chat on a
-  // portrait phone does not switch it to the landscape layout.
+  // viewport. Orientation and device class follow the layout viewport, so typing in chat
+  // keeps a portrait phone in portrait and a landscape tablet a tablet (F354).
   const layoutWidth = window.innerWidth || width;
   const layoutHeight = window.innerHeight || height;
   const orientationState: OrientationState = layoutWidth >= layoutHeight ? 'landscape' : 'portrait';
-  const deviceClass = classifyDeviceClass(width, height, coarsePointer);
+  // Device class measures the layout viewport at the screen's real size. The visible width
+  // times the zoom is the real screen width at any zoom, and the keyboard never changes it,
+  // so a phone whose page is wider than its screen stays a phone at every zoom level.
+  const realWidth = viewport ? viewport.width * viewport.scale : layoutWidth;
+  const realScale = Math.min(1, realWidth / Math.max(1, layoutWidth));
+  const deviceClass = classifyDeviceClass(
+    Math.round(layoutWidth * realScale),
+    Math.round(layoutHeight * realScale),
+    coarsePointer,
+  );
   const performanceProfile = resolvePerformanceProfile(deviceClass, coarsePointer);
 
   return {
@@ -99,9 +108,24 @@ function computeState(): DeviceLayoutState {
   };
 }
 
+function isEditingText(element: Element | null): element is HTMLElement {
+  return element instanceof HTMLElement && (element.isContentEditable || element.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea'));
+}
+
+// An on-screen keyboard opening or closing changes only the height. While a text field has
+// focus, keep the layout unless the width changes too (a rotation or a resized window): a
+// browser that shrinks the layout viewport for the keyboard must not switch layouts under
+// the field mid-word, which moves the field and closes the keyboard.
+function keepLayoutWhileTyping(nextState: DeviceLayoutState): DeviceLayoutState {
+  if (!isEditingText(document.activeElement) || nextState.viewport.width !== state.viewport.width) {
+    return nextState;
+  }
+  return { ...nextState, deviceClass: state.deviceClass, orientationState: state.orientationState };
+}
+
 function updateKeyboardInset(): void {
   const element = document.activeElement;
-  const editing = element instanceof HTMLElement && (element.isContentEditable || element.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea'));
+  const editing = isEditingText(element);
   document.documentElement.style.setProperty('--keyboard-inset', `${editing ? keyboardViewportInset(window.innerHeight, window.visualViewport) : 0}px`);
   if (editing && window.visualViewport && keyboardViewportInset(window.innerHeight, window.visualViewport) > 0) {
     requestAnimationFrame(() => {
@@ -137,7 +161,7 @@ function statesEqual(a: DeviceLayoutState, b: DeviceLayoutState): boolean {
 
 function refreshState(): void {
   updateKeyboardInset();
-  const nextState = computeState();
+  const nextState = keepLayoutWhileTyping(computeState());
   if (statesEqual(state, nextState)) {
     return;
   }
