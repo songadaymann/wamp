@@ -1126,8 +1126,11 @@ interface SwordsmanTraversalRouteSet {
   depths: number[];
 }
 
+// One least-recently-used cache for every room's graph: a dense room's lists run to ~25 KB each.
 const TRAVERSAL_ROUTE_SET_CACHE_LIMIT = 64;
-const traversalRouteSetsByGraph = new WeakMap<SwordsmanTraversalGraph, Map<string, SwordsmanTraversalRouteSet>>();
+const traversalRouteSets = new Map<string, SwordsmanTraversalRouteSet>();
+const traversalGraphIds = new WeakMap<SwordsmanTraversalGraph, number>();
+let nextTraversalGraphId = 1;
 const routeEndScores: number[] = [];
 const routeEntryScores: number[] = [];
 
@@ -1136,25 +1139,32 @@ function getSwordsmanTraversalRouteSet(
   startNodeIds: readonly string[],
   blockedEdgeIds: ReadonlySet<string>,
 ): SwordsmanTraversalRouteSet {
-  let routeSets = traversalRouteSetsByGraph.get(graph);
-  if (!routeSets) {
-    routeSets = new Map();
-    traversalRouteSetsByGraph.set(graph, routeSets);
+  let graphId = traversalGraphIds.get(graph);
+  if (graphId === undefined) {
+    graphId = nextTraversalGraphId;
+    nextTraversalGraphId += 1;
+    traversalGraphIds.set(graph, graphId);
   }
 
+  const startKey = `${graphId}\n${startNodeIds.join('\n')}`;
   const cacheKey = blockedEdgeIds.size === 0
-    ? startNodeIds.join('\n')
-    : `${startNodeIds.join('\n')}\n\n${Array.from(blockedEdgeIds).sort().join('\n')}`;
-  const cached = routeSets.get(cacheKey);
+    ? startKey
+    : `${startKey}\n\n${Array.from(blockedEdgeIds).sort().join('\n')}`;
+  const cached = traversalRouteSets.get(cacheKey);
   if (cached) {
+    traversalRouteSets.delete(cacheKey);
+    traversalRouteSets.set(cacheKey, cached);
     return cached;
   }
 
-  if (routeSets.size >= TRAVERSAL_ROUTE_SET_CACHE_LIMIT) {
-    routeSets.clear();
-  }
   const routes = buildSwordsmanTraversalRouteSet(graph, startNodeIds, blockedEdgeIds);
-  routeSets.set(cacheKey, routes);
+  traversalRouteSets.set(cacheKey, routes);
+  if (traversalRouteSets.size > TRAVERSAL_ROUTE_SET_CACHE_LIMIT) {
+    const leastRecentKey = traversalRouteSets.keys().next().value;
+    if (leastRecentKey !== undefined) {
+      traversalRouteSets.delete(leastRecentKey);
+    }
+  }
   return routes;
 }
 

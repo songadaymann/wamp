@@ -223,4 +223,38 @@ describe('classic traversal route choice (F305)', () => {
     decideSwordsmanTraversal(graph, standingOn(midLedge.centerX + 3, midLedge.topY), target(1), new Set(blocked));
     expect(readEdgeList).not.toHaveBeenCalled();
   });
+
+  it('keeps one least-recently-used cap on route lists across every room graph', () => {
+    const graphs = Array.from({ length: 7 }, () => buildSwordsmanTraversalGraph(denseLedgeGrid()));
+    const high = graphs[0].surfaceSegments.find((surface) => surface.tileY === 5)!;
+    const target = standingOn(high.centerX, high.topY);
+    // 31 route lists per graph: one per ledge below the player's.
+    const chaseFromEveryLedge = (graph: SwordsmanTraversalGraph): void => {
+      for (const surface of graph.surfaceSegments.filter((candidate) => candidate.tileY !== 5)) {
+        decideSwordsmanTraversal(graph, standingOn(surface.centerX, surface.topY), target, new Set());
+      }
+    };
+    const [watched, ...others] = graphs;
+    const watchedLedge = watched.surfaceSegments.find((surface) => surface.tileY === 11)!;
+    const chaseWatched = (): number => {
+      const readEdgeList = vi.spyOn(watched.edgesByNodeId, 'get');
+      decideSwordsmanTraversal(watched, standingOn(watchedLedge.centerX, watchedLedge.topY), target, new Set());
+      const reads = readEdgeList.mock.calls.length;
+      readEdgeList.mockRestore();
+      return reads;
+    };
+
+    expect(chaseWatched()).toBeGreaterThan(0);
+    chaseFromEveryLedge(others[0]);
+    chaseFromEveryLedge(others[1]);
+    expect(chaseWatched()).toBe(0);
+    // 94 lists now: the 30 oldest go, which no longer include the one just used.
+    chaseFromEveryLedge(others[2]);
+    expect(chaseWatched()).toBe(0);
+    // 93 newer lists, more than the 64 kept, push it out.
+    chaseFromEveryLedge(others[3]);
+    chaseFromEveryLedge(others[4]);
+    chaseFromEveryLedge(others[5]);
+    expect(chaseWatched()).toBeGreaterThan(0);
+  });
 });
