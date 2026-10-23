@@ -2291,6 +2291,8 @@ Fix (small): for canvases that are never redrawn, replace textures.addCanvas(key
   - Update the six test files that mock addCanvas.
   - Stall times are unmeasured. Profile a 640x352 and a 1280x704 readback on a phone before claiming several milliseconds.
 
+**2026-10-22 delivered.** [PR #297](https://github.com/songadaymann/wamp/pull/297). Room layers, snapshots, previews and still backgrounds are registered as plain images, dropping the hidden full-size copy. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+
 ### F303: Custom tiles are painted one pixel at a time into room and map pictures (256 draw calls per tile, even for 4-pixel thumbnails)
 
 - **Area:** Performance: frame rate and smoothness (reviewer: Gap review: Phone cost of visual effects: animated backgrounds, weather, starfield, custom textures)
@@ -2378,6 +2380,8 @@ Fix:
   - Skip the empty foreground layer, updating texturesReady (worldStreaming.ts:3726), commitNext, both builders and the resource keys and sizes together.
   - Use textures.create instead of addCanvas for prepared canvases, which drops the ImageData copy and the readback.
   - Fix the byte accounting.
+
+**2026-10-22 delivered.** [PR #297](https://github.com/songadaymann/wamp/pull/297). Rooms with no foreground tiles build no foreground layer. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 
 ### F312: Room building is throttled by fixed cost guesses, so a room needs at least ~0.6 s to get ready on phones
 
@@ -3887,6 +3891,8 @@ Fix:
   - Fix: treat the room below as unreachable while body.blocked.down, and the room above as unreachable when the jump can't reach the top seam (vy²/2g, taking gravity zones into account). Clear a pending preparation for the room below while blocked.down, and add tests that run real jump arcs.
   - Do not drop upward prediction entirely: bounce pads, springs and wall jumps that really reach the room above would then be held at the top seam. Keep step 3 (demote instead of cancel) as a separate, optional item because of the one-full-room memory limit on phones.
 
+**2026-10-22 delivered.** [PR #299](https://github.com/songadaymann/wamp/pull/299). Next-room prediction no longer picks the room below while standing on a floor, and picks the room above only while rising in the top quarter or when the jump can reach the top; climbs and bottom-row holes still get a lead. Water, ladders and sideways gravity are unchanged. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+
 ### F351: A signed-in player's ranked clear is lost if one network request fails on a weak phone signal
 
 - **Area:** Mobile play (reviewer: Mobile play on phones and tablets)
@@ -3953,6 +3959,8 @@ This is mostly client-side and reuses runService's queue shape.
   - Retrying a failed start is optional extra scope.
   Impact is medium, not high.
 
+**2026-10-22 delivered.** [PR #301](https://github.com/songadaymann/wamp/pull/301). A signed-in ranked finish that fails is resent from memory (with a size-scaled timeout) and the run panel offers Retry; the server finalizes only active runs in commit order, replays stored outcomes, and re-runs an unfinished reward step for recent finishes exactly once (migration 0074 `run_settlements`, API Worker `d1bf600c`). Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+
 ### F355: On a slow or dropped phone connection, room edges become silent invisible walls and nothing says you're offline
 
 - **Area:** Mobile play (reviewer: Mobile play on phones and tablets)
@@ -3983,6 +3991,8 @@ About 60 lines, no server change.
 **Fact-check.**
 
 - **partially confirmed.** Real, but the fix needs one change: on data-device-class='phone' the HUD #world-status line is display:none (phone-world-chat.css:55-66), so a showTransientStatus message is invisible on phones. Show the 'Loading next room...' notice (after about 600 ms of an unprepared episode) and the offline chip on a surface phones can see: a small chip outside #world-hud, #mobile-goal-footer, or canvas text at the seam. The transition retry is a fixed 1 s (worldStreaming.ts:130), not the cited backoffs. The run-timer cost mostly hits time-limited Room Rush, since courses preload their rooms (coursePlayback.ts:156). When offline, the world-window boundary also blocks silently as 'unreachable'; the global offline listener should cover that case.
+
+**2026-10-22 delivered.** [PR #300](https://github.com/songadaymann/wamp/pull/300). A chip says "Loading next room…" when the player is held at an edge (including the invisible edge wall), "Still loading… Retrying…" after 4 s, and "Offline…" while offline; reconnecting retries at once. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 
 ### F358: Touch stick: a slightly low diagonal still makes you crawl and ignores Jump, and gravity zones auto-jump
 
@@ -4029,6 +4039,8 @@ About 20 lines plus tests in movementController.stateOwnership.test.ts. The land
 **Fact-check.**
 
 - **confirmed.** No correction.
+
+**2026-10-22 delivered.** [PR #296](https://github.com/songadaymann/wamp/pull/296). On the on-screen stick a drift toward crouch or climb counts only at about 50° or steeper, gravity zones jump once per push; forwarded mann.cool keys, ladders and water keep the old thresholds. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 
 ### F352: Custom backgrounds are never freed: every one seen on the map or in play, animated ones included, stays in memory until the tab closes
 
@@ -4101,6 +4113,8 @@ Fix (medium):
   
   Fix: keep one module-wide background lease shared by the overworld, editor and course editor, then a small LRU that evicts with textures.remove so the existing frame cleanup runs. Eviction must skip keys used by visible chunk previews, or drop the background-resident term from the chunk content signature (chunkPreviewRenderer.ts:666-684), to avoid a rebuild and re-fetch loop. Preview thumbnails and coordinator routing for the editors are low-value extras. Impact: medium (tens of MB on phones in long sessions), not high.
 
+**2026-10-22 delivered.** [PR #297](https://github.com/songadaymann/wamp/pull/297). Custom background textures are reference-counted and freed when nothing uses them (an idle list of 1 on low-memory devices, 4 otherwise). Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+
 ### F357: Tiled photo backgrounds, the default setting, keep a 2048x1024 copy per room just to draw a 128-pixel tile
 
 - **Area:** Mobile play (reviewer: Gap review: Phone cost of visual effects: animated backgrounds, weather, starfield, custom textures)
@@ -4158,6 +4172,8 @@ Savings: about 16.7 MB per tile-fit room sprite (more in the editor, which also 
   - **Leave animated backgrounds (at most 240 px) on the current path**, or regenerate the derived texture each frame.
   
   Expected saving is about 7-15 MB per sprite, and the LINEAR intent at runtime.ts:115 gets fixed.
+
+**2026-10-22 delivered.** [PR #297](https://github.com/songadaymann/wamp/pull/297). Tiled still photos draw from one shared downscaled copy per background, about 2 MB per room instead of about 17 MB. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 
 ### F353: Each starfield or parallax background layer costs 3-7 MB of hidden memory per room; a Forest room is about 50 MB
 
@@ -4341,6 +4357,8 @@ Fix: classify deviceClass from the layout viewport (innerWidth/innerHeight) or s
      - Optionally, keep the previous deviceClass while a text field has focus.
      - Leave --app-viewport-* on visualViewport.
      - Add vitest cases for a 1180x760 tablet with a 1180x360 visual viewport, which should give 'tablet', and for pinch scale 1.5. Optionally add a tablet keyboard scenario to mobile_smoke.
+
+**2026-10-22 delivered.** [PR #295](https://github.com/songadaymann/wamp/pull/295). Phone vs tablet is judged from the screen's real width, so opening the keyboard or zooming never flips a tablet to the phone layout; the layout is also held while a text field has focus. Reviewed adversarially before merging; `npm run check` and the muted phone smokes passed. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 
 ### F362: Rotating the phone mid-run drops your held stick and jump while the run keeps going
 

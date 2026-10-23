@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 22 of 248 done.**
+**Progress: 31 of 248 done.**
 
 ## How to use this file
 
@@ -180,9 +180,9 @@ Normal play is in good shape. What's left is a handful of spots that redo all th
 - [ ] **F305** Sword Hunters and police re-search every possible route on every frame while chasing you · medium impact · small effort
 - [ ] **F302** Coin-collecting Sword Hunters can freeze the game for a moment when they first plan, and re-plan every frame when coins are out of reach · medium impact · medium effort
 - [ ] **F306** World-map tile system still re-plans its whole display every frame, while you play and while the map sits still · medium impact · medium effort
-- [ ] **F304** Every game canvas texture does a blocking pixel read-back and keeps a second full-size copy that nothing uses · medium impact · small effort
+- [x] **F304** Every game canvas texture does a blocking pixel read-back and keeps a second full-size copy that nothing uses · medium impact · small effort — **done 2026-10-22** ([PR #297](https://github.com/songadaymann/wamp/pull/297)): room layers, snapshots, previews and still backgrounds are registered as plain images, dropping the hidden full-size copy. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 - [ ] **F303** Custom tiles are painted one pixel at a time into room and map pictures (256 draw calls per tile, even for 4-pixel thumbnails) · medium impact · small effort
-- [ ] **F307** Each loaded room uses about twice the memory the budget thinks, and always builds an empty foreground layer · low impact · small effort
+- [x] **F307** Each loaded room uses about twice the memory the budget thinks, and always builds an empty foreground layer · low impact · small effort — **done 2026-10-22** ([PR #297](https://github.com/songadaymann/wamp/pull/297)): rooms with no foreground tiles build no foreground layer. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 - [ ] **F312** Room building is throttled by fixed cost guesses, so a room needs at least ~0.6 s to get ready on phones · low impact · medium effort
 - [ ] **F313** Room data is deep-copied two or three times every time it is downloaded or read from a cache · low impact · medium effort
 - [ ] **F311** In-game room pictures copy a 12-field tileset object for every tile they draw · low impact · small effort
@@ -240,15 +240,15 @@ Newer routes brought back slow patterns that round 1 removed, and guest play wri
 
 Touch controls, audio and pause are solid. The open issues are moving between rooms on phones, weak connections, and image memory that is never released.
 
-- [ ] **F350** After every jump, phones prepare the room above or below instead of the room you're running into · high impact · medium effort
-- [ ] **F351** A signed-in player's ranked clear is lost if one network request fails on a weak phone signal · medium impact · medium effort
-- [ ] **F355** On a slow or dropped phone connection, room edges become silent invisible walls and nothing says you're offline · medium impact · small effort
-- [ ] **F358** Touch stick: a slightly low diagonal still makes you crawl and ignores Jump, and gravity zones auto-jump · medium impact · small effort
-- [ ] **F352** Custom backgrounds are never freed: every one seen on the map or in play, animated ones included, stays in memory until the tab closes · medium impact · medium effort — _also covers: Custom room backgrounds are never unloaded, so memory grows with every new background you pass_
-- [ ] **F357** Tiled photo backgrounds, the default setting, keep a 2048x1024 copy per room just to draw a 128-pixel tile · medium impact · small effort
+- [x] **F350** After every jump, phones prepare the room above or below instead of the room you're running into · high impact · medium effort — **done 2026-10-22** ([PR #299](https://github.com/songadaymann/wamp/pull/299)): next-room prediction no longer picks the room below while standing on a floor, and picks the room above only while rising in the top quarter or when the jump can reach the top; climbs and bottom-row holes still get a lead. Water, ladders and sideways gravity are unchanged. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+- [x] **F351** A signed-in player's ranked clear is lost if one network request fails on a weak phone signal · medium impact · medium effort — **done 2026-10-22** ([PR #301](https://github.com/songadaymann/wamp/pull/301)): a signed-in ranked finish that fails is resent from memory (with a size-scaled timeout) and the run panel offers Retry; the server finalizes only active runs in commit order, replays stored outcomes, and re-runs an unfinished reward step for recent finishes exactly once (migration 0074 `run_settlements`, API Worker `d1bf600c`). [Receipt](wamp-round2-phone-play-2026-10-22.md).
+- [x] **F355** On a slow or dropped phone connection, room edges become silent invisible walls and nothing says you're offline · medium impact · small effort — **done 2026-10-22** ([PR #300](https://github.com/songadaymann/wamp/pull/300)): a chip says "Loading next room…" when the player is held at an edge (including the invisible edge wall), "Still loading… Retrying…" after 4 s, and "Offline…" while offline; reconnecting retries at once. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+- [x] **F358** Touch stick: a slightly low diagonal still makes you crawl and ignores Jump, and gravity zones auto-jump · medium impact · small effort — **done 2026-10-22** ([PR #296](https://github.com/songadaymann/wamp/pull/296)): on the on-screen stick a drift toward crouch or climb counts only at about 50° or steeper, gravity zones jump once per push; forwarded mann.cool keys, ladders and water keep the old thresholds. [Receipt](wamp-round2-phone-play-2026-10-22.md).
+- [x] **F352** Custom backgrounds are never freed: every one seen on the map or in play, animated ones included, stays in memory until the tab closes · medium impact · medium effort — _also covers: Custom room backgrounds are never unloaded, so memory grows with every new background you pass_ — **done 2026-10-22** ([PR #297](https://github.com/songadaymann/wamp/pull/297)): custom background textures are reference-counted and freed when nothing uses them (an idle list of 1 on low-memory devices, 4 otherwise). [Receipt](wamp-round2-phone-play-2026-10-22.md).
+- [x] **F357** Tiled photo backgrounds, the default setting, keep a 2048x1024 copy per room just to draw a 128-pixel tile · medium impact · small effort — **done 2026-10-22** ([PR #297](https://github.com/songadaymann/wamp/pull/297)): tiled still photos draw from one shared downscaled copy per background, about 2 MB per room instead of about 17 MB. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 - [ ] **F353** Each starfield or parallax background layer costs 3-7 MB of hidden memory per room; a Forest room is about 50 MB · medium impact · medium effort
 - [ ] **F356** Phones redraw the game at full speed behind full-screen menus, while paused and when idle, and Battery Saver doesn't slow it · medium impact · medium effort
-- [ ] **F354** iPads and Android tablets switch to the phone layout whenever the on-screen keyboard opens in landscape · medium impact · small effort
+- [x] **F354** iPads and Android tablets switch to the phone layout whenever the on-screen keyboard opens in landscape · medium impact · small effort — **done 2026-10-22** ([PR #295](https://github.com/songadaymann/wamp/pull/295)): phone vs tablet is judged from the screen's real width, so opening the keyboard or zooming never flips a tablet to the phone layout; the layout is also held while a text field has focus. [Receipt](wamp-round2-phone-play-2026-10-22.md).
 - [ ] **F362** Rotating the phone mid-run drops your held stick and jump while the run keeps going · low impact · small effort
 - [ ] **F360** Battery Saver doesn't pause or simplify animated backgrounds · low impact · small effort
 - [ ] **F359** Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact) · low impact · medium effort
