@@ -1,12 +1,11 @@
 # Environment Setup
 
-Local environment files are intentionally ignored. Keep real values in local files, Cloudflare/PartyKit project settings, or deployment secret stores.
+Local environment files are intentionally ignored. Keep real values in local files, Cloudflare project settings, or deployment secret stores.
 
 Use:
 
 - `env.local` for Vite/frontend overrides
-- `.dev.vars` for Wrangler Worker development
-- PartyKit local env files only when running the presence server locally
+- `.dev.vars` for Wrangler Worker development, including realtime presence
 
 Do not commit real keys, private keys, personal email addresses, salts, API tokens, or production project IDs.
 
@@ -25,8 +24,9 @@ VITE_REOWN_PROJECT_ID=
 # remote or local storage behavior for local development.
 VITE_ROOM_STORAGE_BACKEND=remote
 
-# Optional PartyKit presence endpoint.
-# VITE_PARTYKIT_HOST=127.0.0.1:1999
+# Optional build-time presence host. Leave unset so /api/auth/session supplies the
+# Worker's PARTYKIT_HOST; a value here is baked into the bundle and wins over it.
+# VITE_PARTYKIT_HOST=127.0.0.1:8787
 # VITE_PARTYKIT_PARTY=main
 
 # Optional Cloudflare Web Analytics token.
@@ -49,9 +49,11 @@ ADMIN_REVIEW_EMAIL=
 ROOM_DAILY_CLAIM_LIMIT=
 ROOM_DAILY_PUBLISH_LIMIT=
 
-PARTYKIT_HOST="127.0.0.1:1999"
+# Presence: wrangler dev serves /parties/* from this Worker. Use the address it listens on.
+PARTYKIT_HOST="127.0.0.1:8787"
 PARTYKIT_PARTY="main"
 PARTYKIT_INTERNAL_TOKEN=
+# Any local random string. The Worker signs and verifies presence identities with it.
 PARTYKIT_IDENTITY_TOKEN_SECRET=
 
 ROOM_MINT_CHAIN_ID=84532
@@ -89,7 +91,8 @@ CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES=20
 ## Notes
 
 - Production wallet auth should come from Worker env `REOWN_PROJECT_ID`.
-- Worker and PartyKit must share the same presence identity signing secret.
+- Presence runs in the API Worker: `npm run dev:api` (`wrangler dev`) serves `/parties/*` on the same port as `/api`, backed by a local `PresenceDurableObject`. `/api/auth/session` hands clients `PARTYKIT_HOST`, so set it in `.dev.vars` to the address `wrangler dev` listens on (`127.0.0.1:8787` by default; match a custom `--port`). Without it, local clients get wrangler.jsonc's production host, `api.wamp.land`, which rejects locally signed identities. The client prefers a build-time `VITE_PARTYKIT_HOST`, then the session host; Vite dev builds fall back to `127.0.0.1:8787`.
+- The same Worker signs presence identities and verifies them before accepting a socket, so `PARTYKIT_IDENTITY_TOKEN_SECRET` (or the `PARTYKIT_INTERNAL_TOKEN` fallback) is set only on the Worker. Presence still uses the `PARTYKIT_*` names even though the hosted PartyKit service is retired.
 - Leave optional moderation/upload/mint values blank unless you are testing that subsystem.
 - Prefer the hosting provider's secret store for deployed environments.
 - Turnstile secrets: the guestbook verifies with `TURNSTILE_SECRET` and falls back to `TURNSTILE_SECRET_KEY` when that is unset. The Jam page reads `TURNSTILE_SECRET_KEY`. Both use `TURNSTILE_SITE_KEY`, and with a site key set and neither secret set, guestbook signing returns 503.

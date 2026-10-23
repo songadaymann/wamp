@@ -30,7 +30,6 @@ Start a frontend that can reach a real API, then run the mobile smoke:
 
 ```bash
 VITE_ROOM_API_BASE_URL="https://api.wamp.land" \
-VITE_PARTYKIT_HOST="everybodys-platformer-presence.songadaymann.partykit.dev" \
 npm run dev -- --host 127.0.0.1
 ```
 
@@ -67,16 +66,15 @@ Use the Mac's Wi-Fi IP for a real phone or tablet on the same network:
 LAN_IP="$(ipconfig getifaddr en0)"
 ```
 
-For a local Worker-backed run:
+For a local Worker-backed run, the Worker also serves presence. `/api` goes through the Vite proxy, but the phone opens presence sockets to the Worker's own port, so `wrangler dev` must listen on the LAN too:
 
 ```bash
-npm run dev:api
-npm run dev:presence
+npm run dev:api -- --ip 0.0.0.0
 ```
 
 ```bash
 VITE_ROOM_API_BASE_URL="" \
-VITE_PARTYKIT_HOST="${LAN_IP}:1999" \
+VITE_PARTYKIT_HOST="${LAN_IP}:8787" \
 npm run dev -- --host 0.0.0.0
 ```
 
@@ -94,11 +92,7 @@ http://${LAN_IP}:3000/?x=0&y=0
 
 Use the actual Vite port if the local server is running somewhere else, for example `3232`.
 
-If the phone cannot reach local PartyKit, use the deployed PartyKit host for frontend testing:
-
-```bash
-VITE_PARTYKIT_HOST="everybodys-platformer-presence.songadaymann.partykit.dev"
-```
+If the phone cannot reach the local Worker's port, run the frontend against the safety backend instead (see the profiler setup below). Its `/api/auth/session` supplies the safety Worker's presence host.
 
 For magic-link auth on the phone, make sure the Worker `APP_BASE_URL` points at the phone URL or an HTTPS preview URL. A localhost `APP_BASE_URL` will send the phone back to the Mac-only loopback address.
 
@@ -108,7 +102,6 @@ For real-device lag checks, start the LAN frontend against the safety backend:
 
 ```bash
 VITE_ROOM_API_BASE_URL="https://everybodys-platformer-safety.novox-robot.workers.dev" \
-VITE_PARTYKIT_HOST="everybodys-platformer-presence-safety.songadaymann.partykit.dev" \
 npm run dev -- --host 0.0.0.0 --port 3232
 ```
 

@@ -29,7 +29,7 @@ page.on('response', (response) => {
     });
   }
 });
-await page.routeWebSocket('ws://127.0.0.1:1999/**', (webSocket) => {
+await page.routeWebSocket(/\/parties\//, (webSocket) => {
   webSocket.onMessage(() => {
     // Presence transport is unrelated to this modal smoke; keep the socket local and quiet.
   });

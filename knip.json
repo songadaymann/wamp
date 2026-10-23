@@ -35,7 +35,6 @@
     "src/cloudflare/cryptopunk-avatar-queue-worker.ts",
     "src/cloudflare/world-tile-renderer-worker.ts",
     "src/mapScreenshot/worker.ts",
-    "partykit/presenceServer.ts",
     "cloudflare/cryptopunk-avatar-queue/runner/server.mjs",
     "scripts/api_performance_probe.mjs",
     "scripts/analyze_smart_tile_reference.mjs",

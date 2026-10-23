@@ -1,4 +1,4 @@
-import type * as Party from 'partykit/server';
+import type * as Party from '../../partykit/presenceTypes';
 import type { DurableObjectState, DurableObjectNamespace, Request as WorkerRequest, WebSocket as WorkerWebSocket } from '@cloudflare/workers-types';
 import PresenceServer from '../../../partykit/presenceServer';
 import type { ConnectionPresenceState } from '../../partykit/presenceProtocol';
@@ -30,7 +30,7 @@ class PresenceConnection {
     return state;
   }
   asConnection(): Party.Connection<ConnectionPresenceState> {
-    // Party.Connection also exposes event listeners; the core exclusively uses the surface above.
+    // Party.Connection (src/partykit/presenceTypes.ts) declares only the surface above.
     return this as unknown as Party.Connection<ConnectionPresenceState>;
   }
 }
