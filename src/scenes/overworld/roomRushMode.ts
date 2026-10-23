@@ -71,6 +71,7 @@ interface OverworldRoomRushModeHost {
   syncAppMode(): void;
   showTransientStatus(message: string): void;
   renderHud(): void;
+  isDeathPending(): boolean;
 }
 
 export class OverworldRoomRushModeController {
@@ -208,6 +209,11 @@ export class OverworldRoomRushModeController {
 
   end(): void {
     if (!this.getCurrentRun()) {
+      return;
+    }
+    // A death in its beat fails a Hard or Weekly Rush once the beat ends; ending the run
+    // first would save it as completed with that death uncounted, whichever input stopped it.
+    if (this.host.isDeathPending() && this.runController.deathEndsRun()) {
       return;
     }
 

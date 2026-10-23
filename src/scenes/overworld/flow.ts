@@ -266,10 +266,7 @@ export class OverworldSceneFlowController {
       ?? this.host.getCurrentRoomCoordinates();
     const courseEditorReturnTarget = this.host.getCourseEditorReturnTarget();
     const editorPlaytestReturnTarget = this.host.getEditorPlaytestReturnTarget();
-    this.host.setCourseEditorReturnTarget(null);
-    this.host.setEditorPlaytestReturnTarget(null);
-    this.host.resetPlaySession();
-    this.host.clearTouchGestureState();
+    this.endPlaySession();
     this.host.setMode('browse');
     this.host.setCameraMode('inspect');
     this.host.setInspectZoom(this.host.getBrowseInspectZoom());
@@ -320,6 +317,14 @@ export class OverworldSceneFlowController {
 
     this.host.syncModeRuntime();
     this.host.refreshAroundIfNeededOrFromCache(returnCoordinates);
+  }
+
+  /** Ends the run like Stop, minus the trip back: a jump forgets an editor test's return (F383). */
+  endPlaySession(): void {
+    this.host.setCourseEditorReturnTarget(null);
+    this.host.setEditorPlaytestReturnTarget(null);
+    this.host.resetPlaySession();
+    this.host.clearTouchGestureState();
   }
 
   buildSelectedRoom(): void {

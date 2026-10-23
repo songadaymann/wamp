@@ -149,7 +149,7 @@ export function setupSceneCommands(
   };
 
   installGameplayShortcuts({ restart: () => getActiveOverworldScene(game)?.restartCurrentRun(),
-    stop: () => getActiveOverworldScene(game)?.returnToWorld() }, doc);
+    stop: () => getActiveOverworldScene(game)?.stopCurrentPlay() }, doc);
   doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
   doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 
@@ -190,9 +190,7 @@ export function setupSceneCommands(
       void (getActiveOverworldScene(game)?.openCourseEditor() ??
         getActiveOverworldScene(game)?.openCourseComposer());
     },
-    onJumpToCoordinates: (coordinates) => {
-      void getActiveOverworldScene(game)?.jumpToCoordinates(coordinates);
-    },
+    onJumpToCoordinates: (coordinates) => getActiveOverworldScene(game)?.jumpToCoordinates(coordinates),
     onZoomIn: () => {
       getActiveOverworldScene(game)?.zoomIn();
     },

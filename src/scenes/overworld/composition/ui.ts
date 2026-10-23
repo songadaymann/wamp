@@ -261,8 +261,8 @@ export function createHudStateController(
 export function createInspectInputController(
   host: Pick<OverworldCompositionPorts,
     | 'scene' | 'cameraController' | 'mode'
-    | 'cameraMode' | 'applyCameraMode' | 'fitLoadedWorld'
-    | 'returnToWorld' | 'viewportController' | 'constrainInspectCamera'
+    | 'cameraMode' | 'applyCameraMode' | 'fitLoadedWorld' | 'roomCommentsController'
+    | 'roomChatController' | 'stopCurrentPlay' | 'viewportController' | 'constrainInspectCamera'
     | 'getRoomCoordinatesForPoint' | 'isWithinLoadedRoomBounds' | 'selectRoomCoordinates'
     | 'syncBrowseWindowToCamera'
   >,
@@ -276,7 +276,9 @@ export function createInspectInputController(
     },
     applyCameraMode: () => host.applyCameraMode(),
     fitLoadedWorld: () => host.fitLoadedWorld(),
-    returnToWorld: () => host.returnToWorld(),
+    // Comment composer before chat, the order Escape has always closed them in.
+    closeComposerForEscape: () => host.roomCommentsController.handleEscapeKey() || host.roomChatController.handleEscapeKey(),
+    stopCurrentPlay: () => host.stopCurrentPlay(),
     adjustZoomByFactor: (factor, screenX, screenY) => host.viewportController.adjustZoomByFactor(factor, screenX, screenY),
     constrainInspectCamera: () => host.constrainInspectCamera(),
     getRoomCoordinatesForPoint: (x, y) => host.getRoomCoordinatesForPoint(x, y),

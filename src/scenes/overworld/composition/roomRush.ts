@@ -45,7 +45,7 @@ export function createRoomRushModeController(
     | 'sessionResetController' | 'clearTouchGestureState' | 'goalRunController'
     | 'clearRoomGoalIntroState' | 'syncScenePauseState' | 'runtimeController'
     | 'syncAppMode' | 'showTransientStatus' | 'renderHud'
-    | 'roomRushResultController'
+    | 'roomRushResultController' | 'gameFeelController'
   >,
 ): OverworldRoomRushModeController {
   return new OverworldRoomRushModeController({
@@ -96,5 +96,6 @@ export function createRoomRushModeController(
     syncAppMode: () => host.syncAppMode(),
     showTransientStatus: (message) => host.showTransientStatus(message),
     renderHud: () => host.renderHud(),
+    isDeathPending: () => host.gameFeelController.isDeathPending(),
   }, host.roomRushResultController);
 }

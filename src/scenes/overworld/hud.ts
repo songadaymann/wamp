@@ -17,7 +17,8 @@ interface OverworldHudRuntimeConfig {
   onEditRoom: (roomOnly?: boolean) => void | Promise<void>;
   onBuildRoom: () => void | Promise<void>;
   onOpenCourseBuilder: () => void | Promise<void>;
-  onJumpToCoordinates: (coordinates: RoomCoordinates) => void | Promise<void>;
+  /** Resolves false when the jump did not happen (an active Room Rush ended instead). */
+  onJumpToCoordinates: (coordinates: RoomCoordinates) => boolean | void | Promise<boolean | void>;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onOpenExplore: () => void | Promise<void>;
@@ -940,8 +941,8 @@ export class OverworldHudBridge {
       this.playersOnlinePinned = false;
       this.setPlayersOnlinePopoverOpen(false);
       void (async () => {
-        await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
-        if (entry.mode === 'play') {
+        const jumped = await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
+        if (entry.mode === 'play' && jumped !== false) {
           await runtimeConfig.onPlayRoom();
         }
       })();

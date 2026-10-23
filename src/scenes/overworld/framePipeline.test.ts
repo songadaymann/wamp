@@ -297,6 +297,15 @@ describe('overworld frame behavior captured before extraction', () => {
     ).toHaveLength(3);
     expect(result.state.groundedOverride).toBeNull();
   });
+  it.each([
+    { name: 'touch stop in a Room Rush', touch: ['stop'], rush: true },
+    { name: 'gamepad Select without a Rush', pad: ['stop'] },
+  ])('sends $name through the shared stop path (F378)', (spec) => {
+    const calls = characterize({ profile: 'none', ...spec }).events.map((e) => e[0]);
+    expect(calls.filter((call) => call === 'stopCurrentPlay')).toHaveLength(1);
+    expect(calls).not.toContain('endRoomRushRun');
+    expect(calls).not.toContain('returnToWorld');
+  });
   it('rotates the controller profile slot across successive frames', () => {
     const result = characterize(
       { profile: 'enabled', slot: 19 },

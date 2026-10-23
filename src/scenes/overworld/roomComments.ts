@@ -92,7 +92,7 @@ interface OverworldRoomCommentsControllerOptions {
   getPlayerCommentPosition: () => { x: number; y: number } | null;
   getZoom?: () => number;
   selectRoomCoordinates?: (coordinates: RoomCoordinates) => void;
-  jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
+  jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => boolean | void | Promise<boolean | void>;
   showTransientStatus?: (message: string) => void;
   waitForBrowseDiscoveryReady?: (signal: AbortSignal) => Promise<boolean>;
   document?: Document;

@@ -100,6 +100,7 @@ export const SCENE_CAPABILITY_METHODS = {
     startRoomRushRun: true,
     endRoomRushRun: true,
     isRoomRushRunActive: true,
+    stopCurrentPlay: true,
     invitePvpDuel: true,
     openMultiplayerLauncher: true,
     inviteMultiplayer: true,

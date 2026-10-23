@@ -332,6 +332,7 @@ import {
   type RoomRushOverviewCameraState,
 } from './overworld/roomRushResults';
 import {
+  ROOM_RUSH_NAME,
   type ActiveRoomRushRunState,
   type RoomRushDifficulty,
   type RoomRushStartRule,
@@ -867,7 +868,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const maybeRespawnFromVoid: typeof owner.maybeRespawnFromVoid = (...args) => owner.maybeRespawnFromVoid(...args);
     const updateMobilePortraitRoomFraming: typeof owner.updateMobilePortraitRoomFraming = (...args) => owner.updateMobilePortraitRoomFraming(...args);
     const toggleCameraMode: typeof owner.toggleCameraMode = (...args) => owner.toggleCameraMode(...args);
-    const endRoomRushRun: typeof owner.endRoomRushRun = (...args) => owner.endRoomRushRun(...args);
+    const stopCurrentPlay: typeof owner.stopCurrentPlay = (...args) => owner.stopCurrentPlay(...args);
     const restartCurrentRun: typeof owner.restartCurrentRun = (...args) => owner.restartCurrentRun(...args);
     const setLastMovementInput: typeof owner.setLastMovementInput = (...args) => owner.setLastMovementInput(...args);
     const isPvpCountdownActive: typeof owner.isPvpCountdownActive = (...args) => owner.isPvpCountdownActive(...args);
@@ -1193,7 +1194,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       get mobilePerformanceControllerProfilingEnabled() { return owner.mobilePerformanceControllerProfilingEnabled; },
       get mobilePerformanceControllerProfileSlot() { return owner.mobilePerformanceControllerProfileSlot; },
       toggleCameraMode,
-      endRoomRushRun,
+      stopCurrentPlay,
       restartCurrentRun,
       setLastMovementInput,
       isPvpCountdownActive,
@@ -1421,11 +1422,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       simulateMovement: (stepDelta, input) => this.simulateMovementStep(stepDelta, input),
     });
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.on(
-      Phaser.Scenes.Events.SLEEP,
-      this.handlePerformanceAdvisorSceneSleep,
-      this,
-    );
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.handleSceneSleep, this);
     this.events.on(Phaser.Scenes.Events.PAUSE, this.handlePerformanceAdvisorScenePause, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.handlePerformanceAdvisorScenePause, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -1657,17 +1654,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private setupGameplayKeys(): void {
-    const keyboard = this.input.keyboard!;
-
+    // Escape is handled once, in order, by the inspect input controller (F385).
     this.gameplayKeyboard = createOverworldKeyboardInput(this, () => this.mode === 'play');
-    keyboard.on('keydown-ESC', () => {
-      if (this.roomCommentsController.handleEscapeKey()) {
-        return;
-      }
-      if (this.roomChatController.handleEscapeKey()) {
-        return;
-      }
-    });
   }
 
   private setupCamera(): void {
@@ -1739,6 +1727,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.resetPerformanceAdvisorEvidence('scene-wake', now);
     this.syncPerformanceAdvisorEligibility(now);
     void this.windowController.handleWakeAsync(data);
+  }
+
+  private handleSceneSleep(): void {
+    this.handlePerformanceAdvisorSceneSleep();
+    // A sleeping scene never runs the browse frame that stops room music, and a kept
+    // last playback would leave the next test run silent (F375).
+    this.roomMusicPlaybackController.reset();
   }
 
   private handlePerformanceAdvisorSceneSleep(): void {
@@ -2027,8 +2022,21 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     return this.transientStatusMessage;
   }
 
-  async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
+  /** Resolves false when a Room Rush result took the jump's place, so callers stop there. */
+  async jumpToCoordinates(coordinates: RoomCoordinates): Promise<boolean> {
+    if (this.mode === 'play') {
+      // End the run as Stop does (F383). A Rush shows its result instead: that dialog
+      // saves the score and drives the camera to the route, so the jump yields to it.
+      if (this.activeRoomRushRun) {
+        this.endRoomRushRun();
+        this.showTransientStatus(`${ROOM_RUSH_NAME} ended. Open the room again to play it.`);
+        return false;
+      }
+      this.clearActivePvpMatch();
+      this.flowController.endPlaySession();
+    }
     await this.selectionController.jumpToCoordinates(coordinates);
+    return true;
   }
 
   async warpToSelectedRoom(): Promise<void> {
@@ -3956,15 +3964,18 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
   playSelectedRoom(options: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean } = {}): void | Promise<void> {
     if (this.mode === 'play') {
-      if (this.activeRoomRushRun) {
-        this.endRoomRushRun();
-      } else {
-        this.returnToWorld();
-      }
+      this.stopCurrentPlay();
       return;
     }
 
     return this.flowController.playSelectedRoom(options);
+  }
+
+  /** Every stop input lands here: a Room Rush ends through its result, which alone saves the score (F378). */
+  stopCurrentPlay(): void {
+    if (this.mode !== 'play') return;
+    if (this.activeRoomRushRun) this.endRoomRushRun();
+    else this.returnToWorld();
   }
 
   async startRoomRushRun(options: {
@@ -5068,11 +5079,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this,
     );
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.off(
-      Phaser.Scenes.Events.SLEEP,
-      this.handlePerformanceAdvisorSceneSleep,
-      this,
-    );
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.handleSceneSleep, this);
     this.events.off(
       Phaser.Scenes.Events.PAUSE,
       this.handlePerformanceAdvisorScenePause,

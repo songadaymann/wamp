@@ -187,7 +187,7 @@ export class OverworldRoomRushRunController {
     }
 
     this.currentRun.deaths += 1;
-    if (this.currentRun.difficulty === 'hard') {
+    if (this.deathEndsRun()) {
       const score = this.currentRun.visitedRoomIds.length;
       this.currentRun.result = 'failed';
       this.currentRun.completionMessage =
@@ -204,6 +204,11 @@ export class OverworldRoomRushRunController {
       transientStatus: `${reason} ${ROOM_RUSH_NAME} continues.`,
       terminalResult: null,
     };
+  }
+
+  /** Hard Rushes, the Weekly Rush among them, end on the first death. */
+  deathEndsRun(): boolean {
+    return this.currentRun?.difficulty === 'hard';
   }
 
   completeActiveRun(message: string | null = null): RoomRushMutationResult {

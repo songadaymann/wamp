@@ -12,8 +12,8 @@ type FrameHost = Pick<OverworldCompositionPorts,
   | 'applyPvpArenaCameraLock' | 'roomChatController' | 'roomCommentsController'
   | 'presenceOverlayController' | 'roomMusicSyncInput' | 'currentRoomCoordinates'
   | 'activeCourseRun' | 'roomMusicPlaybackController' | 'isPvpMatchActive'
-  | 'gameplayKeyboard' | 'gamepadInput' | 'toggleCameraMode' | 'activeRoomRushRun'
-  | 'endRoomRushRun' | 'returnToWorld' | 'restartCurrentRun' | 'playerBody'
+  | 'gameplayKeyboard' | 'gamepadInput' | 'toggleCameraMode'
+  | 'stopCurrentPlay' | 'restartCurrentRun' | 'playerBody'
   | 'setLastMovementInput' | 'movementController' | 'syncLocalPresence'
   | 'syncPvpInstanceState' | 'syncPvpLocalHeartLabel' | 'updateRoomLighting'
   | 'updateRoomWeather' | 'renderFrameHud' | 'isPvpCountdownActive'
@@ -247,8 +247,7 @@ export class OverworldFramePipeline {
       host.toggleCameraMode();
     }
     if (host.mode === 'play' && (consumeTouchAction('stop') || host.gamepadInput.pressed('stop'))) {
-      if (host.activeRoomRushRun) host.endRoomRushRun();
-      else host.returnToWorld();
+      host.stopCurrentPlay();
       return true;
     }
     if (host.mode === 'play' && (consumeTouchAction('restart') || host.gamepadInput.pressed('restart'))) {

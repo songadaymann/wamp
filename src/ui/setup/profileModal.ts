@@ -306,7 +306,7 @@ export class ProfileModalController {
     });
     setupProfileEmptyStates(this.doc, { canEdit: () => Boolean(this.currentProfile?.canEdit),
       canCreatePlaylist: () => Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)),
-      findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
+      findBuildSpot: () => { this.close(); const world = getActiveOverworldScene(this.game); if (world?.isRoomRushRunActive()) world.stopCurrentPlay(); else void (world ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
     this.doc.getElementById('btn-profile-report')?.addEventListener('click', () => { const shown = this.currentProfile; if (shown && !shown.isSelf) requestReport({ type: 'user', id: shown.userId, label: shown.displayName }); });
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
