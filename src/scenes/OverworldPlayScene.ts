@@ -28,11 +28,8 @@ import {
 import { getCourseObjectLink } from '../courses/objectLinks';
 import { dailyEntryReady } from '../daily/entry';
 import { createDailyRepository } from '../daily/repository';
-import {
-  createMobilePerformanceProfiler,
-  type MobilePerformanceContext,
-  type MobilePerformanceProfiler,
-} from '../debug/mobilePerformanceProfiler';
+import type { MobilePerformanceContext, MobilePerformanceProfiler } from '../debug/mobilePerformanceProfiler';
+import { requestMobilePerformanceProfiler } from '../main/debugTools';
 import {
   type SwordsmanTraversalPlannerMode,
 } from '../enemies/swordsmanRobustPlanner';
@@ -501,6 +498,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private hudBridge: OverworldHudBridge | null = null;
   private fxController: SceneFxController | null = null;
   private mobilePerformanceProfiler: MobilePerformanceProfiler | null = null;
+  private cancelMobilePerformanceProfiler: (() => void) | null = null;
   private mobilePerformanceControllerProfilingEnabled = false;
   private mobilePerformanceControllerProfileSlot = 0;
   private criticalFrameStartedAtMs: number | null = null;
@@ -4885,10 +4883,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private initializeMobilePerformanceProfiler(): void {
+    this.cancelMobilePerformanceProfiler?.();
     this.mobilePerformanceProfiler?.destroy();
-    this.mobilePerformanceProfiler = createMobilePerformanceProfiler({
-      getContext: () => this.buildMobilePerformanceContext(),
-    });
+    this.mobilePerformanceProfiler = null;
+    this.cancelMobilePerformanceProfiler = requestMobilePerformanceProfiler(
+      { getContext: () => this.buildMobilePerformanceContext() },
+      (profiler) => { this.mobilePerformanceProfiler = profiler; },
+    );
     this.mobilePerformanceControllerProfilingEnabled =
       new URLSearchParams(window.location.search).get('mobilePerfControllers') === '1';
     this.mobilePerformanceControllerProfileSlot = 0;
@@ -5100,6 +5101,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.combatPresentationController.destroyProjectiles();
     this.fxController?.destroy();
     this.fxController = null;
+    this.cancelMobilePerformanceProfiler?.();
+    this.cancelMobilePerformanceProfiler = null;
     this.mobilePerformanceProfiler?.destroy();
     this.mobilePerformanceProfiler = null;
     this.removeMobilePortraitCameraTunerApi();
