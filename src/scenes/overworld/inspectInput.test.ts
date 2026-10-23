@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OverworldInspectInputController } from './inspectInput';
+import { installMenuToggle } from '../../ui/menuToggle';
 
 vi.mock('phaser', () => ({ default: { Math: { Distance: { Between: vi.fn(() => 100) } } } }));
 vi.mock('../../ui/deviceLayout', () => ({ getDeviceLayoutState: () => ({ coarsePointer: false }) }));
@@ -163,5 +164,25 @@ describe('one ordered Escape (F378, F385)', () => {
     menu.open = false;
     h.fire('key:keydown-ESC', escape());
     expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+  });
+
+  it('lets the menu spend the Escape that closes it, so only the next Escape stops play (F478)', () => {
+    vi.stubGlobal('MutationObserver', class { observe() {} disconnect() {} });
+    const classes = new Set(['menu-open']);
+    const panel = { classList: { contains: (name: string) => classes.has(name), remove: (name: string) => classes.delete(name) }, contains: () => false };
+    const toggle = Object.assign(new EventTarget(), { getAttribute: () => null, setAttribute: vi.fn(), focus: vi.fn() });
+    const page = Object.assign(new EventTarget(), { activeElement: null, getElementById: (id: string) => id === 'auth-panel' ? panel : null });
+    vi.stubGlobal('document', page);
+    const dispose = installMenuToggle(panel as never, toggle as never, null, page as unknown as Document);
+    const h = harness('play');
+    // Phaser hears keys after the page does and skips the ones the page handled.
+    page.addEventListener('keydown', (event) => { if (!event.defaultPrevented) h.fire('key:keydown-ESC', event); });
+    const press = () => page.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { key: 'Escape', isComposing: false, ...escape() }));
+    press();
+    expect(classes.has('menu-open')).toBe(false);
+    expect(h.host.stopCurrentPlay).not.toHaveBeenCalled();
+    press();
+    expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+    dispose();
   });
 });

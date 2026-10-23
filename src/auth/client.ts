@@ -16,6 +16,7 @@ import { apiRequest as requestApi } from '../api/request';
 import { createProfileRepository } from '../profiles/profileRepository';
 import { rememberBuilderTrustTier } from '../roomVideo/access';
 import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
+import { installMenuToggle } from '../ui/menuToggle';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -177,15 +178,7 @@ export async function setupAuthUi(): Promise<void> {
 
   // Hamburger menu toggle
   const menuToggle = document.getElementById('menu-toggle');
-  menuToggle?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    authPanel!.classList.toggle('menu-open');
-  });
-  document.addEventListener('click', (e) => {
-    if (authPanel && authPanel.classList.contains('menu-open') && !authPanel.contains(e.target as Node)) {
-      authPanel.classList.remove('menu-open');
-    }
-  });
+  if (menuToggle) installMenuToggle(authPanel, menuToggle, document.getElementById('menu-body'));
   authIdentity?.addEventListener('click', () => {
     if (!isOpenableProfileUserId(state.user?.id)) {
       return;
