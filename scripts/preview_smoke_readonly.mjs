@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const rawUrl = getStringArg('--url') || process.env.PREVIEW_SMOKE_URL?.trim() || '';
 if (!rawUrl) {
@@ -40,6 +41,8 @@ await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
 });
+// A local build has no rooms of its own; replay recorded ones (F480). Deployed previews stay live.
+if (['127.0.0.1', 'localhost'].includes(new URL(targetUrl).hostname)) await installSmokeApiReplay(context);
 const page = await context.newPage();
 page.on('console', (message) => {
   const text = message.text();

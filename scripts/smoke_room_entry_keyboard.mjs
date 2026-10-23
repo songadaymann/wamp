@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:3051';
 const engine = process.env.ROOM_ENTRY_BROWSER === 'webkit' ? 'webkit' : 'chromium';
@@ -17,6 +18,8 @@ try {
       localStorage.setItem('wamp_replay_opt_out', '1');
       localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
     });
+    // Recorded rooms stand in for the live world (F480).
+    await installSmokeApiReplay(context);
     const page = await context.newPage();
     page.on('pageerror', error => report.pageErrors.push(error.message));
     // Keep the probe local: snapshot queries read content; don't save runs or drafts.
@@ -24,7 +27,7 @@ try {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       return ['GET', 'OPTIONS'].includes(request.method()) || path === '/api/rooms/snapshots/query'
-        ? route.continue() : route.abort();
+        ? route.fallback() : route.abort();
     });
     await page.goto(`${base}/r/-11/-6?renderer=canvas`);
     await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });

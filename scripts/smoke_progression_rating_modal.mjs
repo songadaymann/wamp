@@ -287,8 +287,10 @@ if (deferredState.appMode !== 'play-world' || !deferredState.modalHidden) {
   throw new Error(`Expected rating prompts to remain hidden during Play: ${JSON.stringify(deferredState)}`);
 }
 
+// Mirror setAppMode in src/ui/appMode.ts: the queue listens for its change event.
 await page.evaluate(() => {
   document.body.dataset.appMode = 'world';
+  window.dispatchEvent(new Event('wamp:app-mode-changed'));
 });
 await page.waitForSelector('#run-rating-modal:not(.hidden)');
 await page.waitForSelector('#run-rating-batch:not(.hidden)');
@@ -317,6 +319,9 @@ await page.screenshot({
 await page.click('[data-quality-stars="4"]');
 await page.click('#btn-run-rating-submit');
 await page.waitForFunction(() => document.getElementById('btn-run-rating-skip')?.textContent === 'Next Room');
+// The status line updates before the save finishes and marks the queue entry; wait for the mark.
+await page.waitForFunction(() => document.querySelector('#run-rating-batch-list li')?.textContent?.includes('Rated'), null, { timeout: 15000 })
+  .catch(() => {});
 const ratedState = await page.evaluate(() => ({
   status: document.getElementById('run-rating-status')?.textContent ?? '',
   nextButton: document.getElementById('btn-run-rating-skip')?.textContent ?? '',
@@ -374,8 +379,10 @@ const singleDeferred = await page.evaluate(() => (
 if (!singleDeferred) {
   throw new Error('Expected the single-room prompt to remain hidden during Play.');
 }
+// Mirror setAppMode in src/ui/appMode.ts: the queue listens for its change event.
 await page.evaluate(() => {
   document.body.dataset.appMode = 'world';
+  window.dispatchEvent(new Event('wamp:app-mode-changed'));
 });
 await page.waitForFunction(() => document.getElementById('run-rating-title')?.textContent === 'Solo Summit');
 const singleState = await page.evaluate(() => ({

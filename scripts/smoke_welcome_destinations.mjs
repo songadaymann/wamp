@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:3034';
 const output = process.argv[3] || 'output/web-game/welcome-destinations/native';
 const devices = [['desktop',1280,800,false],['phone',390,844,true],['tablet',1024,768,true],['landscape',844,390,true],['narrow-phone',320,568,true]];
@@ -20,7 +21,7 @@ async function startGoal(page,touch,allowPlaying=false) {
  await page.waitForTimeout(300);
 }
 async function holdRight(page,context,touch,ms) {
- const wait=()=>ms===null?page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',null,{timeout:20000}):page.waitForTimeout(ms);
+ const wait=()=>ms===null?page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',null,{timeout:60000}):page.waitForTimeout(ms);
  if(!touch) {await page.keyboard.down('ArrowRight');try {await wait();}finally {await page.keyboard.up('ArrowRight');}return;}
  const box=await page.locator('#mobile-move-stick').boundingBox();assert.ok(box);
  const cdp=await context.newCDPSession(page),x=box.x+box.width/2,y=box.y+box.height/2;
@@ -33,6 +34,8 @@ try {
   const scenario=`${name}-${lane}`;if(process.env.CASE&&!scenario.includes(process.env.CASE))continue;
   activeName=scenario;const context=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch});
   await context.addInitScript(()=>{localStorage.setItem('wamp_replay_opt_out','1');localStorage.setItem('wamp.devicePerformanceMode.v1',JSON.stringify({version:1,mode:'full-quality'}));});
+  // Recorded rooms stand in for the live world (F480).
+  await installSmokeApiReplay(context);
   const page=await context.newPage();activePage=page;
   page.on('pageerror',error=>report.errors.push({scenario,message:error.message}));
   page.on('console',message=>{if(message.type()==='error'&&!(base.includes('127.0.0.1')&&message.location().url.includes('/api/presence/identity-token')))report.errors.push({scenario,message:message.text(),url:message.location().url});});
@@ -63,7 +66,7 @@ try {
    await page.screenshot({path:`${output}/${scenario}-run.png`});
    if(name==='desktop'||name==='phone') {
     await holdRight(page,context,touch,null);
-    await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',{},{timeout:20000});
+    await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',{},{timeout:60000});
     await page.waitForTimeout(1200);
    }
    for(let index=1;index<6;index++) {

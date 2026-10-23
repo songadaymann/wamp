@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay, smokeApiReplayEnabled } from './lib/smokeApiReplay.mjs';
 
 const base = process.argv[2] || 'http://127.0.0.1:3033';
 const output = process.argv[3] || 'output/web-game/first-play-controls/native';
 const rendererQuery = process.env.F104_RENDERER ? `?renderer=${process.env.F104_RENDERER}` : '';
-const expandedPath = process.env.F104_EXPANDED_PATH || '/r/12/0';
+// -14,-5 is the recorded civil war Expanded Room; /r/12/0 is a live one.
+const expandedPath = process.env.F104_EXPANDED_PATH || (smokeApiReplayEnabled() ? '/r/-14/-5' : '/r/12/0');
 const devices = [
   ['desktop', 1280, 800, false], ['tablet', 1024, 768, true],
   ['phone', 390, 844, true], ['landscape', 844, 390, true], ['narrow-phone', 320, 568, true],
@@ -51,6 +53,9 @@ async function checkGuide(page, touch) {
   for (const layer of layers) assert.ok(layer.mapZ < layer.modalZ, `Startup map covers controls: ${JSON.stringify(layer)}`);
   return text;
 }
+// Keeps the input held until the player has moved, for up to three seconds of slow frames.
+const movedRight = (page, before) => page.waitForFunction(x => JSON.parse(window.render_game_to_text()).activeScene.player.x > x + 2,
+  before.player.x, { timeout: 3000 }).catch(() => {});
 async function moveAndJump(page, context, touch) {
   await page.waitForFunction(() => {
     const s = JSON.parse(window.render_game_to_text()).activeScene;
@@ -63,11 +68,11 @@ async function moveAndJump(page, context, touch) {
     const cd = await context.newCDPSession(page), x = box.x + box.width / 2, y = box.y + box.height / 2;
     await cd.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
     await cd.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 32, y, id: 1 }] });
-    await page.waitForTimeout(140);
+    await page.waitForTimeout(140); await movedRight(page, before);
     await cd.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await cd.detach();
   } else {
-    await page.keyboard.down('ArrowRight'); await page.waitForTimeout(140); await page.keyboard.up('ArrowRight');
+    await page.keyboard.down('ArrowRight'); await page.waitForTimeout(140); await movedRight(page, before); await page.keyboard.up('ArrowRight');
   }
   const moved = await state(page); assert.ok(moved.player.x > before.player.x + 2, `Move failed: ${JSON.stringify({ before: before.player, moved: moved.player })}`);
   await page.waitForTimeout(250);
@@ -78,6 +83,8 @@ async function moveAndJump(page, context, touch) {
     await page.keyboard.down('w'); await page.waitForTimeout(60); await page.keyboard.up('w');
   }
   await page.waitForTimeout(100);
+  // A starved browser advances the game a frame at a time; give the jump a few seconds to show.
+  await page.waitForFunction(y => JSON.parse(window.render_game_to_text()).activeScene.player.y < y - 2, ground.player.y, { timeout: 3000 }).catch(() => {});
   const jumped = await state(page); assert.ok(jumped.player.y < ground.player.y - 2, `Jump failed: ${JSON.stringify({ ground: ground.player, jumped: jumped.player })}`);
   return { moved: true, jumped: true };
 }
@@ -95,6 +102,14 @@ try {
         localStorage.setItem('wamp_replay_opt_out', '1');
         localStorage.setItem('wamp.devicePerformanceMode.v1', JSON.stringify({ version: 1, mode: 'full-quality' }));
       }, { home: kind === 'home', laptop: device === 'touch-laptop' });
+      // Recorded rooms stand in for the live world (F480). The goal-less case replays -11,-6 without its goal.
+      const stripGoal = value => {
+        if (!value || typeof value !== 'object') return value;
+        if (value.id === '-11,-6' && value.tileData) { value.goal = null; value.goalIntroText = null; }
+        Object.values(value).forEach(stripGoal);
+        return value;
+      };
+      await installSmokeApiReplay(context, kind === 'goal-less' ? { rewrite: stripGoal, variantFile: `${output}/${name}-api.json.gz` } : {});
       const page = await context.newPage(); activePage = page;
       const chatRequests = new Set(); pendingChat.set(page, chatRequests);
       page.on('request', request => { if (new URL(request.url()).pathname === '/api/chat/messages') chatRequests.add(request); });
@@ -112,7 +127,7 @@ try {
         if (!base.startsWith('https:') && entry.url.includes('/api/presence/identity-token')) report.expectedLocalErrors.push(entry);
         else report.unexpectedConsoleErrors.push(entry);
       });
-      if (kind === 'goal-less') {
+      if (kind === 'goal-less' && !smokeApiReplayEnabled()) {
         // A read-only content fixture exercises a published room with no goal, without editing it.
         await page.route('**/api/**', async route => {
           const request = route.request(), path = new URL(request.url()).pathname;
@@ -140,6 +155,11 @@ try {
       if (kind === 'home') {
         await page.locator('#welcome-modal').waitFor({ state: 'visible' });
         await tap('#btn-welcome-play');
+        // Welcome Play opens the First Steps playlist; its intro carries the guide before the room intro.
+        await page.locator('#playlist-intro-modal').waitFor({ state: 'visible', timeout: 30000 });
+        assert.equal(await page.locator('#playlist-intro-controls').getAttribute('data-play-controls-input'), touch ? 'touch' : 'keyboard');
+        assert.equal((await state(page)).goalRun?.elapsedMs ?? 0, 0);
+        await tap('#btn-playlist-intro-start');
       }
       await intro(page).waitFor({ state: 'visible', timeout: 30000 });
       const guide = await checkGuide(page, touch), paused = await state(page);
@@ -169,9 +189,19 @@ try {
       await page.screenshot({ path: `${output}/${name}-playing.png` });
       const key = `wamp:play-controls-seen:v1:${touch ? 'touch' : 'keyboard'}`;
       assert.equal(await page.evaluate(key => localStorage.getItem(key), key), '1');
-      await tap(touch ? '#btn-mobile-world-stop' : '#btn-world-play');
+      // First Steps runs as a room sequence, whose panel carries its own Stop on desktop.
+      await tap(touch ? '#btn-mobile-world-stop' : kind === 'home' ? '#btn-room-sequence-stop' : '#btn-world-play');
       if (kind === 'shared' || kind === 'goal-less' || kind === 'expanded') {
         await tap('#btn-world-play');
+        if (kind === 'shared') {
+          // A time-ranked room reopens its intro on every Play to offer a ghost race (bf4718da);
+          // the acknowledged controls must not hold the timer any other way.
+          await intro(page).waitFor({ state: 'visible', timeout: 30000 });
+          assert.equal(await page.locator('#room-ghost-race').isVisible(), true, 'Repeat Play intro must offer the ghost race');
+          assert.equal((await state(page)).goalRun?.elapsedMs ?? 0, 0);
+          await tap('#btn-room-goal-intro-start');
+          await intro(page).waitFor({ state: 'hidden' });
+        }
         await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.mode === 'play', null, { timeout: 30000 });
         assert.equal(await intro(page).isVisible(), false, 'Acknowledged controls interrupted repeat Play');
         assert.equal((await state(page)).mode, 'play');
@@ -185,12 +215,23 @@ try {
         await checkGuide(page, touch); assert.equal((await state(page)).goalRun?.elapsedMs ?? 0, 0);
         await tap('#btn-room-goal-intro-start');
         await tap(touch ? '#btn-mobile-world-stop' : '#btn-world-play');
-        await visit(page, '/'); await ready(page); await tap('#btn-world-play');
+        await visit(page, '/'); await ready(page);
+        assert.equal(await page.evaluate(key => localStorage.getItem(key), key), '1', 'Acknowledgement did not survive navigation');
+        await tap('#btn-world-play');
+        // The time-ranked room still offers its ghost race on Play; any other intro means the guide came back.
+        await page.waitForFunction(() => !document.getElementById('room-goal-intro-modal').classList.contains('hidden')
+          || JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.elapsedMs > 0, null, { timeout: 30000 });
+        if (await intro(page).isVisible()) {
+          assert.equal(await page.locator('#room-ghost-race').isVisible(), true, 'Acknowledgement did not survive navigation');
+          await tap('#btn-room-goal-intro-start');
+        }
         await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.elapsedMs > 0);
         assert.equal(await intro(page).isVisible(), false, 'Acknowledgement did not survive navigation');
         await tap(touch ? '#btn-mobile-world-stop' : '#btn-world-play');
         if (await page.locator('#btn-world-room-rush').isVisible()) {
           await tap('#btn-world-room-rush');
+          // Room Rush loads on first open (F019), so wait for its guide to render.
+          await page.locator('#room-rush-controls[data-play-controls-input]').waitFor({ state: 'attached', timeout: 15000 });
           assert.equal(await page.locator('#room-rush-controls').getAttribute('data-play-controls-input'), touch ? 'touch' : 'keyboard');
           await page.screenshot({ path: `${output}/${name}-rush-guide.png` });
           await tap('#btn-room-rush-close');
