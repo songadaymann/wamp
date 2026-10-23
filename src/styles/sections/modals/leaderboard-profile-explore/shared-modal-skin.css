@@ -429,8 +429,9 @@
   }
 
   /* One selected look for the tabs, filters, sorts and votes in these menus (F464): a heavier ink
-     frame, plus a tick on filters, sorts and votes, so the choice never rests on colour alone. It
-     stays on a disabled button, so a rating you can't change right now still shows. */
+     frame, plus a tick on filters, sorts and votes, so the choice never rests on colour alone. A
+     disabled one keeps the frame without the raised shadow, so a rating you can't change right now
+     still shows but doesn't look pressable. */
   #leaderboard-modal .leaderboard-tabs .bar-btn.active,
   #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active,
   #explore-modal .leaderboard-discover-filters .bar-btn.active,
@@ -438,11 +439,31 @@
     box-shadow: var(--shadow-3), inset 0 0 0 2px var(--wamp-ink);
   }
 
-  /* The empty alt text keeps the tick out of the button's name; screen readers already hear 'pressed'. */
+  #leaderboard-modal .leaderboard-tabs .bar-btn.active:disabled,
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active:disabled,
+  #explore-modal .leaderboard-discover-filters .bar-btn.active:disabled,
+  #profile-modal .profile-tabs .bar-btn.active:disabled {
+    box-shadow: inset 0 0 0 2px var(--wamp-ink);
+    transform: none;
+  }
+
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
+  #explore-modal .leaderboard-discover-filters .bar-btn {
+    position: relative;
+  }
+
+  /* The tick sits in the left padding, so choosing a button never changes its width or wrapping.
+     Its empty alt text keeps it out of the button's name; screen readers already hear 'pressed'. */
   #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active::before,
   #explore-modal .leaderboard-discover-filters .bar-btn.active::before {
-    content: '\2713\00a0';
-    content: '\2713\00a0' / '';
+    content: '\2713';
+    content: '\2713' / '';
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    font-size: 0.8em;
+    line-height: 1;
+    transform: translateY(-50%);
   }
 
   #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='easy:selected'] {

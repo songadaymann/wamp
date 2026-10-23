@@ -185,9 +185,10 @@
     cursor: pointer;
   }
 
-  /* Hover only: keyboard focus keeps the deep blue and takes the shared profile-name ring (F477). */
+  /* Hover turns the name green (5.1:1 on paper, 4.8:1 on cream). Keyboard focus keeps the deep
+     blue and takes the shared profile-name ring (F477). */
   #explore-modal .explore-room-builder-name:hover {
-    color: var(--wamp-sky);
+    color: var(--wamp-green);
   }
 
   #explore-modal .explore-room-featured-badge,

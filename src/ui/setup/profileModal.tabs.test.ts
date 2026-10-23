@@ -31,8 +31,9 @@ function fixture() {
   const win = Object.assign(new EventTarget(), { location: { pathname: '/' } });
   const profile = new ProfileModalController({} as never, {} as never, {} as never, doc as unknown as Document, win as unknown as Window, {} as never, {} as never);
   profile.init();
-  (profile as unknown as { renderTabs(): void }).renderTabs();
-  return { tab, get };
+  const state = profile as unknown as Record<string, unknown> & { renderTabs(): void };
+  state.renderTabs();
+  return { tab, get, state };
 }
 function press(target: Item, key: string) {
   const event = Object.assign(new Event('keydown', { cancelable: true }), { key });
@@ -66,5 +67,13 @@ describe('profile tabs are a tab list (F464)', () => {
     press(f.tab('stats'), 'Home');
     expect(f.tab('rooms').getAttribute('aria-selected')).toBe('true');
     expect(press(f.tab('rooms'), 'Enter').defaultPrevented).toBe(false);
+  });
+
+  it('gives the Tab stop to the first shown tab while a hidden Collection tab is still selected', () => {
+    const f = fixture();
+    Object.assign(f.state, { activeTab: 'collection', loading: true });
+    f.state.renderTabs();
+    expect(f.tab('collection').getAttribute('aria-selected')).toBe('true');
+    expect(TAB_ORDER.map(name => f.tab(name).getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1', '-1']);
   });
 });

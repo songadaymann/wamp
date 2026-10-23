@@ -149,3 +149,15 @@ describe('guest clear sharing', () => {
     expect(f.elements.get('run-share-status')?.textContent).not.toBe('Shared.'); f.controller.destroy();
   });
 });
+describe('post-run rating choices (F464)', () => {
+  it('marks the chosen stars and difficulty for screen readers as well as by look', async () => {
+    const f = fixture();
+    f.roomRepo.loadRoomLeaderboard.mockResolvedValue({ ...leaderboard, viewerRank: 1 });
+    await f.controller.openForSequence({ roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, roomVersion: 1 });
+    f.quality.dispatchEvent(new Event('click')); f.difficulty.dispatchEvent(new Event('click'));
+    for (const button of [f.quality, f.difficulty]) {
+      expect(vi.mocked(button.setAttribute).mock.calls.filter(([name]) => name === 'aria-pressed').at(-1)).toEqual(['aria-pressed', 'true']);
+      expect(button.classList.contains('active')).toBe(true);
+    }
+  });
+});

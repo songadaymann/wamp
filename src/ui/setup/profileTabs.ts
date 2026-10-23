@@ -2,6 +2,11 @@ import type { ProfileTabId } from './profileCollection';
 
 type TabButtons = Record<ProfileTabId, HTMLButtonElement | null>;
 
+/** The tabs on screen, in page order. */
+function shownTabs(button: HTMLElement): HTMLButtonElement[] {
+  return Array.from(button.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(.hidden)') ?? []);
+}
+
 /**
  * The profile tabs as a real tab list, so screen readers hear which tab is selected (F464). Like
  * Activity's tabs, Tab reaches only the selected tab, and the arrow keys, Home and End move between
@@ -21,7 +26,7 @@ export function setupProfileTabs(buttons: TabButtons, panels: Record<ProfileTabI
     button.addEventListener('click', () => select(tab));
     button.addEventListener('keydown', (event) => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      const shown = Array.from(button.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(.hidden)') ?? []);
+      const shown = shownTabs(button);
       const current = shown.indexOf(button);
       if (current < 0) return;
       event.preventDefault();
@@ -34,7 +39,14 @@ export function setupProfileTabs(buttons: TabButtons, panels: Record<ProfileTabI
   }
 }
 
-/** Only the selected tab is a Tab stop. */
+/**
+ * Only the selected tab is a Tab stop. While a profile loads, the selected tab can still be hidden
+ * (Collection, before the wallet check); then the first tab on screen takes the stop.
+ */
 export function setProfileTabStops(buttons: TabButtons, selected: ProfileTabId): void {
-  for (const [tab, button] of Object.entries(buttons)) button?.setAttribute('tabindex', tab === selected ? '0' : '-1');
+  const all = Object.values(buttons).filter((button): button is HTMLButtonElement => Boolean(button));
+  const shown = all.length ? shownTabs(all[0]) : [];
+  const chosen = buttons[selected];
+  const stop = chosen && shown.includes(chosen) ? chosen : shown[0];
+  for (const button of all) button.setAttribute('tabindex', button === stop ? '0' : '-1');
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { setLiveMessage } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn } from '../../auth/client';
 import {
   createCourseRepository,
@@ -990,12 +991,12 @@ export class RunRatingModalController {
 
     for (const button of this.elements.qualityButtons) {
       const value = Number.parseInt(button.dataset.qualityStars ?? '', 10);
-      button.classList.toggle('active', value === this.currentQualityStars);
+      setToggleState(button, value === this.currentQualityStars);
       button.disabled = this.submitting;
     }
     for (const button of this.elements.difficultyButtons) {
       const value = button.dataset.progressionDifficulty as ProgressionDifficulty | undefined;
-      button.classList.toggle('active', value === this.currentDifficultyChoice);
+      setToggleState(button, value === this.currentDifficultyChoice);
       button.disabled = this.submitting;
     }
 
