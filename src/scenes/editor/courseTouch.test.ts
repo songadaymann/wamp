@@ -6,9 +6,11 @@ function pointer(id: number, x = 40, y = 40, type = 'touchstart'): Phaser.Input.
   return { id, x, y, event: { type } } as Phaser.Input.Pointer;
 }
 
-function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend') {
+function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend', moveSelected = false) {
   let signature = 'initial';
+  const moveTool = { down: vi.fn(() => moveSelected), move: vi.fn(() => true), up: vi.fn(() => true), stopGesture: vi.fn(() => true) };
   const host = {
+    moveTool,
     signature: () => signature, classify: () => action,
     schedule: (delay: number, callback: () => void) => { const timer = setTimeout(callback, delay); return () => clearTimeout(timer); },
     begin: vi.fn(), beginBrush: vi.fn(), beginObjects: vi.fn(), move: vi.fn(), tap: vi.fn(),
@@ -95,5 +97,38 @@ describe('expanded editor touch ownership', () => {
     controller.move(pointer(1, 80));
     controller.up(pointer(1, 80));
     expect(host.finish).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), true);
+  });
+
+  it('lets Move drag with one finger and gives a second finger the pinch (F371)', () => {
+    const { controller, host } = harness('draw', true);
+    controller.down(pointer(1, 20));
+    controller.move(pointer(1, 30));
+    expect(host.moveTool.down).toHaveBeenCalledOnce();
+    expect(host.moveTool.move).toHaveBeenCalledOnce();
+    controller.down(pointer(2, 60));
+    // The drag stops (its selection stays) and nothing reaches the edit handlers.
+    expect(host.moveTool.stopGesture).toHaveBeenCalledOnce();
+    expect(host.moveTool.down).toHaveBeenCalledOnce();
+    controller.move(pointer(2, 90));
+    expect(host.pinch).toHaveBeenCalledWith(2, { x: 90, y: 80 }, 60, 40);
+    controller.up(pointer(2, 90));
+    controller.move(pointer(1, 10));
+    controller.up(pointer(1, 10));
+    expect(host.moveTool.move).toHaveBeenCalledOnce();
+    expect(host.moveTool.up).not.toHaveBeenCalled();
+    expect(host.begin).not.toHaveBeenCalled();
+    expect(host.finish).not.toHaveBeenCalled();
+    controller.down(pointer(3, 20));
+    controller.move(pointer(3, 50));
+    controller.up(pointer(3, 50), true);
+    expect(host.moveTool.up).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 3 }), true);
+  });
+
+  it('cancels a Move drag on a native interruption without releasing it', () => {
+    const { controller, host } = harness('draw', true);
+    controller.down(pointer(1));
+    controller.up(pointer(1, 40, 40, 'touchcancel'));
+    expect(host.moveTool.stopGesture).toHaveBeenCalledOnce();
+    expect(host.moveTool.up).not.toHaveBeenCalled();
   });
 });

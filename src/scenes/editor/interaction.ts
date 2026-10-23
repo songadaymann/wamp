@@ -138,7 +138,7 @@ export class EditorInteractionController {
     const timer = this.scene.time.delayedCall(delay, callback);
     return () => timer.remove(false);
   });
-  private touchAction: 'tiles' | 'objects' | 'shape' | 'tap' | 'bend' | null = null;
+  private touchAction: 'tiles' | 'objects' | 'shape' | 'tap' | 'bend' | 'move' | null = null;
   private touchStartTile: TilePoint | null = null;
   private touchToolKey = '';
   private pinchDistance = 0;
@@ -631,8 +631,8 @@ export class EditorInteractionController {
   // they finish the stroke, shape or pan exactly like a release over the canvas.
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
     if (roomVideoPointerUp(this.scene)) return;
-    if (this.host.objectMove?.up(pointer, outside)) return;
-    if (this.handleTouchPointerUp(pointer)) {
+    if (!this.isTouchPointer(pointer) && this.host.objectMove?.up(pointer, outside)) return;
+    if (this.handleTouchPointerUp(pointer, outside)) {
       return;
     }
 
@@ -705,8 +705,9 @@ export class EditorInteractionController {
       ) {
         return;
       }
+      // Touch reaches Move through the touch gesture, so a second finger pinches (F371).
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
-      else if (this.host.objectMove?.down(pointer)) return;
+      else if (!this.isTouchPointer(pointer) && this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
       }
@@ -824,7 +825,7 @@ export class EditorInteractionController {
       if (roomVideoPointerMove(this.scene, pointer)) {
         return;
       }
-      if (this.host.objectMove?.move(pointer)) return;
+      if (!this.isTouchPointer(pointer) && this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;
       }
@@ -1176,6 +1177,12 @@ export class EditorInteractionController {
       return true;
     }
     if (action !== 'edit') return true;
+    // Move drags with one finger and keeps its selection when a second finger pinches.
+    if (this.host.objectMove?.down(pointer)) {
+      this.touchAction = 'move';
+      this.touchToolKey = editorTouchToolKey();
+      return true;
+    }
 
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const tile = { x: Math.floor(world.x / TILE_SIZE), y: Math.floor(world.y / TILE_SIZE) };
@@ -1228,6 +1235,10 @@ export class EditorInteractionController {
       return true;
     }
     if (action !== 'edit' || !this.touchAction) return true;
+    if (this.touchAction === 'move') {
+      this.host.objectMove?.move(pointer);
+      return true;
+    }
     if (this.touchAction === 'bend') {
       this.updatePathBendPreview(pointer);
       return true;
@@ -1255,7 +1266,7 @@ export class EditorInteractionController {
     return true;
   }
 
-  private handleTouchPointerUp(pointer: Phaser.Input.Pointer): boolean {
+  private handleTouchPointerUp(pointer: Phaser.Input.Pointer, outside = false): boolean {
     if (!this.isTouchPointer(pointer)) return false;
     this.validateTouchEdit();
     const result = this.touchGesture.up(pointer);
@@ -1273,6 +1284,10 @@ export class EditorInteractionController {
     const action = this.touchAction;
     this.touchAction = null;
     this.touchStartTile = null;
+    if (action === 'move') {
+      this.host.objectMove?.up(pointer, outside);
+      return true;
+    }
     if (action === 'tap' || (action === 'objects' && !this.isDrawing)) {
       if (result === 'tap') this.applyTouchTap(pointer);
       return true;
@@ -1326,6 +1341,7 @@ export class EditorInteractionController {
 
   /** Pinch and lifecycle cancellation never consume a committed history entry. */
   cancelTouchEdit(): void {
+    if (this.touchAction === 'move') this.host.objectMove?.stopGesture();
     this.touchCandidate.cancel();
     if (this.touchAction === 'tiles' || this.touchAction === 'shape') this.host.cancelTileBatch();
     if (this.touchAction === 'objects' && this.isDrawing) this.host.cancelObjectBatch();
