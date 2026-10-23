@@ -7,7 +7,7 @@ vi.mock('phaser', () => ({ default: { Math: { Distance: { Between: vi.fn(() => 1
 vi.mock('../../ui/deviceLayout', () => ({ getDeviceLayoutState: () => ({ coarsePointer: false }) }));
 vi.mock('../../settings/userSettings', () => ({ getGameSettings: () => ({ panningStyle: 'option-drag' }) }));
 const modal = vi.hoisted(() => ({ open: false }));
-vi.mock('../../ui/modalState', () => ({ hasBlockingModalOpen: () => modal.open }));
+vi.mock('../../ui/modalState', () => ({ hasBlockingModalOpen: () => modal.open, isInWalletWindow: () => false }));
 
 describe('overworld fit shortcut', () => {
   it('uses 0 instead of F and removes the listener on destroy', () => {
