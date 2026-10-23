@@ -110,7 +110,8 @@ export async function loadRunFinishOrder(
 
 /** SET clause numbering a finalize in commit order (writes to one D1 database are serialized). */
 export function nextFinalizeSeqSql(table: 'room_runs' | 'course_runs' | 'expanded_room_runs'): string {
-  return `finalize_seq = (SELECT COALESCE(MAX(finalize_seq), 0) + 1 FROM ${table})`;
+  // The WHERE matches the partial unique index, so this reads one index entry, not the table.
+  return `finalize_seq = (SELECT COALESCE(MAX(finalize_seq), 0) + 1 FROM ${table} WHERE finalize_seq IS NOT NULL)`;
 }
 
 /**

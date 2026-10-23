@@ -107,7 +107,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
         // Only a still-active row is finalized, so an overlapping resend cannot finalize it twice, and
         // each finalize is numbered in commit order for first-clear checks (F351).
         expect(write.sql).toMatch(/WHERE attempt_id = \? AND result = 'active'/);
-        expect(write.sql).toMatch(/finalize_seq = \(SELECT COALESCE\(MAX\(finalize_seq\), 0\) \+ 1 FROM \w+_runs\)/);
+        expect(write.sql).toMatch(/finalize_seq = \(SELECT COALESCE\(MAX\(finalize_seq\), 0\) \+ 1 FROM \w+_runs WHERE finalize_seq IS NOT NULL\)/);
         expect(write.values.slice(8, 13)).toEqual([status, reason, null, 1000, 'attempt']);
         expect(write.values.slice(5, 8)).toEqual(scenario === 'passed' ? [3, 4, 5] : scenario === 'not_required' ? [0, 0, 0] : [8, 7, 6]);
         expect(write.values[0]).toBe('2026-09-08T12:00:01.000Z');
