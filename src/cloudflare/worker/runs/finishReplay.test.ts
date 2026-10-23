@@ -103,7 +103,10 @@ const awards = () => ({
   finalized: count(`SELECT COUNT(*) AS n FROM point_events WHERE user_id = 'player' AND event_type = 'run_finalized'`),
 });
 const once = { firstClear: 1, dailyClear: 1, builder: 1, finalized: 1 };
-const settledMarkers = () => count(`SELECT COUNT(*) AS n FROM point_events WHERE event_type = 'run_settled'`);
+const settledMarkers = () => count(`SELECT COUNT(*) AS n FROM run_settlements WHERE attempt_kind = 'room'`);
+/** The parts of migration 0074 that can run again: the table, its backfill and the cleanup. */
+const settlementBackfill = () => readFileSync(new URL('../../../../migrations/0074_run_settlements.sql', import.meta.url), 'utf8')
+  .split('-- The order finalizes commit in')[0];
 const stored = (attemptId: string, column: string) => (sqlite.prepare(`SELECT ${column} AS v FROM room_runs WHERE attempt_id = ?`).get(attemptId) as { v: string }).v;
 const finalizePoints = (attemptId: string) => sqlite.prepare(`SELECT points, created_at, json_extract(breakdown_json, '$.awardMode') AS mode
   FROM point_events WHERE event_type = 'run_finalized' AND source_key = ?`).get(attemptId) as { points: number; created_at: string; mode: string };
@@ -202,6 +205,59 @@ describe('resent ranked finishes (F351)', () => {
     vi.setSystemTime(NOW.getTime() + 120_000);
     expect(await finish(earlier.attemptId, earlier.body)).toMatchObject({ status: 204 });
     expect(finalizePoints(earlier.attemptId).mode).toBe('first_completion');
+    expect(awards().firstClear).toBe(1);
+  });
+
+  it('replays a finish older than a day without re-running its rewards', async () => {
+    const { attemptId, body } = await startRun();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    database.failAfterFinalize = true;
+    await finish(attemptId, body);
+    vi.setSystemTime(NOW.getTime() + 25 * 60 * 60 * 1000);
+    const resent: Promise<unknown>[] = [];
+    expect(await finish(attemptId, body, resent)).toMatchObject({ status: 204 });
+    expect(resent).toHaveLength(0);
+    expect(awards()).toEqual({ firstClear: 0, dailyClear: 0, builder: 0, finalized: 0 });
+    expect(settledMarkers()).toBe(0);
+  });
+
+  it('counts a finish rewarded before run_settlements existed as settled', async () => {
+    const { attemptId, body } = await startRun();
+    await finish(attemptId, body);
+    // As production stood before migration 0074: rewarded (run_finalized), no settlement row.
+    sqlite.prepare('DELETE FROM run_settlements').run();
+    sqlite.prepare("DELETE FROM pxp_events WHERE event_type = 'weekly_play'").run();
+    sqlite.exec(settlementBackfill());
+    expect(settledMarkers()).toBe(1);
+    const resent: Promise<unknown>[] = [];
+    expect(await finish(attemptId, body, resent)).toMatchObject({ status: 204 });
+    expect(resent).toHaveLength(0);
+    // Nothing re-ran: the award removed above stays missing.
+    expect(count(`SELECT COUNT(*) AS n FROM pxp_events WHERE event_type = 'weekly_play'`)).toBe(0);
+  });
+
+  it('decides first clear by commit order when a slower finish committed after a later one', async () => {
+    const slow = await startRun();
+    const fast = await startRun(20_000);
+    // The slow finish (earlier finish time) is still verifying while the fast one commits and settles.
+    let release: (() => void) | null = null;
+    const held = new Promise<void>((ready) => {
+      database.beforeBatch = async (sql) => {
+        if (release || !sql.some((statement) => statement.includes('UPDATE room_runs'))) return;
+        await new Promise<void>((resolve) => { release = resolve; ready(); });
+      };
+    });
+    vi.setSystemTime(NOW.getTime() + 9_000);
+    const slowFinish = finish(slow.attemptId, slow.body);
+    await held;
+    vi.setSystemTime(NOW.getTime() + 29_000);
+    expect(await finish(fast.attemptId, fast.body)).toMatchObject({ status: 204 });
+    release!();
+    expect(await slowFinish).toMatchObject({ status: 204 });
+    expect(stored(slow.attemptId, 'finished_at') < stored(fast.attemptId, 'finished_at')).toBe(true);
+    // Only one of the two gets first-completion points: the one that committed first.
+    expect(finalizePoints(fast.attemptId).mode).toBe('first_completion');
+    expect(finalizePoints(slow.attemptId).mode).not.toBe('first_completion');
     expect(awards().firstClear).toBe(1);
   });
 

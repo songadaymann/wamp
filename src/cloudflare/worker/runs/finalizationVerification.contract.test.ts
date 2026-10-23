@@ -100,14 +100,14 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       if (scenario === 'timeout') mocks.verify.mockResolvedValue({ status: 'timeout', reason: 'trace_timeout', derivedMetrics, summary: { elapsed: true } });
       const { writes, batch, error } = await finish();
       expect(batch).toHaveBeenCalledTimes(1);
-      // Each route finalizes its own row and the other copy of an Expanded Room run (F351).
-      expect(writes.map(({ sql }) => sql.match(/UPDATE (\w+)/)?.[1])).toEqual(kind === 'expanded' ? ['expanded_room_runs', 'course_runs']
-        : kind === 'course' ? ['course_runs', 'expanded_room_runs'] : ['room_runs']);
+      expect(writes.map(({ sql }) => sql.match(/UPDATE (\w+)/)?.[1])).toEqual(kind === 'expanded' ? ['expanded_room_runs', 'course_runs'] : [`${kind}_runs`]);
       const status = scenario === 'relaxed' ? 'not_required' : scenario === 'missing_trace' ? 'failed' : scenario;
       const reason = scenario === 'failed' ? 'trace_goal' : scenario === 'missing_trace' ? 'missing_trace' : scenario === 'timeout' ? 'trace_timeout' : null;
       for (const write of writes) {
-        // Only a still-active row is finalized, so an overlapping resend cannot finalize it twice (F351).
+        // Only a still-active row is finalized, so an overlapping resend cannot finalize it twice, and
+        // each finalize is numbered in commit order for first-clear checks (F351).
         expect(write.sql).toMatch(/WHERE attempt_id = \? AND result = 'active'/);
+        expect(write.sql).toMatch(/finalize_seq = \(SELECT COALESCE\(MAX\(finalize_seq\), 0\) \+ 1 FROM \w+_runs\)/);
         expect(write.values.slice(8, 13)).toEqual([status, reason, null, 1000, 'attempt']);
         expect(write.values.slice(5, 8)).toEqual(scenario === 'passed' ? [3, 4, 5] : scenario === 'not_required' ? [0, 0, 0] : [8, 7, 6]);
         expect(write.values[0]).toBe('2026-09-08T12:00:01.000Z');
@@ -195,16 +195,5 @@ describe('Expanded Room course_runs copy (F351)', () => {
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(db.writes[0].sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM course_runs\s+WHERE course_runs.attempt_id = expanded_room_runs.attempt_id AND course_runs.result <> 'active'/);
     expect(mocks.audit).not.toHaveBeenCalled();
-  });
-
-  it('closes the expanded_room_runs row when a course finish of its copy wins', async () => {
-    const db = database();
-    // The fixture stops at the post-commit reload; the finalize batch is what this pins.
-    await handleCourseRunFinish(new Request('https://example.test/finish'), db.env, 'attempt').catch(() => {});
-    const mirror = db.writes[1];
-    // Guarded to a still-active row, and only when the copy now carries this request's finish time.
-    expect(mirror.sql).toMatch(/UPDATE expanded_room_runs[\s\S]*WHERE attempt_id = \? AND result = 'active'[\s\S]*course_runs\.finished_at = \?/);
-    expect(mirror.values.slice(-2)).toEqual(['attempt', '2026-09-08T12:00:01.000Z']);
-    expect(mirror.values.slice(0, 13)).toEqual(db.writes[0].values);
   });
 });

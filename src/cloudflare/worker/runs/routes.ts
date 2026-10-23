@@ -7,7 +7,8 @@ import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
 import {
-  assertReplayableRunFinish, finalizeStatementWon, runFinishSettled, runPastDisconnect, runVerificationError,
+  assertReplayableRunFinish, finalizeStatementWon, loadRunFinishOrder, nextFinalizeSeqSql, recordRunSettlement,
+  runNeedsResettle, runPastDisconnect, runVerificationError,
   type RunFinishMessages,
 } from './finishReplay';
 import { deathLocationsJson } from '../insights/deathLocations';
@@ -54,7 +55,6 @@ import {
   getRunMetricCapsForSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
   previewRunFinalizePoints,
-  recordRunSettled,
   upsertUserStats,
 } from './points';
 import {
@@ -226,7 +226,7 @@ export async function handleRunFinish(
   const resend = existing.result !== 'active';
   if (resend) {
     assertReplayableRunFinish(existing, body.result, ROOM_RUN_FINISH_MESSAGES);
-    if (await runFinishSettled(env, attemptId)) return noContentResponse(request);
+    if (!(await runNeedsResettle(env, 'room', attemptId, existing.finishedAt))) return noContentResponse(request);
   }
 
   const roomRecord = await loadRoomRankingRecord(env, existing.roomId, existing.roomCoordinates, {
@@ -242,14 +242,14 @@ export async function handleRunFinish(
   const settlement = { attemptId, userId: auth.user.id, goal: snapshot.goal, roomRecord,
     rewardScope: resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id) };
   // An earlier finish committed, then threw or was cut off before its rewards finished.
-  const settleResend = async (): Promise<Response> => {
-    if (!(await runFinishSettled(env, attemptId))) {
+  const settleResend = async (finishedAt: string | null): Promise<Response> => {
+    if (await runNeedsResettle(env, 'room', attemptId, finishedAt)) {
       await runPastDisconnect(executionContext, attemptId,
         settleRoomRunFinish(env, executionContext, { ...settlement, completedGhost: null }));
     }
     return noContentResponse(request);
   };
-  if (resend) return settleResend();
+  if (resend) return settleResend(existing.finishedAt);
 
   const metricCaps = getRunMetricCapsForSnapshot(snapshot);
   const clampedMetrics = clampRunMetricsToSnapshot(snapshot, {
@@ -448,7 +448,8 @@ export async function handleRunFinish(
           verification_status = ?,
           verification_reason = ?,
           insight_deaths_json = ?,
-          insight_play_ms = ?
+          insight_play_ms = ?,
+          ${nextFinalizeSeqSql('room_runs')}
         WHERE attempt_id = ? AND result = 'active'
         RETURNING attempt_id
       `
@@ -473,8 +474,9 @@ export async function handleRunFinish(
   ]);
   if (!finalizeStatementWon(finalized)) {
     // A resend raced this request and finalized first: replay its answer. Its awards are keyed.
-    assertReplayableRunFinish(await loadRoomRunByAttemptId(env, attemptId), body.result, ROOM_RUN_FINISH_MESSAGES);
-    return settleResend();
+    const stored = await loadRoomRunByAttemptId(env, attemptId);
+    assertReplayableRunFinish(stored, body.result, ROOM_RUN_FINISH_MESSAGES);
+    return settleResend(stored?.finishedAt ?? null);
   }
 
   const verificationError = runVerificationError(verificationStatus, verificationReason, ROOM_RUN_FINISH_MESSAGES);
@@ -507,8 +509,8 @@ interface RoomRunSettlement {
 
 /**
  * Everything after the finalize commit: discovery, reward flags, the PB ghost, the daily clear and
- * the deferred rewards. Every award is keyed, so a resend runs this again when an earlier try threw
- * or was cut off after the commit. The run_finalized point event goes last, as the marker (F351).
+ * the deferred rewards. Every award is keyed, so a recent resend runs this again when an earlier try
+ * threw or was cut off after the commit; its run_settlements row goes last, as the marker (F351).
  */
 async function settleRoomRunFinish(
   env: Env,
@@ -533,7 +535,7 @@ async function settleRoomRunFinish(
     const isBetterThan = (best: RoomRunRecord | null) => best === null
       || sortCompletedRunsForLeaderboard([finalizedRun, best], goal)[0]?.attemptId === finalizedRun.attemptId;
     // Only clears stored before this one count, so a late resend and a later clear agree on "first".
-    const order = { finishedAt, attemptId };
+    const order = await loadRunFinishOrder(env, 'room_runs', attemptId, finishedAt);
     const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
       env,
       userId,
@@ -593,8 +595,8 @@ async function settleRoomRunFinish(
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
     await upsertUserStats(env, userId);
-    // Last: runFinishSettled reads this marker as "every reward above finished".
-    await recordRunSettled(env, finalizedRun, finishedAt);
+    // Last: runNeedsResettle reads this row as "every reward above finished".
+    await recordRunSettlement(env, 'room', attemptId);
   });
 }
 

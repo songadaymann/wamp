@@ -1,6 +1,7 @@
 import type { RunResult } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
+import type { RunFinishOrder } from './points';
 import type { RunVerificationStatus } from './verification';
 
 export interface RunFinishMessages {
@@ -57,15 +58,59 @@ export function finalizeStatementWon(result: { results?: unknown[]; meta?: { cha
   return Array.isArray(result?.results) ? result.results.length > 0 : (result?.meta?.changes ?? 0) > 0;
 }
 
-/**
- * A finish's deferred rewards write a 0-point run_settled event after everything else, so its
- * presence means they all finished. Without it, a resend runs the settle step again; every award
- * is keyed and adds to the totals with its own event, so a re-run only fills in what is missing.
- */
-export async function runFinishSettled(env: Env, attemptId: string): Promise<boolean> {
-  const row = await env.DB.prepare(`SELECT 1 AS settled FROM point_events
-    WHERE event_type = 'run_settled' AND source_key = ? LIMIT 1`).bind(attemptId).first<{ settled: number }>();
+export type RunFinishKind = 'room' | 'course' | 'expanded_room';
+
+/** A resend re-runs the reward step only for a finish this recent; older ones just replay (F351). */
+export const RUN_RESETTLE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Whether this finish's reward step wrote its run_settlements row (its last step). */
+export async function runFinishSettled(env: Env, kind: RunFinishKind, attemptId: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 AS settled FROM run_settlements WHERE attempt_kind = ? AND attempt_id = ? LIMIT 1')
+    .bind(kind, attemptId).first<{ settled: number }>();
   return Boolean(row);
+}
+
+/**
+ * Whether a resend should re-run the reward step: the finish is recent and its reward step never
+ * finished. Every award is keyed and adds to the totals with its own event, so a re-run only fills
+ * in what is missing. Older finishes (including every one before this table) replay their outcome:
+ * re-judging rank XP against today's board would reward the wrong thing.
+ */
+export async function runNeedsResettle(
+  env: Env,
+  kind: RunFinishKind,
+  attemptId: string,
+  finishedAt: string | null,
+): Promise<boolean> {
+  const finished = finishedAt ? Date.parse(finishedAt) : Number.NaN;
+  if (!Number.isFinite(finished) || Date.now() - finished > RUN_RESETTLE_WINDOW_MS) return false;
+  return !(await runFinishSettled(env, kind, attemptId));
+}
+
+/** The reward step's last write: every award above it finished. */
+export async function recordRunSettlement(env: Env, kind: RunFinishKind, attemptId: string): Promise<void> {
+  await env.DB.batch([env.DB.prepare(`INSERT OR IGNORE INTO run_settlements (attempt_kind, attempt_id, settled_at)
+    VALUES (?, ?, ?)`).bind(kind, attemptId, new Date().toISOString())]);
+}
+
+/**
+ * This run's place in commit order, for first-clear and personal-best checks. finalize_seq is
+ * numbered inside the finalize batch; the stored finish time is taken before verification.
+ */
+export async function loadRunFinishOrder(
+  env: Env,
+  table: 'room_runs' | 'course_runs' | 'expanded_room_runs',
+  attemptId: string,
+  finishedAt: string,
+): Promise<RunFinishOrder> {
+  const row = await env.DB.prepare(`SELECT finalize_seq FROM ${table} WHERE attempt_id = ? LIMIT 1`)
+    .bind(attemptId).first<{ finalize_seq: number | null }>();
+  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt, attemptId };
+}
+
+/** SET clause numbering a finalize in commit order (writes to one D1 database are serialized). */
+export function nextFinalizeSeqSql(table: 'room_runs' | 'course_runs' | 'expanded_room_runs'): string {
+  return `finalize_seq = (SELECT COALESCE(MAX(finalize_seq), 0) + 1 FROM ${table})`;
 }
 
 /**

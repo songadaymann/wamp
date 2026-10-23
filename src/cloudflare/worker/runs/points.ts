@@ -14,8 +14,6 @@ export type PointEventType =
   | 'course_first_publish'
   | 'course_publish_update'
   | 'run_finalized'
-  /** 0 points, written last by a finish's deferred rewards: a resend re-settles only without it (F351). */
-  | 'run_settled'
   | 'room_creator_completion'
   | 'course_creator_completion';
 
@@ -103,17 +101,6 @@ export async function awardRunFinalizePoints(
     points: preview.points,
     breakdown: preview.breakdown,
     createdAt,
-  });
-}
-
-/** The last step of a finish's deferred rewards; its presence means they all finished (F351). */
-export async function recordRunSettled(
-  env: Env,
-  run: Pick<RoomRunRecord | CourseRunRecord, 'attemptId' | 'userId'>,
-  createdAt: string,
-): Promise<void> {
-  await recordPointEvent(env, {
-    userId: run.userId, eventType: 'run_settled', sourceKey: run.attemptId, points: 0, breakdown: {}, createdAt,
   });
 }
 
@@ -312,7 +299,8 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        finalize_seq
       FROM room_runs
       WHERE user_id = ?
         AND room_id = ?
@@ -359,18 +347,23 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   return runs[0] ?? null;
 }
 
-/** A run's place in the stored finish order: finish time, then attempt id. */
-export interface RunFinishOrder { finishedAt: string; attemptId: string }
+/** A run's place in commit order: its finalize_seq, else (before numbering) finish time and id. */
+export interface RunFinishOrder { finalizeSeq: number | null; finishedAt: string; attemptId: string }
 
 /**
- * Whether a run finished before `order`. Reward flags compare against earlier runs only, so a late
- * resend of an earlier clear and a later clear agree on which one was first (F351).
+ * Whether a run was finalized before `order`. Reward flags compare against earlier runs only, so a
+ * late resend of an earlier clear, a later clear, and two clears committing out of their finish-time
+ * order all agree on which one was first (F351). Unnumbered runs predate numbering, so they are
+ * earlier than every numbered run.
  */
 export function finishedEarlier(
-  row: { finished_at: string | null; attempt_id: string },
+  row: { finalize_seq?: number | null; finished_at: string | null; attempt_id: string },
   order: RunFinishOrder | null,
 ): boolean {
-  if (!order || row.finished_at === null) return true;
+  if (!order) return true;
+  const rowSeq = row.finalize_seq ?? null;
+  if (order.finalizeSeq !== null) return rowSeq === null || rowSeq < order.finalizeSeq;
+  if (rowSeq !== null || row.finished_at === null) return rowSeq === null;
   return row.finished_at < order.finishedAt
     || (row.finished_at === order.finishedAt && row.attempt_id < order.attemptId);
 }

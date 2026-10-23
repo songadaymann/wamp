@@ -60,16 +60,20 @@ const finishRequest = () => new Request('https://api.wamp.land/finish', { method
 const resendExpanded = () => handleExpandedRoomRunFinish(finishRequest(), f.env, ATTEMPT).catch((error: unknown) => error);
 const count = (sql: string) => Number((f.sqlite.prepare(sql).get() as { n: number }).n);
 const events = (type: string) => count(`SELECT COUNT(*) AS n FROM point_events WHERE event_type = '${type}' AND source_key = '${ATTEMPT}'`);
+const settled = (kind = 'expanded_room') =>
+  count(`SELECT COUNT(*) AS n FROM run_settlements WHERE attempt_kind = '${kind}' AND attempt_id = '${ATTEMPT}'`);
+const discoveryKeys = () => (f.sqlite.prepare("SELECT target_key FROM discovery_run_players WHERE user_id = 'p1' ORDER BY target_key").all() as
+  { target_key: string }[]).map((row) => row.target_key);
 const firstClears = () => count(`SELECT COUNT(*) AS n FROM pxp_events WHERE user_id = 'p1' AND event_type = 'course_clear_first'`);
 
 describe('Expanded Room finish resends (F351)', () => {
   it('re-settles a committed clear whose rewards never finished, once', async () => {
     seed('completed');
     expect(await resendExpanded()).toMatchObject({ status: 204 });
-    expect({ finalized: events('run_finalized'), settled: events('run_settled'), firstClears: firstClears() })
+    expect({ finalized: events('run_finalized'), settled: settled(), firstClears: firstClears() })
       .toEqual({ finalized: 1, settled: 1, firstClears: 1 });
     expect(await resendExpanded()).toMatchObject({ status: 204 });
-    expect({ finalized: events('run_finalized'), settled: events('run_settled'), firstClears: firstClears() })
+    expect({ finalized: events('run_finalized'), settled: settled(), firstClears: firstClears() })
       .toEqual({ finalized: 1, settled: 1, firstClears: 1 });
     const total = f.sqlite.prepare(`SELECT total_pxp AS total, (SELECT SUM(amount) FROM pxp_events WHERE user_id = 'p1') AS events
       FROM user_progress WHERE user_id = 'p1'`).get() as { total: number; events: number };
@@ -79,7 +83,7 @@ describe('Expanded Room finish resends (F351)', () => {
   it('never re-awards a run while invalidation is between its two batches (F205)', async () => {
     seed('completed');
     expect(await resendExpanded()).toMatchObject({ status: 204 });
-    expect(events('run_settled')).toBe(1);
+    expect(settled()).toBe(1);
 
     // Run the resend exactly when the course_runs copy and the markers are gone but the
     // expanded_room_runs row is not yet.
@@ -98,23 +102,27 @@ describe('Expanded Room finish resends (F351)', () => {
     expect((await handleAdminSuspiciousInvalidate(invalidate, f.env, 'p1')).status).toBe(200);
 
     expect(inWindow).toMatchObject({ status: 404 });
-    expect({ finalized: events('run_finalized'), settled: events('run_settled') }).toEqual({ finalized: 0, settled: 0 });
+    expect({ finalized: events('run_finalized'), settled: settled() }).toEqual({ finalized: 0, settled: 0 });
     expect(count(`SELECT COUNT(*) AS n FROM expanded_room_runs WHERE attempt_id = '${ATTEMPT}'`)).toBe(0);
   });
 
-  it('closes the expanded_room_runs row when a course finish of its copy wins, and awards once', async () => {
+  it('hands a course-route finish of an Expanded Room copy to that route, so it settles once from one history', async () => {
     seed('active');
     vi.setSystemTime(new Date(Date.parse(STARTED) + 9_000));
     expect(await handleCourseRunFinish(finishRequest(), f.env, ATTEMPT)).toMatchObject({ status: 204 });
     const rows = f.sqlite.prepare(`SELECT c.result AS copy, c.finished_at AS copyAt, e.result AS expanded, e.finished_at AS expandedAt
       FROM course_runs c JOIN expanded_room_runs e ON e.legacy_course_attempt_id = c.attempt_id WHERE c.attempt_id = ?`).get(ATTEMPT) as Record<string, string>;
     expect(rows).toEqual({ copy: 'completed', copyAt: rows.copyAt, expanded: 'completed', expandedAt: rows.copyAt });
-    expect({ finalized: events('run_finalized'), settled: events('run_settled'), firstClears: firstClears() })
-      .toEqual({ finalized: 1, settled: 1, firstClears: 1 });
+    expect({ finalized: events('run_finalized'), settled: settled(), courseSettled: settled('course'), firstClears: firstClears() })
+      .toEqual({ finalized: 1, settled: 1, courseSettled: 0, firstClears: 1 });
+    // Settled as the Expanded Room run only: one discovery key, not the legacy course's too.
+    expect(discoveryKeys()).toEqual(['expanded_room:expanded']);
 
-    // The Expanded Room route now sees a settled, finished run: a replay, not a second award.
+    // A resend through either route replays the outcome.
+    expect(await handleCourseRunFinish(finishRequest(), f.env, ATTEMPT)).toMatchObject({ status: 204 });
     expect(await resendExpanded()).toMatchObject({ status: 204 });
-    expect({ finalized: events('run_finalized'), settled: events('run_settled'), firstClears: firstClears() })
-      .toEqual({ finalized: 1, settled: 1, firstClears: 1 });
+    expect({ finalized: events('run_finalized'), settled: settled(), courseSettled: settled('course'), firstClears: firstClears() })
+      .toEqual({ finalized: 1, settled: 1, courseSettled: 0, firstClears: 1 });
+    expect(discoveryKeys()).toEqual(['expanded_room:expanded']);
   });
 });
