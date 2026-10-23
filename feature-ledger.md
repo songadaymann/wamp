@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 4: speed (first part)
+
+Round-2 lane. PRs #302 F301, #303 F306, #304 F363, #308 F305 (client), and #305 F329, #306 F331, #307 F330 (API Worker `4d03ca81`, no migration; F330 is forward-only). Every branch adversarially reviewed. F302 and F332 are still in progress, and F333 waits on F351. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.
+
 ## 2026-10-22 — Round 2 step 3: phone play
 
 Round-2 lane. PRs #295 F354, #296 F358, #297 F304/F307/F352/F357, #299 F350, #300 F355, #301 F351 (migration 0074 `run_settlements`, API Worker `d1bf600c`), plus #298 muting every test browser at Jonathan's request. Every branch adversarially reviewed; F351 took four rounds. Receipt: docs/review/wamp-round2-phone-play-2026-10-22.md.

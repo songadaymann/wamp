@@ -2080,6 +2080,8 @@ Expected cost per lookup drops to well under 1 µs. Add a unit test that calls g
   - Optionally keep a gid→profile array per room.
 - **confirmed.** No correction.
 
+**2026-10-23 delivered.** [PR #302](https://github.com/songadaymann/wamp/pull/302). Custom tile lookups clean a room's custom tile list once and reuse it, keyed on that list; the editor and migrations replace the list on every change, so edits show at once. A test checks 25,600 lookups clean each tile exactly once, with results identical to a fresh clean-up. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
+
 ### F305: Sword Hunters and police re-search every possible route on every frame while chasing you
 
 - **Area:** Performance: frame rate and smoothness (reviewer: Runtime performance: frame rate, GC and memory)
@@ -2135,6 +2137,8 @@ Fix plan: (1) memoize the classic decision per enemy keyed on graph.cacheKey + c
   - Add a new equivalence test that uses the old implementation as the oracle. There are no existing tests for decideSwordsmanTraversal.
   - Treat memoization as optional. Never cache the whole decision, because its direction, targetX and jump velocities depend on live positions. Cache at most the chosen first edge and rebuild the decision each frame, accepting a behaviour change that needs playtesting.
   - Reusing the blocked-edge Set is a trivial extra.
+
+**2026-10-23 delivered.** [PR #308](https://github.com/songadaymann/wamp/pull/308). The classic chase planner lists an enemy's 1–3 jump routes only when it reaches another node, an edge gets blocked or the room changes, and scores those cached routes every frame against live positions with the same order and tie-break, so it picks the same route. A dense 39-ledge room drops from 0.5–1 ms to about 0.008 ms a frame; cached lists share one 64-entry cap (about 1.5 MB at most). 24,000 random cases across 60 rooms matched main's planner. Reviewed adversarially before merging; `npm run check` (645 files, 5,549 tests) and the muted default smoke (68/68) passed with F302 on top. [Receipt](wamp-round2-speed-2026-10-23.md).
 
 ### F302: Coin-collecting Sword Hunters can freeze the game for a moment when they first plan, and re-plan every frame when coins are out of reach
 
@@ -2242,6 +2246,8 @@ Fix plan: keep a frame signature (tile bounds + level + zoom bucket + an availab
      - the timers for pending target-LOD waiters, level commits and fallback.
   
   A safer first step, small effort: count ready targets from the desired plan, make recordFrame and metrics.update return void, drop the default-argument Set, compute isCameraTargetLodReady once per frame, and limit play mode to 4 Hz or less unless tile bounds change.
+
+**2026-10-23 delivered.** [PR #303](https://github.com/songadaymann/wamp/pull/303). The world-map tile planner reuses its plans while the visible tiles and their loaded state are unchanged (`displayPlanCache.ts`); display sync and repair still run every frame. A still scene goes from 241 plan rebuilds to 0 in 30 frames, and a randomized check compares the plans with freshly built ones. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
 
 ### F304: Every game canvas texture does a blocking pixel read-back and keeps a second full-size copy that nothing uses
 
@@ -3178,6 +3184,8 @@ handleRoomGhosts (src/cloudflare/worker/runs/ghosts.ts:83-103) calls loadRoomRec
   1. Typical rooms (v3-13) save only about 100-200 KB of D1 reads and a few milliseconds. The high-impact case is heavily republished, time-ranked rooms such as 0,0 (176 versions, about 10.5 MB) and 2,1 (215 versions). There, every ghost intro and every racing restart repeats the full pre-F026 cost of 0.2-3.7 s and risks the CPU limit. Whether 0,0 is time-ranked is likely but not verified from code.
   2. The ghost fetch does not block Start, so the gain is mainly server cost, D1 contention and how soon the ghost option appears, not "rooms open faster".
 
+**2026-10-23 delivered.** [PR #305](https://github.com/songadaymann/wamp/pull/305). The timed-room ghost lookup uses the lightweight loader the room leaderboards use, so it reads only the requested version (none when it is the current one). A 9-version test returns the same ghosts with 0–1 snapshot reads instead of 9. API Worker `4d03ca81`. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
+
 ### F332: Every link-preview image is a 3 MB uncompressed PNG, and most of the render time goes to a slow checksum
 
 - **Area:** Backend speed, cost and reliability (reviewer: Gap review: Room-to-image renderers: several separate implementations drawing the same room)
@@ -3276,6 +3284,8 @@ Client triggers: dailyRoom.ts:60 subscribes onClear to POST_RUN_RATING_REQUEST, 
   (2) Optionally, cache pick, top 10 and recentPicks with a DiscoveryPublicCache-style keyed data cache (pass ctx into handleDaily), and keep the viewer's completions and rank fresh.
   (3) If pre-picking tomorrow's room, pass `${tomorrow}T00:00:00.000Z` as `now`, or change runBindings to use row.date. Otherwise dailyWindow(row.picked_at) points the daily board at the previous day. Note that featureStatements would switch the featured room about 8 minutes early.
 
+**2026-10-23 delivered.** [PR #306](https://github.com/songadaymann/wamp/pull/306). Room of the Day reloads only when a signed-in player finished today's exact pick, the account changes or the day rolls over. The Worker caches the pick, recent picks and top 10 at the edge for 30 s per UTC date, with no per-user data in the cache; each viewer's own completion and board row are read fresh, and an admin repick clears the cache. Live: `/api/daily` answers `x-wamp-cache: hit` with `private, no-store`. API Worker `4d03ca81`. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
+
 ### F330: Every guest attempt copies the whole room (9-38 KB) into the database, and abandoned attempts keep the copy for 14 days
 
 - **Area:** Backend speed, cost and reliability (reviewer: Backend speed, cost and reliability)
@@ -3307,6 +3317,8 @@ startGuestRun (guestRuns/attempts.ts:73-104) runs existingStart, then loadGuestR
   - Latency stays about the same: one fewer read at start (through RETURNING), one more at finish.
   - The bigger win is closing an amplification vector. Self-minted guest identities at up to 120 starts/min per network can each park a full room (or about 600 KB Expanded Room) copy for 14 days.
   - Recomputing the hash at finish is optional; the signed-in path does not do it.
+
+**2026-10-23 delivered.** [PR #307](https://github.com/songadaymann/wamp/pull/307). A guest attempt stores only the room id, version and verification hash instead of a copy of the room; finish re-reads that version and checks the hash, and attempts started before the deploy still finish from their stored copy. Forward-only: rolling the Worker back would fail guest attempts still open. API Worker `4d03ca81`. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
 
 ### F333: Finishing a run still waits on about 14 database trips in a row, half of which can be skipped or run together
 
@@ -4561,6 +4573,8 @@ Fix plan: (1) in hasEditorDraftClear return false when no receipt matches the ro
 - **confirmed.** No correction.
 - **confirmed.** No correction.
 - **confirmed.** No correction.
+
+**2026-10-23 delivered.** [PR #304](https://github.com/songadaymann/wamp/pull/304). A pinch-zoom step reuses the last publish checklist while its inputs are unchanged (room revision, clear record, edge summary, title, background, lighting and weather); mid-stroke edits always rebuild it, Clear Check skips the room hash when the room has no recorded clear, and the publish dialog still builds a fresh checklist. Reviewed adversarially before merging; `npm run check` (646 files, 5,542 tests) and the muted smokes (default 68/68, auth, assist, Expanded Room, map capture, artwork) passed on the combined batch. [Receipt](wamp-round2-speed-2026-10-23.md).
 
 ### F369: Phone builders have to reopen the library just to switch between Draw and Erase
 
