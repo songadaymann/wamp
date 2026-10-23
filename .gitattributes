@@ -1,3 +1,7 @@
 # feature-ledger.md is rebuilt from docs/ledger/ by `npm run ledger`. When two branches each
 # add an entry, keep both new rows instead of stopping on a conflict; the next rebuild sorts them.
 feature-ledger.md merge=union
+# scripts/dead_code_baseline.txt only shrinks. When two branches each drop neighbouring lines, keep
+# both sides instead of stopping on a conflict: a line that comes back is harmless, because the
+# check ignores fixed findings and the next `npm run dead-code:shrink` drops it.
+scripts/dead_code_baseline.txt merge=union
