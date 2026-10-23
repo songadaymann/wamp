@@ -78,6 +78,14 @@ export async function takeRateLimitSlot(
   return row ? Number(row.id) : null;
 }
 
+/**
+ * Passed to a write so it can say the slots it was given were used: set once something is stored
+ * (or the write used up its attempts), so a later failure keeps them instead of giving them back.
+ */
+export interface RateLimitSlotUse {
+  keep: boolean;
+}
+
 /** Gives back slots for an action that did not happen or should not count. */
 export async function releaseRateLimitSlots(env: Env, ids: Array<number | null>): Promise<void> {
   const taken = ids.filter((id): id is number => id !== null);

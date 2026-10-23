@@ -16,6 +16,7 @@ import {
   releaseRateLimitSlots,
   takeRateLimitSlots,
   type RateLimitRule,
+  type RateLimitSlotUse,
 } from '../core/rateLimit';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
 import {
@@ -54,11 +55,18 @@ export async function handlePlaylistGetBySlug(
     if (!playlist) {
       throw new HttpError(404, 'Playlist not found.');
     }
-    return jsonResponse(request, playlist, {
+    const response = jsonResponse(request, playlist, {
       headers: { 'Cache-Control': auth ? 'private, no-store' : ANONYMOUS_PLAYLIST_CACHE_CONTROL },
     });
+    // A browser must not answer a signed-in request with a signed-out copy.
+    if (!auth) response.headers.append('Vary', 'Cookie, Authorization');
+    return response;
   };
-  return auth ? loadResponse() : loadAnonymousPublicCache(request, context, loadResponse);
+  if (auth) return loadResponse();
+  // One shared copy per playlist path: a query string cannot add copies.
+  const cacheUrl = new URL(request.url);
+  cacheUrl.search = '';
+  return loadAnonymousPublicCache(new Request(cacheUrl, request), context, loadResponse);
 }
 
 export async function handleMyPlaylistsGet(request: Request, env: Env): Promise<Response> {
@@ -82,7 +90,7 @@ export async function handlePlaylistCreate(request: Request, env: Env): Promise<
   assertNotSchoolRestricted(auth, 'create playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistCreateRequestBody>>(request);
   const playlist = await withPlaylistWriteSlots(env, auth.user.id, [PLAYLIST_CREATES_PER_HOUR, PLAYLIST_WRITES_PER_HOUR],
-    () => createRoomPlaylist(env, auth.user, body));
+    (slotUse) => createRoomPlaylist(env, auth.user, body, slotUse));
   return jsonResponse(request, playlist, { status: 201 });
 }
 
@@ -100,7 +108,7 @@ export async function handlePlaylistUpdate(
   assertNotSchoolRestricted(auth, 'update playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistUpdateRequestBody>>(request);
   const playlist = await withPlaylistWriteSlots(env, auth.user.id, [PLAYLIST_WRITES_PER_HOUR],
-    () => updateRoomPlaylist(env, auth.user, playlistId, body));
+    (slotUse) => updateRoomPlaylist(env, auth.user, playlistId, body, slotUse));
   return jsonResponse(request, playlist);
 }
 
@@ -133,7 +141,7 @@ export async function handlePlaylistItemCreate(
   assertNotSchoolRestricted(auth, 'add rooms to playlists');
   const body = await parseJsonBody<Partial<RoomPlaylistItemCreateRequestBody>>(request);
   const playlist = await withPlaylistWriteSlots(env, auth.user.id, [PLAYLIST_WRITES_PER_HOUR],
-    () => addRoomToPlaylist(env, auth.user, playlistId, body));
+    (slotUse) => addRoomToPlaylist(env, auth.user, playlistId, body, slotUse));
   return jsonResponse(request, playlist, { status: 201 });
 }
 
@@ -153,12 +161,15 @@ export async function handlePlaylistItemDelete(
   return jsonResponse(request, playlist);
 }
 
-/** Takes a slot under each rule for the account, and gives them back when the change is refused. */
+/**
+ * Takes a slot under each rule for the account. They are given back when the change is refused or
+ * its write fails, and kept once the write has stored something, even if a later step fails.
+ */
 async function withPlaylistWriteSlots<T>(
   env: Env,
   userId: string,
   rules: RateLimitRule[],
-  write: () => Promise<T>,
+  write: (slotUse: RateLimitSlotUse) => Promise<T>,
 ): Promise<T> {
   const keyHash = await hashRateLimitKey(env, `playlist-user:${userId}`);
   const { ids, limitedBy } = await takeRateLimitSlots(env, rules.map((rule) => ({ rule, keyHash })));
@@ -168,10 +179,11 @@ async function withPlaylistWriteSlots<T>(
   if (limitedBy) {
     throw new HttpError(429, 'You have changed your playlists a lot lately. Try again later.');
   }
+  const slotUse: RateLimitSlotUse = { keep: false };
   try {
-    return await write();
+    return await write(slotUse);
   } catch (error) {
-    await releaseRateLimitSlots(env, ids);
+    if (!slotUse.keep) await releaseRateLimitSlots(env, ids);
     throw error;
   }
 }

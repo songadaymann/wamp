@@ -122,6 +122,8 @@ describe('playlist routes: making, editing and deleting', () => {
     for (let suffix = 1; suffix <= 99; suffix += 1) insertPlaylist(`mix-${suffix}`);
     expect(await create({ title: 'Mix' })).toMatchObject({ status: 409, body: { error: 'Could not find an available playlist URL name.' } });
     expect(count('room_playlists')).toBe(100);
+    // A hundred tries counts toward the limits.
+    expect(count("rate_limit_events WHERE bucket LIKE 'playlist:%'")).toBe(2);
   });
 
   it('refuses a missing or oversized title, an oversized description, a bad URL name or a body that is not JSON', async () => {
@@ -314,27 +316,57 @@ describe('playlist rooms', () => {
     expect((await bySlug('mix')).body.items).toEqual([expect.objectContaining({ roomId: '1,0', roomTitle: 'Hidden by moderation' })]);
   });
 
-  it('leaves out a room whose stored version cannot be read, on the page and in "my playlists"', async () => {
+  it('refuses a room version that cannot be read, and still lists one that later could not be', async () => {
     const playlist = await made();
-    for (const x of [1, 2, 3]) await add(playlist.id, x);
     f.sqlite.prepare("UPDATE room_versions SET snapshot_json = 'not json' WHERE room_id = '2,0'").run();
+    expect(await add(playlist.id, 2)).toMatchObject({
+      status: 409, body: { error: 'That room version could not be read and cannot be added to a playlist.' },
+    });
+    for (const x of [1, 3]) await add(playlist.id, x);
+    f.sqlite.prepare("UPDATE room_versions SET snapshot_json = 'not json', goal_type = 'survival' WHERE room_id = '3,0'").run();
     const { status, body } = await bySlug('mix');
     expect(status).toBe(200);
-    expect(roomIds(body.items)).toEqual(['1,0', '3,0']);
-    expect(body.roomCount).toBe(2);
+    expect(body.items.map((item) => [item.roomId, item.roomTitle, item.goalType])).toEqual([
+      ['1,0', 'Public room 1', 'reach_exit'], ['3,0', 'Public room 3', 'survival'],
+    ]);
+    f.sqlite.prepare("UPDATE room_versions SET title = NULL, goal_type = NULL WHERE room_id = '3,0'").run();
+    expect((await bySlug('mix')).body.items[1]).toMatchObject({ roomId: '3,0', roomTitle: null, goalType: null });
     expect((await mine()).body.playlists[0].roomCount).toBe(2);
     f.env.EXPANDED_ROOMS_ENABLED = 'off';
     expect((await mine()).body.playlists[0].roomCount).toBe(2);
+  });
+
+  it('counts rooms from indexes alone, without reading any stored room', async () => {
+    const playlist = await made();
+    for (const x of [1, 7]) await add(playlist.id, x);
+    insertItem(playlist.id, '8,0', 1, 2);
+    const statements: string[] = [];
+    const database = f.env.DB;
+    const prepare = (Object.getPrototypeOf(database) as typeof database).prepare.bind(database);
+    vi.spyOn(database, 'prepare').mockImplementation((query: string) => { statements.push(query); return prepare(query); });
+    expect((await mine()).body.playlists[0].roomCount).toBe(2);
+    expect((await loadPublicPlaylistSummariesForUser(f.env, 'p1'))[0].roomCount).toBe(2);
+    f.env.EXPANDED_ROOMS_ENABLED = 'off';
+    expect((await mine()).body.playlists[0].roomCount).toBe(3);
+
+    const counting = statements.filter((query) => query.includes('room_playlist_items'));
+    expect(counting.length).toBeGreaterThanOrEqual(3);
+    for (const query of counting) {
+      expect(query).not.toContain('snapshot_json');
+      const plan = (f.sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+      for (const step of plan.filter((detail) => detail.includes('room_versions'))) expect(step).toContain('COVERING INDEX');
+      if (query.includes('AS room_count')) expect(plan.join('\n')).toMatch(/room_playlist_items USING COVERING INDEX/);
+    }
   });
 
   it("reads each room's title and goal from its version row, falling back to the stored room", async () => {
     const playlist = await made();
     await add(playlist.id, 1);
     await add(playlist.id, 2);
-    f.sqlite.prepare("UPDATE room_versions SET goal_type = 'survival' WHERE room_id = '1,0'").run();
-    f.sqlite.prepare("UPDATE room_versions SET title = NULL, goal_type = NULL WHERE room_id = '2,0'").run();
+    f.sqlite.prepare("UPDATE room_versions SET goal_type = 'survival', created_at = '2026-10-05T09:00:00.000Z' WHERE room_id = '1,0'").run();
+    f.sqlite.prepare("UPDATE room_versions SET title = '  ', goal_type = NULL WHERE room_id = '2,0'").run();
     expect((await bySlug('mix')).body.items.map((item) => [item.roomTitle, item.goalType, item.publishedAt])).toEqual([
-      ['Public room 1', 'survival', NOW], ['Public room 2', 'reach_exit', NOW],
+      ['Public room 1', 'survival', '2026-10-05T09:00:00.000Z'], ['Public room 2', 'reach_exit', NOW],
     ]);
   });
 
@@ -421,7 +453,18 @@ describe('playlist limits', () => {
     expect((await update(playlist.id, { title: 'x'.repeat(61) })).status).toBe(400);
     expect((await add(playlist.id, 99)).status).toBe(404);
     expect((await update(playlist.id, { title: 'Hijacked' }, 'p2')).status).toBe(404);
+    for (let index = 0; index < 49; index += 1) insertPlaylist(`kept-${index}`, 'p1');
+    expect((await create({ title: 'Over the limit' })).status).toBe(409);
     expect(count("rate_limit_events WHERE bucket LIKE 'playlist:%'")).toBe(2);
+  });
+
+  it('keeps the slot once a change is stored, even if a later step fails', async () => {
+    const playlist = await made();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    beforeStatement(/SET updated_at = \?/, () => { throw new Error('Storage unavailable'); });
+    expect((await add(playlist.id, 1)).status).toBe(500);
+    expect(count('room_playlist_items')).toBe(1);
+    expect(count("rate_limit_events WHERE bucket LIKE 'playlist:%'")).toBe(3);
   });
 
   it('gives creates of one name at the same moment their own numbers', async () => {
@@ -452,9 +495,13 @@ describe('playlist page caching', () => {
     expect(first.headers.get('Cache-Control')).toBe('public, max-age=20');
     expect(first.headers.get('X-WAMP-Cache')).toBe('miss');
     expect(first.body.viewerCanEdit).toBe(false);
+    expect(first.headers.get('Vary')).toContain('Cookie, Authorization');
     const second = await bySlug('mix', null, context);
     expect(second.headers.get('X-WAMP-Cache')).toBe('hit');
     expect(second.body).toEqual(first.body);
+    expect(second.headers.get('Vary')).toContain('Cookie, Authorization');
+    // A query string shares the same copy rather than adding one.
+    expect((await bySlug('mix?ref=share', null, context)).headers.get('X-WAMP-Cache')).toBe('hit');
 
     const owner = await bySlug('mix', 'p1', context);
     expect(owner.headers.get('Cache-Control')).toBe('private, no-store');
