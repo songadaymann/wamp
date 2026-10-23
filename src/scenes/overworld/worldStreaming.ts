@@ -106,6 +106,7 @@ import {
   SelectedExactPrefetchLifecycle,
   type SelectedExactPrefetchRequest,
 } from './selectedExactPrefetch';
+import { isBodySupportedAwayFromVerticalSeam } from './transitionApproach';
 import {
   isStreamingRoomCandidateRenderable,
   type PlayableRoomSource,
@@ -3537,7 +3538,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       const distance = deltaY > 0
         ? Math.max(0, origin.y + ROOM_PX_HEIGHT - player.y)
         : Math.max(0, player.y - origin.y);
-      if (distance <= PREDICTED_SEAM_LOCK_DISTANCE_PX) {
+      // A floor or ceiling short of the seam is not a hold at the seam; only
+      // the seam's own edge wall or clamp keeps the vertical room locked (F350).
+      if (
+        distance <= PREDICTED_SEAM_LOCK_DISTANCE_PX
+        && !isBodySupportedAwayFromVerticalSeam(
+          player.body,
+          deltaY > 0 ? 1 : -1,
+          deltaY > 0 ? origin.y + ROOM_PX_HEIGHT : origin.y,
+        )
+      ) {
         return distance / PREDICTED_FALLBACK_SPEED_PX_PER_SEC * 1_000;
       }
     }
