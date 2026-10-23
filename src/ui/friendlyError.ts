@@ -3,7 +3,8 @@ type FriendlyErrorOptions = { error?: unknown; nextStep?: string };
 /** Keep useful server explanations, replacing transport errors with a player's next step. */
 export function friendlyError(action: string, { error, nextStep = 'Please try again.' }: FriendlyErrorOptions = {}): string {
   const detail = error instanceof Error ? error.message.trim() : '';
-  const technical = /^(?:Failed to fetch|Load failed|NetworkError|Network request failed|TypeError:|Unexpected token|HTTP \d|\{)/i.test(detail);
+  // Includes each browser's failed lazy-module download (Chromium, Safari, Firefox).
+  const technical = /^(?:Failed to fetch|Load failed|NetworkError|Network request failed|Importing a module script failed|error loading dynamically imported module|TypeError:|Unexpected token|HTTP \d|\{)/i.test(detail);
   const message = detail && !technical ? detail : `Couldn't ${action}.`;
   return `${message.replace(/[.!?]?$/, '.')} ${nextStep}`;
 }

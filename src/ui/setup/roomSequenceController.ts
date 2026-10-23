@@ -6,6 +6,7 @@ import {
   POST_RUN_RATING_SUBMITTED_EVENT,
   type PostRunRatingSubmittedDetail,
 } from '../../progression/postRunRatingEvents';
+import { friendlyError } from '../friendlyError';
 import { getActiveOverworldScene } from './sceneBridge';
 import type { LeaderboardModalController } from './leaderboardModal';
 import type { LazyModal } from './lazyModal';
@@ -359,7 +360,8 @@ export class RoomSequenceController {
     } catch (error) {
       if (this.activeSequence !== sequence) return;
       console.error('Failed to present room sequence entry.', error);
-      sequence.statusText = error instanceof Error ? error.message : 'Failed to load this room.';
+      // Plain messages thrown above read as they are; a failed download or network error doesn't.
+      sequence.statusText = friendlyError('load this room', { error, nextStep: 'Use Next for another room.' });
       sequence.statusTone = 'error';
     } finally {
       if (this.activeSequence === sequence) {

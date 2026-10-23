@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { friendlyError, renderFriendlyError, setLiveMessage } from './friendlyError';
 
 describe('friendly errors', () => {
-  it.each(['Failed to fetch', 'Load failed', 'Unexpected token < in JSON', 'HTTP 503', '{"error":"server"}'])
+  it.each(['Failed to fetch', 'Load failed', 'Unexpected token < in JSON', 'HTTP 503', '{"error":"server"}',
+    'Failed to fetch dynamically imported module: https://wamp.land/assets/cache-v2/x.js',
+    'Importing a module script failed.', 'error loading dynamically imported module: https://wamp.land/assets/cache-v2/x.js'])
     ('replaces transport details (%s) with an action and next step', (message) => {
       expect(friendlyError('load your profile', { error: new Error(message) }))
         .toBe("Couldn't load your profile. Please try again.");
