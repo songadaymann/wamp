@@ -867,7 +867,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const maybeRespawnFromVoid: typeof owner.maybeRespawnFromVoid = (...args) => owner.maybeRespawnFromVoid(...args);
     const updateMobilePortraitRoomFraming: typeof owner.updateMobilePortraitRoomFraming = (...args) => owner.updateMobilePortraitRoomFraming(...args);
     const toggleCameraMode: typeof owner.toggleCameraMode = (...args) => owner.toggleCameraMode(...args);
-    const endRoomRushRun: typeof owner.endRoomRushRun = (...args) => owner.endRoomRushRun(...args);
+    const stopCurrentPlay: typeof owner.stopCurrentPlay = (...args) => owner.stopCurrentPlay(...args);
     const restartCurrentRun: typeof owner.restartCurrentRun = (...args) => owner.restartCurrentRun(...args);
     const setLastMovementInput: typeof owner.setLastMovementInput = (...args) => owner.setLastMovementInput(...args);
     const isPvpCountdownActive: typeof owner.isPvpCountdownActive = (...args) => owner.isPvpCountdownActive(...args);
@@ -1193,7 +1193,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       get mobilePerformanceControllerProfilingEnabled() { return owner.mobilePerformanceControllerProfilingEnabled; },
       get mobilePerformanceControllerProfileSlot() { return owner.mobilePerformanceControllerProfileSlot; },
       toggleCameraMode,
-      endRoomRushRun,
+      stopCurrentPlay,
       restartCurrentRun,
       setLastMovementInput,
       isPvpCountdownActive,
@@ -1657,17 +1657,8 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private setupGameplayKeys(): void {
-    const keyboard = this.input.keyboard!;
-
+    // Escape is handled once, in order, by the inspect input controller (F385).
     this.gameplayKeyboard = createOverworldKeyboardInput(this, () => this.mode === 'play');
-    keyboard.on('keydown-ESC', () => {
-      if (this.roomCommentsController.handleEscapeKey()) {
-        return;
-      }
-      if (this.roomChatController.handleEscapeKey()) {
-        return;
-      }
-    });
   }
 
   private setupCamera(): void {
@@ -3956,15 +3947,18 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
 
   playSelectedRoom(options: { forceGoalIntro?: boolean; expectedCourseVersion?: number; canStart?: () => boolean } = {}): void | Promise<void> {
     if (this.mode === 'play') {
-      if (this.activeRoomRushRun) {
-        this.endRoomRushRun();
-      } else {
-        this.returnToWorld();
-      }
+      this.stopCurrentPlay();
       return;
     }
 
     return this.flowController.playSelectedRoom(options);
+  }
+
+  /** Every stop input lands here: a Room Rush ends through its result, which alone saves the score (F378). */
+  stopCurrentPlay(): void {
+    if (this.mode !== 'play') return;
+    if (this.activeRoomRushRun) this.endRoomRushRun();
+    else this.returnToWorld();
   }
 
   async startRoomRushRun(options: {

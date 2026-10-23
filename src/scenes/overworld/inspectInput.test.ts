@@ -4,6 +4,8 @@ import { OverworldInspectInputController } from './inspectInput';
 vi.mock('phaser', () => ({ default: { Math: { Distance: { Between: vi.fn(() => 100) } } } }));
 vi.mock('../../ui/deviceLayout', () => ({ getDeviceLayoutState: () => ({ coarsePointer: false }) }));
 vi.mock('../../settings/userSettings', () => ({ getGameSettings: () => ({ panningStyle: 'option-drag' }) }));
+const modal = vi.hoisted(() => ({ open: false }));
+vi.mock('../../ui/modalState', () => ({ hasBlockingModalOpen: () => modal.open }));
 
 describe('overworld fit shortcut', () => {
   it('uses 0 instead of F and removes the listener on destroy', () => {
@@ -17,7 +19,8 @@ describe('overworld fit shortcut', () => {
       setCameraMode: vi.fn(),
       applyCameraMode: vi.fn(),
       fitLoadedWorld,
-      returnToWorld: vi.fn(),
+      closeComposerForEscape: () => false,
+      stopCurrentPlay: vi.fn(),
       adjustZoomByFactor: vi.fn(),
       constrainInspectCamera: vi.fn(),
       getRoomCoordinatesForPoint: () => ({ x: 0, y: 0 }),
@@ -39,15 +42,16 @@ describe('overworld fit shortcut', () => {
 });
 
 type Handler = (...args: unknown[]) => void;
-function harness() {
+function harness(mode: 'browse' | 'play' = 'browse') {
   const handlers = new Map<string, Handler>();
   const register = (prefix: string) => ({ on: vi.fn((event: string, fn: Handler) => handlers.set(prefix + event, fn)), off: vi.fn() });
   const camera = { scrollX: 0, scrollY: 0, zoom: 1, setScroll: vi.fn(), getWorldPoint: (x: number, y: number) => ({ x, y }) };
   const activePointer = mouse({ isDown: false });
   const scene = { input: { ...register('input:'), keyboard: register('key:'), activePointer }, game: { events: register('game:') }, cameras: { main: camera } };
   const host = {
-    getMode: () => 'browse' as const, getCameraMode: () => 'inspect' as const, setCameraMode: vi.fn(), applyCameraMode: vi.fn(),
-    fitLoadedWorld: vi.fn(), returnToWorld: vi.fn(), adjustZoomByFactor: vi.fn(), constrainInspectCamera: vi.fn(),
+    getMode: () => mode, getCameraMode: () => 'inspect' as const, setCameraMode: vi.fn(), applyCameraMode: vi.fn(),
+    fitLoadedWorld: vi.fn(), closeComposerForEscape: vi.fn(() => false), stopCurrentPlay: vi.fn(),
+    adjustZoomByFactor: vi.fn(), constrainInspectCamera: vi.fn(),
     getRoomCoordinatesForPoint: () => ({ x: 3, y: 4 }), isWithinLoadedRoomBounds: () => true,
     onSelectCoordinates: vi.fn(), syncBrowseWindowToCamera: vi.fn(),
   };
@@ -104,5 +108,41 @@ describe('pan keys after focus leaves the game (F059)', () => {
     expect(h.host.syncBrowseWindowToCamera).toHaveBeenCalledOnce();
     h.fire('input:pointerdown', mouse({ buttons: 1 }));
     expect(h.host.onSelectCoordinates).toHaveBeenCalled();
+  });
+});
+
+describe('one ordered Escape (F378, F385)', () => {
+  const escape = (changes: Partial<KeyboardEvent> = {}) => ({ repeat: false, ctrlKey: false, metaKey: false, altKey: false, ...changes });
+
+  it('stops play through the shared stop path, which ends a Room Rush with its result', () => {
+    const h = harness('play');
+    h.fire('key:keydown-ESC', escape());
+    expect(h.host.closeComposerForEscape).toHaveBeenCalledOnce();
+    expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+  });
+
+  it('spends the key on a blurred composer and never also ends the run', () => {
+    const h = harness('play');
+    h.host.closeComposerForEscape.mockReturnValueOnce(true);
+    h.fire('key:keydown-ESC', escape());
+    expect(h.host.stopCurrentPlay).not.toHaveBeenCalled();
+    h.fire('key:keydown-ESC', escape());
+    expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+  });
+
+  it('still closes a composer in browse, and leaves play alone behind a dialog or a held key', () => {
+    const browse = harness();
+    browse.host.closeComposerForEscape.mockReturnValueOnce(true);
+    browse.fire('key:keydown-ESC', escape());
+    browse.fire('key:keydown-ESC', escape());
+    expect(browse.host.closeComposerForEscape).toHaveBeenCalledTimes(2);
+    expect(browse.host.stopCurrentPlay).not.toHaveBeenCalled();
+
+    const play = harness('play');
+    play.fire('key:keydown-ESC', escape({ repeat: true }));
+    play.fire('key:keydown-ESC', escape({ metaKey: true }));
+    modal.open = true;
+    try { play.fire('key:keydown-ESC', escape()); } finally { modal.open = false; }
+    expect(play.host.stopCurrentPlay).not.toHaveBeenCalled();
   });
 });

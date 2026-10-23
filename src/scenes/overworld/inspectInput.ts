@@ -21,7 +21,9 @@ interface OverworldInspectInputHost {
   setCameraMode(mode: CameraMode): void;
   applyCameraMode(): void;
   fitLoadedWorld(): void;
-  returnToWorld(): void;
+  /** Closes the open comment or chat composer; true when Escape was spent on that. */
+  closeComposerForEscape(): boolean;
+  stopCurrentPlay(): void;
   adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void;
   constrainInspectCamera(): void;
   getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates;
@@ -60,7 +62,7 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.on('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.on('keydown-ESC', this.handleReturnToWorldKeydown);
+      keyboard.on('keydown-ESC', this.handleEscapeKeydown);
       keyboard.on('keyup-ALT', this.handleAltKeyup);
       keyboard.on('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.on('keyup-SPACE', this.handleSpaceKeyup);
@@ -78,7 +80,7 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.off('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.off('keydown-ESC', this.handleReturnToWorldKeydown);
+      keyboard.off('keydown-ESC', this.handleEscapeKeydown);
       keyboard.off('keyup-ALT', this.handleAltKeyup);
       keyboard.off('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.off('keyup-SPACE', this.handleSpaceKeyup);
@@ -114,11 +116,13 @@ export class OverworldInspectInputController {
     this.host.fitLoadedWorld();
   };
 
-  private readonly handleReturnToWorldKeydown = (event: KeyboardEvent): void => {
+  // The only Escape listener, so a key a composer used never also ends play (F385).
+  private readonly handleEscapeKeydown = (event: KeyboardEvent): void => {
+    if (this.host.closeComposerForEscape()) return;
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
     // Escape remains a fixed way out, independent of custom command bindings.
     if (this.host.getMode() === 'play' && !hasBlockingModalOpen()) {
-      this.host.returnToWorld();
+      this.host.stopCurrentPlay();
     }
   };
 

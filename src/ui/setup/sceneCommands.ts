@@ -149,7 +149,7 @@ export function setupSceneCommands(
   };
 
   installGameplayShortcuts({ restart: () => getActiveOverworldScene(game)?.restartCurrentRun(),
-    stop: () => getActiveOverworldScene(game)?.returnToWorld() }, doc);
+    stop: () => getActiveOverworldScene(game)?.stopCurrentPlay() }, doc);
   doc.addEventListener('keydown', handleRoomChatShortcut, { capture: true });
   doc.addEventListener('keydown', handleRoomCommentShortcut, { capture: true });
 

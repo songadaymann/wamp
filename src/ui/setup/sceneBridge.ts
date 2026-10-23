@@ -271,6 +271,7 @@ export interface OverworldSceneBridge {
   }) => Promise<boolean> | boolean;
   endRoomRushRun: () => void;
   isRoomRushRunActive: () => boolean;
+  stopCurrentPlay: () => void;
   invitePvpDuel: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
   openMultiplayerLauncher: () => Promise<boolean> | boolean;
   inviteMultiplayer: (
