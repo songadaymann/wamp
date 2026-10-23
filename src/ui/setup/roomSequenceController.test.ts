@@ -7,7 +7,7 @@ vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthD
 import { RoomSequenceController } from './roomSequenceController';
 import type { RoomSequenceStartDetail } from './roomSequenceEvents';
 
-function fixture() {
+function fixture(leaderboard?: { loaded: boolean; open: (tab: 'room') => Promise<void>; close: () => void }) {
   auth.id = 'a';
   const buttons = new Map<string, EventTarget>();
   const doc = { body: { dataset: {} }, getElementById: (id: string) => {
@@ -17,8 +17,9 @@ function fixture() {
   const win = Object.assign(new EventTarget(), { setTimeout, clearTimeout });
   const summary = { reset: vi.fn(), finish: vi.fn() };
   const ratingModal = { openForSequence: vi.fn(async () => {}), close: vi.fn() };
-  const controller = new RoomSequenceController({} as never, { close: vi.fn() } as never,
-    { open: vi.fn(async () => {}) } as never, { close: vi.fn() }, doc as unknown as Document, win as unknown as Window, summary, ratingModal);
+  const controller = new RoomSequenceController({} as never, leaderboard ?? { close: vi.fn() } as never,
+    { open: vi.fn(async () => {}) } as never, { close: vi.fn() }, doc as unknown as Document, win as unknown as Window, summary,
+    leaderboard ? undefined : ratingModal);
   controller.init();
   const detail: RoomSequenceStartDetail = { kind: 'welcome', mode: 'play', sourceLabel: 'First Steps', kickerLabel: 'First Steps', forceGoalIntro: true,
     entries: [1, 2].map(x => ({ roomId: `${x},0`, roomCoordinates: { x, y: 0 }, roomVersion: 1 })) };
@@ -36,6 +37,19 @@ describe('Sequence navigation lifecycle', () => {
       f.win.dispatchEvent(new CustomEvent('post-run-rating-submitted', { detail: { contentType:'expanded_room',contentId:'native',expandedRoomId:'native' } }));
       await vi.advanceTimersByTimeAsync(500); expect(f.ratingModal.openForSequence).toHaveBeenLastCalledWith(f.detail.entries[1]); f.controller.destroy();
     } finally { vi.useRealTimers(); }
+  });
+  it('says the Leaderboard could not load instead of waiting for a rating it can never send', async () => {
+    bridge.scene = { jumpToCoordinates: vi.fn(async () => {}) };
+    // A Leaderboard whose download failed: open() resolves, its card shows, and it never loads.
+    const leaderboard = { loaded: false, open: vi.fn(async () => {}), close: vi.fn() };
+    const f = fixture(leaderboard); f.detail.mode = 'rate'; await f.controller.start(f.detail);
+    const state = () => (f.win as unknown as { get_room_sequence_state(): { navigating: boolean; statusText: string | null } }).get_room_sequence_state();
+    expect(leaderboard.open).toHaveBeenCalledExactlyOnceWith('room');
+    expect(state()).toMatchObject({ navigating: false, statusText: "The Leaderboard couldn't load. Use Next for another room." });
+    expect((f.buttons.get('room-sequence-hud') as unknown as { setAttribute: ReturnType<typeof vi.fn> }).setAttribute)
+      .toHaveBeenLastCalledWith('data-sequence-tone', 'error');
+    leaderboard.loaded = true; f.buttons.get('btn-room-sequence-next')!.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(state().statusText).toBe('Rate this room, then the queue will advance.')); f.controller.destroy();
   });
   it('discards a personal rating queue on account change before navigation returns', async () => {
     let resolve!: () => void;

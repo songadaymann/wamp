@@ -44,13 +44,13 @@ it('retries an automatic download failure after backoff', async () => {
   expect(f.onLoadError).not.toHaveBeenCalled(); f.lazy.destroy();
 });
 it('a menu click whose download fails shows one card naming it and reports once', async () => {
-  vi.spyOn(console, 'error').mockImplementation(() => {}); const f = fixture(explainMenuLoadFailure('Guest Drafts'));
+  vi.spyOn(console, 'error').mockImplementation(() => {}); const f = fixture(explainMenuLoadFailure('Guest Drafts list'));
   f.load.mockRejectedValue(new TypeError('Failed to fetch dynamically imported module')); f.button.click(); await settle();
-  expect(showBusyError).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/^The Guest Drafts couldn't load\./), expect.objectContaining({ title: 'Guest Drafts' }));
+  expect(showBusyError).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(/^The Guest Drafts list couldn't load\./), expect.objectContaining({ title: 'Guest Drafts list' }));
   expect(reportClientError).toHaveBeenCalledOnce(); f.lazy.destroy();
 });
 it('a failed click download never covers a save in progress or a choice, but is still reported', async () => {
-  vi.spyOn(console, 'error').mockImplementation(() => {}); feedback.free = false; const f = fixture(explainMenuLoadFailure('Guest Drafts'));
+  vi.spyOn(console, 'error').mockImplementation(() => {}); feedback.free = false; const f = fixture(explainMenuLoadFailure('Guest Drafts list'));
   f.load.mockRejectedValue(new Error('offline')); f.button.click(); await settle();
   expect(showBusyError).not.toHaveBeenCalled(); expect(reportClientError).toHaveBeenCalledOnce(); f.lazy.destroy();
 });

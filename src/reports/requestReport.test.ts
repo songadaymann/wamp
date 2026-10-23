@@ -15,7 +15,7 @@ it('a Report form that fails to download shows the reload card once, not a brows
   requestReport({ type: 'room', id: 'room-1', label: 'Room 1, 0' });
   await vi.waitFor(() => expect(reportClientError).toHaveBeenCalledOnce());
   expect(showBusyError).toHaveBeenCalledExactlyOnceWith(
-    "The Report form couldn't load. Check your connection, then reload WAMP. Save anything you are working on first.",
+    "The report form couldn't load. Check your connection, then reload WAMP. Save anything you are working on first.",
     expect.objectContaining({ title: 'Report form', retryLabel: 'Reload', closeLabel: 'Not now' }));
   expect(alert).not.toHaveBeenCalled();
 });

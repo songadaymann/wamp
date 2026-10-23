@@ -5,13 +5,13 @@ import type { BugReportDialog } from './reporter';
  * The Report a bug form, its replay player and its sender download on the first Report click
  * instead of at boot (F319). The recent replay keeps recording from boot, so a report still
  * shows what just happened. Gameplay stays paused while the form downloads. A failed download
- * (offline, or a tab left open across a release) shows an error with a retry; on a stale tab
- * the stale-build recovery then offers a reload.
+ * (offline, or a tab left open across a release) calls `onLoadError`, which offers a reload: the
+ * browser keeps the failed file for the page, so trying again without one fails the same way.
  */
 export function installLazyBugReportDialog(options: {
   buttons: Iterable<EventTarget>;
   load: () => Promise<BugReportDialog>;
-  showLoadError: (retry: () => void) => void;
+  onLoadError: (error: unknown) => void;
 }): { isOpen(): boolean; destroy(): void } {
   let dialog: BugReportDialog | null = null, destroyed = false;
   const modal = new LazyModal<BugReportDialog>(async () => {
@@ -19,10 +19,8 @@ export function installLazyBugReportDialog(options: {
     if (destroyed) loaded.destroy();
     else dialog = loaded;
     return loaded;
-  });
-  const open = (): void => {
-    void modal.open().catch(() => { if (!destroyed) options.showLoadError(open); });
-  };
+  }, [], options.onLoadError);
+  const open = (): void => { void modal.open(); };
   const buttons = [...options.buttons];
   buttons.forEach(button => button.addEventListener('click', open));
   return {
