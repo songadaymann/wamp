@@ -13,7 +13,9 @@ export class LazyRecoveryController<T extends Controller> {
   private generation = 0;
   private button: HTMLElement | null = null;
   private readonly wakeEvents = [APP_READY_EVENT, APP_MODE_CHANGED_EVENT, AUTH_STATE_CHANGED_EVENT, AUTH_SESSION_REFRESHED_EVENT, 'focus', 'online', 'storage'];
+  /** `onLoadError` explains a download the player asked for (a click); the automatic start stays quiet. */
   constructor(private readonly load: () => Promise<T>, private readonly buttonId: string, private readonly delay: number,
+    private readonly onLoadError?: (error: unknown) => void,
     private readonly doc: Document = document, private readonly win: Window = window) {}
 
   init(): void {
@@ -37,7 +39,14 @@ export class LazyRecoveryController<T extends Controller> {
   async invoke(action: (controller: T) => void): Promise<void> {
     if (this.destroyed) return;
     const generation = ++this.generation;
-    const controller = await this.ensure();
+    let controller: T;
+    try {
+      controller = await this.ensure();
+    } catch (error) {
+      if (!this.onLoadError) throw error;
+      if (!this.destroyed && generation === this.generation) this.onLoadError(error);
+      return;
+    }
     if (!this.destroyed && generation === this.generation) action(controller);
   }
   private ensure(): Promise<T> {
