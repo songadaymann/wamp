@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: compares rendered world tiles with the live map pixel by
+// pixel. Never scheduled; see scripts/lib/smokeManifest.mjs.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

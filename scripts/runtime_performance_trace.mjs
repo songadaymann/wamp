@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: records phone runtime performance traces. Never
+// scheduled; see scripts/lib/smokeManifest.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

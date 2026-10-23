@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: measures world tile pyramid loading, caching and frame
+// time on a running frontend. Never scheduled; see scripts/lib/smokeManifest.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import './lib/mutedBrowsers.mjs';

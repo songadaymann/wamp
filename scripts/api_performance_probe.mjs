@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: times API endpoints (production by default) and writes a
+// report. Never scheduled; see scripts/lib/smokeManifest.mjs.
 const DEFAULT_BASE_URL = 'https://api.wamp.land';
 const DEFAULT_RUNS = 10;
 

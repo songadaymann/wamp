@@ -1,0 +1,83 @@
+name: Nightly smokes
+
+# The browser smokes and probes the pull-request checks skip (F480). Not a required check.
+# scripts/lib/smokeManifest.mjs gives each script its group; scripts/smoke_nightly.mjs builds the
+# test-hook frontend and runs one group against a fresh local Worker stack. Each job's summary has
+# its table, and the report job puts every group in one table.
+
+on:
+  schedule:
+    - cron: '43 9 * * *'
+  workflow_dispatch:
+    inputs:
+      group:
+        description: Group to run
+        type: choice
+        default: all
+        options: [all, editor, editor-phone, editor-dock, editor-touch, play, stack]
+
+concurrency:
+  group: nightly-smokes
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smokes:
+    name: smokes-${{ matrix.group }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        # The groups in NIGHTLY_GROUPS (scripts/smoke_manifest.test.ts keeps them in step).
+        group: ${{ fromJSON(inputs.group && inputs.group != 'all' && format('["{0}"]', inputs.group) || '["editor","editor-phone","editor-dock","editor-touch","play","stack"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: node scripts/smoke_nightly.mjs --group ${{ matrix.group }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-smokes-${{ matrix.group }}
+          path: output/nightly-smokes/${{ matrix.group }}/results.json
+          retention-days: 7
+          if-no-files-found: ignore
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-output-${{ matrix.group }}
+          path: |
+            output/
+            !output/build/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  report:
+    needs: smokes
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-smokes-*
+          path: output/nightly-smokes
+      # One table for the whole night; fails when any group had an unexpected failure.
+      - run: node scripts/smoke_nightly.mjs --report output/nightly-smokes
