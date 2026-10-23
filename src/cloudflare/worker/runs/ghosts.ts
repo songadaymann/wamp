@@ -6,7 +6,7 @@ import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
 import { getCoordinatesFromRequest, jsonResponse, parseOptionalPositiveIntegerQueryParam } from '../core/http';
 import { loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
-import { loadRoomRecord } from '../rooms/store';
+import { loadRoomRankingRecord } from '../rooms/rankingRecord';
 import { resolveAggregatedRoomLeaderboardSelection } from './roomLeaderboardAggregation';
 import { loadRankedRoomLeaderboardRows, loadViewerRankedRoomLeaderboardRow } from './leaderboards';
 import { verifyRoomRunTrace } from './verification';
@@ -83,10 +83,12 @@ export async function loadGhostOption(env: Env, roomId: string, equivalents: num
 export async function handleRoomGhosts(request: Request, url: URL, env: Env, roomId: string): Promise<Response> {
   const auth = await loadOptionalRequestAuth(env, request);
   requireOptionalScope(auth, 'leaderboards:read', 'race room ghosts');
-  const record = await loadRoomRecord(env, roomId, getCoordinatesFromRequest(roomId, url.searchParams),
-    auth?.user.id ?? null, auth?.user.walletAddress ?? null);
-  const selection = resolveAggregatedRoomLeaderboardSelection(record,
-    parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version'));
+  const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
+  // Compact version facts plus only the requested snapshot, as room leaderboards read (F026, F329).
+  const record = await loadRoomRankingRecord(env, roomId, getCoordinatesFromRequest(roomId, url.searchParams), {
+    viewerUserId: auth?.user.id ?? null, viewerWalletAddress: auth?.user.walletAddress ?? null, snapshotVersions: [version],
+  });
+  const selection = resolveAggregatedRoomLeaderboardSelection(record, version);
   const unavailable: GhostOption = { ghost: null, reason: 'unsupported' };
   const response: RoomGhostResponse = { roomId, roomVersion: selection.roomVersion, top: unavailable, personal: unavailable };
   if (supportsGhostRace(selection.snapshot.goal)) {
