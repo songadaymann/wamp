@@ -297,6 +297,12 @@
     box-shadow: var(--shadow-6);
   }
 
+  /* The pop-up takes focus on its card when it asks something (F467); no ring for that. */
+
+  .app-busy-card:focus {
+    outline: none;
+  }
+
   .app-busy-title {
     color: var(--wamp-ink);
     font-family: var(--font-display);
@@ -375,22 +381,32 @@
     filter: brightness(1.06);
   }
 
+  /* Retry is the green play action. Close takes the shared neutral role, and only a button that
+     throws work away turns red (data-button-variant, button-roles.css). */
+
   .app-busy-actions #btn-busy-retry {
     background: var(--wamp-green);
     color: var(--wamp-cream);
   }
 
-  .app-busy-actions #btn-busy-close {
-    background: var(--wamp-red);
-    color: var(--wamp-ink);
-  }
+  /* The tone marks the card and the title's edge: red for an error, green for good news, the
+     plain card for a choice. Titles stay ink, since red text on cream is too faint (F467). */
 
-  .app-busy-overlay[data-busy-state='error'] .app-busy-title {
-    color: var(--wamp-red);
-  }
-
-  .app-busy-overlay[data-busy-state='error'] .app-busy-card {
+  .app-busy-overlay[data-busy-tone='error'] .app-busy-card {
     border-color: var(--wamp-red);
+  }
+
+  .app-busy-overlay[data-busy-tone='success'] .app-busy-card {
+    border-color: var(--wamp-green);
+  }
+
+  .app-busy-overlay:is([data-busy-tone='error'], [data-busy-tone='success']) .app-busy-title {
+    padding-left: 10px;
+    border-left: 4px solid var(--wamp-red);
+  }
+
+  .app-busy-overlay[data-busy-tone='success'] .app-busy-title {
+    border-left-color: var(--wamp-green);
   }
 
   .app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-card {
@@ -403,18 +419,18 @@
     color: var(--wamp-ink);
   }
 
-  .app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-actions .bar-btn {
-    border-color: var(--wamp-white);
-    background: transparent;
-    color: var(--wamp-ink);
-  }
-
-  .app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-actions .bar-btn:hover {
-    background: rgba(var(--wamp-white-rgb), 0.12);
+  .app-busy-overlay[data-busy-state='error'][data-busy-variant='danger'] .app-busy-title {
+    border-left-color: var(--wamp-ink);
   }
 
   .app-busy-overlay[data-busy-state='error'] .app-busy-spinner {
     display: none;
+  }
+
+  /* Under a PvP pop-up, the only dialog above it, the screen dims once (installModalStackBackdrops). */
+
+  .app-busy-overlay[data-modal-covered='true'] {
+    background: transparent;
   }
 
   @keyframes busy-load {

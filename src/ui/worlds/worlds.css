@@ -1,11 +1,16 @@
 .worlds-modal {
   position: fixed;
-  z-index: 1200;
+  z-index: var(--z-modal);
   inset: 0;
   display: grid;
   place-items: center;
   padding: 18px;
   background: rgba(5, 5, 5, 0.78);
+}
+
+/* Under another dialog, the screen dims once (installModalStackBackdrops). */
+.worlds-modal[data-modal-covered='true'] {
+  background: transparent;
 }
 
 .worlds-panel {
@@ -17,6 +22,11 @@
   color: #18161c;
   box-shadow: 8px 8px 0 #050505;
   font-family: "HomeVideo", monospace;
+}
+
+/* The dialog takes focus itself when it opens (F175); no ring for that. */
+.worlds-panel:focus {
+  outline: none;
 }
 
 .worlds-header,

@@ -15,6 +15,7 @@ import {
 import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isKeyboardFocusedControl, isTextInputFocused } from '../keyboardFocus';
+import { dialogOnTopFor } from '../modalState';
 import { createProfileTriggerElement } from '../setup/profileEvents';
 import { requestReport } from '../../reports/requestReport';
 import {
@@ -138,7 +139,8 @@ export class ChatPanelController {
       return;
     }
 
-    if (event.key === 'Escape' && this.open) {
+    // A dialog above the chat takes Escape for itself.
+    if (event.key === 'Escape' && this.open && !dialogOnTopFor(event, this.doc)) {
       event.preventDefault();
       this.closePanel();
     }

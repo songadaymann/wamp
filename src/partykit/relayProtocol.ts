@@ -13,6 +13,37 @@ import type { ConnectionPresenceState } from './presenceProtocol';
 import { roomIdFromPresenceCoordinates } from './presencePopulation';
 
 export const PVP_INVITE_SEND_RATE_LIMIT_MS = 3_000;
+/** A challenge stays open at most this long, whatever the sender asks for. */
+export const PVP_INVITE_MAX_LIFETIME_MS = 30_000;
+/** After a decline, the same sender can't challenge the same player again for this long. */
+export const PVP_INVITE_DECLINE_COOLDOWN_MS = 60_000;
+/** One challenge per receiver in this window, from anyone, so several senders can't take turns. */
+export const PVP_INVITE_TARGET_INTERVAL_MS = 10_000;
+
+/** Per-shard limits on who may challenge whom, keyed by user so reconnecting doesn't reset them. */
+export class PvpInviteLimiter {
+  private readonly lastOfferAtByTarget = new Map<string, number>();
+  private readonly cooldownUntilByPair = new Map<string, number>();
+
+  allows(senderUserId: string, targetUserId: string, now: number): boolean {
+    this.prune(now);
+    return (this.cooldownUntilByPair.get(`${senderUserId}\n${targetUserId}`) ?? 0) <= now
+      && now - (this.lastOfferAtByTarget.get(targetUserId) ?? -Infinity) >= PVP_INVITE_TARGET_INTERVAL_MS;
+  }
+
+  recordOffer(targetUserId: string, now: number): void {
+    this.lastOfferAtByTarget.set(targetUserId, now);
+  }
+
+  recordDecline(senderUserId: string, targetUserId: string, now: number): void {
+    this.cooldownUntilByPair.set(`${senderUserId}\n${targetUserId}`, now + PVP_INVITE_DECLINE_COOLDOWN_MS);
+  }
+
+  private prune(now: number): void {
+    for (const [target, at] of this.lastOfferAtByTarget) if (now - at >= PVP_INVITE_TARGET_INTERVAL_MS) this.lastOfferAtByTarget.delete(target);
+    for (const [pair, until] of this.cooldownUntilByPair) if (until <= now) this.cooldownUntilByPair.delete(pair);
+  }
+}
 
 export function normalizeRoomChatText(rawText: unknown): string | null {
   if (typeof rawText !== 'string') return null;
@@ -69,7 +100,7 @@ export function normalizePvpInviteSend(
     target: normalizePvpParticipant(invite.target) ?? {
       userId: '', displayName: 'Player', avatarId: 'default-player',
     },
-    expiresAt: Math.max(now + 5_000, Number(invite.expiresAt ?? 0)),
+    expiresAt: Math.min(now + PVP_INVITE_MAX_LIFETIME_MS, Math.max(now + 5_000, Number(invite.expiresAt) || 0)),
   };
 }
 

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const modal = vi.hoisted(() => ({ open: false }));
 vi.mock('phaser', () => ({ default: {} }));
-vi.mock('./modalState', () => ({ hasBlockingModalOpen: () => modal.open }));
+vi.mock('./modalState', () => ({ hasBlockingModalOpen: () => modal.open, isInWalletWindow: () => false }));
 
 import { syncGameKeyboardFocus } from './keyboardFocus';
 

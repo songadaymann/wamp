@@ -1,6 +1,7 @@
 import { EDITOR_AUTO_COLLAPSE_EVENT } from '../../scenes/editor/uiEvents';
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
+import { watchModals } from '../modalState';
 import { getActiveOverworldScene } from '../setup/sceneBridge';
 import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
 import { PortraitPlayControlsController } from './portraitPlayControls';
@@ -34,6 +35,7 @@ type Elements = {
 export class MobileUiController {
   private readonly elements: Elements;
   private readonly mutationObserver: MutationObserver;
+  private stopWatchingModals: () => void = () => {};
   private readonly portraitPlayControls: PortraitPlayControlsController;
   private activeEditorSheet: EditorSheetId = 'tools';
   private editorSheetCollapsed = false;
@@ -97,6 +99,7 @@ export class MobileUiController {
 
   destroy(): void {
     this.mutationObserver.disconnect();
+    this.stopWatchingModals();
     this.portraitPlayControls.destroy();
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
     this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
@@ -137,9 +140,7 @@ export class MobileUiController {
     this.observeClassChanges(this.doc.getElementById('auth-panel'));
     this.observeClassChanges(this.doc.getElementById('global-chat'));
     this.observeClassChanges(this.doc.getElementById('busy-overlay'));
-    this.doc.querySelectorAll('.history-modal').forEach((element) => {
-      this.observeClassChanges(element);
-    });
+    this.stopWatchingModals = watchModals(this.doc, () => this.render());
   }
 
   private observeClassChanges(target: Element | null): void {

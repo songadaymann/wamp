@@ -1,3 +1,4 @@
+import { dialogOnTopFor } from '../modalState';
 import './worlds.css';
 
 export class WorldsView {
@@ -7,12 +8,14 @@ export class WorldsView {
   private readonly title: HTMLElement;
 
   constructor(root: HTMLElement, onClose: () => void) {
+    // A shared dialog (modalState counts .worlds-modal): focus, Tab, Escape, game keys and the
+    // pause follow it (F406). It keeps its own layout rather than the .history-modal one.
     root.innerHTML = `
       <section class="worlds-modal hidden" aria-hidden="true">
         <div class="worlds-panel" role="dialog" aria-modal="true" aria-labelledby="worlds-title">
           <header class="worlds-header">
             <div><span class="worlds-kicker">The shared WAMP grid</span><h2 id="worlds-title">Worlds</h2></div>
-            <button class="bar-btn bar-btn-small" type="button" data-world-action="close">Close</button>
+            <button class="bar-btn bar-btn-small" type="button" data-world-action="close" data-dialog-close>Close</button>
           </header>
           <nav class="worlds-tabs" aria-label="Worlds sections">
             <button class="bar-btn bar-btn-small" type="button" data-world-tab="browse">Browse</button>
@@ -40,6 +43,15 @@ export class WorldsView {
   close(): void {
     this.modal.classList.add('hidden');
     this.modal.setAttribute('aria-hidden', 'true');
+  }
+
+  isOpen(): boolean {
+    return !this.modal.classList.contains('hidden');
+  }
+
+  /** Whether this Escape is for the Worlds window: open, and the top dialog when the key went down. */
+  ownsEscape(event: KeyboardEvent): boolean {
+    return this.isOpen() && dialogOnTopFor(event) === this.modal;
   }
 
   setTitle(value: string): void {

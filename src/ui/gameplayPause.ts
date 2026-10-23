@@ -1,4 +1,4 @@
-import { hasBlockingModalOpen } from './modalState';
+import { hasBlockingModalOpen, watchModals } from './modalState';
 import { hasPendingDialog, subscribePendingDialogs } from './pendingDialog';
 
 export interface GameplayPauseContext {
@@ -36,7 +36,6 @@ export function installGameplayPause(
 ): () => void {
   const menu = doc.getElementById('auth-panel');
   const status = doc.getElementById('game-pause-status');
-  const watched = new Set<Element>();
   let blocked = false;
   let requested = false;
   let message = '';
@@ -64,35 +63,17 @@ export function installGameplayPause(
       || doc.visibilityState === 'hidden';
     sync();
   };
-  const attributes = new MutationObserver(readUi);
-  const watch = (element: Element): void => {
-    if (watched.has(element)) return;
-    watched.add(element);
-    attributes.observe(element, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
-  };
-  if (menu) watch(menu);
-  for (const modal of doc.querySelectorAll('.history-modal')) watch(modal);
-  // Rare dialogs are inserted on demand. Do not observe every game's class mutation.
-  const additions = new MutationObserver(records => {
-    let changed = false;
-    for (const record of records) {
-      for (const node of [...record.addedNodes, ...record.removedNodes]) {
-        if (!(node instanceof Element)) continue;
-        const modals = [...node.querySelectorAll('.history-modal')];
-        if (node.matches('.history-modal')) modals.push(node);
-        for (const modal of modals) { if (modal.isConnected) watch(modal); changed = true; }
-      }
-    }
-    if (changed) readUi();
-  });
-  additions.observe(doc.body, { childList: true, subtree: true });
+  const menuObserver = new MutationObserver(readUi);
+  if (menu) menuObserver.observe(menu, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
+  // Includes dialogs inserted on demand (modalState watches the page for them).
+  const stopWatchingModals = watchModals(doc, readUi);
   doc.addEventListener('visibilitychange', readUi);
   const unsubscribePending = subscribePendingDialogs(readUi);
   events.on('prestep', sync);
   readUi();
   return () => {
     destroyed = true;
-    attributes.disconnect(); additions.disconnect(); watched.clear();
+    menuObserver.disconnect(); stopWatchingModals();
     doc.removeEventListener('visibilitychange', readUi);
     unsubscribePending();
     events.off('prestep', sync);
