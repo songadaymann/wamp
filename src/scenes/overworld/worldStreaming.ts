@@ -1325,6 +1325,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
 
 
+  /** Drop the 1 s transition retry wait, e.g. once the browser is back online. */
+  retryPlayableRoomSnapshotsNow(): void {
+    this.playableRoomSnapshotRetryAtById.clear();
+  }
+
   prefetchPlayableRoomForTransition(coordinates: RoomCoordinates): void {
     const roomId = roomIdFromCoordinates(coordinates);
     if (this.portalPreparationRoomId && this.portalPreparationRoomId !== roomId) {

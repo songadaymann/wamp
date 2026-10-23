@@ -27,6 +27,7 @@ const requiredIdsByController = {
     'btn-daily-close','btn-daily-play','btn-daily-copy','btn-daily-save','btn-daily-retry','daily-room-title','daily-room-builder',
     'daily-room-status','daily-room-progress','daily-room-board','daily-room-date','activity-daily-features'],
   'RoomSharingController': ['btn-world-share', 'btn-mobile-world-share', 'world-share-status'],
+  'OverworldConnectionNoticeController': ['play-connection-notice'],
   'RunRatingModalController': ['run-rating-modal', 'run-rating-share', 'run-share-preview', 'run-share-message',
     'run-share-status', 'btn-run-share-native', 'btn-run-share-copy', 'btn-run-share-twitter', 'btn-run-share-download'],
   'FirstPublishModalController': ['first-publish-modal', 'first-publish-heading', 'first-publish-name-form', 'first-publish-name',

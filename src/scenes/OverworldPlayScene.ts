@@ -205,6 +205,7 @@ import {
   createWindowController,
   createWorldStreamingController,
 } from './overworld/composition/world';
+import { OverworldConnectionNoticeController } from './overworld/connectionNotice';
 import {
   OverworldCoursePlaybackController,
 } from './overworld/coursePlayback';
@@ -633,6 +634,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   private readonly pvpInstanceRenderer: MultiplayerRemotePlayerRenderer;
   private readonly pvpArenaController: OverworldPvpArenaController;
   private readonly pvpCombatCoordinator = new OverworldPvpCombatCoordinator();
+  private readonly connectionNoticeController = new OverworldConnectionNoticeController({
+    onOnline: () => this.worldStreamingController.retryPlayableRoomSnapshotsNow(),
+  });
   private readonly pvpLocalPresentationController: OverworldPvpLocalPresentationController;
   private readonly roomChatController: OverworldRoomChatController;
   private readonly browseRealtimeStartupGate: BrowseRealtimeStartupGate;
@@ -933,6 +937,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       set heldKeyCount(value: typeof owner.heldKeyCount) { owner.heldKeyCount = value; },
       get playerHealthController() { return owner.playerHealthController; },
       get lostSongController() { return owner.lostSongController; },
+      get connectionNoticeController() { return owner.connectionNoticeController; },
       get respawnCheckpointController() { return owner.respawnCheckpointController; },
       get quicksandController() { return owner.quicksandController; },
       get externalLaunchGraceUntil() { return owner.externalLaunchGraceUntil; },
@@ -1373,6 +1378,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.gridOverlayController.create();
     this.roomCellController.create();
     this.lostSongController.start();
+    this.connectionNoticeController.start();
     this.browseOverlayController.create();
     this.loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, 'Loading world...', {
       fontFamily: 'Courier New',
@@ -5105,6 +5111,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.browseOverlayController.destroy();
     this.roomCellController.destroy();
     this.lostSongController.destroy();
+    this.connectionNoticeController.destroy();
     this.presenceOverlayController.destroy();
   };
 
