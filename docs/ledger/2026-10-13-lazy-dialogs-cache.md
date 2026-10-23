@@ -1,0 +1,1 @@
+| 2026-10-13 | F019 | [#195](https://github.com/songadaymann/wamp/pull/195) | [receipt](docs/review/wamp-lazy-dialogs-cache-2026-10-13.md) | Seven more dialogs load on demand, and stable room data is cached |

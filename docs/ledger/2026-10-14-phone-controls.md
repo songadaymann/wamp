@@ -1,0 +1,1 @@
+| 2026-10-14 | F109, F089 | [#201](https://github.com/songadaymann/wamp/pull/201) | [receipt](docs/review/wamp-phone-keyboard-targets-2026-10-14.md) | 44 px phone controls, readable HUD text and Play menu access; more automated phone input checks |

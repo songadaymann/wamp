@@ -1,0 +1,1 @@
+| 2026-10-10 | F101, F121, F140, F039 | [#129](https://github.com/songadaymann/wamp/pull/129)–[#131](https://github.com/songadaymann/wamp/pull/131) | [receipt](docs/review/wamp-small-fixes-2026-10-10.md) | Boot in zero-size embeds, centred phone labels, fresh-push touch stomp, outbox sent only after tile writes |

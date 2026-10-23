@@ -1,5 +1,7 @@
 # Refactor Plan Audit — 2026-08-13
 
+> Historical (August 2026). Current work is tracked in the [round 2 checkup checklist](../review/wamp-checkup-round-2.md).
+
 This is the current implementation plan for the cleanup proposal reviewed against
 `origin/main` at `667f766`. The original proposal had the right overall goal—small,
 independently verified extractions—but several findings were stale or based on a dirty

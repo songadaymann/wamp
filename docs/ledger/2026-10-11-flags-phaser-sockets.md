@@ -1,0 +1,1 @@
+| 2026-10-11 | F179, F020, F095, F023 | [#159](https://github.com/songadaymann/wamp/pull/159)–[#162](https://github.com/songadaymann/wamp/pull/162) | [receipt](docs/review/wamp-flags-phaser-sockets-2026-10-11.md) | Faded checkpoint flags and a slimmer Phaser build; parts of hidden-tab sockets and the SFX pool |

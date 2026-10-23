@@ -1,0 +1,3 @@
+# feature-ledger.md is rebuilt from docs/ledger/ by `npm run ledger`. When two branches each
+# add an entry, keep both new rows instead of stopping on a conflict; the next rebuild sorts them.
+feature-ledger.md merge=union

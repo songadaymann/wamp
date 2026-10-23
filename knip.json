@@ -54,6 +54,7 @@
     "scripts/deploy_safety_branch.mjs",
     "scripts/generate_autotile_edge_case_tiles.mjs",
     "scripts/install_cryptopunk_avatar_queue_launchd.mjs",
+    "scripts/ledger.mjs",
     "scripts/live_construction_play_smoke.ts",
     "scripts/mobile_smoke.mjs",
     "scripts/mobile_smoke_ci.mjs",

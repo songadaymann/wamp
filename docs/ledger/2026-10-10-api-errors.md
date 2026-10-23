@@ -1,0 +1,1 @@
+| 2026-10-10 | F063 | [#118](https://github.com/songadaymann/wamp/pull/118)–[#119](https://github.com/songadaymann/wamp/pull/119) | [receipt](docs/review/wamp-api-errors-2026-10-10.md) | Players see the server's error message instead of raw JSON; cached API replies keep their own lifetime |

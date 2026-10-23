@@ -1,0 +1,1 @@
+| 2026-10-18 | F036 | [#237](https://github.com/songadaymann/wamp/pull/237)–[#240](https://github.com/songadaymann/wamp/pull/240) | [receipt](docs/review/wamp-personal-discovery-cache-2026-10-18.md) | Signed-in browsing shares public caches (lists, standings, discovery); private ranks and history stay fresh |

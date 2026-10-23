@@ -1,0 +1,1 @@
+| 2026-10-20 | F241 | [#264](https://github.com/songadaymann/wamp/pull/264) | [receipt](docs/review/wamp-owner-edit-refresh-2026-10-20.md) | Transferred room ownership is rechecked before the editor opens |

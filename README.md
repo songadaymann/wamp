@@ -50,6 +50,8 @@ The root `.html` files are intentional Vite multi-page entry points and stable a
 
 Start with [docs/README.md](docs/README.md) for the organized documentation index. Product planning lives under `docs/product/`, feature design under `docs/features/`, and implementation notes under `docs/development/`.
 
+Current work is the [round 2 checkup checklist](docs/review/wamp-checkup-round-2.md). What shipped is in [feature-ledger.md](feature-ledger.md), one row per delivery linking its PR and its receipt in `docs/review/`. Long-form logs up to 2026-10-23 are archived in [docs/history/](docs/history/README.md).
+
 ## Public Repo Hygiene
 
 - Do not commit `.env`, `env.local`, `.dev.vars`, Wrangler secret dumps, generated builds, or smoke-test output.

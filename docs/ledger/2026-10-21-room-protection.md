@@ -1,0 +1,1 @@
+| 2026-10-21 | F246 | [#274](https://github.com/songadaymann/wamp/pull/274) | [receipt](docs/review/wamp-room-protection-2026-10-21.md) | Room protection shows in Browse, Explore and profiles (F246 part) |

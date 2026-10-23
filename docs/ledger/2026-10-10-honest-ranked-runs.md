@@ -1,0 +1,1 @@
+| 2026-10-10 | F198 | [#110](https://github.com/songadaymann/wamp/pull/110), [#113](https://github.com/songadaymann/wamp/pull/113) | [receipt](docs/review/wamp-ranked-trace-coverage-2026-10-10.md) | Honest ranked runs (portals, long runs, many deaths, slow requests, roaming enemies) are no longer rejected |

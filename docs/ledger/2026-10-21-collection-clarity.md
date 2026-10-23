@@ -1,0 +1,1 @@
+| 2026-10-21 | F246 | [#273](https://github.com/songadaymann/wamp/pull/273) | [receipt](docs/review/wamp-collection-clarity-2026-10-21.md) | One Collect & Lock action and confirmed collectible links, reachable on phones (F246 part) |

@@ -1,0 +1,1 @@
+| 2026-10-13 | F038 | [#192](https://github.com/songadaymann/wamp/pull/192) | [receipt](docs/review/wamp-replay-storage-cleanup-2026-10-13.md) | Guest replay frames are stored in R2, and expired records are pruned hourly |

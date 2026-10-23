@@ -1,0 +1,1 @@
+| 2026-10-13 | F056, F098, F117, F119, F120, F174 | [#187](https://github.com/songadaymann/wamp/pull/187) | [receipt](docs/review/wamp-approved-small-fixes-2026-10-13.md) | Six approved UI and draft fixes |

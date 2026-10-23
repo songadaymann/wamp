@@ -1,0 +1,1 @@
+| 2026-10-09 | F220 | [#104](https://github.com/songadaymann/wamp/pull/104) | [receipt](docs/review/wamp-music-stems-2026-10-09.md) | Instruments mix live, and Arrange renders each phrase once and plays slot by slot |

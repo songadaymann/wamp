@@ -1,0 +1,1 @@
+| 2026-10-14 | F095 | [#199](https://github.com/songadaymann/wamp/pull/199) | [receipt](docs/review/wamp-shared-realtime-2026-10-14.md) | Nearby presence and chat share connections, and background connections close fully |

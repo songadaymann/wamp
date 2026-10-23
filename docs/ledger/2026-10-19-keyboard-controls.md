@@ -1,0 +1,1 @@
+| 2026-10-19 | F177 | [#248](https://github.com/songadaymann/wamp/pull/248)–[#249](https://github.com/songadaymann/wamp/pull/249) | [receipt](docs/review/wamp-keyboard-controls-2026-10-19.md) | Every gameplay action can be remapped, with physical key layouts and Z/X alternates |

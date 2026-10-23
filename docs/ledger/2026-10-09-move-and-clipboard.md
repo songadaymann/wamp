@@ -1,0 +1,1 @@
+| 2026-10-09 | F162 | [#107](https://github.com/songadaymann/wamp/pull/107), [#108](https://github.com/songadaymann/wamp/pull/108) | [receipt](docs/review/wamp-editor-move-clipboard-2026-10-09.md) | Move tool box-select and area move, a clipboard across rooms, and saved stamps |

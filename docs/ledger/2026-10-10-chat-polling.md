@@ -1,0 +1,1 @@
+| 2026-10-10 | F028 | [#121](https://github.com/songadaymann/wamp/pull/121) | [receipt](docs/review/wamp-chat-polling-2026-10-10.md) | Chat polls slowly while its panel is closed, and anonymous polls are edge-cached |

@@ -1,0 +1,1 @@
+| 2026-10-19 | F045 | [#260](https://github.com/songadaymann/wamp/pull/260) | [receipt](docs/review/wamp-identity-selection-2026-10-19.md) | Chat admins are chosen by account ID, and usernames are shown unambiguously |

@@ -290,7 +290,7 @@ The art can be much larger than the collision body, but the gameplay body does n
 ## Source of Truth Files
 
 - `docs/product/product-requirements.md`
-- `progress.md`
+- `docs/history/progress-2026.md`
 - `src/config.ts`
 - `src/scenes/BootScene.ts`
 - `src/scenes/EditorScene.ts`

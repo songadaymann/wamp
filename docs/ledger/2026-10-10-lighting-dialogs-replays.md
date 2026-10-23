@@ -1,0 +1,1 @@
+| 2026-10-10 | F005, F116, F038 | [#132](https://github.com/songadaymann/wamp/pull/132), [#134](https://github.com/songadaymann/wamp/pull/134), [#135](https://github.com/songadaymann/wamp/pull/135) | [receipt](docs/review/wamp-lighting-dialogs-replays-2026-10-10.md) | One-pass dark-room lighting, Escape closes only the top dialog, replay flags from each batch |

@@ -1,0 +1,1 @@
+| 2026-10-20 | F248 | [#263](https://github.com/songadaymann/wamp/pull/263) | [receipt](docs/review/wamp-mint-network-safety-2026-10-20.md) | Minting needs an explicit network, and mismatched server chains are rejected |

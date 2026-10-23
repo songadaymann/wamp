@@ -1,0 +1,1 @@
+| 2026-10-14 | F062, F109 | [#203](https://github.com/songadaymann/wamp/pull/203) | [receipt](docs/review/wamp-phone-profile-overlap-2026-10-14.md) | Signed-in phone room controls and the music Close button no longer overlap |

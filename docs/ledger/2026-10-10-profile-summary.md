@@ -1,0 +1,1 @@
+| 2026-10-10 | F033 | [#125](https://github.com/songadaymann/wamp/pull/125) | [receipt](docs/review/wamp-profile-summary-2026-10-10.md) | Profile summaries are read where only identity and progression are needed |

@@ -1,0 +1,1 @@
+| 2026-10-14 | F019 | [#200](https://github.com/songadaymann/wamp/pull/200) | [receipt](docs/review/wamp-remaining-dialogs-2026-10-14.md) | The remaining rare dialogs load after startup (F019 complete) |

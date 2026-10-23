@@ -1,0 +1,1 @@
+| 2026-10-19 | F064 | [#250](https://github.com/songadaymann/wamp/pull/250) | [receipt](docs/review/wamp-auth-state-2026-10-19.md) | Sign-out state and phone account menu taps fixed; account transitions extracted and tested |

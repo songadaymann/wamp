@@ -1,0 +1,1 @@
+| 2026-10-15 | — | [#218](https://github.com/songadaymann/wamp/pull/218)–[#219](https://github.com/songadaymann/wamp/pull/219) | [receipt](docs/review/wamp-guest-activity-2026-10-15.md) | Activity tabs, consistent guest names, and guest names that open their activity |

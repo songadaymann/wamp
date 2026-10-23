@@ -1,0 +1,1 @@
+| 2026-10-19 | F066 | [#251](https://github.com/songadaymann/wamp/pull/251)–[#254](https://github.com/songadaymann/wamp/pull/254) | [receipt](docs/review/wamp-runtime-context-2026-10-19.md) | OverworldPlayScene split into shared runtime reads, composition owners, frame stages and room presentation |

@@ -1,0 +1,1 @@
+| 2026-10-18 | F170 | [#245](https://github.com/songadaymann/wamp/pull/245) | [receipt](docs/review/wamp-menu-pause-2026-10-18.md) | Menus and dialogs pause solo play safely; co-op, PvP and Rush keep running |
