@@ -6,6 +6,7 @@ import type { RunFinishRequestBody, RunStartResponse } from '../../../runs/model
 import { createSession } from '../auth/store';
 import { HttpError } from '../core/http';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
+import { syncUserBadges } from '../progression/badgesTrophies';
 import { assertReplayableRunFinish, finalizeStatementWon, runPastDisconnect } from './finishReplay';
 import { handleRunFinish, handleRunStart } from './routes';
 
@@ -19,6 +20,8 @@ class Statement implements D1PreparedStatement {
 /** node:sqlite behind D1's batch shape: RETURNING rows in `results`, the change count in `meta` (as Miniflare's D1 does). */
 class Database implements D1Database {
   beforeBatch: ((sql: string[]) => Promise<void>) | null = null;
+  /** Throws instead of running a batch it picks, as a D1 blip partway through the settle step would. */
+  failBatch: ((sql: string[]) => boolean) | null = null;
   /** Fail the first read after the finalize commit, as a D1 blip in the post-commit steps would. */
   failAfterFinalize = false;
   private failNextRead = false;
@@ -33,6 +36,7 @@ class Database implements D1Database {
   async batch<T>(statements: D1PreparedStatement[]): Promise<T[]> {
     const sql = statements.map((statement) => (statement as Statement).sql);
     await this.beforeBatch?.(sql);
+    if (this.failBatch?.(sql)) throw new Error('D1 unavailable');
     this.read();
     this.db.exec('BEGIN');
     try {
@@ -75,9 +79,10 @@ afterEach(() => { sqlite.close(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 const headers = () => ({ 'Content-Type': 'application/json', Origin: 'https://wamp.land', Cookie: `ep_session=${session}` });
 const request = (body: unknown) => new Request('https://api.wamp.land/api/runs/run', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
-async function startRun() {
+async function startRun(startAtMs = 0) {
+  vi.setSystemTime(NOW.getTime() + startAtMs);
   const start = await (await handleRunStart(request({ roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, roomVersion: 1, goal }), env)).json() as RunStartResponse;
-  vi.setSystemTime(NOW.getTime() + 9_000);
+  vi.setSystemTime(NOW.getTime() + startAtMs + 9_000);
   const body: RunFinishRequestBody = { result: 'completed', elapsedMs: 9_000, deaths: 0, collectiblesCollected: 0, enemyCollectiblesCollected: 0, enemiesDefeated: 0, checkpointsReached: 0,
     verificationTrace: { schemaVersion: 1, verificationNonce: start.verificationNonce, snapshotHash: start.snapshotHash, traceDurationMs: 9_000, inputEvents: [], roomTransitions: [],
       breadcrumbs: Array.from({ length: 37 }, (_, index) => ({ atMs: Math.min(9_000, index * 250), roomX: 0, roomY: 0, x: 64, y: 64, vx: 0, vy: 0, grounded: true })),
@@ -98,6 +103,15 @@ const awards = () => ({
   finalized: count(`SELECT COUNT(*) AS n FROM point_events WHERE user_id = 'player' AND event_type = 'run_finalized'`),
 });
 const once = { firstClear: 1, dailyClear: 1, builder: 1, finalized: 1 };
+const settledMarkers = () => count(`SELECT COUNT(*) AS n FROM point_events WHERE event_type = 'run_settled'`);
+const stored = (attemptId: string, column: string) => (sqlite.prepare(`SELECT ${column} AS v FROM room_runs WHERE attempt_id = ?`).get(attemptId) as { v: string }).v;
+const finalizePoints = (attemptId: string) => sqlite.prepare(`SELECT points, created_at, json_extract(breakdown_json, '$.awardMode') AS mode
+  FROM point_events WHERE event_type = 'run_finalized' AND source_key = ?`).get(attemptId) as { points: number; created_at: string; mode: string };
+/** Fails the nth batch that records a player XP event. */
+const failNthXpEvent = (n: number) => {
+  let seen = 0;
+  return (sql: string[]) => sql.some((statement) => statement.includes('INTO pxp_events')) && (seen += 1) === n;
+};
 const progressMatchesEvents = () => {
   const pxp = sqlite.prepare(`SELECT total_pxp AS total, (SELECT SUM(amount) FROM pxp_events WHERE user_id = 'player') AS events
     FROM user_progress WHERE user_id = 'player'`).get() as { total: number; events: number };
@@ -140,6 +154,55 @@ describe('resent ranked finishes (F351)', () => {
     expect(await finish(attemptId, body, again)).toMatchObject({ status: 204 });
     expect(again).toHaveLength(0);
     expect(awards()).toEqual(once);
+  });
+
+  it('keeps the points and each recorded award\'s total when a deferred award fails, and a resend fills in the rest', async () => {
+    const { attemptId, body } = await startRun();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // 1st XP event: the daily clear before the reply. 2nd: first clear. 3rd (fails): weekly play.
+    database.failBatch = failNthXpEvent(3);
+    expect(await finish(attemptId, body)).toMatchObject({ status: 204 });
+    // The run's points went first and stay; the "rewards finished" marker never got written.
+    expect(awards()).toMatchObject({ finalized: 1, dailyClear: 1, firstClear: 1 });
+    expect(settledMarkers()).toBe(0);
+    // Each recorded XP event already carries its total; none is stranded for the re-run to skip.
+    expect(progressMatchesEvents()).toBe(true);
+
+    database.failBatch = null;
+    vi.setSystemTime(NOW.getTime() + 60_000);
+    expect(await finish(attemptId, body)).toMatchObject({ status: 204 });
+    expect(awards()).toEqual(once);
+    expect(settledMarkers()).toBe(1);
+    expect(count(`SELECT COUNT(*) AS n FROM pxp_events WHERE user_id = 'player' AND event_type = 'weekly_play'`)).toBe(1);
+    expect(progressMatchesEvents()).toBe(true);
+    // Re-settled events keep the clear's own time (day and week keys, daily caps, weekly boards).
+    expect(finalizePoints(attemptId).created_at).toBe(stored(attemptId, 'finished_at'));
+  });
+
+  it('lets two settles award the same badge at once without either throwing', async () => {
+    const { attemptId, body } = await startRun();
+    await finish(attemptId, body);
+    sqlite.prepare("DELETE FROM badge_awards WHERE user_id = 'player'").run();
+    await expect(Promise.all([syncUserBadges(env, 'player'), syncUserBadges(env, 'player')])).resolves.toBeDefined();
+    expect(count(`SELECT COUNT(*) AS n FROM badge_awards WHERE user_id = 'player' AND badge_id = 'player_first_clear'`)).toBe(1);
+    expect(count(`SELECT badge_count AS n FROM user_progress WHERE user_id = 'player'`))
+      .toBe(count(`SELECT COUNT(*) AS n FROM badge_awards WHERE user_id = 'player'`));
+  });
+
+  it('gives the first clear to the earlier stored finish when its resend lands after a later clear', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const earlier = await startRun();
+    database.failAfterFinalize = true;
+    expect(await finish(earlier.attemptId, earlier.body)).toMatchObject({ message: 'D1 unavailable' });
+    // The player restarted while that clear waited to resend, and cleared again.
+    const later = await startRun(30_000);
+    expect(await finish(later.attemptId, later.body)).toMatchObject({ status: 204 });
+    expect(finalizePoints(later.attemptId).mode).not.toBe('first_completion');
+
+    vi.setSystemTime(NOW.getTime() + 120_000);
+    expect(await finish(earlier.attemptId, earlier.body)).toMatchObject({ status: 204 });
+    expect(finalizePoints(earlier.attemptId).mode).toBe('first_completion');
+    expect(awards().firstClear).toBe(1);
   });
 
   it('replays a stored verification failure rather than reporting the resend as saved', async () => {
@@ -197,11 +260,13 @@ describe('finish replay helpers', () => {
     expect(replay(null)).toBe('409 finalized');
   });
 
-  it('reads a won finalize from RETURNING rows or from D1\'s change count', () => {
+  it('reads a won finalize from its RETURNING rows, and D1\'s change count only without them', () => {
     expect(finalizeStatementWon({ results: [{ attempt_id: 'a' }], meta: { changes: 1 } })).toBe(true);
-    expect(finalizeStatementWon({ results: [], meta: { changes: 1 } })).toBe(true);
     expect(finalizeStatementWon({ results: [{ attempt_id: 'a' }] })).toBe(true);
+    // A RETURNING statement that returned nothing lost, whatever the change count says.
+    expect(finalizeStatementWon({ results: [], meta: { changes: 1 } })).toBe(false);
     expect(finalizeStatementWon({ results: [], meta: { changes: 0 } })).toBe(false);
+    expect(finalizeStatementWon({ meta: { changes: 1 } })).toBe(true);
     expect(finalizeStatementWon(undefined)).toBe(false);
   });
 

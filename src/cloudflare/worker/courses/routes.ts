@@ -54,7 +54,10 @@ import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
+  finishedEarlier,
   previewRunFinalizePoints,
+  recordRunSettled,
+  type RunFinishOrder,
   upsertUserStats,
 } from '../runs/points';
 import {
@@ -420,9 +423,9 @@ export async function handleCourseRunFinish(
   );
   const settlement = { attemptId, userId: auth.user.id, goal: snapshot.goal, courseRecord, courseOwnerUserId, rewardScope };
   // An earlier finish committed, then threw or was cut off before its rewards finished. An Expanded
-  // Room finish also finalizes this copy row, and that route settles its own rewards.
+  // Room finish of this copy awards the same keys, so whichever route re-settles adds nothing twice.
   const settleResend = async (): Promise<Response> => {
-    if (!(await runFinishSettled(env, attemptId)) && !(await expandedRoomRunFinalized(env, attemptId))) {
+    if (!(await runFinishSettled(env, attemptId))) {
       await runPastDisconnect(executionContext, attemptId, settleCourseRunFinish(env, executionContext, settlement));
     }
     return noContentResponse(request);
@@ -617,6 +620,47 @@ export async function handleCourseRunFinish(
       Math.min(30 * 60 * 1000, reportedElapsedMs),
       attemptId
     ),
+    // A finish of an Expanded Room run's course_runs copy that wins (its finish time is now on the
+    // copy) closes the expanded_room_runs row too, so it is not left active. It awards nothing.
+    env.DB.prepare(
+      `
+        UPDATE expanded_room_runs
+        SET
+          finished_at = ?,
+          result = ?,
+          elapsed_ms = ?,
+          deaths = ?,
+          score = ?,
+          collectibles_collected = ?,
+          enemies_defeated = ?,
+          checkpoints_reached = ?,
+          verification_status = ?,
+          verification_reason = ?,
+          insight_deaths_json = ?,
+          insight_play_ms = ?
+        WHERE attempt_id = ? AND result = 'active'
+          AND EXISTS (
+            SELECT 1 FROM course_runs
+            WHERE course_runs.attempt_id = expanded_room_runs.legacy_course_attempt_id
+              AND course_runs.result <> 'active' AND course_runs.finished_at = ?
+          )
+      `
+    ).bind(
+      finishedAt,
+      finalBody.result,
+      finalBody.elapsedMs,
+      finalBody.deaths,
+      finalScore,
+      finalBody.collectiblesCollected,
+      finalBody.enemiesDefeated,
+      finalBody.checkpointsReached,
+      verificationStatus,
+      verificationReason,
+      deathLocationsJson(finalBody.verificationTrace, { verificationNonce: existing.verificationNonce, snapshotHash: existing.verificationSnapshotHash }, snapshot.roomRefs.map(ref => ref.coordinates), finalBody.elapsedMs, finalBody.deaths),
+      Math.min(30 * 60 * 1000, reportedElapsedMs),
+      attemptId,
+      finishedAt,
+    ),
   ]);
   if (!finalizeStatementWon(finalized)) {
     // A resend raced this request and finalized first: replay its answer. Its awards are keyed.
@@ -673,6 +717,7 @@ async function settleCourseRunFinish(
 
   let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
+    // Only clears stored before this one count, so a late resend and a later clear agree on "first".
     const previousBest = await loadBestCompletedCourseRunForUserAndVersion(
       env,
       userId,
@@ -680,6 +725,7 @@ async function settleCourseRunFinish(
       rewardScope.versions,
       attemptId,
       finalizedRun.courseVersion,
+      { finishedAt, attemptId },
     );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: previousBest === null,
@@ -693,6 +739,7 @@ async function settleCourseRunFinish(
   await awardRunDailyClear(env, finalizedRun,
     { type: 'course', id: finalizedRun.courseId, version: finalizedRun.courseVersion }, finishedAt);
   await scheduleRunRewards(executionContext, attemptId, async () => {
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags, finishedAt);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardCourseCreatorCompletionPoints(env, {
@@ -702,6 +749,7 @@ async function settleCourseRunFinish(
             finisherUserId: finalizedRun.userId,
             attemptId: finalizedRun.attemptId,
             rewardVersions: rewardScope.versions,
+            createdAt: finishedAt,
           })
         : null;
 
@@ -720,17 +768,10 @@ async function settleCourseRunFinish(
       rankVersions: rewardScope.versions,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    // Last award: runFinishSettled reads this event as "rewards finished".
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
     await upsertUserStats(env, userId);
+    // Last: runFinishSettled reads this marker as "every reward above finished".
+    await recordRunSettled(env, finalizedRun, finishedAt);
   });
-}
-
-/** Whether an Expanded Room finish finalized this attempt (and its course_runs copy). */
-async function expandedRoomRunFinalized(env: Env, attemptId: string): Promise<boolean> {
-  const row = await env.DB.prepare(`SELECT 1 AS finalized FROM expanded_room_runs
-    WHERE attempt_id = ? AND result <> 'active' LIMIT 1`).bind(attemptId).first<{ finalized: number }>();
-  return Boolean(row);
 }
 
 export async function handleCourseLeaderboard(
@@ -971,6 +1012,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
   courseVersions: readonly number[],
   excludeAttemptId: string | null,
   goalVersion: number,
+  finishedBefore: RunFinishOrder | null = null,
 ): Promise<CourseRunRecord | null> {
   const result = await env.DB.prepare(
     `
@@ -1007,6 +1049,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
     .filter(
       (row): row is CourseRunRow & { elapsed_ms: number; finished_at: string } =>
         typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string'
+        && finishedEarlier(row, finishedBefore)
     )
     .map(mapCourseRunRow);
 

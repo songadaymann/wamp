@@ -71,7 +71,10 @@ import { resolveCourseClearRewardScope, scopeClearRewardFlags } from '../progres
 import {
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
+  finishedEarlier,
   previewRunFinalizePoints,
+  recordRunSettled,
+  type RunFinishOrder,
   upsertUserStats,
 } from '../runs/points';
 import {
@@ -335,6 +338,11 @@ export async function handleExpandedRoomRunFinish(
   // An earlier finish committed, then threw or was cut off before its rewards finished.
   const settleResend = async (): Promise<Response> => {
     if (!(await runFinishSettled(env, attemptId))) {
+      // Invalidation deletes the course_runs copy (and the markers) before this row. A resend in
+      // between must not re-award a run that is being removed (F205).
+      if (existing.legacyCourseAttemptId && !(await loadCourseRunCopyOutcome(env, existing.legacyCourseAttemptId))) {
+        throw new HttpError(404, 'Expanded room run attempt was not found.');
+      }
       await runPastDisconnect(executionContext, attemptId, settleExpandedRoomRunFinish(env, executionContext, settlement));
     }
     return noContentResponse(request);
@@ -629,6 +637,7 @@ async function settleExpandedRoomRunFinish(
 
   let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
+    // Only clears stored before this one count, so a late resend and a later clear agree on "first".
     const previousBest = await loadBestCompletedExpandedRoomRunForUserAndVersion(
       env,
       userId,
@@ -636,6 +645,7 @@ async function settleExpandedRoomRunFinish(
       rewardScope.versions,
       goal,
       attemptId,
+      { finishedAt, attemptId },
     );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: previousBest === null,
@@ -649,6 +659,7 @@ async function settleExpandedRoomRunFinish(
   await awardRunDailyClear(env, progressionRun,
     { type: 'course', id: progressionRun.courseId, version: progressionRun.courseVersion }, finishedAt);
   await scheduleRunRewards(executionContext, attemptId, async () => {
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags, finishedAt);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardCourseCreatorCompletionPoints(env, {
@@ -658,6 +669,7 @@ async function settleExpandedRoomRunFinish(
             finisherUserId: finalizedRun.userId,
             attemptId: finalizedRun.attemptId,
             rewardVersions: rewardScope.versions,
+            createdAt: finishedAt,
           })
         : null;
 
@@ -676,9 +688,9 @@ async function settleExpandedRoomRunFinish(
       rankVersions: rewardScope.versions,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    // Last award: runFinishSettled reads this event as "rewards finished".
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
     await upsertUserStats(env, userId);
+    // Last: runFinishSettled reads this marker as "every reward above finished".
+    await recordRunSettled(env, finalizedRun, finishedAt);
   });
 }
 
@@ -1047,6 +1059,7 @@ async function loadBestCompletedExpandedRoomRunForUserAndVersion(
   expandedRoomVersions: readonly number[],
   goal: CourseGoal,
   excludeAttemptId: string | null,
+  finishedBefore: RunFinishOrder | null = null,
 ): Promise<ExpandedRoomRunRecord | null> {
   const result = await env.DB.prepare(
     `
@@ -1087,7 +1100,8 @@ async function loadBestCompletedExpandedRoomRunForUserAndVersion(
   const runs = result.results
     .filter(
       (row): row is ExpandedRoomRunRow & { elapsed_ms: number; finished_at: string } =>
-        typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string',
+        typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string'
+        && finishedEarlier(row, finishedBefore),
     )
     .map(mapExpandedRoomRunRow);
 

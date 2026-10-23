@@ -49,18 +49,22 @@ export function assertReplayableRunFinish(
   if (error) throw error;
 }
 
-/** Whether this guarded finalize statement claimed the still-active row (RETURNING rows, or D1's change count). */
+/**
+ * Whether a guarded finalize statement (UPDATE ... RETURNING) claimed the still-active row. Its
+ * RETURNING rows are the answer; D1's change count is read only when a result carries no rows array.
+ */
 export function finalizeStatementWon(result: { results?: unknown[]; meta?: { changes?: number } } | undefined): boolean {
-  return (result?.results?.length ?? 0) > 0 || (result?.meta?.changes ?? 0) > 0;
+  return Array.isArray(result?.results) ? result.results.length > 0 : (result?.meta?.changes ?? 0) > 0;
 }
 
 /**
- * The finish's deferred rewards write the run_finalized point event last, so its presence means
- * the rewards finished. Without it, a resend runs the settle step again; every award is keyed.
+ * A finish's deferred rewards write a 0-point run_settled event after everything else, so its
+ * presence means they all finished. Without it, a resend runs the settle step again; every award
+ * is keyed and adds to the totals with its own event, so a re-run only fills in what is missing.
  */
 export async function runFinishSettled(env: Env, attemptId: string): Promise<boolean> {
   const row = await env.DB.prepare(`SELECT 1 AS settled FROM point_events
-    WHERE event_type = 'run_finalized' AND source_key = ? LIMIT 1`).bind(attemptId).first<{ settled: number }>();
+    WHERE event_type = 'run_settled' AND source_key = ? LIMIT 1`).bind(attemptId).first<{ settled: number }>();
   return Boolean(row);
 }
 

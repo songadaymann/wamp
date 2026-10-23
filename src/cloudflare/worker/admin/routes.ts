@@ -379,7 +379,7 @@ async function handleAdminRoomClear(
       env.DB.prepare(
         `
           DELETE FROM point_events
-          WHERE event_type = 'run_finalized'
+          WHERE event_type IN ('run_finalized', 'run_settled')
             AND source_key IN (SELECT value FROM json_each(?))
         `
       ).bind(JSON.stringify(attemptIds))

@@ -178,6 +178,13 @@ export async function handleAdminSuspiciousInvalidate(
   ]) {
     statements.push(env.DB.prepare('DELETE FROM point_events WHERE id = ?').bind(event.id));
   }
+  // The 0-point "rewards finished" markers of the removed runs go in the same batch (F351).
+  const removedAttemptIds = [...preview.roomRuns, ...preview.courseRuns].map((run) => run.attemptId);
+  if (removedAttemptIds.length > 0) {
+    statements.push(env.DB.prepare(`DELETE FROM point_events
+      WHERE event_type = 'run_settled' AND source_key IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(removedAttemptIds)));
+  }
   statements.push(...prepareProgressRollbackStatements(env, rollback, createdAt));
   statements.push(...prepareStatsRollbackStatements(env, statsRollback));
 

@@ -54,6 +54,7 @@ import {
   getRunMetricCapsForSnapshot,
   loadBestCompletedRunForUserAndRoomVersion,
   previewRunFinalizePoints,
+  recordRunSettled,
   upsertUserStats,
 } from './points';
 import {
@@ -531,19 +532,22 @@ async function settleRoomRunFinish(
   if (finalizedRun.result === 'completed') {
     const isBetterThan = (best: RoomRunRecord | null) => best === null
       || sortCompletedRunsForLeaderboard([finalizedRun, best], goal)[0]?.attemptId === finalizedRun.attemptId;
+    // Only clears stored before this one count, so a late resend and a later clear agree on "first".
+    const order = { finishedAt, attemptId };
     const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
       env,
       userId,
       finalizedRun.roomId,
       finalizedRun.roomVersion,
       goal,
-      finalizedRun.attemptId
+      finalizedRun.attemptId,
+      order,
     );
     isNewPersonalBest = isBetterThan(previousBest);
     const rewardBest = rewardScope.versions.length === 1 && rewardScope.versions[0] === finalizedRun.roomVersion
       ? previousBest
       : await loadBestCompletedRunForUserAndRoomVersion(
-          env, userId, finalizedRun.roomId, rewardScope.versions, goal, finalizedRun.attemptId,
+          env, userId, finalizedRun.roomId, rewardScope.versions, goal, finalizedRun.attemptId, order,
         );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: rewardBest === null,
@@ -562,6 +566,7 @@ async function settleRoomRunFinish(
   await awardRunDailyClear(env, finalizedRun,
     { type: 'room', id: finalizedRun.roomId, version: finalizedRun.roomVersion }, finishedAt);
   await scheduleRunRewards(executionContext, attemptId, async () => {
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags, finishedAt);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardRoomCreatorCompletionPoints(env, {
@@ -571,6 +576,7 @@ async function settleRoomRunFinish(
             finisherUserId: finalizedRun.userId,
             attemptId: finalizedRun.attemptId,
             rewardVersions: rewardScope.versions,
+            createdAt: finishedAt,
           })
         : null;
     if (creatorPointEvent) {
@@ -586,9 +592,9 @@ async function settleRoomRunFinish(
       ownContent: rewardScope.ownContent,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    // Last award: runFinishSettled reads this event as "rewards finished".
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
     await upsertUserStats(env, userId);
+    // Last: runFinishSettled reads this marker as "every reward above finished".
+    await recordRunSettled(env, finalizedRun, finishedAt);
   });
 }
 
