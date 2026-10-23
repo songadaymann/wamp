@@ -1,6 +1,8 @@
 import type { ReadyToPublishChecklist } from './clearCheck';
 
 let activeClose: (() => void) | null = null;
+// A zoom-only editor render passes the same checklist again; its rows are already on screen.
+const renderedEditorChecklists = new WeakMap<HTMLElement, ReadyToPublishChecklist>();
 export function closePublishChecklist(): void { activeClose?.(); }
 
 export function renderChecklistRows(container: HTMLElement, checklist: ReadyToPublishChecklist): void {
@@ -17,7 +19,10 @@ export function renderEditorClearCheck(doc: Document, checklist?: ReadyToPublish
   const root = doc.getElementById('editor-clear-check');
   root?.classList.toggle('hidden', !checklist);
   const rows = doc.getElementById('editor-clear-check-rows');
-  if (checklist && rows) renderChecklistRows(rows, checklist);
+  if (checklist && rows && renderedEditorChecklists.get(rows) !== checklist) {
+    renderChecklistRows(rows, checklist);
+    renderedEditorChecklists.set(rows, checklist);
+  }
   const heading = doc.getElementById('editor-clear-check-title');
   if (heading) heading.textContent = checklist?.cleared ? 'Clear Check ✓' : 'Ready to Publish';
 }

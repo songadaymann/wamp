@@ -1657,7 +1657,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private updateZoomUI(): void {
-    this.renderEditorUi();
+    this.renderEditorUi(true);
   }
 
   fitToScreen(): void {
@@ -1897,9 +1897,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.chromeController.refreshBottomBar();
   }
 
-  private renderEditorUi(): void {
+  private renderEditorUi(zoomOnly = false): void {
     this.objectMoveController.validate();
-    this.chromeController.render();
+    this.chromeController.render(zoomOnly);
     const practice = document.getElementById('btn-clear-check-test-here');
     if (practice) { practice.textContent = this.testFromHerePlacement ? 'Cancel practice start' : 'Test from Here'; practice.setAttribute('aria-pressed', String(this.testFromHerePlacement)); }
     this.renderMusicUi();

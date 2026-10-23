@@ -51,10 +51,16 @@ export function recordEditorDraftClear(binding: EditorClearCheckBinding | null |
   return true;
 }
 
+/** The fingerprint of this room's last recorded editor clear, if any. */
+export function getEditorDraftClearReceipt(roomId: string, storage: ClearCheckStorage | undefined = getStorage()): string | null {
+  return readReceipts(storage).find(item => item.roomId === roomId)?.fingerprint ?? null;
+}
+
 export function hasEditorDraftClear(snapshot: RoomSnapshot, storage: ClearCheckStorage | undefined = getStorage()): boolean {
   if (!snapshot.goal) return false;
-  const receipt = readReceipts(storage).find(item => item.roomId === snapshot.id);
-  return receipt?.fingerprint === getEditorDraftFingerprint(snapshot);
+  const receipt = getEditorDraftClearReceipt(snapshot.id, storage);
+  // Fingerprinting copies, sorts and hashes the whole room, so skip it when there is nothing to match.
+  return receipt !== null && receipt === getEditorDraftFingerprint(snapshot);
 }
 
 function pointInsideTerrain(room: RoomSnapshot, x: number, y: number): boolean {
