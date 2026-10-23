@@ -100,6 +100,8 @@ describe('guestbook signing', () => {
       [{ displayName: ' A ' }, 'Name must be at least 2 characters.'],
       [{ displayName: 'n'.repeat(33) }, 'Name must be 32 characters or fewer.'],
       [{ displayName: '<b>Ada</b>' }, 'Name cannot contain angle brackets.'],
+      [{ displayName: 'https://example.test' }, 'Links are not allowed in the guestbook yet.'],
+      [{ displayName: 'visit www.example.test' }, 'Links are not allowed in the guestbook yet.'],
       [{ body: undefined }, 'Message is required.'],
       [{ body: ' \n ' }, 'Message is required.'],
       [{ body: 'm'.repeat(281) }, 'Message must be 280 characters or fewer.'],

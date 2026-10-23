@@ -39,6 +39,8 @@ import {
 const GUESTBOOK_PER_NETWORK: RateLimitRule = { bucket: 'guestbook:network', limit: 5, windowMs: 60 * 60 * 1000 };
 const GUESTBOOK_PER_SESSION_MINUTE: RateLimitRule = { bucket: 'guestbook:session-minute', limit: 1, windowMs: 60 * 1000 };
 const GUESTBOOK_PER_SESSION_DAY: RateLimitRule = { bucket: 'guestbook:session-day', limit: 10, windowMs: 24 * 60 * 60 * 1000 };
+/** Names and messages are both shown on the page, so neither may carry a link. */
+const GUESTBOOK_LINK_PATTERN = /(https?:\/\/|www\.)/i;
 
 export async function handleGuestbookRequest(
   request: Request,
@@ -184,6 +186,10 @@ function normalizeGuestbookDisplayName(value: unknown): string {
     throw new HttpError(400, 'Name cannot contain angle brackets.');
   }
 
+  if (GUESTBOOK_LINK_PATTERN.test(normalized)) {
+    throw new HttpError(400, 'Links are not allowed in the guestbook yet.');
+  }
+
   return normalized;
 }
 
@@ -205,7 +211,7 @@ function normalizeGuestbookMessage(value: unknown): string {
     throw new HttpError(400, 'Message cannot contain angle brackets.');
   }
 
-  if (/(https?:\/\/|www\.)/i.test(normalized)) {
+  if (GUESTBOOK_LINK_PATTERN.test(normalized)) {
     throw new HttpError(400, 'Links are not allowed in the guestbook yet.');
   }
 
