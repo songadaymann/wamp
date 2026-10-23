@@ -44,22 +44,25 @@ const hide = (id: string, options: CallOptions = {}) =>
   call('DELETE', `/api/guestbook/entries/${id}`, { ...options, headers: { 'x-admin-key': 'test-admin-key', ...options.headers } });
 const count = (where = '') => (f.sqlite.prepare(`SELECT COUNT(*) AS n FROM guestbook_entries ${where}`).get() as { n: number }).n;
 const slotCount = () => (f.sqlite.prepare("SELECT COUNT(*) AS n FROM rate_limit_events WHERE bucket LIKE 'guestbook:%'").get() as { n: number }).n;
-const insertEntry = (id: string, createdAt: string, hiddenAt: string | null = null) => f.sqlite.prepare(`INSERT INTO guestbook_entries
+const insertEntry = (id: string, createdAt: string, hiddenAt: string | null = null, name = `Name ${id}`) => f.sqlite.prepare(`INSERT INTO guestbook_entries
   (id,display_name,body,user_id,guest_session_id,ip_hash,user_agent,created_at,hidden_at) VALUES (?,?,?,'p1','session-private','hash-private','Agent-private',?,?)`)
-  .run(id, `Name ${id}`, `Body ${id}`, createdAt, hiddenAt);
+  .run(id, name, `Body ${id}`, createdAt, hiddenAt);
 
 describe('guestbook list', () => {
   it('lists visible entries newest first, with only their public fields, up to the limit asked for', async () => {
     insertEntry('entry-old-0001', '2026-10-01T00:00:00.000Z');
     insertEntry('entry-new-0002', '2026-10-03T00:00:00.000Z');
     insertEntry('entry-gone-003', '2026-10-04T00:00:00.000Z', NOW);
-    insertEntry('entry-mid-0004', '2026-10-02T00:00:00.000Z');
+    insertEntry('entry-mid-0004', '2026-10-02T00:00:00.000Z', null, 'P1');
+    const prepare = vi.spyOn(f.env.DB, 'prepare');
     const { status, body } = await list();
+    expect(prepare).toHaveBeenCalledTimes(1);
     expect(status).toBe(200);
     expect(body.entries.map((item) => item.id)).toEqual(['entry-new-0002', 'entry-mid-0004', 'entry-old-0001']);
-    expect(body.entries[0]).toEqual({ id: 'entry-new-0002', displayName: 'Name entry-new-0002', body: 'Body entry-new-0002', createdAt: '2026-10-03T00:00:00.000Z', signedIn: true });
+    expect(body.entries[0]).toEqual({ id: 'entry-new-0002', displayName: 'Name entry-new-0002', body: 'Body entry-new-0002', createdAt: '2026-10-03T00:00:00.000Z', signedIn: false });
+    expect(body.entries.map((item) => item.signedIn)).toEqual([false, true, false]);
     expect(body.config).toEqual({ turnstileSiteKey: 'site-key', turnstileRequired: true });
-    expect(JSON.stringify(body)).not.toMatch(/private|p1/);
+    expect(JSON.stringify(body)).not.toMatch(/private|@example\.test|user_?id|account/i);
 
     expect((await list('?limit=1')).body.entries).toHaveLength(1);
     for (const limit of ['0', '81', '1.5', 'many']) {
@@ -87,15 +90,22 @@ describe('guestbook signing', () => {
     expect((await list()).body.entries.map((item) => item.displayName)).toEqual(['Ada L']);
   });
 
-  it("marks an entry as signed in only under the account's own name", async () => {
+  it("keeps every signed-in entry's account, and marks it signed in only under the account's current name", async () => {
     f.sqlite.prepare("UPDATE users SET display_name = 'Ada  Lovelace' WHERE id = 'p1'").run();
     expect((await sign({ displayName: ' ada lovelace ' }, { as: 'p1' })).body.entry).toMatchObject({ displayName: 'ada lovelace', signedIn: true });
     expect((await sign({ displayName: 'Someone Else' }, { as: 'p1' }))).toMatchObject({ status: 201, body: { entry: { displayName: 'Someone Else', signedIn: false } } });
     expect((await sign({ displayName: 'Ada Lovelace' })).body.entry.signedIn).toBe(false);
     expect(f.sqlite.prepare('SELECT display_name, user_id FROM guestbook_entries ORDER BY rowid').all()).toEqual([
-      { display_name: 'ada lovelace', user_id: 'p1' }, { display_name: 'Someone Else', user_id: null }, { display_name: 'Ada Lovelace', user_id: null },
+      { display_name: 'ada lovelace', user_id: 'p1' }, { display_name: 'Someone Else', user_id: 'p1' }, { display_name: 'Ada Lovelace', user_id: null },
     ]);
-    expect((await list()).body.entries.map((item) => item.signedIn).sort()).toEqual([false, false, true]);
+    const marks = async () => Object.fromEntries((await list()).body.entries.map((item) => [`${item.displayName}${item.signedIn ? ' (signed in)' : ''}`, item.signedIn]));
+    expect(Object.keys(await marks()).sort()).toEqual(['Ada Lovelace', 'Someone Else', 'ada lovelace (signed in)']);
+
+    // A rename moves the mark to entries under the new name; older ones lose it.
+    f.sqlite.prepare("UPDATE users SET display_name = 'someone  else' WHERE id = 'p1'").run();
+    expect(Object.keys(await marks()).sort()).toEqual(['Ada Lovelace', 'Someone Else (signed in)', 'ada lovelace']);
+    f.sqlite.prepare("UPDATE users SET display_name = '' WHERE id = 'p1'").run();
+    expect(Object.values(await marks())).toEqual([false, false, false]);
   });
 
   it('removes invisible formatting characters before checking names and messages', async () => {
