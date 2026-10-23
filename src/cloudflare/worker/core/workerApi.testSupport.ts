@@ -4,15 +4,10 @@ import { fixture } from '../activity/testDatabase';
 import { createSession } from '../auth/store';
 import type { Env } from './types';
 
-/**
- * The whole API Worker on the real migrated database (activity/testDatabase), called the way the
- * browser and bots call it: by URL, with a session cookie or a bearer token. Tests written against
- * this keep working when the handlers behind a URL are moved or merged.
- */
-export const ADMIN_KEY = 'fixture-admin-key';
+const ADMIN_KEY = 'fixture-admin-key';
 const ORIGIN = 'https://wamp.land';
 
-export interface ApiOptions {
+interface ApiOptions {
   method?: string;
   body?: unknown;
   /** A session token from signIn(). */
@@ -24,13 +19,18 @@ export interface ApiOptions {
   admin?: boolean;
 }
 
-export interface ApiResponse {
+interface ApiResponse {
   status: number;
   /** Loosely typed JSON: each assertion names the fields it needs. */
   body: any;
   headers: Headers;
 }
 
+/**
+ * The whole API Worker on the real migrated database (activity/testDatabase), called the way the
+ * browser and bots call it: by URL, with a session cookie or a bearer token. Tests written against
+ * this keep working when the handlers behind a URL are moved or merged.
+ */
 export function workerApi(envOverrides: Partial<Env> = {}) {
   const f = fixture();
   Object.assign(f.env, { ADMIN_API_KEY: ADMIN_KEY }, envOverrides);

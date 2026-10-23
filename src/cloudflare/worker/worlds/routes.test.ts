@@ -77,6 +77,20 @@ describe('starting a World', () => {
     expect([again.status, again.body.error]).toEqual([409, 'This grant has already activated a World.']);
   });
 
+  it('names a World only when its owner asks and an admin approves', async () => {
+    const { worldId } = await worldWithMember();
+    expect((await api.call(world(worldId, '/name-requests'), { session: member, body: { proposedName: 'Lava Land' } })).status).toBe(403);
+    expect((await api.call(world(worldId, '/name-requests'), { session: owner, body: { proposedName: 'L' } })).status).toBe(400);
+    const requested = await api.call(world(worldId, '/name-requests'), { session: owner, body: { proposedName: 'Lava Land' } });
+    expect(requested.status).toBe(201);
+    expect((await api.call(world(worldId))).body.displayName).toBeNull();
+
+    const decide = (decision: string) => api.call(`/api/admin/worlds/name-requests/${requested.body.request.id}`, { method: 'PATCH', admin: true, body: { decision } });
+    expect((await decide('approve')).status).toBe(200);
+    expect((await api.call(world(worldId))).body.displayName).toBe('Lava Land');
+    expect((await decide('reject')).status).toBe(409);
+  });
+
   it('answers 404 for every World route while Worlds are switched off', async () => {
     const off = workerApi();
     try {
