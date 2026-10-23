@@ -303,13 +303,113 @@
     background: var(--course-editor-blue) !important;
     color: var(--wamp-black) !important;
   }
+
+  .course-editor-sheet-handle {
+    display: none;
+  }
+
+  /* Phones: the setup panel is a sheet that leaves the map usable beside it, and its handle
+     folds it down to the selected cell (F365). */
   body[data-device-class='phone'] .course-editor-panel {
-    /* Keep the setup header and World button below the account controls. */
-    top: calc(96px + var(--safe-top));
-    left: calc(8px + var(--safe-left));
-    right: calc(8px + var(--safe-right));
-    bottom: calc(8px + var(--safe-bottom));
+    top: auto;
+    left: var(--safe-left);
+    right: var(--safe-right);
+    bottom: 0;
     width: auto;
-    padding: 12px;
+    height: min(46dvh, 400px);
+    /* Keep the setup header and World button below the account controls. */
+    max-height: calc(100dvh - 96px - var(--safe-top));
+    gap: 10px;
+    padding: 0 12px calc(12px + var(--safe-bottom));
+    border-width: 3px 0 0;
+    box-shadow: 0 -3px 0 var(--course-editor-shadow);
+  }
+
+  body[data-device-class='phone'][data-orientation-state='landscape'] .course-editor-panel {
+    top: calc(96px + var(--safe-top));
+    right: auto;
+    bottom: calc(8px + var(--safe-bottom));
+    left: calc(8px + var(--safe-left));
+    width: min(340px, 44vw);
+    height: auto;
+    max-height: none;
+    padding: 0 12px 12px;
+    border-width: 3px;
+    box-shadow: 4px 4px 0 var(--course-editor-shadow);
+  }
+
+  body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] {
+    height: auto;
+  }
+
+  body[data-device-class='phone'][data-orientation-state='landscape'] .course-editor-panel[data-sheet='collapsed'] {
+    bottom: auto;
+  }
+
+  body[data-device-class='phone'] .course-editor-sheet-handle {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 0 -12px;
+    padding: 6px 12px;
+    border: 0;
+    border-bottom: 2px solid var(--course-editor-blue);
+    border-radius: 0;
+    background: var(--course-editor-paper);
+    color: var(--course-editor-blue-deep);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    letter-spacing: 0.04em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  body[data-device-class='phone'] .course-editor-sheet-handle::before {
+    content: '';
+    width: 40px;
+    height: 4px;
+    background: var(--course-editor-blue-deep);
+  }
+
+  /* Picking cells is the job on a phone, so the selected cell leads the sheet. */
+  body[data-device-class='phone'] .course-editor-selected-cell {
+    order: -1;
+  }
+
+  body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] :is(
+    .course-editor-toolbar,
+    .history-modal-kicker,
+    .history-modal-title,
+    .course-editor-scroll > .about-section:not(.course-editor-selected-cell),
+    .course-editor-selected-cell > .about-section-title,
+    #btn-course-workbench-open-room,
+    #btn-course-workbench-center-room,
+    #btn-course-workbench-edit-course
+  ) {
+    display: none;
+  }
+
+  body[data-device-class='phone'] #course-editor-shell .course-editor-panel[data-sheet='collapsed'] .course-editor-selected-cell {
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] #course-workbench-selected-room-summary {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] #course-workbench-selected-room-status {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  body[data-device-class='phone'] .course-editor-panel[data-sheet='collapsed'] #course-workbench-selected-room-actions {
+    grid-template-columns: auto;
   }
 }

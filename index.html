@@ -1860,7 +1860,8 @@
         </div>
       </div>
       <div id="course-editor-shell" class="course-editor-shell hidden">
-        <div class="course-editor-panel">
+        <div id="course-workbench-panel" class="course-editor-panel" data-sheet="open">
+          <button id="btn-course-workbench-sheet" class="course-editor-sheet-handle" type="button" aria-controls="course-workbench-panel" aria-expanded="true">Hide setup</button>
           <div class="course-editor-header">
             <div class="course-editor-header-copy">
               <div class="history-modal-kicker">Expanded Rooms</div>
@@ -1890,7 +1891,7 @@
               <div class="goal-context-note">Falling past the outer bottom edge respawns you. Drops between cells stay open.</div>
             </div>
 
-            <div class="about-section">
+            <div class="about-section course-editor-selected-cell">
               <div class="about-section-title">Selected Cell</div>
               <div id="course-workbench-selected-room-summary" class="goal-summary">Room 0,0</div>
               <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>

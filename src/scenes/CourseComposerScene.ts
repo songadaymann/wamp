@@ -70,6 +70,7 @@ import {
   snapRoundedCameraScroll,
 } from './overworld/camera';
 import { OverworldWorldStreamingController } from './overworld/worldStreaming';
+import { ComposerTouchController, uncoveredMapArea, type MapArea } from './editor/composerMap';
 import type { CourseComposerSceneData, EditorSceneData, OverworldPlaySceneData } from './sceneData';
 
 const MIN_ZOOM = 0.08;
@@ -115,6 +116,21 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   private panStartScroll = { x: 0, y: 0 };
   private loading = false;
   private roomMetaByRoomId = new Map<string, CoursePublishedRoomMeta>();
+  private readonly touch = new ComposerTouchController({
+    beginPan: (point) => this.beginPan(point),
+    pan: (point) => this.applyPan(point),
+    worldPoint: (x, y) => getScreenAnchorWorldPoint(x, y, this.cameras.main),
+    pinch: (factor, anchor, x, y) => {
+      const camera = this.cameras.main;
+      this.inspectZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+      camera.setZoom(this.inspectZoom);
+      const scroll = getScrollForScreenAnchor(anchor.x, anchor.y, x, y, camera);
+      camera.setScroll(scroll.x, scroll.y);
+      this.constrainInspectCamera();
+    },
+    select: (pointer) => this.handlePointerAction(pointer),
+    settle: () => this.settleCamera(),
+  });
 
   constructor() {
     super({ key: 'CourseComposerScene' });
@@ -122,6 +138,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private readonly handleWake = (_sys: Phaser.Scenes.Systems, data?: CourseComposerSceneData): void => {
     void this.openFromData(data);
+  };
+
+  private readonly handleTouchBlur = (): void => {
+    this.touch.reset();
   };
 
   private readonly handleResize = (): void => {
@@ -183,6 +203,9 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.setupPointerControls();
     this.setupKeyboard();
     this.events.on('wake', this.handleWake, this);
+    this.events.on('sleep', this.handleTouchBlur);
+    this.game.events.on('blur', this.handleTouchBlur);
+    this.game.events.on('hidden', this.handleTouchBlur);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.scale.on('resize', this.handleResize, this);
     this.game.canvas.addEventListener('wheel', this.handleCanvasWheel, { passive: false });
@@ -284,6 +307,18 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       goalAuthoring.clearExpandedGoalMarkers(draft.goal);
     });
     this.tool = 'select';
+  }
+
+  /** Keeps the middle of the uncovered map in place while the setup panel changes size. */
+  keepMapCenterWhile(change: () => void): void {
+    const camera = this.cameras.main;
+    const before = this.getUncoveredMapArea();
+    const world = getScreenAnchorWorldPoint(before.x + before.width / 2, before.y + before.height / 2, camera);
+    change();
+    const after = this.getUncoveredMapArea();
+    const scroll = getScrollForScreenAnchor(world.x, world.y, after.x + after.width / 2, after.y + after.height / 2, camera);
+    camera.setScroll(scroll.x, scroll.y);
+    this.constrainInspectCamera();
   }
 
   centerSelectedRoom(): void {
@@ -508,9 +543,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     const focusBounds = this.getCourseBounds();
     const roomCount =
       (focusBounds.maxX - focusBounds.minX + 1) * (focusBounds.maxY - focusBounds.minY + 1);
+    const view = this.getUncoveredMapArea();
     const fitZoom = getFitZoomForRoom(
-      this.scale.width,
-      this.scale.height,
+      view.width,
+      view.height,
       Math.max(ROOM_PX_WIDTH, (focusBounds.maxX - focusBounds.minX + 1) * ROOM_PX_WIDTH),
       Math.max(ROOM_PX_HEIGHT, (focusBounds.maxY - focusBounds.minY + 1) * ROOM_PX_HEIGHT),
       roomCount > 1 ? FIT_PADDING : 48,
@@ -1245,18 +1281,21 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private setupPointerControls(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch) {
+        this.touch.down(pointer);
+        return;
+      }
       if (this.pointerRequestsPan(pointer)) {
         this.isPanning = true;
-        this.panStartPointer = { x: pointer.x, y: pointer.y };
-        this.panStartScroll = {
-          x: this.cameras.main.scrollX,
-          y: this.cameras.main.scrollY,
-        };
-        return;
+        this.beginPan(pointer);
       }
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch) {
+        this.touch.move(pointer);
+        return;
+      }
       if (!this.isPanning) {
         return;
       }
@@ -1271,22 +1310,45 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         return;
       }
 
-      const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
-      const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
-      this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
-      this.constrainInspectCamera();
+      this.applyPan(pointer);
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch) {
+        this.touch.up(pointer);
+        return;
+      }
       if (this.isPanning) {
         this.isPanning = false;
-        this.centerCoordinates = this.getCameraCenterCoordinates();
-        void this.refreshAround(this.centerCoordinates);
+        this.settleCamera();
         return;
       }
 
       this.handlePointerAction(pointer);
     });
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch) this.touch.up(pointer, true);
+    });
+  }
+
+  private beginPan(point: { x: number; y: number }): void {
+    this.panStartPointer = { x: point.x, y: point.y };
+    this.panStartScroll = {
+      x: this.cameras.main.scrollX,
+      y: this.cameras.main.scrollY,
+    };
+  }
+
+  private applyPan(point: { x: number; y: number }): void {
+    const dx = (this.panStartPointer.x - point.x) / this.cameras.main.zoom;
+    const dy = (this.panStartPointer.y - point.y) / this.cameras.main.zoom;
+    this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    this.constrainInspectCamera();
+  }
+
+  private settleCamera(): void {
+    this.centerCoordinates = this.getCameraCenterCoordinates();
+    void this.refreshAround(this.centerCoordinates);
   }
 
   private setupKeyboard(): void {
@@ -1412,9 +1474,20 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   private centerCameraOnCoordinates(coordinates: RoomCoordinates): void {
     const origin = this.getRoomOrigin(coordinates);
     this.syncCameraBounds();
-    this.cameras.main.setZoom(this.inspectZoom);
-    this.cameras.main.centerOn(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2);
+    const camera = this.cameras.main;
+    camera.setZoom(this.inspectZoom);
+    // Centre the cell in the map the setup panel leaves visible, not behind the phone sheet.
+    const view = this.getUncoveredMapArea();
+    const scroll = getScrollForScreenAnchor(origin.x + ROOM_PX_WIDTH / 2, origin.y + ROOM_PX_HEIGHT / 2,
+      view.x + view.width / 2, view.y + view.height / 2, camera);
+    camera.setScroll(scroll.x, scroll.y);
     this.constrainInspectCamera();
+  }
+
+  private getUncoveredMapArea(): MapArea {
+    const canvas = this.game.canvas;
+    const panel = canvas.ownerDocument.querySelector<HTMLElement>('.course-editor-panel');
+    return uncoveredMapArea(canvas.getBoundingClientRect(), panel?.getBoundingClientRect() ?? null, this.scale.width, this.scale.height);
   }
 
   private syncCameraBounds(): void {
@@ -1438,10 +1511,11 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private getCameraCenterCoordinates(): RoomCoordinates {
-    const camera = this.cameras.main;
+    const view = this.getUncoveredMapArea();
+    const center = getScreenAnchorWorldPoint(view.x + view.width / 2, view.y + view.height / 2, this.cameras.main);
     return {
-      x: Math.floor((camera.scrollX + camera.width * 0.5 / camera.zoom) / ROOM_PX_WIDTH),
-      y: Math.floor((camera.scrollY + camera.height * 0.5 / camera.zoom) / ROOM_PX_HEIGHT),
+      x: Math.floor(center.x / ROOM_PX_WIDTH),
+      y: Math.floor(center.y / ROOM_PX_HEIGHT),
     };
   }
 
@@ -1493,6 +1567,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
     this.draftLifecycle = null;
     this.backupDebouncer.cancel();
     this.events.off('wake', this.handleWake, this);
+    this.events.off('sleep', this.handleTouchBlur);
+    this.game.events.off('blur', this.handleTouchBlur);
+    this.game.events.off('hidden', this.handleTouchBlur);
+    this.touch.reset();
     this.scale.off('resize', this.handleResize, this);
     this.worldStreamingController.destroy();
     this.game.canvas.removeEventListener('wheel', this.handleCanvasWheel);

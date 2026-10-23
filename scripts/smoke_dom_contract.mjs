@@ -73,6 +73,8 @@ const requiredIdsByController = {
   ],
   'CourseComposerPanelController': [
     'course-editor-shell',
+    'course-workbench-panel',
+    'btn-course-workbench-sheet',
     'course-workbench-title-input',
     'course-workbench-pits-deadly',
     'course-workbench-status',
