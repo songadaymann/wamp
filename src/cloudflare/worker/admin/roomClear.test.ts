@@ -37,6 +37,7 @@ beforeEach(() => {
     CREATE TABLE room_versions (room_id TEXT, version INTEGER, published_by_user_id TEXT);
     CREATE TABLE room_difficulty_votes (room_id TEXT, user_id TEXT);
     CREATE TABLE point_events (id INTEGER PRIMARY KEY, event_type TEXT, source_key TEXT);
+    CREATE TABLE run_settlements (attempt_kind TEXT, attempt_id TEXT, settled_at TEXT, PRIMARY KEY (attempt_kind, attempt_id));
     CREATE TABLE users (id TEXT PRIMARY KEY);
   `);
   db.exec(readFileSync('migrations/0070_account_suspension.sql', 'utf8'));
@@ -65,11 +66,14 @@ describe('admin room clear (F205)', () => {
     db.prepare('INSERT INTO rooms VALUES (?, ?)').run('4,2', 'builder');
     const addRun = db.prepare('INSERT INTO room_runs VALUES (?, ?, ?)');
     const addPoints = db.prepare('INSERT INTO point_events (event_type, source_key) VALUES (?, ?)');
+    const settle = db.prepare("INSERT INTO run_settlements VALUES ('room', ?, '2026-10-01T00:00:00.000Z')");
     for (let i = 0; i < 150; i += 1) {
       addRun.run(`attempt-${i}`, '4,2', `player-${i % 7}`);
       addPoints.run('run_finalized', `attempt-${i}`);
+      settle.run(`attempt-${i}`);
     }
     addPoints.run('run_finalized', 'attempt-in-another-room');
+    settle.run('attempt-in-another-room');
 
     const url = new URL('https://api.wamp.land/api/admin/rooms/4%2C2/clear');
     const response = await handleAdminRequest(new Request(url, { method: 'POST', headers: { Origin: 'https://wamp.land' } }), url, env);
@@ -77,6 +81,8 @@ describe('admin room clear (F205)', () => {
     expect((await response.json() as { deleted: { runs: number } }).deleted.runs).toBe(150);
     const left = db.prepare("SELECT source_key FROM point_events WHERE event_type = 'run_finalized'").all() as { source_key: string }[];
     expect(left.map((row) => row.source_key)).toEqual(['attempt-in-another-room']);
+    // The cleared runs' "rewards finished" markers go too (F351).
+    expect(db.prepare('SELECT attempt_id FROM run_settlements').all()).toEqual([{ attempt_id: 'attempt-in-another-room' }]);
     expect(db.prepare('SELECT COUNT(*) AS n FROM room_runs').get()).toEqual({ n: 0 });
     expect(db.prepare('SELECT action, target_user_id, target_room_id FROM moderation_audit').all())
       .toEqual([{ action: 'room_clear', target_user_id: 'builder', target_room_id: '4,2' }]);

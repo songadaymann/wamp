@@ -178,6 +178,18 @@ export async function handleAdminSuspiciousInvalidate(
   ]) {
     statements.push(env.DB.prepare('DELETE FROM point_events WHERE id = ?').bind(event.id));
   }
+  // The removed runs' "rewards finished" markers go in the same batch (F351). A course run may be
+  // an Expanded Room run's copy, which shares its attempt id.
+  if (preview.roomRuns.length > 0) {
+    statements.push(env.DB.prepare(`DELETE FROM run_settlements
+      WHERE attempt_kind = 'room' AND attempt_id IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(preview.roomRuns.map((run) => run.attemptId))));
+  }
+  if (preview.courseRuns.length > 0) {
+    statements.push(env.DB.prepare(`DELETE FROM run_settlements
+      WHERE attempt_kind IN ('course', 'expanded_room') AND attempt_id IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(preview.courseRuns.map((run) => run.attemptId))));
+  }
   statements.push(...prepareProgressRollbackStatements(env, rollback, createdAt));
   statements.push(...prepareStatsRollbackStatements(env, statsRollback));
 

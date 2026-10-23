@@ -15,7 +15,9 @@ import {
   computeRoomWeightedChange,
 } from './changeMetrics';
 import { syncUserBadges } from './badgesTrophies';
-import { awardCappedTrustDelta, awardLaneDelta, persistProgressIncrement } from './laneEvents';
+import {
+  awardCappedTrustDelta, awardLaneDelta, persistProgressIncrement, refreshProgressLevels, type LaneAwardOptions,
+} from './laneEvents';
 
 // Hidden trust grows slowly from real play (xp-badges-ratings PRD): at most this much
 // per UTC day from each source, and never from clearing your own content.
@@ -368,6 +370,25 @@ function runEarnsProgression(run: { result: string; verificationStatus?: string 
  * panel re-reads it right after a clear. The deferred progression award then finds the
  * event already recorded and does not add it again.
  */
+/** Run-finish awards move the totals with each event, so a re-run settle never strands one (F351). */
+const RUN_FINISH_AWARD: LaneAwardOptions = { addToTotals: true };
+
+function awardRunLaneDelta(
+  env: Env,
+  userId: string,
+  lane: 'pxp' | 'bxp' | 'cxp' | 'trust',
+  eventType: string,
+  sourceType: string,
+  sourceId: string,
+  dedupeKey: string,
+  amount: number,
+  createdAt: string,
+  breakdown?: Record<string, unknown> | null,
+): Promise<number> {
+  return awardLaneDelta(env, userId, lane, eventType, sourceType, sourceId, dedupeKey, amount, createdAt,
+    breakdown ?? null, RUN_FINISH_AWARD);
+}
+
 export async function awardRunDailyClear(
   env: Env,
   run: { result: string; verificationStatus?: string; userId: string },
@@ -378,9 +399,10 @@ export async function awardRunDailyClear(
     return;
   }
 
-  const pxp = await awardDailyClear(env, run.userId, target.type, target.id, target.version, completedAt);
+  await loadOrBackfillUserProgress(env, run.userId);
+  const pxp = await awardDailyClear(env, run.userId, target.type, target.id, target.version, completedAt, RUN_FINISH_AWARD);
   if (pxp > 0) {
-    await persistProgressIncrement(env, run.userId, { ...createEmptyProgressionDelta(), pxp }, completedAt);
+    await refreshProgressLevels(env, run.userId);
   }
 }
 
@@ -406,10 +428,12 @@ export async function awardRoomRunProgression(
   const dayKey = getUtcDayKey(params.completedAt);
   const weekKey = getUtcWeekKey(params.completedAt);
 
-  delta.pxp += await awardDailyClear(env,params.run.userId,'room',params.run.roomId,params.run.roomVersion,params.completedAt);
+  // Each award below adds to the totals in its own batch, so the runner's row must exist first.
+  await loadOrBackfillUserProgress(env, params.run.userId);
+  delta.pxp += await awardDailyClear(env,params.run.userId,'room',params.run.roomId,params.run.roomVersion,params.completedAt,RUN_FINISH_AWARD);
 
   if (params.isFirstCompletion) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -422,7 +446,7 @@ export async function awardRoomRunProgression(
     );
   }
 
-  delta.pxp += await awardLaneDelta(
+  delta.pxp += await awardRunLaneDelta(
     env,
     params.run.userId,
     'pxp',
@@ -435,7 +459,7 @@ export async function awardRoomRunProgression(
   );
 
   if (params.isNewPersonalBest) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -459,7 +483,7 @@ export async function awardRoomRunProgression(
   );
 
   if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -473,7 +497,7 @@ export async function awardRoomRunProgression(
     );
   }
   if (currentRank !== null && previousRank !== null && currentRank < previousRank && currentRank <= 10) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -489,7 +513,7 @@ export async function awardRoomRunProgression(
   if (currentRank === 1 && previousRank !== 1) {
     const priorLeader = sortCompletedRunsForLeaderboard(runs.filter(entry => entry.attemptId !== params.run.attemptId), params.goal)[0];
 
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -513,7 +537,7 @@ export async function awardRoomRunProgression(
       dedupeKey: `trust:room_clear:${params.run.userId}:${params.run.roomId}:${ratingWindow.versionKey}`,
       amount: 1,
       createdAt: params.completedAt,
-    }, CLEAR_TRUST_CAP);
+    }, CLEAR_TRUST_CAP, RUN_FINISH_AWARD);
   }
 
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
@@ -522,36 +546,32 @@ export async function awardRoomRunProgression(
       await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
     );
     const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueRoomCompletion * creatorWeight));
-    // The creator's rewards are saved to the creator; the runner's stay in delta.
-    const creatorDelta: ProgressionDelta = {
-      pxp: 0,
-      bxp: await awardLaneDelta(
-        env,
-        params.creatorUserId,
-        'bxp',
-        'unique_completion_room',
-        'room_completion',
-        `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        creatorBxp,
-        params.completedAt,
-        { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
-      ),
-      cxp: 0,
-      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
-        eventType: 'unique_completion_room',
-        sourceType: 'room_completion',
-        sourceId: `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        dedupeKey: `trust:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        amount: 2,
-        createdAt: params.completedAt,
-      }, CREATOR_TRUST_CAP),
-    };
-    await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
+    // The creator's rewards are saved to the creator, each with its total; the runner's stay in delta.
+    await awardRunLaneDelta(
+      env,
+      params.creatorUserId,
+      'bxp',
+      'unique_completion_room',
+      'room_completion',
+      `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      creatorBxp,
+      params.completedAt,
+      { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
+    );
+    await awardCappedTrustDelta(env, params.creatorUserId, {
+      eventType: 'unique_completion_room',
+      sourceType: 'room_completion',
+      sourceId: `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      dedupeKey: `trust:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      amount: 2,
+      createdAt: params.completedAt,
+    }, CREATOR_TRUST_CAP, RUN_FINISH_AWARD);
+    await refreshProgressLevels(env, params.creatorUserId);
     await syncUserBadges(env, params.creatorUserId);
   }
 
-  await persistProgressIncrement(env, params.run.userId, delta, params.completedAt);
+  await refreshProgressLevels(env, params.run.userId);
   await syncUserBadges(env, params.run.userId);
   return delta;
 }
@@ -580,10 +600,12 @@ export async function awardCourseRunProgression(
   const dayKey = getUtcDayKey(params.completedAt);
   const weekKey = getUtcWeekKey(params.completedAt);
 
-  delta.pxp += await awardDailyClear(env,params.run.userId,'course',params.run.courseId,params.run.courseVersion,params.completedAt);
+  // Each award below adds to the totals in its own batch, so the runner's row must exist first.
+  await loadOrBackfillUserProgress(env, params.run.userId);
+  delta.pxp += await awardDailyClear(env,params.run.userId,'course',params.run.courseId,params.run.courseVersion,params.completedAt,RUN_FINISH_AWARD);
 
   if (params.isFirstCompletion) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -595,7 +617,7 @@ export async function awardCourseRunProgression(
       params.completedAt,
     );
   }
-  delta.pxp += await awardLaneDelta(
+  delta.pxp += await awardRunLaneDelta(
     env,
     params.run.userId,
     'pxp',
@@ -607,7 +629,7 @@ export async function awardCourseRunProgression(
     params.completedAt,
   );
   if (params.isNewPersonalBest) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -632,7 +654,7 @@ export async function awardCourseRunProgression(
   );
 
   if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -646,7 +668,7 @@ export async function awardCourseRunProgression(
     );
   }
   if (currentRank !== null && previousRank !== null && currentRank < previousRank && currentRank <= 10) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -663,7 +685,7 @@ export async function awardCourseRunProgression(
     const priorLeader = runs.filter(entry => entry.attemptId !== params.run.attemptId)
       .sort((left, right) => compareCourseLeaderboardEntries(left, right, params.goal))[0];
 
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
@@ -687,7 +709,7 @@ export async function awardCourseRunProgression(
       dedupeKey: `trust:course_clear:${params.run.userId}:${params.run.courseId}:${ratingWindow.versionKey}`,
       amount: 1,
       createdAt: params.completedAt,
-    }, CLEAR_TRUST_CAP);
+    }, CLEAR_TRUST_CAP, RUN_FINISH_AWARD);
   }
 
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
@@ -696,35 +718,32 @@ export async function awardCourseRunProgression(
       await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
     );
     const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueCourseCompletion * creatorWeight));
-    const creatorDelta: ProgressionDelta = {
-      pxp: 0,
-      bxp: await awardLaneDelta(
-        env,
-        params.creatorUserId,
-        'bxp',
-        'unique_completion_course',
-        'course_completion',
-        `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        `bxp:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        creatorBxp,
-        params.completedAt,
-        { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion, actorUserId: params.run.userId } },
-      ),
-      cxp: 0,
-      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
-        eventType: 'unique_completion_course',
-        sourceType: 'course_completion',
-        sourceId: `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        dedupeKey: `trust:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        amount: 3,
-        createdAt: params.completedAt,
-      }, CREATOR_TRUST_CAP),
-    };
-    await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
+    // The creator's rewards are saved to the creator, each with its total; the runner's stay in delta.
+    await awardRunLaneDelta(
+      env,
+      params.creatorUserId,
+      'bxp',
+      'unique_completion_course',
+      'course_completion',
+      `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      `bxp:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      creatorBxp,
+      params.completedAt,
+      { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion, actorUserId: params.run.userId } },
+    );
+    await awardCappedTrustDelta(env, params.creatorUserId, {
+      eventType: 'unique_completion_course',
+      sourceType: 'course_completion',
+      sourceId: `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      dedupeKey: `trust:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
+      amount: 3,
+      createdAt: params.completedAt,
+    }, CREATOR_TRUST_CAP, RUN_FINISH_AWARD);
+    await refreshProgressLevels(env, params.creatorUserId);
     await syncUserBadges(env, params.creatorUserId);
   }
 
-  await persistProgressIncrement(env, params.run.userId, delta, params.completedAt);
+  await refreshProgressLevels(env, params.run.userId);
   await syncUserBadges(env, params.run.userId);
   return delta;
 }

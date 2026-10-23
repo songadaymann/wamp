@@ -18,6 +18,7 @@ import type {
   CourseRunStartResponse,
 } from './runModel';
 import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
+import { rankedFinishRequestInit } from '../runs/rankedFinishDelivery';
 
 export interface CourseRepository {
   createCourse(snapshot: CourseSnapshot): Promise<CourseRecord>;
@@ -107,10 +108,7 @@ class ApiCourseRepository implements CourseRepository {
   }
 
   async finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void> {
-    await this.request(`/api/course-runs/${encodeURIComponent(attemptId)}/finish`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    await this.request(`/api/course-runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
     this.invalidateLeaderboards();
   }
 

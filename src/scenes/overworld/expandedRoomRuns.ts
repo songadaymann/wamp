@@ -14,6 +14,7 @@ import { formatGoalBadgeText, formatCourseGoalProgressText, formatGoalTimerText 
 import type { GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
+import type { RankedFinishRetryState } from '../../runs/rankedFinishDelivery';
 
 export interface ActiveExpandedRoomRunState {
   course: CourseSnapshot;
@@ -47,6 +48,7 @@ export interface ActiveExpandedRoomRunState {
   verificationNonce: string | null;
   snapshotHash: string | null;
   guestProgress?: GuestRunSaveResult;
+  finishRetry?: RankedFinishRetryState | null;
 }
 
 export interface CreateActiveExpandedRoomRunStateOptions {

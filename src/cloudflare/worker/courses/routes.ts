@@ -2,9 +2,15 @@ import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
+  assertReplayableRunFinish, finalizeStatementWon, loadRunFinishOrder, nextFinalizeSeqSql, recordRunSettlement,
+  runNeedsResettle, runPastDisconnect, runVerificationError,
+  type RunFinishMessages,
+} from '../runs/finishReplay';
+import {
   cloneCourseGoal,
   cloneCourseSnapshot,
   normalizeCourseGoal,
+  type CourseGoal,
   type CourseRecord,
   type CourseSnapshot,
 } from '../../../courses/model';
@@ -49,7 +55,9 @@ import {
   awardCoursePublishPoints,
   awardCourseCreatorCompletionPoints,
   awardRunFinalizePoints,
+  finishedEarlier,
   previewRunFinalizePoints,
+  type RunFinishOrder,
   upsertUserStats,
 } from '../runs/points';
 import {
@@ -72,6 +80,7 @@ import {
 } from './store';
 import { loadRoomSnapshotsByReferences } from '../rooms/store';
 import { assertSoloCourseRun } from '../runs/coopPolicy';
+import { handleExpandedRoomRunFinish } from '../expandedRooms/runRoutes';
 import {
   computeCourseSnapshotVerificationHash,
   createCourseVerificationTrigger,
@@ -363,12 +372,24 @@ export async function handleCourseRunStart(
   return jsonResponse(request, responseBody);
 }
 
+const COURSE_RUN_FINISH_MESSAGES: RunFinishMessages = {
+  missingTrace: 'Missing verification trace for ranked expanded room run.',
+  unverified: 'Ranked expanded room run could not be verified.',
+  timedOut: 'Ranked run verification timed out.',
+  finalized: 'This expanded room run attempt has already been finalized.',
+};
+
 export async function handleCourseRunFinish(
   request: Request,
   env: Env,
   attemptId: string,
   executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
+  // An Expanded Room run's course_runs copy is finished, verified and rewarded by that route only,
+  // so one attempt never settles twice from two histories (F351).
+  if (await isExpandedRoomRunCopy(env, attemptId)) {
+    return handleExpandedRoomRunFinish(request, env, attemptId, executionContext);
+  }
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
@@ -386,8 +407,11 @@ export async function handleCourseRunFinish(
     throw new HttpError(403, 'You can only finish your own expanded room run attempts.');
   }
 
-  if (existing.result !== 'active') {
-    throw new HttpError(409, 'This expanded room run attempt has already been finalized.');
+  // A resend of a finished attempt replays its stored answer (F351).
+  const resend = existing.result !== 'active';
+  if (resend) {
+    assertReplayableRunFinish(existing, body.result, COURSE_RUN_FINISH_MESSAGES);
+    if (!(await runNeedsResettle(env, 'course', attemptId, existing.finishedAt))) return noContentResponse(request);
   }
 
   const snapshot = await resolvePublishedCourseVersion(env, existing.courseId, existing.courseVersion);
@@ -403,6 +427,15 @@ export async function handleCourseRunFinish(
   const rewardScope = resolveCourseClearRewardScope(
     courseRecord, existing.courseId, existing.courseVersion, auth.user.id, courseOwnerUserId,
   );
+  const settlement = { attemptId, userId: auth.user.id, goal: snapshot.goal, courseRecord, courseOwnerUserId, rewardScope };
+  // An earlier finish committed, then threw or was cut off before its rewards finished.
+  const settleResend = async (finishedAt: string | null): Promise<Response> => {
+    if (await runNeedsResettle(env, 'course', attemptId, finishedAt)) {
+      await runPastDisconnect(executionContext, attemptId, settleCourseRunFinish(env, executionContext, settlement));
+    }
+    return noContentResponse(request);
+  };
+  if (resend) return settleResend(existing.finishedAt);
 
   const finishedAt = new Date().toISOString();
   const reportedElapsedMs = body.elapsedMs;
@@ -557,7 +590,7 @@ export async function handleCourseRunFinish(
     finalScore = computeCourseRunScore(snapshot.goal, finalBody);
   }
 
-  await env.DB.batch([
+  const [finalized] = await env.DB.batch<{ results?: unknown[]; meta?: { changes?: number } }>([
     env.DB.prepare(
       `
         UPDATE course_runs
@@ -573,8 +606,10 @@ export async function handleCourseRunFinish(
           verification_status = ?,
           verification_reason = ?,
           insight_deaths_json = ?,
-          insight_play_ms = ?
-        WHERE attempt_id = ?
+          insight_play_ms = ?,
+          ${nextFinalizeSeqSql('course_runs')}
+        WHERE attempt_id = ? AND result = 'active'
+        RETURNING attempt_id
       `
     ).bind(
       finishedAt,
@@ -592,66 +627,85 @@ export async function handleCourseRunFinish(
       attemptId
     ),
   ]);
-
-  if (verification.audit) {
-    await recordRunVerificationAudit(env, {
-      attemptId,
-      kind: 'course',
-      ...verification.audit,
-      // Unverified (skipped) runs keep their recording so they can be reviewed later.
-      trace: finalBody.verificationTrace ?? null,
-      createdAt: finishedAt,
-    });
+  if (!finalizeStatementWon(finalized)) {
+    // A resend raced this request and finalized first: replay its answer. Its awards are keyed.
+    const stored = await loadCourseRunByAttemptId(env, attemptId);
+    assertReplayableRunFinish(stored, body.result, COURSE_RUN_FINISH_MESSAGES);
+    return settleResend(stored?.finishedAt ?? null);
   }
 
-  if (verificationStatus === 'failed') {
-    throw new HttpError(
-      409,
-      verificationReason === 'missing_trace'
-        ? 'Missing verification trace for ranked expanded room run.'
-        : verificationReason === 'trace_client_outdated'
-          ? 'Client update required for ranked verification.'
-          : 'Ranked expanded room run could not be verified.',
-    );
-  }
+  const verificationError = runVerificationError(verificationStatus, verificationReason, COURSE_RUN_FINISH_MESSAGES);
+  await runPastDisconnect(executionContext, attemptId, (async () => {
+    if (verification.audit) {
+      await recordRunVerificationAudit(env, {
+        attemptId,
+        kind: 'course',
+        ...verification.audit,
+        // Unverified (skipped) runs keep their recording so they can be reviewed later.
+        trace: finalBody.verificationTrace ?? null,
+        createdAt: finishedAt,
+      });
+    }
+    if (!verificationError) await settleCourseRunFinish(env, executionContext, settlement);
+  })());
+  if (verificationError) throw verificationError;
+  return noContentResponse(request);
+}
 
-  if (verificationStatus === 'timeout') {
-    throw new HttpError(409, 'Ranked run verification timed out.');
-  }
+interface CourseRunSettlement {
+  attemptId: string;
+  userId: string;
+  goal: CourseGoal;
+  courseRecord: CourseRecord;
+  courseOwnerUserId: string | null;
+  rewardScope: ReturnType<typeof resolveCourseClearRewardScope>;
+}
 
+/**
+ * Everything after the finalize commit. Every award is keyed, so a recent resend runs this
+ * again when an earlier try threw or was cut off; its run_settlements row goes last, as the marker (F351).
+ */
+async function settleCourseRunFinish(
+  env: Env,
+  executionContext: WorkerExecutionContextLike | undefined,
+  { attemptId, userId, goal, courseRecord, courseOwnerUserId, rewardScope }: CourseRunSettlement,
+): Promise<void> {
   const finalizedRun = await loadCourseRunByAttemptId(env, attemptId);
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized expanded room run.');
   }
+  // The stored finish time keeps a resend's day and week reward keys on the original clear.
+  const finishedAt = finalizedRun.finishedAt ?? new Date().toISOString();
   await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
-    env, 'expanded_room:course:' + existing.courseId, existing.courseVersion, auth.user.id,
-    { ...finalBody, finishedAt },
+    env, 'expanded_room:course:' + finalizedRun.courseId, finalizedRun.courseVersion, userId,
+    { ...finalizedRun, elapsedMs: finalizedRun.elapsedMs ?? 0, finishedAt },
   ));
 
   let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
   if (finalizedRun.result === 'completed') {
+    // Only clears stored before this one count, so a late resend and a later clear agree on "first".
     const previousBest = await loadBestCompletedCourseRunForUserAndVersion(
       env,
-      auth.user.id,
+      userId,
       finalizedRun.courseId,
       rewardScope.versions,
       attemptId,
       finalizedRun.courseVersion,
+      await loadRunFinishOrder(env, 'course_runs', attemptId, finishedAt),
     );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: previousBest === null,
       isNewPersonalBest:
         previousBest === null ||
-        sortCompletedCourseRunsForLeaderboard([finalizedRun, previousBest], snapshot.goal)[0]?.attemptId ===
+        sortCompletedCourseRunsForLeaderboard([finalizedRun, previousBest], goal)[0]?.attemptId ===
           finalizedRun.attemptId,
     });
   }
 
   await awardRunDailyClear(env, finalizedRun,
     { type: 'course', id: finalizedRun.courseId, version: finalizedRun.courseVersion }, finishedAt);
-  const goal = snapshot.goal;
   await scheduleRunRewards(executionContext, attemptId, async () => {
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags, finishedAt);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardCourseCreatorCompletionPoints(env, {
@@ -661,6 +715,7 @@ export async function handleCourseRunFinish(
             finisherUserId: finalizedRun.userId,
             attemptId: finalizedRun.attemptId,
             rewardVersions: rewardScope.versions,
+            createdAt: finishedAt,
           })
         : null;
 
@@ -679,9 +734,10 @@ export async function handleCourseRunFinish(
       rankVersions: rewardScope.versions,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    await upsertUserStats(env, auth.user.id);
+    await upsertUserStats(env, userId);
+    // Last: runNeedsResettle reads this row as "every reward above finished".
+    await recordRunSettlement(env, 'course', attemptId);
   });
-  return noContentResponse(request);
 }
 
 export async function handleCourseLeaderboard(
@@ -922,6 +978,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
   courseVersions: readonly number[],
   excludeAttemptId: string | null,
   goalVersion: number,
+  finishedBefore: RunFinishOrder | null = null,
 ): Promise<CourseRunRecord | null> {
   const result = await env.DB.prepare(
     `
@@ -941,7 +998,8 @@ async function loadBestCompletedCourseRunForUserAndVersion(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        finalize_seq
       FROM course_runs
       WHERE user_id = ?
         AND course_id = ?
@@ -958,6 +1016,7 @@ async function loadBestCompletedCourseRunForUserAndVersion(
     .filter(
       (row): row is CourseRunRow & { elapsed_ms: number; finished_at: string } =>
         typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string'
+        && finishedEarlier(row, finishedBefore)
     )
     .map(mapCourseRunRow);
 
@@ -970,6 +1029,13 @@ async function loadBestCompletedCourseRunForUserAndVersion(
     return null;
   }
   return sortCompletedCourseRunsForLeaderboard(runs, course.goal)[0] ?? null;
+}
+
+/** Whether this course_runs row is the copy an Expanded Room run start wrote beside its own row. */
+async function isExpandedRoomRunCopy(env: Env, attemptId: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 AS found FROM expanded_room_runs WHERE legacy_course_attempt_id = ? LIMIT 1')
+    .bind(attemptId).first<{ found: number }>();
+  return Boolean(row);
 }
 
 async function resolvePublishedCourseOwnerUserId(

@@ -14,6 +14,7 @@ import type {
   ExpandedRoomRunStartResponse,
 } from './runModel';
 import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
+import { rankedFinishRequestInit } from '../runs/rankedFinishDelivery';
 
 export interface ExpandedRoomRepository {
   loadExpandedRoom(expandedRoomId: string): Promise<ResolvedExpandedRoomTarget>;
@@ -76,10 +77,7 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     attemptId: string,
     body: ExpandedRoomRunFinishRequestBody,
   ): Promise<void> {
-    await this.request(`/api/expanded-room-runs/${encodeURIComponent(attemptId)}/finish`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    await this.request(`/api/expanded-room-runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
     this.invalidateLeaderboards();
   }
 

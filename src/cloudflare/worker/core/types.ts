@@ -395,6 +395,8 @@ export interface PersistCourseVersionInput {
 }
 
 export interface CourseRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   course_id: string;
   course_version: number;
@@ -418,6 +420,8 @@ export interface CourseRunRow {
 }
 
 export interface ExpandedRoomRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   expanded_room_id: string;
   expanded_room_version: number;
@@ -442,6 +446,8 @@ export interface ExpandedRoomRunRow {
 }
 
 export interface RoomRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   room_id: string;
   room_x: number;

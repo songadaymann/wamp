@@ -37,6 +37,7 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import { deliverRankedFinish, type RankedFinishRetryState } from '../../runs/rankedFinishDelivery';
 import type { GuestRunPlaybackController } from './guestRunPlayback';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
 import { notifyGhostBestUpdated } from '../../runs/ghostRepository';
@@ -79,6 +80,7 @@ export interface GoalRunState {
   verificationNonce: string | null;
   snapshotHash: string | null;
   guestProgress?: GuestRunSaveResult;
+  finishRetry?: RankedFinishRetryState | null;
 }
 
 export interface GoalRunMutationResult {
@@ -917,7 +919,8 @@ export class OverworldGoalRunController {
     runState: GoalRunState,
     result: Exclude<RunResult, 'active'>
   ): Promise<void> {
-    if (!runState.attemptId || runState.assisted) {
+    const attemptId = runState.attemptId;
+    if (!attemptId || runState.assisted) {
       return;
     }
 
@@ -934,7 +937,10 @@ export class OverworldGoalRunController {
     const postRunPromptKey = this.buildPostRunRatingPromptKey(runState);
 
     try {
-      await this.options.runRepository.finishRun(runState.attemptId, payload);
+      // The payload holds its own trace copy, so the recorder is released once a send fails.
+      await deliverRankedFinish(runState, result, () => this.options.runRepository.finishRun(attemptId, payload), {
+        onChange: () => { if (this.currentGoalRun === runState) this.options.clearVerificationTrace?.(); },
+      });
       if (result === 'completed') notifyGhostBestUpdated(runState.roomId);
       runState.pendingResult = null;
       runState.submissionState = 'submitted';
@@ -1002,7 +1008,7 @@ export class OverworldGoalRunController {
       }
     } catch (error) {
       console.error('Failed to finish ranked run', {
-        attemptId: runState.attemptId,
+        attemptId,
         result,
         payload,
         error,

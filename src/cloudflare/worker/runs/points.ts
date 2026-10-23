@@ -90,6 +90,8 @@ export async function awardRunFinalizePoints(
     isFirstCompletion: boolean;
     isNewPersonalBest: boolean;
   },
+  /** The run's stored finish time, so a resend's event lands in the clear's own day and week. */
+  createdAt?: string,
 ): Promise<PointEventRow> {
   const preview = previewRunFinalizePoints(run, options);
   return recordPointEvent(env, {
@@ -98,6 +100,7 @@ export async function awardRunFinalizePoints(
     sourceKey: run.attemptId,
     points: preview.points,
     breakdown: preview.breakdown,
+    createdAt,
   });
 }
 
@@ -191,6 +194,8 @@ export async function awardRoomCreatorCompletionPoints(
     attemptId: string;
     /** Versions that count as the same room; a finisher pays the creator once across them. */
     rewardVersions?: readonly number[];
+    /** The run's stored finish time; it also picks the day for the creator's daily cap. */
+    createdAt?: string;
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
@@ -218,6 +223,7 @@ export async function awardRoomCreatorCompletionPoints(
       finisherUserId: input.finisherUserId,
       attemptId: input.attemptId,
     },
+    createdAt: input.createdAt,
   });
 }
 
@@ -231,6 +237,8 @@ export async function awardCourseCreatorCompletionPoints(
     attemptId: string;
     /** Versions that count as the same Expanded Room; a finisher pays the creator once across them. */
     rewardVersions?: readonly number[];
+    /** The run's stored finish time; it also picks the day for the creator's daily cap. */
+    createdAt?: string;
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
@@ -258,6 +266,7 @@ export async function awardCourseCreatorCompletionPoints(
       finisherUserId: input.finisherUserId,
       attemptId: input.attemptId,
     },
+    createdAt: input.createdAt,
   });
 }
 
@@ -267,7 +276,8 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   roomId: string,
   roomVersion: number | readonly number[],
   goal: RoomGoal,
-  excludeAttemptId: string | null = null
+  excludeAttemptId: string | null = null,
+  finishedBefore: RunFinishOrder | null = null,
 ): Promise<RoomRunRecord | null> {
   const result = await env.DB.prepare(
     `
@@ -289,7 +299,8 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
         score,
         collectibles_collected,
         enemies_defeated,
-        checkpoints_reached
+        checkpoints_reached,
+        finalize_seq
       FROM room_runs
       WHERE user_id = ?
         AND room_id = ?
@@ -307,6 +318,7 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
     .filter(
       (row): row is RoomRunRow & { elapsed_ms: number; finished_at: string } =>
         typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string'
+        && finishedEarlier(row, finishedBefore)
     )
     .map(mapRoomRunRow);
 
@@ -333,6 +345,27 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   );
 
   return runs[0] ?? null;
+}
+
+/** A run's place in commit order: its finalize_seq, else (before numbering) finish time and id. */
+export interface RunFinishOrder { finalizeSeq: number | null; finishedAt: string; attemptId: string }
+
+/**
+ * Whether a run was finalized before `order`. Reward flags compare against earlier runs only, so a
+ * late resend of an earlier clear, a later clear, and two clears committing out of their finish-time
+ * order all agree on which one was first (F351). Unnumbered runs predate numbering, so they are
+ * earlier than every numbered run.
+ */
+export function finishedEarlier(
+  row: { finalize_seq?: number | null; finished_at: string | null; attempt_id: string },
+  order: RunFinishOrder | null,
+): boolean {
+  if (!order) return true;
+  const rowSeq = row.finalize_seq ?? null;
+  if (order.finalizeSeq !== null) return rowSeq === null || rowSeq < order.finalizeSeq;
+  if (rowSeq !== null || row.finished_at === null) return rowSeq === null;
+  return row.finished_at < order.finishedAt
+    || (row.finished_at === order.finishedAt && row.attempt_id < order.attemptId);
 }
 
 export async function upsertUserStats(env: Env, userId: string): Promise<void> {
@@ -669,6 +702,7 @@ async function recordCreatorCompletionPointEvent(
     equivalentSourceKeys?: readonly string[];
     points: number;
     breakdown: Record<string, unknown>;
+    createdAt?: string;
   }
 ): Promise<PointEventRow | null> {
   const sourceKeys = [...new Set([input.sourceKey, ...(input.equivalentSourceKeys ?? [])])];
@@ -678,8 +712,10 @@ async function recordCreatorCompletionPointEvent(
   }
 
   const eventId = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
+  const createdAt = input.createdAt ?? new Date().toISOString();
   const dayStartIso = getUtcDayStartIso(createdAt);
+  // Bounded on both sides: a resend that re-settles an earlier day's clear counts that day only.
+  const dayEndIso = new Date(Date.parse(dayStartIso) + 86_400_000).toISOString();
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -699,6 +735,7 @@ async function recordCreatorCompletionPointEvent(
           WHERE user_id = ?
             AND event_type IN ('room_creator_completion', 'course_creator_completion')
             AND created_at >= ?
+            AND created_at < ?
         ) < ?
           AND NOT EXISTS (
             SELECT 1
@@ -717,6 +754,7 @@ async function recordCreatorCompletionPointEvent(
       createdAt,
       input.userId,
       dayStartIso,
+      dayEndIso,
       DAILY_CREATOR_COMPLETION_POINTS_LIMIT,
       input.eventType,
       JSON.stringify(sourceKeys),
@@ -777,10 +815,11 @@ async function recordPointEvent(
     sourceKey: string;
     points: number;
     breakdown: Record<string, unknown>;
+    createdAt?: string;
   }
 ): Promise<PointEventRow> {
   const eventId = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
+  const createdAt = input.createdAt ?? new Date().toISOString();
   await env.DB.batch([
     env.DB.prepare(
       `

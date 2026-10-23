@@ -382,7 +382,10 @@ async function handleAdminRoomClear(
           WHERE event_type = 'run_finalized'
             AND source_key IN (SELECT value FROM json_each(?))
         `
-      ).bind(JSON.stringify(attemptIds))
+      ).bind(JSON.stringify(attemptIds)),
+      // The cleared runs' "rewards finished" markers (F351).
+      env.DB.prepare(`DELETE FROM run_settlements
+        WHERE attempt_kind = 'room' AND attempt_id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(attemptIds)),
     );
   }
 
