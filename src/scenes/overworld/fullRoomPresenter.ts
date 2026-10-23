@@ -12,6 +12,7 @@ import {
   type BuiltInBackgroundObject,
   type CustomBackgroundObject,
 } from '../../backgrounds/runtime';
+import { holdCustomBackgroundTextureFor } from '../../backgrounds/textureLeases';
 import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -43,6 +44,7 @@ import {
   terrainTileDisablesTilemapCollision,
   terrainTileNeedsInsetBody,
 } from './terrainCollision';
+import { roomLayerHasTiles } from './roomTexturePreparation';
 import { type PlayableRoomSource } from './worldStreamingModel';
 
 import type {
@@ -90,13 +92,14 @@ export interface FullRoomRenderIdentity {
   room: RoomSnapshot;
   source: PlayableRoomSource;
   textureKey: string;
-  foregroundTextureKey: string;
+  /** Null when the room has no foreground tiles, so it gets no foreground image. */
+  foregroundTextureKey: string | null;
   artifactKey: string;
 }
 interface CreatedFullRoom<TLiveObject, TEdgeWall> {
   loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>;
   textureKey: string;
-  foregroundTextureKey: string;
+  foregroundTextureKey: string | null;
   customRoomTileTextureKey: string | null;
 }
 
@@ -124,11 +127,13 @@ export class OverworldFullRoomPresenter<
       includeObjects: false,
       includedLayers: ['background', 'terrain'],
     });
-    const foregroundTextureKey = this.options.buildScopedRoomTextureKey(room, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['foreground'],
-    });
+    const foregroundTextureKey = roomLayerHasTiles(room, 'foreground')
+      ? this.options.buildScopedRoomTextureKey(room, {
+          includeBackground: false,
+          includeObjects: false,
+          includedLayers: ['foreground'],
+        })
+      : null;
     if (!this.options.scene.textures.exists(textureKey)) {
       this.options.measure('stream.buildFullRoomTexture.terrain', () => {
         buildRoomSnapshotTexture(
@@ -144,7 +149,7 @@ export class OverworldFullRoomPresenter<
         );
       });
     }
-    if (!this.options.scene.textures.exists(foregroundTextureKey)) {
+    if (foregroundTextureKey && !this.options.scene.textures.exists(foregroundTextureKey)) {
       this.options.measure('stream.buildFullRoomTexture.foreground', () => {
         buildRoomSnapshotTexture(
           this.options.scene,
@@ -173,14 +178,9 @@ export class OverworldFullRoomPresenter<
     image.setOrigin(0.5);
     image.setDepth(10);
     image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    const foregroundImage = this.options.scene.add.image(
-      origin.x + ROOM_PX_WIDTH / 2,
-      origin.y + ROOM_PX_HEIGHT / 2,
-      foregroundTextureKey,
-    );
-    foregroundImage.setOrigin(0.5);
-    foregroundImage.setDepth(27.25);
-    foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    const foregroundImage = foregroundTextureKey
+      ? this.createForegroundImage(origin, foregroundTextureKey)
+      : null;
 
     const map = this.options.measure('stream.createTilemap', () =>
       this.options.scene.make.tilemap({
@@ -237,7 +237,7 @@ export class OverworldFullRoomPresenter<
         backgroundSprite.sprite.destroy();
       }
       image.destroy();
-      foregroundImage.destroy();
+      foregroundImage?.destroy();
       map.destroy();
       return null;
     }
@@ -312,6 +312,21 @@ export class OverworldFullRoomPresenter<
       foregroundTextureKey,
       customRoomTileTextureKey,
     };
+  }
+
+  private createForegroundImage(
+    origin: { x: number; y: number },
+    textureKey: string,
+  ): Phaser.GameObjects.Image {
+    const foregroundImage = this.options.scene.add.image(
+      origin.x + ROOM_PX_WIDTH / 2,
+      origin.y + ROOM_PX_HEIGHT / 2,
+      textureKey,
+    );
+    foregroundImage.setOrigin(0.5);
+    foregroundImage.setDepth(27.25);
+    foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
+    return foregroundImage;
   }
 
   populateTerrainLayerRows(
@@ -541,6 +556,12 @@ export class OverworldFullRoomPresenter<
       );
       colorRect.setOrigin(0, 0);
       colorRect.setDepth(8);
+      // The room keeps its background resident from the first request until it is torn down.
+      holdCustomBackgroundTextureFor(
+        this.options.scene,
+        getCustomBackgroundTextureKey(resolved.id),
+        colorRect,
+      );
       const createReadyCustomBackground = () => {
         const layer = createCustomBackgroundLayer(
           this.options.scene,
@@ -878,16 +899,11 @@ export class OverworldFullRoomPresenter<
     image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
     image.setActive(false);
     image.setVisible(false);
-    const foregroundImage = this.options.scene.add.image(
-      origin.x + ROOM_PX_WIDTH / 2,
-      origin.y + ROOM_PX_HEIGHT / 2,
-      identity.foregroundTextureKey,
-    );
-    foregroundImage.setOrigin(0.5);
-    foregroundImage.setDepth(27.25);
-    foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    foregroundImage.setActive(false);
-    foregroundImage.setVisible(false);
+    const foregroundImage = identity.foregroundTextureKey
+      ? this.createForegroundImage(origin, identity.foregroundTextureKey)
+      : null;
+    foregroundImage?.setActive(false);
+    foregroundImage?.setVisible(false);
 
     const map = this.options.scene.make.tilemap({
       tileWidth: TILE_SIZE,
@@ -926,7 +942,7 @@ export class OverworldFullRoomPresenter<
     );
     if (!terrainLayer) {
       image.destroy();
-      foregroundImage.destroy();
+      foregroundImage?.destroy();
       map.destroy();
       throw new Error(
         `Could not create terrain layer for ${identity.room.id}.`,

@@ -9,9 +9,26 @@ const mocks = vi.hoisted(() => ({
   drawRoomObjectRangeForLayerToContext: vi.fn(),
   drawConstructionOverlay: vi.fn(),
   ensureCustomBackgroundTexture: vi.fn(() => new Promise<string>(() => undefined)),
+  createPooledCanvas: vi.fn((_width: number, _height: number): HTMLCanvasElement => {
+    throw new Error('createScene() installs the pooled canvas factory.');
+  }),
+  releasePooledCanvas: vi.fn(),
 }));
 
-vi.mock('phaser', () => ({ default: {} }));
+vi.mock('phaser', () => ({
+  default: {
+    CANVAS: 1,
+    Display: {
+      Canvas: {
+        CanvasPool: {
+          create: (_parent: unknown, width: number, height: number) =>
+            mocks.createPooledCanvas(width, height),
+          remove: mocks.releasePooledCanvas,
+        },
+      },
+    },
+  },
+}));
 vi.mock('../../visuals/roomSnapshotTexture', () => ({
   drawRoomSnapshotToContext: mocks.drawRoomSnapshotToContext,
   drawRoomBackground: mocks.drawRoomBackground,
@@ -24,6 +41,8 @@ vi.mock('../../backgrounds/runtime', () => ({
   getCustomBackgroundTextureKey: (id: string) => `custom_background_${id}`,
 }));
 
+import type Phaser from 'phaser';
+import { getCustomBackgroundTextureLeases } from '../../backgrounds/textureLeases';
 import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import { FrameWorkCoordinator } from './frameWorkCoordinator';
 
@@ -416,6 +435,75 @@ describe('sparse overworld chunk preview textures', () => {
     expect(mocks.ensureCustomBackgroundTexture).toHaveBeenCalledOnce();
     expect(scene.canvasBuilds).toHaveLength(1);
   });
+
+  it('keeps custom backgrounds of on-screen preview rooms resident until they leave', () => {
+    const scene = createScene();
+    let fullRoomLoaded = false;
+    const renderer = new OverworldChunkPreviewRenderer({
+      scene: scene.value,
+      getPreviewTileSize: () => 4,
+      getRoomOrigin: (coordinates) => ({
+        x: coordinates.x * ROOM_PX_WIDTH,
+        y: coordinates.y * ROOM_PX_HEIGHT,
+      }),
+      isFullRoomLoaded: () => fullRoomLoaded,
+      createCanvas: scene.createDetachedCanvas,
+    });
+    const leases = getCustomBackgroundTextureLeases(
+      (scene.value as { textures: Phaser.Textures.TextureManager }).textures,
+    );
+    const first = room(5, 3);
+    first.background = 'custom:abcdefgh';
+    const second = room(6, 3);
+    second.background = 'custom:abcdefgh?fit=stretch';
+
+    renderer.renderChunkPreviews([first, second]);
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+
+    // A room drawn as a full room holds its own background instead.
+    fullRoomLoaded = true;
+    renderer.syncPreviewVisibility();
+    expect(leases.getSnapshot().leases).toEqual({});
+
+    fullRoomLoaded = false;
+    renderer.syncPreviewVisibility();
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+    renderer.reset();
+    expect(leases.getSnapshot().leases).toEqual({});
+  });
+
+  it.each([
+    ['zoomed-out overview previews', 2, false, {}],
+    ['play previews, which draw resident photos without loading them', 4, true, { custom_background_abcdefgh: 1 }],
+  ] as const)(
+    'holds backgrounds only where previews draw them: %s',
+    (_name, tileSize, scheduled, expectedLeases) => {
+      const scene = createScene();
+      const renderer = new OverworldChunkPreviewRenderer({
+        scene: scene.value,
+        getPreviewTileSize: () => tileSize,
+        getRoomOrigin: (coordinates) => ({
+          x: coordinates.x * ROOM_PX_WIDTH,
+          y: coordinates.y * ROOM_PX_HEIGHT,
+        }),
+        isFullRoomLoaded: () => false,
+        workScheduler: scheduled ? new FrameWorkCoordinator() : undefined,
+        shouldScheduleWork: () => true,
+        createCanvas: scene.createDetachedCanvas,
+      });
+      const leases = getCustomBackgroundTextureLeases(
+        (scene.value as { textures: Phaser.Textures.TextureManager }).textures,
+      );
+      const customRoom = room(5, 3);
+      customRoom.background = 'custom:abcdefgh';
+
+      renderer.renderChunkPreviews([customRoom]);
+
+      expect(mocks.ensureCustomBackgroundTexture).not.toHaveBeenCalled();
+      expect(leases.getSnapshot().leases).toEqual(expectedLeases);
+      renderer.reset();
+    },
+  );
 });
 
 function createScene(): {
@@ -471,27 +559,23 @@ function createScene(): {
     detachedCanvasBuilds.push(created);
     return created.canvas;
   };
+  // Immediate previews draw into a pooled canvas, as textures.createCanvas did.
+  mocks.createPooledCanvas.mockImplementation((width: number, height: number) => {
+    const created = createCanvas(width, height);
+    canvasBuilds.push({ width, height, context: created.context });
+    return created.canvas;
+  });
   const value = {
     sys: { settings: { key: 'chunk-preview-test' } },
     textures: {
       exists: (key: string) => textures.has(key),
-      createCanvas: (key: string, width: number, height: number) => {
-        const { canvas, context } = createCanvas(width, height);
-        const texture = {
-          getSourceImage: () => canvas,
-          refresh: vi.fn(),
-        };
+      // Previews are drawn once, so they register as plain textures (no CanvasTexture).
+      addImage: (key: string, canvas: HTMLCanvasElement) => {
+        const texture = { getSourceImage: () => canvas };
         textures.set(key, texture);
-        canvasBuilds.push({ width, height, context });
-        return texture;
-      },
-      addCanvas: (key: string, canvas: HTMLCanvasElement) => {
-        const texture = {
-          getSourceImage: () => canvas,
-          refresh: vi.fn(),
-        };
-        textures.set(key, texture);
-        registeredCanvasUploads.push({ key, canvas });
+        if (detachedCanvasBuilds.some((build) => build.canvas === canvas)) {
+          registeredCanvasUploads.push({ key, canvas });
+        }
         return texture;
       },
       remove: (key: string) => textures.delete(key),

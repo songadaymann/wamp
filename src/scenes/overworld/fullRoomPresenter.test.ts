@@ -16,6 +16,7 @@ vi.mock('phaser', () => ({
 }));
 
 import * as backgrounds from '../../backgrounds/runtime';
+import { getCustomBackgroundTextureLeases } from '../../backgrounds/textureLeases';
 import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -63,9 +64,15 @@ function display(tile = false) {
     setSize: vi.fn(),
     setCrop: vi.fn(),
     setAlpha: vi.fn(),
+    destroyListeners: [] as Array<() => void>,
+    once(event: string, listener: () => void) {
+      if (event === 'destroy') this.destroyListeners.push(listener);
+      return this;
+    },
     destroy() {
       this.active = false;
       this.scene = null;
+      for (const listener of this.destroyListeners.splice(0)) listener();
     },
   };
   for (const key of [
@@ -81,6 +88,7 @@ function display(tile = false) {
 function fixture() {
   const room = createDefaultRoomSnapshot('0,0', { x: 0, y: 0 });
   room.background = 'solid:#123456';
+  room.tileData.foreground[2][3] = 1;
   const images: ReturnType<typeof display>[] = [],
     rectangles: ReturnType<typeof display>[] = [];
   const lifecycle = { destroyed: false, player: null as object | null };
@@ -276,6 +284,38 @@ describe('full-room presentation ownership', () => {
       'stream.buildFullRoomTexture.terrain',
       'stream.buildFullRoomTexture.foreground',
     ]);
+  });
+
+  it('builds no foreground texture or image for a room without foreground tiles', () => {
+    const f = fixture(),
+      ready = new Set<string>();
+    f.room.tileData.foreground[2][3] = -1;
+    f.scene.textures.exists.mockImplementation((key) => ready.has(key));
+    const build = vi
+      .spyOn(roomTextures, 'buildRoomSnapshotTexture')
+      .mockImplementation((_scene, _room, key) => {
+        ready.add(key);
+        return key;
+      });
+    const result = f.presenter.createImmediate(f.room, 'published')!;
+    expect(build.mock.calls.map((call) => call[2])).toEqual(['terrain']);
+    expect(result.foregroundTextureKey).toBeNull();
+    expect(result.loadedRoom.foregroundTextureKey).toBeNull();
+    expect(result.loadedRoom.foregroundImage).toBeNull();
+    expect(f.images).toHaveLength(1);
+    expect(f.images[0].setDepth).toHaveBeenCalledWith(10);
+  });
+
+  it('activates a prepared shell that has no foreground image', () => {
+    const f = fixture(),
+      loaded = f.presenter.createDormantShell({ ...f.identity, foregroundTextureKey: null });
+    expect(loaded.foregroundImage).toBeNull();
+    expect(loaded.foregroundTextureKey).toBeNull();
+    expect(f.images).toHaveLength(1);
+    f.presenter.prepareBackground(loaded, f.identity);
+    f.presenter.activatePrepared(loaded);
+    expect(loaded.image.visible).toBe(true);
+    expect(() => f.presenter.destroyDisplay(loaded)).not.toThrow();
   });
 
   it('retains captured cache keys when a live-object callback mutates the allocated runtime', () => {
@@ -531,6 +571,41 @@ describe('full-room backgrounds', () => {
     expect(load).not.toHaveBeenCalled();
     expect(f.rectangles[0].destroy).toHaveBeenCalledOnce();
     expect(f.images).toEqual([]);
+  });
+
+  it('keeps a custom background resident until every object of the room is gone', () => {
+    const f = fixture();
+    f.room.background = 'custom:abcdefgh?fit=stretch';
+    const leases = getCustomBackgroundTextureLeases(
+      f.scene.textures as unknown as Phaser.Textures.TextureManager,
+    );
+    const background = f.presenter.createRoomBackground(f.room, { x: 0, y: 0 });
+
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 2 });
+    background.sprites[0].sprite.destroy();
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+    background.colorRect!.destroy();
+    expect(leases.getSnapshot()).toEqual({
+      leases: {},
+      idle: ['custom_background_abcdefgh'],
+    });
+  });
+
+  it('holds a custom background while its upload is pending', () => {
+    const f = fixture();
+    f.room.background = 'custom:abcdefgh?fit=stretch';
+    f.scene.textures.exists.mockReturnValue(false);
+    vi.spyOn(backgrounds, 'ensureCustomBackgroundTexture').mockReturnValue(
+      new Promise<string>(() => undefined),
+    );
+    const leases = getCustomBackgroundTextureLeases(
+      f.scene.textures as unknown as Phaser.Textures.TextureManager,
+    );
+    const background = f.presenter.createRoomBackground(f.room, { x: 0, y: 0 });
+
+    expect(leases.getSnapshot().leases).toEqual({ custom_background_abcdefgh: 1 });
+    background.colorRect!.destroy();
+    expect(leases.getSnapshot()).toEqual({ leases: {}, idle: [] });
   });
 
   it.each(['active', 'destroyed-room', 'destroyed-streamer'] as const)(

@@ -1,8 +1,12 @@
+import type Phaser from 'phaser';
 import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   default: {
+    Math: {
+      Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+    },
     Textures: {
       FilterMode: {
         LINEAR: 'linear',
@@ -14,6 +18,7 @@ vi.mock('phaser', () => ({
 
 import { createDefaultRoomSnapshot } from '../../persistence/roomModel';
 import { getCustomBackgroundTextureKey } from '../../backgrounds/runtime';
+import { getCustomBackgroundTextureLeases } from '../../backgrounds/textureLeases';
 import { FrameWorkCoordinator } from './frameWorkCoordinator';
 import { OverworldWorldStreamingController } from './worldStreaming';
 
@@ -90,8 +95,70 @@ describe('world streaming dormant destination lifecycle', () => {
     expect(loadedRoom.backgroundSprites[0]?.sprite).toBe(customImage);
     expect(colorRect).toMatchObject({ active: false, visible: false });
     expect(customImage).toMatchObject({ active: false, visible: false });
+    // Both background objects keep the shared texture resident until they are destroyed.
+    expect(colorRect.once).toHaveBeenCalledWith('destroy', expect.any(Function));
+    expect(customImage.once).toHaveBeenCalledWith('destroy', expect.any(Function));
     expect(preparation.backgroundPrepared).toBe(true);
     expect(queuePreparedTerrainBatch).toHaveBeenCalledWith(preparation);
+  });
+
+  it('draws and uploads only the terrain texture for a room without foreground tiles', () => {
+    const room = createDefaultRoomSnapshot('3,4', { x: 3, y: 4 });
+    const registered = new Set<string>();
+    const context = { clearRect: vi.fn(), imageSmoothingEnabled: true };
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => ({ width: 0, height: 0, getContext: () => context })),
+    });
+    const frameWorkCoordinator = new FrameWorkCoordinator();
+    const scene = {
+      textures: {
+        exists: vi.fn((key: string) => registered.has(key)),
+        addImage: vi.fn((key: string) => registered.add(key)),
+      },
+    };
+    const buildScopedRoomTextureKey = vi.fn(() => 'terrain-only');
+    const queuePreparedCustomTiles = vi.fn();
+    const harness = Object.assign(createWorldStreamingHarness(), {
+      destroyed: false,
+      loadedFullRoomsById: new Map(),
+      pendingFullRoomPreparationsById: new Map(),
+      pendingFullRoomTeardownsById: new Map(),
+      predictedPreparationRoomId: null,
+      frameWorkCoordinator,
+      options: { getMode: () => 'play', scene },
+      buildFullRoomPreparationIdentity: vi.fn(() => 'terrain-only'),
+      buildFullRoomArtifactKey: vi.fn(() => 'terrain-only-artifact'),
+      buildScopedRoomTextureKey,
+      getCustomRoomTileTextureKey: vi.fn(() => null),
+      syncRoomArtifactCachePolicy: vi.fn(),
+      queuePreparedCustomTiles,
+    });
+
+    try {
+      const preparation = callBeginPreparedRoom(
+        harness,
+        { id: room.id, coordinates: room.coordinates, room, source: 'published' },
+        'predicted-visuals-objects',
+        false,
+        false,
+      ) as unknown as { foregroundTextureKey: string | null; committedTextureKeys: string[] };
+
+      expect(preparation.foregroundTextureKey).toBeNull();
+      expect(buildScopedRoomTextureKey).toHaveBeenCalledOnce();
+      const labels: string[] = [];
+      for (let frame = 0; frame < 40 && queuePreparedCustomTiles.mock.calls.length === 0; frame += 1) {
+        const result = frameWorkCoordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+        labels.push(...result.executed.map((job) => job.label));
+      }
+
+      expect(queuePreparedCustomTiles).toHaveBeenCalledOnce();
+      expect(labels.filter((label) => label.startsWith('upload-room-texture'))).toHaveLength(1);
+      expect(scene.textures.addImage).toHaveBeenCalledOnce();
+      expect(scene.textures.addImage).toHaveBeenCalledWith('terrain-only', expect.anything());
+      expect(preparation.committedTextureKeys).toEqual(['terrain-only']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('prepares and atomically activates a cold custom-background destination', async () => {
@@ -177,7 +244,7 @@ describe('world streaming dormant destination lifecycle', () => {
     const scene = {
       textures: {
         exists: vi.fn((key: string) => registeredTextures.has(key)),
-        addCanvas: vi.fn((key: string) => {
+        addImage: vi.fn((key: string) => {
           registeredTextures.add(key);
           return {};
         }),
@@ -245,6 +312,10 @@ describe('world streaming dormant destination lifecycle', () => {
       expect(preparation).not.toBeNull();
       expect(preparation.phase).toBe('custom-background');
       expect(preparation.activationRequested).toBe(true);
+      const leases = getCustomBackgroundTextureLeases(
+        scene.textures as unknown as Phaser.Textures.TextureManager,
+      );
+      expect(leases.getSnapshot().leases).toEqual({ [customBackgroundTextureKey]: 1 });
       expect(loadedFullRoomsById.has(room.id)).toBe(false);
       expect(loadedRoom.collisionReady).toBe(false);
 
@@ -271,6 +342,8 @@ describe('world streaming dormant destination lifecycle', () => {
       expect(loadedFullRoomsById.get(room.id)).toBe(loadedRoom);
       expect(loadedRoom.collisionReady).toBe(true);
       expect(pendingFullRoomPreparationsById.has(room.id)).toBe(false);
+      // The preparation's hold ends at activation; the room's own objects hold it from here.
+      expect(leases.getSnapshot().leases).toEqual({});
       expect(onFullRoomCollisionReady).toHaveBeenCalledWith(loadedRoom);
       expect(onFullRoomSetChanged).toHaveBeenCalledWith([room.coordinates]);
       expect(observerStates).toEqual([{ published: true, collisionReady: true }]);
@@ -742,9 +815,44 @@ function createDormantBackgroundObject() {
     setPosition: vi.fn().mockReturnThis(),
     setCrop: vi.fn().mockReturnThis(),
     setDisplaySize: vi.fn().mockReturnThis(),
+    once: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
   };
 }
+
+describe('world streaming display reset', () => {
+  it('releases preview backgrounds first and destroys the current room last', () => {
+    const order: string[] = [];
+    const harness = Object.assign(createWorldStreamingHarness(), {
+      loadedFullRoomsById: new Map([
+        ['1,0', {}],
+        ['0,0', {}],
+        ['2,0', {}],
+      ]),
+      options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
+      previewRenderer: {
+        releaseCustomBackgroundLeases: () => order.push('release-previews'),
+        clear: () => order.push('clear-previews'),
+      },
+      destroyFullRoom: (roomId: string) => order.push(`destroy:${roomId}`),
+    });
+
+    (
+      OverworldWorldStreamingController.prototype as unknown as {
+        clearDisplayState(): void;
+      }
+    ).clearDisplayState.call(harness);
+
+    // On a phone the one idle slot then keeps the current room's background.
+    expect(order).toEqual([
+      'release-previews',
+      'destroy:1,0',
+      'destroy:2,0',
+      'destroy:0,0',
+      'clear-previews',
+    ]);
+  });
+});
 
 function callQueuePreparedBackground(harness: object, preparation: object): void {
   const method = (
