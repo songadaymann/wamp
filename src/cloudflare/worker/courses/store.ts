@@ -46,7 +46,8 @@ export async function loadCourseRecord(
   viewerUserId: string | null = null,
   viewerIsAdmin = false
 ): Promise<CourseRecord | null> {
-  const row = await env.DB.prepare(
+  // The versions need only the id (the row's primary key), so both reads share one wait (F333).
+  const [row, versions] = await Promise.all([env.DB.prepare(
     `
       SELECT
         id,
@@ -67,7 +68,7 @@ export async function loadCourseRecord(
     `
   )
     .bind(courseId)
-    .first<CourseRow>();
+    .first<CourseRow>(), loadCourseVersions(env, courseId)]);
 
   if (!row) {
     return null;
@@ -75,7 +76,6 @@ export async function loadCourseRecord(
 
   const draft = parseStoredCourseSnapshot(row.draft_json, row.id);
   const published = row.published_json ? parseStoredCourseSnapshot(row.published_json, row.id) : null;
-  const versions = await loadCourseVersions(env, row.id);
 
   const record: CourseRecord = {
     draft,

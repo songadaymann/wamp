@@ -59,8 +59,9 @@ export async function loadEffectiveTrustState(
   userId: string,
   progress?: UserProgressRow,
 ): Promise<EffectiveTrustState> {
-  const resolvedProgress = progress ?? await loadOrBackfillUserProgress(env, userId);
-  const [suspiciousRow, chatBanAuditRow, activeChatBanRow, userRow] = await Promise.all([
+  // None of the penalty reads needs the progress row, so all five share one wait (F333).
+  const [resolvedProgress, suspiciousRow, chatBanAuditRow, activeChatBanRow, userRow] = await Promise.all([
+    progress ?? loadOrBackfillUserProgress(env, userId),
     env.DB.prepare(
       `
         SELECT created_at

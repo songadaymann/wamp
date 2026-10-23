@@ -269,9 +269,10 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   roomVersion: number | readonly number[],
   goal: RoomGoal,
   excludeAttemptId: string | null = null,
-  finishedBefore: RunFinishOrder | null = null,
+  /** Only runs committed before this one count. The query doesn't need it, so it may still be loading. */
+  finishedBefore: RunFinishOrder | Promise<RunFinishOrder> | null = null,
 ): Promise<RoomRunRecord | null> {
-  const result = await env.DB.prepare(
+  const [result, order] = await Promise.all([env.DB.prepare(
     `
       SELECT
         attempt_id,
@@ -304,13 +305,13 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   )
     .bind(userId, roomId, JSON.stringify(typeof roomVersion === 'number' ? [roomVersion] : roomVersion),
       excludeAttemptId, excludeAttemptId)
-    .all<RoomRunRow>();
+    .all<RoomRunRow>(), finishedBefore]);
 
   const runs = result.results
     .filter(
       (row): row is RoomRunRow & { elapsed_ms: number; finished_at: string } =>
         typeof row.elapsed_ms === 'number' && typeof row.finished_at === 'string'
-        && finishedEarlier(row, finishedBefore)
+        && finishedEarlier(row, order)
     )
     .map(mapRoomRunRow);
 

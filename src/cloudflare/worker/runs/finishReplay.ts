@@ -38,11 +38,11 @@ export function runVerificationError(
  * outcome instead of a second finalize. This throws the original verification 409, or "already
  * finalized" for a different result, and returns when the same result already counted (F351).
  */
-export function assertReplayableRunFinish(
-  stored: StoredRunOutcome | null,
+export function assertReplayableRunFinish<T extends StoredRunOutcome>(
+  stored: T | null,
   requested: RunResult,
   messages: RunFinishMessages,
-): void {
+): asserts stored is T {
   if (!stored || stored.result === 'active' || stored.result !== requested) {
     throw new HttpError(409, messages.finalized);
   }
@@ -95,17 +95,39 @@ export async function recordRunSettlement(env: Env, kind: RunFinishKind, attempt
 
 /**
  * This run's place in commit order, for first-clear and personal-best checks. finalize_seq is
- * numbered inside the finalize batch; the stored finish time is taken before verification.
+ * numbered inside the finalize batch; the stored finish time is taken before verification, so a
+ * resend keeps the original clear's place. It reads only this, so it can load beside the run (F333).
  */
 export async function loadRunFinishOrder(
   env: Env,
   table: 'room_runs' | 'course_runs' | 'expanded_room_runs',
   attemptId: string,
-  finishedAt: string,
 ): Promise<RunFinishOrder> {
-  const row = await env.DB.prepare(`SELECT finalize_seq FROM ${table} WHERE attempt_id = ? LIMIT 1`)
-    .bind(attemptId).first<{ finalize_seq: number | null }>();
-  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt, attemptId };
+  const row = await env.DB.prepare(`SELECT finalize_seq, finished_at FROM ${table} WHERE attempt_id = ? LIMIT 1`)
+    .bind(attemptId).first<{ finalize_seq: number | null; finished_at: string | null }>();
+  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt: row?.finished_at ?? new Date().toISOString(), attemptId };
+}
+
+/**
+ * Waits on independent finish steps together, so they cost one database wait instead of one each
+ * (F333). Unlike Promise.all, every step finishes before this returns or throws (none keeps running
+ * past the reply), and the failure thrown is the first in argument order, as when they ran in turn.
+ */
+export async function awaitInOrder<T extends readonly unknown[] | []>(
+  steps: T,
+): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+  const settled = await Promise.allSettled(steps);
+  for (const step of settled) if (step.status === 'rejected') throw step.reason;
+  return settled.map((step) => (step as PromiseFulfilledResult<unknown>).value) as { -readonly [P in keyof T]: Awaited<T[P]> };
+}
+
+/**
+ * Starts a read the finish needs later, so it shares a wait with earlier steps (F333). A failure
+ * surfaces where the read is awaited; if an earlier step throws first, it is dropped, not unhandled.
+ */
+export function readAhead<T>(read: Promise<T>): Promise<T> {
+  read.catch(() => {});
+  return read;
 }
 
 /** SET clause numbering a finalize in commit order (writes to one D1 database are serialized). */
