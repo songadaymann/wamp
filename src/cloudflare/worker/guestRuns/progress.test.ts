@@ -168,8 +168,17 @@ describe('verified guest progress and account claims on the real schema', () => 
     expect(starts[0]).toEqual(starts[1]);
     expect(read('SELECT COUNT(*) AS count FROM guest_run_attempts')?.count).toBe(1);
     await expect(startGuestRun(env, identity, { ...body, version: 2 })).rejects.toMatchObject({ status: 409 });
-    room.goal = { type: 'collect_target', requiredCount: 10, timeLimitMs: null }; putRoom(room);
+    putRoom({ ...room, version: 2, goal: { type: 'collect_target', requiredCount: 10, timeLimitMs: null } });
     at(1000); expect((await finishGuestRun(env, identity, starts[0].attemptId, request(resultBody(starts[0])))).saved).toBe(true);
+  });
+  it.each(['rewritten', 'removed'] as const)('fails verification when the bound published version is %s', async change => {
+    const start = await startGuestRun(env, identity, startBody());
+    expect(read('SELECT snapshot_json FROM guest_run_attempts')?.snapshot_json).toBeNull();
+    if (change === 'rewritten') putRoom({ ...room, goal: { type: 'collect_target', requiredCount: 10, timeLimitMs: null } });
+    else sqlite.prepare('DELETE FROM room_versions WHERE room_id = ?').run(room.id);
+    at(1000); expect(await finishGuestRun(env, identity, start.attemptId, request(resultBody(start))))
+      .toMatchObject({ result: 'completed', verificationStatus: 'failed', verificationReason: 'snapshot_changed', saved: false });
+    expect((await claim()).pxpAwarded).toBe(0);
   });
   it('recovers only an existing original start by client id, protected by the recovery identity', async () => {
     const body = startBody(); const started = await startGuestRun(env, identity, body);
@@ -238,13 +247,25 @@ describe('verified guest progress and account claims on the real schema', () => 
     await expect(finishGuestRun(env, { ...identity, recoveryTokenHash: 'wrong' }, start.attemptId, request(finish))).rejects.toMatchObject({ status: 404 });
     await expect(finishGuestRun(env, identity, start.attemptId, request({ ...finish, deaths: 2 }))).rejects.toMatchObject({ status: 409 });
   });
-  it('verifies course cells captured at start, and discards them after finalization', async () => {
+  it('verifies course cells from their pinned published versions without copying them', async () => {
     const body = startBody('course', course.id); const start = await startGuestRun(env, identity, body);
-    expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(1);
-    room.goal = null; putRoom(room); at(1000);
+    expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(0);
+    expect(read('SELECT snapshot_json FROM guest_run_attempts')?.snapshot_json).toBeNull();
+    putRoom({ ...room, version: 2, goal: null }); at(1000);
+    expect((await finishGuestRun(env, identity, start.attemptId, request(resultBody(start)))).saved).toBe(true);
+    expect((await claim()).pxpAwarded).toBe(40);
+  });
+  it('still finishes an attempt that stored its own copy before F330, then discards the cell copies', async () => {
+    const start = await startGuestRun(env, identity, startBody('course', course.id));
+    sqlite.prepare('UPDATE guest_run_attempts SET snapshot_json = ? WHERE attempt_id = ?')
+      .run(JSON.stringify({ kind: 'course', course, rooms: [] }), start.attemptId);
+    sqlite.prepare('INSERT INTO guest_run_snapshot_rooms (attempt_id, room_id, snapshot_json) VALUES (?, ?, ?)')
+      .run(start.attemptId, room.id, JSON.stringify(room));
+    // The stored copy is used, so a later loss of the version does not affect it.
+    sqlite.prepare('DELETE FROM room_versions WHERE room_id = ?').run(room.id); at(1000);
     expect((await finishGuestRun(env, identity, start.attemptId, request(resultBody(start)))).saved).toBe(true);
     expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(0);
-    expect((await claim()).pxpAwarded).toBe(40);
+    expect(read('SELECT snapshot_json FROM guest_run_attempts')?.snapshot_json).toBeNull();
   });
   it('captures every cell in a full-size expanded footprint and rejects missing published versions', async () => {
     const full = { ...course, id: 'full-course', roomRefs: [course.roomRefs[0]] };
@@ -252,10 +273,12 @@ describe('verified guest progress and account claims on the real schema', () => 
       const cell = { ...createDefaultRoomSnapshot(`${x},0`, { x, y: 0 }), status: 'published' as const, publishedAt: NOW };
       putRoom(cell); full.roomRefs.push({ roomId: cell.id, roomTitle: null, coordinates: cell.coordinates, roomVersion: 1 });
     }
-    putCourse(full); await startGuestRun(env, identity, startBody('course', full.id));
-    expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(16);
+    putCourse(full); const start = await startGuestRun(env, identity, startBody('course', full.id));
+    expect(read('SELECT COUNT(*) AS count FROM guest_run_snapshot_rooms')?.count).toBe(0);
     sqlite.prepare('DELETE FROM room_versions WHERE room_id = ?').run('15,0');
     await expect(startGuestRun(env, identity, startBody('course', full.id))).rejects.toMatchObject({ status: 409 });
+    at(1000); expect(await finishGuestRun(env, identity, start.attemptId, request(resultBody(start))))
+      .toMatchObject({ saved: false, verificationReason: 'snapshot_changed' });
   });
   it.each(['standalone', 'course_alias', 'native'] as const)('supports %s expanded-room progress', async kind => {
     let id = 'room:0,0';
