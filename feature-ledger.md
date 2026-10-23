@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 4: share previews (F332, F348)
+
+Round-2 lane. PR #314: one compressed PNG encoder for share and gram previews (3 MB to 5–144 KB, same pixels), and Wamp-O-Gram previews cached per datacenter behind a visibility check (deletes, hidden versions) with blocked art masked and a one-hour client cache. API Worker `1f1fdef2`. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 5: dialogs, accessibility and startup size
 
 Round-2 lane. PRs #311 F319 (developer tools and bug report form load on use; boot 663.5 KB), #312 F464/F471/F477/F478 (selected states, announcements, player-name focus ring, menu Escape), and #313 F380/F467/F406 (one modal watcher; pop-up tones; Worlds and PvP as shared dialogs; duel challenges held until a run ends and limited on the server, API Worker `3034c796`). Adversarial reviews on each. Receipt: docs/review/wamp-round2-where-features-meet-2026-10-23.md.
