@@ -121,6 +121,8 @@ import {
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
+import { phoneToolSwitchClearArea } from './editor/phoneToolSwitchArea';
+import type { MapArea } from './editor/composerMap';
 import {
   requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
@@ -1198,17 +1200,19 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     const size = getCourseWorkspacePixelSize(this.workspaceBounds);
+    // In landscape the phone Draw/Erase column stands at the left edge; fit the rooms beside it (F369).
+    const view = phoneToolSwitchClearArea(this.game.canvas, this.scale.width, this.scale.height);
     const fitZoom = Phaser.Math.Clamp(
       Math.min(
-        (this.scale.width - FIT_PADDING) / Math.max(ROOM_PX_WIDTH, size.width),
-        (this.scale.height - FIT_PADDING) / Math.max(ROOM_PX_HEIGHT, size.height),
+        (view.width - FIT_PADDING) / Math.max(ROOM_PX_WIDTH, size.width),
+        (view.height - FIT_PADDING) / Math.max(ROOM_PX_HEIGHT, size.height),
       ),
       MIN_ZOOM,
       MAX_ZOOM,
     );
     this.inspectZoom = Number(fitZoom.toFixed(3));
     this.cameras.main.setZoom(this.inspectZoom);
-    this.centerCameraOnWorkspace();
+    this.centerCameraOnWorkspace(view);
     this.renderUi();
   }
 
@@ -3513,10 +3517,16 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     );
   }
 
-  private centerCameraOnWorkspace(): void {
+  /** Puts the workspace centre in the middle of the given part of the view. */
+  private centerCameraOnWorkspace(view: MapArea): void {
     const size = getCourseWorkspacePixelSize(this.workspaceBounds);
+    const camera = this.cameras.main;
     this.syncCameraBounds();
-    this.cameras.main.centerOn(size.width * 0.5, size.height * 0.5);
+    // centerOn, unlike setScroll, also moves midPoint, which a resize keeps in the middle.
+    camera.centerOn(
+      size.width * 0.5 - (view.x + view.width * 0.5 - camera.width * 0.5) / camera.zoom,
+      size.height * 0.5 - (view.y + view.height * 0.5 - camera.height * 0.5) / camera.zoom,
+    );
     this.constrainCamera();
   }
 
