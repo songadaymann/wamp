@@ -5,11 +5,11 @@ import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roo
 import {
   buildSwordsmanTraversalGraph,
   getSwordsmanTraversalGraphCacheKey,
+  markSwordsmanTraversalRoomInPlay,
   type SwordsmanBodySnapshot,
 } from './swordsmanTraversal';
 import {
   debugSimulateSwordsmanTraversalEdge,
-  markSwordsmanTraversalRoomInPlay,
   planSwordsmanRobustTraversal,
   prepareSwordsmanTraversalEdgeSimulation,
   type SwordsmanRobustTraversalPlan,

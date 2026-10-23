@@ -1,6 +1,7 @@
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import {
   getSwordsmanTraversalGraphCacheKey,
+  markSwordsmanTraversalRoomInPlay,
   peekSwordsmanTraversalGraphForRoom,
   rememberSwordsmanTraversalGraph,
   startSwordsmanTraversalGraphBuild,
@@ -8,20 +9,16 @@ import {
   type SwordsmanTraversalGraph,
   type SwordsmanTraversalGraphBuild,
 } from '../../../enemies/swordsmanTraversal';
-import {
-  markSwordsmanTraversalRoomInPlay,
-  prepareSwordsmanTraversalEdgeSimulation,
-} from '../../../enemies/swordsmanRobustPlanner';
+import { prepareSwordsmanTraversalEdgeSimulation } from '../../../enemies/swordsmanRobustPlanner';
 
 /** Time one background job may spend, inside the frame-work coordinator's 1 ms CPU estimate. */
 export const SWORDSMAN_EDGE_WARMUP_CHUNK_MS = 0.8;
-/** Graph pieces or edges per background job, which also bounds a job on a coarse clock. */
-export const SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB = 8;
 /**
- * Time a run start or portal arrival may spend finishing the arrival room's warm-up before its
- * hunters first plan. A dense 40-ledge room needs about 35-45 ms on a fast desktop.
+ * Graph pieces or uncached edges per background job. It bounds a job where the clock is too coarse
+ * to (Safari and Firefox round performance.now() to about 1 ms; resistFingerprinting to 100 ms).
  */
-export const SWORDSMAN_EDGE_WARMUP_ARRIVAL_BUDGET_MS = 250;
+export const SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB = 8;
+const PRIORITIZED_ROOM_LIMIT = 16;
 
 type WarmupPriority = 'gameplay-catch-up' | 'gameplay-warmup';
 
@@ -30,12 +27,12 @@ interface WarmupJob {
   reprioritize(priority: WarmupPriority): boolean;
 }
 
-interface WarmupHunter {
+export interface WarmupHunter {
   runtime: { aiObjectiveMode: string | null };
   sprite: { scene?: unknown; body: unknown };
 }
 
-interface WarmupRoom {
+export interface WarmupRoom {
   room: RoomSnapshot;
   liveObjects: readonly WarmupHunter[];
   runtimeSuspended?: boolean;
@@ -45,14 +42,14 @@ interface WarmupTask {
   loadedRoom: WarmupRoom;
   hunters: WarmupHunter[];
   bodySizes: Array<[width: number, height: number]>;
-  graphBuild: { buildNextPiece(): SwordsmanTraversalGraph | null } | null;
+  graphBuild: SwordsmanTraversalGraphBuild | null;
   graph: SwordsmanTraversalGraph | null;
   edges: SwordsmanTraversalEdge[];
   nextEdgeIndex: number;
   nextBodyIndex: number;
+  /** Hunters there are awake, or the player is about to arrive: run ahead of cosmetic previews. */
+  catchUp: boolean;
   wantedAt: number;
-  /** The slowest graph piece or edge so far; a job stops before one more would pass its budget. */
-  largestUnitMs: number;
 }
 
 interface RoomNote {
@@ -82,16 +79,18 @@ export interface SwordsmanEdgeWarmupOptions {
  * hunters plan, so the plans read cached physics instead of freezing a frame (F302). Plans never
  * wait for it and choose exactly the same routes; only when the physics runs changes.
  * - A room's warm-up is queued when its live objects are created, and runs as frame work below all
- *   streaming queues, in Play and Browse frames, within the device profile's CPU cap.
- * - While Sword Hunters in a room are awake, its unfinished warm-up moves ahead of cosmetic
- *   previews (still behind preparation and teardown).
- * - A run start or portal arrival finishes the arrival room's warm-up on the spot.
+ *   streaming queues, within the device profile's CPU cap.
+ * - While a room's Sword Hunters are awake, or once its preparation as a portal destination or the
+ *   next room is requested, its unfinished warm-up moves ahead of cosmetic previews (still behind
+ *   preparation and teardown).
+ * - A run start or respawn finishes the arrival room on the spot within 250 ms, a portal arrival
+ *   into another room within 50 ms; whatever is left continues as catch-up.
  */
 export class SwordsmanEdgeWarmup {
   private readonly tasksByRoomId = new Map<string, WarmupTask>();
   private readonly notesByRoom = new WeakMap<RoomSnapshot, RoomNote>();
+  private readonly prioritizedRoomIds = new Set<string>();
   private backgroundJob: WarmupJob | null = null;
-  private latestNotedFrameTime = Number.NaN;
   private readonly now: () => number;
   private readonly startGraphBuild: (room: RoomSnapshot) => SwordsmanTraversalGraphBuild;
   private readonly prepareEdge: typeof prepareSwordsmanTraversalEdgeSimulation;
@@ -117,6 +116,7 @@ export class SwordsmanEdgeWarmup {
       const size = getBodySize(hunter)!;
       bodySizes.set(`${Math.round(size[0])}:${Math.round(size[1])}`, size);
     }
+    const prioritized = this.prioritizedRoomIds.delete(loadedRoom.room.id);
     this.tasksByRoomId.set(loadedRoom.room.id, {
       loadedRoom,
       hunters,
@@ -126,15 +126,15 @@ export class SwordsmanEdgeWarmup {
       edges: [],
       nextEdgeIndex: 0,
       nextBodyIndex: 0,
+      catchUp: prioritized,
       wantedAt: Number.NEGATIVE_INFINITY,
-      largestUnitMs: 0,
     });
     this.scheduleBackgroundChunk();
   }
 
   /**
    * Called as a room's Sword Hunters update, every frame. Simulates nothing itself: it keeps the
-   * room's simulated edges from eviction and ranks its unfinished warm-up as catch-up work.
+   * room's caches from eviction and ranks its unfinished warm-up as catch-up work.
    */
   noteActiveRoom(loadedRoom: WarmupRoom, frameTime: number): void {
     let note = this.notesByRoom.get(loadedRoom.room);
@@ -146,35 +146,60 @@ export class SwordsmanEdgeWarmup {
       this.notesByRoom.set(loadedRoom.room, note);
     }
     note.frameTime = frameTime;
-    this.latestNotedFrameTime = frameTime;
     markSwordsmanTraversalRoomInPlay(note.graphCacheKey);
 
     const task = this.tasksByRoomId.get(loadedRoom.room.id);
-    if (task?.loadedRoom !== loadedRoom) {
-      return;
-    }
-    task.wantedAt = frameTime;
-    if (this.backgroundJob?.state === 'queued') {
-      this.backgroundJob.reprioritize('gameplay-catch-up');
-    } else {
-      // Nothing queued: the last job finished with this room suspended, or enqueue returned null.
-      this.scheduleBackgroundChunk();
+    if (task?.loadedRoom === loadedRoom) {
+      task.wantedAt = frameTime;
+      this.catchUp(task);
     }
   }
 
   /**
-   * A run start or portal arrival into this room: finish its warm-up now, within the arrival
-   * budget, so its hunters' first plans find every edge simulated.
+   * The player may soon arrive in this room (a portal destination or the next room is being
+   * prepared): rank its warm-up as catch-up, now or as soon as its objects are created.
    */
-  finishRoom(roomId: string): void {
+  prioritizeRoom(roomId: string): void {
     const task = this.tasksByRoomId.get(roomId);
     if (task) {
-      this.runUnits(task, SWORDSMAN_EDGE_WARMUP_ARRIVAL_BUDGET_MS, Number.POSITIVE_INFINITY);
+      this.catchUp(task);
+      return;
+    }
+    if (this.prioritizedRoomIds.size >= PRIORITIZED_ROOM_LIMIT) {
+      this.prioritizedRoomIds.clear();
+    }
+    this.prioritizedRoomIds.add(roomId);
+  }
+
+  /**
+   * The player is arriving in this room now (run start, respawn, portal): finish its warm-up
+   * within `budgetMs` so its hunters' first plans find every edge simulated. Whatever does not
+   * fit continues as catch-up.
+   */
+  finishRoom(roomId: string, budgetMs: number): void {
+    const task = this.tasksByRoomId.get(roomId);
+    if (task) {
+      this.runUnits(task, budgetMs, Number.POSITIVE_INFINITY);
+      this.catchUp(task);
     }
   }
 
   hasPendingWork(roomId: string): boolean {
     return this.tasksByRoomId.has(roomId);
+  }
+
+  private catchUp(task: WarmupTask): void {
+    if (this.tasksByRoomId.get(task.loadedRoom.room.id) !== task) {
+      return;
+    }
+    task.catchUp = true;
+    if (this.backgroundJob?.state === 'queued') {
+      this.backgroundJob.reprioritize('gameplay-catch-up');
+    } else {
+      // Nothing queued: the last job ran out of work it could do (its rooms were suspended), or
+      // enqueue returned null.
+      this.scheduleBackgroundChunk();
+    }
   }
 
   private scheduleBackgroundChunk(): void {
@@ -202,16 +227,23 @@ export class SwordsmanEdgeWarmup {
         this.backgroundJob = null;
         this.tasksByRoomId.clear();
       },
-      task.wantedAt === this.latestNotedFrameTime ? 'gameplay-catch-up' : 'gameplay-warmup',
+      task.catchUp ? 'gameplay-catch-up' : 'gameplay-warmup',
     ) ?? null;
   }
 
-  /** The room most recently played first, else the oldest; never a suspended room. */
+  /** Catch-up rooms first, the most recently played of them first, else the oldest; never a suspended room. */
   private nextTask(): WarmupTask | null {
     this.dropDestroyedTasks();
     let next: WarmupTask | null = null;
     for (const task of this.tasksByRoomId.values()) {
-      if (task.loadedRoom.runtimeSuspended !== true && (!next || task.wantedAt > next.wantedAt)) {
+      if (task.loadedRoom.runtimeSuspended === true) {
+        continue;
+      }
+      if (
+        !next
+        || (task.catchUp && !next.catchUp)
+        || (task.catchUp === next.catchUp && task.wantedAt > next.wantedAt)
+      ) {
         next = task;
       }
     }
@@ -219,23 +251,30 @@ export class SwordsmanEdgeWarmup {
   }
 
   /**
-   * Runs graph pieces, then edges, until the task is done, `maxUnits` have run, or the next unit
-   * would pass `budgetMs` if it took as long as the slowest one so far. A task that throws is
-   * dropped: its hunters then simulate what they need as they plan, as on main.
+   * Runs graph pieces, then edges, until the task is done, `maxUnits` uncached units have run, or
+   * the next unit would pass `budgetMs` if it took as long as this job's slowest so far. That
+   * figure starts afresh each job, so one hitch, or a unit that happened to span a tick of a
+   * coarse clock, slows only its own job. A task that throws is dropped: its hunters then simulate
+   * what they need as they plan, as on main.
    */
   private runUnits(task: WarmupTask, budgetMs: number, maxUnits: number): void {
     const startedAt = this.now();
     let unitStartedAt = startedAt;
+    let slowestUnitMs = 0;
+    let coldUnits = 0;
     try {
-      for (let units = 0; units < maxUnits; units += 1) {
-        const finished = this.runUnit(task);
-        const unitEndedAt = this.now();
-        task.largestUnitMs = Math.max(task.largestUnitMs, unitEndedAt - unitStartedAt);
-        if (finished) {
+      while (coldUnits < maxUnits) {
+        const unit = this.runUnit(task);
+        if (unit === 'done') {
           this.finish(task);
           return;
         }
-        if (unitEndedAt - startedAt + task.largestUnitMs > budgetMs) {
+        const unitEndedAt = this.now();
+        if (unit === 'worked') {
+          coldUnits += 1;
+          slowestUnitMs = Math.max(slowestUnitMs, unitEndedAt - unitStartedAt);
+        }
+        if (unitEndedAt - startedAt + slowestUnitMs > budgetMs) {
           return;
         }
         unitStartedAt = unitEndedAt;
@@ -246,12 +285,13 @@ export class SwordsmanEdgeWarmup {
     }
   }
 
-  /** One graph piece or one edge; true once the task has nothing left. */
-  private runUnit(task: WarmupTask): boolean {
+  /** One graph piece or one edge: whether it did real work, was already cached, or finished the task. */
+  private runUnit(task: WarmupTask): 'worked' | 'cached' | 'done' {
     const room = task.loadedRoom.room;
     if (!task.graph) {
       // A hunter that planned first built the graph itself; stop building our copy.
       const cached = peekSwordsmanTraversalGraphForRoom(room);
+      let worked = false;
       if (cached) {
         task.graph = cached;
       } else {
@@ -260,26 +300,33 @@ export class SwordsmanEdgeWarmup {
         }
         const built = task.graphBuild.buildNextPiece();
         if (!built) {
-          return false;
+          return 'worked';
         }
         task.graph = rememberSwordsmanTraversalGraph(built);
+        worked = true;
       }
       task.graphBuild = null;
       task.edges = Array.from(task.graph.edgesById.values());
-      return task.edges.length === 0;
+      if (task.edges.length === 0) {
+        return 'done';
+      }
+      return worked ? 'worked' : 'cached';
     }
 
     const bodySize = task.bodySizes[task.nextBodyIndex];
     if (!bodySize) {
-      return true;
+      return 'done';
     }
-    this.prepareEdge(room, task.graph, task.edges[task.nextEdgeIndex], bodySize[0], bodySize[1]);
+    const simulated = this.prepareEdge(room, task.graph, task.edges[task.nextEdgeIndex], bodySize[0], bodySize[1]);
     task.nextEdgeIndex += 1;
     if (task.nextEdgeIndex >= task.edges.length) {
       task.nextEdgeIndex = 0;
       task.nextBodyIndex += 1;
     }
-    return task.nextBodyIndex >= task.bodySizes.length;
+    if (task.nextBodyIndex >= task.bodySizes.length) {
+      return 'done';
+    }
+    return simulated ? 'worked' : 'cached';
   }
 
   private finish(task: WarmupTask): void {

@@ -215,6 +215,15 @@ describe('OverworldPortalObjectController cold destinations', () => {
     expect(harness.clearPortalTargetRoomPreparation).toHaveBeenCalledWith('2,0');
   });
 
+  it('teleports within one room without stalling to ready it again (F302)', () => {
+    const harness = createHarness();
+    harness.sourcePortal.linkedTargetRoomId = '0,0';
+    harness.rooms.get('0,0')!.liveObjects.push(createPortalObject('portal_b', 'target-portal', 300, 16));
+    harness.controller.update();
+    expect(harness.host.teleportPlayerTo).toHaveBeenCalledWith(300, 16, { x: 75, y: -40 });
+    expect(harness.host.prepareRoomArrival).not.toHaveBeenCalled();
+  });
+
   it('clears retained preparation when a link becomes invalid', () => {
     const harness = createHarness();
     harness.controller.update();

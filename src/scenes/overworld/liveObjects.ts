@@ -67,7 +67,7 @@ import { LiveObjectHazardController } from './liveObjects/hazardController';
 import { LiveObjectJumpFeatherController } from './liveObjects/jumpFeather';
 import { LiveObjectEnemyLifecycleController } from './liveObjects/enemyLifecycle';
 import { LiveObjectSwordsmanController } from './liveObjects/swordsmanController';
-import { SwordsmanEdgeWarmup, type SwordsmanEdgeWarmupOptions } from './liveObjects/swordsmanEdgeWarmup';
+import { LazySwordsmanEdgeWarmup, type SwordsmanEdgeWarmupOptions } from './liveObjects/swordsmanEdgeWarmupLoader';
 import {
   getLiveObjectBehavior,
   liveObjectBehaviorCanSleepAtDistance,
@@ -278,10 +278,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
-  /** Run starts and portal arrivals call finishRoom on it before the room's hunters first plan. */
-  readonly swordsmanEdgeWarmup = new SwordsmanEdgeWarmup({
+  /** Run starts, respawns and portal arrivals call finishRoom before the room's hunters first plan. */
+  readonly swordsmanEdgeWarmup = new LazySwordsmanEdgeWarmup({
     enqueueBackgroundCpuWork: (...args) => this.options.enqueueBackgroundCpuWork?.(...args) ?? null,
-  });
+  }, () => this.options.getLoadedFullRooms());
   private readonly riderCarryOptions = {
     getDynamicBody: (sprite: Phaser.GameObjects.Sprite) => this.getDynamicBody(sprite),
     getPlayerBody: () => this.options.getPlayerBody(),

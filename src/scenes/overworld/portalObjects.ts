@@ -172,7 +172,9 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     }
 
     this.host.authorizeRoomTransition(destination.roomCoordinates);
-    this.host.prepareRoomArrival?.(destination.loadedRoom.room.id);
+    if (destination.loadedRoom !== source.loadedRoom) {
+      this.host.prepareRoomArrival?.(destination.loadedRoom.room.id);
+    }
     this.host.teleportPlayerTo(destination.x, destination.y, {
       x: playerBody.velocity.x,
       y: playerBody.velocity.y,

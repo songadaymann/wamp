@@ -25,6 +25,7 @@ import {
   getSwordsmanTraversalCurrentNodeId,
   getSwordsmanTraversalTargetContext,
   isSwordsmanLadderTraversalEdge,
+  isSwordsmanTraversalRoomInPlay,
   measureSwordsmanTraversalNodeDistanceToBody,
   type SwordsmanBodySnapshot,
   type SwordsmanTraversalEdge,
@@ -112,12 +113,10 @@ const EDGE_SIMULATION_CACHE_LIMIT = 4096;
 
 // Simulated edges, one bucket per room version and body size, least recently used first. Past
 // the limit whole rooms are evicted, never the one being planned or one still in play (F302).
-const ROOM_IN_PLAY_PROTECTION_MS = 2000;
 const edgeSimulationsByRoom = new Map<string, {
   graphCacheKey: string;
   simulations: Map<string, EdgeSimulationResult>;
 }>();
-const roomsInPlay = new Map<string, { markedAt: number }>();
 let edgeSimulationCount = 0;
 let lastEdgeSimulationRoomKey: string | null = null;
 let coldSimulationCount = 0;
@@ -300,29 +299,6 @@ export function debugSimulateSwordsmanTraversalEdge(
     success: result.success,
     travelMs: Math.round(result.travelMs),
   };
-}
-
-/**
- * Keeps a room's simulated edges (every body size) from being evicted for the next couple of
- * seconds; called each frame its Sword Hunters update.
- */
-export function markSwordsmanTraversalRoomInPlay(graphCacheKey: string): void {
-  const now = performance.now();
-  const mark = roomsInPlay.get(graphCacheKey);
-  if (mark) {
-    // Updated in place: this runs every frame for every room with an awake Sword Hunter.
-    mark.markedAt = now;
-    return;
-  }
-
-  if (roomsInPlay.size >= 64) {
-    for (const [key, oldMark] of roomsInPlay) {
-      if (now - oldMark.markedAt >= ROOM_IN_PLAY_PROTECTION_MS || roomsInPlay.size >= 64) {
-        roomsInPlay.delete(key);
-      }
-    }
-  }
-  roomsInPlay.set(graphCacheKey, { markedAt: now });
 }
 
 /**
@@ -913,8 +889,7 @@ function evictLeastRecentEdgeSimulationRooms(keepRoomKey: string): void {
     if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
       return;
     }
-    const mark = roomsInPlay.get(bucket.graphCacheKey);
-    if (roomKey === keepRoomKey || (mark && now - mark.markedAt < ROOM_IN_PLAY_PROTECTION_MS)) {
+    if (roomKey === keepRoomKey || isSwordsmanTraversalRoomInPlay(bucket.graphCacheKey, now)) {
       continue;
     }
     edgeSimulationsByRoom.delete(roomKey);

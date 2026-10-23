@@ -6,8 +6,13 @@ import {
   buildSwordsmanTraversalGraph,
   decideSwordsmanTraversal,
   getSwordsmanTraversalContext,
+  getSwordsmanTraversalGraphCacheKey,
+  getSwordsmanTraversalGraphForRoom,
   getSwordsmanTraversalTargetContext,
+  isSwordsmanTraversalRoomInPlay,
+  markSwordsmanTraversalRoomInPlay,
   measureSwordsmanTraversalNodeDistanceToBody,
+  peekSwordsmanTraversalGraphForRoom,
   type SwordsmanBodySnapshot,
   type SwordsmanTraversalEdge,
   type SwordsmanTraversalGraph,
@@ -258,3 +263,37 @@ describe('classic traversal route choice (F305)', () => {
     expect(chaseWatched()).toBeGreaterThan(0);
   });
 });
+
+describe('shared traversal caches (F302)', () => {
+  it('drops stale in-play marks first, then the oldest, never one marked this frame', () => {
+    const keys = Array.from({ length: 64 }, (_, index) => `in-play-room-${index}`);
+    keys.forEach((key, index) => markSwordsmanTraversalRoomInPlay(key, 10_000 + index));
+    markSwordsmanTraversalRoomInPlay(keys[0], 10_100);
+    markSwordsmanTraversalRoomInPlay('in-play-new', 10_101);
+    expect(isSwordsmanTraversalRoomInPlay(keys[0], 10_102)).toBe(true);
+    expect(isSwordsmanTraversalRoomInPlay(keys[1], 10_102)).toBe(false);
+    expect(isSwordsmanTraversalRoomInPlay(keys[2], 10_102)).toBe(true);
+
+    // Two seconds later every mark but one is stale; all of those go before any fresh one.
+    markSwordsmanTraversalRoomInPlay('in-play-new', 12_101);
+    markSwordsmanTraversalRoomInPlay('in-play-later', 12_102);
+    expect(isSwordsmanTraversalRoomInPlay('in-play-new', 12_103)).toBe(true);
+    expect(isSwordsmanTraversalRoomInPlay(keys[0], 12_103)).toBe(false);
+  });
+
+  it('keeps graphs least recently used first and never evicts a room in play', () => {
+    const rooms = Array.from({ length: 66 }, (_, index) => createDefaultRoomSnapshot(`graph-cache-${index}`, { x: index, y: 50 }));
+    const [played, touched, ...rest] = rooms;
+    const playedGraph = getSwordsmanTraversalGraphForRoom(played);
+    const touchedGraph = getSwordsmanTraversalGraphForRoom(touched);
+    markSwordsmanTraversalRoomInPlay(getSwordsmanTraversalGraphCacheKey(played));
+    for (const room of rest.slice(0, 30)) getSwordsmanTraversalGraphForRoom(room);
+    expect(peekSwordsmanTraversalGraphForRoom(touched)).toBe(touchedGraph);
+    for (const room of rest.slice(30)) getSwordsmanTraversalGraphForRoom(room);
+
+    expect(peekSwordsmanTraversalGraphForRoom(played)).toBe(playedGraph);
+    expect(peekSwordsmanTraversalGraphForRoom(touched)).toBe(touchedGraph);
+    expect(peekSwordsmanTraversalGraphForRoom(rest[0])).toBeNull();
+  });
+});
+

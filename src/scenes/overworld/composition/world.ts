@@ -36,6 +36,7 @@ import { OverworldSpecialTilesController } from '../specialTiles';
 import { OverworldWindowController } from '../windowController';
 import { OverworldWorldStreamingController } from '../worldStreaming';
 import type { OverworldCompositionPorts } from './ports';
+import { finishRoomWarmupForArrival } from './roomArrival';
 import { BROWSE_VISIBLE_CHUNK_REFRESH_INTERVAL_MS, EDGE_WALL_THICKNESS, PLAY_VISIBLE_CHUNK_REFRESH_INTERVAL_MS, RESPAWN_FALL_DISTANCE } from './settings';
 type RoomEdgeWall = OverworldRoomEdgeWall;
 
@@ -255,10 +256,14 @@ export function createPortalObjectController(
     getPlayerBody: () => host.playerBody,
     getLoadedFullRooms: () => host.getCollisionReadyLoadedFullRooms(),
     getLoadedFullRoomById: (roomId) => host.getCollisionReadyLoadedFullRoomById(roomId),
-    requestPortalTargetRoomPreparation: (roomId) => portalTargetRoomPreparation.request(roomId),
+    requestPortalTargetRoomPreparation: (roomId) => {
+      // Rank its Sword Hunter warm-up as catch-up now, so it is usually done before the teleport.
+      host.liveObjectController.swordsmanEdgeWarmup.prioritizeRoom(roomId);
+      return portalTargetRoomPreparation.request(roomId);
+    },
     clearPortalTargetRoomPreparation: (roomId) => portalTargetRoomPreparation.clear(roomId),
     authorizeRoomTransition: (coordinates) => host.roomTransitionController.authorizeTeleportTransition(coordinates),
-    prepareRoomArrival: (roomId) => host.liveObjectController.swordsmanEdgeWarmup.finishRoom(roomId),
+    prepareRoomArrival: (roomId) => finishRoomWarmupForArrival(host, roomId, 'portal'),
     teleportPlayerTo: (x, y, velocity) => host.teleportPlayerToPortalObject(x, y, velocity),
     playPortalFx: () => {
       playSfx('warp');
@@ -507,7 +512,7 @@ export function createRuntimeController(
     getPlayerBody: () => host.playerBody,
     shouldCollidePlayerWithTerrainTile: (tile) => host.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
     createPlayer: (room) => host.createPlayer(room),
-    prepareRoomArrival: (roomId) => host.liveObjectController.swordsmanEdgeWarmup.finishRoom(roomId),
+    prepareRoomArrival: (roomId) => finishRoomWarmupForArrival(host, roomId, 'spawn'),
     afterCoursePlayerSpawn: () => host.coursePlaybackController.startRunAfterSpawn(),
     destroyPlayer: () => host.destroyPlayer(),
     syncAppMode: () => host.syncAppMode(),
@@ -617,7 +622,7 @@ export function createRoomTransitionController(
     | 'activeCourseRun' | 'activeCourseSnapshot' | 'roomSummariesById'
     | 'activeRoomRushRun' | 'recordRoomRushVisit' | 'syncGoalRunForRoomWithIntro'
     | 'getRoomSnapshotViewForCoordinates' | 'refreshLeaderboardForSelection' | 'refreshAround'
-    | 'refreshAroundIfNeededOrFromCache' | 'redrawWorld' | 'renderHud'
+    | 'refreshAroundIfNeededOrFromCache' | 'redrawWorld' | 'renderHud' | 'liveObjectController'
     | 'getRoomOrigin' | 'movementController' | 'playerPresentationController'
     | 'getCellStateAt' | 'specialTilesController' | 'isSolidTerrainAtWorldPoint'
   >,
@@ -642,9 +647,15 @@ export function createRoomTransitionController(
     getWindowCenterCoordinates: () => ({ ...host.windowCenterCoordinates }),
     getRoomCoordinatesForPoint: (x, y) => host.getRoomCoordinatesForPoint(x, y),
     isNeighborReachable: (roomCoordinates, neighborCoordinates) => host.runtimeController.isNeighborReachable(roomCoordinates, neighborCoordinates),
-    prefetchPlayableRoomForTransition: (coordinates) => host.worldStreamingController.prefetchPlayableRoomForTransition(coordinates),
+    prefetchPlayableRoomForTransition: (coordinates) => {
+      host.liveObjectController.swordsmanEdgeWarmup.prioritizeRoom(roomIdFromCoordinates(coordinates));
+      return host.worldStreamingController.prefetchPlayableRoomForTransition(coordinates);
+    },
     clearPredictedPlayableRoomForTransition: () => host.worldStreamingController.clearPredictedPlayableRoomForTransition(),
-    preparePlayableRoomForTransition: (coordinates, portalDestination) => host.worldStreamingController.preparePlayableRoomForTransition(coordinates, portalDestination),
+    preparePlayableRoomForTransition: (coordinates, portalDestination) => {
+      host.liveObjectController.swordsmanEdgeWarmup.prioritizeRoom(roomIdFromCoordinates(coordinates));
+      return host.worldStreamingController.preparePlayableRoomForTransition(coordinates, portalDestination);
+    },
     setTransitionPreparationSeamUrgent: (urgent) => host.worldStreamingController.setTransitionPreparationSeamUrgent(urgent),
     recordPerformanceTransitionGate: (reason, currentCoordinates, nextCoordinates) => host.recordPerformanceTransitionGate(reason, currentCoordinates, nextCoordinates),
     clearPerformanceTransitionGate: () => {

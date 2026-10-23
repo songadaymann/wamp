@@ -20,11 +20,15 @@ import {
   type FrameWorkPriority,
 } from '../frameWorkCoordinator';
 import {
-  SWORDSMAN_EDGE_WARMUP_ARRIVAL_BUDGET_MS,
   SWORDSMAN_EDGE_WARMUP_CHUNK_MS,
   SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB,
   SwordsmanEdgeWarmup,
 } from './swordsmanEdgeWarmup';
+import {
+  LazySwordsmanEdgeWarmup,
+  SWORDSMAN_EDGE_WARMUP_PORTAL_BUDGET_MS,
+  SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS,
+} from './swordsmanEdgeWarmupLoader';
 
 const GROUND = getTilesetByKey('forest')!.firstGid + 14;
 let roomSerial = 0;
@@ -105,11 +109,15 @@ function harness({ pieceMs = 0.12, edgeMs = () => 0.06, clockResolutionMs = 0 }:
       };
     },
     prepareEdge: (...args) => {
-      clock += edgeMs(edgeIndex);
-      edgeIndex += 1;
-      unitsThisJob += 1;
-      counts.edges += 1;
-      return prepareSwordsmanTraversalEdgeSimulation(...args);
+      // An edge already simulated costs next to nothing, as in the game.
+      const simulated = prepareSwordsmanTraversalEdgeSimulation(...args);
+      if (simulated) {
+        clock += edgeMs(edgeIndex);
+        edgeIndex += 1;
+        unitsThisJob += 1;
+        counts.edges += 1;
+      }
+      return simulated;
     },
   });
   const runFrame = (profile: FrameWorkPerformanceProfile = 'normal', options: { gameplayCpuCapMs?: number; gameplayOnly?: boolean } = {}) =>
@@ -166,25 +174,40 @@ describe('Sword Hunter jump warm-up: warm before the first plan (F302)', () => {
     const setup = harness();
     const room = loadedRoom();
     setup.warmup.queueRoom(room);
-    setup.warmup.finishRoom(room.room.id);
+    setup.warmup.finishRoom(room.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
     expect(setup.warmup.hasPendingWork(room.room.id)).toBe(false);
     expect(firstPlanColdEdges(room.room)).toBe(0);
   });
 
-  it('portal arrival: a prepared destination left cold by busy streaming finishes on arrival', () => {
+  it('portal arrival: the destination is ranked as catch-up once its preparation is requested', () => {
     const setup = harness();
-    const destination = { ...loadedRoom(), runtimeSuspended: false };
+    const destination = loadedRoom();
+    setup.warmup.prioritizeRoom(destination.room.id);
     setup.warmup.queueRoom(destination);
-    for (let frame = 0; frame < 5; frame += 1) {
-      setup.enqueueStreamingJob('predicted-visuals-objects', `prepare-${frame}`, 1.5);
+    expect(setup.coordinator.getDiagnostics().queueDepthByPriority['gameplay-catch-up']).toBe(1);
+    let frames = 0;
+    // Cosmetic previews keep streaming, but catch-up runs ahead of them.
+    while (setup.warmup.hasPendingWork(destination.room.id) && frames < 2_000) {
+      setup.enqueueStreamingJob('preview-cosmetic', `preview-${frames}`, 0.2, 'gpu-upload');
       setup.runFrame('reduced');
+      frames += 1;
     }
-    expect(setup.counts.edges).toBe(0);
-    setup.warmup.finishRoom(destination.room.id);
+    expect(frames).toBeLessThan(120);
+    setup.warmup.finishRoom(destination.room.id, SWORDSMAN_EDGE_WARMUP_PORTAL_BUDGET_MS);
     expect(firstPlanColdEdges(destination.room)).toBe(0);
   });
 
-  it('browse: rooms loaded while browsing warm in Browse frames, which run no streaming work', () => {
+  it('portal arrival into a room still cold spends at most the portal budget, then catches up', () => {
+    const setup = harness({ pieceMs: 0.5, edgeMs: () => 0.5 });
+    const destination = loadedRoom();
+    setup.warmup.queueRoom(destination);
+    const arrivalMs = setup.elapsed(() => setup.warmup.finishRoom(destination.room.id, SWORDSMAN_EDGE_WARMUP_PORTAL_BUDGET_MS));
+    expect(arrivalMs).toBeLessThanOrEqual(SWORDSMAN_EDGE_WARMUP_PORTAL_BUDGET_MS);
+    expect(setup.warmup.hasPendingWork(destination.room.id)).toBe(true);
+    expect(setup.coordinator.getDiagnostics().queueDepthByPriority['gameplay-catch-up']).toBe(1);
+  });
+
+  it('browse: the room kept from the last run warms in Browse frames, which run no streaming work', () => {
     const setup = harness();
     const room = loadedRoom();
     setup.warmup.queueRoom(room);
@@ -198,12 +221,15 @@ describe('Sword Hunter jump warm-up: warm before the first plan (F302)', () => {
     expect(firstPlanColdEdges(room.room)).toBe(0);
   });
 
-  it('walking in: a prepared neighbour warms while the player is next door', () => {
-    const setup = harness();
+  it.each([
+    ['a fine clock', 0],
+    ['a 1 ms clock (Safari, Firefox)', 1],
+  ])('walking in: a prepared neighbour warms while the player is next door, on %s', (_name, clockResolutionMs) => {
+    const setup = harness({ clockResolutionMs });
     const current = loadedRoom();
     const neighbour = loadedRoom();
     setup.warmup.queueRoom(current);
-    setup.warmup.finishRoom(current.room.id);
+    setup.warmup.finishRoom(current.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
     setup.warmup.queueRoom(neighbour);
     let frames = 0;
     while (setup.warmup.hasPendingWork(neighbour.room.id) && frames < 2_000) {
@@ -211,21 +237,68 @@ describe('Sword Hunter jump warm-up: warm before the first plan (F302)', () => {
       setup.runFrame('reduced');
       frames += 1;
     }
-    // About 600 units at 7 per 0.8 ms job, one job per phone frame: well under 2 s at 60 fps.
+    // About 600 units at up to 8 per job, one job per phone frame: well under 2 s at 60 fps.
     expect(frames).toBeLessThan(120);
     expect(firstPlanColdEdges(neighbour.room)).toBe(0);
   });
 
-  it('bounds the arrival finish on a slow device and lets the room catch up afterwards', () => {
+  it('bounds the spawn finish on a slow device and lets the room catch up afterwards', () => {
     const setup = harness({ pieceMs: 2, edgeMs: () => 1 });
     const room = loadedRoom();
     setup.warmup.queueRoom(room);
-    const arrivalMs = setup.elapsed(() => setup.warmup.finishRoom(room.room.id));
-    expect(arrivalMs).toBeLessThanOrEqual(SWORDSMAN_EDGE_WARMUP_ARRIVAL_BUDGET_MS);
-    expect(arrivalMs).toBeGreaterThan(SWORDSMAN_EDGE_WARMUP_ARRIVAL_BUDGET_MS - 3);
+    const arrivalMs = setup.elapsed(() => setup.warmup.finishRoom(room.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS));
+    expect(arrivalMs).toBeLessThanOrEqual(SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
+    expect(arrivalMs).toBeGreaterThan(SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS - 3);
     expect(setup.warmup.hasPendingWork(room.room.id)).toBe(true);
   });
 });
+
+describe('Sword Hunter jump warm-up throughput (F302)', () => {
+  const framesToWarm = (options: HarnessOptions, profile: FrameWorkPerformanceProfile) => {
+    const setup = harness(options);
+    const room = loadedRoom();
+    setup.warmup.queueRoom(room);
+    let frames = 0;
+    while (setup.warmup.hasPendingWork(room.room.id) && frames < 5_000) {
+      setup.runFrame(profile);
+      frames += 1;
+    }
+    expect(setup.warmup.hasPendingWork(room.room.id)).toBe(false);
+    return { frames, unitsPerJob: setup.unitsPerJob };
+  };
+
+  it('keeps its pace on a 1 ms clock instead of dropping to one unit per job', () => {
+    const units = { pieceMs: 0.25, edgeMs: () => 0.25 };
+    const fine = framesToWarm(units, 'reduced').frames;
+    const coarse = framesToWarm({ ...units, clockResolutionMs: 1 }, 'reduced');
+    // 0.8 ms buys three 0.25 ms units on a fine clock; on a 1 ms clock a job stops at the unit
+    // that crosses a tick, so it runs one to four.
+    expect(coarse.frames).toBeLessThan(fine * 1.5);
+    expect(coarse.unitsPerJob.filter((count) => count > 1).length).toBeGreaterThan(coarse.unitsPerJob.length / 2);
+  });
+
+  it('slows only the job with a hitch in it', () => {
+    const steady = framesToWarm({}, 'reduced').frames;
+    const hitched = framesToWarm({ edgeMs: (index) => (index === 40 ? 20 : 0.06) }, 'reduced').frames;
+    expect(hitched).toBeLessThanOrEqual(steady + 2);
+  });
+
+  it('counts only uncached work toward the per-job unit cap', () => {
+    const setup = harness();
+    const room = loadedRoom();
+    setup.warmup.queueRoom(room);
+    setup.warmup.finishRoom(room.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
+    const rerun = loadedRoom(room.room);
+    setup.warmup.queueRoom(rerun);
+    let frames = 0;
+    while (setup.warmup.hasPendingWork(room.room.id) && frames < 100) {
+      setup.runFrame('reduced');
+      frames += 1;
+    }
+    expect(frames).toBe(1);
+  });
+});
+
 
 describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () => {
   it('does not delay teardown or room preparation by a single frame', () => {
@@ -298,12 +371,10 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
       jobDurations.push(...jobs.map((job) => job.actualDurationMs));
     }
     expect(setup.warmup.hasPendingWork(room.room.id)).toBe(false);
-    // A job stops before a unit that would pass 0.8 ms at the slowest cost seen so far, so only a
-    // unit slower than any before it can overrun; after the first slow edge none can.
+    // A job stops before a unit that would pass 0.8 ms at its slowest cost so far, so only a unit
+    // slower than any before it in that job can overrun, and by at most that unit.
     expect(Math.max(...jobDurations)).toBeLessThanOrEqual(SWORDSMAN_EDGE_WARMUP_CHUNK_MS + 0.9);
-    const firstSlowJob = jobDurations.findIndex((duration) => duration > SWORDSMAN_EDGE_WARMUP_CHUNK_MS);
-    expect(firstSlowJob).toBeGreaterThanOrEqual(0);
-    expect(Math.max(...jobDurations.slice(firstSlowJob + 1))).toBeLessThanOrEqual(0.9 + 1e-9);
+    expect(jobDurations.some((duration) => duration > SWORDSMAN_EDGE_WARMUP_CHUNK_MS)).toBe(true);
     expect(Math.max(...setup.unitsPerJob)).toBeLessThanOrEqual(SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB);
     expect(coldEdgesLeft(room.room, 16, 32)).toBe(0);
   });
@@ -315,11 +386,10 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
     for (let frame = 0; frame < 200 && setup.warmup.hasPendingWork(room.room.id); frame += 1) {
       setup.runFrame('reduced');
     }
+    // The cap bounds every job; only the rare job a 100 ms tick lands in stops sooner.
     expect(Math.max(...setup.unitsPerJob)).toBe(SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB);
-    // Once one unit was seen to cross a 100 ms tick, every later job runs a single unit.
-    const firstTick = setup.unitsPerJob.findIndex((units) => units < SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB);
-    expect(firstTick).toBeGreaterThan(0);
-    expect(setup.unitsPerJob.slice(firstTick + 1).every((units) => units === 1)).toBe(true);
+    const fullJobs = setup.unitsPerJob.filter((units) => units === SWORDSMAN_EDGE_WARMUP_MAX_UNITS_PER_JOB);
+    expect(fullJobs.length).toBeGreaterThan(setup.unitsPerJob.length * 0.9);
   });
 
   it('splits the graph build, starting with surfaces, walls and ladders as separate pieces', () => {
@@ -343,7 +413,7 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
     const cached = loadedRoom();
     rememberSwordsmanTraversalGraph(buildSwordsmanTraversalGraph(cached.room));
     cachedSetup.warmup.queueRoom(cached);
-    cachedSetup.warmup.finishRoom(cached.room.id);
+    cachedSetup.warmup.finishRoom(cached.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
     expect(cachedSetup.counts.pieces).toBe(0);
     expect(cachedSetup.counts.edges).toBeGreaterThan(500);
 
@@ -364,7 +434,7 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
     const setup = harness();
     const flat = loadedRoom(buildRoom({ ledges: false }), hunter(), hunter('collect', 22, 38));
     setup.warmup.queueRoom(flat);
-    setup.warmup.finishRoom(flat.room.id);
+    setup.warmup.finishRoom(flat.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
     expect(setup.warmup.hasPendingWork(flat.room.id)).toBe(false);
 
     const failing = new SwordsmanEdgeWarmup({
@@ -375,7 +445,7 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const room = loadedRoom();
     failing.queueRoom(room);
-    failing.finishRoom(room.room.id);
+    failing.finishRoom(room.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
     expect(failing.hasPendingWork(room.room.id)).toBe(false);
     expect(error).toHaveBeenCalledOnce();
   });
@@ -451,5 +521,24 @@ describe('Sword Hunter jump warm-up on the frame-work coordinator (F302)', () =>
     expect(coldEdgesLeft(room.room, 16, 32)).toBe(0);
     expect(coldEdgesLeft(room.room, 22, 38)).toBe(0);
     expect(coldEdgesLeft(room.room, 20, 32)).toBeGreaterThan(0);
+  });
+});
+
+describe('lazy-loaded Sword Hunter jump warm-up (F302)', () => {
+  it('does nothing until its module arrives, then queues the rooms already loaded', async () => {
+    const coordinator = new FrameWorkCoordinator();
+    const loaded = loadedRoom();
+    const lazy = new LazySwordsmanEdgeWarmup({
+      enqueueBackgroundCpuWork: (label, execute, onCancelled, priority) =>
+        enqueueGameplayWarmupWork(coordinator, label, execute, onCancelled, priority),
+    }, () => [loaded]);
+    lazy.noteActiveRoom(loaded, 1);
+    lazy.finishRoom(loaded.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
+    expect(coordinator.getDiagnostics().queueDepth).toBe(0);
+
+    await lazy.ready;
+    expect(coordinator.getDiagnostics().queueDepth).toBe(1);
+    lazy.finishRoom(loaded.room.id, SWORDSMAN_EDGE_WARMUP_SPAWN_BUDGET_MS);
+    expect(firstPlanColdEdges(loaded.room)).toBe(0);
   });
 });

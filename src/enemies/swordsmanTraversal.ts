@@ -179,9 +179,49 @@ export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTrave
   return graph;
 }
 
-// One graph per room version, shared by every scene's Sword Hunters and the jump warm-up (F302).
+// Rooms whose Sword Hunters updated in the last couple of seconds. The graph cache and the edge
+// simulation cache never evict them (F302).
+const ROOM_IN_PLAY_PROTECTION_MS = 2000;
+const ROOMS_IN_PLAY_LIMIT = 64;
+const roomsInPlay = new Map<string, { markedAt: number }>();
+
+/** Marks a room version in play; called every frame its Sword Hunters update. */
+export function markSwordsmanTraversalRoomInPlay(graphCacheKey: string, now = performance.now()): void {
+  const mark = roomsInPlay.get(graphCacheKey);
+  if (mark) {
+    // Updated in place, so the map's order is not recency; pruning goes by timestamp.
+    mark.markedAt = now;
+    return;
+  }
+
+  if (roomsInPlay.size >= ROOMS_IN_PLAY_LIMIT) {
+    let oldestKey: string | null = null;
+    let oldestAt = Number.POSITIVE_INFINITY;
+    for (const [key, oldMark] of roomsInPlay) {
+      if (now - oldMark.markedAt >= ROOM_IN_PLAY_PROTECTION_MS) {
+        roomsInPlay.delete(key);
+      } else if (oldMark.markedAt < oldestAt) {
+        oldestKey = key;
+        oldestAt = oldMark.markedAt;
+      }
+    }
+    if (roomsInPlay.size >= ROOMS_IN_PLAY_LIMIT && oldestKey !== null) {
+      roomsInPlay.delete(oldestKey);
+    }
+  }
+  roomsInPlay.set(graphCacheKey, { markedAt: now });
+}
+
+export function isSwordsmanTraversalRoomInPlay(graphCacheKey: string, now = performance.now()): boolean {
+  const mark = roomsInPlay.get(graphCacheKey);
+  return mark !== undefined && now - mark.markedAt < ROOM_IN_PLAY_PROTECTION_MS;
+}
+
+// One graph per room version, shared by every scene's Sword Hunters and the jump warm-up, least
+// recently used first; rooms in play are never evicted (F302).
 const TRAVERSAL_GRAPH_CACHE_LIMIT = 64;
 const traversalGraphsByCacheKey = new Map<string, SwordsmanTraversalGraph>();
+let lastTraversalGraphCacheKey: string | null = null;
 
 /** The room's cached graph, built now if no hunter or warm-up has built it yet. */
 export function getSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph {
@@ -190,7 +230,15 @@ export function getSwordsmanTraversalGraphForRoom(room: RoomSnapshot): Swordsman
 }
 
 export function peekSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph | null {
-  return traversalGraphsByCacheKey.get(getSwordsmanTraversalGraphCacheKey(room)) ?? null;
+  const cacheKey = getSwordsmanTraversalGraphCacheKey(room);
+  const graph = traversalGraphsByCacheKey.get(cacheKey);
+  if (graph && cacheKey !== lastTraversalGraphCacheKey) {
+    // Hunters read their room's graph many times a frame; only a change of room reorders.
+    traversalGraphsByCacheKey.delete(cacheKey);
+    traversalGraphsByCacheKey.set(cacheKey, graph);
+    lastTraversalGraphCacheKey = cacheKey;
+  }
+  return graph ?? null;
 }
 
 /** Caches a graph built elsewhere, unless one for that room version is already cached. */
@@ -201,9 +249,12 @@ export function rememberSwordsmanTraversalGraph(graph: SwordsmanTraversalGraph):
   }
   traversalGraphsByCacheKey.set(graph.cacheKey, graph);
   if (traversalGraphsByCacheKey.size > TRAVERSAL_GRAPH_CACHE_LIMIT) {
-    const oldestKey = traversalGraphsByCacheKey.keys().next().value;
-    if (oldestKey !== undefined) {
-      traversalGraphsByCacheKey.delete(oldestKey);
+    const now = performance.now();
+    for (const cacheKey of traversalGraphsByCacheKey.keys()) {
+      if (cacheKey !== graph.cacheKey && !isSwordsmanTraversalRoomInPlay(cacheKey, now)) {
+        traversalGraphsByCacheKey.delete(cacheKey);
+        break;
+      }
     }
   }
   return graph;

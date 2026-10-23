@@ -338,17 +338,23 @@ export class FrameWorkCoordinator {
       }
 
       const sharedRemainingMs = availableSharedWorkMs - chargedSharedWorkMs;
-      if (nextJob.estimatedCostMs > sharedRemainingMs + COST_EPSILON_MS) {
+      const overShared = nextJob.estimatedCostMs > sharedRemainingMs + COST_EPSILON_MS;
+      const overCpu = nextJob.costKind === 'cpu'
+        && nextJob.estimatedCostMs > availableCpuWorkMs - chargedCpuWorkMs + COST_EPSILON_MS;
+      if ((overShared || overCpu) && isGameplayJob) {
+        // A gameplay job that does not fit never holds back the work below it, such as a
+        // preview's GPU upload after the CPU budget is spent.
+        gameplayCapped = true;
+        stopReason = 'gameplay-budget-exhausted';
+        continue;
+      }
+      if (overShared) {
         stopReason = criticalHeadroomMs < budget.sharedCeilingMs - sharedConsumedBeforeMs
           ? 'critical-headroom-exhausted'
           : 'shared-budget-exhausted';
         break;
       }
-
-      if (
-        nextJob.costKind === 'cpu'
-        && nextJob.estimatedCostMs > availableCpuWorkMs - chargedCpuWorkMs + COST_EPSILON_MS
-      ) {
+      if (overCpu) {
         stopReason = 'cpu-budget-exhausted';
         break;
       }

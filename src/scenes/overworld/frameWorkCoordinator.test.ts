@@ -73,6 +73,27 @@ describe('FrameWorkCoordinator', () => {
     expect(executionOrder).toEqual(['catch-up-1', 'preview', 'catch-up-2']);
   });
 
+  it('lets a preview upload below a catch-up job run when the catch-up no longer fits (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'cpu', 0.75);
+    enqueueGameplayWarmupWork(coordinator, 'catch-up', () => executionOrder.push('catch-up'), undefined, 'gameplay-catch-up');
+    enqueue(coordinator, clock, executionOrder, 'preview-upload', 'preview-cosmetic', 'gpu-upload', 0.5);
+    // A phone frame: 1 ms of CPU, which the teardown has mostly spent.
+    const frame = coordinator.runFrame({ profile: 'reduced', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['teardown', 'preview-upload']);
+    expect(coordinator.hasQueuedWorkAtPriority('gameplay-catch-up')).toBe(true);
+    expect(frame.stopReason).toBe('gameplay-budget-exhausted');
+
+    // After 0.5 ms of tile streaming the catch-up cannot fit either; the upload still runs.
+    enqueue(coordinator, clock, executionOrder, 'next-upload', 'preview-cosmetic', 'gpu-upload', 0.5);
+    coordinator.runFrame({
+      profile: 'reduced', criticalHeadroomMs: 8, sharedBudgetConsumedMs: 0.5, cpuBudgetConsumedMs: 0.5, gameplayCpuCapMs: 1,
+    });
+    expect(executionOrder).toEqual(['teardown', 'preview-upload', 'next-upload']);
+  });
+
   it('runs only the gameplay queues in a gameplay-only (Browse) frame (F302)', () => {
     const clock = new TestClock();
     const coordinator = createCoordinator(clock);
