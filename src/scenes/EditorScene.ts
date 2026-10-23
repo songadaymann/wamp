@@ -203,6 +203,8 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private forceInitialRoomSnapshot = false;
   private readonly handleWake = (): void => {
     this.testFromHerePlacement = false;
+    // Like the course editor, own the music again: a test run's room loop must not follow us back (F375).
+    this.stopRoomMusicPreview();
     setAppMode('editor');
     delete document.body.dataset.editorCourseMode;
     updateEditorState({ isPlaying: false });

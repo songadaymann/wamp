@@ -1421,11 +1421,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       simulateMovement: (stepDelta, input) => this.simulateMovementStep(stepDelta, input),
     });
     this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.on(
-      Phaser.Scenes.Events.SLEEP,
-      this.handlePerformanceAdvisorSceneSleep,
-      this,
-    );
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.handleSceneSleep, this);
     this.events.on(Phaser.Scenes.Events.PAUSE, this.handlePerformanceAdvisorScenePause, this);
     this.events.on(Phaser.Scenes.Events.RESUME, this.handlePerformanceAdvisorScenePause, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -1730,6 +1726,13 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.resetPerformanceAdvisorEvidence('scene-wake', now);
     this.syncPerformanceAdvisorEligibility(now);
     void this.windowController.handleWakeAsync(data);
+  }
+
+  private handleSceneSleep(): void {
+    this.handlePerformanceAdvisorSceneSleep();
+    // A sleeping scene never runs the browse frame that stops room music, and a kept
+    // last playback would leave the next test run silent (F375).
+    this.roomMusicPlaybackController.reset();
   }
 
   private handlePerformanceAdvisorSceneSleep(): void {
@@ -5072,11 +5075,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       this,
     );
     this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.off(
-      Phaser.Scenes.Events.SLEEP,
-      this.handlePerformanceAdvisorSceneSleep,
-      this,
-    );
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.handleSceneSleep, this);
     this.events.off(
       Phaser.Scenes.Events.PAUSE,
       this.handlePerformanceAdvisorScenePause,

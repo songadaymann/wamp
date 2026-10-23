@@ -11,9 +11,11 @@ vi.mock('../ui/modalState', async (importOriginal) => ({
 }));
 
 import { OverworldPlayScene } from './OverworldPlayScene';
+import { createDefaultRoomMusic } from '../music/model';
 import { createDefaultRoomSnapshot } from '../persistence/roomModel';
 import { createInspectInputController } from './overworld/composition/ui';
 import { OverworldSceneFlowController } from './overworld/flow';
+import { OverworldRoomMusicPlaybackController } from './overworld/roomMusicPlaybackController';
 import { OverworldRoomRushModeController } from './overworld/roomRushMode';
 import type { OverworldRoomRushRunController } from './overworld/roomRushRuns';
 import { OverworldSessionResetController } from './overworld/sessionReset';
@@ -22,6 +24,7 @@ type Harness = Record<string, unknown> & {
   stopCurrentPlay(): void;
   playSelectedRoom(): void | Promise<void>;
   jumpToCoordinates(coordinates: { x: number; y: number }): Promise<void>;
+  handleSceneSleep(): void;
 };
 
 function scene(fields: Record<string, unknown>): Harness {
@@ -186,5 +189,39 @@ describe('jumping to a room mid-run (F383)', () => {
     await h.harness.jumpToCoordinates({ x: 9, y: 4 });
     expect(h.order).toEqual(['jump']);
     expect(h.state.activeCourseRun).not.toBeNull();
+  });
+});
+
+describe('room music after a test run returns to the editor (F375)', () => {
+  it('stops the loop at scene sleep and plays it again on the next test', () => {
+    const music = createDefaultRoomMusic();
+    music.arrangement.laneAssignments.drums[0] = 'clip-a';
+    const testRoom = { ...room, music };
+    const playArrangement = vi.fn();
+    const stopArrangement = vi.fn();
+    const controller = new OverworldRoomMusicPlaybackController({
+      getRoomSnapshotViewForCoordinates: () => testRoom,
+      getRoomSummaryById: () => null,
+      getRoomSummaries: () => [],
+      getRoomSummariesRevision: () => 0,
+      getExpandedRoomIdAt: () => null,
+      getCourseStartRoomRef: () => null,
+    }, { playArrangement, stopArrangement });
+    const harness = scene({
+      roomMusicPlaybackController: controller,
+      resetPerformanceAdvisorEvidence: vi.fn(),
+      syncPerformanceAdvisorEligibility: vi.fn(),
+    });
+    const input = { mode: 'play' as const, currentRoomCoordinates: testRoom.coordinates, activeCourseRun: null };
+
+    controller.sync(input);
+    expect(playArrangement).toHaveBeenCalledOnce();
+    // Stop from a DOM button switches to browse and sleeps the scene before another frame runs.
+    harness.handleSceneSleep();
+    expect(stopArrangement).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'idle', resetTransport: true }));
+    expect(harness.performanceAdvisorSceneActive).toBe(false);
+
+    controller.sync(input);
+    expect(playArrangement).toHaveBeenCalledTimes(2);
   });
 });
