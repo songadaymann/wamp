@@ -933,7 +933,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/wamp-o-grams')) {
-        return await handleWampOGramRequest(request, url, env);
+        return await handleWampOGramRequest(request, url, env, ctx);
       }
 
       if (!url.pathname.startsWith('/api/rooms/')) {

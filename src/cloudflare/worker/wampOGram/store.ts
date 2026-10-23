@@ -151,6 +151,14 @@ export async function deleteWampOGramBySlug(env: Env, slug: string): Promise<boo
   return row !== null;
 }
 
+/** Whether a gram exists, without reading its stored room. */
+export async function wampOGramExists(env: Env, slug: string): Promise<boolean> {
+  const row = await env.DB.prepare('SELECT 1 AS found FROM wamp_o_grams WHERE slug = ? LIMIT 1')
+    .bind(slug)
+    .first<{ found: number }>();
+  return row !== null;
+}
+
 export async function loadWampOGramBySlug(
   env: Env,
   slug: string,

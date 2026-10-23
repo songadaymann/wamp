@@ -111,13 +111,13 @@ describe('Wamp-O-Gram creation (F417)', () => {
   });
 });
 
-describe('Wamp-O-Gram admin delete (F417)', () => {
-  const remove = (slug: string, key = 'test-admin-key') => {
-    const url = new URL(`https://api.wamp.land/api/admin/wamp-o-grams/${slug}`);
-    const request = new Request(url, { method: 'DELETE', headers: { Origin: 'https://wamp.land', 'x-admin-key': key } });
-    return handleAdminWampOGramRequest(request, url, { ...f.env, ADMIN_API_KEY: 'test-admin-key' } as Env);
-  };
+const remove = (slug: string, key = 'test-admin-key') => {
+  const url = new URL(`https://api.wamp.land/api/admin/wamp-o-grams/${slug}`);
+  const request = new Request(url, { method: 'DELETE', headers: { Origin: 'https://wamp.land', 'x-admin-key': key } });
+  return handleAdminWampOGramRequest(request, url, { ...f.env, ADMIN_API_KEY: 'test-admin-key' } as Env);
+};
 
+describe('Wamp-O-Gram admin delete (F417)', () => {
   it('deletes a gram by its slug so the link stops working', async () => {
     const { slug } = await create(room());
     await expect(remove(slug!, 'wrong-key')).rejects.toMatchObject({ status: 403 });
@@ -126,5 +126,74 @@ describe('Wamp-O-Gram admin delete (F417)', () => {
     const url = new URL(`https://api.wamp.land/api/wamp-o-grams/${slug}`);
     await expect(handleWampOGramRequest(new Request(url), url, f.env)).rejects.toMatchObject({ status: 404 });
     await expect(remove(slug!)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('Wamp-O-Gram preview cache (F348)', () => {
+  const IMMUTABLE = 'public, max-age=31536000, immutable';
+  let stored: Map<string, Response>;
+  const waits: Promise<unknown>[] = [];
+  const context = { waitUntil: (promise: Promise<unknown>) => { waits.push(promise); } };
+  beforeEach(() => {
+    stored = new Map();
+    vi.stubGlobal('caches', {
+      default: {
+        match: async (request: Request) => stored.get(request.url)?.clone(),
+        put: async (request: Request, response: Response) => { stored.set(request.url, response.clone()); },
+      },
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function preview(slug: string, path = 'preview.png?v=1', method = 'GET'): Promise<Response> {
+    const url = new URL(`https://api.wamp.land/api/wamp-o-grams/${slug}/${path}`);
+    const response = await handleWampOGramRequest(new Request(url, { method }), url, f.env, context);
+    await Promise.all(waits.splice(0));
+    return response;
+  }
+  const bytesOf = async (response: Response) => Buffer.from(await response.arrayBuffer());
+
+  it('draws a preview once and keeps it for good under its slug and version', async () => {
+    const { slug } = await create(room());
+
+    const first = await preview(slug!);
+    expect(first.status).toBe(200);
+    expect(first.headers.get('Content-Type')).toBe('image/png');
+    expect(first.headers.get('Cache-Control')).toBe(IMMUTABLE);
+    expect(first.headers.get('X-WAMP-Cache')).toBe('miss');
+    expect([...stored.keys()]).toEqual([`https://api.wamp.land/api/wamp-o-grams/${slug}/preview.png?v=1`]);
+    const drawn = await bytesOf(first);
+
+    const second = await preview(slug!);
+    expect(second.headers.get('X-WAMP-Cache')).toBe('hit');
+    expect(second.headers.get('Cache-Control')).toBe(IMMUTABLE);
+    expect((await bytesOf(second)).equals(drawn)).toBe(true);
+
+    // Old links without the version share the stored image, but a later version may redraw it.
+    for (const path of ['preview.png', 'preview?v=0']) {
+      const old = await preview(slug!, path);
+      expect(old.headers.get('X-WAMP-Cache')).toBe('hit');
+      expect(old.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=3600');
+    }
+    expect(stored.size).toBe(1);
+  });
+
+  it('answers HEAD without drawing or storing anything', async () => {
+    const { slug } = await create(room());
+    const head = await preview(slug!, 'preview.png?v=1', 'HEAD');
+    expect(head.status).toBe(200);
+    expect(head.headers.get('Cache-Control')).toBe(IMMUTABLE);
+    expect(head.body).toBeNull();
+    expect(stored.size).toBe(0);
+  });
+
+  it('stops serving a deleted gram\'s preview even though the cache still holds it', async () => {
+    const { slug } = await create(room());
+    expect((await preview(slug!)).status).toBe(200);
+    expect((await remove(slug!)).status).toBe(200);
+
+    expect(stored.size).toBe(1);
+    await expect(preview(slug!)).rejects.toMatchObject({ status: 404 });
+    await expect(preview(slug!, 'preview.png?v=1', 'HEAD')).rejects.toMatchObject({ status: 404 });
   });
 });
