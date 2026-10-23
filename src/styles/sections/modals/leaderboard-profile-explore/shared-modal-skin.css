@@ -428,9 +428,21 @@
     color: var(--wamp-cream);
   }
 
-  #leaderboard-modal .leaderboard-quality-actions .bar-btn.active {
-    background: var(--wamp-sky);
-    color: var(--wamp-black);
+  /* One selected look for the tabs, filters, sorts and votes in these menus (F464): a heavier ink
+     frame, plus a tick on filters, sorts and votes, so the choice never rests on colour alone. It
+     stays on a disabled button, so a rating you can't change right now still shows. */
+  #leaderboard-modal .leaderboard-tabs .bar-btn.active,
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active,
+  #explore-modal .leaderboard-discover-filters .bar-btn.active,
+  #profile-modal .profile-tabs .bar-btn.active {
+    box-shadow: var(--shadow-3), inset 0 0 0 2px var(--wamp-ink);
+  }
+
+  /* The empty alt text keeps the tick out of the button's name; screen readers already hear 'pressed'. */
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active::before,
+  #explore-modal .leaderboard-discover-filters .bar-btn.active::before {
+    content: '\2713\00a0';
+    content: '\2713\00a0' / '';
   }
 
   #leaderboard-modal .leaderboard-room-rush-modes .bar-btn[data-room-rush-leaderboard-mode='easy:selected'] {
@@ -463,11 +475,6 @@
     transform: translate(-1px, -1px);
   }
 
-  #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='easy'] {
-    background: var(--wamp-green);
-    color: var(--wamp-cream);
-  }
-
   #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty=''] {
     background: var(--wamp-sky);
     color: var(--wamp-black);
@@ -478,19 +485,16 @@
     color: var(--wamp-cream);
   }
 
-  #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='medium'],
   #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='medium'] {
     background: var(--wamp-yellow);
     color: var(--wamp-black);
   }
 
-  #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='hard'],
   #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='hard'] {
     background: #d7ac63;
     color: var(--wamp-black);
   }
 
-  #explore-modal .leaderboard-discover-filters .bar-btn.active[data-explore-difficulty='extreme'],
   #explore-modal .leaderboard-discover-filters .bar-btn[data-explore-difficulty='extreme'] {
     background: var(--wamp-red);
     color: var(--wamp-ink);

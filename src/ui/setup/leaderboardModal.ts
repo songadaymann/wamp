@@ -1,6 +1,7 @@
 import { createExpandedRoomRepository, type ExpandedRoomRepository } from '../../expandedRooms/repository';
 import { hasExpandedRoomLeaderboardTarget, loadSelectedExpandedRoomLeaderboard } from './expandedRoomLeaderboardTarget';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
@@ -620,10 +621,6 @@ export class LeaderboardModalController {
     this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
     const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
     const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
-    this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
-    this.elements.courseTabButton?.classList.toggle('active', this.activeTab === 'course');
-    this.elements.roomRushTabButton?.classList.toggle('active', this.activeTab === 'roomRush');
-    this.elements.globalTabButton?.classList.toggle('active', this.activeTab === 'global');
     if (this.elements.roomTabButton) {
       this.elements.roomTabButton.disabled = !roomAvailable;
     }
@@ -636,6 +633,11 @@ export class LeaderboardModalController {
     if (!courseAvailable && this.activeTab === 'course') {
       this.activeTab = roomAvailable ? 'room' : 'global';
     }
+    // Marked after the fallback above, so the pressed tab is always the panel on screen.
+    setToggleState(this.elements.roomTabButton, this.activeTab === 'room');
+    setToggleState(this.elements.courseTabButton, this.activeTab === 'course');
+    setToggleState(this.elements.roomRushTabButton, this.activeTab === 'roomRush');
+    setToggleState(this.elements.globalTabButton, this.activeTab === 'global');
 
     this.elements.roomPanel?.classList.toggle('hidden', this.activeTab !== 'room');
     this.elements.coursePanel?.classList.toggle('hidden', this.activeTab !== 'course');
@@ -776,7 +778,7 @@ export class LeaderboardModalController {
 
       const count = this.getQualityVoteCount(qualityStars);
       button.textContent = `${qualityStars} Star${qualityStars === 1 ? '' : 's'} · ${count}`;
-      button.classList.toggle('active', this.roomLeaderboard?.viewerRating?.qualityStars === qualityStars);
+      setToggleState(button, this.roomLeaderboard?.viewerRating?.qualityStars === qualityStars);
       button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
     }
     for (const button of this.elements.roomDifficultyButtons) {
@@ -788,7 +790,7 @@ export class LeaderboardModalController {
 
       const count = difficulty?.counts[difficultyValue] ?? 0;
       button.textContent = `${ROOM_DIFFICULTY_LABELS[difficultyValue]} · ${count}`;
-      button.classList.toggle('active', difficulty?.viewerVote === difficultyValue);
+      setToggleState(button, difficulty?.viewerVote === difficultyValue);
       button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
     }
 
@@ -891,7 +893,7 @@ export class LeaderboardModalController {
 
     for (const button of this.elements.roomRushModeButtons) {
       const mode = this.parseRoomRushModeButtonValue(button.dataset.roomRushLeaderboardMode);
-      button.classList.toggle('active', mode === this.selectedRoomRushMode);
+      setToggleState(button, mode === this.selectedRoomRushMode);
       button.disabled = roomRushPending;
     }
 

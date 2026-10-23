@@ -1,6 +1,7 @@
 import { CollectionAttributionController, collectionAttributionSlot } from './collectionAttribution';
 import { createRoomProtectionBadge } from '../roomProtection';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import Phaser from 'phaser';
 import { loadExploreDiscovery } from './exploreDiscovery';
 import {
@@ -383,15 +384,15 @@ export class ExploreModalController {
 
     for (const button of this.elements.filterButtons) {
       const difficulty = this.parseDifficultyButtonValue(button.dataset.exploreDifficulty);
-      button.classList.toggle('active', difficulty === this.discoverFilter);
+      setToggleState(button, difficulty === this.discoverFilter);
       button.disabled = this.loading || buildersActive || guestRoomsActive;
     }
 
     for (const button of this.elements.sortButtons) {
       const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
       button.classList.toggle('hidden', sort === 'protected' && this.roomDiscovery?.protectedDiscoveryAvailable !== true);
-      button.classList.toggle(
-        'active',
+      setToggleState(
+        button,
         sort === 'builders'
           ? buildersActive
           : sort === 'guestRooms'
@@ -410,7 +411,7 @@ export class ExploreModalController {
 
     for (const button of this.elements.builderSortButtons) {
       const sort = this.parseBuilderSortButtonValue(button.dataset.exploreBuilderSort);
-      button.classList.toggle('active', buildersActive && sort === this.builderSort);
+      setToggleState(button, buildersActive && sort === this.builderSort);
       button.disabled = this.loading || !buildersActive;
     }
 
