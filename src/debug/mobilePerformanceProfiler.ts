@@ -1,3 +1,5 @@
+import { isMobilePerformanceProfilerEnabled, isTruthySearchValue } from '../main/debugTools';
+
 export type MobilePerformanceContext = Record<string, unknown>;
 
 export interface MobilePerformanceSegmentSummary {
@@ -102,14 +104,6 @@ export function createMobilePerformanceProfiler(
   }
 
   return new MobilePerformanceProfiler(options);
-}
-
-export function isMobilePerformanceProfilerEnabled(): boolean {
-  const params = new URLSearchParams(window.location.search);
-  return (
-    isTruthySearchValue(params.get('mobilePerf')) ||
-    isTruthySearchValue(params.get('perf'))
-  );
 }
 
 export class MobilePerformanceProfiler {
@@ -517,13 +511,4 @@ function clampNumber(value: number, min: number, max: number, fallback: number):
   }
 
   return Math.min(max, Math.max(min, value));
-}
-
-function isTruthySearchValue(value: string | null): boolean {
-  if (value === null) {
-    return false;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  return normalized === '' || ['1', 'true', 'yes', 'on'].includes(normalized);
 }

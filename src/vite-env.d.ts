@@ -22,7 +22,7 @@ interface Window {
   advanceTime?: (ms: number) => Promise<void>;
   get_auth_debug_state?: () => Record<string, unknown>;
   get_room_music_debug_state?: () => Record<string, unknown>;
-  get_wamp_resource_debug?: () => Record<string, unknown>;
+  get_wamp_resource_debug?: () => Promise<Record<string, unknown>>;
   get_wamp_resource_log?: () => Record<string, unknown>[];
   get_wamp_graphics_debug?: () => import('./main/webglRecovery').GraphicsDebugState;
   get_sword_hunter_debug?: () => Record<string, unknown>;

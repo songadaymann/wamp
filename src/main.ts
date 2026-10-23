@@ -13,7 +13,6 @@ import { installDialogEscapeGuard, installModalFocusManagement, installModalStac
 import { installStaleBuildRecovery } from './main/staleBuildRecovery';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { sharedAudioEngine } from './audio/engine';
-import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
 import { BootScene } from './scenes/BootScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
@@ -41,10 +40,7 @@ import { getRuntimeTransitionProbe } from './main/runtimeTransitionProbe';
 import { installEarlyWorldTileBootstrapHandoff } from './main/earlyWorldTileBootstrapHandoff';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
-import {
-  getRuntimeResourceDebugState,
-  installRuntimeResourceDebugLogger,
-} from './main/resourceDebug';
+import { installResourceDebugTools, preloadMobilePerformanceProfiler } from './main/debugTools';
 import {
   type GraphicsDebugState,
   installWebglRecoveryMonitor,
@@ -86,6 +82,7 @@ logBootPhase('main:start', {
 
 void resolveWorldLinkBeforeBoot();
 startArrivalWorldPrefetch();
+preloadMobilePerformanceProfiler();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),
@@ -220,12 +217,11 @@ const applyDevicePerformanceMode = () => {
 applyDevicePerformanceMode();
 subscribeDevicePerformanceMode(applyDevicePerformanceMode);
 initializeGameSettingsSync();
-window.get_wamp_resource_debug = () => ({ ...getRuntimeResourceDebugState(game), frameCadence: getFrameCadenceDebugState() });
-installRuntimeResourceDebugLogger(game, query);
+installResourceDebugTools(game, query, getFrameCadenceDebugState);
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;
-  window.run_overworld_lod_stress = () => runOverworldLodStress(game);
+  window.run_overworld_lod_stress = async () => (await import('./debug/overworldLodStress')).runOverworldLodStress(game);
 }
 
 // Set up HTML UI event handlers
