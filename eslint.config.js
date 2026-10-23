@@ -18,7 +18,7 @@ const OVERSIZED_FILE_LINES = {
   'src/cloudflare/worker/runs/difficulty.ts': 1762,
   'src/main/earlyWorldTileBootstrap.classic.ts': 1718,
   'src/scenes/overworld/movementController.ts': 1638,
-  'src/ui/setup/paletteController.ts': 1590,
+  'src/ui/setup/paletteController.ts': 1558,
   'src/ui/setup/profileModal.ts': 1553,
   'src/scenes/editor/musicPatternEditor.ts': 1528,
   'src/scenes/editor/musicWorkflow.ts': 1486,

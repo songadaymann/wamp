@@ -73,10 +73,12 @@
     display: none;
   }
 
+  /* The sheet scrolls the whole tileset; a 166px box hid most of WampOS 95 (F368). */
+
   body[data-device-class='phone'][data-app-mode='editor'] #palette-container {
     flex: none;
-    max-height: 166px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] #palette-canvas {

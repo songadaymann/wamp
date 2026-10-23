@@ -24,9 +24,15 @@
     cursor: pointer;
   }
 
+  /* Swipes scroll the picker; a tap or a hold selects (F368). Pinch stays off, as on the room. */
+
   #palette-canvas {
     display: block;
     image-rendering: pixelated;
+    touch-action: pan-x pan-y;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .palette-hint {

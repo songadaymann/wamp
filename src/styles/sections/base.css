@@ -1221,4 +1221,10 @@
   body[data-coarse-pointer='true'] .fine-pointer-hint {
     display: none;
   }
+
+  /* Their touch counterparts, where a finger does something else (F368). */
+
+  body:not([data-coarse-pointer='true']) .coarse-pointer-hint {
+    display: none;
+  }
 }

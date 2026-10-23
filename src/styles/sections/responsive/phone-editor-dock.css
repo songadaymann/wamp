@@ -327,6 +327,12 @@
     flex: 0 0 auto !important;
   }
 
+  /* A shrinking tileset section let Tile Controls cover the picker in the scrolling sheet. */
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #tileset-section {
+    flex: 0 0 auto;
+  }
+
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #object-palette-section .sidebar-section-body {
     flex: 0 0 auto;
     overflow: visible;
