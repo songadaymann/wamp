@@ -648,7 +648,8 @@ async function claimUniquePlaylistSlug(env: Env, requestedSlug: string): Promise
     const candidate =
       suffix === 0
         ? requestedSlug
-        : `${requestedSlug.slice(0, Math.max(1, 47 - String(suffix).length))}-${suffix}`;
+        // A cut that ends at a hyphen would give "--", which the link's lookup folds to "-".
+        : `${requestedSlug.slice(0, Math.max(1, 47 - String(suffix).length)).replace(/-+$/, '')}-${suffix}`;
     const existing = await env.DB.prepare(
       `
         SELECT 1 AS found

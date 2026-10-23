@@ -94,6 +94,14 @@ describe('playlist routes: making, editing and deleting', () => {
     expect((await bySlug(second.slug)).body.id).toBe(second.id);
   });
 
+  it('numbers a long URL name that would be cut at a hyphen so its link still opens it', async () => {
+    const title = `${'a'.repeat(45)} bb`;
+    expect((await made(title)).slug).toBe(`${'a'.repeat(45)}-bb`);
+    const second = await made(title);
+    expect(second.slug).toBe(`${'a'.repeat(45)}-1`);
+    expect((await bySlug(second.slug)).body.id).toBe(second.id);
+  });
+
   it('stops numbering after 99 clashes', async () => {
     insertPlaylist('mix');
     for (let suffix = 1; suffix <= 99; suffix += 1) insertPlaylist(`mix-${suffix}`);
