@@ -1,0 +1,1 @@
+| 2026-10-23 | F256, F264, F272 | [#319](https://github.com/songadaymann/wamp/pull/319) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | About 494 lines of dead Worker code and checks that can no longer fire removed; frozen tables kept |

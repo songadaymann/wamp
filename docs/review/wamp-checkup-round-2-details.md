@@ -94,6 +94,8 @@ Usage: the partykit devDependency (package.json:176) appears only in `import typ
   
   CI cost is extraction only: the npm cache is on, and Linux installs only Linux binaries.
 
+**2026-10-23 delivered.** [PR #318](https://github.com/songadaymann/wamp/pull/318). A local `src/partykit/presenceTypes.ts` replaces the `partykit/server` types, so the `partykit` devDependency (72 packages; `node_modules` 1.1 GB to 991 MB), `partykit.json`, `partykit.safety.json` and the `dev:presence` and `presence:deploy:safety` scripts are gone; local presence runs through `wrangler dev`, documented in `.dev.vars`, and the old port-1999 defaults now use 8787. Presence behaviour is unchanged. `npm run check` passed (682 files, 5,755 tests) and the 133 presence tests passed. [Receipt](wamp-round2-cleanup-2026-10-23.md).
+
 ### F253: The old editor toolbars and old phone tabs are still in every page load, always hidden, since the new dock replaced them
 
 - **Area:** Dead code (reviewer: Dead code: game client)
@@ -227,6 +229,8 @@ Method: knip lists these as unused exports. For each one, `rg -w <name>` over sr
   The POST difficulty-vote endpoint stays live because it routes through submitRoomRating; only the legacy room_difficulty_votes helpers die.
   
   Treat the knip CI gate for src/cloudflare/** as separate, medium-effort follow-up work under F067's open Knip item. It currently reports 92 unused value exports there, so it needs ignoreExportsUsedInFile or a cleanup pass first.
+
+**2026-10-23 delivered.** [PR #319](https://github.com/songadaymann/wamp/pull/319). About 494 lines of uncalled Worker code are removed, led by the retired difficulty-vote system in `runs/difficulty.ts` and its helpers, plus unused run, stats, world-tile, publish-limit, Expanded Room and map-screenshot functions, each checked for callers and with knip. API Worker `b5007f4b`. Reviewed adversarially; `npm run check` passed (684 files, 5,759 tests). [Receipt](wamp-round2-cleanup-2026-10-23.md).
 
 ### F264: Three D1 tables are dead weight: two frozen since their features retired, one written on every publish and never read
 
@@ -5490,6 +5494,8 @@ Commit 5d138368 (2026-10-18) switched production presence to the PresenceDurable
 
 - **partially confirmed.** Safety previews do bake the hosted PartyKit safety host, which overrides the safety Worker's runtime host, and every non-pages-only safety deploy redeploys that PartyKit project. But alarms, PvP checkpoints and hibernation live in the shared core (partykit/presenceServer.ts) and still run on PartyKit. What previews actually miss is the Cloudflare Worker/DO adapter (src/cloudflare/presence/durableObject.ts) and the safety PRESENCE_ROOMS binding and /parties/* routing. Fix: set VITE_PARTYKIT_HOST to '' explicitly rather than omitting it, because vite.config.ts loadMergedEnv would otherwise pick up env.local/.env values. Drop the presence deploy step, --skip-presence, partykit.safety.json and the presence:deploy:safety script. Update safety-backend-foundation.md, mobile-testing.md:100-111 and frontend-redeploy-and-minting.md:42, which still tells operators to set VITE_PARTYKIT_HOST in Pages to the old production partykit.dev host. In smoke_prod.mjs, replace the uninformative mainBundleContainsPartyKitHost check (the bundle always contains api.wamp.land as the API base) with an assertion that the entry bundle does not contain 'partykit.dev'.
 
+**2026-10-23 delivered.** [PR #318](https://github.com/songadaymann/wamp/pull/318). `deploy_safety_branch.mjs` builds with blank `VITE_PARTYKIT_HOST` and `VITE_PARTYKIT_PARTY`, so a safety deploy's client takes its presence host from the safety Worker, and the PartyKit deploy step and `--skip-presence` are gone. `smoke_prod.mjs` now fails if any startup script contains `partykit.dev`. The new production smoke check passes against live wamp.land. [Receipt](wamp-round2-cleanup-2026-10-23.md).
+
 ### F386: Rooms that share a custom background each download and decode it, and the slower one can fail and restart
 
 - **Area:** Bugs and regressions (reviewer: Gap review: World streaming client: the largest file in the repo, never reviewed)
@@ -8898,6 +8904,8 @@ Size: progress.md is 585,768 bytes / 2,594 lines. On Oct 3 it was 95,133 bytes (
   4. **Missing step: doc pointers and F061.** Five docs name progress.md as their evidence location: checkup-delivery-2026-10-03.md:108 and 289, ghost-run-archive.md:25, asset-intake-rules.md:293, and 2026-07-29-gameplay-performance-plan.md:75. Repoint them at the archived copy. Also merge the archive step with F061's open 'archive progress.md to docs/history' sub-item instead of tracking it twice.
 - **partially confirmed.** The numbers hold, give or take: 298 of 418 commits (71%) and 137 identical sections (182 KB). Narrow the fix. Move the existing progress.md and feature-ledger.md history once into docs/history/. Then write each delivery note in one file only, and make the other file a short index. Untracking progress.md (`git rm --cached`) is only safe together with an edit to ~/.codex/skills/develop-web-game/SKILL.md:28/133-138: that skill tells agents to read both files, and the tracked progress.md is how handoffs reach separate Codex worktrees. Drop step (4), because F061's AGENTS.md was declined as won't do on 2026-10-13. Per-PR ledger fragment files (step 3) change the workflow for every lane, so that part is medium effort. Impact is medium, not high: conflicts take a minute to fix and players never see this.
 
+**2026-10-23 delivered.** [PR #317](https://github.com/songadaymann/wamp/pull/317). Progress.md is archived unchanged to `docs/history/progress-2026.md` and untracked, and the old ledger to `docs/history/feature-ledger-2026.md`. `feature-ledger.md` is now one row per delivery, built by `npm run ledger` from one file per entry in `docs/ledger/` with a union merge, so parallel PRs don't conflict; `scripts/ledger.test.ts` checks it. `npm run check` passed (684 files, 5,764 tests). The root logs and doc entry points went from about 948 KB to about 26 KB. [Receipt](wamp-round2-cleanup-2026-10-23.md).
+
 ### F498: The file-size limits were never lowered after this week's big refactors: the two largest files can regrow by 2,000 lines unnoticed
 
 - **Area:** Code health, tests and tooling (reviewer: Superfluous and duplicated code: scenes and game runtime)
@@ -9263,6 +9271,8 @@ This doesn't touch the AGENTS.md question Jonathan declined.
     - fixing the stale presence lines in README.md:11 and docs/development/architecture.md:3,29-30 (presence is PresenceDurableObject in the API Worker on api.wamp.land; dev:presence and presence:deploy:safety still use the partykit CLI);
     - moving the status paragraphs out of the checklist;
     - adding a test that the Progress count matches the `- [x]` count.
+
+**2026-10-23 delivered.** [PR #317](https://github.com/songadaymann/wamp/pull/317). `docs/README.md` gains a Start here section (round 2 checklist, ledger and receipts, how to record, archives); old plans are marked Historical; the round 1 checklist's status notes moved to `docs/history/` so its title is line 1 again, checked by `scripts/checkup_progress.test.ts`; and the presence docs (README, architecture, environment and others, via [PR #318](https://github.com/songadaymann/wamp/pull/318)) describe the API Worker's Durable Object instead of PartyKit. `npm run check` passed on both PRs. [Receipt](wamp-round2-cleanup-2026-10-23.md).
 
 ### F492: Database test fakes are copy-pasted 21 times, with 12 hand-typed copies of the rooms table
 

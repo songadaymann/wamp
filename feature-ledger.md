@@ -8,6 +8,9 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-23 | F256, F264, F272 | [#319](https://github.com/songadaymann/wamp/pull/319) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | About 494 lines of dead Worker code and checks that can no longer fire removed; frozen tables kept |
+| 2026-10-23 | F252, F387 | [#318](https://github.com/songadaymann/wamp/pull/318) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | PartyKit retired: local presence types, no PartyKit runtime, safety previews use the safety Worker |
+| 2026-10-23 | F486, F493 | [#317](https://github.com/songadaymann/wamp/pull/317) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | Run logs archived to docs/history; the ledger is one file per delivery; agent docs point at the checklist |
 | 2026-10-23 | F368, F369, F367 | [#316](https://github.com/songadaymann/wamp/pull/316) | [receipt](docs/review/wamp-round2-phone-building-2026-10-23.md) | Phone dock: touch-scrolling tile picker, a one-tap Draw/Erase switch, and every dock button in reach |
 | 2026-10-23 | F365, F371 | [#315](https://github.com/songadaymann/wamp/pull/315) | [receipt](docs/review/wamp-round2-phone-building-2026-10-23.md) | Expanded Room setup as a phone bottom sheet with a touch map; Move keeps pinch-zoom; Fit room on phones |
 | 2026-10-23 | F332, F348 | [#314](https://github.com/songadaymann/wamp/pull/314) | [receipt](docs/review/wamp-round2-speed-2026-10-23.md) | Share previews shrink from 3 MB to under 150 KB; Wamp-O-Gram previews cached behind a visibility check |
@@ -85,6 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-13 | — | [#186](https://github.com/songadaymann/wamp/pull/186) | [receipt](docs/review/wamp-restart-keyboard-focus-2026-10-13.md) | Space keeps jumping after repeated Restart clicks |
 | 2026-10-12 | — | [#184](https://github.com/songadaymann/wamp/pull/184) | [receipt](docs/review/wamp-room-entry-keyboard-2026-10-12.md) | Movement controls work again after the room Start prompt |
 | 2026-10-12 | F070 | [#183](https://github.com/songadaymann/wamp/pull/183) | [receipt](docs/review/wamp-goal-switches-2026-10-12.md) | Unknown goal types fail verification, and lint flags switches with missing cases (F070 part) |
-| 2026-10-12 | F068, F009 | [#181](https://github.com/songadaymann/wamp/pull/181)–[#182](https://github.com/songadaymann/wamp/pull/182) | [receipt](docs/review/wamp-backdrop-camera-2026-10-12.md) | The starfield camera draws only its own layer; the editor's unused background camera is gone |
-| 2026-10-11 | F019, F008, F089 | [#177](https://github.com/songadaymann/wamp/pull/177)–[#180](https://github.com/songadaymann/wamp/pull/180) | [receipt](docs/review/wamp-split-colliders-phone-ci-2026-10-11.md) | Builder UI loads with the editor, lazy pop-ups, nearby-room colliders, phone smoke in CI (all parts) |
-| 2026-10-11 | F012, F018, F188, F205, F222, F035 | [#171](https://github.com/songadaymann/wamp/pull/171)–[#176](https://github.com/songadaymann/wamp/pull/176) | [receipt](docs/review/wamp-frames-prefetch-limits-2026-10-11.md) | Fewer per-frame allocations, arrival area fetched before boot; parts of F188, F205, F222, F035 |

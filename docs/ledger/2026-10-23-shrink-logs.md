@@ -1,0 +1,1 @@
+| 2026-10-23 | F486, F493 | [#317](https://github.com/songadaymann/wamp/pull/317) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | Run logs archived to docs/history; the ledger is one file per delivery; agent docs point at the checklist |
