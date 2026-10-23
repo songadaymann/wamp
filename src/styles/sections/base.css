@@ -976,11 +976,17 @@
     cursor: pointer;
   }
 
-  .profile-trigger:hover,
-  .profile-trigger:focus-visible {
+  .profile-trigger:hover {
     color: var(--accent-cool);
     text-decoration: underline;
-    outline: none;
+  }
+
+  /* Keyboard focus keeps the name's own colour, which already reads on its panel, and rings it
+     in that colour (F477). */
+  .profile-trigger:focus-visible {
+    text-decoration: underline;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
   }
 
   #auth-email-input {

@@ -185,10 +185,9 @@
     cursor: pointer;
   }
 
-  #explore-modal .explore-room-builder-name:hover,
-  #explore-modal .explore-room-builder-name:focus-visible {
+  /* Hover only: keyboard focus keeps the deep blue and takes the shared profile-name ring (F477). */
+  #explore-modal .explore-room-builder-name:hover {
     color: var(--wamp-sky);
-    outline: none;
   }
 
   #explore-modal .explore-room-featured-badge,
