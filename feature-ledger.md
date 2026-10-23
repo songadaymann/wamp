@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 5: dialogs, accessibility and startup size
+
+Round-2 lane. PRs #311 F319 (developer tools and bug report form load on use; boot 663.5 KB), #312 F464/F471/F477/F478 (selected states, announcements, player-name focus ring, menu Escape), and #313 F380/F467/F406 (one modal watcher; pop-up tones; Worlds and PvP as shared dialogs; duel challenges held until a run ends and limited on the server, API Worker `3034c796`). Adversarial reviews on each. Receipt: docs/review/wamp-round2-where-features-meet-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 4: F302 Sword Hunter first plan
 
 Round-2 lane. PR #310 F302: Sword Hunter jump simulations are warmed ahead of the first plan (lowest frame-work queue within the device cap, an on-the-spot finish at run start and portals, catch-up for the room in play), with routes identical to main. Five adversarial review rounds. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.

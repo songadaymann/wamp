@@ -2973,6 +2973,8 @@ In-bundle cost of 9 modules is 27 KB minified / 7.6 KB br: src/main/resourceDebu
   - guard the scene-shutdown race for the async profiler;
   - move the query-flag check into a tiny module that stays in boot.
 
+**2026-10-23 delivered.** [PR #311](https://github.com/songadaymann/wamp/pull/311). The resource logger and phone profiler download only when their switches are on, and the bug report form (with its CSS, sender and replay player) on the first Report click, while the recent-play recording stays in boot; `check_bundle_budget.mjs` now rejects those modules in the startup download. Boot JavaScript drops from 668.4 KB to 663.5 KB. Reviewed; `npm run check` passed (656 files, 5,631 tests), and the muted default, pause and keyboard smokes passed on the step-5 stack that includes it. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F318: After the first tap, every player downloads all 29 sound effects (469 KB), including editor, PvP and bounce-pad sounds the room may never play
 
 - **Area:** Load time and downloads (reviewer: Load time, bundle and assets)
@@ -5112,6 +5114,8 @@ Fix: extract gameplayPause's addition watcher into one `watchModals(doc, onChang
 - **confirmed.** No correction.
 - **confirmed.** No correction.
 
+**2026-10-23 delivered.** [PR #313](https://github.com/songadaymann/wamp/pull/313). One page-wide watcher (`watchModals` in `modalState.ts`) sees dialogs that open, close, or are added to or removed from the page later, from a template or from code, and feeds the focus manager, stacked dimming, game-key handling, gameplay pause and mobile controls, so on-demand dialogs get focus in and back, one dimmed backdrop, and the game's keys again. Closing a dialog returns focus to where it was unless the player clicked back into the game. Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F388: Server logs are now sampled at 1%, so 99 of 100 error references and phone crash reports are thrown away
 
 - **Area:** Bugs and regressions (reviewer: Bugs and data integrity: API, storage and realtime)
@@ -5968,6 +5972,8 @@ Mechanism: src/ui/modalState.ts:1 hard-codes MODAL_SELECTOR = '.history-modal'. 
   2. Optionally merge the four private blocking-dialog checks and the observers that only watch dialogs present at install time into a single modalState helper.
   
   Only stack backdrops misses dialogs inserted during setupUI (main.ts:207). Keyboard sync and focus management are installed after setupUI (main.ts:236-237). Verify in the browser; scripts/smoke_worlds_pilot.ts only tests the API.
+
+**2026-10-23 delivered.** [PR #313](https://github.com/songadaymann/wamp/pull/313). The Worlds window and the PvP challenge and result pop-ups are shared dialogs, and each Escape closes only the dialog on top. Duel challenges no longer open mid-run or in the editor: the status line says who challenged you and the latest challenge is offered back on the world map; the pop-up focuses Decline, and the presence server checks sender and receiver eligibility, caps a challenge's lifetime and limits how often one player can be challenged (API Worker `3034c796`). Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F393: Controller players can't press Start on the room intro, which now appears before every timed room
 
@@ -8091,6 +8097,8 @@ Explore difficulty row: shared-modal-skin.css:466-497 styles 'easy' the same whe
   Impact: medium.
 - **partially confirmed.** The Explore part holds. The difficulty row (all 5 buttons) has no visible selected state. In the sort row, Featured, Popular and Protected, plus A-Z in the builder sorts, look identical selected or not, so the default first view shows no selection. The Leaderboard part is overstated. The viewer's own star rating is not hidden: leaderboardModal.ts:1105-1114 prints "Your current rating: N stars · <difficulty>." under the buttons, so only the 1-5 star button highlight is missing. Leaderboard tabs, profile tabs, leaderboard difficulty votes and Room Rush modes already show a visible selected state; for those only the ARIA fix applies. The code change is about 7 toggle loops (3 in exploreModal, 4 in leaderboardModal), not about 30 sites. Keep the plain difficulty colour rules, which are intentional colour-coding. Delete only the redundant `.active[...]` halves, plus the dead generic rule at leaderboard-base.css:51-55. Then add one ring or check-mark selected style. Impact is medium, not high.
 
+**2026-10-23 delivered.** [PR #312](https://github.com/songadaymann/wamp/pull/312). Explore filters, sorts and A–Z, the Leaderboard tabs, star and difficulty votes, the post-run rating and Room Rush modes show which one is selected, through one `setToggleState` that sets the `active` class and `aria-pressed` together, with a thicker frame and a tick that never changes the button's size. Your own rating stays visible when voting is closed, the Leaderboard marks a tab only after its fallback, and the Profile tabs are a real tab list with arrow, Home and End keys. Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F467: The shared pop-up shows successes and choices as red errors, paints every Cancel/Close red, and doesn't take keyboard focus
 
 - **Area:** Design, UX and accessibility (reviewer: Design, UX and accessibility)
@@ -8130,6 +8138,8 @@ base.css:378-386 makes #btn-busy-retry green and #btn-busy-close red in every st
   - The red Close's ink text passes contrast (5.42:1), so its problem is meaning, not contrast.
   - The existing confirmation test (roomWalletCostAudits.mjs:22-24) expects focus on #btn-busy-close. Keep that order, or update the test.
   - When the overlay takes focus, also yield game keys to it, for example by checking isBusyOverlayVisible inside isGameKeyboardYielded. Otherwise arrows and Space still reach the game behind the overlay.
+
+**2026-10-23 delivered.** [PR #313](https://github.com/songadaymann/wamp/pull/313). The shared pop-up takes a tone (error, success or choice) and colours only the destructive button red; while it shows buttons it is a dialog (focus in and back, Tab stays inside, the game gives up its keys, Escape presses Close). The wallet-waiting state isn't a dialog, so the wallet window keeps focus, Tab and Escape, and the reload offer never replaces an open choice. Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F466: New builders can open 'Expand Room' but can never publish one: they get 1 cell and publishing needs 2
 
@@ -8249,6 +8259,8 @@ index.html has 13 `.history-modal-error` banners. Only #guest-progress-status (:
   - In the 4 mixed-tone banners, switch the role by tone inside their setStatus, or keep a role="status" region that isn't toggled with display:none.
   - Optional: aria-busy on the Explore and Profile lists, following the activityInbox pattern.
 
+**2026-10-23 delivered.** [PR #312](https://github.com/songadaymann/wamp/pull/312). Error and status lines in Explore, Leaderboard, Profile, Playlist and eight other menus are announced to screen readers through one `setLiveMessage`: errors as alerts, progress and success as polite status, a repeated error announced again, unchanged re-renders kept quiet, and a Leaderboard error kept with the tab that raised it. Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
+
 ### F478: The main menu button doesn't say whether the menu is open, and Escape doesn't close the menu
 
 - **Area:** Design, UX and accessibility (reviewer: Design, UX and accessibility)
@@ -8271,6 +8283,8 @@ index.html:162 `<button id="menu-toggle" aria-label="Menu">` has no aria-expande
 **Fact-check.**
 
 - **confirmed.** No correction.
+
+**2026-10-23 delivered.** [PR #312](https://github.com/songadaymann/wamp/pull/312). The menu button reports `aria-expanded` and `aria-controls`; while the menu is open, Escape closes it before the game sees the key, so it never stops play, and the next Escape stops play as usual. Escape is left to the wallet window, dialogs and focus outside the menu, and focus returns to the button only when the menu was opened from the keyboard. Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F477: Tabbing to a player's name makes it fade to near-invisible, with no focus ring
 
@@ -8298,6 +8312,8 @@ base.css:979-984 sets `.profile-trigger:hover, .profile-trigger:focus-visible { 
   - Profile-collection builder links (.collection-person): #5dc16b, about 2:1, colour change only.
   - 'Collected by' names (.collection-person): same as above.
   The last two are crypto-gated, so only wallet holders see them. The fix stays two CSS rules: base.css:979-984 and explore-room-cards.css:184-188. Use an ink outline for :focus-visible, and on hover keep a colour of at least 4.5:1, or none.
+
+**2026-10-23 delivered.** [PR #312](https://github.com/songadaymann/wamp/pull/312). A keyboard-focused player name keeps its colour and gets a 2 px ring, also while hovered, and Explore's builder-name hover meets contrast (`--wamp-green`). Reviewed adversarially, every finding fixed; on the combined branch `npm run check` (667 files, 5,686 tests; boot 664.7 KB) and the muted default (68/68), keyboard, pause, sign-in, approval-cost, wallet sign-in, wallet recovery, chat identity, room protection and map-capture smokes passed. [Receipt](wamp-round2-where-features-meet-2026-10-23.md).
 
 ### F472: Explore room cards read as one long run-on button, and key explanations only exist as mouse-hover tooltips
 
