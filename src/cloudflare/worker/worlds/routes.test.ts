@@ -213,6 +213,20 @@ describe('placing rooms in and around a World', () => {
     expect([legacy.status, legacy.body.error]).toEqual([409, 'This room belongs to WAMP 0.']);
   });
 
+  it("holds builders to the World's daily claim and publish limits", async () => {
+    // Both limits used to surface as a 500: the database names the CHECK expression, not the table.
+    const { worldId } = await worldWithMember();
+    await api.call(world(worldId, '/settings'), { method: 'PATCH', session: owner,
+      body: { buildPolicy: 'request_to_join', publishPolicy: 'members_publish', claimLimitPerDay: 1, publishLimitPerDay: 1 } });
+    expect((await saveRoomDraft(api, member, roomSnapshot(130, 0), inWorld(worldId))).status).toBe(200);
+    const secondClaim = await saveRoomDraft(api, member, roomSnapshot(128, 0), inWorld(worldId));
+    expect([secondClaim.status, secondClaim.body.error]).toEqual([429, 'This builder has reached the World daily limit.']);
+
+    expect((await publishRoomSnapshot(api, member, roomSnapshot(130, 0), inWorld(worldId))).status).toBe(200);
+    tick();
+    const secondPublish = await publishRoomSnapshot(api, member, roomSnapshot(130, 0, { title: 'Again' }), inWorld(worldId));
+    expect([secondPublish.status, secondPublish.body.error]).toEqual([429, 'This builder has reached the World daily limit.']);
+  });
 });
 
 describe('publication approval', () => {
