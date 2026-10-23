@@ -353,7 +353,6 @@ async function handleAdminRoomClear(
 
   const statements = [
     env.DB.prepare('DELETE FROM room_runs WHERE room_id = ?').bind(roomId),
-    env.DB.prepare('DELETE FROM room_difficulty_votes WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM room_versions WHERE room_id = ?').bind(roomId),
     env.DB.prepare('DELETE FROM rooms WHERE id = ?').bind(roomId),
     env.DB.prepare(

@@ -35,9 +35,15 @@ const RETIRED_SOURCE_NAME = [112, 108, 97, 121, 102, 117, 110].reduce(
   ''
 );
 const LEGACY_GENERATED_USER_LINKS_TABLE = `${RETIRED_SOURCE_NAME}_user_links`;
-const LEGACY_GENERATED_POINT_SYNC_TABLE = `${RETIRED_SOURCE_NAME}_point_sync`;
 
 const INTERNAL_TABLES = new Set(['_cf_KV', 'd1_migrations']);
+// Nothing reads or writes these any more (F264); they stay in the schema until a drop migration.
+// The snapshot admin routes don't accept them, so the refresh leaves them alone.
+const RETIRED_TABLES = new Set([
+  `${RETIRED_SOURCE_NAME}_point_sync`,
+  'room_difficulty_votes',
+  'room_version_attribution',
+]);
 const DEFAULT_EPHEMERAL_AUTH_TABLES = new Set([
   'magic_link_tokens',
   'sessions',
@@ -63,11 +69,9 @@ const IMPORT_ORDER = [
   'agent_tokens',
   'room_runs',
   'course_runs',
-  'room_difficulty_votes',
   'chat_messages',
   'chat_admins',
   'chat_bans',
-  LEGACY_GENERATED_POINT_SYNC_TABLE,
   'admin_suspicious_invalidation_audit',
 ];
 const IMPORT_ORDER_INDEX = new Map(IMPORT_ORDER.map((table, index) => [table, index]));
@@ -86,11 +90,9 @@ const TABLE_BATCH_SIZES = {
   agent_tokens: 100,
   room_runs: 250,
   course_runs: 250,
-  room_difficulty_votes: 250,
   chat_messages: 100,
   chat_admins: 100,
   chat_bans: 100,
-  [LEGACY_GENERATED_POINT_SYNC_TABLE]: 100,
   admin_suspicious_invalidation_audit: 100,
 };
 
@@ -156,7 +158,7 @@ async function main() {
     );
   }
 
-  const resetTables = sourceTables.filter((table) => !INTERNAL_TABLES.has(table));
+  const resetTables = sourceTables.filter((table) => !INTERNAL_TABLES.has(table) && !RETIRED_TABLES.has(table));
   const skippedTables = resetTables.filter((table) => shouldSkipTable(table));
   const copiedTables = sortTablesForImport(resetTables.filter((table) => !shouldSkipTable(table)));
 

@@ -1,10 +1,7 @@
 import { requireAdminRequest } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
-import {
-  LEGACY_GENERATED_POINT_SYNC_TABLE,
-  LEGACY_GENERATED_USER_LINKS_TABLE,
-} from '../generatedUsers/legacySource';
+import { LEGACY_GENERATED_USER_LINKS_TABLE } from '../generatedUsers/legacySource';
 import { countRows } from '../maintenance/routes';
 
 const SNAPSHOT_TABLES = [
@@ -32,10 +29,8 @@ const SNAPSHOT_TABLES = [
   'expanded_rooms',
   'guest_room_drafts',
   'magic_link_tokens',
-  LEGACY_GENERATED_POINT_SYNC_TABLE,
   LEGACY_GENERATED_USER_LINKS_TABLE,
   'point_events',
-  'room_difficulty_votes',
   'room_runs',
   'room_versions',
   'rooms',

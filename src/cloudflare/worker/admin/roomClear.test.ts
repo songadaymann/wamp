@@ -35,7 +35,6 @@ beforeEach(() => {
     CREATE TABLE rooms (id TEXT PRIMARY KEY, claimer_user_id TEXT);
     CREATE TABLE room_runs (attempt_id TEXT PRIMARY KEY, room_id TEXT, user_id TEXT);
     CREATE TABLE room_versions (room_id TEXT, version INTEGER, published_by_user_id TEXT);
-    CREATE TABLE room_difficulty_votes (room_id TEXT, user_id TEXT);
     CREATE TABLE point_events (id INTEGER PRIMARY KEY, event_type TEXT, source_key TEXT);
     CREATE TABLE run_settlements (attempt_kind TEXT, attempt_id TEXT, settled_at TEXT, PRIMARY KEY (attempt_kind, attempt_id));
     CREATE TABLE users (id TEXT PRIMARY KEY);

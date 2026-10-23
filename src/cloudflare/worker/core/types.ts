@@ -662,15 +662,6 @@ export interface BadgeAwardRow {
   awarded_at: string;
 }
 
-export interface RoomVersionAttributionRow {
-  room_id: string;
-  version_key: number;
-  prior_version_key: number | null;
-  percent_change: number;
-  contributor_weight_breakdown: string;
-  created_at: string;
-}
-
 export interface UserStatsRow {
   user_id: string;
   user_display_name: string;
