@@ -8,7 +8,7 @@ import WebSocket from 'ws';
 const ROOM_PX_WIDTH = 640;
 const ROOM_PX_HEIGHT = 352;
 const WORLD_CHUNK_SIZE = 8;
-const DEFAULT_HOST = '127.0.0.1:1999';
+const DEFAULT_HOST = '127.0.0.1:8787'; // wrangler dev: the API Worker serves /parties/* itself
 const DEFAULT_PARTY = 'main';
 const DEFAULT_URL = 'http://127.0.0.1:3001/?x=0&y=0';
 const DEFAULT_COUNTS = '5,10,20,50';
@@ -498,7 +498,7 @@ function buildPresencePayload(state) {
 async function createPresenceIdentityToken(identity) {
   if (!identityTokenSecret) {
     throw new Error(
-      'Presence load bots need PARTYKIT_IDENTITY_TOKEN_SECRET or PARTYKIT_INTERNAL_TOKEN to sign PartyKit identities.'
+      'Presence load bots need PARTYKIT_IDENTITY_TOKEN_SECRET or PARTYKIT_INTERNAL_TOKEN to sign presence identities (use the API Worker secret).'
     );
   }
 
@@ -677,7 +677,7 @@ function waitForSocketOpen(socket, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`Timed out connecting to PartyKit room ${socket.roomUrl}`));
+      reject(new Error(`Timed out connecting to presence room ${socket.roomUrl}`));
     }, timeoutMs);
 
     const handleOpen = () => {
@@ -686,7 +686,7 @@ function waitForSocketOpen(socket, timeoutMs) {
     };
     const handleError = (event) => {
       cleanup();
-      reject(new Error(`Failed to connect to PartyKit room ${socket.roomUrl}: ${String(event?.message ?? event?.type ?? 'error')}`));
+      reject(new Error(`Failed to connect to presence room ${socket.roomUrl}: ${String(event?.message ?? event?.type ?? 'error')}`));
     };
     const cleanup = () => {
       clearTimeout(timeout);

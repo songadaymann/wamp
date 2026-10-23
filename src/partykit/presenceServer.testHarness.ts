@@ -1,5 +1,5 @@
 import { setImmediate as realSetImmediate, setTimeout as realSetTimeout } from 'node:timers';
-import type * as Party from 'partykit/server';
+import type * as Party from './presenceTypes';
 import { vi } from 'vitest';
 import PresenceServer from '../../partykit/presenceServer';
 import {

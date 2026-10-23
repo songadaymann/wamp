@@ -444,7 +444,7 @@ Cross-room challenges, PvP, and crypto stakes should be treated as one future pr
 
 ### v1: Cooperative Ghosts
 
-- All players share the world in real-time via PartyKit
+- All players share the world in real-time via presence rooms (a Durable Object in the API Worker)
 - You see other players as semi-transparent sprites running and jumping
 - No player-to-player collision, no damage, no direct interaction
 - Presence is the feature — seeing a dozen tiny characters bouncing through a room feels alive
@@ -501,7 +501,7 @@ Cross-room challenges, PvP, and crypto stakes should be treated as one future pr
 - **API:** Cloudflare Workers (handles auth, rooms, world reads, runs, leaderboards, chat, and mint helpers)
 - **Database:** Cloudflare D1 (SQLite — room metadata, versions, users, sessions, API tokens, runs, stats, points, and chat messages)
 - **Object Storage:** Cloudflare R2 is still optional / not required yet
-- **Real-time:** PartyKit presence only. Persistence stays in Worker + D1; editor collaboration is not implemented
+- **Real-time:** Presence only, in a Durable Object inside the API Worker (it replaced hosted PartyKit in October 2026). Persistence stays in Worker + D1; editor collaboration is not implemented
 
 ### Planned Competitive Extension
 

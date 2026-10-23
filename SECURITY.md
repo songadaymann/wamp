@@ -9,4 +9,4 @@ Local secret files are ignored by default:
 - `.dev.vars`
 - any suffixed variants of those files
 
-Use [docs/development/environment.md](docs/development/environment.md) for local setup guidance. Production values should live in the relevant hosting, Worker, PartyKit, or deployment secret stores, not in Git history.
+Use [docs/development/environment.md](docs/development/environment.md) for local setup guidance. Production values should live in the relevant hosting, Worker, or deployment secret stores, not in Git history.

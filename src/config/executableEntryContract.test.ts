@@ -55,15 +55,6 @@ for (const file of readdirSync(repoRoot, { withFileTypes: true })) {
   }
 }
 
-const partyKitEntries = new Set<string>();
-for (const file of readdirSync(repoRoot, { withFileTypes: true })) {
-  if (!file.isFile() || !/^partykit(?:\.[a-z0-9-]+)?\.json$/i.test(file.name)) {
-    continue;
-  }
-  const config = readRepoJson<{ main: string }>(file.name);
-  partyKitEntries.add(config.main);
-}
-
 const packageJson = readRepoJson<PackageJson>('package.json');
 const packageScriptEntries = new Set<string>();
 for (const command of Object.values(packageJson.scripts)) {
@@ -153,7 +144,6 @@ describe('executable entry contract', () => {
       earlyBootstrapEntry!,
       'src/pages/worker.ts',
       ...wranglerWorkerEntries,
-      ...partyKitEntries,
       'cloudflare/cryptopunk-avatar-queue/runner/server.mjs',
       ...executableScriptEntries,
       ...generatorEntries,

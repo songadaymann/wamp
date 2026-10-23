@@ -13,7 +13,7 @@ const errors=[]; const requests=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{if(m.type()==='error') errors.push(m.text());});
 // Stub unrelated local telemetry/presence; forbid room writes during the smoke.
-await page.routeWebSocket(/(?:127\.0\.0\.1:1999|partykit\.dev)/, () => {});
+await page.routeWebSocket(/\/parties\//, () => {});
 await page.route('**/api/**', async route => {
   const request = route.request();
   if (new URL(request.url()).pathname === '/api/presence/identity-token') return route.fulfill({json:{token:'smoke-local',expiresAt:new Date(Date.now()+3600000).toISOString()}});

@@ -5,9 +5,10 @@ import { Wallet } from 'ethers';
 const BASE_URL =
   process.env.ROLL_OUT_BASE_URL ??
   'http://127.0.0.1:8787';
+// Presence runs in the API Worker (/parties/*), so it defaults to the same host.
 const PARTYKIT_HOST =
   process.env.ROLL_OUT_PARTYKIT_HOST ??
-  '127.0.0.1:1999';
+  new URL(BASE_URL).host;
 const OUTPUT_DIR = 'output/remote-rollout-check';
 const ROOM_IDS = ['0,0', '1,0', '0,1'];
 const ROOM_WIDTH = 40;
@@ -17,9 +18,8 @@ const BLOCKED_BASE_URL_HOSTS = new Set([
   'api.wamp.land',
   'everybodys-platformer.novox-robot.workers.dev',
 ]);
-const BLOCKED_PARTYKIT_HOSTS = new Set([
-  'everybodys-platformer-presence.songadaymann.partykit.dev',
-]);
+// The production Workers serve presence too.
+const BLOCKED_PARTYKIT_HOSTS = BLOCKED_BASE_URL_HOSTS;
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -185,8 +185,10 @@ async function testPartyKit(accountA, accountB) {
   const tokenB = await issuePresenceToken(accountB);
 
   await new Promise((resolve, reject) => {
-    const urlA = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&identityToken=${encodeURIComponent(tokenA)}`;
-    const urlB = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&identityToken=${encodeURIComponent(tokenB)}`;
+    // wrangler dev serves plain ws://; deployed Workers need wss://.
+    const scheme = classifyTargetHost(presenceHostname()) === 'local' ? 'ws' : 'wss';
+    const urlA = `${scheme}://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&identityToken=${encodeURIComponent(tokenA)}`;
+    const urlB = `${scheme}://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&identityToken=${encodeURIComponent(tokenB)}`;
     const clientA = new WebSocket(urlA);
     const clientB = new WebSocket(urlB);
     let opened = 0;
@@ -330,6 +332,13 @@ function d1Exec(sql) {
   );
 }
 
+function presenceHostname() {
+  return PARTYKIT_HOST.replace(/^(https?:\/\/|wss?:\/\/)/, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .toLowerCase();
+}
+
 function classifyTargetHost(hostname) {
   const normalized = hostname.trim().toLowerCase();
   if (
@@ -359,9 +368,7 @@ function assertMutationTargetSafety() {
   }
 
   const baseHost = new URL(BASE_URL).hostname.toLowerCase();
-  const partykitHost = PARTYKIT_HOST.replace(/^(https?:\/\/|wss?:\/\/)/, '')
-    .replace(/\/.*$/, '')
-    .toLowerCase();
+  const partykitHost = presenceHostname();
 
   summary.targetChecks = {
     baseHost,
@@ -378,7 +385,7 @@ function assertMutationTargetSafety() {
 
   if (BLOCKED_PARTYKIT_HOSTS.has(partykitHost)) {
     throw new Error(
-      `Refusing to mutate the known production PartyKit target ${partykitHost}. Use a local or safety PartyKit project instead.`
+      `Refusing to mutate the known production presence target ${partykitHost}. Use a local or safety Worker instead.`
     );
   }
 

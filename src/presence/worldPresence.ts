@@ -956,7 +956,7 @@ export function resolveWorldPresenceConfig(): {
   party: string;
 } | null {
   const runtimeConfig = getResolvedPartykitConfig();
-  const rawHost = runtimeConfig?.host || (import.meta.env.DEV ? '127.0.0.1:1999' : '');
+  const rawHost = runtimeConfig?.host || (import.meta.env.DEV ? '127.0.0.1:8787' : '');
   if (!rawHost) {
     return null;
   }

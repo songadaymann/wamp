@@ -1,4 +1,4 @@
-import type * as Party from 'partykit/server';
+import type * as Party from './presenceTypes';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import {
   isVisiblePresence,

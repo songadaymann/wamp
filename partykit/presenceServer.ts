@@ -1,5 +1,5 @@
 import { ShardHeartbeatScheduler } from '../src/partykit/shardHeartbeatScheduler';
-import type * as Party from 'partykit/server';
+import type * as Party from '../src/partykit/presenceTypes';
 import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
 import { normalizeInterestRoom, PresenceInterestBroadcast, PRESENCE_FAR_FLUSH_MS } from '../src/partykit/presenceInterest';
 import type { PartyKitShardHeartbeat } from '../src/admin/model';

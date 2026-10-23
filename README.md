@@ -8,7 +8,7 @@ Live app: <https://wamp.land>
 
 - Phaser 3, TypeScript, and Vite for the client
 - Cloudflare Workers, D1, R2/Images, and Pages for the backend and hosting surface
-- PartyKit for realtime presence
+- A presence Durable Object in the API Worker for realtime presence, room chat and PvP
 - Base L2 contracts for room ownership and minting flows
 
 ## Local Development
@@ -20,12 +20,13 @@ npm run typecheck
 npm run build
 ```
 
-The frontend dev server runs on `http://127.0.0.1:3000` by default. Backend development uses Wrangler and PartyKit:
+The frontend dev server runs on `http://127.0.0.1:3000` by default. Backend development uses Wrangler; `wrangler dev` serves both the API and realtime presence (`/parties/*`):
 
 ```bash
 npm run dev:api
-npm run dev:presence
 ```
+
+For local presence, point `PARTYKIT_HOST` in `.dev.vars` at the address `wrangler dev` listens on, as [docs/development/environment.md](docs/development/environment.md) shows.
 
 Local environment files are intentionally not tracked. Use `env.local` for frontend Vite overrides and `.dev.vars` for Worker values, following [docs/development/environment.md](docs/development/environment.md). [.env.example](.env.example) lists variable names only; set the values for your environment locally.
 
@@ -36,7 +37,7 @@ Local environment files are intentionally not tracked. Use `env.local` for front
 | `src/` | Client, editor, world, UI, audio, API client, and Worker source |
 | `src/scenes/` | Phaser scenes and scene-specific systems |
 | `src/cloudflare/worker/` | Worker routes, storage, auth, moderation, leaderboards, and admin APIs |
-| `partykit/` | Realtime presence server |
+| `partykit/` | Presence room logic, run by the Durable Object in `src/cloudflare/presence/` |
 | `contracts/` | Room ownership contract workspace |
 | `scripts/` | Build, deploy, smoke-test, migration, and maintenance scripts |
 | `docs/` | Product, feature, and development notes |

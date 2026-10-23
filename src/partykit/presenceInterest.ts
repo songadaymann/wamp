@@ -1,4 +1,4 @@
-import type * as Party from 'partykit/server';
+import type * as Party from './presenceTypes';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../config/room';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import type { ConnectionPresenceState, WorldGhostPresence } from './presenceProtocol';

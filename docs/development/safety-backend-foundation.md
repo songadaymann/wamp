@@ -5,7 +5,7 @@ This branch establishes the non-production rollout path for backend-changing saf
 ## Goals
 
 - keep backend refactors off production until they pass on a dedicated safety backend
-- give safety Pages previews a matching non-production Worker and PartyKit target
+- give safety Pages previews a matching non-production Worker, which also serves presence
 - keep automated preview verification read-only
 - keep mutation-heavy rollout checks away from populated live data
 
@@ -18,7 +18,7 @@ This branch establishes the non-production rollout path for backend-changing saf
 - preview URLs: enabled
 - D1 binding: `everybodys-platformer-safety-db`
 - D1 database id: `27f64d18-5d6d-45a0-9361-c09ec1a805a6`
-- PartyKit host: `everybodys-platformer-presence-safety.songadaymann.partykit.dev`
+- presence host (`PARTYKIT_HOST`): `everybodys-platformer-safety.novox-robot.workers.dev`, the same Worker
 
 To deploy the safety Worker:
 
@@ -37,34 +37,16 @@ npm run cf:deploy:safety
 Recommended Worker vars/secrets for `--env safety`:
 
 - `PARTYKIT_PARTY=main`
-- `PARTYKIT_HOST=<your safety PartyKit hostname>`
-- `PARTYKIT_HOST=everybodys-platformer-presence-safety.songadaymann.partykit.dev`
-- `PARTYKIT_INTERNAL_TOKEN=<shared random secret>`
+- `PARTYKIT_HOST=everybodys-platformer-safety.novox-robot.workers.dev` (set in `wrangler.jsonc` `env.safety`)
+- `PARTYKIT_INTERNAL_TOKEN=<random secret>` (guards the presence metrics room and is the identity-signing fallback)
 - `AUTH_DEBUG_MAGIC_LINKS=0`
 - `ENABLE_TEST_RESET=0`
 - leave `APP_BASE_URL` unset for Pages preview testing so auth redirects follow the requesting preview origin
 - optionally set `AUTH_TRUSTED_REDIRECT_HOSTS` for extra non-`*.wampland.pages.dev` preview frontends
 
-## PartyKit Safety Project
+## Safety Presence
 
-`partykit.safety.json` defines a separate PartyKit project:
-
-- project name: `everybodys-platformer-presence-safety`
-- deployed host: `everybodys-platformer-presence-safety.songadaymann.partykit.dev`
-
-Deploy it with:
-
-```bash
-npm run presence:deploy:safety
-```
-
-Then add the shared token to that PartyKit project:
-
-```bash
-npx partykit env add PARTYKIT_INTERNAL_TOKEN --config partykit.safety.json
-```
-
-Use the same token value in the Worker `PARTYKIT_INTERNAL_TOKEN` safety secret.
+The safety Worker serves presence itself. `/parties/*` goes to its own `PresenceDurableObject` (binding `PRESENCE_ROOMS` in `env.safety`), and its `/api/auth/session` returns its own `PARTYKIT_HOST`. Deploying the safety Worker deploys presence; there is no separate project or token to copy. The hosted PartyKit safety project it replaced is retired.
 
 ## Current Safety Data State
 
@@ -140,8 +122,8 @@ They use the existing `x-admin-key` auth and are intended only for controlled sa
 For safety branches, set branch preview env vars in the `wampland` Pages project so the preview frontend talks to the safety backend instead of production:
 
 - `VITE_ROOM_API_BASE_URL=https://<your-safety-worker>.workers.dev`
-- `VITE_PARTYKIT_HOST=<your-safety-partykit>.partykit.dev`
-- `VITE_PARTYKIT_PARTY=main`
+
+Leave `VITE_PARTYKIT_HOST` and `VITE_PARTYKIT_PARTY` unset. The safety Worker's `/api/auth/session` supplies its own presence host, and a build-time value would override it. `npm run deploy:safety:branch` builds with both blank.
 
 Keep production Pages env unchanged.
 
@@ -185,9 +167,9 @@ The smoke verifies:
 
 `scripts/remote_rollout_check.mjs` now:
 
-- defaults to local Worker + local PartyKit
+- defaults to the local Worker (`http://127.0.0.1:8787`), with presence on the same host; set `ROLL_OUT_PARTYKIT_HOST` only when presence is elsewhere
 - requires `ROLL_OUT_ALLOW_MUTATIONS=1`
-- refuses the known production Worker and PartyKit hosts
+- refuses the known production Worker hosts, for both the API and presence
 - refuses unknown targets that are not clearly local/safety/preview/staging
 - defaults remote D1 writes to the Wrangler `safety` environment
 
@@ -196,7 +178,6 @@ Example safety usage:
 ```bash
 ROLL_OUT_ALLOW_MUTATIONS=1 \
 ROLL_OUT_BASE_URL="https://<your-safety-worker>.workers.dev" \
-ROLL_OUT_PARTYKIT_HOST="<your-safety-partykit>.partykit.dev" \
 ROLL_OUT_WRANGLER_ENV="safety" \
 node scripts/remote_rollout_check.mjs
 ```
