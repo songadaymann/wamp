@@ -47,9 +47,6 @@ import {
   requireAuthenticatedRequestAuth,
   requireOptionalScope,
 } from '../auth/request';
-import {
-  assertWampLeaderboardWriteAllowed,
-} from '../generatedUsers/leaderboardIsolation';
 import { resolveCourseClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
 import {
   awardCoursePublishPoints,
@@ -297,7 +294,6 @@ export async function handleCourseRunStart(
     'submit expanded room runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunStartBody(request, courseId);
   const snapshot = await resolvePublishedCourseVersion(env, body.courseId, body.courseVersion);
   await assertSoloCourseRun(env, snapshot);
@@ -396,7 +392,6 @@ export async function handleCourseRunFinish(
     'submit expanded room runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunFinishBody(request);
   const existing = await loadCourseRunByAttemptId(env, attemptId);
   if (!existing) {

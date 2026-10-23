@@ -10,10 +10,7 @@ import { loadIndexedDiscoveryRows, type IndexedDiscoveryRow } from '../playableC
 import { loadDiscoveryRunMetrics, resolveDiscoveryDifficulty } from '../playableContentIndex/runMetrics';
 import { attachCoopDiscoveryFlags } from './coopPolicy';
 import { loadExpandedDiscoveryTrophies, expandedTrophyKey } from '../playableContentIndex/trophies';
-import type {
-  RoomCoordinates,
-  RoomSnapshot,
-} from '../../../persistence/roomModel';
+import type { RoomCoordinates } from '../../../persistence/roomModel';
 import { ROOM_GOAL_TYPES, type RoomGoalType } from '../../../goals/roomGoals';
 import type {
   ResolvedExpandedRoomTarget,
@@ -23,8 +20,6 @@ import type {
   BuilderDiscoveryResponse,
   BuilderDiscoverySort,
   RoomDifficulty,
-  RoomDifficultyCounts,
-  RoomDifficultySummary,
   RoomDiscoveryEntry,
   RoomDiscoveryResponse,
   RoomDiscoverySort,
@@ -36,7 +31,7 @@ import {
 } from '../../../runs/model';
 import { HttpError } from '../core/http';
 import type { ServerTiming } from '../core/serverTiming';
-import type { ContentTrophyRow, Env, RoomDifficultyVoteRow } from '../core/types';
+import type { ContentTrophyRow, Env } from '../core/types';
 import {
   sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix,
   sqlUserIdIsNotLegacyGeneratedOnly,
@@ -49,24 +44,17 @@ import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors'
 import {
   compareBuilderDiscoveryEntries,
   compareRoomDiscoveryEntries,
-  createEmptyRoomDifficultyCounts,
   encodeRoomDiscoveryCursor,
-  getRoomDifficultyVoteTotal,
   isPersonalRoomDiscoverySort,
   isViewerRoomBuilder,
-  resolveRoomDifficultyConsensus,
 } from './difficultyModel';
 
 export {
-  compareBuilderDiscoveryEntries,
   compareRoomDiscoveryEntries,
-  createEmptyRoomDifficultyCounts,
   encodeRoomDiscoveryCursor,
-  getRoomDifficultyVoteTotal,
   parseBuilderDiscoverySortOrThrow,
   parseRoomDifficultyOrThrow,
   parseRoomDiscoverySortOrThrow,
-  resolveRoomDifficultyConsensus,
 } from './difficultyModel';
 
 interface PublishedRoomDiscoveryRow {
@@ -150,120 +138,6 @@ type PublishedRoomDiscoveryEntry = ReturnType<typeof mapPublishedRoomDiscoveryRo
 
 const QUALITY_PRIOR_MEAN = 3.5;
 const QUALITY_PRIOR_WEIGHT = 5;
-
-export async function loadRoomDifficultyCounts(
-  env: Env,
-  roomId: string,
-  roomVersions: number[]
-): Promise<RoomDifficultyCounts> {
-  const dedupedVotes = await loadLatestDifficultyVotesByUser(env, roomId, roomVersions);
-  return summarizeDifficultyVotes(dedupedVotes);
-}
-
-export async function loadViewerRoomDifficultyVote(
-  env: Env,
-  roomId: string,
-  roomVersions: number[],
-  userId: string
-): Promise<RoomDifficulty | null> {
-  const votes = await loadLatestDifficultyVotesByUser(env, roomId, roomVersions);
-  return normalizeRoomDifficulty(
-    votes.find((vote) => vote.user_id === userId)?.difficulty ?? null
-  );
-}
-
-export async function hasViewerRatedRoomVersion(
-  env: Env,
-  roomId: string,
-  roomVersions: number[],
-  userId: string
-): Promise<boolean> {
-  if (roomVersions.length === 0) {
-    return false;
-  }
-
-  const row = await env.DB.prepare(
-    `
-      SELECT 1 AS found
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version IN (
-          SELECT CAST(value AS INTEGER)
-          FROM json_each(?)
-        )
-        AND user_id = ?
-        AND result != 'active'
-      LIMIT 1
-    `
-  )
-    .bind(roomId, JSON.stringify(roomVersions), userId)
-    .first<{ found: number | string | null }>();
-
-  return Number(row?.found ?? 0) === 1;
-}
-
-export async function buildRoomDifficultySummary(
-  env: Env,
-  snapshot: RoomSnapshot,
-  viewerUserId: string | null,
-  currentPublishedVersion: number | null,
-  effectiveRoomVersion: number,
-  leaderboardFamilyVersions: number[]
-): Promise<RoomDifficultySummary> {
-  const counts = await loadRoomDifficultyCounts(env, snapshot.id, leaderboardFamilyVersions);
-  const viewerSignedIn = viewerUserId !== null;
-  const viewerVote =
-    viewerUserId === null
-      ? null
-      : await loadViewerRoomDifficultyVote(env, snapshot.id, leaderboardFamilyVersions, viewerUserId);
-  const viewerCanRateCurrentVersion =
-    viewerUserId !== null &&
-    currentPublishedVersion === effectiveRoomVersion &&
-    (await hasViewerRatedRoomVersion(env, snapshot.id, leaderboardFamilyVersions, viewerUserId));
-
-  return {
-    consensus: resolveRoomDifficultyConsensus(counts),
-    counts,
-    totalVotes: getRoomDifficultyVoteTotal(counts),
-    viewerVote,
-    viewerSignedIn,
-    viewerCanVote: viewerCanRateCurrentVersion,
-    viewerNeedsRun:
-      viewerUserId !== null &&
-      currentPublishedVersion === effectiveRoomVersion &&
-      !viewerCanRateCurrentVersion,
-  };
-}
-
-export async function upsertRoomDifficultyVote(
-  env: Env,
-  roomId: string,
-  roomVersion: number,
-  userId: string,
-  difficulty: RoomDifficulty,
-  now: string
-): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT INTO room_difficulty_votes (
-          room_id,
-          room_version,
-          user_id,
-          difficulty,
-          created_at,
-          updated_at,
-          carried_from_version
-        )
-        VALUES (?, ?, ?, ?, ?, ?, NULL)
-        ON CONFLICT(room_id, room_version, user_id) DO UPDATE SET
-          difficulty = excluded.difficulty,
-          updated_at = excluded.updated_at,
-          carried_from_version = NULL
-      `
-    ).bind(roomId, roomVersion, userId, difficulty, now, now),
-  ]);
-}
 
 async function loadRoomDiscoveryResponseWithoutInsights(
   env: Env,
@@ -1602,75 +1476,6 @@ function parseRowNumber(value: number | string | null | undefined): number {
 
 function parseRowFloat(value: number | string | null | undefined): number {
   return parseRowNumber(value);
-}
-
-async function loadLatestDifficultyVotesByUser(
-  env: Env,
-  roomId: string,
-  roomVersions: number[]
-): Promise<RoomDifficultyVoteRow[]> {
-  if (roomVersions.length === 0) {
-    return [];
-  }
-
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        room_id,
-        room_version,
-        user_id,
-        difficulty,
-        created_at,
-        updated_at,
-        carried_from_version
-      FROM room_difficulty_votes
-      WHERE room_id = ?
-        AND room_version IN (
-          SELECT CAST(value AS INTEGER)
-          FROM json_each(?)
-        )
-    `
-  )
-    .bind(roomId, JSON.stringify(roomVersions))
-    .all<RoomDifficultyVoteRow>();
-
-  return dedupeLatestDifficultyVotesByUser(result.results);
-}
-
-function dedupeLatestDifficultyVotesByUser(rows: RoomDifficultyVoteRow[]): RoomDifficultyVoteRow[] {
-  const latestByUser = new Map<string, RoomDifficultyVoteRow>();
-
-  for (const row of rows) {
-    const existing = latestByUser.get(row.user_id);
-    if (!existing) {
-      latestByUser.set(row.user_id, row);
-      continue;
-    }
-
-    const existingUpdatedAt = Date.parse(existing.updated_at);
-    const nextUpdatedAt = Date.parse(row.updated_at);
-    if (
-      nextUpdatedAt > existingUpdatedAt ||
-      (nextUpdatedAt === existingUpdatedAt && row.room_version > existing.room_version)
-    ) {
-      latestByUser.set(row.user_id, row);
-    }
-  }
-
-  return Array.from(latestByUser.values());
-}
-
-function summarizeDifficultyVotes(rows: RoomDifficultyVoteRow[]): RoomDifficultyCounts {
-  const counts = createEmptyRoomDifficultyCounts();
-  for (const row of rows) {
-    const difficulty = normalizeRoomDifficulty(row.difficulty);
-    if (!difficulty) {
-      continue;
-    }
-
-    counts[difficulty] += 1;
-  }
-  return counts;
 }
 
 function mapPublishedRoomDiscoveryRow(

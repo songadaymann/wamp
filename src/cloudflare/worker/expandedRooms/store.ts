@@ -1,7 +1,6 @@
 import { toCourseGoalType } from '../../../courses/model';
 import {
   createExpandedRoomSummaryFromLegacyCourse,
-  createExpandedRoomSummaryFromResolvedTarget,
   createExpandedRoomSummaryFromStandaloneRoom,
   expandedRoomIdFromLegacyCourseId,
   isExpandedRoomGoalType,
@@ -955,10 +954,4 @@ function chunkValues<T>(values: T[], size: number): T[][] {
     chunks.push(values.slice(index, index + size));
   }
   return chunks;
-}
-
-export function createExpandedRoomMembershipSummaryFromTarget(
-  target: ResolvedExpandedRoomTarget
-) {
-  return createExpandedRoomSummaryFromResolvedTarget(target);
 }

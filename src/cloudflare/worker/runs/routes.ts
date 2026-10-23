@@ -45,10 +45,6 @@ import {
 import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadExactRoomVersion } from '../rooms/store';
 import {
-  assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotLegacyGeneratedOnly,
-} from '../generatedUsers/leaderboardIsolation';
-import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
   clampRunMetricsToSnapshot,
@@ -95,7 +91,6 @@ import {
   buildRoomLeaderboardResponse,
   loadRankedRoomLeaderboardRows,
   loadViewerRankedRoomLeaderboardRow,
-  sqlIsVerificationAccepted,
 } from './leaderboards';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
@@ -105,7 +100,6 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunStartBody(request);
   const exactVersion = await loadExactRoomVersion(env, body.roomId, body.roomVersion);
   if (!exactVersion) throw new HttpError(404, `Room version ${body.roomVersion} was not found.`);
@@ -210,7 +204,6 @@ export async function handleRunFinish(
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunFinishBody(request);
   const existing = await loadRoomRunByAttemptId(env, attemptId);
 
@@ -899,101 +892,6 @@ export async function loadRoomRunByAttemptId(
     .first<RoomRunRow>();
 
   return row ? mapRoomRunRow(row) : null;
-}
-
-export async function loadCompletedRoomRuns(
-  env: Env,
-  roomId: string,
-  roomVersion: number
-): Promise<RoomRunRecord[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        attempt_id,
-        room_id,
-        room_x,
-        room_y,
-        room_version,
-        goal_type,
-        goal_json,
-        user_id,
-        user_display_name,
-        started_at,
-        finished_at,
-        result,
-        elapsed_ms,
-        deaths,
-        score,
-        collectibles_collected,
-        enemies_defeated,
-        checkpoints_reached,
-        verification_status,
-        verification_reason,
-        verification_nonce,
-        verification_snapshot_hash
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version = ?
-        AND result = 'completed'
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
-    `
-  )
-    .bind(roomId, roomVersion)
-    .all<RoomRunRow>();
-
-  return result.results.map(mapRoomRunRow);
-}
-
-export async function loadCompletedRoomRunsForVersions(
-  env: Env,
-  roomId: string,
-  roomVersions: number[]
-): Promise<RoomRunRecord[]> {
-  if (roomVersions.length === 0) {
-    return [];
-  }
-
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        attempt_id,
-        room_id,
-        room_x,
-        room_y,
-        room_version,
-        goal_type,
-        goal_json,
-        user_id,
-        user_display_name,
-        started_at,
-        finished_at,
-        result,
-        elapsed_ms,
-        deaths,
-        score,
-        collectibles_collected,
-        enemies_defeated,
-        checkpoints_reached,
-        verification_status,
-        verification_reason,
-        verification_nonce,
-        verification_snapshot_hash
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version IN (
-          SELECT CAST(value AS INTEGER)
-          FROM json_each(?)
-        )
-        AND result = 'completed'
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
-    `
-  )
-    .bind(roomId, JSON.stringify(roomVersions))
-    .all<RoomRunRow>();
-
-  return result.results.map(mapRoomRunRow);
 }
 
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {

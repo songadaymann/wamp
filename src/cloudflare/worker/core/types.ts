@@ -540,16 +540,6 @@ export interface PvpMatchPlayerRow {
   created_at: string;
 }
 
-export interface RoomDifficultyVoteRow {
-  room_id: string;
-  room_version: number;
-  user_id: string;
-  difficulty: string;
-  created_at: string;
-  updated_at: string;
-  carried_from_version: number | null;
-}
-
 export interface UserProgressRow {
   user_id: string;
   total_pxp: number;
@@ -670,15 +660,6 @@ export interface BadgeAwardRow {
   source_id: string;
   metadata_json: string | null;
   awarded_at: string;
-}
-
-export interface RoomVersionAttributionRow {
-  room_id: string;
-  version_key: number;
-  prior_version_key: number | null;
-  percent_change: number;
-  contributor_weight_breakdown: string;
-  created_at: string;
 }
 
 export interface UserStatsRow {

@@ -15,7 +15,6 @@ const OVERSIZED_FILE_LINES = {
   'src/scenes/overworld/worldTiles/controller.ts': 1955,
   'src/cloudflare/worker/rooms/store.ts': 1819,
   'src/admin/launch/app.ts': 1816,
-  'src/cloudflare/worker/runs/difficulty.ts': 1762,
   'src/main/earlyWorldTileBootstrap.classic.ts': 1718,
   'src/scenes/overworld/movementController.ts': 1638,
   'src/ui/setup/paletteController.ts': 1584,

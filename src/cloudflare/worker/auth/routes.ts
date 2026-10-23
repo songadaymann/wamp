@@ -67,7 +67,6 @@ import {
   requireTrustedOriginForMutation,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
-import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { getRoomClaimQuota } from '../rooms/store';
 import { handleLogoutAll } from './logoutAll';
 import { handleWalletChallenge, handleWalletVerify } from './walletRoutes';
@@ -563,8 +562,6 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
   if (displayName.length > 24) {
     throw new HttpError(400, 'Display name must be 24 characters or fewer.');
   }
-
-  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, displayName);
 
   const existingUser = await findUserByDisplayName(env, displayName);
   if (existingUser && existingUser.id !== auth.user.id) {

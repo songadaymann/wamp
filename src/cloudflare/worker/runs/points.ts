@@ -202,10 +202,6 @@ export async function awardRoomCreatorCompletionPoints(
     return null;
   }
 
-  if (await isGeneratedLeaderboardExcludedUserId(env, input.finisherUserId)) {
-    return null;
-  }
-
   if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
     return null;
   }
@@ -242,10 +238,6 @@ export async function awardCourseCreatorCompletionPoints(
   }
 ): Promise<PointEventRow | null> {
   if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
-    return null;
-  }
-
-  if (await isGeneratedLeaderboardExcludedUserId(env, input.finisherUserId)) {
     return null;
   }
 

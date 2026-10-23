@@ -20,10 +20,7 @@ import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOption
 import { HttpError, jsonResponse, parsePositiveIntegerQueryParam } from '../core/http';
 import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRushRunRow, RoomRushRunStartRow } from '../core/types';
-import {
-  assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotLegacyGeneratedOnly,
-} from '../generatedUsers/leaderboardIsolation';
+import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import { loadPublishedRoom, loadPublishedRoomsInBounds } from '../rooms/store';
 import { parseRoomRushRunStartBody, parseRoomRushRunSubmissionBody } from './requestBodies';
@@ -60,7 +57,6 @@ interface ScoredRoomRushRoute {
 export async function handleRoomRushRunStart(request: Request, env: Env): Promise<Response> {
   env = { ...env, DB: env.DB.withSession?.('first-primary') ?? env.DB };
   const auth = await requireAuthenticatedRequestAuth(env, request, 'start Room Rush runs', 'runs:write');
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play Room Rush');
   const body = await parseRoomRushRunStartBody(request);
   if (body.startRule === 'origin' && !areRoomCoordinatesEqual(body.startCoordinates, DEFAULT_ROOM_COORDINATES)) {
     throw new HttpError(400, 'Origin Room Rush runs must start at the world origin.');
@@ -121,7 +117,6 @@ export async function handleRoomRushRunSubmit(
     'submit Room Rush runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play Room Rush');
   const body = await parseRoomRushRunSubmissionBody(request);
   const start = await loadRoomRushRunStart(env, auth.user.id, body.startId);
   if (!start) {

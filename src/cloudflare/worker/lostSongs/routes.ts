@@ -3,7 +3,6 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlots } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { guestRunIdentity, hashGuestRunValue } from '../guestRuns/identity';
-import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertLostSongPickupProof, parseLostSongFind, parseLostSongTarget } from './validation';
 import { loadLostSongTarget, userOwnsSongRoom } from './targets';
 import { loadLostSongProgress, saveUserLostSong } from './progress';
@@ -49,7 +48,6 @@ export async function handleLostSongs(request: Request, url: URL, env: Env): Pro
   }
   if (url.pathname === '/api/lost-songs/claim' && request.method === 'POST') {
     const auth = await requireAuthenticatedRequestAuth(env, request, 'claim Lost Song progress', 'runs:write');
-    await assertWampLeaderboardWriteAllowed(env, auth, 'play');
     const guest = await guestRunIdentity(request);
     const identity: Identity = { type: 'guest', id: guest.guestUserId, recoveryHash: guest.recoveryTokenHash };
     await limit(env, request, identity, 'claim');
@@ -75,7 +73,6 @@ export async function handleLostSongs(request: Request, url: URL, env: Env): Pro
   }
   const auth = await loadOptionalRequestAuth(env, request);
   requireOptionalScope(auth, 'runs:write', 'save Lost Song progress');
-  if (auth) await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const guest = auth ? null : await guestRunIdentity(request);
   const identity: Identity = auth ? { type: 'user', id: auth.user.id, recoveryHash: '' }
     : { type: 'guest', id: guest!.guestUserId, recoveryHash: guest!.recoveryTokenHash };

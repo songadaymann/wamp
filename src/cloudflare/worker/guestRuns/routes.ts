@@ -2,7 +2,6 @@ import { requireAuthenticatedRequestAuth, requireTrustedOriginForMutation } from
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { recordClaimedDiscoveryPlayers, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
-import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
 import { findGuestRunStart, finishGuestRun, parseGuestRunStart, startGuestRun, validGuestRequestId } from './attempts';
 import { claimGuestRuns } from './claims';
 import { guestRunIdentity, limitGuestRunRequest } from './identity';
@@ -40,7 +39,6 @@ export async function handleGuestProgressHistoryRequest(request: Request, origin
 export async function handleClaimGuestRequest(request: Request, originalEnv: Env, context?: WorkerExecutionContextLike): Promise<Response> {
   const env = { ...originalEnv, DB: originalEnv.DB.withSession?.('first-primary') ?? originalEnv.DB };
   const auth = await requireAuthenticatedRequestAuth(env, request, 'save guest progress', 'runs:write');
-  await assertWampLeaderboardWriteAllowed(env, auth, 'save guest progress');
   const identity = await guestRunIdentity(request);
   await limitGuestRunRequest(env, request, identity, 'claim');
   const body = await parseJsonBody<{ claimId?: unknown; expectedUserId?: unknown }>(request, { maxBytes: 8192 });

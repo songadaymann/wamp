@@ -7,7 +7,6 @@ import {
   type CourseSnapshot,
 } from '../../../courses/model';
 import {
-  expandedRoomIdFromLegacyCourseId,
   getExpandedRoomCellRemovalError,
   type ExpandedRoomFootprintCell,
 } from '../../../expandedRooms/model';
@@ -421,8 +420,4 @@ async function loadProtectedMintedRoomIds(env: Env, roomIds: string[]): Promise<
       )
       .map((row) => row.id)
   );
-}
-
-export function editableExpandedRoomIdForCourseId(courseId: string): string {
-  return expandedRoomIdFromLegacyCourseId(courseId);
 }

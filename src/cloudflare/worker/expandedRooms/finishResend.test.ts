@@ -14,8 +14,6 @@ const body: CourseRunFinishRequestBody = { result: 'completed', elapsedMs: 9_000
   enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: NOW, verificationTrace: null };
 vi.mock('../auth/request', async (original) => ({ ...await original<typeof import('../auth/request')>(),
   requireAuthenticatedRequestAuth: vi.fn(async () => ({ user: { id: 'p1', displayName: 'p1' }, isAdmin: false })) }));
-vi.mock('../generatedUsers/leaderboardIsolation', async (original) => ({
-  ...await original<typeof import('../generatedUsers/leaderboardIsolation')>(), assertWampLeaderboardWriteAllowed: vi.fn() }));
 vi.mock('../courses/requestBodies', async (original) => ({ ...await original<typeof import('../courses/requestBodies')>(),
   parseCourseRunFinishBody: vi.fn(async () => ({ ...body })) }));
 vi.mock('./store', async (original) => ({ ...await original<typeof import('./store')>(),

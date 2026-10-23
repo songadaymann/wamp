@@ -102,29 +102,6 @@ export async function awardRoomPublishProgression(
   },
 ): Promise<ProgressionDelta> {
   const percentChange = computeRoomWeightedChange(params.previousPublishedSnapshot, params.publishedSnapshot);
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT OR REPLACE INTO room_version_attribution (
-          room_id,
-          version_key,
-          prior_version_key,
-          percent_change,
-          contributor_weight_breakdown,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-      `
-    ).bind(
-      params.roomId,
-      params.roomVersion,
-      params.previousPublishedSnapshot?.version ?? null,
-      percentChange,
-      JSON.stringify([{ userId: params.userId, weight: 1 }]),
-      params.publishedAt,
-    ),
-  ]);
-
   const delta = createEmptyProgressionDelta();
   const significant = percentChange >= ROOM_SIGNIFICANT_CHANGE_THRESHOLD || params.previousPublishedSnapshot === null;
   if (!params.hasGoal || !significant) {

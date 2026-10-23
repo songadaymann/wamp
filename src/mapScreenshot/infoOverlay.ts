@@ -57,12 +57,6 @@ export const INFO_OVERLAY_TEMPLATE = `<div class="map-shot-info">
 </style>
 `;
 
-/** Bottom-right brand mark (drawn separately in stitch, not inside the info box). */
-export const CORNER_MARK_TEXT = 'WAMP.LAND';
-/** Plan: 100px Early GameBoy in #faaa39, 50px from bottom-right. */
-export const CORNER_MARK_FONT_SIZE_PX = 100;
-export const CORNER_MARK_COLOR = '#faaa39';
-
 export interface InfoOverlayValues {
   date: string;
   players: number | string;
@@ -79,24 +73,6 @@ export function fillInfoOverlayTemplate(
     .replace(/\{\{PLAYERS\}\}/g, escapeHtml(formatCount(values.players)))
     .replace(/\{\{BUILDERS\}\}/g, escapeHtml(formatCount(values.builders)))
     .replace(/\{\{ROOMS\}\}/g, escapeHtml(formatCount(values.rooms)));
-}
-
-export function buildFontFaceCss(input: {
-  earlyGameboyDataUrl: string;
-  homeVideoDataUrl: string;
-}): string {
-  return `
-@font-face {
-  font-family: 'Early Gameboy';
-  src: url('${input.earlyGameboyDataUrl}') format('truetype');
-  font-display: block;
-}
-@font-face {
-  font-family: 'HomeVideo';
-  src: url('${input.homeVideoDataUrl}') format('truetype');
-  font-display: block;
-}
-`.trim();
 }
 
 function formatCount(value: number | string): string {

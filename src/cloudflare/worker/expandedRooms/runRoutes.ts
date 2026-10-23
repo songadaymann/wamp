@@ -65,9 +65,6 @@ import {
   normalizeFinalizedCourseRunBody,
   parseCourseRunFinishBody,
 } from '../courses/requestBodies';
-import {
-  assertWampLeaderboardWriteAllowed,
-} from '../generatedUsers/leaderboardIsolation';
 import { resolveCourseClearRewardScope, scopeClearRewardFlags } from '../progression/clearRewardScope';
 import {
   awardCourseCreatorCompletionPoints,
@@ -151,7 +148,6 @@ export async function handleExpandedRoomRunStart(
     'submit expanded room runs',
     'runs:write',
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseExpandedRoomRunStartBody(request, expandedRoomId);
   const context = await resolveLegacyExpandedRoomCourseContext(
     env,
@@ -292,7 +288,6 @@ export async function handleExpandedRoomRunFinish(
     'submit expanded room runs',
     'runs:write',
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseCourseRunFinishBody(request);
   const existing = await loadExpandedRoomRunByAttemptId(env, attemptId);
   if (!existing) {

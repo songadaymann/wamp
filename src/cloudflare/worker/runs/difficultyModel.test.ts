@@ -3,22 +3,16 @@ import type { BuilderDiscoveryEntry, RoomDiscoveryEntry } from '../../../runs/mo
 import {
   compareBuilderDiscoveryEntries,
   compareRoomDiscoveryEntries,
-  createEmptyRoomDifficultyCounts,
   encodeRoomDiscoveryCursor,
-  getRoomDifficultyVoteTotal,
   isPersonalRoomDiscoverySort,
   isViewerRoomBuilder,
   parseBuilderDiscoverySortOrThrow,
   parseRoomDifficultyOrThrow,
   parseRoomDiscoverySortOrThrow,
-  resolveRoomDifficultyConsensus,
 } from './difficultyModel';
 
 describe('difficulty model', () => {
-  it('preserves difficulty totals, tie order, and exact vocabularies', () => {
-    expect(createEmptyRoomDifficultyCounts()).toEqual({ easy: 0, medium: 0, hard: 0, extreme: 0 });
-    expect(getRoomDifficultyVoteTotal({ easy: 1, medium: 2, hard: 3, extreme: 4 })).toBe(10);
-    expect(resolveRoomDifficultyConsensus({ easy: 2, medium: 2, hard: 0, extreme: 0 })).toBe('easy');
+  it('preserves the exact difficulty and sort vocabularies', () => {
     expect(parseRoomDifficultyOrThrow('extreme')).toBe('extreme');
     expect(parseRoomDiscoverySortOrThrow('unrated')).toBe('unrated');
     expect(parseBuilderDiscoverySortOrThrow('rooms')).toBe('rooms');
