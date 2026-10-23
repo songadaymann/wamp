@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getTilesetByKey, ROOM_HEIGHT, ROOM_WIDTH } from '../config';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 import {
@@ -71,8 +71,7 @@ function summarize(plan: SwordsmanRobustTraversalPlan | null) {
   };
 }
 
-function warmEveryEdge(room: RoomSnapshot, bodyWidth = 16, bodyHeight = 32): number {
-  const graph = buildSwordsmanTraversalGraph(room);
+function warmEveryEdge(room: RoomSnapshot, bodyWidth = 16, bodyHeight = 32, graph = buildSwordsmanTraversalGraph(room)): number {
   let simulated = 0;
   for (const edge of graph.edgesById.values()) {
     if (prepareSwordsmanTraversalEdgeSimulation(room, graph, edge, bodyWidth, bodyHeight)) simulated += 1;
@@ -80,10 +79,10 @@ function warmEveryEdge(room: RoomSnapshot, bodyWidth = 16, bodyHeight = 32): num
   return simulated;
 }
 
-function planIn(room: RoomSnapshot, testCase: typeof recorded.cases[number]) {
+function planIn(room: RoomSnapshot, testCase: typeof recorded.cases[number], graph = buildSwordsmanTraversalGraph(room)) {
   return planSwordsmanRobustTraversal({
     room,
-    graph: buildSwordsmanTraversalGraph(room),
+    graph,
     enemy: testCase.enemy,
     target: testCase.target,
     blockedEdgeIds: new Set(testCase.blockedEdgeIds),
@@ -93,6 +92,10 @@ function planIn(room: RoomSnapshot, testCase: typeof recorded.cases[number]) {
 }
 
 describe('robust Sword Hunter planning (F302)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('plans exactly like origin/main in a room it has not simulated yet', () => {
     expect(recorded.cases.length).toBeGreaterThan(100);
     expect(recorded.cases.filter((testCase) => testCase.plan?.edgeIds.length).length).toBeGreaterThan(80);
@@ -102,13 +105,28 @@ describe('robust Sword Hunter planning (F302)', () => {
   }, 30000);
 
   it('plans exactly like origin/main from edges simulated ahead, simulating nothing itself', () => {
+    // Cases with the same layout and body size share one room simulated ahead, so its edges (570
+    // in the dense layout) are simulated once, not once per case. Each plan still finds exactly
+    // the warm-up's cache: the plans before it in that room simulate nothing, as each asserts.
+    const casesByRoom = new Map<string, typeof recorded.cases>();
     for (const testCase of recorded.cases) {
-      const room = freshRoom(recorded.layouts[testCase.layout]);
-      warmEveryEdge(room, testCase.bodyWidth, testCase.bodyHeight);
-      const plan = planIn(room, testCase);
-      expect(summarize(plan)).toEqual(testCase.plan);
-      expect(plan?.coldSimulatedEdges ?? 0).toBe(0);
+      const key = `${testCase.layout}:${testCase.bodyWidth}x${testCase.bodyHeight}`;
+      casesByRoom.set(key, [...(casesByRoom.get(key) ?? []), testCase]);
     }
+    let planned = 0;
+    for (const cases of casesByRoom.values()) {
+      const { layout, bodyWidth, bodyHeight } = cases[0];
+      const room = freshRoom(recorded.layouts[layout]);
+      const graph = buildSwordsmanTraversalGraph(room);
+      warmEveryEdge(room, bodyWidth, bodyHeight, graph);
+      for (const testCase of cases) {
+        const plan = planIn(room, testCase, graph);
+        expect(summarize(plan)).toEqual(testCase.plan);
+        expect(plan?.coldSimulatedEdges ?? 0).toBe(0);
+        planned += 1;
+      }
+    }
+    expect(planned).toBe(recorded.cases.length);
   }, 30000);
 
   it('simulates each jump the same whichever tiles were read first', () => {
@@ -126,6 +144,8 @@ describe('robust Sword Hunter planning (F302)', () => {
       .toEqual(new Map([...forward].sort(([left], [right]) => left.localeCompare(right))));
   });
 
+  // This test and the next simulate over 4,500 edges each: a second or two idle, but past vitest's
+  // 5 s default on a loaded machine, so they carry the same explicit bound as the replays.
   it('evicts whole least-recently-planned rooms past 4,096 edges instead of clearing every room', () => {
     const dense = recorded.layouts.dense;
     const denseCase = recorded.cases.find((testCase) => testCase.layout === 'dense' && testCase.plan?.edgeIds.length
@@ -142,9 +162,12 @@ describe('robust Sword Hunter planning (F302)', () => {
     expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
     expect(planIn(others[1], denseCase)?.coldSimulatedEdges).toBe(0);
     expect(planIn(others[0], denseCase)?.coldSimulatedEdges).toBeGreaterThan(0);
-  });
+  }, 30000);
 
   it('keeps every edge of a room in play even when it is the least recently planned', () => {
+    // A room stays in play for 2 s of performance.now() after its mark. The warm-ups below take
+    // seconds on a loaded machine, so the clock stands still instead.
+    vi.useFakeTimers({ toFake: ['performance'] });
     const dense = recorded.layouts.dense;
     const denseCase = recorded.cases.find((testCase) => testCase.layout === 'dense' && testCase.plan?.edgeIds.length
       && testCase.bodyWidth === 16 && testCase.blockedEdgeIds.length === 0)!;
@@ -157,5 +180,5 @@ describe('robust Sword Hunter planning (F302)', () => {
     for (let index = 0; index < 8; index += 1) warmEveryEdge(freshRoom(dense));
     expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
     expect(planIn(unmarked, denseCase)?.coldSimulatedEdges).toBeGreaterThan(0);
-  });
+  }, 30000);
 });

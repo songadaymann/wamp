@@ -154,6 +154,7 @@ function expectSameDecisionAsOracle(
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('classic traversal route choice (F305)', () => {
@@ -282,6 +283,8 @@ describe('shared traversal caches (F302)', () => {
   });
 
   it('keeps graphs least recently used first and never evicts a room in play', () => {
+    // In play means marked in the last 2 s of performance.now(); hold it still on a slow machine.
+    vi.useFakeTimers({ toFake: ['performance'] });
     const rooms = Array.from({ length: 66 }, (_, index) => createDefaultRoomSnapshot(`graph-cache-${index}`, { x: index, y: 50 }));
     const [played, touched, ...rest] = rooms;
     const playedGraph = getSwordsmanTraversalGraphForRoom(played);
