@@ -179,7 +179,7 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
   tryConsumeHeldKey: () => boolean;
   touchQuicksand: () => void;
   grantExternalLaunchGrace: (durationMs: number) => void;
-  enqueueBackgroundCpuWork?: (label: string, execute: () => void) => { readonly state: string } | null;
+  enqueueBackgroundCpuWork?: (label: string, execute: () => void, onCancelled: () => void) => { readonly state: string } | null;
   getPlayerGravityDirection?: () => PlayerGravityDirection;
   launchPlayerFromSpring?: (x: number, y: number, durationMs: number) => void;
   grantPlayerAirJump?: () => boolean;
@@ -279,8 +279,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
   private readonly swordsmanEdgeWarmup = new SwordsmanEdgeWarmup({
-    getGraph: (room) => this.swordsmanController.getSwordsmanTraversalGraph(room),
-    enqueueBackgroundCpuWork: (label, execute) => this.options.enqueueBackgroundCpuWork?.(label, execute) ?? null,
+    getGraph: (room, prebuilt) => this.swordsmanController.getSwordsmanTraversalGraph(room, prebuilt),
+    enqueueBackgroundCpuWork: (...args) => this.options.enqueueBackgroundCpuWork?.(...args) ?? null,
   });
   private readonly riderCarryOptions = {
     getDynamicBody: (sprite: Phaser.GameObjects.Sprite) => this.getDynamicBody(sprite),
@@ -935,7 +935,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
               this.updatePatrolEnemy(loadedRoom.room, liveObject);
               break;
             case 'swordsman':
-              this.swordsmanEdgeWarmup.runForActiveRoom(loadedRoom, this.options.getCurrentTime());
+              this.swordsmanEdgeWarmup.noteActiveRoom(loadedRoom, this.options.getCurrentTime());
               this.swordsmanController.updateEnemy(loadedRoom, liveObject);
               break;
             case 'frog':

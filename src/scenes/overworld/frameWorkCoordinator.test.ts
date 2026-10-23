@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  enqueueGameplayWarmupWork,
   FRAME_WORK_LONG_JOB_THRESHOLD_MS,
   FrameWorkCoordinator,
   getFrameWorkBudget,
@@ -40,6 +41,27 @@ describe('FrameWorkCoordinator', () => {
       'teardown',
       'preview',
     ]);
+  });
+
+  it('runs gameplay warm-up only after every streaming queue, and tells cancelled jobs why (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    const cancelled: string[] = [];
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'), (reason) => cancelled.push(reason));
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 2);
+    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'gpu-upload', 2);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+    expect(executionOrder).toEqual(['teardown', 'preview']);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+    expect(executionOrder).toEqual(['teardown', 'preview', 'warmup']);
+    expect(cancelled).toEqual([]);
+
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('late'), (reason) => cancelled.push(reason));
+    coordinator.cancelAll('stream-reset');
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+    expect(cancelled).toEqual(['stream-reset']);
+    expect(executionOrder).not.toContain('late');
   });
 
   it('reprioritizes queued work without jumping jobs already waiting at the new priority', () => {

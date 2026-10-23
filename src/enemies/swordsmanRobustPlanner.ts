@@ -110,9 +110,14 @@ const SURFACE_PROBE_INSET_PX = 1;
 const EPSILON = 0.01;
 const EDGE_SIMULATION_CACHE_LIMIT = 4096;
 
-// Simulated edges, one bucket per room version and body size, least recently used first. Whole
-// rooms are evicted past the limit, so the room being played keeps all of its edges (F302).
-const edgeSimulationsByRoom = new Map<string, Map<string, EdgeSimulationResult>>();
+// Simulated edges, one bucket per room version and body size, least recently used first. Past
+// the limit whole rooms are evicted, never the one being planned or one still in play (F302).
+const ROOM_IN_PLAY_PROTECTION_MS = 2000;
+const edgeSimulationsByRoom = new Map<string, {
+  graphCacheKey: string;
+  simulations: Map<string, EdgeSimulationResult>;
+}>();
+const roomsInPlayMarkedAt = new Map<string, number>();
 let edgeSimulationCount = 0;
 let lastEdgeSimulationRoomKey: string | null = null;
 let coldSimulationCount = 0;
@@ -298,6 +303,21 @@ export function debugSimulateSwordsmanTraversalEdge(
 }
 
 /**
+ * Keeps a room's simulated edges (every body size) from being evicted for the next couple of
+ * seconds; called each frame its Sword Hunters update.
+ */
+export function markSwordsmanTraversalRoomInPlay(graphCacheKey: string): void {
+  roomsInPlayMarkedAt.delete(graphCacheKey);
+  roomsInPlayMarkedAt.set(graphCacheKey, performance.now());
+  if (roomsInPlayMarkedAt.size > 64) {
+    const oldestKey = roomsInPlayMarkedAt.keys().next().value;
+    if (oldestKey !== undefined) {
+      roomsInPlayMarkedAt.delete(oldestKey);
+    }
+  }
+}
+
+/**
  * Simulates one edge for a body size ahead of planning, so plans for that room find it cached.
  * Returns whether it had to be simulated now.
  */
@@ -415,7 +435,7 @@ function simulateTraversalEdge(
   bodyHeight: number,
 ): EdgeSimulationResult {
   const roomKey = buildEdgeSimulationRoomKey(graph.cacheKey, bodyWidth, bodyHeight);
-  const simulations = getEdgeSimulationRoom(roomKey);
+  const simulations = getEdgeSimulationRoom(graph.cacheKey, roomKey);
   const cached = simulations.get(edge.id);
   if (cached) {
     return cached;
@@ -859,29 +879,38 @@ function buildEdgeSimulationRoomKey(
   return `${graphCacheKey}:${Math.round(bodyWidth)}:${Math.round(bodyHeight)}`;
 }
 
-function getEdgeSimulationRoom(roomKey: string): Map<string, EdgeSimulationResult> {
-  let simulations = edgeSimulationsByRoom.get(roomKey);
-  if (!simulations) {
-    simulations = new Map();
-    edgeSimulationsByRoom.set(roomKey, simulations);
+function getEdgeSimulationRoom(
+  graphCacheKey: string,
+  roomKey: string,
+): Map<string, EdgeSimulationResult> {
+  let bucket = edgeSimulationsByRoom.get(roomKey);
+  if (!bucket) {
+    bucket = { graphCacheKey, simulations: new Map() };
+    edgeSimulationsByRoom.set(roomKey, bucket);
   } else if (roomKey !== lastEdgeSimulationRoomKey) {
     edgeSimulationsByRoom.delete(roomKey);
-    edgeSimulationsByRoom.set(roomKey, simulations);
+    edgeSimulationsByRoom.set(roomKey, bucket);
   }
   lastEdgeSimulationRoomKey = roomKey;
-  return simulations;
+  return bucket.simulations;
 }
 
 function evictLeastRecentEdgeSimulationRooms(keepRoomKey: string): void {
-  for (const [roomKey, simulations] of edgeSimulationsByRoom) {
+  if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
+    return;
+  }
+
+  const now = performance.now();
+  for (const [roomKey, bucket] of edgeSimulationsByRoom) {
     if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
       return;
     }
-    if (roomKey === keepRoomKey) {
+    const markedAt = roomsInPlayMarkedAt.get(bucket.graphCacheKey);
+    if (roomKey === keepRoomKey || (markedAt !== undefined && now - markedAt < ROOM_IN_PLAY_PROTECTION_MS)) {
       continue;
     }
     edgeSimulationsByRoom.delete(roomKey);
-    edgeSimulationCount -= simulations.size;
+    edgeSimulationCount -= bucket.simulations.size;
   }
 }
 

@@ -205,8 +205,8 @@ export function createLiveObjectController(
       host.externalLaunchGraceUntil = Math.max(host.externalLaunchGraceUntil, gameplayNow(host.scene) + durationMs);
     },
     // Streaming is created after this controller; jobs are only queued once rooms load.
-    enqueueBackgroundCpuWork: (label, execute) =>
-      host.worldStreamingController?.enqueueBackgroundCpuWork(label, execute) ?? null,
+    enqueueBackgroundCpuWork: (label, execute, onCancelled) =>
+      host.worldStreamingController?.enqueueBackgroundCpuWork(label, execute, onCancelled) ?? null,
     getPlayerGravityDirection: () => host.specialTilesController.getPlayerEnvironment().gravityDirection,
     launchPlayerFromSpring: (x, y, durationMs) => host.movementController.launchFromSpring(x, y, durationMs),
     grantPlayerAirJump: () => host.movementController.grantAirJump(),

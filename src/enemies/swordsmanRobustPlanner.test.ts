@@ -2,9 +2,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { getTilesetByKey, ROOM_HEIGHT, ROOM_WIDTH } from '../config';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
-import { buildSwordsmanTraversalGraph, type SwordsmanBodySnapshot } from './swordsmanTraversal';
+import {
+  buildSwordsmanTraversalGraph,
+  getSwordsmanTraversalGraphCacheKey,
+  type SwordsmanBodySnapshot,
+} from './swordsmanTraversal';
 import {
   debugSimulateSwordsmanTraversalEdge,
+  markSwordsmanTraversalRoomInPlay,
   planSwordsmanRobustTraversal,
   prepareSwordsmanTraversalEdgeSimulation,
   type SwordsmanRobustTraversalPlan,
@@ -137,5 +142,20 @@ describe('robust Sword Hunter planning (F302)', () => {
     expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
     expect(planIn(others[1], denseCase)?.coldSimulatedEdges).toBe(0);
     expect(planIn(others[0], denseCase)?.coldSimulatedEdges).toBeGreaterThan(0);
+  });
+
+  it('keeps every edge of a room in play even when it is the least recently planned', () => {
+    const dense = recorded.layouts.dense;
+    const denseCase = recorded.cases.find((testCase) => testCase.layout === 'dense' && testCase.plan?.edgeIds.length
+      && testCase.bodyWidth === 16 && testCase.blockedEdgeIds.length === 0)!;
+    const played = freshRoom(dense);
+    const unmarked = freshRoom(dense);
+    warmEveryEdge(played);
+    warmEveryEdge(unmarked);
+    markSwordsmanTraversalRoomInPlay(getSwordsmanTraversalGraphCacheKey(played));
+    // Eight more dense rooms are about 4,500 edges: everything not in play rotates out.
+    for (let index = 0; index < 8; index += 1) warmEveryEdge(freshRoom(dense));
+    expect(planIn(played, denseCase)?.coldSimulatedEdges).toBe(0);
+    expect(planIn(unmarked, denseCase)?.coldSimulatedEdges).toBeGreaterThan(0);
   });
 });

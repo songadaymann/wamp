@@ -70,6 +70,7 @@ import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
 import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
 import {
   FRAME_WORK_PRIORITIES,
+  enqueueGameplayWarmupWork,
   FrameWorkCoordinator,
   type FrameWorkGeneration,
   type FrameWorkJobHandle,
@@ -1183,20 +1184,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   /**
-   * Queues one atomic CPU job of at most about 1 ms beside predicted-room object preparation, for
-   * gameplay caches worth filling before a room is played (Sword Hunter jump physics, F302).
+   * Queues one atomic CPU job of at most about 1 ms below every streaming queue, for gameplay
+   * caches worth filling before a room is played (Sword Hunter jump physics, F302). It runs only
+   * in frames whose preparation, teardown and preview work has drained, within the same budget.
    */
-  enqueueBackgroundCpuWork(label: string, execute: () => void): FrameWorkJobHandle | null {
-    if (this.destroyed) {
-      return null;
-    }
-    return this.frameWorkCoordinator.enqueue({
-      label,
-      priority: 'predicted-visuals-objects',
-      costKind: 'cpu',
-      estimatedCostMs: 1,
-      execute,
-    });
+  enqueueBackgroundCpuWork(
+    label: string,
+    execute: () => void,
+    onCancelled?: () => void,
+  ): FrameWorkJobHandle | null {
+    return this.destroyed
+      ? null
+      : enqueueGameplayWarmupWork(this.frameWorkCoordinator, label, execute, onCancelled);
   }
 
   private hasUrgentDestinationFrameWork(): boolean {

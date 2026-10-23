@@ -1390,7 +1390,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     );
   }
 
-  getSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
+  getSwordsmanTraversalGraph(room: RoomSnapshot, prebuilt?: SwordsmanTraversalGraph): SwordsmanTraversalGraph {
     const cacheKey = getSwordsmanTraversalGraphCacheKey(room);
     const cached = this.swordsmanTraversalGraphs.get(cacheKey);
     if (cached) {
@@ -1400,7 +1400,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     if (this.swordsmanTraversalGraphs.size > 64) {
       this.swordsmanTraversalGraphs.clear();
     }
-    const graph = buildSwordsmanTraversalGraph(room);
+    const graph = prebuilt ?? buildSwordsmanTraversalGraph(room);
     this.swordsmanTraversalGraphs.set(cacheKey, graph);
     return graph;
   }

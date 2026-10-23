@@ -171,21 +171,28 @@ export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
 }
 
 export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
-  const surfaceSegments = buildSurfaceSegments(room);
-  const wallSegments = buildWallSegments(room);
-  const ladderSegments = buildLadderSegments(room);
+  return startSwordsmanTraversalGraphBuild(room).step(() => false)!;
+}
+
+/** A graph built a piece at a time, so the work can be spread over frames (F302). */
+export interface SwordsmanTraversalGraphBuild {
+  /** Builds pieces until done or `shouldStop()`, asked before each piece; returns the finished graph. */
+  step(shouldStop: () => boolean): SwordsmanTraversalGraph | null;
+}
+
+/**
+ * Builds the same graph as buildSwordsmanTraversalGraph, in the same order: the segments first,
+ * then one piece per surface's outgoing jumps, one per wall's, and the ladders last.
+ */
+export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): SwordsmanTraversalGraphBuild {
+  let surfaceSegments: SwordsmanSurfaceSegment[] = [];
+  let wallSegments: SwordsmanWallSegment[] = [];
+  let ladderSegments: SwordsmanLadderSegment[] = [];
   const nodesById = new Map<string, SwordsmanTraversalNode>();
   const edgesByNodeId = new Map<string, SwordsmanTraversalEdge[]>();
   const edgesById = new Map<string, SwordsmanTraversalEdge>();
-
-  for (const segment of surfaceSegments) {
-    nodesById.set(segment.id, segment);
-    edgesByNodeId.set(segment.id, []);
-  }
-  for (const wall of wallSegments) {
-    nodesById.set(wall.id, wall);
-    edgesByNodeId.set(wall.id, []);
-  }
+  let nextPiece = 0;
+  let graph: SwordsmanTraversalGraph | null = null;
 
   const addEdge = (edge: SwordsmanTraversalEdge | null): void => {
     if (!edge) {
@@ -195,40 +202,70 @@ export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTrave
     edgesById.set(edge.id, edge);
   };
 
-  for (const source of surfaceSegments) {
-    for (const target of surfaceSegments) {
-      if (source.id === target.id) {
-        continue;
+  const buildPiece = (piece: number): void => {
+    if (piece === 0) {
+      surfaceSegments = buildSurfaceSegments(room);
+      wallSegments = buildWallSegments(room);
+      ladderSegments = buildLadderSegments(room);
+      for (const segment of surfaceSegments) {
+        nodesById.set(segment.id, segment);
+        edgesByNodeId.set(segment.id, []);
+      }
+      for (const wall of wallSegments) {
+        nodesById.set(wall.id, wall);
+        edgesByNodeId.set(wall.id, []);
+      }
+      return;
+    }
+
+    const source = surfaceSegments[piece - 1];
+    if (source) {
+      for (const target of surfaceSegments) {
+        if (source.id === target.id) {
+          continue;
+        }
+
+        addEdge(buildJumpUpEdge(source, target, surfaceSegments));
+        for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
+          addEdge(dropEdge);
+        }
       }
 
-      addEdge(buildJumpUpEdge(source, target, surfaceSegments));
-      for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
-        addEdge(dropEdge);
+      for (const wall of wallSegments) {
+        addEdge(buildJumpToWallEdge(source, wall));
       }
+      return;
     }
 
-    for (const wall of wallSegments) {
-      addEdge(buildJumpToWallEdge(source, wall));
+    const wall = wallSegments[piece - 1 - surfaceSegments.length];
+    if (wall) {
+      for (const target of surfaceSegments) {
+        addEdge(buildWallJumpEdge(wall, target));
+      }
+      return;
     }
-  }
 
-  for (const wall of wallSegments) {
-    for (const target of surfaceSegments) {
-      addEdge(buildWallJumpEdge(wall, target));
+    for (const edge of buildLadderEdges(ladderSegments, surfaceSegments)) {
+      addEdge(edge);
     }
-  }
-
-  for (const edge of buildLadderEdges(ladderSegments, surfaceSegments)) {
-    addEdge(edge);
-  }
+    graph = {
+      cacheKey: getSwordsmanTraversalGraphCacheKey(room),
+      surfaceSegments,
+      wallSegments,
+      nodesById,
+      edgesByNodeId,
+      edgesById,
+    };
+  };
 
   return {
-    cacheKey: getSwordsmanTraversalGraphCacheKey(room),
-    surfaceSegments,
-    wallSegments,
-    nodesById,
-    edgesByNodeId,
-    edgesById,
+    step(shouldStop) {
+      while (!graph && !shouldStop()) {
+        buildPiece(nextPiece);
+        nextPiece += 1;
+      }
+      return graph;
+    },
   };
 }
 

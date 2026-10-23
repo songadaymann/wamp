@@ -4,6 +4,8 @@ export const FRAME_WORK_PRIORITIES = [
   'predicted-visuals-objects',
   'teardown',
   'preview-cosmetic',
+  // Gameplay caches filled ahead of play; runs only once every streaming queue is empty.
+  'gameplay-warmup',
 ] as const;
 
 export type FrameWorkPriority = typeof FRAME_WORK_PRIORITIES[number];
@@ -28,6 +30,8 @@ export interface FrameWorkJobSpec {
   estimatedCostMs: number;
   generation?: FrameWorkGeneration;
   execute: () => void;
+  /** Called if the job is cancelled before it runs, so its owner can release what it held. */
+  onCancelled?: (reason: string) => void;
 }
 
 export interface FrameWorkJobHandle {
@@ -138,6 +142,26 @@ const COST_EPSILON_MS = 0.000_001;
 
 export function getFrameWorkBudget(profile: FrameWorkPerformanceProfile): FrameWorkBudget {
   return FRAME_WORK_BUDGETS[profile];
+}
+
+/**
+ * Queues one CPU job of at most 1 ms in the lowest queue: it runs only in frames where all
+ * streaming work has drained, inside the frame's CPU cap (1 ms reduced, 2 ms normal).
+ */
+export function enqueueGameplayWarmupWork(
+  scheduler: Pick<FrameWorkCoordinator, 'enqueue'>,
+  label: string,
+  execute: () => void,
+  onCancelled?: (reason: string) => void,
+): FrameWorkJobHandle {
+  return scheduler.enqueue({
+    label,
+    priority: 'gameplay-warmup',
+    costKind: 'cpu',
+    estimatedCostMs: MAX_REDUCED_CPU_FRAME_WORK_ESTIMATE_MS,
+    execute,
+    onCancelled,
+  });
 }
 
 export class FrameWorkCoordinator {
@@ -503,6 +527,11 @@ export class FrameWorkCoordinator {
   private settleCancelled(job: InternalFrameWorkJobHandle, reason: string): void {
     job.markCancelled(this.now(), reason);
     this.cancelledJobs += 1;
+    try {
+      job.notifyCancelled(reason);
+    } catch (error) {
+      this.reportJobError(job, error);
+    }
   }
 
   private reportJobError(job: InternalFrameWorkJobHandle, error: unknown): void {
@@ -523,6 +552,7 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
   readonly generation: FrameWorkGeneration | null;
   readonly queuedAtMs: number;
   private readonly executeJob: () => unknown;
+  private readonly onCancelled: ((reason: string) => void) | null;
   private readonly requestCancel: (job: InternalFrameWorkJobHandle, reason: string) => boolean;
   private readonly requestReprioritize: (
     job: InternalFrameWorkJobHandle,
@@ -552,6 +582,7 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
     this.estimatedCostMs = spec.estimatedCostMs;
     this.generation = spec.generation ?? null;
     this.executeJob = spec.execute;
+    this.onCancelled = spec.onCancelled ?? null;
     this.queuedAtMs = queuedAtMs;
     this.requestCancel = requestCancel;
     this.requestReprioritize = requestReprioritize;
@@ -607,6 +638,10 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
     this.currentSettledAtMs = settledAtMs;
   }
 
+  notifyCancelled(reason: string): void {
+    this.onCancelled?.(reason);
+  }
+
   markCancelled(settledAtMs: number, reason: string): void {
     this.currentState = 'cancelled';
     this.currentSettledAtMs = settledAtMs;
@@ -627,6 +662,7 @@ function createPriorityQueues(): Record<FrameWorkPriority, InternalFrameWorkJobH
     'predicted-visuals-objects': [],
     teardown: [],
     'preview-cosmetic': [],
+    'gameplay-warmup': [],
   };
 }
 
@@ -639,6 +675,7 @@ function countQueuesByPriority(
     'predicted-visuals-objects': queues['predicted-visuals-objects'].length,
     teardown: queues.teardown.length,
     'preview-cosmetic': queues['preview-cosmetic'].length,
+    'gameplay-warmup': queues['gameplay-warmup'].length,
   };
 }
 
