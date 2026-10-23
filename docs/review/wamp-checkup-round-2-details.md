@@ -8774,9 +8774,57 @@ Fix:
 
 **2026-10-23 delivered.** [PR #323](https://github.com/songadaymann/wamp/pull/323). 52 route tests run the whole API Worker on the all-migrations SQLite fixture (`core/workerApi.testSupport.ts`) and cover room save and publish, Expanded Room editing, agent and API tokens, and Worlds at the HTTP boundary. Lines: `expandedRooms/editorRoutes.ts` 0% to 93%, `courses/store.ts` 10% to 87%, `agents/` 5% to 97%, `worlds/routes.ts` 0% to 89%. The tests found two fixes: Expanded Room create now checks ownership as edit does, and a World's daily limit answers 429 instead of 500. API Worker `d71c2b8e`. Typecheck, lint, dead-code, build and size passed; main CI on the merge passed. [Receipt](wamp-round2-tests-2026-10-23.md).
 
-### F481: details withheld
+### F481: About 1,700 lines of Playlist, Wamp-O-Gram and Guestbook server code have no tests at all
 
-Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
+- **Area:** Gap review: Small untested features: Wamp-O-Gram, Playlists, Guestbook, Collections
+- **Type:** improvement · **impact:** medium · **effort:** small
+
+**Summary.** Of these four features, only Collections has tests. The playlist server (over 1,000 lines), the Wamp-O-Gram server and the guestbook server have none, which is how bugs like the expanded-room playlist breakage and the share-name limit went unnoticed. The test database setup Collections uses already works for these features, so a first set of tests is a few hours of work.
+
+**Technical detail.**
+
+src/cloudflare/worker/playlists/ (routes.ts 131 + store.ts 903 lines), src/cloudflare/worker/wampOGram/ (298), src/cloudflare/worker/guestbook/ (475), src/playlists/ and src/wampOGram/ contain no *.test.ts. Only share-page tests touch these routes indirectly (pages/shareMetadata.test.ts, workerRoutes.test.ts). Collections shows the pattern: store.test.ts runs against a real SQLite fixture (discoveryFixture, runs/discoveryTestDatabase.ts), which seeds published rooms, versions and two-cell expanded rooms.
+
+Minimum suite:
+1. playlists/store.test.ts:
+- add, dedupe and order
+- an expanded room whose focused cell is republished stays an expanded entry
+- slug collision past -99 and the 'playlist' fallback
+- caps
+- remove
+- loadPlaylistBySlug item shape without snapshot parsing
+2. wampOGram/routes.test.ts:
+- a low-trust user cannot add a video
+- a non-owner cannot gram an unpublished draft
+- rate limit
+- the public record has no email
+- preview is cached and compressed (PNG IDAT is not stored-block)
+3. guestbook/routes.test.ts:
+- rate limit holds under parallel posts and without guestSessionId
+- either Turnstile env name works
+
+Roughly 300 test lines in total.
+
+**Evidence.**
+- src/cloudflare/worker/collections/store.test.ts:1-59 — existing real-SQLite test pattern
+- src/cloudflare/worker/runs/discoveryTestDatabase.ts:1-30 — fixture seeds rooms, versions and expanded rooms
+- src/cloudflare/worker/playlists/store.ts:1-903 — no companion test file
+- src/cloudflare/worker/wampOGram/routes.ts:1-111 — no companion test file
+- src/cloudflare/worker/guestbook/routes.ts:1-317 — no companion test file
+
+**Fact-check (partially confirmed).**
+
+About 1,800 server lines (1,807) have no behavioral tests. The only touch is restrictions.contract.test.ts, which checks that the school-restriction lines appear in the source. The existing discoveryFixture runs all three stores unchanged, which I verified. The first suite should cover only behavior that exists today:
+- playlist add, dedupe and order, including the expanded-room collapse;
+- playlist remove, the -1 to -99 slug suffix then 409, the 'playlist' fallback, and the shape of loadPlaylistBySlug;
+- the Wamp-O-Gram public record dropping recipientEmail and deliveryError;
+- the guestbook's sequential IP and session limits, and its Turnstile 403 and 503 paths.
+That is roughly 200 lines and a few hours. These proposed tests describe fixes that are not on main, so each belongs with its own fix PR instead:
+- Wamp-O-Gram: trust and video checks, the draft and ownership check, a rate limit, and a cached, compressed preview;
+- guestbook: no race under parallel posts, and TURNSTILE_SECRET_KEY as a fallback name;
+- playlists: caps (none exist) and an expanded entry surviving a republished cell.
+
+**2026-10-23 delivered.** [PR #326](https://github.com/songadaymann/wamp/pull/326). Server tests for playlists, Wamp-O-Gram records and links, and guestbook entries run through `worker.fetch` with real sessions and tokens (line coverage: playlists 1% to 96%, guestbook 65% to 100%). The fixes they led to: playlist limits (50 per account, 200 rooms each, hourly create and change limits), index-only counts and lighter pages, refusing unreadable or hidden versions, a 20 s signed-out cache; display names and guestbook text cleaned when saved and compared by how they read; account status and the account kept on signed-in guestbook entries; blocked art masked in gram records and drawn as the placeholder in the game. API Worker `859838f8`. Reviewed adversarially, every finding fixed; the full suite passed on the rebased branch (6,002 tests), with typecheck, lint, the dead-code check and build. [Receipt](wamp-round2-tests-2026-10-23.md).
 
 ### F480: 48 of 69 smoke and probe scripts never run in CI, and at least five are broken on main
 

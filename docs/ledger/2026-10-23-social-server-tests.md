@@ -1,0 +1,1 @@
+| 2026-10-23 | F481 | [#326](https://github.com/songadaymann/wamp/pull/326) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Server tests for playlists, Wamp-O-Gram and the guestbook, with limits, name cleaning and art masking |

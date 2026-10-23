@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-23 | F481 | [#326](https://github.com/songadaymann/wamp/pull/326) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Server tests for playlists, Wamp-O-Gram and the guestbook, with limits, name cleaning and art masking |
 | 2026-10-23 | F484 | [#324](https://github.com/songadaymann/wamp/pull/324) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Renderer equivalence tests across share cards, map tiles and the game texture; blocked-sprite map tiles redraw |
 | 2026-10-23 | F487 | [#323](https://github.com/songadaymann/wamp/pull/323) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Route tests for room save and publish, Expanded Room editing, tokens and Worlds; ownership check on create |
 | 2026-10-23 | — | [#320](https://github.com/songadaymann/wamp/pull/320), [#322](https://github.com/songadaymann/wamp/pull/322) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | A menu whose code fails to download explains itself and offers a reload instead of doing nothing |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-13 | F038 | [#192](https://github.com/songadaymann/wamp/pull/192) | [receipt](docs/review/wamp-replay-storage-cleanup-2026-10-13.md) | Guest replay frames are stored in R2, and expired records are pruned hourly |
 | 2026-10-13 | F023 | [#191](https://github.com/songadaymann/wamp/pull/191) | [receipt](docs/review/wamp-audio-assets-2026-10-13.md) | Smaller drum samples, gapless stems and audio deploy hygiene |
 | 2026-10-13 | F021 | [#190](https://github.com/songadaymann/wamp/pull/190) | [receipt](docs/review/wamp-asset-cache-versioning-2026-10-13.md) | Public assets carry content versions, so updated art reaches returning players |
-| 2026-10-13 | — | [#189](https://github.com/songadaymann/wamp/pull/189) | — | Planted goal flags are allowed, and editor tilesets are grouped |
