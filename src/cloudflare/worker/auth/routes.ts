@@ -70,6 +70,7 @@ import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/
 import { getRoomClaimQuota } from '../rooms/store';
 import { handleLogoutAll } from './logoutAll';
 import { handleWalletChallenge, handleWalletVerify } from './walletRoutes';
+import { cleanDisplayText } from '../core/displayText';
 export { handleWalletChallenge, handleWalletVerify } from './walletRoutes';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
@@ -563,7 +564,7 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
     throw new HttpError(400, 'Display name must be 24 characters or fewer.');
   }
 
-  const existingUser = await findUserByDisplayName(env, displayName);
+  const existingUser = await findUserByDisplayName(env, displayName, auth.user.id);
   if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
   }
@@ -592,7 +593,7 @@ export async function handleDisplayNameAvailability(
   }
 
   const auth = await loadOptionalRequestAuth(env, request);
-  const existingUser = await findUserByDisplayName(env, displayName);
+  const existingUser = await findUserByDisplayName(env, displayName, auth?.user.id ?? null);
   const claimedByCurrentUser = Boolean(existingUser && auth?.user.id === existingUser.id);
   const responseBody: DisplayNameAvailabilityResponse = {
     available: !existingUser || claimedByCurrentUser,
@@ -685,5 +686,5 @@ function normalizeDisplayName(value: unknown): string {
     return '';
   }
 
-  return value.replace(/\s+/g, ' ').trim();
+  return cleanDisplayText(value);
 }

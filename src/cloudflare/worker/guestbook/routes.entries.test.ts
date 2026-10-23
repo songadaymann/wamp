@@ -109,13 +109,29 @@ describe('guestbook signing', () => {
   });
 
   it('removes invisible formatting characters before checking names and messages', async () => {
-    const { body } = await sign({ displayName: 'A\u200Bd\u202Ea\uFEFF', body: '\u2066Hello\u2069 \u200Fthere\u202A' });
+    const { body } = await sign({ displayName: 'A\u200Bd\u202Ea\uFEFF\u00AD', body: '\u2066Hello\u2069 \u200Fthere\u202A\u061C\u2060' });
     expect(body.entry).toMatchObject({ displayName: 'Ada', body: 'Hello there' });
-    expect(await sign({ displayName: '\u200B\u200CA\u200D' })).toEqual({ status: 400, body: { error: 'Name must be at least 2 characters.' } });
+    expect(await sign({ displayName: '\u200B\u2060A\u3164\u115F\u1160\uFFA0' })).toEqual({ status: 400, body: { error: 'Name must be at least 2 characters.' } });
     expect(await sign({ body: 'www\u200B.example.test' })).toEqual({ status: 400, body: { error: 'Links are not allowed in the guestbook yet.' } });
     expect(await sign({ body: '\u202E\u202D' })).toEqual({ status: 400, body: { error: 'Message is required.' } });
+  });
+
+  it('keeps the joiners that emoji and some scripts need', async () => {
+    const coder = '\u{1F469}\u200D\u{1F4BB} Coder';
+    const persian = '\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645 \u{1F3F3}\uFE0F\u200D\u{1F308}';
+    const { body } = await sign({ displayName: coder, body: persian });
+    expect(body.entry).toMatchObject({ displayName: coder, body: persian });
+    expect(f.sqlite.prepare('SELECT display_name, body FROM guestbook_entries').get()).toEqual({ display_name: coder, body: persian });
+  });
+
+  it("marks an entry as signed in when its name reads the same as the account's", async () => {
     f.sqlite.prepare("UPDATE users SET display_name = 'Ada' WHERE id = 'p1'").run();
-    expect((await sign({ displayName: 'A\u200Bda' }, { as: 'p1' })).body.entry.signedIn).toBe(true);
+    const names = ['A\u200Bda', 'A\u200Dda', '\uFF21\uFF44\uFF41', 'ADA\uFE0F', 'Ad\u00ADa', 'Adam'];
+    const marks = [];
+    for (const [index, displayName] of names.entries()) {
+      marks.push((await sign({ displayName }, { as: 'p1', ip: `198.51.100.${index}` })).body.entry.signedIn);
+    }
+    expect(marks).toEqual([true, true, true, true, true, false]);
   });
 
   it('refuses a name or message outside the rules before taking a slot or calling Turnstile', async () => {

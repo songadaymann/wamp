@@ -27,7 +27,7 @@ import {
 } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { assertNotSchoolRestricted } from '../school/restrictions';
-import { cleanGuestbookText } from './names';
+import { cleanDisplayText } from '../core/displayText';
 import {
   createGuestbookEntry,
   hideGuestbookEntry,
@@ -178,7 +178,7 @@ function normalizeGuestbookDisplayName(value: unknown): string {
     throw new HttpError(400, 'Name is required.');
   }
 
-  const normalized = cleanGuestbookText(value);
+  const normalized = cleanDisplayText(value);
   if (normalized.length < 2) {
     throw new HttpError(400, 'Name must be at least 2 characters.');
   }
@@ -203,7 +203,7 @@ function normalizeGuestbookMessage(value: unknown): string {
     throw new HttpError(400, 'Message is required.');
   }
 
-  const normalized = cleanGuestbookText(value);
+  const normalized = cleanDisplayText(value);
   if (!normalized) {
     throw new HttpError(400, 'Message is required.');
   }
