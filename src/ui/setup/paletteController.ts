@@ -48,6 +48,7 @@ import {
 import { refreshEditorUi, EDITOR_AUTO_COLLAPSE_EVENT } from '../../scenes/editor/uiEvents';
 import { getDeviceLayoutState, isCoarsePointerDevice } from '../deviceLayout';
 import { getTilesetPaletteAvailableWidth, getTilesetPaletteScale } from './paletteLayout';
+import { bindPaletteTouchDefaults, PaletteTouchPress } from './paletteTouchPress';
 import {
   cloneTileSelection,
   isSelectionCellOccupied,
@@ -62,6 +63,7 @@ import {
   walkDragCells,
 } from '../../scenes/editor/selectionPattern';
 import { makeObjectPaletteTile, setObjectPaletteTilePressed } from './objectPaletteTile';
+import { drawSelectionEmptyCellOverlay, drawSelectionPatternOrderOverlay } from './paletteSelectionOverlay';
 
 const MIN_SELECTION_OPAQUE_PIXELS = 96;
 const CUSTOM_OBJECT_SUBCATEGORIES = ['all', 'decoration', 'collectible', 'sign', 'solid', 'pushable'] as const;
@@ -93,6 +95,9 @@ export function objectMatchesEditorScope(
   if (scope === 'hazards') return objectConfig.category === 'hazard';
   return !parseCustomSpriteObjectId(objectConfig.id) && objectConfig.category === 'decoration';
 }
+
+/** Where a finger came down on the picker; Cmd/Ctrl (a keyboard on a tablet) adds or removes tiles. */
+type PaletteTouchCell = { tilesetKey: string; col: number; row: number; toggle: boolean };
 
 type PaletteTooltipContent = {
   title: string;
@@ -140,6 +145,12 @@ export class PaletteController {
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private paletteMaskPaint: { add: boolean; snapshot: TileSelection } | null = null;
+  private readonly paletteTouch = new PaletteTouchPress<PaletteTouchCell>(
+    (cell, pointerId) => this.beginPaletteTouchHold(cell, pointerId),
+    () => this.cancelPaletteTouchHold(),
+  );
+  private paletteHoldSnapshot: TileSelection | null = null;
+  private releasePaletteTouch: (() => void) | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
   private communityEntries: CustomSpriteCatalogEntry[] = [];
   private communityNextCursor: string | null = null;
@@ -203,6 +214,7 @@ export class PaletteController {
     this.renderObjectFacingControls();
     this.renderObjectSelectionDetails();
     this.observePaletteLayout();
+    if (this.paletteCanvas) this.releasePaletteTouch = bindPaletteTouchDefaults(this.paletteCanvas, this.paletteTouch);
   }
 
   destroy(): void {
@@ -214,6 +226,8 @@ export class PaletteController {
       this.paletteCanvas.onpointerleave = null;
       this.paletteCanvas.onclick = null;
     }
+    this.releasePaletteTouch?.();
+    this.releasePaletteTouch = null;
 
     this.paletteResizeObserver?.disconnect();
     this.paletteResizeObserver = null;
@@ -295,6 +309,29 @@ export class PaletteController {
       ),
     );
     this.commitSelection(nextSelection);
+  }
+
+  private beginPaletteTouchHold(cell: PaletteTouchCell, pointerId: number): void {
+    const ts = getTilesetByKey(cell.tilesetKey);
+    if (!ts || this.handleSpecialPaletteTileShortcut(ts, cell.row * ts.columns + cell.col)) {
+      return;
+    }
+    this.paletteHoldSnapshot = cloneTileSelection(editorState.selection);
+    this.paletteDragStart = { col: cell.col, row: cell.row };
+    this.paletteMaskPaint = null;
+    if (cell.toggle) this.beginPaletteMaskPaint(ts.key, cell.col, cell.row);
+    else this.updateSelection(ts.key, cell.col, cell.row, cell.col, cell.row);
+    // A pen may have no implicit capture; keep the block growing past the canvas edge.
+    this.paletteCanvas?.setPointerCapture(pointerId);
+  }
+
+  /** A second finger during a hold puts the selection back as it was. */
+  private cancelPaletteTouchHold(): void {
+    const snapshot = this.paletteHoldSnapshot;
+    this.paletteDragStart = null;
+    this.paletteMaskPaint = null;
+    this.paletteHoldSnapshot = null;
+    if (snapshot) this.commitSelection(snapshot);
   }
 
   private beginPaletteMaskPaint(tilesetKey: string, col: number, row: number): void {
@@ -411,7 +448,6 @@ export class PaletteController {
     this.paletteCanvas.style.width = `${scaledWidth}px`;
     this.paletteCanvas.style.height = `${scaledHeight}px`;
     this.paletteCanvas.style.background = getTilesetEditorPaletteBackgroundColor(ts.key);
-    this.paletteCanvas.style.touchAction = 'none';
 
     const ctx = this.paletteCanvas.getContext('2d');
     if (!ctx) {
@@ -455,8 +491,8 @@ export class PaletteController {
 
       ctx.fillRect(sx, sy, sw, sh);
       ctx.strokeRect(sx, sy, sw, sh);
-      this.drawSelectionEmptyCellOverlay(ctx, selection, scaledTile, scaledTile, sx - 1, sy - 1);
-      this.drawSelectionPatternOrderOverlay(ctx, selection, scaledTile, scaledTile);
+      drawSelectionEmptyCellOverlay(ctx, selection, scaledTile, scaledTile, sx - 1, sy - 1);
+      drawSelectionPatternOrderOverlay(ctx, selection, scaledTile, scaledTile);
     }
 
     this.paletteCanvas.onpointerdown = (event: PointerEvent) => {
@@ -472,6 +508,12 @@ export class PaletteController {
       const row = Math.floor(y / scaledTile);
 
       if (col >= 0 && col < ts.columns && row >= 0 && row < ts.rows) {
+        if (event.pointerType !== 'mouse') {
+          // A finger may be starting a swipe that scrolls the picker: wait for a tap or a hold (F368).
+          const toggle = event.ctrlKey || event.metaKey;
+          this.paletteTouch.down(event.pointerId, { tilesetKey: ts.key, col, row, toggle }, event.clientX, event.clientY);
+          return;
+        }
         if (this.handleSpecialPaletteTileShortcut(ts, row * ts.columns + col)) {
           return;
         }
@@ -487,6 +529,7 @@ export class PaletteController {
     };
 
     this.paletteCanvas.onpointermove = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse' && !this.paletteTouch.move(event.pointerId, event.clientX, event.clientY)) return;
       if (!this.paletteDragStart) {
         this.updatePaletteTileTooltip(event, ts, scaledTile);
         return;
@@ -510,15 +553,33 @@ export class PaletteController {
       }
     };
 
-    this.paletteCanvas.onpointerup = () => {
+    this.paletteCanvas.onpointerup = (event: PointerEvent) => {
+      const tapped = event.pointerType === 'mouse' ? null : this.paletteTouch.up(event.pointerId);
+      if (tapped?.tilesetKey === ts.key) {
+        if (tapped.toggle) {
+          // Cmd/Ctrl+tap adds or removes one tile, as Cmd/Ctrl+click does, and leaves the sheet open for more.
+          this.paletteDragStart = { col: tapped.col, row: tapped.row };
+          this.beginPaletteMaskPaint(ts.key, tapped.col, tapped.row);
+          this.paletteDragStart = null;
+          this.paletteMaskPaint = null;
+        } else if (!this.handleSpecialPaletteTileShortcut(ts, tapped.row * ts.columns + tapped.col)) {
+          this.updateSelection(ts.key, tapped.col, tapped.row, tapped.col, tapped.row);
+          this.requestPhoneEditorAutoCollapse();
+        }
+        return;
+      }
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
         this.paletteMaskPaint = null;
-        this.requestPhoneEditorAutoCollapse();
+        this.paletteHoldSnapshot = null;
+        // A touch hold leaves the sheet open, so an accidental hold costs only the selection.
+        if (event.pointerType === 'mouse') this.requestPhoneEditorAutoCollapse();
       }
     };
 
     this.paletteCanvas.onpointercancel = () => {
+      this.paletteTouch.cancel();
+      this.paletteHoldSnapshot = null;
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
         this.paletteMaskPaint = null;
@@ -527,6 +588,7 @@ export class PaletteController {
     };
 
     this.paletteCanvas.onpointerleave = () => {
+      this.paletteTouch.cancel();
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
         this.paletteMaskPaint = null;
@@ -641,7 +703,7 @@ export class PaletteController {
       }
     }
 
-    this.drawSelectionEmptyCellOverlay(
+    drawSelectionEmptyCellOverlay(
       ctx,
       selection,
       drawWidth / selection.width,
@@ -1383,75 +1445,6 @@ export class PaletteController {
     }
 
     return -1;
-  }
-
-  private drawSelectionEmptyCellOverlay(
-    ctx: CanvasRenderingContext2D,
-    selection: TileSelection,
-    cellWidth: number,
-    cellHeight: number,
-    offsetX: number,
-    offsetY: number,
-  ): void {
-    ctx.save();
-    ctx.fillStyle = 'rgba(5, 6, 10, 0.45)';
-    ctx.strokeStyle = 'rgba(255, 210, 145, 0.7)';
-    ctx.lineWidth = Math.max(1, Math.min(2, Math.min(cellWidth, cellHeight) * 0.08));
-
-    for (let dy = 0; dy < selection.height; dy++) {
-      for (let dx = 0; dx < selection.width; dx++) {
-        if (selection.occupiedMask[dy]?.[dx]) {
-          continue;
-        }
-
-        const left = offsetX + dx * cellWidth;
-        const top = offsetY + dy * cellHeight;
-        const inset = Math.max(1, Math.min(cellWidth, cellHeight) * 0.12);
-        const width = Math.max(1, cellWidth - inset * 2);
-        const height = Math.max(1, cellHeight - inset * 2);
-
-        ctx.fillRect(left + inset, top + inset, width, height);
-        ctx.beginPath();
-        ctx.moveTo(left + inset, top + inset);
-        ctx.lineTo(left + inset + width, top + inset + height);
-        ctx.moveTo(left + inset + width, top + inset);
-        ctx.lineTo(left + inset, top + inset + height);
-        ctx.stroke();
-      }
-    }
-
-    ctx.restore();
-  }
-
-  private drawSelectionPatternOrderOverlay(
-    ctx: CanvasRenderingContext2D,
-    selection: TileSelection,
-    cellWidth: number,
-    cellHeight: number,
-  ): void {
-    const order = selection.patternOrder && selection.patternOrder.length > 0
-      ? selection.patternOrder
-      : rowMajorOccupiedOrder(selection);
-    if (order.length <= 1) {
-      return;
-    }
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.max(8, Math.floor(Math.min(cellWidth, cellHeight) * 0.42))}px "IBM Plex Mono", monospace`;
-    ctx.lineWidth = Math.max(2, Math.min(cellWidth, cellHeight) * 0.08);
-    ctx.strokeStyle = 'rgba(8, 10, 14, 0.85)';
-    ctx.fillStyle = '#fff6de';
-
-    order.forEach((cell, index) => {
-      const x = (cell.col + 0.5) * cellWidth;
-      const y = (cell.row + 0.5) * cellHeight;
-      const label = String(index + 1);
-      ctx.strokeText(label, x, y);
-      ctx.fillText(label, x, y);
-    });
-    ctx.restore();
   }
 
   private getSelectedObjectConfig(): GameObjectConfig | null {

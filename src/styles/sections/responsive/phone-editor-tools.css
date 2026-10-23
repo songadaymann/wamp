@@ -73,14 +73,23 @@
     display: none;
   }
 
+  /* The sheet scrolls the whole tileset; a 166px box hid most of WampOS 95 (F368). */
+
   body[data-device-class='phone'][data-app-mode='editor'] #palette-container {
     flex: none;
-    max-height: 166px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] #palette-canvas {
     margin: 0 auto;
+  }
+
+  /* The gestures come first; under a tall tileset they would be far out of view. */
+
+  body[data-device-class='phone'][data-app-mode='editor'] #tileset-section .palette-hint {
+    order: -1;
+    padding: 0 0 4px;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] .object-category-tabs {
