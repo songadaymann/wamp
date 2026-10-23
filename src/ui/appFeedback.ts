@@ -338,6 +338,13 @@ export function isBusyOverlayVisible(): boolean {
   return Boolean(root && !root.classList.contains('hidden'));
 }
 
+/** True when a new message would not cover a save in progress or an open choice, whose answer would be lost. */
+export function canReplaceBusyCard(): boolean {
+  const root = getElements().busyRoot;
+  if (!root || root.classList.contains('hidden')) return true;
+  return root.getAttribute('data-busy-state') === 'error' && root.getAttribute('data-busy-tone') !== 'choice';
+}
+
 export function getAppFeedbackDebugState(): Record<string, unknown> {
   const refs = getElements();
   return {

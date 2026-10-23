@@ -37,6 +37,19 @@ async function setup() {
 }
 
 describe('the shared pop-up (F467)', () => {
+  it('lets a new message replace only an idle card or a plain error, never a choice or a spinner', async () => {
+    const { feedback } = await setup();
+    expect(feedback.canReplaceBusyCard()).toBe(true);
+    feedback.showBusyError('Could not save.');
+    expect(feedback.canReplaceBusyCard()).toBe(true);
+    feedback.showBusyError('Keep yours or load theirs?', { tone: 'choice', closeHandler: () => {} });
+    expect(feedback.canReplaceBusyCard()).toBe(false);
+    feedback.showBusyOverlay('Saving room');
+    expect(feedback.canReplaceBusyCard()).toBe(false);
+    feedback.hideBusyOverlay();
+    expect(feedback.canReplaceBusyCard()).toBe(true);
+  });
+
   it('tells errors, good news and choices apart, and paints only a button that throws work away red', async () => {
     const f = await setup();
     f.feedback.showBusyError('Failed to load room.', { retryHandler: vi.fn() });

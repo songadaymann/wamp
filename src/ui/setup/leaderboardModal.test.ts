@@ -125,3 +125,52 @@ describe('a Leaderboard error stays with its tab (F471)', () => {
     expect(f.error.classes.has('hidden')).toBe(true);
   });
 });
+
+describe('a vote that did not save says so beside the vote buttons', () => {
+  it('shows the reason under the buttons as an alert, keeps the buttons usable, and clears it on the next vote', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const runs = { submitRoomRating: vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Complete this room version window once before rating it.'), { status: 409 }))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockReturnValueOnce(new Promise(() => {})) };
+    const f = fixture(runs);
+    Object.assign(f.state, { activeTab: 'room', roomContext: { state: 'published', roomId: 'room-1', coordinates: { x: 0, y: 0 } },
+      roomLoaded: true, currentPublishedVersion: 2,
+      roomLeaderboard: { ...roomBoard({ stars: null, vote: null, canVote: true, needsRun: false }), roomId: 'room-1', roomCoordinates: { x: 0, y: 0 }, goalType: 'reach_exit' } });
+    const vote = (stars: number) => (f.state as unknown as { submitRoomQualityVote(stars: number): Promise<void> }).submitRoomQualityVote(stars);
+    const status = f.get('leaderboard-room-difficulty-status');
+    await vote(4);
+    // The server's reason won't change on a retry, so it isn't told to try again.
+    expect(status.textContent).toBe('Complete this room version window once before rating it.');
+    expect(status.getAttribute('role')).toBe('alert');
+    expect(status.classes.has('history-modal-error')).toBe(true);
+    expect(f.error.children).toEqual([]);
+    expect(f.stars.some(item => item.disabled)).toBe(false);
+    await vote(4);
+    expect(status.textContent).toBe("Couldn't save your rating. Please try again.");
+    void vote(5);
+    expect(status.textContent).toBe('Saving your quality and difficulty rating...');
+    expect(status.getAttribute('role')).toBeNull();
+    expect(status.classes.has('history-modal-error')).toBe(false);
+    logged.mockRestore();
+  });
+
+  it("keeps a vote's error off another room's buttons when the board changed while it was saving", async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let reject!: (error: Error) => void;
+    const runs = { submitRoomRating: vi.fn(() => new Promise((_done, fail) => { reject = fail; })) };
+    const f = fixture(runs);
+    const board = (roomId: string) => ({ ...roomBoard({ stars: null, vote: null, canVote: true, needsRun: false }), roomId, roomCoordinates: { x: 0, y: 0 }, goalType: 'reach_exit' });
+    Object.assign(f.state, { activeTab: 'room', roomContext: { state: 'published', roomId: 'room-1', coordinates: { x: 0, y: 0 } },
+      roomLoaded: true, currentPublishedVersion: 2, roomLeaderboard: board('room-1') });
+    const voting = (f.state as unknown as { submitRoomQualityVote(stars: number): Promise<void> }).submitRoomQualityVote(4);
+    await vi.waitFor(() => expect(runs.submitRoomRating).toHaveBeenCalledOnce());
+    Object.assign(f.state, { roomLeaderboard: board('room-2') });
+    reject(new Error('Complete this room version window once before rating it.'));
+    await voting;
+    const status = f.get('leaderboard-room-difficulty-status');
+    expect(status.classes.has('history-modal-error')).toBe(false);
+    expect(status.textContent).toBe('Rate this room based on your run.');
+    logged.mockRestore();
+  });
+});
