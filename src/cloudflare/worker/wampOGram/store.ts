@@ -9,6 +9,7 @@ import { cloneRoomSnapshot } from '../../../persistence/roomModel';
 import type { RequestAuth } from '../core/types';
 import type { Env } from '../core/types';
 import { HttpError } from '../core/http';
+import type { RateLimitSlotUse } from '../core/rateLimit';
 import { loadRoomRecord, parseStoredSnapshot } from '../rooms/store';
 import { assertCanPersistRoomVideo } from '../rooms/guardrails';
 import { hiddenVersionSnapshot } from '../rooms/versionRedaction';
@@ -51,6 +52,7 @@ export async function createWampOGram(
   env: Env,
   input: WampOGramCreateRequest,
   auth: RequestAuth,
+  slotUse: RateLimitSlotUse = { keep: false },
 ): Promise<WampOGramRecord> {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
@@ -116,6 +118,7 @@ export async function createWampOGram(
     ),
   ]);
 
+  slotUse.keep = true;
   const created = await loadWampOGramBySlug(env, slug);
   if (!created) {
     throw new HttpError(500, 'Wamp-O-Gram was created but could not be loaded.');

@@ -21,6 +21,7 @@ import type {
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { mapSchoolAuthContextRow } from '../school/authContext';
 import { ensureFounderIdentityQualification } from '../progression/store';
+import { displayNameKey } from '../core/displayText';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
@@ -105,8 +106,21 @@ export async function findUserById(env: Env, userId: string): Promise<AuthUser |
   return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
-export async function findUserByDisplayName(env: Env, displayName: string): Promise<AuthUser | null> {
-  const row = await env.DB.prepare(
+/**
+ * The account whose display name reads the same as `displayName` (see displayNameKey), preferring
+ * one other than `viewerUserId` so a clash with someone else is always found. Names that are plain
+ * ASCII without extra spaces match by lower(); every other name is loaded and compared in full.
+ */
+export async function findUserByDisplayName(
+  env: Env,
+  displayName: string,
+  viewerUserId: string | null = null,
+): Promise<AuthUser | null> {
+  const key = displayNameKey(displayName);
+  if (!key) {
+    return null;
+  }
+  const result = await env.DB.prepare(
     `
       SELECT
         id,
@@ -120,12 +134,17 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
         created_at,
         updated_at
       FROM users
-      WHERE lower(display_name) = lower(?)
-      LIMIT 1
+      WHERE lower(display_name) = ?
+        OR display_name GLOB '*[^ -~]*'
+        OR display_name GLOB ' *'
+        OR display_name GLOB '* '
+        OR display_name GLOB '*  *'
     `
   )
-    .bind(displayName)
-    .first<UserRow>();
+    .bind(key)
+    .all<UserRow>();
+  const matches = result.results.filter((row) => displayNameKey(row.display_name ?? '') === key);
+  const row = matches.find((candidate) => candidate.id !== viewerUserId) ?? matches[0] ?? null;
 
   return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }

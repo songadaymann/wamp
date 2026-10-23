@@ -10,6 +10,7 @@ import {
   type GuestbookListResponse,
 } from '../../../guestbook/model';
 import { loadOptionalRequestAuth, requireAdminRequest } from '../auth/request';
+import { assertAccountNotSuspended } from '../moderation/suspension';
 import {
   HttpError,
   jsonResponse,
@@ -26,6 +27,7 @@ import {
 } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { assertNotSchoolRestricted } from '../school/restrictions';
+import { cleanDisplayText } from '../core/displayText';
 import {
   createGuestbookEntry,
   hideGuestbookEntry,
@@ -39,7 +41,8 @@ import {
 const GUESTBOOK_PER_NETWORK: RateLimitRule = { bucket: 'guestbook:network', limit: 5, windowMs: 60 * 60 * 1000 };
 const GUESTBOOK_PER_SESSION_MINUTE: RateLimitRule = { bucket: 'guestbook:session-minute', limit: 1, windowMs: 60 * 1000 };
 const GUESTBOOK_PER_SESSION_DAY: RateLimitRule = { bucket: 'guestbook:session-day', limit: 10, windowMs: 24 * 60 * 60 * 1000 };
-
+/** Names and messages are both shown on the page, so neither may carry a link. */
+const GUESTBOOK_LINK_PATTERN = /(https?:\/\/|www\.)/i;
 export async function handleGuestbookRequest(
   request: Request,
   url: URL,
@@ -89,6 +92,8 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
   const auth = await loadOptionalRequestAuth(env, request);
   if (auth) {
     assertNotSchoolRestricted(auth, 'sign the guestbook');
+    // The same account check as every other signed-in write.
+    if (!auth.isAdmin) await assertAccountNotSuspended(env, auth.user.id);
   }
   const remoteIp = getClientIp(request);
   const ipHash = remoteIp ? await hashGuestbookIp(env, remoteIp) : null;
@@ -101,7 +106,9 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
     entry = await createGuestbookEntry(env, {
       displayName,
       body: message,
+      // Every signed-in entry keeps its account, whatever name it was signed with.
       userId: auth?.user.id ?? null,
+      accountDisplayName: auth?.user.displayName ?? null,
       guestSessionId,
       ipHash,
       userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
@@ -171,7 +178,7 @@ function normalizeGuestbookDisplayName(value: unknown): string {
     throw new HttpError(400, 'Name is required.');
   }
 
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = cleanDisplayText(value);
   if (normalized.length < 2) {
     throw new HttpError(400, 'Name must be at least 2 characters.');
   }
@@ -184,6 +191,10 @@ function normalizeGuestbookDisplayName(value: unknown): string {
     throw new HttpError(400, 'Name cannot contain angle brackets.');
   }
 
+  if (GUESTBOOK_LINK_PATTERN.test(normalized)) {
+    throw new HttpError(400, 'Links are not allowed in the guestbook yet.');
+  }
+
   return normalized;
 }
 
@@ -192,7 +203,7 @@ function normalizeGuestbookMessage(value: unknown): string {
     throw new HttpError(400, 'Message is required.');
   }
 
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = cleanDisplayText(value);
   if (!normalized) {
     throw new HttpError(400, 'Message is required.');
   }
@@ -205,7 +216,7 @@ function normalizeGuestbookMessage(value: unknown): string {
     throw new HttpError(400, 'Message cannot contain angle brackets.');
   }
 
-  if (/(https?:\/\/|www\.)/i.test(normalized)) {
+  if (GUESTBOOK_LINK_PATTERN.test(normalized)) {
     throw new HttpError(400, 'Links are not allowed in the guestbook yet.');
   }
 

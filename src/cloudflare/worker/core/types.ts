@@ -231,6 +231,8 @@ export interface GuestbookEntryRow {
   created_at: string;
   hidden_at?: string | null;
   hidden_by_user_id?: string | null;
+  /** The signed-in account's current display name, joined in when entries are listed. */
+  account_display_name?: string | null;
 }
 
 export interface RoomCommentRow {

@@ -594,6 +594,7 @@ export default {
           request,
           env,
           decodeURIComponent(playlistBySlugMatch[1]),
+          ctx,
         );
       }
 

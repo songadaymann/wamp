@@ -24,6 +24,7 @@ import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
 import { hasUserAvatarEntitlement } from '../avatars/entitlements';
+import { cleanDisplayText } from '../core/displayText';
 import {
   loadUserProfile,
   loadUserProfilePlaylists,
@@ -130,7 +131,7 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
   assertNotSchoolRestricted(auth, 'edit profile text');
   const body = await parseProfileUpdateBody(request);
 
-  const existingUser = await findUserByDisplayName(env, body.displayName);
+  const existingUser = await findUserByDisplayName(env, body.displayName, auth.user.id);
   if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
   }
@@ -213,7 +214,7 @@ function normalizeDisplayName(value: unknown): string {
     return '';
   }
 
-  return value.replace(/\s+/g, ' ').trim();
+  return cleanDisplayText(value);
 }
 
 function normalizeAvatarUrl(value: unknown): string | null {

@@ -2,6 +2,7 @@ import {
   makePublicWampOGramRecord,
   normalizeWampOGramCreateRequest,
   normalizeWampOGramSlug,
+  type WampOGramRecord,
 } from '../../../wampOGram/model';
 import {
   requireAdminRequest,
@@ -19,10 +20,13 @@ import {
   getClientIp,
   hashRateLimitKey,
   networkKeyForIp,
+  releaseRateLimitSlots,
   takeRateLimitSlots,
   type RateLimitRule,
+  type RateLimitSlotUse,
 } from '../core/rateLimit';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
+import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
 import {
   createWampOGram,
   deleteWampOGramBySlug,
@@ -57,8 +61,16 @@ export async function handleWampOGramRequest(
     // The same id, tile and object checks a room save gets.
     validateRoomSnapshotForWrite(input.roomSnapshot, input.roomSnapshot.id);
     const roomSnapshot = await resolveWampOGramRoomSnapshot(env, input.roomSnapshot, auth);
-    await takeWampOGramSlots(request, env, auth.user.id);
-    const record = await createWampOGram(env, { ...input, roomSnapshot }, auth);
+    const slotIds = await takeWampOGramSlots(request, env, auth.user.id);
+    // Given back only when the gram is not stored; kept once it is, even if reading it back fails.
+    const slotUse: RateLimitSlotUse = { keep: false };
+    let record: WampOGramRecord;
+    try {
+      record = await createWampOGram(env, { ...input, roomSnapshot }, auth, slotUse);
+    } catch (error) {
+      if (!slotUse.keep) await releaseRateLimitSlots(env, slotIds);
+      throw error;
+    }
     return jsonResponse(request, record);
   }
 
@@ -85,7 +97,12 @@ export async function handleWampOGramRequest(
     throw new HttpError(404, 'Wamp-O-Gram not found.');
   }
 
-  return jsonResponse(request, makePublicWampOGramRecord(record));
+  // The game draws the gram from this record, so it gets the same blocked-art masking as the preview
+  // (F189). Read fresh every time, so a block, a hidden version or a delete applies at once.
+  const [roomSnapshot] = await maskBlockedArtInSnapshots(env, [record.roomSnapshot]);
+  return jsonResponse(request, makePublicWampOGramRecord({ ...record, roomSnapshot }), {
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
 
 /** Admins can delete a gram by the slug in its link; the link then shows "not found". */
@@ -109,10 +126,10 @@ export async function handleAdminWampOGramRequest(
   return jsonResponse(request, { slug, deleted: true }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
-async function takeWampOGramSlots(request: Request, env: Env, userId: string): Promise<void> {
+async function takeWampOGramSlots(request: Request, env: Env, userId: string): Promise<number[]> {
   const ip = getClientIp(request);
   const userKey = await hashRateLimitKey(env, `wamp-o-gram-user:${userId}`);
-  const { limitedBy } = await takeRateLimitSlots(env, [
+  const { ids, limitedBy } = await takeRateLimitSlots(env, [
     { rule: GRAMS_PER_USER_PER_HOUR, keyHash: userKey },
     { rule: GRAMS_PER_USER_PER_DAY, keyHash: userKey },
     ...(ip ? [{ rule: GRAMS_PER_NETWORK_PER_DAY, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []),
@@ -120,6 +137,7 @@ async function takeWampOGramSlots(request: Request, env: Env, userId: string): P
   if (limitedBy) {
     throw new HttpError(429, 'You have made a lot of Wamp-O-Grams lately. Try again later.');
   }
+  return ids;
 }
 
 function parseCreateRequest(body: unknown): ReturnType<typeof normalizeWampOGramCreateRequest> {

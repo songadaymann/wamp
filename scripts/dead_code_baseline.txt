@@ -186,7 +186,6 @@ export src/customSprites/model.ts CUSTOM_SPRITE_MAX_LIBRARY_SIZE
 export src/customSprites/model.ts CUSTOM_SPRITE_OBJECT_PREFIX
 export src/customSprites/model.ts normalizeCustomSpriteSize
 export src/customSprites/registry.ts buildCustomSpriteObjectConfig
-export src/customSprites/registry.ts createCustomSpriteCanvas
 export src/customSprites/registry.ts getCustomSpriteCatalogMetadata
 export src/customSprites/registry.ts listCustomSpriteDefinitions
 export src/customSprites/registry.ts registerCommunityCatalogSprite
