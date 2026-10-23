@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';

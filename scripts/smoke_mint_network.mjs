@@ -1,3 +1,4 @@
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createServer } from 'vite';
 import { decodeFunctionData, encodeFunctionResult } from 'viem';

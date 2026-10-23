@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const rawUrl = getStringArg('--url') || process.env.PREVIEW_SMOKE_URL?.trim() || '';

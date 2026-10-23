@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const url = process.env.COMMUNITY_SPRITE_SMOKE_URL || 'http://127.0.0.1:3000/?renderer=canvas';

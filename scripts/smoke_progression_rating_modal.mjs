@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:4175/?previewSmoke=1';

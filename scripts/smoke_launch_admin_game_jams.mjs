@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const requestedBaseUrl = process.env.WAMP_SMOKE_URL;

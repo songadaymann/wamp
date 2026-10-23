@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const PNG_WIDTH = 642;

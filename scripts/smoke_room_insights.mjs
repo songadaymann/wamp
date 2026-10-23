@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync,readFileSync,writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 const base=process.argv[2]||'http://127.0.0.1:3033', output=process.argv[3]||'output/web-game/room-insights/native';
 const local=new URL(base).hostname==='127.0.0.1', isolated=process.env.INSIGHTS_FIXTURE==='1';

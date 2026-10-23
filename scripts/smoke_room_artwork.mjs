@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createServer } from 'vite';
 import { encodeFunctionData, decodeFunctionData } from 'viem';

@@ -7,6 +7,7 @@ import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib
 import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
 import { createMobileSpawnPickupFixtures } from './lib/mobileSpawnPickupFixture.mjs';

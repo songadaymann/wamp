@@ -1,3 +1,4 @@
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { crc32, inflateRawSync } from 'node:zlib';
