@@ -37,7 +37,8 @@ describe('standing-player edge geometry', () => {
     const r = room(); r.customTiles = [{ id: 'tile', name: 'Edge', pixels: Array(256).fill(null), collision: 'none', createdAt: '', updatedAt: '' }];
     r.tileData.terrain[5][0] = CUSTOM_ROOM_TILE_FIRST_GID;
     expect(getStandingEdgeOpenings(r, 'left')[88]).toBe(1);
-    r.customTiles[0].collision = 'solid'; expect(getStandingEdgeOpenings(r, 'left')[88]).toBe(0);
+    // Tile edits replace the customTiles array, like EditorRuntime does.
+    r.customTiles = [{ ...r.customTiles[0], collision: 'solid' }]; expect(getStandingEdgeOpenings(r, 'left')[88]).toBe(0);
   });
   it('includes initial solid object footprints but ignores decoration layers and moving NPCs', () => {
     const r = room(); r.placedObjects = [{ id: 'crate', instanceId: 'c', x: 8, y: 88, layer: 'terrain' }];
