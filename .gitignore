@@ -12,7 +12,9 @@ gen-avatar/cryptopunk/generated-avatar-packs/
 gen-avatar/cryptopunk/__pycache__/
 gen-avatar/cryptopunk/**/*.pyc
 cloudflare/cryptopunk-avatar-queue/build-input/
+# Local agent scratch log; its history to 2026-10-23 is docs/history/progress-2026.md.
 progress.md
+.cursor/*.log
 
 .DS_Store
 
