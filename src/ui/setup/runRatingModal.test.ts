@@ -12,7 +12,7 @@ function fixture() {
   const elements = new Map<string, ReturnType<typeof element>>();
   function element() {
     const classes = new Set(['hidden']);
-    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
+    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), getAttribute: vi.fn(() => null), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
       classList: { contains: (name: string) => classes.has(name), add: (...names: string[]) => names.forEach(name => classes.add(name)),
         remove: (...names: string[]) => names.forEach(name => classes.delete(name)), toggle: (name: string, force: boolean) => force ? classes.add(name) : classes.delete(name) } });
   }
@@ -147,5 +147,17 @@ describe('guest clear sharing', () => {
     f.elements.get('btn-run-share-native')?.dispatchEvent(new Event('click')); f.elements.get('btn-run-guest-claim-continue')?.dispatchEvent(new Event('click'));
     await settle(); late.resolve(); await settle();
     expect(f.elements.get('run-share-status')?.textContent).not.toBe('Shared.'); f.controller.destroy();
+  });
+});
+describe('post-run rating choices (F464)', () => {
+  it('marks the chosen stars and difficulty for screen readers as well as by look', async () => {
+    const f = fixture();
+    f.roomRepo.loadRoomLeaderboard.mockResolvedValue({ ...leaderboard, viewerRank: 1 });
+    await f.controller.openForSequence({ roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, roomVersion: 1 });
+    f.quality.dispatchEvent(new Event('click')); f.difficulty.dispatchEvent(new Event('click'));
+    for (const button of [f.quality, f.difficulty]) {
+      expect(vi.mocked(button.setAttribute).mock.calls.filter(([name]) => name === 'aria-pressed').at(-1)).toEqual(['aria-pressed', 'true']);
+      expect(button.classList.contains('active')).toBe(true);
+    }
   });
 });

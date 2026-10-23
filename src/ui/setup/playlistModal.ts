@@ -341,7 +341,8 @@ export class PlaylistModalController {
         this.windowObj.setTimeout(() => this.render(), 1400);
       }
     } catch {
-      this.setError(shareUrl);
+      // Not an error: the link to copy by hand, read politely.
+      renderFriendlyError(this.elements.error, shareUrl, undefined, 'status');
     }
   }
 

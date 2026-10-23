@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import { getAuthDebugState } from '../../auth/client';
 import {
   buildRoomLeaderboardLineage,
@@ -181,18 +182,7 @@ export class RoomHistoryModalController {
   }
 
   private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    if (!message) {
-      this.elements.error.textContent = '';
-      this.elements.error.classList.add('hidden');
-      return;
-    }
-
-    this.elements.error.textContent = message;
-    this.elements.error.classList.remove('hidden');
+    setLiveMessage(this.elements.error, message);
   }
 
   private formatTimestamp(value: string | null): string {

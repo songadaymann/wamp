@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import type {
   RoomRushDifficulty,
   RoomRushStartRule,
@@ -125,7 +126,7 @@ export class RoomRushModalController {
     }
 
     this.setButtonsDisabled(true);
-    this.setStatus('Starting Room Rush...');
+    this.setStatus('Starting Room Rush...', 'status');
     try {
       const started = await scene.startRoomRushRun({ difficulty, startRule });
       if (started) {
@@ -147,13 +148,8 @@ export class RoomRushModalController {
     }
   }
 
-  private setStatus(message: string | null): void {
-    if (!this.elements.status) {
-      return;
-    }
-
-    this.elements.status.textContent = message ?? '';
-    this.elements.status.classList.toggle('hidden', !message);
+  private setStatus(message: string | null, tone: 'error' | 'status' = 'error'): void {
+    setLiveMessage(this.elements.status, message, tone);
   }
 
   private parseDifficulty(value: string | undefined): RoomRushDifficulty | null {
