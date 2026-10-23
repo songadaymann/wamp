@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-23 | — | [#320](https://github.com/songadaymann/wamp/pull/320) | — | Leaderboard load failures show a Reload card, and a rejected rating shows its reason under the vote buttons |
 | 2026-10-23 | F256, F264, F272 | [#319](https://github.com/songadaymann/wamp/pull/319) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | About 494 lines of dead Worker code and checks that can no longer fire removed; frozen tables kept |
 | 2026-10-23 | F252, F387 | [#318](https://github.com/songadaymann/wamp/pull/318) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | PartyKit retired: local presence types, no PartyKit runtime, safety previews use the safety Worker |
 | 2026-10-23 | F486, F493 | [#317](https://github.com/songadaymann/wamp/pull/317) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | Run logs archived to docs/history; the ledger is one file per delivery; agent docs point at the checklist |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-13 | F056, F098, F117, F119, F120, F174 | [#187](https://github.com/songadaymann/wamp/pull/187) | [receipt](docs/review/wamp-approved-small-fixes-2026-10-13.md) | Six approved UI and draft fixes |
 | 2026-10-13 | — | [#186](https://github.com/songadaymann/wamp/pull/186) | [receipt](docs/review/wamp-restart-keyboard-focus-2026-10-13.md) | Space keeps jumping after repeated Restart clicks |
 | 2026-10-12 | — | [#184](https://github.com/songadaymann/wamp/pull/184) | [receipt](docs/review/wamp-room-entry-keyboard-2026-10-12.md) | Movement controls work again after the room Start prompt |
-| 2026-10-12 | F070 | [#183](https://github.com/songadaymann/wamp/pull/183) | [receipt](docs/review/wamp-goal-switches-2026-10-12.md) | Unknown goal types fail verification, and lint flags switches with missing cases (F070 part) |
