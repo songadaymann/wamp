@@ -167,47 +167,89 @@ export function dailyRunsSql(): string {
     signed('expanded_room_runs','expanded_room','runs.expanded_room_id = d.content_id','expanded_room_version'),
     signed('course_runs','expanded_room','runs.course_id = d.legacy_course_id','course_version')].join(' UNION ALL ');
 }
-function runBindings(row: DailyRow): string[] {
-  const window = dailyWindow(row.picked_at);
-  return Array.from({ length: 3 }, () => [row.date, window.start, window.end]).flat();
+/** Where a pick's board lives: enough of its row to rank its runs, and nothing private. */
+type DailyBoard = Pick<DailyRow, 'date' | 'target_type' | 'goal_json' | 'picked_at'>;
+interface DailyBoardRow { rank: number; user_id: string; display_name: string; elapsed_ms: number; deaths: number; score: number }
+/** The part of the daily response every viewer shares (viewer is null). */
+export interface DailyShared { response: DailyResponse; board: DailyBoard | null }
+/** Serves the shared part for a date, calling load on a miss. */
+export type DailySharedCache = (date: string, load: () => Promise<DailyShared>) => Promise<DailyShared>;
+function runBindings(board: DailyBoard): string[] {
+  const window = dailyWindow(board.picked_at);
+  return Array.from({ length: 3 }, () => [board.date, window.start, window.end]).flat();
 }
-export async function loadDailyResponse(env: Env, userId: string | null, now = new Date().toISOString()): Promise<DailyResponse> {
+function boardRanking(board: DailyBoard): { rankingMode: 'time' | 'score'; order: string } {
+  const rawGoal: unknown = JSON.parse(board.goal_json);
+  const roomGoal = board.target_type === 'room' ? normalizeRoomGoal(rawGoal) : null;
+  const courseGoal = board.target_type === 'expanded_room' ? normalizeCourseGoal(rawGoal) : null;
+  const rankingMode = roomGoal ? getLeaderboardRankingMode(roomGoal) : courseGoal ? getCourseLeaderboardRankingMode(courseGoal) : 'time';
+  const order = roomGoal && roomGoalRankingPolicy(roomGoal, ROOM_GOAL_DEFINITIONS) === 'protect'
+    ? 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC'
+    : rankingMode === 'time' ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
+      : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
+  return { rankingMode, order };
+}
+/** The top ten plus the viewer's row, or with top false the viewer's row alone. */
+async function loadBoardRows(env: Env, board: DailyBoard, userId: string | null, top = true): Promise<DailyBoardRow[]> {
+  const { order } = boardRanking(board);
+  return (await env.DB.prepare(`WITH accepted AS (${dailyRunsSql()}), best AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY ${order}) AS player_row FROM accepted), ranked AS (
+    SELECT *, ROW_NUMBER() OVER (ORDER BY ${order}) AS rank FROM best WHERE player_row = 1)
+    SELECT * FROM ranked WHERE ${top ? 'rank <= 10 OR ' : ''}user_id = ? ORDER BY rank`)
+    .bind(...runBindings(board),userId).all<DailyBoardRow>()).results;
+}
+function mapBoard(rows: DailyBoardRow[]): DailyLeaderboardEntry[] {
+  return rows.filter(value => value.rank <= 10).map(value => ({ rank: value.rank,userId:value.user_id,
+    displayName:value.display_name,elapsedMs:value.elapsed_ms,deaths:value.deaths,score:value.score }));
+}
+/** A shared board older than the viewer's own newest clear must not contradict their rank. */
+function boardAgreesWithViewer(entries: DailyLeaderboardEntry[], viewer: DailyBoardRow | null, userId: string): boolean {
+  const listed = entries.find(entry => entry.userId === userId);
+  if (!listed) return viewer === null || viewer.rank > 10;
+  return viewer !== null && listed.rank === viewer.rank && listed.elapsedMs === viewer.elapsed_ms
+    && listed.deaths === viewer.deaths && listed.score === viewer.score && listed.displayName === viewer.display_name;
+}
+function dailyCutoff(window: { start: string }): string {
+  return new Date(Date.parse(window.start) - 6 * 86400000).toISOString().slice(0,10);
+}
+/** Reads the shared part; the board query also returns the given viewer's row, so a fresh read costs no extra trip. */
+async function loadDailyShared(env: Env, userId: string | null, now: string): Promise<{ shared: DailyShared; viewer: DailyBoardRow | null }> {
   const window = dailyWindow(now);
   const row = await ensureDailyPick(env, now);
-  const cutoff = new Date(Date.parse(window.start) - 6 * 86400000).toISOString().slice(0,10);
   const history = await env.DB.prepare('SELECT date,target_type,content_id,version,legacy_course_id FROM daily_rooms WHERE date >= ? AND date <= ? ORDER BY date DESC')
-    .bind(cutoff,window.date).all<DailyRow>();
-  const completed = userId ? await env.DB.prepare(`SELECT COUNT(DISTINCT source_id) AS count, MAX(source_id = ?) AS today
-    FROM pxp_events WHERE user_id = ? AND event_type = 'daily_clear' AND source_id >= ? AND source_id <= ?`)
-    .bind(window.date,userId,cutoff,window.date).first<{ count: number; today: number | null }>() : null;
-  let rankingMode: 'time' | 'score' = 'time';
-  let leaderboard: DailyLeaderboardEntry[] = [], viewerRank: number | null = null;
+    .bind(dailyCutoff(window),window.date).all<DailyRow>();
   const available = row ? await dailyPickAvailable(env,row) : false;
-  if (row) {
-    const rawGoal: unknown = JSON.parse(row.goal_json);
-    const roomGoal = row.target_type === 'room' ? normalizeRoomGoal(rawGoal) : null;
-    const courseGoal = row.target_type === 'expanded_room' ? normalizeCourseGoal(rawGoal) : null;
-    if (roomGoal) rankingMode = getLeaderboardRankingMode(roomGoal);
-    else if (courseGoal) rankingMode = getCourseLeaderboardRankingMode(courseGoal);
-    const order = roomGoal && roomGoalRankingPolicy(roomGoal, ROOM_GOAL_DEFINITIONS) === 'protect'
-      ? 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC'
-      : rankingMode === 'time' ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
-        : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
-    const rows = await env.DB.prepare(`WITH accepted AS (${dailyRunsSql()}), best AS (
-      SELECT *, ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY ${order}) AS player_row FROM accepted), ranked AS (
-      SELECT *, ROW_NUMBER() OVER (ORDER BY ${order}) AS rank FROM best WHERE player_row = 1)
-      SELECT * FROM ranked WHERE rank <= 10 OR user_id = ? ORDER BY rank`)
-      .bind(...runBindings(row),userId).all<{ rank: number; user_id: string; display_name: string; elapsed_ms: number; deaths: number; score: number }>();
-    leaderboard = rows.results.filter(value => value.rank <= 10).map(value => ({ rank: value.rank,userId:value.user_id,
-      displayName:value.display_name,elapsedMs:value.elapsed_ms,deaths:value.deaths,score:value.score }));
-    viewerRank = rows.results.find(value => value.user_id === userId)?.rank ?? null;
-  }
-  return { date:window.date,resetsAt:window.end,pick: row ? mapPick(row,available) : null,rankingMode,leaderboard,
+  const board: DailyBoard | null = row ? { date: row.date, target_type: row.target_type, goal_json: row.goal_json, picked_at: row.picked_at } : null;
+  const rows = board ? await loadBoardRows(env,board,userId) : [];
+  const response: DailyResponse = { date:window.date,resetsAt:window.end,pick: row ? mapPick(row,available) : null,
+    rankingMode: board ? boardRanking(board).rankingMode : 'time',leaderboard:mapBoard(rows),
     recentPicks:history.results.map(value=>({date:value.date,contentType:value.target_type,contentId:value.content_id,
-      version:value.version,legacyCourseId:value.legacy_course_id})),
-    viewer:userId ? {completed:Boolean(completed?.today),completedLast7:completed?.count ?? 0,rank:viewerRank} : null,bonusPxp:DAILY_CLEAR_PXP };
+      version:value.version,legacyCourseId:value.legacy_course_id})),viewer:null,bonusPxp:DAILY_CLEAR_PXP };
+  return { shared: { response, board }, viewer: rows.find(value => value.user_id === userId) ?? null };
 }
-export async function overrideDailyPick(env: Env, roomId: string, now = new Date().toISOString()): Promise<void> {
+export async function loadDailyResponse(env: Env, userId: string | null, now = new Date().toISOString(), cache?: DailySharedCache): Promise<DailyResponse> {
+  const window = dailyWindow(now);
+  const read: { viewer?: DailyBoardRow | null } = {};
+  const load = async () => { const loaded = await loadDailyShared(env,userId,now); read.viewer = loaded.viewer; return loaded.shared; };
+  const { response, board } = cache ? await cache(window.date,load) : await load();
+  if (!userId) return response;
+  // Only the viewer's completions and rank are theirs; a cache hit reads the rank on its own.
+  const cutoff = dailyCutoff(window);
+  const [completed, viewer] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(DISTINCT source_id) AS count, MAX(source_id = ?) AS today
+      FROM pxp_events WHERE user_id = ? AND event_type = 'daily_clear' AND source_id >= ? AND source_id <= ?`)
+      .bind(window.date,userId,cutoff,window.date).first<{ count: number; today: number | null }>(),
+    'viewer' in read || !board ? read.viewer ?? null : loadBoardRows(env,board,userId,false).then(rows => rows[0] ?? null),
+  ]);
+  let leaderboard = response.leaderboard, rank = viewer?.rank ?? null;
+  if (board && !boardAgreesWithViewer(leaderboard,viewer,userId)) {
+    const rows = await loadBoardRows(env,board,userId);
+    leaderboard = mapBoard(rows); rank = rows.find(value => value.user_id === userId)?.rank ?? null;
+  }
+  return { ...response,leaderboard,viewer:{completed:Boolean(completed?.today),completedLast7:completed?.count ?? 0,rank} };
+}
+/** Repicks today's room and returns its date. */
+export async function overrideDailyPick(env: Env, roomId: string, now = new Date().toISOString()): Promise<string> {
   const { date, start, end } = dailyWindow(now);
   const candidate = (await loadCandidates(env,now,roomId))[0];
   if (!candidate) throw new HttpError(409,'Choose a public published goal level with a verified clear.');
@@ -238,6 +280,7 @@ export async function overrideDailyPick(env: Env, roomId: string, now = new Date
     .bind(...values,...Array.from({length:4},()=>[date,start,end]).flat()).first<{ date: string }>();
   if (!result) throw new HttpError(409,'Today’s challenge has already started or its builder has been notified. Choose tomorrow’s pick after midnight UTC.');
   await env.DB.batch(featureStatements(env,date));
+  return date;
 }
 export async function awardDailyClear(env: Env, userId: string, type: 'room' | 'course', id: string, version: number, completedAt: string,
   options: LaneAwardOptions = {}): Promise<number> {

@@ -160,7 +160,7 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   { methods: ['GET','POST','DELETE'], pattern: {prefix:'/api/build-prompts'}, auth:'optional',
     handler: ({request,url,env}) => handleBuildPrompts(request,url,env) },
   { methods: ['GET'], pattern: '/api/daily', auth: 'optional',
-    handler: ({ request, env }) => handleDaily(request,env) },
+    handler: ({ request, env, executionContext }) => handleDaily(request,env,executionContext) },
   {
     methods: ['GET'], pattern: /^\/api\/(rooms|expanded-rooms|courses)\/([^/]+)\/stats$/, auth: 'public',
     handler: ({ request, url, env }, match) => handleRoomInsights(request, url, env,
