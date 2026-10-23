@@ -16,7 +16,7 @@ import { hashRateLimitKey } from '../core/rateLimit';
 import type { Env, RequestAuth } from '../core/types';
 import { loadOrBackfillUserProgress } from '../progression/progressRows';
 import { HIDDEN_VERSION_TITLE, hiddenVersionSnapshot } from '../rooms/versionRedaction';
-import { renderRoomSharePreviewPng } from '../share/roomPreviewImage';
+import { ROOM_SHARE_IMAGE_HEIGHT, ROOM_SHARE_IMAGE_WIDTH, renderRoomSharePreviewPng } from '../share/roomPreviewImage';
 import { handleAdminWampOGramRequest, handleWampOGramRequest } from './routes';
 import { loadWampOGramBySlug } from './store';
 
@@ -188,6 +188,16 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
       expect(old.headers.get('Cache-Control')).toBe('public, max-age=300');
     }
     expect(stored.size).toBe(1);
+  });
+
+  it('serves a compressed PNG', async () => {
+    const { slug } = await create(room());
+    const png = await bytesOf(await preview(slug!));
+    expect(png.subarray(1, 4).toString('latin1')).toBe('PNG');
+    // IDAT data is a zlib stream: two header bytes, then a deflate block whose type 0 would mean stored, not compressed.
+    const idat = png.indexOf('IDAT');
+    expect((png[idat + 4 + 2] >> 1) & 3).not.toBe(0);
+    expect(png.length).toBeLessThan(ROOM_SHARE_IMAGE_WIDTH * ROOM_SHARE_IMAGE_HEIGHT);
   });
 
   it('answers a matching If-None-Match with 304 and no body, after checking the gram exists', async () => {
