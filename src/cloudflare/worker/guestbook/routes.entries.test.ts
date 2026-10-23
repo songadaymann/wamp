@@ -87,10 +87,25 @@ describe('guestbook signing', () => {
     expect((await list()).body.entries.map((item) => item.displayName)).toEqual(['Ada L']);
   });
 
-  it('marks an entry from a signed-in player, whatever name they sign with', async () => {
-    const { body } = await sign({ displayName: 'Someone' }, { as: 'p1' });
-    expect(body.entry).toMatchObject({ displayName: 'Someone', signedIn: true });
-    expect(f.sqlite.prepare('SELECT user_id FROM guestbook_entries').get()).toEqual({ user_id: 'p1' });
+  it("marks an entry as signed in only under the account's own name", async () => {
+    f.sqlite.prepare("UPDATE users SET display_name = 'Ada  Lovelace' WHERE id = 'p1'").run();
+    expect((await sign({ displayName: ' ada lovelace ' }, { as: 'p1' })).body.entry).toMatchObject({ displayName: 'ada lovelace', signedIn: true });
+    expect((await sign({ displayName: 'Someone Else' }, { as: 'p1' }))).toMatchObject({ status: 201, body: { entry: { displayName: 'Someone Else', signedIn: false } } });
+    expect((await sign({ displayName: 'Ada Lovelace' })).body.entry.signedIn).toBe(false);
+    expect(f.sqlite.prepare('SELECT display_name, user_id FROM guestbook_entries ORDER BY rowid').all()).toEqual([
+      { display_name: 'ada lovelace', user_id: 'p1' }, { display_name: 'Someone Else', user_id: null }, { display_name: 'Ada Lovelace', user_id: null },
+    ]);
+    expect((await list()).body.entries.map((item) => item.signedIn).sort()).toEqual([false, false, true]);
+  });
+
+  it('removes invisible formatting characters before checking names and messages', async () => {
+    const { body } = await sign({ displayName: 'A\u200Bd\u202Ea\uFEFF', body: '\u2066Hello\u2069 \u200Fthere\u202A' });
+    expect(body.entry).toMatchObject({ displayName: 'Ada', body: 'Hello there' });
+    expect(await sign({ displayName: '\u200B\u200CA\u200D' })).toEqual({ status: 400, body: { error: 'Name must be at least 2 characters.' } });
+    expect(await sign({ body: 'www\u200B.example.test' })).toEqual({ status: 400, body: { error: 'Links are not allowed in the guestbook yet.' } });
+    expect(await sign({ body: '\u202E\u202D' })).toEqual({ status: 400, body: { error: 'Message is required.' } });
+    f.sqlite.prepare("UPDATE users SET display_name = 'Ada' WHERE id = 'p1'").run();
+    expect((await sign({ displayName: 'A\u200Bda' }, { as: 'p1' })).body.entry.signedIn).toBe(true);
   });
 
   it('refuses a name or message outside the rules before taking a slot or calling Turnstile', async () => {
@@ -134,6 +149,17 @@ describe('guestbook signing', () => {
   it('refuses a cookie-signed entry sent from another site', async () => {
     expect((await sign({}, { as: 'p1', headers: { Origin: 'https://evil.example' } })).status).toBe(403);
     expect(count()).toBe(0);
+  });
+
+  it('applies account status to guestbook entries', async () => {
+    f.sqlite.prepare("UPDATE users SET suspended_at = ?, suspended_reason = 'Spam' WHERE id = 'p1'").run(NOW);
+    expect(await sign({}, { as: 'p1' })).toEqual({
+      status: 403, body: { error: 'This account is suspended. You can still play, but saving, publishing and posting are turned off.' },
+    });
+    expect(count()).toBe(0);
+    expect(slotCount()).toBe(0);
+    expect(siteverify).not.toHaveBeenCalled();
+    expect((await sign({}, { as: 'p2' })).status).toBe(201);
   });
 
   it('holds the network limit under parallel posts that carry no browser session', async () => {

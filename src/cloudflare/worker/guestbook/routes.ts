@@ -10,6 +10,7 @@ import {
   type GuestbookListResponse,
 } from '../../../guestbook/model';
 import { loadOptionalRequestAuth, requireAdminRequest } from '../auth/request';
+import { assertAccountNotSuspended } from '../moderation/suspension';
 import {
   HttpError,
   jsonResponse,
@@ -41,6 +42,8 @@ const GUESTBOOK_PER_SESSION_MINUTE: RateLimitRule = { bucket: 'guestbook:session
 const GUESTBOOK_PER_SESSION_DAY: RateLimitRule = { bucket: 'guestbook:session-day', limit: 10, windowMs: 24 * 60 * 60 * 1000 };
 /** Names and messages are both shown on the page, so neither may carry a link. */
 const GUESTBOOK_LINK_PATTERN = /(https?:\/\/|www\.)/i;
+/** Zero-width and text-direction controls: invisible, so they are removed before any other check. */
+const INVISIBLE_FORMATTING = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 
 export async function handleGuestbookRequest(
   request: Request,
@@ -91,7 +94,11 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
   const auth = await loadOptionalRequestAuth(env, request);
   if (auth) {
     assertNotSchoolRestricted(auth, 'sign the guestbook');
+    // The same account check as every other signed-in write.
+    if (!auth.isAdmin) await assertAccountNotSuspended(env, auth.user.id);
   }
+  // An entry counts as signed in only under the account's own name.
+  const signedInUserId = auth && sameGuestbookName(displayName, auth.user.displayName) ? auth.user.id : null;
   const remoteIp = getClientIp(request);
   const ipHash = remoteIp ? await hashGuestbookIp(env, remoteIp) : null;
   const nowIso = new Date().toISOString();
@@ -103,7 +110,7 @@ async function handleGuestbookCreate(request: Request, env: Env): Promise<Respon
     entry = await createGuestbookEntry(env, {
       displayName,
       body: message,
-      userId: auth?.user.id ?? null,
+      userId: signedInUserId,
       guestSessionId,
       ipHash,
       userAgent: normalizeHeaderValue(request.headers.get('User-Agent')),
@@ -168,12 +175,20 @@ function getTurnstileSecret(env: Env): string | null {
   return env.TURNSTILE_SECRET?.trim() || env.TURNSTILE_SECRET_KEY?.trim() || null;
 }
 
+function cleanGuestbookText(value: string): string {
+  return value.replace(INVISIBLE_FORMATTING, '').replace(/\s+/g, ' ').trim();
+}
+
+function sameGuestbookName(entered: string, accountName: string | null | undefined): boolean {
+  return Boolean(accountName) && entered.toLowerCase() === cleanGuestbookText(accountName ?? '').toLowerCase();
+}
+
 function normalizeGuestbookDisplayName(value: unknown): string {
   if (typeof value !== 'string') {
     throw new HttpError(400, 'Name is required.');
   }
 
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = cleanGuestbookText(value);
   if (normalized.length < 2) {
     throw new HttpError(400, 'Name must be at least 2 characters.');
   }
@@ -198,7 +213,7 @@ function normalizeGuestbookMessage(value: unknown): string {
     throw new HttpError(400, 'Message is required.');
   }
 
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  const normalized = cleanGuestbookText(value);
   if (!normalized) {
     throw new HttpError(400, 'Message is required.');
   }
