@@ -368,7 +368,7 @@ async function drawObjectsForLayer(
       const customSprite = getCustomSpriteForObject(snapshot, placedObject.id);
       if (customSprite) {
         drawCustomSpriteObject(context, customSprite, placedObject, tilePixelSize);
-      } else if (strictAssets) {
+      } else if (strictAssets && !isBlockedCustomSpriteObject(snapshot, placedObject.id)) {
         throw new Error(`Room ${snapshot.id} references unknown object ${placedObject.id}.`);
       }
       continue;
@@ -417,6 +417,18 @@ function getCustomSpriteForObject(
   return snapshot.customSprites.find(
     (sprite) => sprite.id === spriteId && sprite.status !== 'blocked' && !isCustomSpriteBlocked(sprite.id)
   ) ?? null;
+}
+
+/**
+ * A sprite the room embeds but an admin blocked is left out, not an unknown object: the map-tile
+ * Worker marks blocked sprites before drawing in strict mode (F189), so throwing kept those tiles
+ * from ever being redrawn.
+ */
+function isBlockedCustomSpriteObject(snapshot: Pick<RoomSnapshot, 'customSprites'>, objectId: string): boolean {
+  const spriteId = parseCustomSpriteObjectId(objectId);
+  return Boolean(spriteId) && (snapshot.customSprites ?? []).some(
+    (sprite) => sprite.id === spriteId && (sprite.status === 'blocked' || isCustomSpriteBlocked(sprite.id)),
+  );
 }
 
 function drawCustomSpriteObject(
