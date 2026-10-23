@@ -140,6 +140,22 @@ describe('who may change an Expanded Room', () => {
     expect(roomIds((await api.call(path('er', '/editor-record'), { session: builder })).body)).toEqual(['0,0', '1,0', '2,0']);
   });
 
+  it('refuses a create that reuses the id of an Expanded Room someone else owns', async () => {
+    // The create used to overwrite that row: a new owner, a new draft, and no longer published.
+    await publishedThreeCells();
+    const takeover = await create('er', [ref(-1, 0)], { title: 'Mine now' }, other);
+    expect(takeover.status).toBe(403);
+    const after = await api.call(path('er', '/editor-record'), { session: builder });
+    expect(after.body).toMatchObject({ ownerUserId: 'builder', draft: { title: 'Three Rooms' }, published: { version: 1 } });
+    expect((await api.call(path('er'))).status).toBe(200);
+    for (const legacyRoute of ['/api/courses']) {
+      const viaCourses = await api.call(legacyRoute, { session: other, body: { ...createDefaultCourseSnapshot('er'), roomRefs: [ref(-1, 0)] } });
+      expect([legacyRoute, viaCourses.status]).toEqual([legacyRoute, 403]);
+    }
+    // The owner can still repeat a create with their own id.
+    expect((await create('er', [ref(0, 0), ref(1, 0), ref(2, 0)], complete)).status).toBe(200);
+  });
+
   it('refuses writes from a suspended owner', async () => {
     await publishedThreeCells();
     api.sqlite.prepare("UPDATE users SET suspended_at = ?, suspended_reason = 'raid' WHERE id = 'builder'").run(new Date().toISOString());

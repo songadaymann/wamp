@@ -224,6 +224,11 @@ export async function createCourseDraft(
   requestAuthSource: RequestAuthSource | null = null
 ): Promise<CourseRecord> {
   const normalized = normalizeCourseSnapshot(snapshot, snapshot.id);
+  // The id comes from the client, and the write below replaces any row with that id.
+  const existing = await loadCourseRecord(env, normalized.id, actor.id, actorIsAdmin);
+  if (existing && !existing.permissions.canSaveDraft) {
+    throw new HttpError(403, 'You do not have permission to edit this expanded room.');
+  }
   const now = new Date().toISOString();
   const expandedRoomCellLimit = await loadExpandedRoomCellLimit(env, actor.id, requestAuthSource);
   const draft = await resolveValidatedCourseDraft(env, normalized, actor, {
