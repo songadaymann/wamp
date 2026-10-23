@@ -43,7 +43,7 @@ import { loadEffectiveTrustTier } from './trustCaps';
 import { resolveAggregatedRoomLeaderboardSelection } from '../runs/roomLeaderboardAggregation';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
-import { awardDailyClear } from '../daily/store';
+import { awardDailyClear, awardDailyClearOn, findDailyClearDate } from '../daily/store';
 
 export async function ensureFounderIdentityQualification(
   env: Env,
@@ -376,8 +376,13 @@ export async function awardRunDailyClear(
     return;
   }
 
-  await loadOrBackfillUserProgress(env, run.userId);
-  const pxp = await awardDailyClear(env, run.userId, target.type, target.id, target.version, completedAt, RUN_FINISH_AWARD);
+  // The award adds to the progress row, so it must exist first; the daily-room check is a separate
+  // read, so the two share one wait (F333).
+  const [, date] = await Promise.all([
+    loadOrBackfillUserProgress(env, run.userId),
+    findDailyClearDate(env, target.type, target.id, target.version, completedAt),
+  ]);
+  const pxp = date ? await awardDailyClearOn(env, run.userId, date, completedAt, RUN_FINISH_AWARD) : 0;
   if (pxp > 0) {
     await refreshProgressLevels(env, run.userId);
   }
