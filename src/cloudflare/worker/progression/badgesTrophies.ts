@@ -287,26 +287,11 @@ async function upsertBadgeAward(
   sourceId: string,
   awardedAt: string,
 ): Promise<boolean> {
-  const existing = await env.DB.prepare(
-    `
-      SELECT 1 AS found
-      FROM badge_awards
-      WHERE user_id = ?
-        AND badge_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(userId, badgeId)
-    .first<{ found: number | string | null }>();
-
-  if (parseRowNumber(existing?.found) === 1) {
-    return false;
-  }
-
-  await env.DB.batch([
+  // Two settles of one finish can award the same badge at once; the slower one must not throw (F351).
+  const [inserted] = await env.DB.batch<{ results?: unknown[] }>([
     env.DB.prepare(
       `
-        INSERT INTO badge_awards (
+        INSERT OR IGNORE INTO badge_awards (
           user_id,
           badge_id,
           source_type,
@@ -315,10 +300,11 @@ async function upsertBadgeAward(
           awarded_at
         )
         VALUES (?, ?, ?, ?, NULL, ?)
+        RETURNING badge_id
       `
     ).bind(userId, badgeId, sourceType, sourceId, awardedAt),
   ]);
-  return true;
+  return (inserted?.results?.length ?? 0) > 0;
 }
 
 async function loadBadgeAwardRows(env: Env, userId: string): Promise<BadgeAwardRow[]> {

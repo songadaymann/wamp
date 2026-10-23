@@ -11,7 +11,7 @@ import { HttpError } from '../core/http';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 import { sqlUserIdIsNotLegacyGeneratedOnly, sqlUserIdDoesNotHaveLegacyGeneratedDisplayNamePrefix } from '../generatedUsers/leaderboardIsolation';
 import { DISCOVERY_RUN_METRICS_CTE } from '../playableContentIndex/runMetrics';
-import { awardLaneDelta } from '../progression/laneEvents';
+import { awardLaneDelta, type LaneAwardOptions } from '../progression/laneEvents';
 
 export interface DailyRow {
   date: string; target_key: string; target_type: 'room' | 'expanded_room'; content_id: string; version: number;
@@ -239,12 +239,13 @@ export async function overrideDailyPick(env: Env, roomId: string, now = new Date
   if (!result) throw new HttpError(409,'Today’s challenge has already started or its builder has been notified. Choose tomorrow’s pick after midnight UTC.');
   await env.DB.batch(featureStatements(env,date));
 }
-export async function awardDailyClear(env: Env, userId: string, type: 'room' | 'course', id: string, version: number, completedAt: string): Promise<number> {
+export async function awardDailyClear(env: Env, userId: string, type: 'room' | 'course', id: string, version: number, completedAt: string,
+  options: LaneAwardOptions = {}): Promise<number> {
   const { date } = dailyWindow(completedAt);
   const row = await env.DB.prepare(`SELECT date FROM daily_rooms WHERE date = ? AND version = ?
     AND (? = 'room' AND target_type = 'room' AND content_id = ?
       OR ? = 'course' AND target_type = 'expanded_room' AND (content_id = ? OR legacy_course_id = ?))`)
     .bind(date,version,type,id,type,id,id).first<{date:string}>();
   if (!row) return 0;
-  return awardLaneDelta(env,userId,'pxp','daily_clear','daily_room',date,`pxp:daily_clear:${userId}:${date}`,DAILY_CLEAR_PXP,completedAt);
+  return awardLaneDelta(env,userId,'pxp','daily_clear','daily_room',date,`pxp:daily_clear:${userId}:${date}`,DAILY_CLEAR_PXP,completedAt,null,options);
 }
