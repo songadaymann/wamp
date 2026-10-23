@@ -271,7 +271,7 @@ export function decideSwordsmanTraversal(
 
   const startNodeIds = currentContext.startNodeIds;
   const targetNodeIds = targetContext.targetNodeIds;
-  const bestPath = findBestTraversalPath(
+  const firstEdge = findBestTraversalFirstEdge(
     graph,
     startNodeIds,
     targetNodeIds,
@@ -279,19 +279,16 @@ export function decideSwordsmanTraversal(
     target,
     blockedEdgeIds,
   );
-  if (bestPath) {
-    const firstEdge = bestPath.edges[0] ?? null;
-    if (firstEdge) {
-      return buildSwordsmanTraversalDecisionFromEdge(
-        firstEdge,
-        enemy,
-        fallbackDirectionX,
-        fallbackTargetX,
-        currentNodeId,
-        targetNodeId,
-        target,
-      );
-    }
+  if (firstEdge) {
+    return buildSwordsmanTraversalDecisionFromEdge(
+      firstEdge,
+      enemy,
+      fallbackDirectionX,
+      fallbackTargetX,
+      currentNodeId,
+      targetNodeId,
+      target,
+    );
   }
 
   if (!enemy.onFloor) {
@@ -1071,94 +1068,175 @@ function getTraversalSetupReferenceX(enemy: SwordsmanBodySnapshot): number {
   return enemy.centerX;
 }
 
-function findBestTraversalPath(
+function findBestTraversalFirstEdge(
   graph: SwordsmanTraversalGraph,
   startNodeIds: string[],
   targetNodeIds: string[],
   enemyBody: SwordsmanBodySnapshot,
   targetBody: SwordsmanBodySnapshot,
   blockedEdgeIds: ReadonlySet<string>,
-): { edges: SwordsmanTraversalEdge[]; score: number } | null {
+): SwordsmanTraversalEdge | null {
   if (startNodeIds.length === 0) {
     return null;
   }
 
+  // The routes are listed once per start-node and blocked-edge set, so a chase only searches again
+  // when the enemy reaches another node or an edge is blocked. Scoring them against the live
+  // positions still runs every call, so the chosen edge is the one a full search would pick (F305).
+  const routes = getSwordsmanTraversalRouteSet(graph, startNodeIds, blockedEdgeIds);
   const targetIdSet = new Set(targetNodeIds);
-  let bestPath: { edges: SwordsmanTraversalEdge[]; score: number } | null = null;
+  for (let endIndex = 0; endIndex < routes.endNodes.length; endIndex += 1) {
+    const node = routes.endNodes[endIndex];
+    const distance = node ? measureSwordsmanTraversalNodeDistanceToBody(node, targetBody) : null;
+    const targetMatchBonus = node && targetIdSet.has(node.id) ? TARGET_MATCH_SCORE_BONUS : 0;
+    for (let depth = 1; depth <= MAX_SEARCH_DEPTH; depth += 1) {
+      routeEndScores[endIndex * MAX_SEARCH_DEPTH + depth - 1] = distance
+        ? scoreTraversalPathEnd(depth, distance, targetMatchBonus)
+        : Number.POSITIVE_INFINITY;
+    }
+  }
+  for (let edgeIndex = 0; edgeIndex < routes.firstEdges.length; edgeIndex += 1) {
+    routeEntryScores[edgeIndex] = scoreTraversalPathEntry(routes.firstEdges[edgeIndex], enemyBody, targetBody);
+  }
+
+  let bestRouteIndex = -1;
+  let bestScore = 0;
+  for (let routeIndex = 0; routeIndex < routes.depths.length; routeIndex += 1) {
+    const score =
+      routeEndScores[routes.endNodeIndexes[routeIndex] * MAX_SEARCH_DEPTH + routes.depths[routeIndex] - 1] +
+      routeEntryScores[routes.firstEdgeIndexes[routeIndex]];
+    if (bestRouteIndex < 0 || score < bestScore) {
+      bestRouteIndex = routeIndex;
+      bestScore = score;
+    }
+  }
+
+  return bestRouteIndex < 0 ? null : routes.firstEdges[routes.firstEdgeIndexes[bestRouteIndex]];
+}
+
+/**
+ * Every simple route of up to MAX_SEARCH_DEPTH edges from a set of start nodes, in the
+ * breadth-first order they are scored, kept as parallel arrays so scoring allocates nothing.
+ */
+interface SwordsmanTraversalRouteSet {
+  firstEdges: SwordsmanTraversalEdge[];
+  endNodes: Array<SwordsmanTraversalNode | undefined>;
+  firstEdgeIndexes: number[];
+  endNodeIndexes: number[];
+  depths: number[];
+}
+
+const TRAVERSAL_ROUTE_SET_CACHE_LIMIT = 64;
+const traversalRouteSetsByGraph = new WeakMap<SwordsmanTraversalGraph, Map<string, SwordsmanTraversalRouteSet>>();
+const routeEndScores: number[] = [];
+const routeEntryScores: number[] = [];
+
+function getSwordsmanTraversalRouteSet(
+  graph: SwordsmanTraversalGraph,
+  startNodeIds: readonly string[],
+  blockedEdgeIds: ReadonlySet<string>,
+): SwordsmanTraversalRouteSet {
+  let routeSets = traversalRouteSetsByGraph.get(graph);
+  if (!routeSets) {
+    routeSets = new Map();
+    traversalRouteSetsByGraph.set(graph, routeSets);
+  }
+
+  const cacheKey = blockedEdgeIds.size === 0
+    ? startNodeIds.join('\n')
+    : `${startNodeIds.join('\n')}\n\n${Array.from(blockedEdgeIds).sort().join('\n')}`;
+  const cached = routeSets.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  if (routeSets.size >= TRAVERSAL_ROUTE_SET_CACHE_LIMIT) {
+    routeSets.clear();
+  }
+  const routes = buildSwordsmanTraversalRouteSet(graph, startNodeIds, blockedEdgeIds);
+  routeSets.set(cacheKey, routes);
+  return routes;
+}
+
+function buildSwordsmanTraversalRouteSet(
+  graph: SwordsmanTraversalGraph,
+  startNodeIds: readonly string[],
+  blockedEdgeIds: ReadonlySet<string>,
+): SwordsmanTraversalRouteSet {
+  const routes: SwordsmanTraversalRouteSet = {
+    firstEdges: [],
+    endNodes: [],
+    firstEdgeIndexes: [],
+    endNodeIndexes: [],
+    depths: [],
+  };
+  const endNodeIndexById = new Map<string, number>();
+  // One breadth-first queue per start node, appended in turn; each entry points at its parent.
+  const queueNodeIds: string[] = [];
+  const queueParents: number[] = [];
+  const queueFirstEdgeIndexes: number[] = [];
+  const queueDepths: number[] = [];
+  const isOnQueuedPath = (queueIndex: number, nodeId: string): boolean => {
+    for (let index = queueIndex; index >= 0; index = queueParents[index]) {
+      if (queueNodeIds[index] === nodeId) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   for (const startNodeId of startNodeIds) {
-    const queue: Array<{
-      nodeId: string;
-      edges: SwordsmanTraversalEdge[];
-      visited: Set<string>;
-    }> = [
-      {
-        nodeId: startNodeId,
-        edges: [],
-        visited: new Set([startNodeId]),
-      },
-    ];
+    let cursor = queueNodeIds.length;
+    queueNodeIds.push(startNodeId);
+    queueParents.push(-1);
+    queueFirstEdgeIndexes.push(-1);
+    queueDepths.push(0);
 
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        break;
-      }
-
-      if (current.edges.length > 0) {
-        const score = scoreTraversalPathEnd(
-          graph,
-          current.nodeId,
-          current.edges.length,
-          targetIdSet,
-          targetBody,
-        ) + scoreTraversalPathEntry(current.edges[0], enemyBody, targetBody);
-        if (!bestPath || score < bestPath.score) {
-          bestPath = {
-            edges: current.edges,
-            score,
-          };
+    for (; cursor < queueNodeIds.length; cursor += 1) {
+      const nodeId = queueNodeIds[cursor];
+      const depth = queueDepths[cursor];
+      if (depth > 0) {
+        let endNodeIndex = endNodeIndexById.get(nodeId);
+        if (endNodeIndex === undefined) {
+          endNodeIndex = routes.endNodes.length;
+          routes.endNodes.push(graph.nodesById.get(nodeId));
+          endNodeIndexById.set(nodeId, endNodeIndex);
         }
+        routes.firstEdgeIndexes.push(queueFirstEdgeIndexes[cursor]);
+        routes.endNodeIndexes.push(endNodeIndex);
+        routes.depths.push(depth);
       }
 
-      if (current.edges.length >= MAX_SEARCH_DEPTH) {
+      if (depth >= MAX_SEARCH_DEPTH) {
         continue;
       }
 
-      for (const edge of graph.edgesByNodeId.get(current.nodeId) ?? []) {
-        if (blockedEdgeIds.has(edge.id)) {
+      for (const edge of graph.edgesByNodeId.get(nodeId) ?? []) {
+        if (blockedEdgeIds.has(edge.id) || isOnQueuedPath(cursor, edge.toId)) {
           continue;
         }
-        if (current.visited.has(edge.toId)) {
-          continue;
+        let firstEdgeIndex = queueFirstEdgeIndexes[cursor];
+        if (depth === 0) {
+          firstEdgeIndex = routes.firstEdges.length;
+          routes.firstEdges.push(edge);
         }
-        queue.push({
-          nodeId: edge.toId,
-          edges: [...current.edges, edge],
-          visited: new Set([...current.visited, edge.toId]),
-        });
+        queueNodeIds.push(edge.toId);
+        queueParents.push(cursor);
+        queueFirstEdgeIndexes.push(firstEdgeIndex);
+        queueDepths.push(depth + 1);
       }
     }
   }
 
-  return bestPath;
+  return routes;
 }
 
 function scoreTraversalPathEnd(
-  graph: SwordsmanTraversalGraph,
-  nodeId: string,
   depth: number,
-  targetNodeIds: Set<string>,
-  targetBody: SwordsmanBodySnapshot,
+  distance: { horizontalDistance: number; verticalDistance: number },
+  targetMatchBonus: number,
 ): number {
-  const node = graph.nodesById.get(nodeId);
-  if (!node) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const { horizontalDistance, verticalDistance } = measureSwordsmanTraversalNodeDistanceToBody(node, targetBody);
-  const targetMatchBonus = targetNodeIds.has(node.id) ? TARGET_MATCH_SCORE_BONUS : 0;
-  return depth * 72 + horizontalDistance * 1.5 + verticalDistance * 2 - targetMatchBonus;
+  return depth * 72 + distance.horizontalDistance * 1.5 + distance.verticalDistance * 2 - targetMatchBonus;
 }
 
 function scoreTraversalPathEntry(
