@@ -19,6 +19,11 @@ import {
   getTouchInputState,
 } from '../../ui/mobile/touchControls';
 import {
+  resolveTouchStickDirections,
+  TouchStickPresses,
+  type TouchStickDirections,
+} from '../../ui/mobile/touchStick';
+import {
   isDynamicArcadeBody,
   type ArcadeObjectBody,
   type LoadedRoomObject,
@@ -93,9 +98,6 @@ interface OverworldMovementControllerState {
   jumpBufferTime: number;
   wallJumpBufferTime: number;
   protectedJumpTime: number;
-  // The touch stick's down state on the previous physics step, so a butt stomp needs
-  // a fresh downward push like the keyboard's Down press, not a held or drifting stick.
-  touchDownHeld: boolean;
 }
 
 interface OverworldMovementControllerHost {
@@ -216,12 +218,14 @@ function createMovementControllerState(): OverworldMovementControllerState {
     jumpBufferTime: 0,
     wallJumpBufferTime: 0,
     protectedJumpTime: 0,
-    touchDownHeld: false,
   };
 }
 
 export class OverworldMovementController {
   private readonly state = createMovementControllerState();
+  // The previous physics step's stick directions, so a butt stomp or a tilted-gravity jump
+  // needs a fresh push like the keyboard's key press, not a held or drifting stick.
+  private readonly touchStickPresses = new TouchStickPresses();
   private readonly ladderState = new OverworldLadderMovementStateController();
   private readonly buttStompState = new OverworldButtStompMovementStateController();
   private readonly crateState = new OverworldCrateMovementStateController();
@@ -453,10 +457,12 @@ export class OverworldMovementController {
   captureInput(): OverworldMovementInput {
     const touch = getTouchInputState();
     const keyboard = this.host.getKeyboardInput();
-    const touchLeft = touch.active && touch.moveX <= -0.28;
-    const touchRight = touch.active && touch.moveX >= 0.28;
-    const touchUp = touch.active && touch.moveY <= -0.42;
-    const touchDown = touch.active && touch.moveY >= 0.42;
+    // In left or right gravity the hero walks along the stick's vertical axis. On a ladder
+    // or in water, up and down count at the plain threshold so a diagonal push still climbs.
+    const { gravityDirection: gravity, inWater } = this.host.getSpecialTileEnvironment();
+    const { left: touchLeft, right: touchRight, up: touchUp, down: touchDown } = resolveTouchStickDirections(touch,
+      gravity === 'left' || gravity === 'right' ? 'vertical'
+        : inWater || this.host.findOverlappingLadder() ? 'both' : 'horizontal');
     const upPressed = keyboard.pressed('up');
     const downPressed = keyboard.pressed('down');
     const leftPressed = keyboard.pressed('left');
@@ -530,8 +536,7 @@ export class OverworldMovementController {
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed, spacePressed,
     } = frameInput ?? this.captureInput();
-    const touchDownPressed = touchDown && !this.state.touchDownHeld;
-    this.state.touchDownHeld = touchDown;
+    const touchPressed = this.touchStickPresses.step({ left: touchLeft, right: touchRight, up: touchUp, down: touchDown });
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const overlappingLadder = this.host.findOverlappingLadder();
     const touchClimbUpHeld = overlappingLadder !== null && touchUp;
@@ -562,10 +567,7 @@ export class OverworldMovementController {
         rightPressed,
         spacePressed,
         spaceHeld,
-        touchLeft,
-        touchRight,
-        touchUp,
-        touchDown,
+        touchPressed,
       });
       return this.updateDirectionalGravityMovement({
         delta,
@@ -619,7 +621,7 @@ export class OverworldMovementController {
     } else if (
       !this.buttStompState.isActive() &&
       !this.ladderState.isClimbing() &&
-      (downPressed || touchDownPressed)
+      (downPressed || touchPressed.down)
     ) {
       this.startButtStomp(playerBody);
     }
@@ -1005,10 +1007,7 @@ export class OverworldMovementController {
       rightPressed: boolean;
       spacePressed: boolean;
       spaceHeld: boolean;
-      touchLeft: boolean;
-      touchRight: boolean;
-      touchUp: boolean;
-      touchDown: boolean;
+      touchPressed: TouchStickDirections;
     },
   ): DirectionalGravityControls {
     switch (gravityDirection) {
@@ -1016,7 +1015,7 @@ export class OverworldMovementController {
         return {
           tangentInput: -input.horizontalInput,
           crouchHeld: input.upHeld,
-          jumpPressed: input.spacePressed || input.downPressed || input.touchDown,
+          jumpPressed: input.spacePressed || input.downPressed || input.touchPressed.down,
           jumpHeld: input.spaceHeld || input.downHeld,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
@@ -1025,7 +1024,7 @@ export class OverworldMovementController {
         return {
           tangentInput: -input.verticalInput,
           crouchHeld: input.left,
-          jumpPressed: input.spacePressed || input.rightPressed || input.touchRight,
+          jumpPressed: input.spacePressed || input.rightPressed || input.touchPressed.right,
           jumpHeld: input.spaceHeld || input.right,
           horizontalInput: -input.verticalInput,
           verticalInput: input.verticalInput,
@@ -1034,7 +1033,7 @@ export class OverworldMovementController {
         return {
           tangentInput: input.verticalInput,
           crouchHeld: input.right,
-          jumpPressed: input.spacePressed || input.leftPressed || input.touchLeft,
+          jumpPressed: input.spacePressed || input.leftPressed || input.touchPressed.left,
           jumpHeld: input.spaceHeld || input.left,
           horizontalInput: input.verticalInput,
           verticalInput: input.verticalInput,
@@ -1044,7 +1043,7 @@ export class OverworldMovementController {
         return {
           tangentInput: input.horizontalInput,
           crouchHeld: input.downHeld,
-          jumpPressed: input.spacePressed || input.upPressed || input.touchUp,
+          jumpPressed: input.spacePressed || input.upPressed || input.touchPressed.up,
           jumpHeld: input.spaceHeld || input.upHeld,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
