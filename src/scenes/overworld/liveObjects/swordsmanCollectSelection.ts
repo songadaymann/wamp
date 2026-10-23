@@ -16,6 +16,7 @@ const SWORDSMAN_AI_COLLECT_NODE_COIN_BONUS = 48;
 const SWORDSMAN_AI_COLLECT_CURRENT_SWEEP_BEHIND_GRACE_PX = 18;
 const SWORDSMAN_AI_COLLECT_PRODUCTIVE_SWEEP_BACKTRACK_PX = 56;
 export const SWORDSMAN_AI_COLLECT_ROUTE_COMMIT_MS = 7200;
+const SWORDSMAN_AI_COLLECT_NO_ROUTE_RETRY_MS = 1000;
 const SWORDSMAN_AI_COLLECT_ROUTE_EDGE_WEIGHT = 720;
 const SWORDSMAN_AI_COLLECT_ROUTE_COST_WEIGHT = 0.35;
 const SWORDSMAN_AI_COLLECT_ROUTE_SETUP_WEIGHT = 2.1;
@@ -60,7 +61,8 @@ export type CollectNodeStats = {
 export type CollectTarget = { collectible: LoadedRoomObject; objectiveTarget: SwordsmanObjectiveTarget };
 export type CollectSelectionState = Pick<LoadedRoomObjectRuntimeState,
   'aiCollectState' | 'aiCollectRouteTargetNodeId' | 'aiCollectRouteExpiresAt' |
-  'aiCollectRouteScore' | 'aiCollectRouteValue' | 'aiCollectRoutePenalty'>;
+  'aiCollectRouteScore' | 'aiCollectRouteValue' | 'aiCollectRoutePenalty' |
+  'aiCollectNoRouteKey' | 'aiCollectNoRouteUntil'>;
 export interface CollectCandidateInventory {
   groupedCandidates: Map<string, CollectNodeCandidate>;
   currentSweepCandidates: CollectSweepCandidate[];
@@ -97,6 +99,8 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
     aiCollectRouteScore: runtime.aiCollectRouteScore,
     aiCollectRouteValue: runtime.aiCollectRouteValue,
     aiCollectRoutePenalty: runtime.aiCollectRoutePenalty,
+    aiCollectNoRouteKey: runtime.aiCollectNoRouteKey,
+    aiCollectNoRouteUntil: runtime.aiCollectNoRouteUntil,
   };
   const clearRoute = (): void => {
     state.aiCollectRouteTargetNodeId = null;
@@ -219,7 +223,24 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
 
     clearRoute();
 
-    const bestRouteTarget = selectBestCollectRoute(input, candidates, currentSurfaceIsDepleted);
+    // With no committable route every frame would plan every coin ledge again, so the same answer
+    // is kept for a moment while the ledge, coins and blocked edges stay the same (F302).
+    const routeSearchKey = buildCollectRouteSearchKey(input);
+    const skipRouteSearch =
+      state.aiCollectNoRouteKey === routeSearchKey && now < state.aiCollectNoRouteUntil;
+    const routeSearch = skipRouteSearch
+      ? null
+      : selectBestCollectRoute(input, candidates, currentSurfaceIsDepleted);
+    if (routeSearch === 'pending') {
+      // The room's jumps are still being simulated over frames. Wait for the full search rather
+      // than act on part of it, so the route taken is the one it would have picked.
+      return null;
+    }
+    if (!routeSearch && !skipRouteSearch) {
+      state.aiCollectNoRouteKey = routeSearchKey;
+      state.aiCollectNoRouteUntil = now + SWORDSMAN_AI_COLLECT_NO_ROUTE_RETRY_MS;
+    }
+    const bestRouteTarget = routeSearch;
 
     if (
       bestRouteTarget &&
@@ -353,8 +374,12 @@ function selectBestCollectRoute(
       blockedEdgeIds,
       bodyWidth: bodyWidth,
       bodyHeight: bodyHeight,
+      deferColdEdgeSimulations: true,
     });
 
+    if (plan?.pending) {
+      return 'pending';
+    }
     if (!plan || plan.edges.length === 0) {
       continue;
     }
@@ -463,6 +488,14 @@ function selectBestCollectRoute(
   }
 
   return bestRouteTarget;
+}
+
+function buildCollectRouteSearchKey(input: CollectSelectionInput): string {
+  return [
+    input.currentContext.startNodeIds.join(','),
+    Array.from(input.groupedCandidates.keys()).sort().join(','),
+    Array.from(input.blockedEdgeIds).sort().join(','),
+  ].join('\n');
 }
 
 function selectCurrentSweepTarget(

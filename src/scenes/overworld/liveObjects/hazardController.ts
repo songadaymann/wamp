@@ -497,6 +497,8 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         aiCollectRouteScore: null,
         aiCollectRouteValue: 0,
         aiCollectRoutePenalty: 0,
+        aiCollectNoRouteKey: null,
+        aiCollectNoRouteUntil: 0,
         policeBehaviorMode: null,
         policePatrolShoots: false,
         npcMode: null,

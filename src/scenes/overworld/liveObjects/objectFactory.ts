@@ -163,6 +163,8 @@ export function createLiveObjectRuntimeState(options: {
     aiCollectRouteScore: null,
     aiCollectRouteValue: 0,
     aiCollectRoutePenalty: 0,
+    aiCollectNoRouteKey: null,
+    aiCollectNoRouteUntil: 0,
     policeBehaviorMode: isPolice
       ? normalizePoliceBehaviorMode(policeBehaviorMode) ?? DEFAULT_POLICE_BEHAVIOR_MODE
       : null,

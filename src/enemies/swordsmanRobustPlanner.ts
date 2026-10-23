@@ -4,7 +4,10 @@ import {
   TILE_SIZE,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
-import { getTerrainTileCollisionProfile } from '../scenes/overworld/terrainCollision';
+import {
+  getTerrainTileCollisionProfile,
+  type TerrainTileCollisionProfile,
+} from '../scenes/overworld/terrainCollision';
 import {
   getSwordsmanTraversalAirSpeed,
   SWORDSMAN_AI_AIR_SPEED,
@@ -41,7 +44,11 @@ export interface SwordsmanRobustTraversalPlan {
   routeCost: number;
   expandedStates: number;
   simulatedEdges: number;
+  /** Edges this plan had to physically simulate because no earlier plan had. */
+  coldSimulatedEdges: number;
   planDurationMs: number;
+  /** The search stopped to leave the remaining edge physics to later frames; it has no route yet. */
+  pending?: boolean;
 }
 
 export interface SwordsmanRobustTraversalRequest {
@@ -52,6 +59,11 @@ export interface SwordsmanRobustTraversalRequest {
   blockedEdgeIds: ReadonlySet<string>;
   bodyWidth: number;
   bodyHeight: number;
+  /**
+   * Run uncached edge physics only while this frame's share is left and otherwise return a
+   * pending plan, so a room's first plans are spread over frames instead of freezing one (F302).
+   */
+  deferColdEdgeSimulations?: boolean;
 }
 
 export interface SwordsmanTraversalEdgeSimulationDebug {
@@ -104,8 +116,19 @@ const OUT_OF_BOUNDS_PADDING_PX = 64;
 const SURFACE_PROBE_INSET_PX = 1;
 const EPSILON = 0.01;
 const EDGE_SIMULATION_CACHE_LIMIT = 4096;
+// Uncached edge physics may use up to this much time in one go, refilling at this share of the
+// time that passes: about 3 ms of each 60 Hz frame. Plans that defer stop when it runs out.
+const COLD_SIMULATION_BURST_MS = 3;
+const COLD_SIMULATION_TIME_SHARE = COLD_SIMULATION_BURST_MS / (1000 / 60);
 
 const edgeSimulationCache = new Map<string, EdgeSimulationResult>();
+let coldSimulationAllowanceMs = COLD_SIMULATION_BURST_MS;
+let coldSimulationAllowanceUpdatedAt = Number.NEGATIVE_INFINITY;
+let coldSimulationCount = 0;
+const terrainProfilesByRoom = new WeakMap<RoomSnapshot, {
+  graphCacheKey: string;
+  profiles: Array<TerrainTileCollisionProfile | undefined>;
+}>();
 
 export const SWORDSMAN_AI_ROBUST_ROUTE_COMMIT_MS = ROBUST_ROUTE_COMMIT_MS;
 export const SWORDSMAN_AI_ROBUST_REPLAN_INTERVAL_MS = ROBUST_REPLAN_INTERVAL_MS;
@@ -122,7 +145,9 @@ export function planSwordsmanRobustTraversal(
     blockedEdgeIds,
     bodyWidth,
     bodyHeight,
+    deferColdEdgeSimulations = false,
   } = request;
+  const coldSimulationCountAtStart = coldSimulationCount;
   const currentContext = getSwordsmanTraversalContext(graph, enemy);
   const targetContext = getSwordsmanTraversalTargetContext(graph, target);
 
@@ -143,6 +168,7 @@ export function planSwordsmanRobustTraversal(
       routeCost: 0,
       expandedStates: 0,
       simulatedEdges: 0,
+      coldSimulatedEdges: 0,
       planDurationMs: performance.now() - startedAt,
     };
   }
@@ -193,7 +219,25 @@ export function planSwordsmanRobustTraversal(
         edge,
         bodyWidth,
         bodyHeight,
+        deferColdEdgeSimulations,
       );
+      if (!simulation) {
+        // Out of physics time for this frame. Searching on without this edge could pick a
+        // different route than a full search, so the caller waits for a later frame instead.
+        return {
+          edges: [],
+          currentNodeId: currentContext.currentNodeId,
+          targetNodeId: targetContext.targetNodeId,
+          targetNodeIds: targetContext.targetNodeIds,
+          exactRoute: false,
+          routeCost: 0,
+          expandedStates,
+          simulatedEdges,
+          coldSimulatedEdges: coldSimulationCount - coldSimulationCountAtStart,
+          planDurationMs: performance.now() - startedAt,
+          pending: true,
+        };
+      }
       if (!simulation.success) {
         continue;
       }
@@ -261,6 +305,7 @@ export function planSwordsmanRobustTraversal(
     routeCost: selectedPlan.cost,
     expandedStates,
     simulatedEdges,
+    coldSimulatedEdges: coldSimulationCount - coldSimulationCountAtStart,
     planDurationMs: performance.now() - startedAt,
   };
 }
@@ -272,7 +317,7 @@ export function debugSimulateSwordsmanTraversalEdge(
   bodyWidth: number,
   bodyHeight: number,
 ): SwordsmanTraversalEdgeSimulationDebug {
-  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
+  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight)!;
   return {
     edgeId: edge.id,
     success: result.success,
@@ -380,26 +425,62 @@ function simulateTraversalEdge(
   edge: SwordsmanTraversalEdge,
   bodyWidth: number,
   bodyHeight: number,
-): EdgeSimulationResult {
+  deferIfOutOfTime = false,
+): EdgeSimulationResult | null {
   const cacheKey = buildEdgeSimulationCacheKey(graph.cacheKey, edge.id, bodyWidth, bodyHeight);
   const cached = edgeSimulationCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
+  const startedAt = performance.now();
+  refillColdSimulationAllowance(startedAt);
+  if (deferIfOutOfTime && coldSimulationAllowanceMs <= 0) {
+    return null;
+  }
+
+  const result = runTraversalEdgeSimulation(room, graph, edge, bodyWidth, bodyHeight);
+  const endedAt = performance.now();
+  // A plan that does not defer can run far past the share; the debt stays at one burst so
+  // deferring plans resume within a frame or two.
+  coldSimulationAllowanceMs = Math.max(
+    -COLD_SIMULATION_BURST_MS,
+    coldSimulationAllowanceMs - (endedAt - startedAt),
+  );
+  coldSimulationAllowanceUpdatedAt = endedAt;
+  coldSimulationCount += 1;
+  return rememberEdgeSimulation(cacheKey, result);
+}
+
+function refillColdSimulationAllowance(now: number): void {
+  const elapsedMs = now - coldSimulationAllowanceUpdatedAt;
+  if (elapsedMs > 0) {
+    coldSimulationAllowanceMs = Math.min(
+      COLD_SIMULATION_BURST_MS,
+      coldSimulationAllowanceMs + elapsedMs * COLD_SIMULATION_TIME_SHARE,
+    );
+  }
+  coldSimulationAllowanceUpdatedAt = now;
+}
+
+function runTraversalEdgeSimulation(
+  room: RoomSnapshot,
+  graph: SwordsmanTraversalGraph,
+  edge: SwordsmanTraversalEdge,
+  bodyWidth: number,
+  bodyHeight: number,
+): EdgeSimulationResult {
   const sourceNode = graph.nodesById.get(edge.fromId);
   const targetNode = graph.nodesById.get(edge.toId);
   if (!sourceNode || !targetNode) {
-    return rememberEdgeSimulation(cacheKey, { success: false, travelMs: 0 });
+    return { success: false, travelMs: 0 };
   }
 
   if (isSwordsmanLadderTraversalEdge(edge)) {
-    return rememberEdgeSimulation(
-      cacheKey,
-      simulateLadderTraversalEdge(edge, sourceNode, targetNode),
-    );
+    return simulateLadderTraversalEdge(edge, sourceNode, targetNode);
   }
 
+  prepareTerrainProfiles(room, graph.cacheKey);
   const body = createInitialSimBody(edge, sourceNode, targetNode, bodyWidth, bodyHeight);
   let elapsedMs = 0;
   let preserveLaunchSteps = needsLaunchImpulse(edge) ? 1 : 0;
@@ -418,15 +499,12 @@ function simulateTraversalEdge(
       break;
     }
 
-    const currentNodeId = getSwordsmanTraversalCurrentNodeId(
-      graph,
-      toBodySnapshot(body, bodyWidth, bodyHeight),
-    );
-    if (currentNodeId === edge.toId && hasSimBodyReachedTraversalTarget(targetNode, body)) {
-      return rememberEdgeSimulation(cacheKey, {
-        success: true,
-        travelMs: elapsedMs,
-      });
+    // Landing is checked first: finding the body's node scans every surface and wall.
+    if (
+      hasSimBodyReachedTraversalTarget(targetNode, body) &&
+      getSwordsmanTraversalCurrentNodeId(graph, toBodySnapshot(body, bodyWidth, bodyHeight)) === edge.toId
+    ) {
+      return { success: true, travelMs: elapsedMs };
     }
 
     if (hasSimulationEscapedRoom(body)) {
@@ -434,7 +512,7 @@ function simulateTraversalEdge(
     }
   }
 
-  return rememberEdgeSimulation(cacheKey, { success: false, travelMs: elapsedMs });
+  return { success: false, travelMs: elapsedMs };
 }
 
 function simulateLadderTraversalEdge(
@@ -694,7 +772,7 @@ function pointCollides(room: RoomSnapshot, localX: number, localY: number): bool
     return false;
   }
 
-  const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+  const profile = getSimTerrainProfile(room, tileX, tileY);
   if (!profile.hasCollision) {
     return false;
   }
@@ -718,7 +796,7 @@ function getCollidingTerrainRects(
 
   for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
     for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
-      const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+      const profile = getSimTerrainProfile(room, tileX, tileY);
       if (!profile.hasCollision) {
         continue;
       }
@@ -738,6 +816,32 @@ function getCollidingTerrainRects(
   }
 
   return collidingRects;
+}
+
+function prepareTerrainProfiles(room: RoomSnapshot, graphCacheKey: string): void {
+  if (terrainProfilesByRoom.get(room)?.graphCacheKey !== graphCacheKey) {
+    terrainProfilesByRoom.set(room, { graphCacheKey, profiles: [] });
+  }
+}
+
+/** A simulation probes the same few tiles every step, so each tile's collision is read once. */
+function getSimTerrainProfile(
+  room: RoomSnapshot,
+  tileX: number,
+  tileY: number,
+): TerrainTileCollisionProfile {
+  const profiles = terrainProfilesByRoom.get(room)?.profiles;
+  if (!profiles) {
+    return getTerrainTileCollisionProfile(room, tileX, tileY);
+  }
+
+  const index = tileY * ROOM_WIDTH + tileX;
+  let profile = profiles[index];
+  if (!profile) {
+    profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+    profiles[index] = profile;
+  }
+  return profile;
 }
 
 function hasSimulationEscapedRoom(body: SimBody): boolean {

@@ -85,6 +85,8 @@ export interface LoadedRoomObjectRuntimeState {
   aiCollectRouteScore: number | null;
   aiCollectRouteValue: number;
   aiCollectRoutePenalty: number;
+  aiCollectNoRouteKey: string | null;
+  aiCollectNoRouteUntil: number;
   policeBehaviorMode: PoliceBehaviorMode | null;
   policePatrolShoots: boolean;
   npcMode: NpcMode | null;

@@ -30,6 +30,7 @@ function fixture(candidates: CollectNodeCandidate[] = []): CollectSelectionInput
     directionX: 1, aiActiveTraversalNextNodeId: null, aiTraversalBlockedEdges: [],
     aiCollectState: null, aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0,
     aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0,
+    aiCollectNoRouteKey: null, aiCollectNoRouteUntil: 0,
   } as unknown as LoadedRoomObjectRuntimeState;
   return {
     groupedCandidates: new Map(candidates.map(c => [c.collectible.key, c])),
@@ -47,7 +48,7 @@ function route(input: CollectSelectionInput, target: CollectNodeCandidate, cost 
   const edge: SwordsmanTraversalEdge = { id: `to-${target.targetNodeId}`, type: 'jump-up', fromId: 'current', toId: target.targetNodeId!, directionX: 1, setupX: 100, targetX: target.targetSnapshot.centerX, allowEdgeDrop: false };
   input.graph.nodesById.set(target.targetNodeId!, { ...input.currentContext.currentSurface!, id: target.targetNodeId! });
   input.graph.edgesById.set(edge.id, edge);
-  return { edges: [edge], currentNodeId: 'current', targetNodeId: target.targetNodeId, targetNodeIds: [target.targetNodeId!], exactRoute: true, routeCost: cost, expandedStates: 1, simulatedEdges: 1, planDurationMs: 0 };
+  return { edges: [edge], currentNodeId: 'current', targetNodeId: target.targetNodeId, targetNodeIds: [target.targetNodeId!], exactRoute: true, routeCost: cost, expandedStates: 1, simulatedEdges: 1, coldSimulatedEdges: 0, planDurationMs: 0 };
 }
 
 beforeEach(() => { vi.mocked(planSwordsmanRobustTraversal).mockReset(); });
@@ -65,7 +66,7 @@ describe('collect objective priority and route scoring', () => {
     Object.assign(input.runtime, { aiCollectState: 'route', aiCollectRouteTargetNodeId: 'old', aiCollectRouteExpiresAt: 5000, aiCollectRouteScore: 8, aiCollectRouteValue: 20, aiCollectRoutePenalty: 7 });
     const result = selectSwordsmanCollectTarget(input);
     expect(result.target?.collectible.key).toBe('overhead');
-    expect(result.state).toEqual({ aiCollectState: 'jump', aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0, aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0 });
+    expect(result.state).toEqual({ aiCollectState: 'jump', aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0, aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0, aiCollectNoRouteKey: null, aiCollectNoRouteUntil: 0 });
     new SwordsmanRuntimeStateController().applyCollectSelection(input.runtime, result.state);
     expect(input.runtime.directionX).toBe(1); expect(input.runtime.aiCollectState).toBe('jump');
   });
@@ -119,6 +120,28 @@ describe('collect objective priority and route scoring', () => {
     input.now = 1001;
     const expiredFailure = selectSwordsmanCollectTarget(input);
     expect(expiredFailure.target?.collectible.key).toBe('remote'); expect(expiredFailure.state.aiCollectRoutePenalty).toBe(1680);
+  });
+
+  it('waits in place without committing while the planner spreads a cold room over frames (F302)', () => {
+    const remote = candidate('remote', 300, 'remote'); const input = fixture([candidate('behind', 10), remote]);
+    vi.mocked(planSwordsmanRobustTraversal).mockReturnValue({ ...route(input, remote), edges: [], exactRoute: false, pending: true });
+    const waiting = selectSwordsmanCollectTarget(input);
+    expect(waiting.target).toBeNull(); expect(waiting.state).toMatchObject({ aiCollectRouteTargetNodeId: null, aiCollectNoRouteKey: null });
+    expect(planSwordsmanRobustTraversal).toHaveBeenCalledWith(expect.objectContaining({ deferColdEdgeSimulations: true }));
+    vi.mocked(planSwordsmanRobustTraversal).mockReturnValue(route(input, remote));
+    expect(selectSwordsmanCollectTarget(input)).toMatchObject({ target: { collectible: { key: 'remote' } }, state: { aiCollectRouteTargetNodeId: 'remote' } });
+  });
+  it('keeps a no-route answer for a second while the ledge, coins and blocked edges stay the same (F302)', () => {
+    const input = fixture([candidate('unreachable', 300, 'remote')]);
+    vi.mocked(planSwordsmanRobustTraversal).mockReturnValue(null);
+    const select = () => { const result = selectSwordsmanCollectTarget(input); Object.assign(input.runtime, result.state); return result; };
+    expect(select()).toMatchObject({ target: null, state: { aiCollectNoRouteUntil: 2000 } }); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(1);
+    input.now = 1999; select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(1);
+    input.blockedEdgeIds = new Set(['blocked']); select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(2);
+    input.groupedCandidates.set('other', candidate('other', 400, 'other')); select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(4);
+    input.now = 2998; select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(4);
+    input.now = 2999; select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(6);
+    input.currentContext = { ...input.currentContext, startNodeIds: ['current', 'wall'] }; select(); expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(8);
   });
 
   it('rejects partial routes ending on depleted nodes', () => {
