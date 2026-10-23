@@ -23,6 +23,7 @@ import {
   releaseRateLimitSlots,
   takeRateLimitSlots,
   type RateLimitRule,
+  type RateLimitSlotUse,
 } from '../core/rateLimit';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
@@ -61,11 +62,13 @@ export async function handleWampOGramRequest(
     validateRoomSnapshotForWrite(input.roomSnapshot, input.roomSnapshot.id);
     const roomSnapshot = await resolveWampOGramRoomSnapshot(env, input.roomSnapshot, auth);
     const slotIds = await takeWampOGramSlots(request, env, auth.user.id);
+    // Given back only when the gram is not stored; kept once it is, even if reading it back fails.
+    const slotUse: RateLimitSlotUse = { keep: false };
     let record: WampOGramRecord;
     try {
-      record = await createWampOGram(env, { ...input, roomSnapshot }, auth);
+      record = await createWampOGram(env, { ...input, roomSnapshot }, auth, slotUse);
     } catch (error) {
-      await releaseRateLimitSlots(env, slotIds);
+      if (!slotUse.keep) await releaseRateLimitSlots(env, slotIds);
       throw error;
     }
     return jsonResponse(request, record);

@@ -458,7 +458,8 @@ export function createCustomSpriteCanvas(sprite: CustomSpriteDefinition): HTMLCa
 
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, sprite.size, sprite.size);
-  if (isCustomSpriteBlocked(sprite.id)) {
+  // Blocked by the loaded list, or marked blocked in the room it came with.
+  if (sprite.status === 'blocked' || isCustomSpriteBlocked(sprite.id)) {
     context.fillStyle = BLOCKED_ART_COLOR;
     context.fillRect(0, 0, sprite.size, sprite.size);
     return canvas;

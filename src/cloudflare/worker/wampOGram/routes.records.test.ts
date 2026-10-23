@@ -144,6 +144,10 @@ describe('Wamp-O-Gram records the game plays', () => {
         id: 'tile_vandal', name: 'Vandal', pixels: Array.from({ length: 256 }, () => '#00ff00'), collision: 'solid',
         sourceSpriteId: 'vandal-art', createdAt: NOW, updatedAt: NOW,
       }],
+      customSprites: [{
+        id: 'vandal-art', name: 'Vandal', size: 16, kind: 'decoration', status: 'active', createdAt: NOW, updatedAt: NOW,
+        pixels: Array.from({ length: 256 }, () => '#00ff00'),
+      }],
     };
     f.sqlite.prepare('UPDATE wamp_o_grams SET snapshot_json = ?').run(JSON.stringify(withArt));
     f.sqlite.prepare(`INSERT INTO custom_sprites (id, definition_json, name, normalized_name, kind, size, status, created_at, updated_at)
@@ -153,6 +157,9 @@ describe('Wamp-O-Gram records the game plays', () => {
     expect(blocked.headers.get('Cache-Control')).toBe('no-store');
     expect(blocked.body.roomSnapshot).toEqual(maskBlockedCustomArt(withArt, new Set(['vandal-art'])));
     expect(new Set(blocked.body.roomSnapshot.customTiles?.[0].pixels)).toEqual(new Set([BLOCKED_ART_COLOR]));
+    expect(blocked.body.roomSnapshot.customSprites?.[0]).toMatchObject({ status: 'blocked' });
+    expect(new Set(blocked.body.roomSnapshot.customSprites?.[0].pixels)).toEqual(new Set([BLOCKED_ART_COLOR]));
+    expect(JSON.stringify(blocked.body)).not.toContain('#00ff00');
 
     f.sqlite.prepare("UPDATE custom_sprites SET status = 'active' WHERE id = 'vandal-art'").run();
     expect((await read(slug)).body.roomSnapshot.customTiles?.[0].pixels[0]).toBe('#00ff00');
@@ -173,6 +180,22 @@ describe('Wamp-O-Gram records the game plays', () => {
     expect(failed).toHaveLength(1);
     expect(count('wamp_o_grams')).toBe(1);
     expect(count("rate_limit_events WHERE bucket LIKE 'wamp-o-gram:%'")).toBe(3);
+  });
+
+  it('keeps the slots once a gram is stored, even if reading it back fails', async () => {
+    await send();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const database = f.env.DB;
+    const prepare = (Object.getPrototypeOf(database) as typeof database).prepare.bind(database);
+    let failed = false;
+    vi.spyOn(database, 'prepare').mockImplementation((query: string) => {
+      if (!failed && /SELECT[\s\S]*FROM wamp_o_grams\s+WHERE slug = \?/.test(query)) { failed = true; throw new Error('Storage unavailable'); }
+      return prepare(query);
+    });
+    expect((await send()).status).toBe(500);
+    expect(failed).toBe(true);
+    expect(count('wamp_o_grams')).toBe(2);
+    expect(count("rate_limit_events WHERE bucket LIKE 'wamp-o-gram:%'")).toBe(6);
   });
 });
 
