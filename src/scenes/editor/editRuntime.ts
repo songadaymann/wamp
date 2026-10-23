@@ -374,6 +374,8 @@ export class EditorEditRuntime {
   }
 
   get documentRevision(): number { return this.revision; }
+  /** A tile, Smart or object gesture has changed the room but not yet bumped the revision. */
+  get hasUncommittedEdits(): boolean { return this.currentBatch.length > 0 || this.currentBatchSmartBefore !== null || this.objectBatchBefore !== null; }
 
   set currentLastDirtyAt(value: number) {
     this.lastDirtyAt = value;

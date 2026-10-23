@@ -20,7 +20,7 @@ import {
 } from './viewModel';
 import type { EditorCourseController } from './courseController';
 import type { EditorStatusDetails } from './roomSession';
-import { buildReadyToPublishChecklist } from './clearCheck';
+import { buildReadyToPublishChecklist, getEditorDraftClearReceipt, type ReadyToPublishChecklist } from './clearCheck';
 import type { RoomEdgeSummary } from './edgeGuides';
 
 interface EditorChromeControllerHost {
@@ -38,7 +38,15 @@ interface EditorChromeControllerHost {
   getRoomEdgeSummary?(): RoomEdgeSummary;
 }
 
+interface CachedClearCheck {
+  key: string;
+  receipt: string | null;
+  checklist: ReadyToPublishChecklist;
+}
+
 export class EditorChromeController {
+  private clearCheckCache: CachedClearCheck | null = null;
+
   constructor(
     private readonly editRuntime: EditorEditRuntime,
     private readonly flowController: EditorSceneFlowController,
@@ -49,7 +57,8 @@ export class EditorChromeController {
     private readonly host: EditorChromeControllerHost,
   ) {}
 
-  render(): void {
+  /** `zoomOnly` marks a render caused only by a camera zoom step. */
+  render(zoomOnly = false): void {
     const uiBridge = this.host.getUiBridge();
     if (!uiBridge) {
       return;
@@ -62,7 +71,7 @@ export class EditorChromeController {
 
     uiBridge.render(
       buildEditorUiViewModel({
-        clearCheck: this.courseController.hasActiveCourseEdit() ? undefined : buildReadyToPublishChecklist(this.editRuntime.exportRoomSnapshot(), undefined, this.host.getRoomEdgeSummary?.()),
+        clearCheck: this.courseController.hasActiveCourseEdit() ? undefined : this.getClearCheck(zoomOnly),
         canUndo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasUndoHistory(),
         canRedo: this.host.getRoomPermissions().canSaveDraft && this.editRuntime.hasRedoHistory(),
         roomTitle: this.host.getRoomTitle(),
@@ -105,6 +114,30 @@ export class EditorChromeController {
 
   refreshBottomBar(): void {
     this.render();
+  }
+
+  /**
+   * Zoom is not a checklist input, so a zoom-only render reuses the last
+   * checklist while the room revision, receipt, edges, title and settings are
+   * unchanged and no gesture is mid-edit. Every other render rebuilds it.
+   */
+  private getClearCheck(zoomOnly: boolean): ReadyToPublishChecklist {
+    const edges = this.host.getRoomEdgeSummary?.();
+    const key = this.editRuntime.hasUncommittedEdits ? null : JSON.stringify([
+      this.editRuntime.documentRevision, this.host.getRoomTitle(), edges ?? null,
+      editorState.selectedBackground, editorState.selectedLightingMode, editorState.selectedLightingDarkness,
+      editorState.selectedLightingRadius, editorState.selectedWeatherMode, editorState.selectedWeatherIntensity,
+    ]);
+    const cached = this.clearCheckCache;
+    if (
+      zoomOnly && key !== null && cached?.key === key
+      && getEditorDraftClearReceipt(cached.checklist.roomId) === cached.receipt
+    ) return cached.checklist;
+    const checklist = buildReadyToPublishChecklist(this.editRuntime.exportRoomSnapshot(), undefined, edges);
+    this.clearCheckCache = key === null
+      ? null
+      : { key, receipt: getEditorDraftClearReceipt(checklist.roomId), checklist };
+    return checklist;
   }
 
   private getSaveStatus(): EditorStatusDetails {
