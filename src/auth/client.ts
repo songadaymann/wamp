@@ -178,7 +178,9 @@ export async function setupAuthUi(): Promise<void> {
 
   // Hamburger menu toggle
   const menuToggle = document.getElementById('menu-toggle');
-  if (menuToggle) installMenuToggle(authPanel, menuToggle, document.getElementById('menu-body'));
+  if (menuToggle) {
+    installMenuToggle({ panel: authPanel, toggle: menuToggle, game: document.getElementById('game-container') });
+  }
   authIdentity?.addEventListener('click', () => {
     if (!isOpenableProfileUserId(state.user?.id)) {
       return;

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OverworldInspectInputController } from './inspectInput';
 import { installMenuToggle } from '../../ui/menuToggle';
+import { isGameKeyboardYielded } from '../../ui/keyboardFocus';
 
 vi.mock('phaser', () => ({ default: { Math: { Distance: { Between: vi.fn(() => 100) } } } }));
 vi.mock('../../ui/deviceLayout', () => ({ getDeviceLayoutState: () => ({ coarsePointer: false }) }));
@@ -166,23 +167,75 @@ describe('one ordered Escape (F378, F385)', () => {
     expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
   });
 
-  it('lets the menu spend the Escape that closes it, so only the next Escape stops play (F478)', () => {
+  // The page as the game's keyboard sees it: a button focused during a key press, or reached with
+  // Tab, matches :focus-visible, and then isGameKeyboardYielded() hands the keys to that button.
+  function menuPage() {
+    class El extends EventTarget {
+      classes = new Set<string>(); inside: El[] = []; focusVisible = false; isContentEditable = false;
+      constructor(readonly isButton = false) { super(); }
+      classList = { contains: (c: string) => this.classes.has(c), remove: (c: string) => this.classes.delete(c),
+        toggle: (c: string) => { if (this.classes.has(c)) this.classes.delete(c); else this.classes.add(c); } };
+      contains(node: unknown): boolean { return node === this || this.inside.some(child => child.contains(node)); }
+      getAttribute() { return null; } setAttribute() {}
+      matches(selector: string) { return selector === ':focus-visible' ? this.focusVisible : this.isButton && selector.includes('button'); }
+      focus() { page.activeElement = this; this.focusVisible = page.keyPressing || this.focusVisible; }
+      blur() { if (page.activeElement === this) { page.activeElement = page.body; this.focusVisible = false; } }
+    }
+    vi.stubGlobal('HTMLElement', El);
+    for (const name of ['HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement']) vi.stubGlobal(name, class {});
     vi.stubGlobal('MutationObserver', class { observe() {} disconnect() {} });
-    const classes = new Set(['menu-open']);
-    const panel = { classList: { contains: (name: string) => classes.has(name), remove: (name: string) => classes.delete(name) }, contains: () => false };
-    const toggle = Object.assign(new EventTarget(), { getAttribute: () => null, setAttribute: vi.fn(), focus: vi.fn() });
-    const page = Object.assign(new EventTarget(), { activeElement: null, getElementById: (id: string) => id === 'auth-panel' ? panel : null });
+    const panel = new El(), toggle = new El(true), emailField = new El();
+    panel.inside.push(toggle, emailField);
+    const page = Object.assign(new EventTarget(), { body: new El(), activeElement: null as El | null, keyPressing: false,
+      getElementById: (id: string) => id === 'auth-panel' ? panel : null, querySelector: () => null });
+    page.activeElement = page.body;
     vi.stubGlobal('document', page);
-    const dispose = installMenuToggle(panel as never, toggle as never, null, page as unknown as Document);
+    const dispose = installMenuToggle({ panel, toggle, game: null } as never, page as unknown as Document);
     const h = harness('play');
-    // Phaser hears keys after the page does and skips the ones the page handled.
-    page.addEventListener('keydown', (event) => { if (!event.defaultPrevented) h.fire('key:keydown-ESC', event); });
-    const press = () => page.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { key: 'Escape', isComposing: false, ...escape() }));
-    press();
-    expect(classes.has('menu-open')).toBe(false);
-    expect(h.host.stopCurrentPlay).not.toHaveBeenCalled();
-    press();
-    expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
-    dispose();
+    // Phaser hears keys after the page, skips handled ones, and gets none while the page holds them.
+    page.addEventListener('keydown', (event) => {
+      if (!event.defaultPrevented && !isGameKeyboardYielded(page as unknown as Document)) h.fire('key:keydown-ESC', event);
+    });
+    const press = () => {
+      page.keyPressing = true;
+      page.dispatchEvent(Object.assign(new Event('keydown', { cancelable: true }), { key: 'Escape', isComposing: false, ...escape() }));
+      page.keyPressing = false;
+    };
+    const clickToggle = (detail: number) => toggle.dispatchEvent(Object.assign(new Event('click'), { detail }));
+    return { panel, toggle, emailField, page, h, press, clickToggle, dispose, open: () => panel.classes.has('menu-open') };
+  }
+
+  it('lets the menu spend the Escape that closes it, so the next Escape stops play (F478)', () => {
+    const m = menuPage();
+    m.toggle.focus(); m.clickToggle(1); // a mouse click focuses the button without a focus ring
+    m.press();
+    expect(m.open()).toBe(false);
+    expect(m.h.host.stopCurrentPlay).not.toHaveBeenCalled();
+    expect(m.page.activeElement).toBe(m.page.body);
+    m.press();
+    expect(m.h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+    m.dispose();
+  });
+
+  it('gives the game its keys back after Escape closes the menu sign-in opened (F478)', () => {
+    const m = menuPage();
+    m.panel.classes.add('menu-open'); m.emailField.focus(); // promptForSignIn() after a run
+    m.press();
+    expect(m.open()).toBe(false);
+    expect(isGameKeyboardYielded(m.page as unknown as Document)).toBe(false);
+    m.press();
+    expect(m.h.host.stopCurrentPlay).toHaveBeenCalledOnce();
+    m.dispose();
+  });
+
+  it('returns a keyboard player to the menu button, which keeps the keys as any tabbed-to button does (F478)', () => {
+    const m = menuPage();
+    m.toggle.focusVisible = true; m.toggle.focus(); m.clickToggle(0); // Tab, then Enter
+    m.press();
+    expect(m.open()).toBe(false);
+    expect(m.page.activeElement).toBe(m.toggle);
+    m.press();
+    expect(m.h.host.stopCurrentPlay).not.toHaveBeenCalled();
+    m.dispose();
   });
 });
