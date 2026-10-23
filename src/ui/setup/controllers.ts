@@ -23,7 +23,7 @@ import { PlaylistIntroModalController } from './playlistIntroModal';
 import { PerformanceSuggestionModalController } from './performanceSuggestionModal';
 import { RoomSequenceController } from './roomSequenceController';
 import type { ProfileModalController } from './profileModal';
-import { LazyModal } from './lazyModal';
+import { explainMenuLoadFailure, LazyModal } from './lazyModal';
 import { LazyRecoveryController } from './lazyRecovery';
 import { setupRemainingModalTriggers } from './remainingModalTriggers';
 import { PROFILE_OPEN_REQUEST_EVENT, type ProfileOpenRequestDetail } from './profileEvents';
@@ -110,7 +110,8 @@ export function setupUiControllers(game: Phaser.Game): void {
 
 function createUiControllers(game: Phaser.Game): UiControllers {
   // Rarely opened pop-ups load on first open (F019).
-  const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game), ['leaderboard-modal']);
+  const leaderboardModal = new LazyModal(async () => new (await import('./leaderboardModal')).LeaderboardModalController(game), ['leaderboard-modal'],
+    explainMenuLoadFailure('Leaderboard'));
   const controlsModal = new LazyModal(async () => new (await import('./controlsModal')).ControlsModalController());
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal']);

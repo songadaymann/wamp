@@ -18,12 +18,13 @@ import { BootScene } from './scenes/BootScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
 import { ensureEditorScenesRegistered } from './scenes/editorSceneLoader';
 import {
+  canReplaceBusyCard,
   getAppFeedbackDebugState,
   hideBusyOverlay,
   initializeAppFeedback,
   isAppReady,
-  showBusyError,
   showBootSplash,
+  showBusyError,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
 import { installDialogKeyboardSync, syncGameKeyboardFocus } from './ui/keyboardFocus';
@@ -329,11 +330,7 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
   ),
 });
 installStaleBuildRecovery({
-  canShowOffer: () => {
-    const feedback = getAppFeedbackDebugState();
-    // Never over an open choice (an edit conflict, a draft recovery): its answer would be lost.
-    return !feedback.busyVisible || (feedback.busyState === 'error' && feedback.busyTone !== 'choice');
-  },
+  canShowOffer: canReplaceBusyCard,
   showReloadOffer: () => showBusyError(
     'A new version of WAMP came out while this tab was open, so this part can\'t load. Save anything you are working on, then reload.',
     { title: 'WAMP was updated', tone: 'choice', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: () => window.location.reload() },

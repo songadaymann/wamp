@@ -1,6 +1,6 @@
 import { createExpandedRoomRepository, type ExpandedRoomRepository } from '../../expandedRooms/repository';
 import { hasExpandedRoomLeaderboardTarget, loadSelectedExpandedRoomLeaderboard } from './expandedRoomLeaderboardTarget';
-import { friendlyError, renderFriendlyError } from '../friendlyError';
+import { friendlyError, renderFriendlyError, setLiveMessage } from '../friendlyError';
 import { setToggleState } from '../toggleState';
 import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
@@ -81,6 +81,13 @@ type LeaderboardModalElements = {
   roomRushList: HTMLElement | null;
 };
 
+/** Why a vote didn't save. A server reason (not your room, play this version first) won't change on a retry. */
+function voteErrorMessage(error: unknown): string {
+  const status = (error as { status?: unknown } | null)?.status;
+  const settled = typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429;
+  return friendlyError('save your rating', { error, nextStep: settled ? '' : undefined }).trim();
+}
+
 export class LeaderboardModalController {
   private readonly elements: LeaderboardModalElements;
   private activeTab: LeaderboardTab = 'room';
@@ -104,6 +111,8 @@ export class LeaderboardModalController {
   private readonly roomRushLoadedModes = new Set<RoomRushLeaderboardModeKey>();
   private readonly roomRushFailedModes = new Set<RoomRushLeaderboardModeKey>();
   private voteSubmitting = false;
+  /** A rejected vote, shown beside the vote buttons rather than at the top of the dialog. */
+  private voteError: string | null = null;
   private selectedRoomRushMode: RoomRushLeaderboardModeKey = 'easy:selected';
   private preferredInitialTab: LeaderboardTab | null = null;
   private returnFocus: HTMLElement | null = null;
@@ -326,6 +335,7 @@ export class LeaderboardModalController {
     this.roomRushLoading = false;
     this.globalController.close();
     this.voteSubmitting = false;
+    this.voteError = null;
     this.roomLeaderboard = null;
     this.courseLeaderboard = null;
     this.roomRushLeaderboards = null;
@@ -412,6 +422,7 @@ export class LeaderboardModalController {
 
     this.roomLoading = true;
     this.roomLoaded = false;
+    this.voteError = null;
     this.render();
     try {
       const response = await this.runRepository.loadRoomLeaderboard(
@@ -561,8 +572,11 @@ export class LeaderboardModalController {
     const roomTitle = this.roomLeaderboard.roomTitle ?? null;
     const previousViewerRank = this.roomLeaderboard.viewerRank ?? null;
     const authUserId = getAuthDebugState().user?.id?.trim() ?? null;
+    const votedBoard = this.roomLeaderboard;
+    const pressed = this.doc.activeElement as HTMLButtonElement | null;
 
     this.voteSubmitting = true;
+    this.voteError = null;
     this.render();
     try {
       const nextDifficultyChoice =
@@ -608,10 +622,14 @@ export class LeaderboardModalController {
       this.setError(null, undefined, 'room');
     } catch (error) {
       console.error('Failed to submit room rating update', error);
-      this.setError(friendlyError('submit room rating update', { error }), undefined, 'room');
+      // A reopen or version change while saving shows another board; its buttons are not this vote's.
+      if (this.roomLeaderboard === votedBoard && !this.roomLoading) this.voteError = voteErrorMessage(error);
     } finally {
       this.voteSubmitting = false;
       this.render();
+      // Disabling the buttons while saving dropped keyboard focus; give it back to the one pressed.
+      if (pressed && pressed !== this.doc.body && pressed.isConnected && !pressed.disabled
+        && (!this.doc.activeElement || this.doc.activeElement === this.doc.body)) pressed.focus({ preventScroll: true });
     }
   }
 
@@ -768,7 +786,7 @@ export class LeaderboardModalController {
               difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
             } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'} · ${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`;
     this.elements.roomDifficultySummary.textContent = consensusText;
-    this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getRoomRatingStatusText();
+    this.renderRoomRatingStatus(roomPending);
     for (const button of this.elements.roomQualityButtons) {
       const qualityStars = this.parseQualityStars(button.dataset.roomQualityStars);
       if (qualityStars === null) {
@@ -1118,6 +1136,21 @@ export class LeaderboardModalController {
     }
 
     return 'Rate this room based on your run.';
+  }
+
+  /** The line under the vote buttons: your rating, or why a vote didn't save, read out as an alert. */
+  private renderRoomRatingStatus(roomPending: boolean): void {
+    const status = this.elements.roomDifficultyStatus;
+    if (!status) return;
+    const error = roomPending ? null : this.voteError;
+    status.classList.toggle('history-modal-error', Boolean(error));
+    if (error) {
+      setLiveMessage(status, error, 'error', { rerender: true });
+      return;
+    }
+    status.removeAttribute('role');
+    status.classList.remove('hidden');
+    status.textContent = roomPending ? '' : this.getRoomRatingStatusText();
   }
 
   private getRoomRatingStatusText(): string {
