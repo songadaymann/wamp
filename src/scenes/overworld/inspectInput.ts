@@ -120,8 +120,10 @@ export class OverworldInspectInputController {
   private readonly handleEscapeKeydown = (event: KeyboardEvent): void => {
     if (this.host.closeComposerForEscape()) return;
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
-    // Escape remains a fixed way out, independent of custom command bindings.
-    if (this.host.getMode() === 'play' && !hasBlockingModalOpen()) {
+    // Escape remains a fixed way out, independent of custom command bindings. Like P and
+    // the gamepad, it leaves play alone behind the open menu (a live Rush or duel keeps running).
+    if (this.host.getMode() === 'play' && !hasBlockingModalOpen()
+      && !document.getElementById('auth-panel')?.classList.contains('menu-open')) {
       this.host.stopCurrentPlay();
     }
   };

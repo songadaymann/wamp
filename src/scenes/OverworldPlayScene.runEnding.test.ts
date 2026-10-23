@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   default: {
@@ -23,7 +23,7 @@ import { OverworldSessionResetController } from './overworld/sessionReset';
 type Harness = Record<string, unknown> & {
   stopCurrentPlay(): void;
   playSelectedRoom(): void | Promise<void>;
-  jumpToCoordinates(coordinates: { x: number; y: number }): Promise<void>;
+  jumpToCoordinates(coordinates: { x: number; y: number }): Promise<boolean>;
   handleSceneSleep(): void;
 };
 
@@ -33,18 +33,23 @@ function scene(fields: Record<string, unknown>): Harness {
 
 const room = { ...createDefaultRoomSnapshot('0,0', { x: 0, y: 0 }), status: 'published' as const, version: 1 };
 
-function rushHarness(mode: 'browse' | 'play' = 'play') {
+function rushHarness(mode: 'browse' | 'play' = 'play', options: { difficulty?: 'easy' | 'hard'; deathPending?: boolean } = {}) {
   const showResult = vi.fn();
+  const death = { pending: options.deathPending ?? false };
   const rush = new OverworldRoomRushModeController(
-    { showTransientStatus: vi.fn(), renderHud: vi.fn() } as never,
+    { showTransientStatus: vi.fn(), renderHud: vi.fn(), isDeathPending: () => death.pending } as never,
     { showResult, reset: vi.fn() } as never,
   );
+  const difficulty = options.difficulty ?? 'hard';
   (rush as unknown as { runController: OverworldRoomRushRunController }).runController.startRun({
-    difficulty: 'hard', startRule: 'weekly', startCoordinates: room.coordinates,
+    difficulty, startRule: difficulty === 'hard' ? 'weekly' : 'selected', startCoordinates: room.coordinates,
     returnCoordinates: room.coordinates, startRoom: room,
   });
   const returnToWorld = vi.fn();
-  return { harness: scene({ mode, roomRushModeController: rush, returnToWorld }), rush, showResult, returnToWorld };
+  const showTransientStatus = vi.fn();
+  const selectionController = { jumpToCoordinates: vi.fn(async () => {}) };
+  const harness = scene({ mode, roomRushModeController: rush, returnToWorld, showTransientStatus, selectionController });
+  return { harness, rush, death, showResult, returnToWorld, showTransientStatus, selectionController };
 }
 
 describe('one stop path for every input (F378)', () => {
@@ -74,7 +79,36 @@ describe('one stop path for every input (F378)', () => {
   });
 });
 
+describe('a stop during the death beat of a Rush a death would fail', () => {
+  it('lets the death fail the Weekly Rush instead of saving it as completed', () => {
+    const h = rushHarness('play', { deathPending: true });
+    h.harness.stopCurrentPlay();
+    expect(h.showResult).not.toHaveBeenCalled();
+    expect(h.rush.getCurrentRun()).toMatchObject({ result: 'active', deaths: 0 });
+    // The beat ends and records the death, which fails the run with its result.
+    h.death.pending = false;
+    h.rush.recordDeath('Ouch.');
+    expect(h.showResult).toHaveBeenCalledOnce();
+    expect(h.showResult.mock.calls[0][0]).toMatchObject({ result: 'failed', deaths: 1 });
+  });
+
+  it('applies to a jump as well, which still gives way to the coming result', async () => {
+    const h = rushHarness('play', { deathPending: true });
+    await expect(h.harness.jumpToCoordinates({ x: 9, y: 4 })).resolves.toBe(false);
+    expect(h.selectionController.jumpToCoordinates).not.toHaveBeenCalled();
+    expect(h.showResult).not.toHaveBeenCalled();
+    expect(h.rush.getCurrentRun()?.result).toBe('active');
+  });
+
+  it('still stops an Easy Rush at once, since its deaths do not end the run', () => {
+    const h = rushHarness('play', { difficulty: 'easy', deathPending: true });
+    h.harness.stopCurrentPlay();
+    expect(h.showResult.mock.calls[0][0]).toMatchObject({ result: 'completed', difficulty: 'easy' });
+  });
+});
+
 describe('Escape after a composer lost focus (F385)', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
   function composerHarness(open: { comments: boolean; chat: boolean }) {
     const keys = new Map<string, (event: unknown) => void>();
     const stopCurrentPlay = vi.fn();
@@ -90,6 +124,7 @@ describe('Escape after a composer lost focus (F385)', () => {
       roomChatController: { handleEscapeKey: chat },
       stopCurrentPlay,
     } as never).initialize();
+    vi.stubGlobal('document', { getElementById: () => null });
     const escape = () => keys.get('keydown-ESC')!({ repeat: false, ctrlKey: false, metaKey: false, altKey: false });
     return { escape, stopCurrentPlay, comments, chat };
   }
@@ -144,19 +179,21 @@ describe('jumping to a room mid-run (F383)', () => {
     const endRush = vi.fn();
     const clearActiveMatch = vi.fn(() => order.push('pvp'));
     const jump = vi.fn(async () => { order.push('jump'); });
+    const showTransientStatus = vi.fn();
     const harness = scene({
       mode: options.mode ?? 'play',
+      showTransientStatus,
       flowController: flow,
       pvpArenaController: { clearActiveMatch },
       roomRushModeController: { getCurrentRun: () => options.rush ? { result: 'active' } : null, end: endRush },
       selectionController: { jumpToCoordinates: jump },
     });
-    return { harness, state, order, scenes, finalizeActiveCourseRun, clearActiveCourseRoomOverrides, abandonGoalRun, clearActiveMatch, endRush, jump };
+    return { harness, state, order, scenes, finalizeActiveCourseRun, clearActiveCourseRoomOverrides, abandonGoalRun, clearActiveMatch, endRush, jump, showTransientStatus };
   }
 
   it('ends the Expanded Room run, its overrides and the duel before moving, like Stop', async () => {
     const h = jumpHarness();
-    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    await expect(h.harness.jumpToCoordinates({ x: 9, y: 4 })).resolves.toBe(true);
     expect(h.state.activeCourseRun).toBeNull();
     expect(h.finalizeActiveCourseRun).toHaveBeenCalledWith('abandoned');
     expect(h.clearActiveCourseRoomOverrides).toHaveBeenCalled();
@@ -176,12 +213,13 @@ describe('jumping to a room mid-run (F383)', () => {
     expect(h.scenes.sleep).not.toHaveBeenCalled();
   });
 
-  it('ends a Room Rush through its result, which takes the place of the jump', async () => {
+  it('ends a Room Rush through its result, which takes the place of the jump, and says so', async () => {
     const h = jumpHarness({ rush: true });
-    await h.harness.jumpToCoordinates({ x: 9, y: 4 });
+    await expect(h.harness.jumpToCoordinates({ x: 9, y: 4 })).resolves.toBe(false);
     expect(h.endRush).toHaveBeenCalledOnce();
     expect(h.order).toEqual([]);
     expect(h.jump).not.toHaveBeenCalled();
+    expect(h.showTransientStatus).toHaveBeenCalledWith('Room Rush ended. Open the room again to play it.');
   });
 
   it('jumps straight from browse without touching a session', async () => {

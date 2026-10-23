@@ -173,6 +173,18 @@ describe('Welcome destination lifecycle', () => {
     expect(saveDraft).not.toHaveBeenCalled(); expect(f.visible()).toBe(false); f.controller.destroy();
   });
 
+  it('does not open the editor when a Room Rush result took the jump over', async () => {
+    const openGuestDraftRoom = vi.fn(async () => true);
+    feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(async () => false), openGuestDraftRoom };
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const localRooms = { loadRoom: vi.fn(async () => createDefaultRoomRecord('24,9', { x: 24, y: 9 })) };
+    const f = fixture({ loadRoomCurrent: async () => current() } as unknown as RoomRepository, { localRooms });
+    f.controller.open(); f.buttons.get('btn-welcome-build')!.dispatchEvent(new Event('click')); await flush();
+    expect(openGuestDraftRoom).not.toHaveBeenCalled();
+    expect(f.buttons.get('welcome-modal-status')!.textContent).toBe('Room Rush ended. Press Build again to start building.');
+    expect(f.visible()).toBe(true); f.controller.destroy(); errors.mockRestore();
+  });
+
   it('preserves an existing browser draft and a newly claimed frontier', async () => {
     const openGuestDraftRoom = vi.fn(); feedback.scene = { getSelectedRoomContext: () => ({ coordinates: { x: 0, y: 0 } }), jumpToCoordinates: vi.fn(), openGuestDraftRoom };
     const record = createDefaultRoomRecord('24,9', { x: 24, y: 9 }); record.draft.title = 'Keep my work';

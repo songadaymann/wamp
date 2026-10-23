@@ -266,7 +266,8 @@ export class RoomSequenceController {
     this.render();
 
     if (shouldReturnToWorld && wasPlaying) {
-      getActiveOverworldScene(this.game)?.returnToWorld();
+      // The shared stop path: an active Room Rush ends with its result, not abandoned.
+      getActiveOverworldScene(this.game)?.stopCurrentPlay();
     }
   }
 
@@ -279,7 +280,7 @@ export class RoomSequenceController {
     if (sequence.index >= sequence.entries.length - 1) {
       if (sequence.kind === 'welcome') {
         this.leaderboardModal.close();
-        getActiveOverworldScene(this.game)?.returnToWorld();
+        getActiveOverworldScene(this.game)?.stopCurrentPlay();
         this.activeSequence = null;
         this.render();
         this.firstStepsSummary?.finish();
@@ -323,8 +324,10 @@ export class RoomSequenceController {
     try {
       if (entry.buildPrompt) await verifyPromptPlayback(entry);
       if (this.activeSequence !== sequence) return;
-      await scene.jumpToCoordinates(entry.roomCoordinates);
+      const jumped = await scene.jumpToCoordinates(entry.roomCoordinates);
       if (this.activeSequence !== sequence) return;
+      // A Room Rush result took the jump's place; the sequence ends with the Rush.
+      if (jumped === false) { this.stop({ returnToWorld: false }); return; }
       if (sequence.mode === 'play') {
         if (!scene.playSelectedRoom) {
           throw new Error('The room player is not ready yet.');

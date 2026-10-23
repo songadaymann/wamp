@@ -352,6 +352,11 @@ export class WorldsController {
       this.view?.setStatus('Return to the World map before warping.', true);
       return;
     }
+    // The world must switch before the jump loads it, and a Rush would end in place of the jump.
+    if (scene.isRoomRushRunActive()) {
+      this.view?.setStatus('End your Room Rush before warping.', true);
+      return;
+    }
     setActiveWorldContext(world.number === 0 ? null : {
       worldId: world.id,
       viewerRole: world.viewerRole ?? null,

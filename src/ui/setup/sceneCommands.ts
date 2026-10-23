@@ -190,9 +190,7 @@ export function setupSceneCommands(
       void (getActiveOverworldScene(game)?.openCourseEditor() ??
         getActiveOverworldScene(game)?.openCourseComposer());
     },
-    onJumpToCoordinates: (coordinates) => {
-      void getActiveOverworldScene(game)?.jumpToCoordinates(coordinates);
-    },
+    onJumpToCoordinates: (coordinates) => getActiveOverworldScene(game)?.jumpToCoordinates(coordinates),
     onZoomIn: () => {
       getActiveOverworldScene(game)?.zoomIn();
     },

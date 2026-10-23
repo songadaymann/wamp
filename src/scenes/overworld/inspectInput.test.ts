@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OverworldInspectInputController } from './inspectInput';
 
 vi.mock('phaser', () => ({ default: { Math: { Distance: { Between: vi.fn(() => 100) } } } }));
@@ -113,8 +113,14 @@ describe('pan keys after focus leaves the game (F059)', () => {
 
 describe('one ordered Escape (F378, F385)', () => {
   const escape = (changes: Partial<KeyboardEvent> = {}) => ({ repeat: false, ctrlKey: false, metaKey: false, altKey: false, ...changes });
+  const menu = { open: false };
+  const stubMenu = () => vi.stubGlobal('document', {
+    getElementById: (id: string) => id === 'auth-panel' ? { classList: { contains: (name: string) => name === 'menu-open' && menu.open } } : null,
+  });
+  afterEach(() => { vi.unstubAllGlobals(); menu.open = false; });
 
   it('stops play through the shared stop path, which ends a Room Rush with its result', () => {
+    stubMenu();
     const h = harness('play');
     h.fire('key:keydown-ESC', escape());
     expect(h.host.closeComposerForEscape).toHaveBeenCalledOnce();
@@ -122,6 +128,7 @@ describe('one ordered Escape (F378, F385)', () => {
   });
 
   it('spends the key on a blurred composer and never also ends the run', () => {
+    stubMenu();
     const h = harness('play');
     h.host.closeComposerForEscape.mockReturnValueOnce(true);
     h.fire('key:keydown-ESC', escape());
@@ -131,6 +138,7 @@ describe('one ordered Escape (F378, F385)', () => {
   });
 
   it('still closes a composer in browse, and leaves play alone behind a dialog or a held key', () => {
+    stubMenu();
     const browse = harness();
     browse.host.closeComposerForEscape.mockReturnValueOnce(true);
     browse.fire('key:keydown-ESC', escape());
@@ -144,5 +152,16 @@ describe('one ordered Escape (F378, F385)', () => {
     modal.open = true;
     try { play.fire('key:keydown-ESC', escape()); } finally { modal.open = false; }
     expect(play.host.stopCurrentPlay).not.toHaveBeenCalled();
+  });
+
+  it('leaves play alone while the game menu is open, as P and the gamepad do', () => {
+    stubMenu();
+    const h = harness('play');
+    menu.open = true;
+    h.fire('key:keydown-ESC', escape());
+    expect(h.host.stopCurrentPlay).not.toHaveBeenCalled();
+    menu.open = false;
+    h.fire('key:keydown-ESC', escape());
+    expect(h.host.stopCurrentPlay).toHaveBeenCalledOnce();
   });
 });

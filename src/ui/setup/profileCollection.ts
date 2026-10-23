@@ -135,7 +135,8 @@ export function createProfileCollectionController(doc: Document, game: Phaser.Ga
     close();
     const scene = getActiveOverworldScene(game);
     if (!scene) return;
-    void Promise.resolve(scene.jumpToCoordinates(coordinates)).then(async () => {
+    void Promise.resolve(scene.jumpToCoordinates(coordinates)).then(async (jumped) => {
+      if (jumped === false) return;
       const selected = scene.getSelectedRoomContext()?.coordinates;
       if (selected?.x === coordinates.x && selected.y === coordinates.y) await scene.playSelectedRoom();
     }).catch(error => console.warn('Could not open collected room.', error));

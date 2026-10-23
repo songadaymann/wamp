@@ -332,6 +332,7 @@ import {
   type RoomRushOverviewCameraState,
 } from './overworld/roomRushResults';
 import {
+  ROOM_RUSH_NAME,
   type ActiveRoomRushRunState,
   type RoomRushDifficulty,
   type RoomRushStartRule,
@@ -2021,18 +2022,21 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     return this.transientStatusMessage;
   }
 
-  async jumpToCoordinates(coordinates: RoomCoordinates): Promise<void> {
+  /** Resolves false when a Room Rush result took the jump's place, so callers stop there. */
+  async jumpToCoordinates(coordinates: RoomCoordinates): Promise<boolean> {
     if (this.mode === 'play') {
       // End the run as Stop does (F383). A Rush shows its result instead: that dialog
       // saves the score and drives the camera to the route, so the jump yields to it.
       if (this.activeRoomRushRun) {
         this.endRoomRushRun();
-        return;
+        this.showTransientStatus(`${ROOM_RUSH_NAME} ended. Open the room again to play it.`);
+        return false;
       }
       this.clearActivePvpMatch();
       this.flowController.endPlaySession();
     }
     await this.selectionController.jumpToCoordinates(coordinates);
+    return true;
   }
 
   async warpToSelectedRoom(): Promise<void> {

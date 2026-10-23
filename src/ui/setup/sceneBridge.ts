@@ -284,7 +284,8 @@ export interface OverworldSceneBridge {
   openGuestDraftRoom: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
   zoomIn: () => void;
   zoomOut: () => void;
-  jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<void> | void;
+  /** False when an active Room Rush ended with its result in place of the jump. */
+  jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<boolean> | boolean;
   fitLoadedWorld: () => void;
   returnToWorld: () => void;
   getSelectedRoomContext: () => OverworldSelectedRoomContext;
