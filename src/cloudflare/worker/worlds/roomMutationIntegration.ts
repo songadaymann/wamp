@@ -192,7 +192,8 @@ export async function runWorldAwareRoomMutationBatch(
     if (message.includes('room_mutation_owner')) throw new HttpError(409, 'This room changed before the save. Reload before trying again.');
     if (message.includes('room_mutation_frontier')) throw new HttpError(409, 'This spot no longer touches a published room. Pick a new location.');
     if (message.includes('room_mutation_claim_quota')) throw new HttpError(429, 'Daily room claim limit reached. Your draft is still saved.');
-    if (message.includes('world_daily_usage')) {
+    // world_daily_usage's CHECKs are unnamed, so SQLite names the expression, not the table.
+    if (message.includes('world_daily_usage') || /(claim|publish)_count <= \1_limit/.test(message)) {
       throw new HttpError(429, 'This builder has reached the World daily limit.');
     }
     if (

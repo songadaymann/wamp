@@ -14,7 +14,8 @@ const RECHECK_F272 =
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
 const workerSources = readdirSync(join(repoRoot, 'src/cloudflare'), { recursive: true, encoding: 'utf8' })
-  .filter((path) => path.endsWith('.ts') && !path.endsWith('.test.ts'))
+  // Test-only helpers (*.testSupport.ts) sign fixtures in directly and never ship.
+  .filter((path) => path.endsWith('.ts') && !path.endsWith('.test.ts') && !path.endsWith('.testSupport.ts'))
   .sort()
   .map((path) => ({
     path: `src/cloudflare/${path.split('\\').join('/')}`,
