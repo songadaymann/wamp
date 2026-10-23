@@ -118,10 +118,11 @@ const containerRunner = readRepoFile(
 ).match(/CMD\s+\["node",\s*"\/app\/runner\/([^"]+)"\]/)?.[1];
 
 describe('executable entry contract', () => {
-  it('keeps the pinned dead-code audit report-only', () => {
+  it('keeps the full dead-code report report-only and gates on the baseline check', () => {
     expect(packageJson.devDependencies.knip).toBe('6.32.2');
     expect(packageJson.scripts['dead-code:report']).toBe('knip --no-exit-code');
     expect(packageJson.scripts.check).not.toContain('dead-code:report');
+    expect(packageJson.scripts.check).toContain('npm run dead-code:check');
   });
 
   it('classifies every script module as an executable root or imported-only helper', () => {

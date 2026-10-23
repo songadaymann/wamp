@@ -46,6 +46,8 @@
     "scripts/build_tree_atlases.mjs",
     "scripts/build_audio_assets.mjs",
     "scripts/check_bundle_budget.mjs",
+    "scripts/check_dead_code.mjs",
+    "scripts/check_max_lines_pins.mjs",
     "scripts/check_shared_styles.mjs",
     "scripts/check_style_cascade.mjs",
     "scripts/convert_custom_sprite_objects_to_tiles.ts",
@@ -156,5 +158,11 @@
   "ignoreBinaries": [
     "python3",
     "tsx"
-  ]
+  ],
+  "ignoreIssues": {
+    "src/partykit/presenceServer.testHarness.ts": ["exports", "types"],
+    "src/scenes/overworld/worldStreaming.testHarness.ts": ["exports", "types"],
+    "src/ui/setup/sceneCapabilityRegistry.testSupport.ts": ["exports", "types"],
+    "src/mint/roomWalletTestFixtures.ts": ["exports", "types"]
+  }
 }
