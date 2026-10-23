@@ -205,8 +205,8 @@ export function createLiveObjectController(
       host.externalLaunchGraceUntil = Math.max(host.externalLaunchGraceUntil, gameplayNow(host.scene) + durationMs);
     },
     // Streaming is created after this controller; jobs are only queued once rooms load.
-    enqueueBackgroundCpuWork: (label, execute, onCancelled) =>
-      host.worldStreamingController?.enqueueBackgroundCpuWork(label, execute, onCancelled) ?? null,
+    enqueueBackgroundCpuWork: (label, execute, onCancelled, priority) =>
+      host.worldStreamingController?.enqueueBackgroundCpuWork(label, execute, onCancelled, priority) ?? null,
     getPlayerGravityDirection: () => host.specialTilesController.getPlayerEnvironment().gravityDirection,
     launchPlayerFromSpring: (x, y, durationMs) => host.movementController.launchFromSpring(x, y, durationMs),
     grantPlayerAirJump: () => host.movementController.grantAirJump(),
@@ -241,7 +241,7 @@ export function createPortalObjectController(
   host: Pick<OverworldCompositionPorts,
     | 'worldStreamingController' | 'mode' | 'scene'
     | 'playerBody' | 'getCollisionReadyLoadedFullRooms' | 'getCollisionReadyLoadedFullRoomById'
-    | 'roomTransitionController' | 'teleportPlayerToPortalObject'
+    | 'roomTransitionController' | 'teleportPlayerToPortalObject' | 'liveObjectController'
   >,
 ): OverworldPortalObjectController<RoomEdgeWall> {
   const portalTargetRoomPreparation = createPortalTargetRoomPreparationAdapter({
@@ -258,6 +258,7 @@ export function createPortalObjectController(
     requestPortalTargetRoomPreparation: (roomId) => portalTargetRoomPreparation.request(roomId),
     clearPortalTargetRoomPreparation: (roomId) => portalTargetRoomPreparation.clear(roomId),
     authorizeRoomTransition: (coordinates) => host.roomTransitionController.authorizeTeleportTransition(coordinates),
+    prepareRoomArrival: (roomId) => host.liveObjectController.swordsmanEdgeWarmup.finishRoom(roomId),
     teleportPlayerTo: (x, y, velocity) => host.teleportPlayerToPortalObject(x, y, velocity),
     playPortalFx: () => {
       playSfx('warp');
@@ -506,6 +507,7 @@ export function createRuntimeController(
     getPlayerBody: () => host.playerBody,
     shouldCollidePlayerWithTerrainTile: (tile) => host.specialTilesController.shouldCollidePlayerWithTerrainTile(tile),
     createPlayer: (room) => host.createPlayer(room),
+    prepareRoomArrival: (roomId) => host.liveObjectController.swordsmanEdgeWarmup.finishRoom(roomId),
     afterCoursePlayerSpawn: () => host.coursePlaybackController.startRunAfterSpawn(),
     destroyPlayer: () => host.destroyPlayer(),
     syncAppMode: () => host.syncAppMode(),

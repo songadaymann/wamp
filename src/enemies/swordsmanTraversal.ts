@@ -171,18 +171,54 @@ export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
 }
 
 export function buildSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
-  return startSwordsmanTraversalGraphBuild(room).step(() => false)!;
+  const build = startSwordsmanTraversalGraphBuild(room);
+  let graph = build.buildNextPiece();
+  while (!graph) {
+    graph = build.buildNextPiece();
+  }
+  return graph;
+}
+
+// One graph per room version, shared by every scene's Sword Hunters and the jump warm-up (F302).
+const TRAVERSAL_GRAPH_CACHE_LIMIT = 64;
+const traversalGraphsByCacheKey = new Map<string, SwordsmanTraversalGraph>();
+
+/** The room's cached graph, built now if no hunter or warm-up has built it yet. */
+export function getSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph {
+  return peekSwordsmanTraversalGraphForRoom(room)
+    ?? rememberSwordsmanTraversalGraph(buildSwordsmanTraversalGraph(room));
+}
+
+export function peekSwordsmanTraversalGraphForRoom(room: RoomSnapshot): SwordsmanTraversalGraph | null {
+  return traversalGraphsByCacheKey.get(getSwordsmanTraversalGraphCacheKey(room)) ?? null;
+}
+
+/** Caches a graph built elsewhere, unless one for that room version is already cached. */
+export function rememberSwordsmanTraversalGraph(graph: SwordsmanTraversalGraph): SwordsmanTraversalGraph {
+  const cached = traversalGraphsByCacheKey.get(graph.cacheKey);
+  if (cached) {
+    return cached;
+  }
+  traversalGraphsByCacheKey.set(graph.cacheKey, graph);
+  if (traversalGraphsByCacheKey.size > TRAVERSAL_GRAPH_CACHE_LIMIT) {
+    const oldestKey = traversalGraphsByCacheKey.keys().next().value;
+    if (oldestKey !== undefined) {
+      traversalGraphsByCacheKey.delete(oldestKey);
+    }
+  }
+  return graph;
 }
 
 /** A graph built a piece at a time, so the work can be spread over frames (F302). */
 export interface SwordsmanTraversalGraphBuild {
-  /** Builds pieces until done or `shouldStop()`, asked before each piece; returns the finished graph. */
-  step(shouldStop: () => boolean): SwordsmanTraversalGraph | null;
+  /** Builds one piece; returns the finished graph after the last one. */
+  buildNextPiece(): SwordsmanTraversalGraph | null;
 }
 
 /**
- * Builds the same graph as buildSwordsmanTraversalGraph, in the same order: the segments first,
- * then one piece per surface's outgoing jumps, one per wall's, and the ladders last.
+ * Builds the same graph as buildSwordsmanTraversalGraph, in the same order, one piece per call:
+ * the surfaces, the walls and the ladders, then each surface's outgoing jumps, each wall's, and
+ * the ladder edges last.
  */
 export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): SwordsmanTraversalGraphBuild {
   let surfaceSegments: SwordsmanSurfaceSegment[] = [];
@@ -205,20 +241,26 @@ export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): Swordsman
   const buildPiece = (piece: number): void => {
     if (piece === 0) {
       surfaceSegments = buildSurfaceSegments(room);
-      wallSegments = buildWallSegments(room);
-      ladderSegments = buildLadderSegments(room);
       for (const segment of surfaceSegments) {
         nodesById.set(segment.id, segment);
         edgesByNodeId.set(segment.id, []);
       }
+      return;
+    }
+    if (piece === 1) {
+      wallSegments = buildWallSegments(room);
       for (const wall of wallSegments) {
         nodesById.set(wall.id, wall);
         edgesByNodeId.set(wall.id, []);
       }
       return;
     }
+    if (piece === 2) {
+      ladderSegments = buildLadderSegments(room);
+      return;
+    }
 
-    const source = surfaceSegments[piece - 1];
+    const source = surfaceSegments[piece - 3];
     if (source) {
       for (const target of surfaceSegments) {
         if (source.id === target.id) {
@@ -237,7 +279,7 @@ export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): Swordsman
       return;
     }
 
-    const wall = wallSegments[piece - 1 - surfaceSegments.length];
+    const wall = wallSegments[piece - 3 - surfaceSegments.length];
     if (wall) {
       for (const target of surfaceSegments) {
         addEdge(buildWallJumpEdge(wall, target));
@@ -259,8 +301,8 @@ export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): Swordsman
   };
 
   return {
-    step(shouldStop) {
-      while (!graph && !shouldStop()) {
+    buildNextPiece() {
+      if (!graph) {
         buildPiece(nextPiece);
         nextPiece += 1;
       }

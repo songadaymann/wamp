@@ -223,8 +223,9 @@ export function selectSwordsmanCollectTarget(input: CollectSelectionInput): {
 
     clearRoute();
 
-    // With no committable route every frame would plan every coin ledge again, so the same answer
-    // is kept for a moment while the room, ledge, spot, coins and blocked edges stay the same (F302).
+    // With no committable route every frame would plan every coin ledge again. While every input
+    // to that answer is unchanged, planning again gives the same answer, so it is kept for up to a
+    // second instead (F302): a hunter left standing with no reachable coin stops re-planning.
     const routeSearchKey = buildCollectRouteSearchKey(input);
     const skipRouteSearch =
       state.aiCollectNoRouteKey === routeSearchKey && now < state.aiCollectNoRouteUntil;
@@ -480,19 +481,42 @@ function selectBestCollectRoute(
   return bestRouteTarget;
 }
 
-/** Everything a no-route answer depends on; the spot on the ledge is kept to the tile. */
+/**
+ * Every input that decides whether any coin ledge has a committable route: the room version, the
+ * hunter's exact body and nodes, each coin group's exact pickup point and node, the coin ledges
+ * and the blocked edges. Route scores (facing, setup coins, wall failures) do not change it.
+ */
 function buildCollectRouteSearchKey(input: CollectSelectionInput): string {
-  const coinGroups = Array.from(
-    input.groupedCandidates,
-    ([nodeKey, candidate]) => `${nodeKey}=${candidate.collectible.key}x${candidate.collectibleCount}`,
-  );
+  const coinGroups = Array.from(input.groupedCandidates, ([nodeKey, candidate]) => [
+    nodeKey,
+    candidate.targetNodeId,
+    candidate.collectible.key,
+    candidate.collectibleCount,
+    formatSnapshotKey(candidate.targetSnapshot),
+  ].join('='));
+  const coinLedges = Array.from(input.collectNodeStats, ([nodeId, stats]) => `${nodeId}x${stats.count}`);
   return [
     input.graph.cacheKey,
+    `${input.bodyWidth}x${input.bodyHeight}`,
+    input.currentContext.currentNodeId,
     input.currentContext.startNodeIds.join(','),
-    Math.floor(input.enemySnapshot.centerX / TILE_SIZE),
-    coinGroups.sort().join(','),
+    formatSnapshotKey(input.enemySnapshot),
+    coinGroups.sort().join(';'),
+    coinLedges.sort().join(','),
     Array.from(input.blockedEdgeIds).sort().join(','),
   ].join('\n');
+}
+
+function formatSnapshotKey(snapshot: SwordsmanBodySnapshot): string {
+  return [
+    snapshot.centerX,
+    snapshot.centerY,
+    snapshot.left,
+    snapshot.right,
+    snapshot.bottom,
+    snapshot.onFloor ? 1 : 0,
+    snapshot.wallContactSide,
+  ].join(',');
 }
 
 function selectCurrentSweepTarget(

@@ -140,6 +140,7 @@ function createHarness() {
     requestPortalTargetRoomPreparation: vi.fn((roomId: string) => adapter.request(roomId)),
     clearPortalTargetRoomPreparation: vi.fn((roomId: string) => adapter.clear(roomId)),
     authorizeRoomTransition: vi.fn(),
+    prepareRoomArrival: vi.fn(),
     teleportPlayerTo: vi.fn(),
     playPortalFx: vi.fn(),
   };
@@ -202,6 +203,11 @@ describe('OverworldPortalObjectController cold destinations', () => {
     expect(harness.host.authorizeRoomTransition).toHaveBeenCalledWith({ x: 2, y: 0 });
     expect(harness.host.teleportPlayerTo).toHaveBeenCalledWith(1_296, 16, { x: 75, y: -40 });
     expect(harness.host.playPortalFx).toHaveBeenCalledWith(1_296, 16, { x: 2, y: 0 });
+    // The destination's Sword Hunters finish their jump warm-up before the player lands (F302).
+    expect(harness.host.prepareRoomArrival).toHaveBeenCalledOnce();
+    expect(harness.host.prepareRoomArrival).toHaveBeenCalledWith('2,0');
+    expect(harness.host.prepareRoomArrival.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.host.teleportPlayerTo.mock.invocationCallOrder[0]);
 
     setBodyPosition(harness.body, 200, 200);
     harness.controller.update();

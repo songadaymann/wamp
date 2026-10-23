@@ -31,6 +31,8 @@ interface OverworldPortalObjectControllerHost<TEdgeWall> {
   requestPortalTargetRoomPreparation: (roomId: string) => boolean;
   clearPortalTargetRoomPreparation: (roomId: string) => void;
   authorizeRoomTransition: (coordinates: RoomCoordinates) => void;
+  /** Readies a room the player is about to arrive in, before its enemies first act (F302). */
+  prepareRoomArrival?: (roomId: string) => void;
   teleportPlayerTo: (
     x: number,
     y: number,
@@ -170,6 +172,7 @@ export class OverworldPortalObjectController<TEdgeWall = unknown> {
     }
 
     this.host.authorizeRoomTransition(destination.roomCoordinates);
+    this.host.prepareRoomArrival?.(destination.loadedRoom.room.id);
     this.host.teleportPlayerTo(destination.x, destination.y, {
       x: playerBody.velocity.x,
       y: playerBody.velocity.y,

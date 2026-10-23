@@ -122,7 +122,7 @@ describe('collect objective priority and route scoring', () => {
     expect(expiredFailure.target?.collectible.key).toBe('remote'); expect(expiredFailure.state.aiCollectRoutePenalty).toBe(1680);
   });
 
-  it('keeps a no-route answer for a second while room, ledge, spot, coins and blocked edges stay the same (F302)', () => {
+  it('keeps a no-route answer for a second only while every input to it is unchanged (F302)', () => {
     const unreachable = candidate('unreachable', 300, 'remote'); const input = fixture([unreachable]);
     vi.mocked(planSwordsmanRobustTraversal).mockReturnValue(null);
     let plans = 0;
@@ -134,8 +134,11 @@ describe('collect objective priority and route scoring', () => {
     };
     expect(expectPlanned(true)).toMatchObject({ target: null, state: { aiCollectNoRouteUntil: 2000 } });
     input.now = 1999; expectPlanned(false);
-    input.enemySnapshot = snapshot(111); expectPlanned(false);
-    input.enemySnapshot = snapshot(112); expectPlanned(true);
+    input.enemySnapshot = snapshot(100); expectPlanned(false);
+    input.enemySnapshot = snapshot(100.25); expectPlanned(true);
+    input.enemySnapshot = snapshot(100.25, 159.5); expectPlanned(true);
+    unreachable.targetSnapshot = snapshot(300.5); expectPlanned(true);
+    input.collectNodeStats.set('remote', { count: 3 }); expectPlanned(true);
     input.blockedEdgeIds = new Set(['blocked']); expectPlanned(true);
     input.currentContext = { ...input.currentContext, startNodeIds: ['current', 'wall'] }; expectPlanned(true);
     unreachable.collectibleCount = 2; expectPlanned(true);

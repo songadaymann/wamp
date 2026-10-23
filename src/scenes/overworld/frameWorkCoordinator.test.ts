@@ -43,26 +43,82 @@ describe('FrameWorkCoordinator', () => {
     ]);
   });
 
-  it('runs gameplay warm-up only after every streaming queue, and tells cancelled jobs why (F302)', () => {
+  it('runs gameplay warm-up after every streaming queue and catch-up between teardown and previews (F302)', () => {
     const clock = new TestClock();
     const coordinator = createCoordinator(clock);
     const executionOrder: string[] = [];
-    const cancelled: string[] = [];
-    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'), (reason) => cancelled.push(reason));
-    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 2);
-    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'gpu-upload', 2);
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'));
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    enqueueGameplayWarmupWork(coordinator, 'catch-up', () => executionOrder.push('catch-up'), undefined, 'gameplay-catch-up');
+    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'gpu-upload', 0.5);
     coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
-    expect(executionOrder).toEqual(['teardown', 'preview']);
-    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
-    expect(executionOrder).toEqual(['teardown', 'preview', 'warmup']);
-    expect(cancelled).toEqual([]);
-
-    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('late'), (reason) => cancelled.push(reason));
-    coordinator.cancelAll('stream-reset');
-    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
-    expect(cancelled).toEqual(['stream-reset']);
-    expect(executionOrder).not.toContain('late');
+    expect(executionOrder).toEqual(['teardown', 'catch-up', 'preview', 'warmup']);
   });
+
+  it('caps the gameplay queues by gameplayCpuCapMs while lower streaming work still runs (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    for (const label of ['catch-up-1', 'catch-up-2']) {
+      enqueueGameplayWarmupWork(coordinator, label, () => {
+        executionOrder.push(label);
+        clock.advance(0.9);
+      }, undefined, 'gameplay-catch-up');
+    }
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    // A seam-critical frame runs on the normal profile (2 ms CPU); a phone's own cap is 1 ms.
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['catch-up-1', 'preview']);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['catch-up-1', 'preview', 'catch-up-2']);
+  });
+
+  it('runs only the gameplay queues in a gameplay-only (Browse) frame (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    enqueue(coordinator, clock, executionOrder, 'portal', 'portal-current-destination', 'cpu', 0.5);
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'));
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    coordinator.runFrame({ profile: 'reduced', criticalHeadroomMs: 8, gameplayOnly: true });
+    expect(executionOrder).toEqual(['warmup']);
+    expect(coordinator.getDiagnostics().queueDepth).toBe(2);
+  });
+
+  it('tells cancelled jobs why only after the whole cancellation has settled (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const seen: Array<{ reason: string; queueDepth: number; otherState: string }> = [];
+    const handles: { other: FrameWorkJobHandle | null } = { other: null };
+    const first = coordinator.enqueue({
+      label: 'first', priority: 'gameplay-warmup', costKind: 'cpu', estimatedCostMs: 1, execute: () => {},
+      onCancelled: (reason) => {
+        seen.push({ reason, queueDepth: coordinator.getDiagnostics().queueDepth, otherState: handles.other!.state });
+        coordinator.enqueue({ label: 'requeued', priority: 'gameplay-warmup', costKind: 'cpu', estimatedCostMs: 1, execute: () => {} });
+      },
+    });
+    handles.other = coordinator.enqueue({ label: 'other', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {} });
+    expect(coordinator.cancelAll('stream-reset')).toBe(2);
+    expect(first.state).toBe('cancelled');
+    expect(seen).toEqual([{ reason: 'stream-reset', queueDepth: 0, otherState: 'cancelled' }]);
+    expect(coordinator.getDiagnostics().queueDepth).toBe(1);
+
+    const onCancelled = vi.fn();
+    const scope = coordinator.beginGeneration('room');
+    coordinator.beginGeneration('room');
+    const superseded = coordinator.enqueue({
+      label: 'superseded', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {},
+      generation: scope, onCancelled,
+    });
+    expect(superseded.state).toBe('cancelled');
+    expect(onCancelled).not.toHaveBeenCalled();
+    const queued = coordinator.enqueue({
+      label: 'queued', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {}, onCancelled,
+    });
+    queued.cancel('caller');
+    expect(onCancelled).toHaveBeenCalledWith('caller');
+  });
+
 
   it('reprioritizes queued work without jumping jobs already waiting at the new priority', () => {
     const clock = new TestClock();

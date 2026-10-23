@@ -72,7 +72,9 @@ import {
   FRAME_WORK_PRIORITIES,
   enqueueGameplayWarmupWork,
   FrameWorkCoordinator,
+  getFrameWorkBudget,
   type FrameWorkGeneration,
+  type GameplayFrameWorkPriority,
   type FrameWorkJobHandle,
   type FrameWorkPriority,
   type RunFrameWorkResult,
@@ -1184,18 +1186,19 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   /**
-   * Queues one atomic CPU job of at most about 1 ms below every streaming queue, for gameplay
-   * caches worth filling before a room is played (Sword Hunter jump physics, F302). It runs only
-   * in frames whose preparation, teardown and preview work has drained, within the same budget.
+   * Queues one atomic CPU job of at most about 1 ms in a gameplay queue, for caches worth filling
+   * before a room is played (Sword Hunter jump physics, F302); see enqueueGameplayWarmupWork. It
+   * runs in Browse frames too, always within the device profile's CPU cap.
    */
   enqueueBackgroundCpuWork(
     label: string,
     execute: () => void,
     onCancelled?: () => void,
+    priority?: GameplayFrameWorkPriority,
   ): FrameWorkJobHandle | null {
     return this.destroyed
       ? null
-      : enqueueGameplayWarmupWork(this.frameWorkCoordinator, label, execute, onCancelled);
+      : enqueueGameplayWarmupWork(this.frameWorkCoordinator, label, execute, onCancelled, priority);
   }
 
   private hasUrgentDestinationFrameWork(): boolean {
@@ -1207,27 +1210,42 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     criticalFrameElapsedMs: number,
     sharedBudgetConsumedMs = 0,
   ): RunFrameWorkResult | null {
-    if (this.destroyed || this.options.getMode() !== 'play') {
+    if (this.destroyed) {
       this.lastDiscretionaryFrameWorkResult = null;
       return null;
     }
     const policy = this.getResolvedPerformancePolicy();
-    const frameWorkProfile = policy.transitionUrgency === 'seam-critical'
-      ? 'normal'
-      : policy.activeRuntimeProfile === 'reduced'
-        ? 'reduced'
-        : 'normal';
+    // Gameplay warm-up stays within the device's own profile even when a seam-critical
+    // transition lifts the rest of the frame's work to normal (F302).
+    const deviceProfile = policy.activeRuntimeProfile === 'reduced' ? 'reduced' : 'normal';
+    const gameplayCpuCapMs = getFrameWorkBudget(deviceProfile).cpuSubCapMs;
+    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
+    if (this.options.getMode() !== 'play') {
+      // Browse frames run only the gameplay queues, so rooms loaded while browsing are warm
+      // when a run starts; streaming work waits for Play.
+      this.frameWorkCoordinator.runFrame({
+        profile: deviceProfile,
+        criticalHeadroomMs,
+        sharedBudgetConsumedMs,
+        cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+        gameplayCpuCapMs,
+        gameplayOnly: true,
+      });
+      this.lastDiscretionaryFrameWorkResult = null;
+      return null;
+    }
+    const frameWorkProfile = policy.transitionUrgency === 'seam-critical' ? 'normal' : deviceProfile;
     const memoryProfile = policy.memoryProfile === 'reduced' ? 'reduced' : 'normal';
     if (memoryProfile !== this.roomArtifactCacheProfile) {
       this.syncRoomArtifactCachePolicy();
     }
-    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
     const result = this.measure('stream.frameWorkCoordinator', () =>
       this.frameWorkCoordinator.runFrame({
         profile: frameWorkProfile,
         criticalHeadroomMs,
         sharedBudgetConsumedMs,
         cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+        gameplayCpuCapMs,
       }),
     );
     if (!result) {

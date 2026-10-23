@@ -95,6 +95,7 @@ describe('overworld runtime room hydration', () => {
       isPlayableRoomCollisionReady: vi.fn(() => options.collisionReady),
       destroyPlayer: vi.fn(),
       createPlayer: vi.fn(),
+      prepareRoomArrival: vi.fn(),
       afterCoursePlayerSpawn: vi.fn(),
       getActiveCourseRun: vi.fn(() => null),
       getActiveRoomRushRun: vi.fn(() => null),
@@ -155,6 +156,17 @@ describe('overworld runtime room hydration', () => {
       coordinates: { x: -2, y: 0 },
     });
     expect(host.setShouldRespawnPlayer).toHaveBeenCalledWith(false);
+  });
+
+  it('readies the spawn room, warming its Sword Hunter jumps, before creating the player (F302)', () => {
+    const { controller, host } = createCollisionReadySpawnHarness({ collisionReady: true, shouldRespawn: true });
+    controller.syncModeRuntime();
+    expect(host.prepareRoomArrival).toHaveBeenCalledWith('-2,0');
+    expect(host.prepareRoomArrival.mock.invocationCallOrder[0]).toBeLessThan(host.createPlayer.mock.invocationCallOrder[0]);
+
+    const waiting = createCollisionReadySpawnHarness({ collisionReady: false, shouldRespawn: true });
+    waiting.controller.syncModeRuntime();
+    expect(waiting.host.prepareRoomArrival).not.toHaveBeenCalled();
   });
 
   it('starts course recording after creating the collision-ready player', () => {
