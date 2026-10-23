@@ -96,6 +96,9 @@ export function objectMatchesEditorScope(
   return !parseCustomSpriteObjectId(objectConfig.id) && objectConfig.category === 'decoration';
 }
 
+/** Where a finger came down on the picker; Cmd/Ctrl (a keyboard on a tablet) adds or removes tiles. */
+type PaletteTouchCell = { tilesetKey: string; col: number; row: number; toggle: boolean };
+
 type PaletteTooltipContent = {
   title: string;
   description?: string;
@@ -142,9 +145,11 @@ export class PaletteController {
   private currentObjectSearch = '';
   private paletteDragStart: { col: number; row: number } | null = null;
   private paletteMaskPaint: { add: boolean; snapshot: TileSelection } | null = null;
-  private readonly paletteTouch = new PaletteTouchPress<{ tilesetKey: string; col: number; row: number }>(
-    (cell) => this.beginPaletteTouchHold(cell.tilesetKey, cell.col, cell.row),
+  private readonly paletteTouch = new PaletteTouchPress<PaletteTouchCell>(
+    (cell, pointerId) => this.beginPaletteTouchHold(cell, pointerId),
+    () => this.cancelPaletteTouchHold(),
   );
+  private paletteHoldSnapshot: TileSelection | null = null;
   private releasePaletteTouch: (() => void) | null = null;
   private paletteTooltipEl: HTMLDivElement | null = null;
   private communityEntries: CustomSpriteCatalogEntry[] = [];
@@ -306,14 +311,27 @@ export class PaletteController {
     this.commitSelection(nextSelection);
   }
 
-  private beginPaletteTouchHold(tilesetKey: string, col: number, row: number): void {
-    const ts = getTilesetByKey(tilesetKey);
-    if (!ts || this.handleSpecialPaletteTileShortcut(ts, row * ts.columns + col)) {
+  private beginPaletteTouchHold(cell: PaletteTouchCell, pointerId: number): void {
+    const ts = getTilesetByKey(cell.tilesetKey);
+    if (!ts || this.handleSpecialPaletteTileShortcut(ts, cell.row * ts.columns + cell.col)) {
       return;
     }
-    this.paletteDragStart = { col, row };
+    this.paletteHoldSnapshot = cloneTileSelection(editorState.selection);
+    this.paletteDragStart = { col: cell.col, row: cell.row };
     this.paletteMaskPaint = null;
-    this.updateSelection(tilesetKey, col, row, col, row);
+    if (cell.toggle) this.beginPaletteMaskPaint(ts.key, cell.col, cell.row);
+    else this.updateSelection(ts.key, cell.col, cell.row, cell.col, cell.row);
+    // A pen may have no implicit capture; keep the block growing past the canvas edge.
+    this.paletteCanvas?.setPointerCapture(pointerId);
+  }
+
+  /** A second finger during a hold puts the selection back as it was. */
+  private cancelPaletteTouchHold(): void {
+    const snapshot = this.paletteHoldSnapshot;
+    this.paletteDragStart = null;
+    this.paletteMaskPaint = null;
+    this.paletteHoldSnapshot = null;
+    if (snapshot) this.commitSelection(snapshot);
   }
 
   private beginPaletteMaskPaint(tilesetKey: string, col: number, row: number): void {
@@ -492,7 +510,8 @@ export class PaletteController {
       if (col >= 0 && col < ts.columns && row >= 0 && row < ts.rows) {
         if (event.pointerType !== 'mouse') {
           // A finger may be starting a swipe that scrolls the picker: wait for a tap or a hold (F368).
-          this.paletteTouch.down(event.pointerId, { tilesetKey: ts.key, col, row }, event.clientX, event.clientY);
+          const toggle = event.ctrlKey || event.metaKey;
+          this.paletteTouch.down(event.pointerId, { tilesetKey: ts.key, col, row, toggle }, event.clientX, event.clientY);
           return;
         }
         if (this.handleSpecialPaletteTileShortcut(ts, row * ts.columns + col)) {
@@ -537,7 +556,13 @@ export class PaletteController {
     this.paletteCanvas.onpointerup = (event: PointerEvent) => {
       const tapped = event.pointerType === 'mouse' ? null : this.paletteTouch.up(event.pointerId);
       if (tapped?.tilesetKey === ts.key) {
-        if (!this.handleSpecialPaletteTileShortcut(ts, tapped.row * ts.columns + tapped.col)) {
+        if (tapped.toggle) {
+          // Cmd/Ctrl+tap adds or removes one tile, as Cmd/Ctrl+click does, and leaves the sheet open for more.
+          this.paletteDragStart = { col: tapped.col, row: tapped.row };
+          this.beginPaletteMaskPaint(ts.key, tapped.col, tapped.row);
+          this.paletteDragStart = null;
+          this.paletteMaskPaint = null;
+        } else if (!this.handleSpecialPaletteTileShortcut(ts, tapped.row * ts.columns + tapped.col)) {
           this.updateSelection(ts.key, tapped.col, tapped.row, tapped.col, tapped.row);
           this.requestPhoneEditorAutoCollapse();
         }
@@ -546,12 +571,15 @@ export class PaletteController {
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
         this.paletteMaskPaint = null;
-        this.requestPhoneEditorAutoCollapse();
+        this.paletteHoldSnapshot = null;
+        // A touch hold leaves the sheet open, so an accidental hold costs only the selection.
+        if (event.pointerType === 'mouse') this.requestPhoneEditorAutoCollapse();
       }
     };
 
     this.paletteCanvas.onpointercancel = () => {
       this.paletteTouch.cancel();
+      this.paletteHoldSnapshot = null;
       if (this.paletteDragStart) {
         this.paletteDragStart = null;
         this.paletteMaskPaint = null;

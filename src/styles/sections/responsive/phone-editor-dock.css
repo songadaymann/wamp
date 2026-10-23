@@ -157,12 +157,13 @@
     z-index: var(--z-phone-editor-dock);
   }
 
-  /* Draw and Erase stay one tap away at the stage's corner while the library sheet is hidden (F369).
-   Placing Spawn, object settings and linking have their own Cancel or Done instead. */
+  /* Draw and Erase stay one tap away at the stage's corner while the library sheet is hidden (F369);
+   the open sheet has its own tool row. Placing Spawn, object settings and linking have their own
+   Cancel or Done, and the phone dock marks it hidden under the Account menu and any dialog. */
 
-  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true'], [data-editor-spawn-placement='true'], [data-editor-phone-inspector='true'], [data-editor-phone-linking='true']) #editor-phone-draw-switch {
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'][data-mobile-editor-collapsed='true']:not([data-editor-music-mode='true'], [data-editor-sprite-mode='true'], [data-editor-spawn-placement='true'], [data-editor-phone-inspector='true'], [data-editor-phone-linking='true']) #editor-phone-draw-switch:not([hidden]) {
     position: fixed;
-    top: calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - 52px);
+    top: calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - var(--phone-draw-switch-height, 44px) - 8px);
     left: calc(8px + var(--safe-left));
     display: flex;
     gap: 4px;
@@ -181,6 +182,21 @@
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-draw-switch > button > span:first-child {
     font-size: var(--ui-text-body, 12px);
     line-height: 1;
+  }
+
+  /* In landscape the room is as tall as the stage, with empty space either side: stack the
+   switch in that left margin so it covers no tiles. */
+
+  @media (orientation: landscape) {
+    body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-draw-switch {
+      --phone-draw-switch-height: 92px;
+      flex-direction: column;
+    }
+
+    body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-draw-switch > button {
+      min-width: 44px;
+      padding: 2px;
+    }
   }
 
   /* Buttons take their label's width, so all seven fit from 360px up, Markers and Room Setup
@@ -243,6 +259,7 @@
   }
 
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] :is(#editor-shell-dock, #editor-phone-tools)[data-scroll-before='true']::before {
+    content: '\25C0';
     content: '\25C0' / '';
     left: var(--safe-left);
     justify-content: flex-start;
@@ -250,15 +267,23 @@
   }
 
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] :is(#editor-shell-dock, #editor-phone-tools)[data-scroll-after='true']::after {
+    content: '\25B6';
     content: '\25B6' / '';
     right: var(--safe-right);
     justify-content: flex-end;
     background: linear-gradient(to left, #0b0b0b 12px, transparent);
   }
 
-  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools:is([data-scroll-before='true'], [data-scroll-after='true'])::before,
+  /* The sheet is already inset from the notch, so the tool row's arrows sit at its own edges. */
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools:is([data-scroll-before='true'], [data-scroll-after='true'])::before {
+    top: 2px;
+    left: 0;
+  }
+
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-tools:is([data-scroll-before='true'], [data-scroll-after='true'])::after {
     top: 2px;
+    right: 0;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-dock-grid .editor-game-icon {

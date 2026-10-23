@@ -25,6 +25,8 @@ let observers: Array<() => void>;
 let tools: Map<ToolName, Button>;
 let halves: Button[];
 let active: boolean;
+let covered: boolean;
+let container: { hidden: boolean };
 const original = { tool: editorState.activeTool, mode: editorState.paletteMode, selection: editorState.selection, gid: editorState.selectedTileGid };
 const selection = { tilesetKey: 'wampos95', startCol: 3, startRow: 21, width: 2, height: 1, occupiedMask: [[true, true]], patternOrder: [] };
 
@@ -45,16 +47,19 @@ const tap = (tool: string) => halves.find(half => half.dataset.editorPhoneTool =
 beforeEach(() => {
   observers = [];
   active = true;
+  covered = false;
+  container = { hidden: false };
   tools = new Map([['pencil', realTool('pencil', 'Draw')], ['eraser', realTool('eraser', 'Erase')], ['fill', realTool('fill', 'Fill')]]);
   halves = ['pencil', 'eraser'].map(tool => Object.assign(new Button([new Text(''), new Text('')]), { dataset: { editorPhoneTool: tool } }));
   updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil', pencilSprayMode: false, selection, selectedTileGid: 742 });
   syncToolRow();
   const doc = {
     defaultView: { MutationObserver: class { constructor(flush: () => void) { observers.push(flush); } observe() {} } },
+    getElementById: (id: string) => (id === 'editor-phone-draw-switch' ? container : null),
     querySelectorAll: () => halves,
     querySelector: (selector: string) => tools.get(/data-tool="(\w+)"/.exec(selector)![1] as ToolName) ?? null,
   };
-  new EditorPhoneToolSwitch(doc as unknown as Document, () => active);
+  new EditorPhoneToolSwitch(doc as unknown as Document, () => active, () => covered);
 });
 afterEach(() => {
   updateEditorState({ activeTool: original.tool, paletteMode: original.mode, pencilSprayMode: false, selection: original.selection, selectedTileGid: original.gid });
@@ -93,6 +98,18 @@ describe('phone Draw/Erase switch (F369)', () => {
     expect(editorState.pencilSprayMode).toBe(true);
     expect(halves[0].children[1].textContent).toBe('Spray');
     expect(pressed()).toEqual(['true', 'false']);
+  });
+
+  it('hides under a menu or dialog, and a tap that reaches it then does nothing', () => {
+    expect(container.hidden).toBe(false);
+    covered = true;
+    syncToolRow();
+    expect(container.hidden).toBe(true);
+    tap('eraser');
+    expect(editorState.activeTool).toBe('pencil');
+    covered = false;
+    syncToolRow();
+    expect(container.hidden).toBe(false);
   });
 
   it('does nothing off the phone dock or when the editor has the tool turned off', () => {

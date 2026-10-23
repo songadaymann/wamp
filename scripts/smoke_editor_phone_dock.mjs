@@ -70,6 +70,25 @@ try {
       assert.equal(await page.locator('#mobile-editor-nav').isVisible(), false);
       passed.push('persistent actions and 44px targets fit');
 
+      if (device === 'portrait') {
+        // F367: every library button, Markers and Room Setup included, is on screen without scrolling.
+        for (const width of [390, 375, 360]) {
+          await page.setViewportSize({ width, height: viewport.height });
+          await page.waitForTimeout(300);
+          const dock = await page.evaluate(() => {
+            const row = document.querySelector('#editor-shell-dock .editor-shell-dock-grid');
+            const off = [...row.children].filter(b => b.getClientRects().length).map(b => ({ label: b.textContent.trim(), box: b.getBoundingClientRect() }))
+              .filter(({ box }) => box.left < -1 || box.right > innerWidth + 1).map(({ label }) => label);
+            return { off, scrollWidth: row.scrollWidth, clientWidth: row.clientWidth };
+          });
+          assert.deepEqual(dock.off, [], `${width}px: dock buttons off screen`);
+          assert.ok(dock.scrollWidth <= dock.clientWidth, `${width}px: dock row scrolls ${JSON.stringify(dock)}`);
+        }
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(300);
+        passed.push('all dock buttons fit at 390, 375 and 360px');
+      }
+
       await tap('[data-editor-dock="stuff"]');
       await tap('.obj-cat-tab[data-category="collectible"]');
       const coin = page.locator('#object-grid [data-object-id="coin_gold"]');
@@ -195,6 +214,55 @@ try {
       await tap('[data-editor-dock="terrain"]');
       await tap('#editor-phone-tools [data-tool="copy"]');
       passed.push('Draw and Erase options fit outside scrolling toolbar');
+
+      // F368: swipes scroll the tile picker by touch, and the last row of WampOS 95 can be tapped.
+      await tap('[data-editor-dock="terrain"]');
+      assert.equal(await page.locator('#editor-phone-draw-switch').isVisible(), false);
+      await page.locator('#tileset-select').selectOption('wampos95');
+      await page.waitForTimeout(250);
+      const cdp = await context.newCDPSession(page);
+      const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+      const picker = () => page.evaluate(() => {
+        const canvas = document.getElementById('palette-canvas').getBoundingClientRect();
+        const sheet = document.getElementById('editor-sidebar-scroll').getBoundingClientRect();
+        return { x: canvas.x, y: canvas.y, width: canvas.width, bottom: canvas.bottom, top: sheet.top, sheetBottom: sheet.bottom };
+      });
+      const tileSelection = () => page.evaluate(async () => {
+        const { editorState } = await import('/src/config.ts');
+        const { tilesetKey, startCol, startRow, width, height } = editorState.selection;
+        return { tilesetKey, startCol, startRow, width, height };
+      });
+      const beforeSwipes = await tileSelection();
+      let box = await picker();
+      for (let swipes = 0; box.bottom > box.sheetBottom - 2; swipes++) {
+        assert.ok(swipes < 30, `WampOS 95 picker never scrolled to its end: ${JSON.stringify(box)}`);
+        const x = box.x + Math.min(box.width, 300) / 2;
+        const from = Math.min(box.sheetBottom - 20, box.bottom - 10);
+        const to = Math.max(box.top + 20, from - 160, from - Math.max(40, box.bottom - box.sheetBottom + 10));
+        await touch('touchStart', x, from);
+        for (let step = 1; step <= 8; step++) { await touch('touchMove', x, from + (to - from) * step / 8); await page.waitForTimeout(16); }
+        // Finish still, so the swipe does not fling past the end.
+        await page.waitForTimeout(150);
+        await touch('touchEnd');
+        await page.waitForTimeout(250);
+        box = await picker();
+      }
+      assert.deepEqual(await tileSelection(), beforeSwipes, 'swiping the picker must not select tiles');
+      const tile = box.width / 12;
+      await page.touchscreen.tap(box.x + tile * 11.5, box.y + tile * 26.5);
+      await page.waitForTimeout(200);
+      assert.deepEqual(await tileSelection(), { tilesetKey: 'wampos95', startCol: 11, startRow: 26, width: 1, height: 1 });
+      assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'true');
+      passed.push('swipe scrolls the WampOS 95 picker and its last row can be tapped');
+
+      // F369: with the sheet hidden, one tap switches between Draw and Erase and keeps the tile.
+      for (const tool of ['eraser', 'pencil']) {
+        await tap(`[data-editor-phone-tool="${tool}"]`);
+        assert.equal((await selection()).activeTool, tool);
+        assert.equal(await page.locator(`[data-editor-phone-tool="${tool}"]`).getAttribute('aria-pressed'), 'true');
+        assert.deepEqual(await tileSelection(), { tilesetKey: 'wampos95', startCol: 11, startRow: 26, width: 1, height: 1 });
+      }
+      passed.push('Draw/Erase switch changes the tool in one tap and keeps the tile');
 
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.waitForFunction(() => document.body.dataset.deviceClass !== 'phone');

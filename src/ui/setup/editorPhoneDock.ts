@@ -1,5 +1,6 @@
 import { EDITOR_AUTO_COLLAPSE_EVENT, EDITOR_SHELL_ESCAPE_REQUESTED_EVENT } from '../../scenes/editor/uiEvents';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
+import { hasBlockingModalOpen, watchModals } from '../modalState';
 import { EditorPhoneToolSwitch } from './editorPhoneToolSwitch';
 import { trackScrollEdges } from './scrollEdges';
 
@@ -13,7 +14,14 @@ export class EditorPhoneDock {
   private stopScrollEdges: Array<() => void> = [];
 
   constructor(private readonly doc: Document, private readonly cancelSpawn: () => void, private readonly closePopovers: () => void) {
-    this.toolSwitch = new EditorPhoneToolSwitch(doc, () => this.active);
+    this.toolSwitch = new EditorPhoneToolSwitch(doc, () => this.active, () => this.switchCovered());
+    // The switch sits above the stage, so it steps aside for the Account menu and every dialog.
+    const win = doc.defaultView;
+    if (win?.MutationObserver) {
+      watchModals(doc, () => this.toolSwitch.render());
+      const authPanel = doc.getElementById('auth-panel');
+      if (authPanel) new win.MutationObserver(() => this.toolSwitch.render()).observe(authPanel, { attributes: true, attributeFilter: ['class'] });
+    }
     for (const id of ['btn-editor-phone-menu', 'btn-editor-phone-account', 'btn-mobile-editor-toggle']) {
       doc.getElementById(id)?.addEventListener('keydown', event => {
         if (!this.active || (event.key !== 'Enter' && event.code !== 'Space')) return;
@@ -76,6 +84,12 @@ export class EditorPhoneDock {
 
   expand(): void { if (this.active) { this.closeInspector(); this.setCollapsed(false); } }
   collapse(): void { if (this.active) this.setCollapsed(true); }
+
+  private switchCovered(): boolean {
+    return this.menuOpen || hasBlockingModalOpen(this.doc)
+      || Boolean(this.doc.getElementById('auth-panel')?.classList.contains('menu-open'))
+      || ['editor-markers-popover', 'editor-share-popover'].some(id => this.doc.getElementById(id)?.classList.contains('hidden') === false);
+  }
 
   private closeInspector(): void {
     if (this.doc.body.dataset.editorPhoneInspector === 'true' || this.doc.body.dataset.editorPhoneLinking === 'true') {

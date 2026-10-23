@@ -41,21 +41,39 @@ describe('the phone tileset picker scrolls by touch (F368)', () => {
   it('keeps the tileset section from shrinking under Tile Controls in the phone sheet', () => {
     expect(declarations(rulesFor(`${PHONE_DOCK} #tileset-section`)[0]).flex).toBe('0 0 auto');
   });
+
+  it('puts the gestures above the picker on phones, worded for the pointer last used', () => {
+    expect(declarations(rulesFor("body[data-device-class='phone'][data-app-mode='editor'] #tileset-section .palette-hint")[0]).order).toBe('-1');
+    const [fine] = allRules.filter(rule => rule.selector.endsWith('.fine-pointer-hint'));
+    const [coarse] = allRules.filter(rule => rule.selector.endsWith('.coarse-pointer-hint'));
+    // A touchscreen laptop gets the touch wording after a tap; a tablet with a trackpad, the mouse one.
+    expect(fine.selector).toContain("[data-last-pointer='touch']");
+    expect(fine.selector).toContain("[data-coarse-pointer='true']:not([data-last-pointer])");
+    expect(coarse.selector).toContain("[data-last-pointer='mouse']");
+  });
 });
 
 describe('the phone Draw/Erase switch stays on the stage (F369)', () => {
-  const shown = allRules.find(rule => rule.selector.endsWith('#editor-phone-draw-switch') && declarations(rule).position === 'fixed')!;
+  const shown = allRules.find(rule => rule.selector.endsWith('#editor-phone-draw-switch:not([hidden])') && declarations(rule).position === 'fixed')!;
 
-  it('is phone-only and sits just above the bottom of the stage, sheet open or not', () => {
+  it('is phone-only and sits just above the bottom of the stage while the library sheet is hidden', () => {
     expect(declarations(rulesFor('#editor-phone-draw-switch')[0]).display).toBe('none');
-    expect(shown.selector.startsWith(PHONE_DOCK)).toBe(true);
-    expect(declarations(shown).top).toBe('calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - 52px)');
+    expect(shown.selector.startsWith(`${PHONE_DOCK}[data-mobile-editor-collapsed='true']`)).toBe(true);
+    expect(declarations(shown).top)
+      .toBe('calc(var(--editor-phone-bar-height) + var(--phone-editor-stage-height) - var(--phone-draw-switch-height, 44px) - 8px)');
   });
 
-  it('steps aside for focused modes that bring their own Cancel or Done', () => {
+  it('steps aside for focused modes that bring their own Cancel or Done, and while hidden under a menu or dialog', () => {
     for (const mode of ['music-mode', 'sprite-mode', 'spawn-placement', 'phone-inspector', 'phone-linking']) {
       expect(shown.selector).toContain(`[data-editor-${mode}='true']`);
     }
+    expect(shown.selector).toContain(':not([hidden])');
+  });
+
+  it('stands in the empty margin beside the room in landscape', () => {
+    const landscape = allRules.find(rule => rule.parent?.type === 'atrule' && (rule.parent as { params?: string }).params === '(orientation: landscape)'
+      && rule.selector === `${PHONE_DOCK} #editor-phone-draw-switch`)!;
+    expect(declarations(landscape)).toMatchObject({ 'flex-direction': 'column', '--phone-draw-switch-height': '92px' });
   });
 
   it('keeps 44px touch targets', () => {
@@ -95,6 +113,15 @@ describe('the phone dock shows every library button at a glance (F367)', () => {
       .map(declarations).find(values => values.content)!;
     expect(cue('after')).toMatchObject({ content: "'\\25B6' / ''", background: 'linear-gradient(to left, #0b0b0b 12px, transparent)' });
     expect(cue('before')).toMatchObject({ content: "'\\25C0' / ''", background: 'linear-gradient(to right, #0b0b0b 12px, transparent)' });
+    // Safari before 17.4 drops the alt-text form, so a plain arrow comes first.
+    const contents = (side: 'before' | 'after') => rulesFor(`${PHONE_DOCK} :is(#editor-shell-dock, #editor-phone-tools)[data-scroll-${side}='true']::${side}`)
+      .flatMap(rule => rule.nodes.flatMap(node => node.type === 'decl' && node.prop === 'content' ? [node.value] : []));
+    expect(contents('after')).toEqual(["'\\25B6'", "'\\25B6' / ''"]);
+    expect(contents('before')).toEqual(["'\\25C0'", "'\\25C0' / ''"]);
+    // The sheet is already inset from the notch; only the dock's arrows take the safe area.
+    const toolRow = (side: 'before' | 'after') => declarations(rulesFor(`${PHONE_DOCK} #editor-phone-tools:is([data-scroll-before='true'], [data-scroll-after='true'])::${side}`)[0]);
+    expect(toolRow('before').left).toBe('0');
+    expect(toolRow('after').right).toBe('0');
     // A mask on the tool row would also hide the Fill options that open from inside it.
     expect(allRules.filter(rule => declarations(rule)['mask-image'] && /editor-shell-(?:tools|dock-grid)/.test(rule.selector))).toEqual([]);
   });

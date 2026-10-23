@@ -1216,15 +1216,16 @@
 }
 
 @layer responsive {
-  /* Mouse- or keyboard-only instructions inside a hint; hidden on touch screens (F119). */
+  /* Mouse- or keyboard-only instructions inside a hint; hidden on touch screens (F119). Once the
+   editor has seen a pointer, the last one decides, so a touchscreen laptop gets the touch wording. */
 
-  body[data-coarse-pointer='true'] .fine-pointer-hint {
+  body:is([data-last-pointer='touch'], [data-last-pointer='pen'], [data-coarse-pointer='true']:not([data-last-pointer])) .fine-pointer-hint {
     display: none;
   }
 
   /* Their touch counterparts, where a finger does something else (F368). */
 
-  body:not([data-coarse-pointer='true']) .coarse-pointer-hint {
+  body:is([data-last-pointer='mouse'], :not([data-coarse-pointer='true'], [data-last-pointer])) .coarse-pointer-hint {
     display: none;
   }
 }

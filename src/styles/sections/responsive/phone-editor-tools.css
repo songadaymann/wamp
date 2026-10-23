@@ -85,6 +85,13 @@
     margin: 0 auto;
   }
 
+  /* The gestures come first; under a tall tileset they would be far out of view. */
+
+  body[data-device-class='phone'][data-app-mode='editor'] #tileset-section .palette-hint {
+    order: -1;
+    padding: 0 0 4px;
+  }
+
   body[data-device-class='phone'][data-app-mode='editor'] .object-category-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
