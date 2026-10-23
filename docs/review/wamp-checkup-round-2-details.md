@@ -8772,6 +8772,8 @@ Fix:
   (e) Add a concrete defect: admin room clear (admin/routes.ts:330 here; :346 on main 80151ad1) deletes the room. That cascades into world_room_claims, whose BEFORE DELETE trigger in 0045:215-219 aborts with 'World room provenance is permanent' (reproduced in node:sqlite). Every claimed or published room has a claim row, so clear fails on essentially every real room. roomClear.test.ts's hand-built schema hides this.
   Do first: fix room clear and move its test to fixture(); then the agent-token gate tests, the removal-rule unit test, a courses/store save/publish test, and Worlds route tests or Worlds smoke in CI; then thresholds.
 
+**2026-10-23 delivered.** [PR #323](https://github.com/songadaymann/wamp/pull/323). 52 route tests run the whole API Worker on the all-migrations SQLite fixture (`core/workerApi.testSupport.ts`) and cover room save and publish, Expanded Room editing, agent and API tokens, and Worlds at the HTTP boundary. Lines: `expandedRooms/editorRoutes.ts` 0% to 93%, `courses/store.ts` 10% to 87%, `agents/` 5% to 97%, `worlds/routes.ts` 0% to 89%. The tests found two fixes: Expanded Room create now checks ownership as edit does, and a World's daily limit answers 429 instead of 500. API Worker `d71c2b8e`. Typecheck, lint, dead-code, build and size passed; main CI on the merge passed. [Receipt](wamp-round2-tests-2026-10-23.md).
+
 ### F481: details withheld
 
 Security, safety or anti-cheat item; details withheld from this public repo until it is fixed (see the private review page, or ask Claude to read it from the review artifact).
@@ -9167,6 +9169,8 @@ This turns 'parity' from a comment into a guard. Once the shared geometry module
   (b) Several assertions fail today: Pages renders 'none' as grassland and has no custom tiles or display scale; the worker renders 'none' as #070b16 with stars and drops background-layer objects. Ship the fixture test together with those fixes, or with it.fails/todo markers, not as a standalone green guard.
   
   Mock-context tests to extend already exist in roomMetadataRender.retry.test.ts:10-16 and roomSnapshotTexture.rows.test.ts:36-51.
+
+**2026-10-23 delivered.** [PR #324](https://github.com/songadaymann/wamp/pull/324). Renderer equivalence tests draw a feature room and the six smart-autotiling reference rooms through the API share card, the Pages share card, the world-tile leaf and the game's room texture on a small software canvas, and compare pixels: the Pages card and client texture match the world tile exactly, the API card gets 34 unit tests, and hashes are pinned beside each version constant. Known mismatches are `it.fails` with reasons. Map tiles for rooms with a blocked community sprite now redraw (strict mode threw); it reaches the map with the next renderer release, and no sprite is blocked in production. All 20 CI checks passed; `world-tiles:release:check` passes, so Pages builds are unaffected. [Receipt](wamp-round2-tests-2026-10-23.md).
 
 ### F491: `npm run check` and CI run different checks, and check type-checks the project twice
 

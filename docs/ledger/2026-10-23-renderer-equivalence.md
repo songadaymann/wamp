@@ -1,0 +1,1 @@
+| 2026-10-23 | F484 | [#324](https://github.com/songadaymann/wamp/pull/324) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Renderer equivalence tests across share cards, map tiles and the game texture; blocked-sprite map tiles redraw |
