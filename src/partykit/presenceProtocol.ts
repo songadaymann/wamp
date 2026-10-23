@@ -67,6 +67,8 @@ export interface ConnectionPresenceState {
   roomChatCheckedAt?: number;
   /** Classroom accounts: no PvP invites to or from strangers, and no PvP rooms. */
   school: boolean;
+  /** From the verified identity token: guests neither send nor receive PvP challenges. */
+  guest?: boolean;
   userId: string;
   displayName: string;
   avatarId: string;

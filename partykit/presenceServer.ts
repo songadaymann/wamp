@@ -73,6 +73,7 @@ import {
   normalizePvpInviteSend,
   normalizeRoomChatText,
   PVP_INVITE_SEND_RATE_LIMIT_MS,
+  PvpInviteLimiter,
 } from '../src/partykit/relayProtocol';
 import {
   activatePvpMatchIfReady,
@@ -158,6 +159,7 @@ export default class PresenceServer implements Party.Server {
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
   private readonly previewBroadcast = new RoomPreviewBroadcast();
+  private readonly pvpInviteLimiter = new PvpInviteLimiter();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
   private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly presenceInterest = new PresenceInterestBroadcast();
@@ -861,6 +863,7 @@ export default class PresenceServer implements Party.Server {
       canReceiveRoomChat: canReceiveRoomChat(claims),
       roomChatCheckedAt: claims.iat,
       school: claims.roomChat === 'school',
+      guest: claims.source === 'guest',
       userId: claims.userId,
       displayName: claims.displayName,
       avatarId: claims.avatarId,
@@ -992,7 +995,11 @@ export default class PresenceServer implements Party.Server {
       return;
     }
     // Strangers cannot pull classroom accounts into matches, and students cannot invite strangers.
-    if (state.school || target.state.school) {
+    // Guests play no ranked PvP, and a challenge never interrupts someone's run.
+    if (state.school || target.state.school || state.guest || target.state.guest || target.state.presence?.mode === 'play') {
+      return;
+    }
+    if (!this.pvpInviteLimiter.allows(state.userId, target.state.userId, now)) {
       return;
     }
 
@@ -1000,6 +1007,7 @@ export default class PresenceServer implements Party.Server {
       ...state,
       lastPvpInviteSentAt: now,
     });
+    this.pvpInviteLimiter.recordOffer(target.state.userId, now);
 
     const payload = buildPvpInviteOffer(
       invite, sender.id, this.identityFromState(state), this.identityFromState(target.state), this.room.id, now,
@@ -1039,6 +1047,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    this.pvpInviteLimiter.recordDecline(target.state.userId, state.userId, Date.now());
     const payload = buildPvpInviteDeclined(message, this.identityFromState(state));
     target.send(JSON.stringify(payload));
   }
