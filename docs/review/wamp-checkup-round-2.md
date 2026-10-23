@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 53 of 248 done.**
+**Progress: 55 of 248 done.**
 
 ## How to use this file
 
@@ -258,12 +258,12 @@ Touch controls, audio and pause are solid. The open issues are moving between ro
 
 Phones can now do most building tasks. Expanded Room setup, the tile picker and switching tools still block real work by touch.
 
-- [ ] **F365** Expanded Room setup on phones: the panel covers the whole map, and the map can't be dragged by touch · medium impact · medium effort
+- [x] **F365** Expanded Room setup on phones: the panel covers the whole map, and the map can't be dragged by touch · medium impact · medium effort — **done 2026-10-23** ([PR #315](https://github.com/songadaymann/wamp/pull/315)): on phones the Expanded Room setup panel is a bottom sheet with a Hide/Show setup handle (a viewport-sized side column in landscape) whose whole panel scrolls under a sticky handle, so every control, Publish included, is reachable at 320–390 px portrait and 568–844 px landscape; folded, it keeps the selected cell, its status, Add/Remove Cell and World. One finger drags the map, two pinch-zoom and pan, and only a tap selects a cell (`composerMap.ts`); centring and Fit use the part of the map the sheet and account controls leave visible, including on first open. [Receipt](wamp-round2-phone-building-2026-10-23.md).
 - [ ] **F368** On phones, most of the WampOS 95 and Backrooms tilesets can't be reached because the tile picker won't scroll by touch · medium impact · small effort
 - [x] **F363** Editor rebuilds the publish checklist (full room copy, sort, JSON and hash) on every UI refresh, including each pinch-zoom step · medium impact · small effort — **done 2026-10-23** ([PR #304](https://github.com/songadaymann/wamp/pull/304)): a pinch-zoom step reuses the last publish checklist while its inputs are unchanged (room revision, clear record, edge summary, title, background, lighting and weather); mid-stroke edits always rebuild it, Clear Check skips the room hash when the room has no recorded clear, and the publish dialog still builds a fresh checklist. [Receipt](wamp-round2-speed-2026-10-23.md).
 - [ ] **F369** Phone builders have to reopen the library just to switch between Draw and Erase · medium impact · medium effort
 - [ ] **F367** On a 390px phone, Markers (Spawn and Goal) and Room Setup start off-screen in the dock, with no hint to scroll · medium impact · small effort
-- [ ] **F371** With the Move tool picked, touch builders can't zoom or pan, and phones have no Fit button · medium impact · small effort
+- [x] **F371** With the Move tool picked, touch builders can't zoom or pan, and phones have no Fit button · medium impact · small effort — **done 2026-10-23** ([PR #315](https://github.com/songadaymann/wamp/pull/315)): in both editors a touch Move waits until the finger drags about 6 px or holds 90 ms, so a second finger in that window pinch-zooms and pans and the selection, selected cell and inspector stay; a drag that turns into a pinch leaves no undo entry, and mouse still goes straight to Move. Phones get a "Fit room" button in the More menu that frames the room, or every cell in the Expanded Room editor. [Receipt](wamp-round2-phone-building-2026-10-23.md).
 - [ ] **F366** Landscape phones get a 109px-tall room view, and tablets lose 366px of height to toolbars · medium impact · medium effort
 - [ ] **F370** Placing objects, pastes and markers by touch is blind: the preview is hidden under your finger, and sliding cancels · medium impact · medium effort
 - [ ] **F364** Erasing a rectangle, line, connected area or stamp shape needs a right-click, so touch builders can't do it · medium impact · medium effort

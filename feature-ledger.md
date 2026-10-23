@@ -1,3 +1,7 @@
+## 2026-10-23 — Round 2 step 6: Expanded Room setup and Move on phones
+
+Round-2 lane. PR #315 F365 (setup bottom sheet and side column that scroll as a whole; touch drag, pinch and tap on the composer map) and F371 (touch Move waits for a drag or hold so a pinch keeps the selection; Fit room on phones). Reviewed adversarially. Receipt: docs/review/wamp-round2-phone-building-2026-10-23.md.
+
 ## 2026-10-23 — Round 2 step 4: share previews (F332, F348)
 
 Round-2 lane. PR #314: one compressed PNG encoder for share and gram previews (3 MB to 5–144 KB, same pixels), and Wamp-O-Gram previews cached per datacenter behind a visibility check (deletes, hidden versions) with blocked art masked and a one-hour client cache. API Worker `1f1fdef2`. Receipt: docs/review/wamp-round2-speed-2026-10-23.md.

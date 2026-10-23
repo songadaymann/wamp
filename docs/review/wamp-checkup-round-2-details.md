@@ -4517,6 +4517,8 @@ course-editor.css:306-313: on phones .course-editor-panel is top calc(96px+safe-
   The fix stays as proposed: a hideable bottom sheet on phones, EditorTouchGesture pan/pinch with tap-to-select, and centring offset by the area the panel covers. Optionally add buttons to select the neighbour in each direction, and a phone composer step in the smoke test.
 - **confirmed.** No correction.
 
+**2026-10-23 delivered.** [PR #315](https://github.com/songadaymann/wamp/pull/315). On phones the Expanded Room setup panel is a bottom sheet with a Hide/Show setup handle (a viewport-sized side column in landscape) whose whole panel scrolls under a sticky handle, so every control, Publish included, is reachable at 320–390 px portrait and 568–844 px landscape; folded, it keeps the selected cell, its status, Add/Remove Cell and World. One finger drags the map, two pinch-zoom and pan, and only a tap selects a cell (`composerMap.ts`); centring and Fit use the part of the map the sheet and account controls leave visible, including on first open. Reviewed adversarially, every finding fixed; `npm run check` (676 files, 5,721 tests; boot 664.5 KB) and the muted default (68/68), Expanded Room, map-capture and keyboard smokes passed. Live on wamp.land (main `4b13bafa`). [Receipt](wamp-round2-phone-building-2026-10-23.md).
+
 ### F368: On phones, most of the WampOS 95 and Backrooms tilesets can't be reached because the tile picker won't scroll by touch
 
 - **Area:** Mobile building (reviewer: Building on phones and tablets)
@@ -4658,6 +4660,8 @@ interaction.ts:708-712: objectMove.down(pointer) runs before handleTouchPointerD
 **Fact-check.**
 
 - **confirmed.** No correction.
+
+**2026-10-23 delivered.** [PR #315](https://github.com/songadaymann/wamp/pull/315). In both editors a touch Move waits until the finger drags about 6 px or holds 90 ms, so a second finger in that window pinch-zooms and pans and the selection, selected cell and inspector stay; a drag that turns into a pinch leaves no undo entry, and mouse still goes straight to Move. Phones get a "Fit room" button in the More menu that frames the room, or every cell in the Expanded Room editor. Reviewed adversarially, every finding fixed; `npm run check` (676 files, 5,721 tests; boot 664.5 KB) and the muted default (68/68), Expanded Room, map-capture and keyboard smokes passed. Live on wamp.land (main `4b13bafa`). [Receipt](wamp-round2-phone-building-2026-10-23.md).
 
 ### F366: Landscape phones get a 109px-tall room view, and tablets lose 366px of height to toolbars
 
