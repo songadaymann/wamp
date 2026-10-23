@@ -138,10 +138,10 @@ function parseCreateRequest(body: unknown): ReturnType<typeof normalizeWampOGram
   }
 }
 
-function wampOGramPreviewResponse(
+async function wampOGramPreviewResponse(
   request: Request,
   roomSnapshot: Parameters<typeof renderRoomSharePreviewPng>[0],
-): Response {
+): Promise<Response> {
   const headers = new Headers({
     'Content-Type': 'image/png',
     'Cache-Control': 'public, max-age=300, s-maxage=3600',
@@ -157,7 +157,7 @@ function wampOGramPreviewResponse(
     });
   }
 
-  const bytes = renderRoomSharePreviewPng(roomSnapshot);
+  const bytes = await renderRoomSharePreviewPng(roomSnapshot);
   const body = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,

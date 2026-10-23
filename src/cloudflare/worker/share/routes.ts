@@ -204,7 +204,7 @@ async function maskBlockedShareArt(env: Env, target: RoomShareTarget): Promise<R
   };
 }
 
-function roomShareImageResponse(request: Request, target: RoomShareTarget): Response {
+async function roomShareImageResponse(request: Request, target: RoomShareTarget): Promise<Response> {
   const headers = new Headers({
     'Content-Type': 'image/png',
     // An hour at the edge, so a sprite blocked by moderation leaves cached share images soon (F189).
@@ -217,8 +217,8 @@ function roomShareImageResponse(request: Request, target: RoomShareTarget): Resp
   }
 
   const bytes = target.expandedRoom && target.previewCells.length > 1
-    ? renderExpandedRoomSharePreviewPng(target.previewCells)
-    : renderRoomSharePreviewPng(target.focusSnapshot);
+    ? await renderExpandedRoomSharePreviewPng(target.previewCells)
+    : await renderRoomSharePreviewPng(target.focusSnapshot);
   const body = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,

@@ -31,13 +31,13 @@ import {
   drawDiamond,
   drawHorizonSteps,
   drawTriangle,
-  encodePng,
   fillEllipse,
   fillRect,
   hexToNumber,
   lighten,
   type RoomImageData,
 } from './roomImagePrimitives';
+import { encodePng } from '../utils/pngEncoder';
 import {
   ROOM_SHARE_IMAGE_HEIGHT,
   ROOM_SHARE_IMAGE_WIDTH,
