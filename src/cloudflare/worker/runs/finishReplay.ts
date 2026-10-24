@@ -38,11 +38,11 @@ export function runVerificationError(
  * outcome instead of a second finalize. This throws the original verification 409, or "already
  * finalized" for a different result, and returns when the same result already counted (F351).
  */
-export function assertReplayableRunFinish(
-  stored: StoredRunOutcome | null,
+export function assertReplayableRunFinish<T extends StoredRunOutcome>(
+  stored: T | null,
   requested: RunResult,
   messages: RunFinishMessages,
-): void {
+): asserts stored is T {
   if (!stored || stored.result === 'active' || stored.result !== requested) {
     throw new HttpError(409, messages.finalized);
   }
@@ -106,6 +106,39 @@ export async function loadRunFinishOrder(
   const row = await env.DB.prepare(`SELECT finalize_seq FROM ${table} WHERE attempt_id = ? LIMIT 1`)
     .bind(attemptId).first<{ finalize_seq: number | null }>();
   return { finalizeSeq: row?.finalize_seq ?? null, finishedAt, attemptId };
+}
+
+/**
+ * A reloaded run's place in commit order, read from the run row itself (F333). The stored finish
+ * time keeps a resend on the original clear's place.
+ */
+export function storedRunFinishOrder(
+  run: { attemptId: string; finishedAt: string | null; finalizeSeq?: number | null },
+): RunFinishOrder {
+  return { finalizeSeq: run.finalizeSeq ?? null, finishedAt: run.finishedAt ?? new Date().toISOString(), attemptId: run.attemptId };
+}
+
+/**
+ * Waits on independent finish steps together, so they cost one database wait instead of one each
+ * (F333). Unlike Promise.all, it waits for every step to settle before it returns or throws, and the
+ * failure thrown is the first in argument order, as when the steps ran in turn. Work a step hands
+ * to waitUntil, or a read started with readAhead and not passed in, can still be running after it.
+ */
+export async function awaitInOrder<T extends readonly unknown[] | []>(
+  steps: T,
+): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+  const settled = await Promise.allSettled(steps);
+  for (const step of settled) if (step.status === 'rejected') throw step.reason;
+  return settled.map((step) => (step as PromiseFulfilledResult<unknown>).value) as { -readonly [P in keyof T]: Awaited<T[P]> };
+}
+
+/**
+ * Starts a read the finish needs later, so it shares a wait with earlier steps (F333). A failure
+ * surfaces where the read is awaited; if an earlier step throws first, it is dropped, not unhandled.
+ */
+export function readAhead<T>(read: Promise<T>): Promise<T> {
+  read.catch(() => {});
+  return read;
 }
 
 /** SET clause numbering a finalize in commit order (writes to one D1 database are serialized). */

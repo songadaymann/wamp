@@ -121,10 +121,10 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
   const raw = await parseJsonBody<Partial<RunFinishRequestBody>>(request, { maxBytes: 1536 * 1024 });
   const body = normalizeRunFinishRequestBody(raw);
   const requestHash = await hashGuestRunValue(JSON.stringify(body));
-  const load = () => env.DB.prepare(`SELECT * FROM guest_run_attempts
+  const select = () => env.DB.prepare(`SELECT * FROM guest_run_attempts
     WHERE attempt_id = ? AND guest_user_id = ? AND recovery_token_hash = ?`)
-    .bind(attemptId, identity.guestUserId, identity.recoveryTokenHash).first<GuestRunRow>();
-  const row = await load();
+    .bind(attemptId, identity.guestUserId, identity.recoveryTokenHash);
+  const row = await select().first<GuestRunRow>();
   if (!row) throw new HttpError(404, 'Guest run not found.');
   if (row.result !== 'active') {
     if (row.finish_request_hash !== requestHash) throw new HttpError(409, 'This guest run has already finished with a different result.');
@@ -174,7 +174,7 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
     && snapshot?.kind === 'room' && supportsGhostRace(snapshot.room.goal) && body.verificationTrace
     ? buildRunGhost({ attemptId, roomId: snapshot.room.id, roomVersion: row.content_version,
       displayName: 'Guest', avatarId: 'default-player', elapsedMs }, body.verificationTrace) : null;
-  await env.DB.batch([
+  const results = await env.DB.batch<{ results?: GuestRunRow[] }>([
     env.DB.prepare(`UPDATE guest_run_attempts SET result = ?, verification_status = ?, verification_reason = ?,
       finish_request_hash = ?, finished_at = ?, expires_at = ?, metrics_json = ?, insight_deaths_json = ?, snapshot_json = NULL
       WHERE attempt_id = ? AND result = 'active'`)
@@ -186,8 +186,10 @@ export async function finishGuestRun(env: Env, identity: GuestRunIdentity, attem
     })] : []),
     // Only attempts started before F330 have cell copies to discard.
     ...(row.snapshot_json ? [env.DB.prepare('DELETE FROM guest_run_snapshot_rooms WHERE attempt_id = ?').bind(attemptId)] : []),
+    // The row as this batch leaves it: finished by this request, or by one that raced it (F333).
+    select(),
   ]);
-  const final = await load();
+  const final = results.at(-1)?.results?.[0];
   if (!final || final.finish_request_hash !== requestHash) throw new HttpError(409, 'Another request already finished this guest run.');
   if (ghost) await scheduleRunGhostArchive(env, context, attemptId);
   return finishResponse(final);

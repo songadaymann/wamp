@@ -99,24 +99,15 @@ export async function loadPublishedExpandedRoomMembershipsInBounds(
   maxY: number
 ): Promise<ExpandedRoomCellMembership[]> {
   const membershipsByRoomId = new Map<string, ExpandedRoomCellMembership>();
-  const nativeMemberships = await loadNativeExpandedRoomMembershipsInBounds(
-    env,
-    minX,
-    maxX,
-    minY,
-    maxY
-  );
+  // Independent reads, so they share one wait; native memberships still win a shared room.
+  const [nativeMemberships, legacyMemberships] = await Promise.all([
+    loadNativeExpandedRoomMembershipsInBounds(env, minX, maxX, minY, maxY),
+    loadLegacyCourseMembershipsAsExpandedRoomsInBounds(env, minX, maxX, minY, maxY),
+  ]);
   for (const membership of nativeMemberships) {
     membershipsByRoomId.set(membership.roomId, membership);
   }
 
-  const legacyMemberships = await loadLegacyCourseMembershipsAsExpandedRoomsInBounds(
-    env,
-    minX,
-    maxX,
-    minY,
-    maxY
-  );
   for (const membership of legacyMemberships) {
     if (membershipsByRoomId.has(membership.roomId)) {
       continue;
