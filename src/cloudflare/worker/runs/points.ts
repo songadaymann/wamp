@@ -270,7 +270,7 @@ export async function loadBestCompletedRunForUserAndRoomVersion(
   goal: RoomGoal,
   excludeAttemptId: string | null = null,
   /** Only runs committed before this one count. The query doesn't need it, so it may still be loading. */
-  finishedBefore: RunFinishOrder | Promise<RunFinishOrder> | null = null,
+  finishedBefore: RunFinishOrder | Promise<RunFinishOrder | null> | null = null,
 ): Promise<RoomRunRecord | null> {
   const [result, order] = await Promise.all([env.DB.prepare(
     `

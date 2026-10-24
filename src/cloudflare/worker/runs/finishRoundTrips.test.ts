@@ -3,6 +3,7 @@ import { createDefaultCourseSnapshot } from '../../../courses/model';
 import { RankedRunTraceRecorder, type RankedRunTraceFrameInput } from '../../../scenes/overworld/rankedRunTraceRecorder';
 import worker from '../../worker';
 import type { D1Database, D1PreparedStatement } from '../core/types';
+import { HttpError } from '../core/http';
 import { publishRoomAs, workerApi, type WorkerApi } from '../core/workerApi.testSupport';
 import { awardRunDailyClear } from '../progression/store';
 import { loadOrBackfillUserProgress } from '../progression/progressRows';
@@ -227,6 +228,47 @@ describe('finish steps that now share a wait (F333)', () => {
     expect(unhandled).not.toHaveBeenCalled();
   });
 
+  it.each(['/api/runs/missing/finish', '/api/expanded-room-runs/missing/finish'])(
+    '%s rejects a signed-out finish without reading the database', async (path) => {
+      const prepare = vi.spyOn(api.env.DB, 'prepare');
+      const headersCases: Array<Record<string, string>> = [{}, { Authorization: 'Basic invalid' }, { Cookie: 'ep_session=' }];
+      for (const headers of headersCases) {
+        expect((await api.call(path, { body: {}, headers })).status).toBe(401);
+      }
+      expect(prepare).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['room', 'expanded room'] as const)(
+    '%s preserves the audit error when the parallel settlement read also fails', async (kind) => {
+      const { attemptId, body } = await (kind === 'room' ? startRoomRun() : startExpandedRoomRun());
+      const table = kind === 'room' ? 'room_runs' : 'expanded_room_runs';
+      const prefix = kind === 'room' ? '/api/runs/' : '/api/expanded-room-runs/';
+      const prepare = api.env.DB.prepare.bind(api.env.DB);
+      const batch = api.env.DB.batch.bind(api.env.DB);
+      let finalized = false;
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      api.env.DB.prepare = (sql) => {
+        const statement = prepare(sql);
+        if (finalized && sql.includes('FROM ' + table)) {
+          statement.first = async () => { throw new HttpError(404, 'Settlement reload failed.'); };
+        }
+        return statement;
+      };
+      api.env.DB.batch = async <T>(statements: D1PreparedStatement[]) => {
+        const sql = statements.map((statement) => (statement as unknown as { sql: string }).sql);
+        if (sql.some((query) => query.includes('INTO run_verification_audit'))) {
+          throw new HttpError(503, 'Verification audit unavailable.');
+        }
+        const results = await batch<T>(statements);
+        if (sql.some((query) => query.includes('UPDATE ' + table))) finalized = true;
+        return results;
+      };
+      expect(await api.call(prefix + attemptId + '/finish', { session: player, body }))
+        .toMatchObject({ status: 503, body: { error: 'Verification audit unavailable.' } });
+    },
+  );
+
   it('a failed verification audit still fails the finish, and the resend awards nothing twice', async () => {
     const { attemptId, body } = await startRoomRun();
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -273,6 +315,66 @@ describe('finish steps that now share a wait (F333)', () => {
     expect([first.body.saved, second.body.saved].sort()).toEqual([false, true]);
     expect(first.body.attemptId).toBe(second.body.attemptId);
     expect(count('SELECT COUNT(*) AS n FROM room_rush_runs WHERE client_run_id = ?', submission.clientRunId)).toBe(1);
+  });
+
+  it('a duplicate Room Rush submit whose lookups reach the database after the original commits answers saved: false', async () => {
+    const submission = await startRoomRush();
+    // Hold the duplicate's start lookup until the original has committed, as D1 may order two
+    // concurrent requests. Were the start and the saved-Rush reads split again, only the start read
+    // would be held, and the saved-Rush read would run before the original saved it.
+    const hold = api.holdNextQuery(/FROM room_rush_run_starts\s+WHERE start_id = \?/);
+    const duplicate = api.call('/api/room-rush/runs', { session: player, body: submission });
+    await hold.held;
+    const original = await api.call('/api/room-rush/runs', { session: player, body: submission });
+    hold.release();
+    expect(original).toMatchObject({ status: 201, body: { saved: true } });
+    expect(await duplicate).toMatchObject({ status: 200, body: { saved: false, attemptId: original.body.attemptId } });
+  });
+
+  it('a duplicate Room Rush submit that sees its start used but not the saved Rush checks again before a 409', async () => {
+    const submission = await startRoomRush();
+    const original = await api.call('/api/room-rush/runs', { session: player, body: submission });
+    // The view a split read could give: the start read after the original committed, the saved-Rush read before.
+    const batch = api.env.DB.batch.bind(api.env.DB);
+    api.env.DB.batch = async <T>(statements: D1PreparedStatement[]) => {
+      const results = await batch<T>(statements);
+      const lookup = statements.some((statement) => /FROM room_rush_run_starts/.test((statement as unknown as { sql: string }).sql));
+      return lookup ? [results[0], { results: [] } as T] : results;
+    };
+    expect(await api.call('/api/room-rush/runs', { session: player, body: submission }))
+      .toMatchObject({ status: 200, body: { saved: false, attemptId: original.body.attemptId } });
+    // A used start that no saved Rush holds is still finalized elsewhere.
+    api.sqlite.prepare('DELETE FROM room_rush_runs WHERE client_run_id = ?').run(submission.clientRunId);
+    expect(await api.call('/api/room-rush/runs', { session: player, body: submission }))
+      .toMatchObject({ status: 409, body: { error: 'Room Rush run start has already been finalized.' } });
+  });
+
+  it('an unpublished Room Rush room still answers 400 when the Expanded Room read fails beside it', async () => {
+    const submission = await startRoomRush();
+    const prepare = api.env.DB.prepare.bind(api.env.DB);
+    api.env.DB.prepare = (sql: string) => {
+      const statement = prepare(sql);
+      if (sql.includes('FROM expanded_room_cells')) statement.all = async () => { throw new Error('D1 unavailable'); };
+      return statement;
+    };
+    const route = [submission.route[0], { routeIndex: 1, roomId: '-1,0', coordinates: { x: -1, y: 0 }, uniqueVisitIndex: 2 }];
+    expect(await api.call('/api/room-rush/runs', { session: player,
+      body: { ...submission, route, visitedRoomIds: ['0,0', '-1,0'], finishCoordinates: { x: -1, y: 0 } } }))
+      .toMatchObject({ status: 400, body: { error: 'Room Rush routes can only include published rooms.' } });
+  });
+
+  it('an Expanded Room version without a goal still answers 409 when its course record read fails beside it', async () => {
+    const { attemptId, body } = await startExpandedRoomRun();
+    api.sqlite.prepare("UPDATE courses SET published_json = json_remove(published_json, '$.goal') WHERE id = 'er'").run();
+    const batch = api.env.DB.batch.bind(api.env.DB);
+    api.env.DB.batch = async <T>(statements: D1PreparedStatement[]) => {
+      if (statements.some((statement) => (statement as unknown as { sql: string }).sql.includes('FROM course_versions'))) {
+        throw new Error('D1 unavailable');
+      }
+      return batch<T>(statements);
+    };
+    expect(await api.call(`/api/expanded-room-runs/${attemptId}/finish`, { session: player, body }))
+      .toMatchObject({ status: 409, body: { error: 'This expanded room version no longer has a leaderboard goal.' } });
   });
 
   it('two different guest finishes of one run: one counts, the other is told it lost', async () => {

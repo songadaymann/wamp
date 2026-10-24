@@ -19,7 +19,6 @@ import {
   type CourseRecord,
   type CourseRoomRef,
   type CourseSnapshot,
-  type CourseVersionRecord,
 } from '../../../courses/model';
 import { HttpError } from '../core/http';
 import type {
@@ -46,8 +45,11 @@ export async function loadCourseRecord(
   viewerUserId: string | null = null,
   viewerIsAdmin = false
 ): Promise<CourseRecord | null> {
-  // The versions need only the id (the row's primary key), so both reads share one wait (F333).
-  const [row, versions] = await Promise.all([env.DB.prepare(
+  // The versions need only the id (the row's primary key). One batch reads both in one wait and
+  // one snapshot, so a publish can't land between the row and its version list (F333).
+  const [rowResult, versionsResult] = await env.DB.batch<{
+    results: Array<CourseRow | CourseVersionRow>;
+  }>([env.DB.prepare(
     `
       SELECT
         id,
@@ -67,8 +69,8 @@ export async function loadCourseRecord(
       LIMIT 1
     `
   )
-    .bind(courseId)
-    .first<CourseRow>(), loadCourseVersions(env, courseId)]);
+    .bind(courseId), prepareCourseVersionsStatement(env, courseId)]);
+  const row = rowResult?.results[0] as CourseRow | undefined;
 
   if (!row) {
     return null;
@@ -76,6 +78,15 @@ export async function loadCourseRecord(
 
   const draft = parseStoredCourseSnapshot(row.draft_json, row.id);
   const published = row.published_json ? parseStoredCourseSnapshot(row.published_json, row.id) : null;
+  const versions = ((versionsResult?.results ?? []) as CourseVersionRow[]).map((version) => {
+    const snapshot = parseStoredCourseSnapshot(version.snapshot_json, row.id);
+    return createCourseVersionRecord(snapshot, {
+      version: version.version,
+      createdAt: version.created_at,
+      publishedByUserId: version.published_by_user_id,
+      publishedByDisplayName: version.published_by_display_name,
+    });
+  });
 
   const record: CourseRecord = {
     draft,
@@ -503,8 +514,8 @@ export async function unpublishCourse(
   return stored;
 }
 
-async function loadCourseVersions(env: Env, courseId: string): Promise<CourseVersionRecord[]> {
-  const result = await env.DB.prepare(
+function prepareCourseVersionsStatement(env: Env, courseId: string) {
+  return env.DB.prepare(
     `
       SELECT
         version,
@@ -517,19 +528,7 @@ async function loadCourseVersions(env: Env, courseId: string): Promise<CourseVer
       WHERE course_id = ?
       ORDER BY version ASC
     `
-  )
-    .bind(courseId)
-    .all<CourseVersionRow>();
-
-  return result.results.map((row) => {
-    const snapshot = parseStoredCourseSnapshot(row.snapshot_json, courseId);
-    return createCourseVersionRecord(snapshot, {
-      version: row.version,
-      createdAt: row.created_at,
-      publishedByUserId: row.published_by_user_id,
-      publishedByDisplayName: row.published_by_display_name,
-    });
-  });
+  ).bind(courseId);
 }
 
 async function resolveValidatedCourseDraft(

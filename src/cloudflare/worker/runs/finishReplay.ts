@@ -95,23 +95,34 @@ export async function recordRunSettlement(env: Env, kind: RunFinishKind, attempt
 
 /**
  * This run's place in commit order, for first-clear and personal-best checks. finalize_seq is
- * numbered inside the finalize batch; the stored finish time is taken before verification, so a
- * resend keeps the original clear's place. It reads only this, so it can load beside the run (F333).
+ * numbered inside the finalize batch; the stored finish time is taken before verification.
  */
 export async function loadRunFinishOrder(
   env: Env,
   table: 'room_runs' | 'course_runs' | 'expanded_room_runs',
   attemptId: string,
+  finishedAt: string,
 ): Promise<RunFinishOrder> {
-  const row = await env.DB.prepare(`SELECT finalize_seq, finished_at FROM ${table} WHERE attempt_id = ? LIMIT 1`)
-    .bind(attemptId).first<{ finalize_seq: number | null; finished_at: string | null }>();
-  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt: row?.finished_at ?? new Date().toISOString(), attemptId };
+  const row = await env.DB.prepare(`SELECT finalize_seq FROM ${table} WHERE attempt_id = ? LIMIT 1`)
+    .bind(attemptId).first<{ finalize_seq: number | null }>();
+  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt, attemptId };
+}
+
+/**
+ * A reloaded run's place in commit order, read from the run row itself (F333). The stored finish
+ * time keeps a resend on the original clear's place.
+ */
+export function storedRunFinishOrder(
+  run: { attemptId: string; finishedAt: string | null; finalizeSeq?: number | null },
+): RunFinishOrder {
+  return { finalizeSeq: run.finalizeSeq ?? null, finishedAt: run.finishedAt ?? new Date().toISOString(), attemptId: run.attemptId };
 }
 
 /**
  * Waits on independent finish steps together, so they cost one database wait instead of one each
- * (F333). Unlike Promise.all, every step finishes before this returns or throws (none keeps running
- * past the reply), and the failure thrown is the first in argument order, as when they ran in turn.
+ * (F333). Unlike Promise.all, it waits for every step to settle before it returns or throws, and the
+ * failure thrown is the first in argument order, as when the steps ran in turn. Work a step hands
+ * to waitUntil, or a read started with readAhead and not passed in, can still be running after it.
  */
 export async function awaitInOrder<T extends readonly unknown[] | []>(
   steps: T,

@@ -24,7 +24,7 @@ import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboard
 import { loadPublishedExpandedRoomMembershipsInBounds } from '../expandedRooms/store';
 import { loadPublishedRoom, loadPublishedRoomsInBounds } from '../rooms/store';
 import { parseRoomRushRunStartBody, parseRoomRushRunSubmissionBody } from './requestBodies';
-import { awaitInOrder } from './finishReplay';
+import { readAhead } from './finishReplay';
 import { WEEKLY_ROOM_RUSH_LIMIT_MS, type WeeklyRoomRushResponse } from '../../../runs/weeklyRoomRush';
 import { loadWeeklyRoomRushPick, weeklyRoomRushPeriod } from './weeklyRoomRushStore';
 import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlots } from '../core/rateLimit';
@@ -119,30 +119,29 @@ export async function handleRoomRushRunSubmit(
     'runs:write'
   );
   const body = await parseRoomRushRunSubmissionBody(request);
-  // The start and an already-saved Rush are independent reads: one wait (F333).
-  const [start, existing] = await awaitInOrder([
-    loadRoomRushRunStart(env, auth.user.id, body.startId),
-    env.DB.prepare(
-      `
-        SELECT attempt_id
-        FROM room_rush_runs
-        WHERE user_id = ?
-          AND client_run_id = ?
-        LIMIT 1
-      `
-    )
-      .bind(auth.user.id, body.clientRunId)
-      .first<{ attempt_id: string }>(),
+  // The start and an already-saved Rush in one batch: one wait and one snapshot, so a duplicate
+  // submit never sees its start used without the Rush that used it (F333).
+  const [startResult, existingResult] = await env.DB.batch<{
+    results: Array<RoomRushRunStartRow | { attempt_id: string }>;
+  }>([
+    prepareRoomRushRunStartStatement(env, auth.user.id, body.startId),
+    prepareSavedRoomRushStatement(env, auth.user.id, body.clientRunId),
   ]);
+  const start = (startResult?.results[0] as RoomRushRunStartRow | undefined) ?? null;
+  const existing = existingResult?.results[0] as { attempt_id: string } | undefined;
   if (!start) {
     throw new HttpError(400, 'Room Rush run start was not found.');
   }
   assertRoomRushStartMatchesSubmission(start, body);
 
-  if (existing?.attempt_id) {
+  // A used start whose Rush the batch didn't show is checked again before calling it finalized.
+  const saved = existing ?? (start.consumed_attempt_id
+    ? await prepareSavedRoomRushStatement(env, auth.user.id, body.clientRunId).first<{ attempt_id: string }>()
+    : null);
+  if (saved?.attempt_id) {
     const response: RoomRushRunSubmissionResponse = {
       saved: false,
-      attemptId: existing.attempt_id,
+      attemptId: saved.attempt_id,
     };
     return jsonResponse(request, response);
   }
@@ -240,14 +239,13 @@ export async function handleRoomRushRunSubmit(
       attemptId
     ),
     // Which Rush holds this client run id once the batch commits: ours, or a racing request's.
-    env.DB.prepare('SELECT attempt_id FROM room_rush_runs WHERE user_id = ? AND client_run_id = ?')
-      .bind(auth.user.id, body.clientRunId),
+    prepareSavedRoomRushStatement(env, auth.user.id, body.clientRunId),
   ]);
 
-  const saved = results[2]?.results?.[0];
-  if (!saved) throw new HttpError(409, 'This Rush could not be finalized. Please retry.');
-  response.saved = saved.attempt_id === attemptId;
-  response.attemptId = saved.attempt_id;
+  const stored = results[2]?.results?.[0];
+  if (!stored) throw new HttpError(409, 'This Rush could not be finalized. Please retry.');
+  response.saved = stored.attempt_id === attemptId;
+  response.attemptId = stored.attempt_id;
   return jsonResponse(request, response, { status: response.saved ? 201 : 200 });
 }
 
@@ -260,19 +258,19 @@ async function scoreRoomRushRouteByExpandedRoom(
   }
 
   const bounds = getRouteBounds(route.map((step) => step.coordinates));
-  // The published rooms and the Expanded Rooms over them are independent reads: one wait (F333).
-  const [publishedRooms, memberships] = await awaitInOrder([
-    loadPublishedRoomsInBounds(env, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY),
-    isExpandedRoomsEnabled(env)
-      ? loadPublishedExpandedRoomMembershipsInBounds(env, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY)
-      : [],
-  ]);
+  // The Expanded Rooms over the route load beside its rooms (F333). The rooms are checked first,
+  // so an unpublished room still answers 400 if the memberships read failed.
+  const membershipsRead = isExpandedRoomsEnabled(env)
+    ? readAhead(loadPublishedExpandedRoomMembershipsInBounds(env, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY))
+    : null;
+  const publishedRooms = await loadPublishedRoomsInBounds(env, bounds.minX, bounds.maxX, bounds.minY, bounds.maxY);
   const publishedRoomIds = new Set(publishedRooms.map((source) => source.snapshot.id));
   for (const step of route) {
     if (!publishedRoomIds.has(step.roomId)) {
       throw new HttpError(400, 'Room Rush routes can only include published rooms.');
     }
   }
+  const memberships = (await membershipsRead) ?? [];
 
   const expandedRoomIdByRoomId = new Map(
     memberships.map((membership) => [membership.roomId, membership.expandedRoomId])
@@ -306,7 +304,11 @@ async function loadRoomRushRunStart(
   userId: string,
   startId: string
 ): Promise<RoomRushRunStartRow | null> {
-  const row = await env.DB.prepare(
+  return (await prepareRoomRushRunStartStatement(env, userId, startId).first<RoomRushRunStartRow>()) ?? null;
+}
+
+function prepareRoomRushRunStartStatement(env: Env, userId: string, startId: string) {
+  return env.DB.prepare(
     `
       SELECT
         start_id,
@@ -328,11 +330,20 @@ async function loadRoomRushRunStart(
         AND user_id = ?
       LIMIT 1
     `
-  )
-    .bind(startId, userId)
-    .first<RoomRushRunStartRow>();
+  ).bind(startId, userId);
+}
 
-  return row ?? null;
+/** The Rush saved under this client run id, if any. */
+function prepareSavedRoomRushStatement(env: Env, userId: string, clientRunId: string) {
+  return env.DB.prepare(
+    `
+      SELECT attempt_id
+      FROM room_rush_runs
+      WHERE user_id = ?
+        AND client_run_id = ?
+      LIMIT 1
+    `
+  ).bind(userId, clientRunId);
 }
 
 function assertRoomRushStartMatchesSubmission(
