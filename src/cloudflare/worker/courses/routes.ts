@@ -686,7 +686,7 @@ async function settleCourseRunFinish(
       rewardScope.versions,
       attemptId,
       finalizedRun.courseVersion,
-      await loadRunFinishOrder(env, 'course_runs', attemptId),
+      await loadRunFinishOrder(env, 'course_runs', attemptId, finishedAt),
     );
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: previousBest === null,

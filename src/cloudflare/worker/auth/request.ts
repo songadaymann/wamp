@@ -136,6 +136,12 @@ export function hasSessionCookie(request: Request): boolean {
   return parseCookie(request.headers.get('Cookie')).has(SESSION_COOKIE_NAME);
 }
 
+/** Whether the request carries a bearer token or a session cookie: without either, sign-in fails before any read. */
+export function hasRequestCredentials(request: Request): boolean {
+  return parseBearerToken(request.headers.get('Authorization')) !== null
+    || Boolean(parseCookie(request.headers.get('Cookie')).get(SESSION_COOKIE_NAME));
+}
+
 export async function loadCurrentSession(env: Env, request: Request): Promise<AuthSession | null> {
   const token = parseCookie(request.headers.get('Cookie')).get(SESSION_COOKIE_NAME);
   if (!token) {

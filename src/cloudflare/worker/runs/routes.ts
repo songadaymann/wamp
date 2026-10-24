@@ -7,8 +7,8 @@ import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
 import {
-  assertReplayableRunFinish, awaitInOrder, finalizeStatementWon, loadRunFinishOrder, nextFinalizeSeqSql, readAhead,
-  recordRunSettlement, runNeedsResettle, runPastDisconnect, runVerificationError,
+  assertReplayableRunFinish, awaitInOrder, finalizeStatementWon, nextFinalizeSeqSql, readAhead,
+  recordRunSettlement, runNeedsResettle, runPastDisconnect, runVerificationError, storedRunFinishOrder,
   type RunFinishMessages,
 } from './finishReplay';
 import { deathLocationsJson } from '../insights/deathLocations';
@@ -42,7 +42,7 @@ import {
   refreshPlayableContentIndexForRoom,
   schedulePlayableContentIndexRefresh,
 } from '../playableContentIndex/store';
-import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
+import { hasRequestCredentials, requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadExactRoomVersion } from '../rooms/store';
 import {
   awardRoomCreatorCompletionPoints,
@@ -198,8 +198,9 @@ export async function handleRunFinish(
     throw new HttpError(400, 'Attempt id is required.');
   }
 
-  // The run row needs only the attempt id, so it loads while the player signs in (F333).
-  const existingRead = readAhead(loadRoomRunByAttemptId(env, attemptId));
+  // The run row needs only the attempt id, so it loads while the player signs in (F333). A request
+  // with no credentials fails sign-in without a read, so it doesn't start one.
+  const existingRead = hasRequestCredentials(request) ? readAhead(loadRoomRunByAttemptId(env, attemptId)) : null;
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
@@ -207,7 +208,7 @@ export async function handleRunFinish(
     'runs:write'
   );
   const body = await parseRunFinishBody(request);
-  const existing = await existingRead;
+  const existing = await (existingRead ?? loadRoomRunByAttemptId(env, attemptId));
 
   if (!existing) {
     throw new HttpError(404, 'Run attempt was not found.');
@@ -462,7 +463,6 @@ export async function handleRunFinish(
   // waits for both, and either failing still answers with an error the client retries.
   await runPastDisconnect(executionContext, attemptId, (async () => {
     await awaitInOrder([
-      verificationError ? null : settleRoomRunFinish(env, executionContext, { ...settlement, result: finalBody.result, completedGhost }),
       verification.audit && recordRunVerificationAudit(env, {
         attemptId,
         kind: 'room',
@@ -471,6 +471,7 @@ export async function handleRunFinish(
         trace: finalBody.verificationTrace ?? null,
         createdAt: finishedAt,
       }),
+      verificationError ? null : settleRoomRunFinish(env, executionContext, { ...settlement, result: finalBody.result, completedGhost }),
     ]);
   })());
   if (verificationError) throw verificationError;
@@ -502,11 +503,12 @@ async function settleRoomRunFinish(
   { attemptId, userId, goal, roomRecord, roomId, roomVersion, result, rewardScope, completedGhost }: RoomRunSettlement,
 ): Promise<void> {
   // Only clears stored before this one count, so a late resend and a later clear agree on "first".
-  // The earlier clears load with the run itself and are filtered by its commit order (F333).
-  const order = result === 'completed' ? readAhead(loadRunFinishOrder(env, 'room_runs', attemptId)) : null;
+  // The earlier clears load beside the run and are filtered by its stored finalize_seq (F333).
+  const reload = loadRoomRunByAttemptId(env, attemptId);
+  const order = result === 'completed' ? reload.then((run) => run && storedRunFinishOrder(run)) : null;
   const scopeIsVersion = rewardScope.versions.length === 1 && rewardScope.versions[0] === roomVersion;
   const [finalizedRun, previousBest, scopeBest] = await awaitInOrder([
-    loadRoomRunByAttemptId(env, attemptId),
+    reload,
     order && loadBestCompletedRunForUserAndRoomVersion(env, userId, roomId, roomVersion, goal, attemptId, order),
     order && !scopeIsVersion
       ? loadBestCompletedRunForUserAndRoomVersion(env, userId, roomId, rewardScope.versions, goal, attemptId, order)
@@ -848,7 +850,7 @@ export function resolveRoomSnapshotForVersion(
 export async function loadRoomRunByAttemptId(
   env: Env,
   attemptId: string
-): Promise<RoomRunRecord | null> {
+): Promise<(RoomRunRecord & { finalizeSeq: number | null }) | null> {
   const row = await env.DB.prepare(
     `
       SELECT
@@ -873,7 +875,8 @@ export async function loadRoomRunByAttemptId(
         verification_status,
         verification_reason,
         verification_nonce,
-        verification_snapshot_hash
+        verification_snapshot_hash,
+        finalize_seq
       FROM room_runs
       WHERE attempt_id = ?
       LIMIT 1
@@ -882,7 +885,8 @@ export async function loadRoomRunByAttemptId(
     .bind(attemptId)
     .first<RoomRunRow>();
 
-  return row ? mapRoomRunRow(row) : null;
+  // Its place in commit order (F351) comes with the run, for the reward step's first-clear check.
+  return row ? { ...mapRoomRunRow(row), finalizeSeq: row.finalize_seq ?? null } : null;
 }
 
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {

@@ -3,8 +3,8 @@ import { assertSoloCourseRun } from '../runs/coopPolicy';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from '../runs/finalizationVerification';
 import {
-  assertReplayableRunFinish, awaitInOrder, finalizeStatementWon, loadRunFinishOrder, nextFinalizeSeqSql, readAhead,
-  recordRunSettlement, runNeedsResettle, runPastDisconnect, runVerificationError,
+  assertReplayableRunFinish, awaitInOrder, finalizeStatementWon, nextFinalizeSeqSql, readAhead,
+  recordRunSettlement, runNeedsResettle, runPastDisconnect, runVerificationError, storedRunFinishOrder,
   type RunFinishMessages,
 } from '../runs/finishReplay';
 import {
@@ -52,6 +52,7 @@ import {
   schedulePlayableContentIndexRefresh,
 } from '../playableContentIndex/store';
 import {
+  hasRequestCredentials,
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
   requireOptionalScope,
@@ -282,8 +283,9 @@ export async function handleExpandedRoomRunFinish(
   attemptId: string,
   executionContext?: WorkerExecutionContextLike,
 ): Promise<Response> {
-  // The run row needs only the attempt id, so it loads while the player signs in (F333).
-  const existingRead = readAhead(loadExpandedRoomRunByAttemptId(env, attemptId));
+  // The run row needs only the attempt id, so it loads while the player signs in (F333). A request
+  // with no credentials fails sign-in without a read, so it doesn't start one.
+  const existingRead = hasRequestCredentials(request) ? readAhead(loadExpandedRoomRunByAttemptId(env, attemptId)) : null;
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
@@ -291,7 +293,7 @@ export async function handleExpandedRoomRunFinish(
     'runs:write',
   );
   const body = await parseCourseRunFinishBody(request);
-  const existing = await existingRead;
+  const existing = await (existingRead ?? loadExpandedRoomRunByAttemptId(env, attemptId));
   if (!existing) {
     throw new HttpError(404, 'Expanded room run attempt was not found.');
   }
@@ -315,18 +317,19 @@ export async function handleExpandedRoomRunFinish(
     existing.expandedRoomVersion,
   );
   const { snapshot } = context;
-  // The co-op check, the compatibility record and its owner each need only the course: one wait (F333).
-  const [, courseRecord, creatorUserId] = await awaitInOrder([
-    assertSoloCourseRun(env, snapshot),
-    loadCourseRecord(env, context.legacyCourseId, auth.user.id, auth.isAdmin),
-    resolvePublishedCourseOwnerUserId(env, context.legacyCourseId),
-  ]);
+  // The compatibility record and its owner need only the course, so they load beside the co-op
+  // check (F333). Each is awaited where it used to load, so the answers keep their order.
+  const courseRecordRead = readAhead(loadCourseRecord(env, context.legacyCourseId, auth.user.id, auth.isAdmin));
+  const creatorUserIdRead = readAhead(resolvePublishedCourseOwnerUserId(env, context.legacyCourseId));
+  await assertSoloCourseRun(env, snapshot);
   if (!snapshot.goal) {
     throw new HttpError(409, 'This expanded room version no longer has a leaderboard goal.');
   }
+  const courseRecord = await courseRecordRead;
   if (!courseRecord) {
     throw new HttpError(404, 'Expanded room compatibility record not found.');
   }
+  const creatorUserId = await creatorUserIdRead;
   const rewardScope = resolveCourseClearRewardScope(
     courseRecord, context.legacyCourseId, existing.expandedRoomVersion, auth.user.id, creatorUserId,
   );
@@ -573,7 +576,6 @@ export async function handleExpandedRoomRunFinish(
   // waits for both, and either failing still answers with an error the client retries.
   await runPastDisconnect(executionContext, attemptId, (async () => {
     await awaitInOrder([
-      verificationError ? null : settleExpandedRoomRunFinish(env, executionContext, { ...settlement, result: finalBody.result }),
       verification.audit && recordRunVerificationAudit(env, {
         attemptId,
         kind: 'course',
@@ -582,6 +584,7 @@ export async function handleExpandedRoomRunFinish(
         trace: finalBody.verificationTrace ?? null,
         createdAt: finishedAt,
       }),
+      verificationError ? null : settleExpandedRoomRunFinish(env, executionContext, { ...settlement, result: finalBody.result }),
     ]);
   })());
   if (verificationError) throw verificationError;
@@ -611,10 +614,11 @@ async function settleExpandedRoomRunFinish(
   { attemptId, userId, goal, legacyCourseId, expandedRoomId, result, courseRecord, creatorUserId, rewardScope }: ExpandedRoomRunSettlement,
 ): Promise<void> {
   // Only clears stored before this one count, so a late resend and a later clear agree on "first".
-  // The earlier clears load with the run itself and are filtered by its commit order (F333).
-  const order = result === 'completed' ? readAhead(loadRunFinishOrder(env, 'expanded_room_runs', attemptId)) : null;
+  // The earlier clears load beside the run and are filtered by its stored finalize_seq (F333).
+  const reload = loadExpandedRoomRunByAttemptId(env, attemptId);
+  const order = result === 'completed' ? reload.then((run) => run && storedRunFinishOrder(run)) : null;
   const [finalizedRun, previousBest] = await awaitInOrder([
-    loadExpandedRoomRunByAttemptId(env, attemptId),
+    reload,
     order && loadBestCompletedExpandedRoomRunForUserAndVersion(
       env, userId, expandedRoomId, rewardScope.versions, goal, attemptId, order,
     ),
@@ -961,7 +965,7 @@ async function loadCourseVerificationRoomsById(
 async function loadExpandedRoomRunByAttemptId(
   env: Env,
   attemptId: string,
-): Promise<ExpandedRoomRunRecord | null> {
+): Promise<(ExpandedRoomRunRecord & { finalizeSeq: number | null }) | null> {
   const row = await env.DB.prepare(
     `
       SELECT
@@ -985,7 +989,8 @@ async function loadExpandedRoomRunByAttemptId(
         verification_status,
         verification_reason,
         verification_nonce,
-        verification_snapshot_hash
+        verification_snapshot_hash,
+        finalize_seq
       FROM expanded_room_runs
       WHERE attempt_id = ?
       LIMIT 1
@@ -994,7 +999,8 @@ async function loadExpandedRoomRunByAttemptId(
     .bind(attemptId)
     .first<ExpandedRoomRunRow>();
 
-  return row ? mapExpandedRoomRunRow(row) : null;
+  // Its place in commit order (F351) comes with the run, for the reward step's first-clear check.
+  return row ? { ...mapExpandedRoomRunRow(row), finalizeSeq: row.finalize_seq ?? null } : null;
 }
 
 function mapExpandedRoomRunRow(row: ExpandedRoomRunRow): ExpandedRoomRunRecord {
@@ -1044,7 +1050,7 @@ async function loadBestCompletedExpandedRoomRunForUserAndVersion(
   goal: CourseGoal,
   excludeAttemptId: string | null,
   /** Only runs committed before this one count. The query doesn't need it, so it may still be loading. */
-  finishedBefore: RunFinishOrder | Promise<RunFinishOrder> | null = null,
+  finishedBefore: RunFinishOrder | Promise<RunFinishOrder | null> | null = null,
 ): Promise<ExpandedRoomRunRecord | null> {
   const [result, order] = await Promise.all([env.DB.prepare(
     `
