@@ -20,6 +20,8 @@ import {
   type NpcMode,
 } from '../npcs/model';
 import { TILE_SIZE, type LayerName } from './room';
+import { ROLLING_BALL_OBJECT_ID } from './rollingBall';
+import { TRIANGLE_PIECE_OBJECT_ID } from './trianglePiece';
 import {
   FIRE_BIG_LIGHT_EMISSION,
   FIRE_LIGHT_EMISSION,
@@ -351,6 +353,8 @@ export const GAME_OBJECTS: GameObjectConfig[] = [
   { id: 'barricade',  name: 'Barricade',  category: 'platform',    path: 'assets/objects/barricade.png', frameWidth: 16, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate building barricade. Pressure plate activates the build to permanently block paths.' },
   { id: 'wooden_bridge',  name: 'Wooden Bridge',  category: 'platform',    path: 'assets/objects/wooden_bridge.png', frameWidth: 64, frameHeight: 16, frameCount: 1,  fps: 0,  facingDirection: 'right', bodyWidth: 64, bodyHeight: 16, bodyOffsetX: 0, bodyOffsetY: 0, behavior: 'static',   description: 'Pressure-plate building bridge. Pressure plate activates the build to permanently create a bridge.' },
   { id: 'crate',       name: 'Crate',       category: 'platform',    path: 'assets/objects/crate.png', frameWidth: 32, frameHeight: 32, frameCount: 4,  fps: 0,  defaultFrame: 0, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 10, displayOffsetX: -8, displayOffsetY: 6, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 10, behavior: 'static',   interaction: 'pushable', description: 'Solid block. Stand on it, push it, or break it with a butt stomp.' },
+  { id: ROLLING_BALL_OBJECT_ID, name: 'Rolling Ball', category: 'platform', path: 'assets/objects/rolling-ball.png', frameWidth: 32, frameHeight: 32, frameCount: 32, fps: 0, defaultFrame: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'A round ball. Weight, hurt flags, and whether it can be pushed come from the selected graphic.' },
+  { id: TRIANGLE_PIECE_OBJECT_ID, name: 'Triangle', category: 'platform', path: 'assets/objects/triangle-piece.png', frameWidth: 32, frameHeight: 32, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Right-triangle ramp. Balls roll down it, and actors walk slopes up to 45 degrees.' },
   { id: 'brick_box',   name: 'Brick Box',   category: 'platform',    path: 'assets/objects/brick_box.png',   frameWidth: 32, frameHeight: 32, frameCount: 6,  fps: 0,  defaultFrame: 5, bodyWidth: 16, bodyHeight: 16, bodyOffsetX: 8, bodyOffsetY: 8, previewWidth: 16, previewHeight: 16, previewOffsetX: 8, previewOffsetY: 8, placeUsingPreviewBounds: true, behavior: 'static',   description: 'Solid brick block. Stand on it, break it from below, or break it with a butt stomp.' },
   { id: MOVING_PLATFORM_OBJECT_ID, name: 'Moving Platform', category: 'platform', path: 'assets/objects/moving_platform.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, facingDirection: 'right', bodyWidth: 16, bodyHeight: 8, bodyOffsetX: 0, bodyOffsetY: 4, behavior: 'static', collidesWithWorld: false, description: 'Linked platform. Connect it to a Moving Platform Anchor to make it patrol.' },
   { id: MOVING_PLATFORM_ENDPOINT_OBJECT_ID, name: 'Moving Platform Anchor', category: 'interactive', path: 'assets/objects/platform_anchor.png', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 0, bodyWidth: 0, bodyHeight: 0, behavior: 'static', description: 'Editor marker for linked moving platforms.' },
@@ -701,6 +705,16 @@ export interface PlacedObject {
   npcFriendlyFire?: boolean | null;
   npcName?: string | null;
   npcDefeatMode?: SwordsmanDefeatMode | null;
+  ballGraphic?: string | null;
+  ballWeight?: number | null;
+  ballHurtEnemies?: boolean | null;
+  ballHurtFriendlies?: boolean | null;
+  ballHurtPlayer?: boolean | null;
+  ballPushable?: boolean | null;
+  triangleLegX?: number | null;
+  triangleLegY?: number | null;
+  triangleFill?: string | null;
+  triangleStroke?: string | null;
 }
 
 export function getPlacedObjectLayer(

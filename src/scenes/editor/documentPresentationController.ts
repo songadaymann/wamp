@@ -10,6 +10,9 @@ import {
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
+import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../config/rollingBall';
+import { isTrianglePieceObjectId, normalizePlacedTriangle } from '../../config/trianglePiece';
+import { placeTriangleSprite } from '../overworld/liveObjects/triangleTexture';
 import { createGoalMarkerFlagSprite } from '../../goals/markerFlags';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type { RoomSpawnPoint } from '../../persistence/roomRepository';
@@ -95,6 +98,22 @@ export class EditorDocumentPresentationController {
         sprite.setTint(0xb8c4d8);
       }
       applyPlacedObjectFacing(sprite, objectConfig, placed);
+      if (isTrianglePieceObjectId(placed.id)) {
+        const geometry = normalizePlacedTriangle(placed);
+        if (geometry) {
+          placeTriangleSprite(
+            sprite,
+            state.origin.x + geometry.anchorX,
+            state.origin.y + geometry.anchorY,
+            geometry.legX,
+            geometry.legY,
+            geometry.fill,
+            geometry.stroke,
+          );
+        }
+      } else if (isRollingBallObjectId(placed.id)) {
+        sprite.setFrame(rollingBallFrame(getRollingBallGraphic(placed.ballGraphic).column, 0));
+      }
       tagEditorObjectSprite(sprite, getPlacedObjectLayer(placed));
       this.objectSprites.push(sprite);
       this.objectSpritesByInstanceId.set(placed.instanceId, sprite);

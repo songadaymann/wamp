@@ -1638,6 +1638,61 @@
             </select>
           </div>
         </div>
+        <div id="ball-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Rolling ball</div>
+          <div id="ball-status" class="goal-context-note">Basic Ball</div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="ball-graphic-select">Graphic</label>
+            <select id="ball-graphic-select" class="goal-input"></select>
+          </div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="ball-weight-input">Weight</label>
+            <input id="ball-weight-input" class="goal-input" type="number" min="0.25" max="8" step="0.25" value="1" />
+          </div>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="ball-hurt-enemies-checkbox" type="checkbox" />
+            <span>Hurts enemies</span>
+          </label>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="ball-hurt-friendlies-checkbox" type="checkbox" />
+            <span>Hurts friendlies</span>
+          </label>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="ball-hurt-player-checkbox" type="checkbox" />
+            <span>Hurts player</span>
+          </label>
+          <label class="goal-control-row npc-checkbox-row">
+            <input id="ball-pushable-checkbox" type="checkbox" />
+            <span>Can be pushed</span>
+          </label>
+        </div>
+        <div id="triangle-panel" class="pressure-plate-panel hidden">
+          <div class="section-label">Triangle ramp</div>
+          <div id="triangle-status" class="goal-context-note">Drag a corner or side.</div>
+          <div id="triangle-leg-readout" class="goal-context-note">32 × -32</div>
+          <div class="goal-control-row">
+            <button id="btn-triangle-flip-x" class="bar-btn bar-btn-small" type="button">Flip left/right</button>
+            <button id="btn-triangle-flip-y" class="bar-btn bar-btn-small" type="button">Flip up/down</button>
+          </div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="triangle-fill-input">Fill</label>
+            <button id="triangle-fill-swatch" class="color-swatch" type="button" aria-label="Pick fill color"></button>
+            <input id="triangle-fill-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#8A8F98" />
+          </div>
+          <div class="goal-control-row">
+            <label class="goal-control-label" for="triangle-stroke-input">Stroke</label>
+            <button id="triangle-stroke-swatch" class="color-swatch" type="button" aria-label="Pick stroke color"></button>
+            <input id="triangle-stroke-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#2C3138" />
+          </div>
+        </div>
+        <div id="color-popover" class="color-popover hidden">
+          <canvas id="color-popover-square" width="160" height="120"></canvas>
+          <input id="color-popover-hue" type="range" min="0" max="360" step="1" value="0" aria-label="Hue" />
+          <div class="goal-control-row">
+            <input id="color-popover-hex" class="goal-input" type="text" maxlength="7" spellcheck="false" aria-label="Hex color" />
+            <button id="btn-color-eyedropper" class="bar-btn bar-btn-small" type="button">Pick pixel</button>
+          </div>
+        </div>
       </div>
       <div id="editor-music-overlay" class="editor-music-overlay hidden">
         <div class="editor-music-shell">

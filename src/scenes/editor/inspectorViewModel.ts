@@ -1,4 +1,6 @@
-import { getObjectById, type GameObjectConfig } from '../../config';
+import { getObjectById, type GameObjectConfig, type PlacedObject } from '../../config';
+import { getRollingBallGraphic, normalizePlacedRollingBall } from '../../config/rollingBall';
+import { normalizePlacedTriangle } from '../../config/trianglePiece';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
@@ -70,6 +72,57 @@ export function createEmptyEditorInspectorState(): EditorInspectorState {
     npcNameValue: '',
     npcDialogueValue: '',
     npcDefeatModeValue: 'defeatable',
+    ballVisible: false,
+    ballStatusText: '',
+    ballGraphicValue: 'basic',
+    ballWeightValue: '1',
+    ballHurtEnemiesChecked: false,
+    ballHurtFriendliesChecked: false,
+    ballHurtPlayerChecked: false,
+    ballPushableChecked: true,
+    triangleVisible: false,
+    triangleStatusText: '',
+    triangleLegText: '',
+    triangleFillValue: '#8A8F98',
+    triangleStrokeValue: '#2C3138',
+  };
+}
+
+export function buildBallInspectorState(
+  placed: PlacedObject,
+  statusText: string | null = null,
+): EditorInspectorState | null {
+  const ball = normalizePlacedRollingBall(placed);
+  if (!ball) return null;
+  const graphic = getRollingBallGraphic(ball.graphicId);
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    ballVisible: true,
+    ballStatusText: statusText ?? graphic.name,
+    ballGraphicValue: graphic.id,
+    ballWeightValue: String(ball.weight),
+    ballHurtEnemiesChecked: ball.hurtEnemies,
+    ballHurtFriendliesChecked: ball.hurtFriendlies,
+    ballHurtPlayerChecked: ball.hurtPlayer,
+    ballPushableChecked: ball.pushable,
+  };
+}
+
+export function buildTriangleInspectorState(
+  placed: PlacedObject,
+  statusText: string | null = null,
+): EditorInspectorState | null {
+  const geometry = normalizePlacedTriangle(placed);
+  if (!geometry) return null;
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    triangleVisible: true,
+    triangleStatusText: statusText ?? 'Drag a corner or side to resize this ramp.',
+    triangleLegText: `${geometry.legX} × ${geometry.legY}`,
+    triangleFillValue: geometry.fill,
+    triangleStrokeValue: geometry.stroke,
   };
 }
 

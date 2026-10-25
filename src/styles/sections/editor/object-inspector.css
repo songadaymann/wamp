@@ -528,6 +528,33 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy
   pointer-events: none;
 }
 
+.color-swatch {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--editor-retro-shadow, var(--wamp-ink));
+  background: #8a8f98;
+  cursor: pointer;
+}
+
+.color-popover {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  gap: 8px;
+  width: 184px;
+  padding: 10px;
+  background: var(--editor-retro-cream, var(--wamp-cream));
+  border: 3px solid var(--editor-retro-shadow, var(--wamp-ink));
+}
+
+.color-popover canvas {
+  width: 160px;
+  height: 120px;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
 .editor-inspector > * {
   pointer-events: auto;
   box-shadow: 0 18px 42px rgba(var(--wamp-black-rgb), 0.32);

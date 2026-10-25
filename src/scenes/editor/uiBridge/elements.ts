@@ -192,6 +192,28 @@ export interface EditorUiElements {
   npcNameInput: HTMLInputElement | null;
   npcDialogueInput: HTMLTextAreaElement | null;
   npcDefeatModeSelect: HTMLSelectElement | null;
+  ballPanel: HTMLElement | null;
+  ballStatus: HTMLElement | null;
+  ballGraphicSelect: HTMLSelectElement | null;
+  ballWeightInput: HTMLInputElement | null;
+  ballHurtEnemiesCheckbox: HTMLInputElement | null;
+  ballHurtFriendliesCheckbox: HTMLInputElement | null;
+  ballHurtPlayerCheckbox: HTMLInputElement | null;
+  ballPushableCheckbox: HTMLInputElement | null;
+  trianglePanel: HTMLElement | null;
+  triangleStatus: HTMLElement | null;
+  triangleLegReadout: HTMLElement | null;
+  triangleFlipXButton: HTMLButtonElement | null;
+  triangleFlipYButton: HTMLButtonElement | null;
+  triangleFillInput: HTMLInputElement | null;
+  triangleFillSwatch: HTMLButtonElement | null;
+  triangleStrokeInput: HTMLInputElement | null;
+  triangleStrokeSwatch: HTMLButtonElement | null;
+  colorPopover: HTMLElement | null;
+  colorPopoverSquare: HTMLCanvasElement | null;
+  colorPopoverHue: HTMLInputElement | null;
+  colorPopoverHex: HTMLInputElement | null;
+  colorEyedropperButton: HTMLButtonElement | null;
 }
 
 function byId<T extends HTMLElement>(doc: Document, id: string): T | null {
@@ -420,5 +442,27 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     npcNameInput: byId<HTMLInputElement>(doc, 'npc-name-input'),
     npcDialogueInput: byId<HTMLTextAreaElement>(doc, 'npc-dialogue-input'),
     npcDefeatModeSelect: byId<HTMLSelectElement>(doc, 'npc-defeat-mode-select'),
+    ballPanel: byId<HTMLElement>(doc, 'ball-panel'),
+    ballStatus: byId<HTMLElement>(doc, 'ball-status'),
+    ballGraphicSelect: byId<HTMLSelectElement>(doc, 'ball-graphic-select'),
+    ballWeightInput: byId<HTMLInputElement>(doc, 'ball-weight-input'),
+    ballHurtEnemiesCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-enemies-checkbox'),
+    ballHurtFriendliesCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-friendlies-checkbox'),
+    ballHurtPlayerCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-player-checkbox'),
+    ballPushableCheckbox: byId<HTMLInputElement>(doc, 'ball-pushable-checkbox'),
+    trianglePanel: byId<HTMLElement>(doc, 'triangle-panel'),
+    triangleStatus: byId<HTMLElement>(doc, 'triangle-status'),
+    triangleLegReadout: byId<HTMLElement>(doc, 'triangle-leg-readout'),
+    triangleFlipXButton: byId<HTMLButtonElement>(doc, 'btn-triangle-flip-x'),
+    triangleFlipYButton: byId<HTMLButtonElement>(doc, 'btn-triangle-flip-y'),
+    triangleFillInput: byId<HTMLInputElement>(doc, 'triangle-fill-input'),
+    triangleFillSwatch: byId<HTMLButtonElement>(doc, 'triangle-fill-swatch'),
+    triangleStrokeInput: byId<HTMLInputElement>(doc, 'triangle-stroke-input'),
+    triangleStrokeSwatch: byId<HTMLButtonElement>(doc, 'triangle-stroke-swatch'),
+    colorPopover: byId<HTMLElement>(doc, 'color-popover'),
+    colorPopoverSquare: byId<HTMLCanvasElement>(doc, 'color-popover-square'),
+    colorPopoverHue: byId<HTMLInputElement>(doc, 'color-popover-hue'),
+    colorPopoverHex: byId<HTMLInputElement>(doc, 'color-popover-hex'),
+    colorEyedropperButton: byId<HTMLButtonElement>(doc, 'btn-color-eyedropper'),
   };
 }

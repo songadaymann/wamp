@@ -146,6 +146,36 @@ export function renderInspectorPanel(
   setValue(elements.npcNameInput, state.npcNameValue);
   setValue(elements.npcDialogueInput, state.npcDialogueValue);
   setValue(elements.npcDefeatModeSelect, state.npcDefeatModeValue);
+  setHidden(elements.ballPanel, !state.ballVisible);
+  setText(elements.ballStatus, state.ballStatusText);
+  setValue(elements.ballGraphicSelect, state.ballGraphicValue);
+  setDisabled(elements.ballGraphicSelect, !state.ballVisible);
+  if (document.activeElement !== elements.ballWeightInput) {
+    setValue(elements.ballWeightInput, state.ballWeightValue);
+  }
+  setDisabled(elements.ballWeightInput, !state.ballVisible);
+  for (const [checkbox, checked] of [
+    [elements.ballHurtEnemiesCheckbox, state.ballHurtEnemiesChecked],
+    [elements.ballHurtFriendliesCheckbox, state.ballHurtFriendliesChecked],
+    [elements.ballHurtPlayerCheckbox, state.ballHurtPlayerChecked],
+    [elements.ballPushableCheckbox, state.ballPushableChecked],
+  ] as const) {
+    if (!checkbox) continue;
+    checkbox.checked = checked;
+    checkbox.disabled = !state.ballVisible;
+  }
+  setHidden(elements.trianglePanel, !state.triangleVisible);
+  setText(elements.triangleStatus, state.triangleStatusText);
+  setText(elements.triangleLegReadout, state.triangleLegText);
+  if (document.activeElement !== elements.triangleFillInput) {
+    setValue(elements.triangleFillInput, state.triangleFillValue);
+  }
+  if (document.activeElement !== elements.triangleStrokeInput) {
+    setValue(elements.triangleStrokeInput, state.triangleStrokeValue);
+  }
+  if (elements.triangleFillSwatch) elements.triangleFillSwatch.style.background = state.triangleFillValue;
+  if (elements.triangleStrokeSwatch) elements.triangleStrokeSwatch.style.background = state.triangleStrokeValue;
+  if (!state.triangleVisible) elements.colorPopover?.classList.add('hidden');
 }
 
 function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewModel): void {

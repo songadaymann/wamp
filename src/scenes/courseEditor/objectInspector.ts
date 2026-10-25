@@ -32,9 +32,13 @@ import { getRoomVideo, linkPressurePlateToRoomVideo } from '../../roomVideo/edit
 import { hitsRoomVideoAnchor, isRoomVideoLinkTarget, roomVideoAnchorPoint, roomVideoFrameBounds } from '../../roomVideo/link';
 import type { EditorEditRuntime } from '../editor/editRuntime';
 import type { EditorInspectorState } from '../editor/uiBridge';
+import { isRollingBallObjectId } from '../../config/rollingBall';
+import { isTrianglePieceObjectId } from '../../config/trianglePiece';
 import {
+  buildBallInspectorState,
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
+  buildTriangleInspectorState,
   createEmptyCourseInspectorState,
   getContainerAcceptedContentsLabel,
   getContainerName,
@@ -69,7 +73,7 @@ export class CourseEditorObjectInspectorController {
   private pressurePlateStatusText: string | null = null;
   private focusedContainerInstanceId: string | null = null;
   private containerStatusText: string | null = null;
-  private pinnedInspector: { kind: 'pressure' | 'container' | 'actor'; instanceId: string } | null = null;
+  private pinnedInspector: { kind: 'pressure' | 'container' | 'actor' | 'ball' | 'triangle'; instanceId: string } | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -250,6 +254,56 @@ export class CourseEditorObjectInspectorController {
     this.editFocusedActor((runtime, id) => runtime.setNpcDefeatMode(id, mode));
   }
 
+  setFocusedBallGraphic(graphicId: string): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallGraphic(id, graphicId));
+  }
+
+  setFocusedBallWeight(weight: number): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallWeight(id, weight));
+  }
+
+  setFocusedBallHurtEnemies(enabled: boolean): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallHurtEnemies(id, enabled));
+  }
+
+  setFocusedBallHurtFriendlies(enabled: boolean): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallHurtFriendlies(id, enabled));
+  }
+
+  setFocusedBallHurtPlayer(enabled: boolean): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallHurtPlayer(id, enabled));
+  }
+
+  setFocusedBallPushable(enabled: boolean): void {
+    this.editFocusedUtility('ball', (runtime, id) => runtime.setRollingBallPushable(id, enabled));
+  }
+
+  setFocusedTriangleFill(color: string): void {
+    this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, color, null));
+  }
+
+  setFocusedTriangleStroke(color: string): void {
+    this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, null, color));
+  }
+
+  flipFocusedTriangle(axis: 'x' | 'y'): void {
+    this.editFocusedUtility('triangle', (runtime, id) => runtime.flipTriangle(id, axis));
+  }
+
+  private editFocusedUtility(
+    kind: 'ball' | 'triangle',
+    edit: (runtime: EditorEditRuntime, instanceId: string) => boolean,
+  ): void {
+    if (this.pinnedInspector?.kind !== kind) return;
+    const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+    if (ref) edit(ref.slice.runtime, ref.placed.instanceId ?? '');
+    this.renderInspectorUi();
+  }
+
+  getPinnedTriangleId(): string | null {
+    return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : null;
+  }
+
   clearPinnedInspector(): void {
     this.clearTransientState();
     this.renderInspectorUi();
@@ -279,6 +333,24 @@ export class CourseEditorObjectInspectorController {
     this.pressurePlateStatusText = null;
   }
 
+  handleUtilityPrimaryAction(slice: CourseInspectorRoomSlice, worldX: number, worldY: number): boolean {
+    const triangle = slice.runtime.findPlacedObjectAt(worldX, worldY, (placed) => isTrianglePieceObjectId(placed.id));
+    if (triangle?.instanceId) {
+      this.clearTransientState();
+      this.pinInspector('triangle', triangle.instanceId);
+      this.renderInspectorUi();
+      return true;
+    }
+    const ball = slice.runtime.findPlacedObjectAt(worldX, worldY, (placed) => isRollingBallObjectId(placed.id));
+    if (ball?.instanceId) {
+      this.clearTransientState();
+      this.pinInspector('ball', ball.instanceId);
+      this.renderInspectorUi();
+      return true;
+    }
+    return false;
+  }
+
   handleActorPrimaryAction(slice: CourseInspectorRoomSlice, worldX: number, worldY: number): boolean {
     const actor = slice.runtime.findPlacedObjectAt(worldX, worldY, isInspectorActor);
     if (!actor?.instanceId) return false;
@@ -289,6 +361,12 @@ export class CourseEditorObjectInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): boolean {
+    if (placed?.instanceId && (isTrianglePieceObjectId(placed.id) || isRollingBallObjectId(placed.id))) {
+      this.clearTransientState();
+      this.pinInspector(isTrianglePieceObjectId(placed.id) ? 'triangle' : 'ball', placed.instanceId);
+      this.renderInspectorUi();
+      return true;
+    }
     if (placed?.instanceId && isInspectorActor(placed)) {
       this.clearTransientState();
       this.pinInspector('actor', placed.instanceId);
@@ -653,7 +731,7 @@ export class CourseEditorObjectInspectorController {
     this.renderInspectorUi();
   }
 
-  private pinInspector(kind: 'pressure' | 'container' | 'actor', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'actor' | 'ball' | 'triangle', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -1164,6 +1242,15 @@ export class CourseEditorObjectInspectorController {
     if (editorState.isPlaying) {
       render(hiddenState);
       return;
+    }
+
+    if (this.pinnedInspector?.kind === 'ball' || this.pinnedInspector?.kind === 'triangle') {
+      const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+      const state = this.pinnedInspector.kind === 'ball'
+        ? (ref ? buildBallInspectorState(ref.placed) : null)
+        : (ref ? buildTriangleInspectorState(ref.placed) : null);
+      if (state && editorState.paletteMode === 'objects') { render(state); return; }
+      this.pinnedInspector = null;
     }
 
     if (this.pinnedInspector?.kind === 'actor') {

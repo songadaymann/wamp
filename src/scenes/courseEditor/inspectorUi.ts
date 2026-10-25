@@ -1,4 +1,6 @@
 export {
+  buildBallInspectorState,
+  buildTriangleInspectorState,
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
   createEmptyEditorInspectorState as createEmptyCourseInspectorState,

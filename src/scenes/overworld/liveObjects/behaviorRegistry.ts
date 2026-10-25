@@ -2,6 +2,7 @@ import { GHOST_OBJECT_ID } from '../../../enemies/ghost';
 import { POLICE_ENEMY_OBJECT_IDS } from '../../../enemies/policeEnemy';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import { JIMOTHY_OBJECT_ID } from '../../../npcs/model';
+import { ROLLING_BALL_OBJECT_ID } from '../../../config/rollingBall';
 
 type FlyingEnemySettingKey = 'bat' | 'bird';
 
@@ -29,6 +30,7 @@ export type LiveObjectBehavior =
   | { kind: 'movingPlatform' }
   | { kind: 'blockSwitch' }
   | { kind: 'npc' }
+  | { kind: 'rollingBall' }
   | { kind: 'none' };
 
 const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
@@ -87,6 +89,7 @@ const BEHAVIORS_BY_OBJECT_ID: Record<string, LiveObjectBehavior> = {
   spring_diagonal: { kind: 'bouncePad' },
   double_jump_feather: { kind: 'jumpFeather' },
   moving_platform: { kind: 'movingPlatform' },
+  [ROLLING_BALL_OBJECT_ID]: { kind: 'rollingBall' },
   block_switch: { kind: 'blockSwitch' },
 };
 
@@ -103,5 +106,6 @@ export function liveObjectBehaviorCanSleepAtDistance(behavior: LiveObjectBehavio
     && behavior.kind !== 'movingPlatform'
     && behavior.kind !== 'blockSwitch'
     && behavior.kind !== 'bouncePad'
-    && behavior.kind !== 'jumpFeather';
+    && behavior.kind !== 'jumpFeather'
+    && behavior.kind !== 'rollingBall';
 }

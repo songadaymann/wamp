@@ -3,6 +3,8 @@ import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
+import { TriangleHandleController } from './editor/triangleHandles';
+import { isTrianglePieceObjectId, normalizePlacedTriangle } from '../config/trianglePiece';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { getAuthDebugState } from '../auth/client';
 import {
@@ -178,6 +180,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
   private readonly objectMoveController: EditorObjectMoveController;
+  private readonly triangleHandles: TriangleHandleController;
   private readonly musicPatternController: EditorMusicPatternController;
   private readonly overlayController: EditorOverlayController;
   private readonly presenceController: EditorPresenceController;
@@ -661,8 +664,20 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       showStatus: text => this.updatePersistenceStatus(text),
       onChanged: () => this.renderEditorUi(),
     });
+    this.triangleHandles = new TriangleHandleController({
+      selected: () => this.triangleHandleGeometry(this.inspectorController.getPinnedTriangleId()),
+      pick: (worldX, worldY) => {
+        const placed = this.editRuntime.findPlacedObjectAt(worldX, worldY, (candidate) => isTrianglePieceObjectId(candidate.id));
+        return placed?.instanceId ? this.triangleHandleGeometry(placed.instanceId) : null;
+      },
+      hitRadius: () => Math.max(8, 10 / Math.max(editorState.zoom, 0.25)),
+      begin: (instanceId) => { this.editRuntime.beginTriangleDrag(instanceId); },
+      apply: (instanceId, next) => { this.editRuntime.applyTriangleDrag(instanceId, next); },
+      commit: () => this.editRuntime.commitTriangleDrag(),
+    });
     this.interactionController = new EditorInteractionController(this, {
       objectMove: this.objectMoveController,
+      triangleHandles: this.triangleHandles,
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
       isPracticeTestPlacementActive: () => this.testFromHerePlacement,
@@ -1022,6 +1037,16 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         this.inspectorController.setFocusedNpcDialogue(text),
       onSetFocusedNpcDefeatMode: (defeatMode) =>
         this.inspectorController.setFocusedNpcDefeatMode(defeatMode),
+      onSetFocusedBallGraphic: (graphicId) => this.inspectorController.setFocusedBallGraphic(graphicId),
+      onSetFocusedBallWeight: (weight) => this.inspectorController.setFocusedBallWeight(weight),
+      onSetFocusedBallHurtEnemies: (enabled) => this.inspectorController.setFocusedBallHurtEnemies(enabled),
+      onSetFocusedBallHurtFriendlies: (enabled) => this.inspectorController.setFocusedBallHurtFriendlies(enabled),
+      onSetFocusedBallHurtPlayer: (enabled) => this.inspectorController.setFocusedBallHurtPlayer(enabled),
+      onSetFocusedBallPushable: (enabled) => this.inspectorController.setFocusedBallPushable(enabled),
+      onSetFocusedTriangleFill: (color) => this.inspectorController.setFocusedTriangleFill(color),
+      onSetFocusedTriangleStroke: (color) => this.inspectorController.setFocusedTriangleStroke(color),
+      onFlipFocusedTriangleX: () => this.inspectorController.flipFocusedTriangle('x'),
+      onFlipFocusedTriangleY: () => this.inspectorController.flipFocusedTriangle('y'),
     });
 
     this.createBackground();
@@ -1847,6 +1872,20 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private updateGoalUi(): void {
     this.overlayController?.redrawGrid();
     this.chromeController.refreshGoalUi();
+  }
+
+  private triangleHandleGeometry(instanceId: string | null) {
+    const placed = this.editRuntime.getPlacedObjectByInstanceId(instanceId);
+    const geometry = placed ? normalizePlacedTriangle(placed) : null;
+    if (!placed?.instanceId || !geometry) return null;
+    const origin = this.editRuntime.getRoomOrigin();
+    return {
+      instanceId: placed.instanceId,
+      anchorX: origin.x + geometry.anchorX,
+      anchorY: origin.y + geometry.anchorY,
+      legX: geometry.legX,
+      legY: geometry.legY,
+    };
   }
 
   private hideObjectInspectorUi(): void {

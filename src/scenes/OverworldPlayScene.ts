@@ -1702,6 +1702,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
         isSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
           this.isSolidTerrainAtWorldPoint(room, worldX, worldY),
         getExternalLaunchGraceUntil: () => this.externalLaunchGraceUntil,
+        getExternalGrounded: () => this.liveObjectController.isPlayerOnTriangle(),
         shouldForceFullBodyHitbox: () => this.isPvpArenaActive(),
         getPushableLiveObjectsInBounds: (bounds, paddingX, paddingY) =>
           this.liveObjectController.getPushableLiveObjectsInBounds(bounds, paddingX, paddingY),
@@ -3592,7 +3593,10 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const liveStartedAt = controllerProfileSlot === 3 ? profiler?.beginSegment() : undefined;
     this.updateLiveObjects(delta);
     if (liveStartedAt !== undefined) profiler?.endSegment('controller.liveObjects', liveStartedAt);
-    if (!this.player || !this.playerBody?.enable) return;
+    if (!this.player || !this.playerBody?.enable) {
+      if (this.mode === 'play') this.liveObjectController.stepUtilityPhysics(delta, 0);
+      return;
+    }
     const specialStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
     this.updateSpecialTiles();
     if (specialStartedAt !== undefined) profiler?.endSegment('controller.specialTiles', specialStartedAt);
@@ -3605,6 +3609,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       ? this.mobilePerformanceControllerProfileSlot : -1;
     const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
     const movement = this.movementController.updateMovement(delta, this.quicksandController.isActive(), input);
+    this.liveObjectController.stepUtilityPhysics(delta, movement.horizontalInput);
     this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
     if (movement.downHeld && movement.jumpPressed) this.specialTilesController.beginOneWayDropThrough();
     if (this.isPvpCountdownActive()) {

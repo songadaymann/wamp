@@ -29,6 +29,10 @@ import {
   type GameObjectConfig,
   type SpecialTileKind,
 } from '../../config';
+import { getRollingBallGraphic, rollingBallFrame } from '../../config/rollingBall';
+import { placeTriangleSprite } from './liveObjects/triangleTexture';
+import { stepUtilityObjects } from './liveObjects/utilityObjects';
+import type { BallSimState } from './liveObjects/rollingBallPhysics';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
@@ -273,6 +277,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly interactionCoordinator: LiveObjectInteractionCoordinator<TEdgeWall>;
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
   private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
+  private readonly ballStates = new WeakMap<LoadedRoomObject, BallSimState>();
+  private playerOnTriangle = false;
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
@@ -689,6 +695,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       npcFriendlyFire = null,
       npcName = null,
       npcDefeatMode = null,
+      ball = null,
+      triangle = null,
       countsTowardGoals,
     } = options;
     ensureCustomSpriteTexture(this.options.scene, config);
@@ -836,6 +844,28 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    liveObject.ball = ball;
+    if (triangle) {
+      liveObject.triangle = {
+        anchorX: roomOrigin.x + x,
+        anchorY: roomOrigin.y + y,
+        legX: triangle.legX,
+        legY: triangle.legY,
+        fill: triangle.fill,
+        stroke: triangle.stroke,
+      };
+      placeTriangleSprite(
+        sprite,
+        liveObject.triangle.anchorX,
+        liveObject.triangle.anchorY,
+        triangle.legX,
+        triangle.legY,
+        triangle.fill,
+        triangle.stroke,
+      );
+    } else if (ball) {
+      sprite.setFrame(rollingBallFrame(getRollingBallGraphic(ball.graphicId).column, 0));
+    }
     createBossPresentation(this.options.scene, liveObject);
     this.triggerController.initializePressureControlledObjectState(liveObject);
     this.checkpointController.syncObject(loadedRoom, liveObject);
@@ -860,6 +890,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.syncLiveObjectGravityPresentation(liveObject);
       }
     }
+  }
+
+  isPlayerOnTriangle(): boolean {
+    return this.playerOnTriangle;
+  }
+
+  stepUtilityPhysics(delta: number, playerIntent: number): void {
+    const rooms = [...this.options.getLoadedFullRooms()];
+    this.playerOnTriangle = stepUtilityObjects({
+      rooms,
+      delta,
+      playerBody: this.options.getPlayerBody(),
+      playerIntent,
+      states: this.ballStates,
+      sampleEnvironment: (probe) => {
+        const environment = this.options.getSpecialTileEnvironmentForBody(probe, 'down');
+        return {
+          gravityDirection: environment.gravityDirection,
+          inWater: environment.inWater,
+        };
+      },
+      now: this.options.getCurrentTime(),
+      bounceSpeed: this.options.settings.bouncePadVelocity,
+      bounceCooldownMs: this.options.settings.bouncePadCooldownMs,
+      bounceActiveMs: this.options.settings.bouncePadActiveMs,
+      onPlayerHurt: () => this.options.handlePlayerDeath('A rolling ball hit you.'),
+      onDefeat: (room, liveObject) => {
+        this.enemyLifecycleController.defeatFromRollingBall(
+          room as LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+          liveObject,
+        );
+      },
+      onBounce: (x, y, coordinates) => this.options.playBounceFx(x, y, coordinates),
+    });
   }
 
   updateLiveObjects(

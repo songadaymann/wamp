@@ -18,6 +18,8 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { normalizePlacedRollingBall } from '../config/rollingBall';
+import { normalizePlacedTriangle } from '../config/trianglePiece';
 import { DEFAULT_ROOM_BACKGROUND, normalizeRoomBackground } from '../backgrounds/model';
 import { normalizePlayerHearts, type PlayerHearts } from '../player/hearts';
 import { getPlacedBossHitPoints } from '../enemies/boss';
@@ -579,6 +581,7 @@ function normalizePlacedObject(
     npcDefeatMode: isNpcObjectId(placed.id)
       ? getPlacedNpcDefeatMode({ id: placed.id, npcDefeatMode: placed.npcDefeatMode })
       : null,
+    ...utilityObjectFields(placed),
   };
 
   if (
@@ -685,8 +688,42 @@ function clonePlacedObjects(
         ? normalizeNpcName(placed.npcName, getObjectById(placed.id)?.name ?? '')
         : null,
       npcDefeatMode: isNpcObjectId(placed.id) ? getPlacedNpcDefeatMode(placed) : null,
+      ...utilityObjectFields(placed),
     };
   });
+}
+
+function utilityObjectFields(placed: {
+  id?: string;
+  x?: number;
+  y?: number;
+  ballGraphic?: string | null;
+  ballWeight?: number | null;
+  ballHurtEnemies?: boolean | null;
+  ballHurtFriendlies?: boolean | null;
+  ballHurtPlayer?: boolean | null;
+  ballPushable?: boolean | null;
+  triangleLegX?: number | null;
+  triangleLegY?: number | null;
+  triangleFill?: string | null;
+  triangleStroke?: string | null;
+}) {
+  const ball = typeof placed.id === 'string' ? normalizePlacedRollingBall({ ...placed, id: placed.id }) : null;
+  const triangle = typeof placed.id === 'string' && typeof placed.x === 'number' && typeof placed.y === 'number'
+    ? normalizePlacedTriangle({ ...placed, id: placed.id, x: placed.x, y: placed.y })
+    : null;
+  return {
+    ballGraphic: ball?.graphicId ?? null,
+    ballWeight: ball?.weight ?? null,
+    ballHurtEnemies: ball ? ball.hurtEnemies : null,
+    ballHurtFriendlies: ball ? ball.hurtFriendlies : null,
+    ballHurtPlayer: ball ? ball.hurtPlayer : null,
+    ballPushable: ball ? ball.pushable : null,
+    triangleLegX: triangle?.legX ?? null,
+    triangleLegY: triangle?.legY ?? null,
+    triangleFill: triangle?.fill ?? null,
+    triangleStroke: triangle?.stroke ?? null,
+  };
 }
 
 function getLegacyBrickBoxTerrainCell(

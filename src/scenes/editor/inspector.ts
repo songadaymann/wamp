@@ -46,15 +46,19 @@ import {
   isNpcObjectId,
   type NpcMode,
 } from '../../npcs/model';
+import { isRollingBallObjectId } from '../../config/rollingBall';
+import { isTrianglePieceObjectId } from '../../config/trianglePiece';
 import {
+  buildBallInspectorState,
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
+  buildTriangleInspectorState,
   createEmptyEditorInspectorState,
   getContainerAcceptedContentsLabel,
   getContainerName,
 } from './inspectorViewModel';
 
-type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc'; instanceId: string } | null;
+type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc' | 'ball' | 'triangle'; instanceId: string } | null;
 
 export class EditorInspectorController {
   private focusedPressurePlateInstanceId: string | null = null;
@@ -68,6 +72,10 @@ export class EditorInspectorController {
   private policeStatusText: string | null = null;
   private focusedNpcInstanceId: string | null = null;
   private npcStatusText: string | null = null;
+  private focusedBallInstanceId: string | null = null;
+  private ballStatusText: string | null = null;
+  private focusedTriangleInstanceId: string | null = null;
+  private triangleStatusText: string | null = null;
   private pinnedInspector: PinnedInspector = null;
 
   constructor(
@@ -120,6 +128,10 @@ export class EditorInspectorController {
     this.policeStatusText = null;
     this.focusedNpcInstanceId = null;
     this.npcStatusText = null;
+    this.focusedBallInstanceId = null;
+    this.focusedTriangleInstanceId = null;
+    this.ballStatusText = null;
+    this.triangleStatusText = null;
     this.pinnedInspector = null;
   }
 
@@ -340,6 +352,26 @@ export class EditorInspectorController {
             this.focusedNpcInstanceId = hoveredNpc.instanceId;
           } else if (this.pinnedInspector?.kind !== 'npc') {
             this.focusedNpcInstanceId = null;
+            const hoveredTriangle = this.editRuntime.findPlacedObjectAt(
+              worldPoint.x,
+              worldPoint.y,
+              (placed) => isTrianglePieceObjectId(placed.id),
+            );
+            if (hoveredTriangle) {
+              this.focusedTriangleInstanceId = hoveredTriangle.instanceId;
+            } else if (this.pinnedInspector?.kind !== 'triangle') {
+              this.focusedTriangleInstanceId = null;
+              const hoveredBall = this.editRuntime.findPlacedObjectAt(
+                worldPoint.x,
+                worldPoint.y,
+                (placed) => isRollingBallObjectId(placed.id),
+              );
+              if (hoveredBall) {
+                this.focusedBallInstanceId = hoveredBall.instanceId;
+              } else if (this.pinnedInspector?.kind !== 'ball') {
+                this.focusedBallInstanceId = null;
+              }
+            }
           }
         }
       }
@@ -378,6 +410,32 @@ export class EditorInspectorController {
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
     if (this.connectingPressurePlateInstanceId) {
       return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
+    }
+
+    const clickedTriangle = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => isTrianglePieceObjectId(placed.id),
+    );
+    if (clickedTriangle?.instanceId) {
+      this.focusedTriangleInstanceId = clickedTriangle.instanceId;
+      this.pinInspector('triangle', clickedTriangle.instanceId);
+      this.triangleStatusText = null;
+      this.renderInspectorUi();
+      return true;
+    }
+
+    const clickedBall = this.editRuntime.findPlacedObjectAt(
+      worldPoint.x,
+      worldPoint.y,
+      (placed) => isRollingBallObjectId(placed.id),
+    );
+    if (clickedBall?.instanceId) {
+      this.focusedBallInstanceId = clickedBall.instanceId;
+      this.pinInspector('ball', clickedBall.instanceId);
+      this.ballStatusText = null;
+      this.renderInspectorUi();
+      return true;
     }
 
     const clickedPolice = this.editRuntime.findPlacedObjectAt(
@@ -485,6 +543,22 @@ export class EditorInspectorController {
   }
 
   handleObjectPlaced(placed: PlacedObject | null): void {
+    if (placed?.instanceId && isTrianglePieceObjectId(placed.id)) {
+      this.focusedTriangleInstanceId = placed.instanceId;
+      this.pinInspector('triangle', placed.instanceId);
+      this.triangleStatusText = 'Triangle ramp placed. Drag a corner or side to reshape it.';
+      this.renderInspectorUi();
+      return;
+    }
+
+    if (placed?.instanceId && isRollingBallObjectId(placed.id)) {
+      this.focusedBallInstanceId = placed.instanceId;
+      this.pinInspector('ball', placed.instanceId);
+      this.ballStatusText = 'Basic Ball placed.';
+      this.renderInspectorUi();
+      return;
+    }
+
     if (placed?.instanceId && isPoliceEnemyObjectId(placed.id)) {
       this.focusedPoliceInstanceId = placed.instanceId;
       this.focusedPressurePlateInstanceId = null;
@@ -985,6 +1059,18 @@ export class EditorInspectorController {
       return;
     }
 
+    const triangle = this.getFocusedTriangle();
+    if (triangle && editorState.paletteMode === 'objects' && !connectMode) {
+      const state = buildTriangleInspectorState(triangle, this.triangleStatusText);
+      if (state) { render(state); return; }
+    }
+
+    const ball = this.getFocusedBall();
+    if (ball && editorState.paletteMode === 'objects' && !connectMode) {
+      const state = buildBallInspectorState(ball, this.ballStatusText);
+      if (state) { render(state); return; }
+    }
+
     const actor = this.getFocusedSwordsman() ?? this.getFocusedPolice() ?? this.getFocusedNpc();
     if (actor && editorState.paletteMode === 'objects' && !connectMode) {
       const status = actor.id === SWORDSMAN_AI_OBJECT_ID ? this.swordsmanStatusText
@@ -1113,7 +1199,7 @@ export class EditorInspectorController {
     return true;
   }
 
-  private pinInspector(kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc', instanceId: string): void {
+  private pinInspector(kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc' | 'ball' | 'triangle', instanceId: string): void {
     this.pinnedInspector = { kind, instanceId };
   }
 
@@ -1125,6 +1211,8 @@ export class EditorInspectorController {
     this.focusedSwordsmanInstanceId = null;
     this.focusedPoliceInstanceId = null;
     this.focusedNpcInstanceId = null;
+    this.focusedBallInstanceId = null;
+    this.focusedTriangleInstanceId = null;
     this.pressurePlateStatusText = null;
     this.containerStatusText = null;
     this.swordsmanStatusText = null;
@@ -1169,6 +1257,82 @@ export class EditorInspectorController {
     }
 
     return null;
+  }
+
+  getPinnedTriangleId(): string | null {
+    return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : this.focusedTriangleInstanceId;
+  }
+
+  setFocusedBallGraphic(graphicId: string): void {
+    const focused = this.getFocusedBall();
+    if (!focused?.instanceId) return;
+    this.editRuntime.setRollingBallGraphic(focused.instanceId, graphicId);
+    this.ballStatusText = null;
+    this.renderInspectorUi();
+  }
+
+  setFocusedBallWeight(weight: number): void {
+    const focused = this.getFocusedBall();
+    if (!focused?.instanceId) return;
+    this.editRuntime.setRollingBallWeight(focused.instanceId, weight);
+    this.renderInspectorUi();
+  }
+
+  setFocusedBallHurtEnemies(enabled: boolean): void {
+    this.setFocusedBallFlag((id) => this.editRuntime.setRollingBallHurtEnemies(id, enabled));
+  }
+
+  setFocusedBallHurtFriendlies(enabled: boolean): void {
+    this.setFocusedBallFlag((id) => this.editRuntime.setRollingBallHurtFriendlies(id, enabled));
+  }
+
+  setFocusedBallHurtPlayer(enabled: boolean): void {
+    this.setFocusedBallFlag((id) => this.editRuntime.setRollingBallHurtPlayer(id, enabled));
+  }
+
+  setFocusedBallPushable(enabled: boolean): void {
+    this.setFocusedBallFlag((id) => this.editRuntime.setRollingBallPushable(id, enabled));
+  }
+
+  setFocusedTriangleFill(color: string): void {
+    const focused = this.getFocusedTriangle();
+    if (!focused?.instanceId) return;
+    this.editRuntime.setTriangleColors(focused.instanceId, color, null);
+    this.renderInspectorUi();
+  }
+
+  setFocusedTriangleStroke(color: string): void {
+    const focused = this.getFocusedTriangle();
+    if (!focused?.instanceId) return;
+    this.editRuntime.setTriangleColors(focused.instanceId, null, color);
+    this.renderInspectorUi();
+  }
+
+  flipFocusedTriangle(axis: 'x' | 'y'): void {
+    const focused = this.getFocusedTriangle();
+    if (!focused?.instanceId) return;
+    this.editRuntime.flipTriangle(focused.instanceId, axis);
+    this.renderInspectorUi();
+  }
+
+  private setFocusedBallFlag(apply: (instanceId: string) => boolean): void {
+    const focused = this.getFocusedBall();
+    if (!focused?.instanceId || !apply(focused.instanceId)) return;
+    this.renderInspectorUi();
+  }
+
+  private getFocusedBall(): PlacedObject | null {
+    if (this.pinnedInspector && this.pinnedInspector.kind !== 'ball') return null;
+    const id = this.pinnedInspector?.kind === 'ball' ? this.pinnedInspector.instanceId : this.focusedBallInstanceId;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(id);
+    return focused && isRollingBallObjectId(focused.id) ? focused : null;
+  }
+
+  private getFocusedTriangle(): PlacedObject | null {
+    if (this.pinnedInspector && this.pinnedInspector.kind !== 'triangle') return null;
+    const id = this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : this.focusedTriangleInstanceId;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(id);
+    return focused && isTrianglePieceObjectId(focused.id) ? focused : null;
   }
 
   private getFocusedNpc(): PlacedObject | null {

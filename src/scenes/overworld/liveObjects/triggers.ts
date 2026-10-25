@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isPushableObjectConfig } from '../../../config';
+import { isRollingBallObjectId, ROLLING_BALL_RADIUS, rollingBallActivatesPressurePlate } from '../../../config/rollingBall';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import type { LoadedFullRoom } from '../worldStreaming';
 import type { LoadedRoomObject } from './model';
@@ -52,11 +53,27 @@ export function isPressureControlledObject(liveObject: LoadedRoomObject): boolea
 }
 
 export function canActivatePressurePlate(liveObject: LoadedRoomObject): boolean {
+  if (isRollingBallObjectId(liveObject.config.id)) {
+    return rollingBallActivatesPressurePlate(liveObject.ball?.pushable !== false);
+  }
   return isPushableObjectConfig(liveObject.config) || liveObject.config.category === 'enemy';
 }
 
 export function getPressurePlateBounds(liveObject: LoadedRoomObject): Phaser.Geom.Rectangle {
   return new Phaser.Geom.Rectangle(liveObject.sprite.x - 8, liveObject.sprite.y + 2, 16, 8);
+}
+
+export function getPressurePressActorBounds(liveObject: LoadedRoomObject): Phaser.Geom.Rectangle {
+  if (liveObject.sprite.body) {
+    const body = liveObject.sprite.body as Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody;
+    return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
+  }
+  return new Phaser.Geom.Rectangle(
+    liveObject.sprite.x - ROLLING_BALL_RADIUS,
+    liveObject.sprite.y - ROLLING_BALL_RADIUS,
+    ROLLING_BALL_RADIUS * 2,
+    ROLLING_BALL_RADIUS * 2,
+  );
 }
 
 export function buildPressurePlateScanIndex<TEdgeWall>(
@@ -80,7 +97,10 @@ export function buildPressurePlateScanIndex<TEdgeWall>(
       if (isPressureControlledObject(liveObject)) {
         index.controlledObjects.push({ loadedRoom, liveObject });
       }
-      if (liveObject.sprite.body && canActivatePressurePlate(liveObject)) {
+      if (
+        canActivatePressurePlate(liveObject) &&
+        (liveObject.sprite.body || isRollingBallObjectId(liveObject.config.id))
+      ) {
         index.pressCandidates.push(liveObject);
       }
     }

@@ -1,4 +1,6 @@
+import { listRollingBallGraphics } from '../../config/rollingBall';
 import { prepareBackgroundFile } from '../../backgrounds/upload';
+import { EditorColorPopover } from './colorPopover';
 import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
@@ -1433,6 +1435,66 @@ export class EditorUiBridge {
         this.elements.npcDefeatModeSelect?.removeEventListener('change', handleNpcDefeatModeChange)
       );
     }
+    const graphicSelect = this.elements.ballGraphicSelect;
+    if (graphicSelect && graphicSelect.options.length === 0) {
+      for (const graphic of listRollingBallGraphics()) {
+        const option = graphicSelect.ownerDocument.createElement('option');
+        option.value = graphic.id;
+        option.textContent = graphic.name;
+        graphicSelect.append(option);
+      }
+    }
+    const handleBallGraphicChange = () => {
+      const value = this.elements.ballGraphicSelect?.value;
+      if (value) this.actions.onSetFocusedBallGraphic(value);
+    };
+    this.elements.ballGraphicSelect?.addEventListener('change', handleBallGraphicChange);
+    const handleBallWeightChange = () => {
+      const weight = Number(this.elements.ballWeightInput?.value);
+      if (Number.isFinite(weight)) this.actions.onSetFocusedBallWeight(weight);
+    };
+    this.elements.ballWeightInput?.addEventListener('change', handleBallWeightChange);
+    const bindBallFlag = (
+      checkbox: HTMLInputElement | null,
+      apply: (enabled: boolean) => void,
+    ) => {
+      const handle = () => apply(checkbox?.checked === true);
+      checkbox?.addEventListener('change', handle);
+      if (checkbox) this.cleanupCallbacks.push(() => checkbox.removeEventListener('change', handle));
+    };
+    bindBallFlag(this.elements.ballHurtEnemiesCheckbox, (enabled) => this.actions.onSetFocusedBallHurtEnemies(enabled));
+    bindBallFlag(this.elements.ballHurtFriendliesCheckbox, (enabled) => this.actions.onSetFocusedBallHurtFriendlies(enabled));
+    bindBallFlag(this.elements.ballHurtPlayerCheckbox, (enabled) => this.actions.onSetFocusedBallHurtPlayer(enabled));
+    bindBallFlag(this.elements.ballPushableCheckbox, (enabled) => this.actions.onSetFocusedBallPushable(enabled));
+    const colorPopover = new EditorColorPopover(
+      {
+        popover: this.elements.colorPopover,
+        square: this.elements.colorPopoverSquare,
+        hue: this.elements.colorPopoverHue,
+        hex: this.elements.colorPopoverHex,
+        dropper: this.elements.colorEyedropperButton,
+      },
+      () => undefined,
+    );
+    colorPopover.bind(this.cleanupCallbacks);
+    const openColor = (anchor: HTMLButtonElement | null, current: string, apply: (hex: string) => void) => {
+      if (!anchor) return;
+      colorPopover.open(anchor, current, apply);
+    };
+    this.elements.triangleFillSwatch?.addEventListener('click', () => {
+      openColor(this.elements.triangleFillSwatch, this.elements.triangleFillInput?.value ?? '#8A8F98', (hex) => this.actions.onSetFocusedTriangleFill(hex));
+    });
+    this.elements.triangleStrokeSwatch?.addEventListener('click', () => {
+      openColor(this.elements.triangleStrokeSwatch, this.elements.triangleStrokeInput?.value ?? '#2C3138', (hex) => this.actions.onSetFocusedTriangleStroke(hex));
+    });
+    this.elements.triangleFillInput?.addEventListener('change', () => {
+      this.actions.onSetFocusedTriangleFill(this.elements.triangleFillInput?.value ?? '');
+    });
+    this.elements.triangleStrokeInput?.addEventListener('change', () => {
+      this.actions.onSetFocusedTriangleStroke(this.elements.triangleStrokeInput?.value ?? '');
+    });
+    this.elements.triangleFlipXButton?.addEventListener('click', () => this.actions.onFlipFocusedTriangleX());
+    this.elements.triangleFlipYButton?.addEventListener('click', () => this.actions.onFlipFocusedTriangleY());
 
     bindButton(this.cleanupCallbacks, this.elements.playBtn, () => {
       runtimeConfig.closePanels();

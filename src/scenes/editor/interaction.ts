@@ -67,6 +67,12 @@ function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
 
 interface EditorInteractionHost {
   objectMove?: EditorObjectMoveController;
+  triangleHandles?: {
+    down(worldX: number, worldY: number): boolean;
+    move(worldX: number, worldY: number): boolean;
+    up(): void;
+    draw(graphics: Phaser.GameObjects.Graphics | null | undefined): void;
+  };
   isPracticeTestPlacementActive?: () => boolean;
   tryStartPracticeTestAt?: (tileX: number, tileY: number) => boolean;
   cancelPracticeTestPlacement?: () => boolean;
@@ -452,10 +458,12 @@ export class EditorInteractionController {
   updateCursorHighlight(): void {
     if (editorState.activeTool === 'move') {
       this.cursorGraphics?.clear();
+      this.host.triangleHandles?.draw(this.cursorGraphics);
       this.host.objectMove?.hover(this.scene.input.activePointer);
       return;
     }
     this.cursorGraphics?.clear();
+    this.host.triangleHandles?.draw(this.cursorGraphics);
     if (!this.cursorGraphics || editorState.isPlaying) {
       return;
     }
@@ -629,8 +637,19 @@ export class EditorInteractionController {
 
   // Mouse releases over a panel or outside the window arrive as 'pointerupoutside';
   // they finish the stroke, shape or pan exactly like a release over the canvas.
+  private triangleHandleDown(pointer: Phaser.Input.Pointer): boolean {
+    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return this.host.triangleHandles?.down(world.x, world.y) ?? false;
+  }
+
+  private triangleHandleMove(pointer: Phaser.Input.Pointer): boolean {
+    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return this.host.triangleHandles?.move(world.x, world.y) ?? false;
+  }
+
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
     if (roomVideoPointerUp(this.scene)) return;
+    this.host.triangleHandles?.up();
     if (this.host.objectMove?.up(pointer, outside)) return;
     if (this.handleTouchPointerUp(pointer)) {
       return;
@@ -706,6 +725,7 @@ export class EditorInteractionController {
         return;
       }
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
+      else if (this.triangleHandleDown(pointer)) return;
       else if (this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
@@ -824,6 +844,7 @@ export class EditorInteractionController {
       if (roomVideoPointerMove(this.scene, pointer)) {
         return;
       }
+      if (this.triangleHandleMove(pointer)) return;
       if (this.host.objectMove?.move(pointer)) return;
       if (this.handleTouchPointerMove(pointer)) {
         return;

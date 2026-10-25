@@ -18,6 +18,17 @@ import {
   isTilesetLocalTileEditorEnabled,
   type LayerName,
   type PlacedObject,
+  isRollingBallObjectId,
+  isTrianglePieceObjectId,
+  rollingBallSettingsFromGraphic,
+  normalizeRollingBallWeight,
+  getRollingBallGraphic,
+  listRollingBallGraphics,
+  defaultTriangleLegs,
+  parseHexColor,
+  snapTriangleLeg,
+  DEFAULT_TRIANGLE_FILL,
+  DEFAULT_TRIANGLE_STROKE,
 } from '../../../config';
 import {
   isCustomBackgroundValue,
@@ -239,6 +250,16 @@ interface ObjectConfiguration {
   npcFriendlyFire?: boolean | null;
   npcName?: string | null;
   npcDefeatMode?: SwordsmanDefeatMode | null;
+  ballGraphic?: string | null;
+  ballWeight?: number | null;
+  ballHurtEnemies?: boolean | null;
+  ballHurtFriendlies?: boolean | null;
+  ballHurtPlayer?: boolean | null;
+  ballPushable?: boolean | null;
+  triangleLegX?: number | null;
+  triangleLegY?: number | null;
+  triangleFill?: string | null;
+  triangleStroke?: string | null;
 }
 
 interface ConfigureObjectCommand extends ObjectConfiguration {
@@ -505,6 +526,44 @@ function normalizeConfiguration(command: Record<string, unknown>, index: number,
   for (const key of ['npcPushable', 'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire'] as const) {
     if (hasOwn(command, key)) configuration[key] = normalizeNullableBoolean(command[key], `commands[${index}].${key}`);
   }
+  if (hasOwn(command, 'ballGraphic')) {
+    if (command.ballGraphic !== null && typeof command.ballGraphic !== 'string') {
+      throw new HttpError(400, `commands[${index}].ballGraphic must be a string or null.`);
+    }
+    if (
+      typeof command.ballGraphic === 'string' &&
+      !listRollingBallGraphics().some((graphic) => graphic.id === command.ballGraphic)
+    ) {
+      throw new HttpError(400, `commands[${index}].ballGraphic is not a rolling ball graphic.`);
+    }
+    configuration.ballGraphic = command.ballGraphic === null ? null : getRollingBallGraphic(command.ballGraphic).id;
+  }
+  if (hasOwn(command, 'ballWeight')) {
+    if (command.ballWeight !== null && normalizeRollingBallWeight(command.ballWeight as number, Number.NaN) !== command.ballWeight) {
+      throw new HttpError(400, `commands[${index}].ballWeight must be a number from 0.25 to 8 or null.`);
+    }
+    configuration.ballWeight = command.ballWeight === null ? null : normalizeRollingBallWeight(command.ballWeight as number);
+  }
+  for (const key of ['ballHurtEnemies', 'ballHurtFriendlies', 'ballHurtPlayer', 'ballPushable'] as const) {
+    if (hasOwn(command, key)) configuration[key] = normalizeNullableBoolean(command[key], `commands[${index}].${key}`);
+  }
+  if (hasOwn(command, 'triangleLegX') || hasOwn(command, 'triangleLegY')) {
+    for (const key of ['triangleLegX', 'triangleLegY'] as const) {
+      if (!hasOwn(command, key)) continue;
+      if (command[key] !== null && (typeof command[key] !== 'number' || !Number.isFinite(command[key]))) {
+        throw new HttpError(400, `commands[${index}].${key} must be a number or null.`);
+      }
+      configuration[key] = command[key] === null ? null : snapTriangleLeg(command[key] as number);
+    }
+  }
+  if (hasOwn(command, 'triangleFill')) {
+    configuration.triangleFill = command.triangleFill === null ? null : parseHexColor(String(command.triangleFill), '');
+    if (configuration.triangleFill === '') throw new HttpError(400, `commands[${index}].triangleFill must be a #RRGGBB color or null.`);
+  }
+  if (hasOwn(command, 'triangleStroke')) {
+    configuration.triangleStroke = command.triangleStroke === null ? null : parseHexColor(String(command.triangleStroke), '');
+    if (configuration.triangleStroke === '') throw new HttpError(400, `commands[${index}].triangleStroke must be a #RRGGBB color or null.`);
+  }
   if (hasOwn(command, 'npcName')) {
     if (command.npcName !== null && typeof command.npcName !== 'string') throw new HttpError(400, `commands[${index}].npcName must be a string or null.`);
     if (typeof command.npcName === 'string' && command.npcName.replace(/\r\n?/g, ' ').trim().length > NPC_NAME_MAX_LENGTH) {
@@ -672,6 +731,8 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         'swordsmanObjectiveMode', 'swordsmanDefeatMode', 'bossHitPoints', 'coopPlate', 'npcMode', 'npcPushable',
         'policeBehaviorMode', 'policePatrolShoots',
         'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire', 'npcName', 'npcDefeatMode',
+        'ballGraphic', 'ballWeight', 'ballHurtEnemies', 'ballHurtFriendlies', 'ballHurtPlayer', 'ballPushable',
+        'triangleLegX', 'triangleLegY', 'triangleFill', 'triangleStroke',
       ] as const;
       assertAllowedKeys(command, ['type', 'target', ...configurationKeys], `commands[${index}]`);
       if (!configurationKeys.some((key) => hasOwn(command, key))) throw new HttpError(400, `commands[${index}] must include at least one configuration field.`);
@@ -738,7 +799,12 @@ function findObject(room: RoomSnapshot, selector: ObjectSelector, refs: Readonly
 function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
   const objectConfig = getObjectById(command.objectId);
   if (!objectConfig) throw new HttpError(400, `Unknown objectId "${command.objectId}".`);
-  const placementPoint = getObjectPlacementPointForTile(objectConfig, command.tileX, command.tileY);
+  const triangle = isTrianglePieceObjectId(command.objectId);
+  const ball = isRollingBallObjectId(command.objectId) ? rollingBallSettingsFromGraphic('basic') : null;
+  const triangleLegs = triangle ? defaultTriangleLegs(false, false) : null;
+  const placementPoint = triangle
+    ? { x: command.tileX * TILE_SIZE, y: (command.tileY + 1) * TILE_SIZE }
+    : getObjectPlacementPointForTile(objectConfig, command.tileX, command.tileY);
   const npc = isNpcObjectId(command.objectId);
   return {
     id: command.objectId,
@@ -772,6 +838,16 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     npcFriendlyFire: npc ? normalizeNpcFriendlyFire(null) : null,
     npcName: npc ? objectConfig.name : null,
     npcDefeatMode: npc ? getPlacedNpcDefeatMode({ id: command.objectId }) : null,
+    ballGraphic: ball?.graphicId ?? null,
+    ballWeight: ball?.weight ?? null,
+    ballHurtEnemies: ball ? ball.hurtEnemies : null,
+    ballHurtFriendlies: ball ? ball.hurtFriendlies : null,
+    ballHurtPlayer: ball ? ball.hurtPlayer : null,
+    ballPushable: ball ? ball.pushable : null,
+    triangleLegX: triangleLegs?.legX ?? null,
+    triangleLegY: triangleLegs?.legY ?? null,
+    triangleFill: triangle ? DEFAULT_TRIANGLE_FILL : null,
+    triangleStroke: triangle ? DEFAULT_TRIANGLE_STROKE : null,
   };
 }
 
@@ -854,6 +930,48 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
     if (command.npcFriendlyFire !== undefined) placed.npcFriendlyFire = normalizeNpcFriendlyFire(command.npcFriendlyFire);
     if (command.npcName !== undefined) placed.npcName = normalizeNpcName(command.npcName, objectConfig.name);
     if (command.npcDefeatMode !== undefined) placed.npcDefeatMode = normalizeNpcDefeatMode(command.npcDefeatMode);
+  }
+  const hasBallConfiguration = [
+    command.ballGraphic,
+    command.ballWeight,
+    command.ballHurtEnemies,
+    command.ballHurtFriendlies,
+    command.ballHurtPlayer,
+    command.ballPushable,
+  ].some((value) => value !== undefined);
+  if (hasBallConfiguration && !isRollingBallObjectId(placed.id)) {
+    throw new HttpError(400, 'Rolling ball settings only apply to rolling_ball.');
+  }
+  if (isRollingBallObjectId(placed.id)) {
+    if (command.ballGraphic !== undefined) {
+      const preset = rollingBallSettingsFromGraphic(command.ballGraphic);
+      placed.ballGraphic = preset.graphicId;
+      placed.ballWeight = preset.weight;
+      placed.ballHurtEnemies = preset.hurtEnemies;
+      placed.ballHurtFriendlies = preset.hurtFriendlies;
+      placed.ballHurtPlayer = preset.hurtPlayer;
+      placed.ballPushable = preset.pushable;
+    }
+    if (command.ballWeight !== undefined && command.ballWeight !== null) placed.ballWeight = command.ballWeight;
+    if (command.ballHurtEnemies !== undefined) placed.ballHurtEnemies = command.ballHurtEnemies;
+    if (command.ballHurtFriendlies !== undefined) placed.ballHurtFriendlies = command.ballHurtFriendlies;
+    if (command.ballHurtPlayer !== undefined) placed.ballHurtPlayer = command.ballHurtPlayer;
+    if (command.ballPushable !== undefined) placed.ballPushable = command.ballPushable;
+  }
+  const hasTriangleConfiguration = [
+    command.triangleLegX,
+    command.triangleLegY,
+    command.triangleFill,
+    command.triangleStroke,
+  ].some((value) => value !== undefined);
+  if (hasTriangleConfiguration && !isTrianglePieceObjectId(placed.id)) {
+    throw new HttpError(400, 'Triangle settings only apply to triangle_piece.');
+  }
+  if (isTrianglePieceObjectId(placed.id)) {
+    if (command.triangleLegX !== undefined && command.triangleLegX !== null) placed.triangleLegX = command.triangleLegX;
+    if (command.triangleLegY !== undefined && command.triangleLegY !== null) placed.triangleLegY = command.triangleLegY;
+    if (command.triangleFill !== undefined && command.triangleFill !== null) placed.triangleFill = command.triangleFill;
+    if (command.triangleStroke !== undefined && command.triangleStroke !== null) placed.triangleStroke = command.triangleStroke;
   }
 }
 

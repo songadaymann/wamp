@@ -26,6 +26,7 @@ import {
   buildPressurePlateScanIndex,
   canActorTriggerBlockSwitchByContact,
   canActivatePressurePlate,
+  getPressurePressActorBounds,
   getLinkedTargetKey,
   getPressurePlateBounds,
   isPressureControlledObject,
@@ -619,17 +620,16 @@ export class LiveObjectTriggerController<TEdgeWall = unknown> {
       if (
         liveObject === trigger ||
         !liveObject.sprite.active ||
-        !liveObject.sprite.body ||
-        !canActivatePressurePlate(liveObject)
+        !canActivatePressurePlate(liveObject) ||
+        (!liveObject.sprite.body && liveObject.config.id !== 'rolling_ball')
       ) {
         continue;
       }
 
-      const body = liveObject.sprite.body as ArcadeObjectBody;
       if (
         Phaser.Geom.Intersects.RectangleToRectangle(
           triggerBounds,
-          getArcadeBodyBounds(body)
+          getPressurePressActorBounds(liveObject)
         )
       ) {
         return true;

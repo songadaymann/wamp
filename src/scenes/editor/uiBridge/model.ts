@@ -134,6 +134,19 @@ export interface EditorInspectorState {
   npcNameValue: string;
   npcDialogueValue: string;
   npcDefeatModeValue: SwordsmanDefeatMode;
+  ballVisible: boolean;
+  ballStatusText: string;
+  ballGraphicValue: string;
+  ballWeightValue: string;
+  ballHurtEnemiesChecked: boolean;
+  ballHurtFriendliesChecked: boolean;
+  ballHurtPlayerChecked: boolean;
+  ballPushableChecked: boolean;
+  triangleVisible: boolean;
+  triangleStatusText: string;
+  triangleLegText: string;
+  triangleFillValue: string;
+  triangleStrokeValue: string;
 }
 
 export interface EditorUiViewModel {
@@ -287,4 +300,14 @@ export interface EditorUiBridgeActions {
   onSetFocusedNpcName: (name: string) => void;
   onSetFocusedNpcDialogue: (text: string) => void;
   onSetFocusedNpcDefeatMode: (defeatMode: SwordsmanDefeatMode) => void;
+  onSetFocusedBallGraphic: (graphicId: string) => void;
+  onSetFocusedBallWeight: (weight: number) => void;
+  onSetFocusedBallHurtEnemies: (enabled: boolean) => void;
+  onSetFocusedBallHurtFriendlies: (enabled: boolean) => void;
+  onSetFocusedBallHurtPlayer: (enabled: boolean) => void;
+  onSetFocusedBallPushable: (enabled: boolean) => void;
+  onSetFocusedTriangleFill: (color: string) => void;
+  onSetFocusedTriangleStroke: (color: string) => void;
+  onFlipFocusedTriangleX: () => void;
+  onFlipFocusedTriangleY: () => void;
 }

@@ -108,6 +108,7 @@ interface OverworldMovementControllerHost {
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   isSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean;
   getExternalLaunchGraceUntil(): number;
+  getExternalGrounded?: () => boolean;
   shouldForceFullBodyHitbox(): boolean;
   getPushableLiveObjectsInBounds(
     bounds: Phaser.Geom.Rectangle,
@@ -611,7 +612,8 @@ export class OverworldMovementController {
     let grounded =
       playerBody.blocked.down ||
       playerBody.touching.down ||
-      this.isSupportedBySolidRuntimeObject(playerBody);
+      this.isSupportedBySolidRuntimeObject(playerBody) ||
+      (this.host.getExternalGrounded?.() ?? false);
     if (
       this.shouldApplySingleTileGapAssist(horizontalInput, downHeld, spacePressed, inQuicksand, grounded) &&
       this.tryApplySingleTileGapAssist(horizontalInput, grounded)
