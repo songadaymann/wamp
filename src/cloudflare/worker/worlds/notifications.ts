@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import { sendAdminReviewNotificationEmail } from '../admin/reviewNotifications';
 import type { Env } from '../core/types';
@@ -108,11 +108,10 @@ async function loadWorldManagerEmails(env: Env, worldId: string): Promise<string
 }
 
 async function sendWorldEmail(env: Env, email: WorldEmail): Promise<WorldEmailResult> {
-  const apiKey = env.RESEND_API_KEY?.trim();
-  if (!apiKey) return { attempted: false, sent: false, error: null };
-  const resend = new Resend(apiKey);
+  if (!emailConfigured(env)) return { attempted: false, sent: false, error: null };
+  const mailer = createEmailClient(env);
   try {
-    const response = await resend.emails.send({
+    const response = await mailer.emails.send({
       from: env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM,
       to: email.to,
       subject: email.subject,

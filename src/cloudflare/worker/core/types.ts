@@ -80,6 +80,12 @@ export interface Env {
   PARTYKIT_PARTY?: string;
   PARTYKIT_INTERNAL_TOKEN?: string;
   PARTYKIT_IDENTITY_TOKEN_SECRET?: string;
+  /** Cloudflare Email Service; Resend remains an optional rollback until cutover is verified. */
+  EMAIL?: {
+    send(message: { from: string | { email: string; name?: string }; to: string | string[];
+      subject: string; text?: string; html?: string; headers?: Record<string, string> }): Promise<{ messageId: string }>;
+  };
+  EMAIL_FROM?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;

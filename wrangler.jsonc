@@ -3,6 +3,7 @@
   "name": "everybodys-platformer",
   "main": "src/cloudflare/worker.ts",
   "keep_vars": true,
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@wamp.land"] }],
   "services": [{ "binding": "MAP_SCREENSHOTS", "service": "everybodys-platformer-map-screenshots", "entrypoint": "MapScreenshotAdmin" }],
   "durable_objects": { "bindings": [{ "name": "PRESENCE_ROOMS", "class_name": "PresenceDurableObject" }] },
   "migrations": [{ "tag": "presence-v1", "new_sqlite_classes": ["PresenceDurableObject"] }],
@@ -28,6 +29,7 @@
     }
   },
   "vars": {
+    "EMAIL_FROM": "WAMP <noreply@wamp.land>",
     "WORLD_MAP_HEALTH_ALERTS_ENABLED": "1",
     "RUN_GHOST_COST_ALERTS_ENABLED": "1",
     "RUN_GHOST_BILLING_CYCLE_DAY": "5",

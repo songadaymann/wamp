@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import { jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
 import { worldMapAlertsConfigured } from '../worldTiles/health';
@@ -46,7 +47,7 @@ async function probe(env: Env): Promise<HealthResult> {
       checks: { database, worldTileOutbox },
       worldMapAlertsConfigured: worldMapAlertsConfigured(env),
       auth: {
-        emailConfigured: Boolean(env.RESEND_API_KEY),
+        emailConfigured: emailConfigured(env),
         debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
         testResetEnabled: env.ENABLE_TEST_RESET === '1',
       },

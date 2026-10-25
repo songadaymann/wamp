@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import type {
   ApiTokenCreateRequestBody,
   ApiTokenCreateResponse,
@@ -322,7 +323,7 @@ async function createAndSendSignInEmail(
     purpose,
     delivery: env.AUTH_DEBUG_MAGIC_LINKS === '1'
       ? 'debug'
-      : env.RESEND_API_KEY
+      : emailConfigured(env)
         ? 'email'
         : 'debug',
   };
@@ -330,12 +331,12 @@ async function createAndSendSignInEmail(
   if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
     responseBody.debugMagicLink = magicLink;
     responseBody.debugCode = code;
-  } else if (env.RESEND_API_KEY) {
+  } else if (emailConfigured(env)) {
     await sendMagicLinkEmail(env, email, magicLink, code);
   } else {
     throw new HttpError(
       500,
-      'Email auth is not configured. Set RESEND_API_KEY or enable AUTH_DEBUG_MAGIC_LINKS.'
+      'Email auth is not configured. Configure EMAIL or enable AUTH_DEBUG_MAGIC_LINKS.'
     );
   }
 

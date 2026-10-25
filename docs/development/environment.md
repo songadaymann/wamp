@@ -100,3 +100,27 @@ CRYPTOPUNK_AVATAR_STALE_AFTER_MINUTES=20
 - `ROOM_MINT_RPC_URL` is the server-only blockchain transport and may use a private provider. Wallet network setup receives the public Base RPC for chain8453 or84532, never this setting. Other chain IDs cannot prepare wallet transactions until an explicit public endpoint is supported.
 
 Minting has no implicit network fallback: configure an explicit8453 (production Base) or84532 (isolated Base Sepolia). Matching names/explorers are used when their optional labels are absent. Every server chain operation first checks `eth_chainId` through the server-only RPC with a2-second, no-retry probe; failures/mismatches cannot produce fresh ownership or wallet instructions. Tolerant draft saves keep stored ownership. Standalone `/minted-room` links also require an explicit valid `chainId`. Existing secret binding types/values remain unchanged.
+
+### Cloudflare outbound email
+
+Production uses the `EMAIL` send_email binding in `wrangler.jsonc`, restricted to
+`noreply@wamp.land`. `EMAIL_FROM` sets the Cloudflare sender independently of the
+legacy `AUTH_EMAIL_FROM` secret. Onboard wamp.land in Compute → Email Service →
+Email Sending before deployment; its DNS status must be Configured and sending Enabled.
+Workers Paid includes 3,000 outbound emails per account per month, then $0.35/1,000.
+Daily account quotas are separate; check the dashboard before cutover.
+
+All login, comment, chat, World, activity, daily-feature and operational email
+uses Cloudflare when the binding exists. Without the binding, the optional
+`RESEND_API_KEY` and `AUTH_EMAIL_FROM` remain a rollback path. A Cloudflare failure
+never triggers a second send through Resend. To roll back, remove the EMAIL
+binding and redeploy while the Resend secret remains available.
+
+Application notification leases and sent markers remain in place. Cloudflare's
+binding has no documented provider idempotency key: if a process dies after a
+provider accepts an email but before its sent marker is stored, a later retry can
+deliver a duplicate. Resend's HTTP path retains its idempotency keys.
+
+Keep `AUTH_DEBUG_MAGIC_LINKS=1` for local auth work. Do not enable remote email
+bindings for tests. After cutover, verify a real sign-in email and code/link,
+then cancel the Resend paid plan separately and remove its unused secret.
