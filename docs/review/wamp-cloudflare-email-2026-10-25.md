@@ -28,3 +28,20 @@ DOM contract, renderer types, build, boot budget and asset checks). Additional
 native-binding tests cover login content, sender override, notification transport,
 quota failures without fallback, missing confirmation, and provider availability.
 Wrangler production dry-run accepted the binding and bundled successfully.
+
+## Production verification
+
+[PR #328](https://github.com/songadaymann/wamp/pull/328) merged as
+8d7dd388 after all 18 CI jobs passed. A missing generated-bindings refresh was
+caught by the first CI run and corrected before merge. The final complete local
+check passed with 6,009 passing tests (704 files).
+
+Deployed from a clean checkout at origin/main. Both D1 databases had no pending
+migrations; the strict world-map release guard passed. API Worker version:
+718f9e4e-bbf9-4951-9e76-fffce778470f. Production smoke verified the frontend,
+auth configuration, database health, direct alerts and current world tiles.
+
+With the owner's approval, the live request-link endpoint sent one login email
+and returned HTTP 200, ok=true, delivery=email. The message arrived in the owner's
+inbox from WAMP <noreply@wamp.land> on October 25. No login code was consumed.
+The Resend subscription has not been cancelled; its key remains only for rollback.
