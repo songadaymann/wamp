@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import type { AuthUser } from '../../../auth/model';
 import type { ChatMessageRecord } from '../../../chat/model';
 import { normalizeProfileUsername, validateProfileUsername } from '../../../profiles/username';
@@ -51,12 +51,11 @@ export async function sendChatMentionNotificationEmails(
   message: ChatMessageRecord,
   sender: AuthUser
 ): Promise<ChatMentionEmailResult> {
-  const apiKey = env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
+  if (!emailConfigured(env)) {
     return {
       attempted: 0,
       sent: 0,
-      skippedReason: 'RESEND_API_KEY is not configured.',
+      skippedReason: 'Email delivery is not configured.',
       errors: [],
     };
   }
@@ -100,7 +99,7 @@ export async function sendChatMentionNotificationEmails(
     };
   }
 
-  const resend = new Resend(apiKey);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
   const baseUrl = resolveEmailBaseUrl(request, env).replace(/\/+$/, '');
   const chatUrl = `${baseUrl}/`;
@@ -118,7 +117,7 @@ export async function sendChatMentionNotificationEmails(
 
   async function sendMentionEmail(recipient: ChatMentionEmailRecipient): Promise<{ sent: boolean; error: string | null }> {
     try {
-      const response = await resend.emails.send({
+      const response = await mailer.emails.send({
         from,
         to: recipient.email,
         subject: `${sender.displayName} mentioned you in World Chat`,

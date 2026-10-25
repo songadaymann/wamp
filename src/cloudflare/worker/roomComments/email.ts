@@ -1,5 +1,5 @@
 import { formatAccountIdentity } from '../../../auth/displayIdentity';
-import { Resend } from 'resend';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { escapeEmailHtml as escapeHtml } from '../email/delivery';
 import type { AdminRoomCommentRecord } from '../../../roomComments/model';
 import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
@@ -17,11 +17,11 @@ export async function sendRoomCommentApprovedEmail(
   env: Env,
   comment: AdminRoomCommentRecord,
 ): Promise<RoomCommentEmailResult> {
-  if (!env.RESEND_API_KEY?.trim()) {
+  if (!emailConfigured(env)) {
     return {
       attempted: false,
       sent: false,
-      skippedReason: 'RESEND_API_KEY is not configured.',
+      skippedReason: 'Email delivery is not configured.',
       error: null,
     };
   }
@@ -50,10 +50,10 @@ export async function sendRoomCommentApprovedEmail(
       : `Room ${comment.roomCoordinates.x},${comment.roomCoordinates.y}`;
   const baseUrl = resolveEmailBaseUrl(request, env).replace(/\/+$/, '');
   const roomUrl = `${baseUrl}/r/${comment.roomCoordinates.x}/${comment.roomCoordinates.y}`;
-  const resend = new Resend(env.RESEND_API_KEY);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
 
-  const response = await resend.emails.send({
+  const response = await mailer.emails.send({
     from,
     to: comment.builderEmail,
     subject: `New approved comment on ${roomLabel}`,

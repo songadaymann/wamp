@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import type {
   LaunchStatsActivityRange,
   LaunchStatsActivityWindow,
@@ -42,7 +43,7 @@ export async function loadLaunchStats(env: Env): Promise<LaunchStatsResponse> {
   const now = new Date();
   const generatedAt = now.toISOString();
   const config = {
-    emailConfigured: Boolean(env.RESEND_API_KEY?.trim()),
+    emailConfigured: emailConfigured(env),
     debugMagicLinks: env.AUTH_DEBUG_MAGIC_LINKS === '1',
     testResetEnabled: env.ENABLE_TEST_RESET === '1',
     partykitConfigured: isPartykitConfigured(env),

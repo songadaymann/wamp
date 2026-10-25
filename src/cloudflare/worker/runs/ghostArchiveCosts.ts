@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import type { Env } from '../core/types';
 import { deliverEmail, escapeEmailHtml } from '../email/delivery';
 import { worldMapAlertRecipient } from '../worldTiles/health';
@@ -27,7 +28,7 @@ export function ghostArchiveAlertRecipient(env: Env): string {
   return env.RUN_GHOST_ALERT_EMAIL?.trim() || worldMapAlertRecipient(env);
 }
 export function ghostArchiveAlertConfigured(env: Env): boolean {
-  return env.RUN_GHOST_COST_ALERTS_ENABLED === '1' && Boolean(env.RESEND_API_KEY?.trim())
+  return env.RUN_GHOST_COST_ALERTS_ENABLED === '1' && emailConfigured(env)
     && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ghostArchiveAlertRecipient(env));
 }
 export async function loadGhostArchiveBudget(env: Env, now = new Date()) {

@@ -1,5 +1,5 @@
 import { storedRoomProtectionSql } from '../rooms/protection';
-import { Resend } from 'resend';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { API_TOKEN_SCOPES, type ApiTokenRecord, type ApiTokenScope, type AuthUser } from '../../../auth/model';
 import {
   deriveProfileUsernameBase,
@@ -1413,14 +1413,14 @@ export async function sendMagicLinkEmail(
   magicLink: string,
   code: string
 ): Promise<void> {
-  if (!env.RESEND_API_KEY) {
-    throw new HttpError(500, 'RESEND_API_KEY is missing.');
+  if (!emailConfigured(env)) {
+    throw new HttpError(500, 'Email delivery is not configured.');
   }
 
-  const resend = new Resend(env.RESEND_API_KEY);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
 
-  const response = await resend.emails.send({
+  const response = await mailer.emails.send({
     from,
     to: email,
     subject: "Your sign-in code for Everybody's Platformer",

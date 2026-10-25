@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import { releaseRateLimitSlots, takeRateLimitSlot, type RateLimitRule } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { deliverEmail, escapeEmailHtml } from '../email/delivery';
@@ -17,7 +18,7 @@ export async function checkDatabaseSize(env: Env, now = new Date(), fetcher: typ
   }
   console.log(JSON.stringify({ event: 'database-size', bytes }));
   if (bytes < DATABASE_SIZE_WARNING_BYTES) return { status: 'ok' as const, bytes };
-  if (!env.RESEND_API_KEY?.trim()) {
+  if (!emailConfigured(env)) {
     console.error(JSON.stringify({ event: 'database-size-alert-not-configured', bytes }));
     return { status: 'not_configured' as const, bytes };
   }

@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 
@@ -24,21 +24,20 @@ export async function sendAdminReviewNotificationEmail(
   env: Env,
   email: AdminReviewNotificationEmail,
 ): Promise<AdminReviewNotificationEmailResult> {
-  const apiKey = env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
+  if (!emailConfigured(env)) {
     return {
       attempted: false,
       sent: false,
-      skippedReason: 'RESEND_API_KEY is not configured.',
+      skippedReason: 'Email delivery is not configured.',
       error: null,
     };
   }
 
   const to = env.ADMIN_REVIEW_EMAIL?.trim() || DEFAULT_ADMIN_REVIEW_EMAIL;
-  const resend = new Resend(apiKey);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
   try {
-    const response = await resend.emails.send({
+    const response = await mailer.emails.send({
       from,
       to,
       subject: email.subject,
