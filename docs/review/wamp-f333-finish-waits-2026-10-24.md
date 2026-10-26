@@ -41,3 +41,30 @@ Local evidence is in ignored `output/f333/`. The source commit `da3eca94` and th
 ## Delivery still needed
 
 After review and green CI, merge and deploy the API Worker from clean main, then run the production smoke and health check. Check F333 off, update the round-2 progress count, and add its delivery ledger entry with the PR and release receipt.
+
+## Resumed verification — 2026-10-26
+
+Dropbox's `codex/f333-finish-waits-2026-10-24` still points to `d6c989b3`,
+the review-fix commit after the handoff. Both it and its source commit were
+already present under the recovered Git refs. They were cherry-picked onto
+current main `67435449`, preserving the Cloudflare email migration.
+
+Current verification:
+
+- `npm run check` passed: 705 test files, 6,028 passing tests, 9 expected failures,
+  2 skipped tests and 1 todo. The five measured dependency counts remain 7, 3,
+  11, 5 and 4 respectively.
+- `npm run smoke:worker-safety` initially exposed an outdated fake that discarded
+  batch SELECT results. The fake now returns those results in D1's shape, and
+  the probe also checks that a duplicate Room Rush submission returns the saved
+  attempt without adding a second run. The updated probe passes.
+- The production Worker dry-run passed with the Cloudflare email binding intact.
+- Fresh isolated workerd/native-D1 checks passed for a verified room clear and
+  retry, signed-out finish rejection, four concurrent Room Rush submissions
+  saving once, and a later duplicate replaying that saved result. All data was
+  local; no production writes or email sends were used. The unused optional
+  Resend React renderer was stubbed in this local harness.
+
+Fresh local evidence is in ignored `output/f333-current/`. Delivery remains
+pending until the current PR's checks pass, it is merged and the API Worker is
+released.
