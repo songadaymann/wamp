@@ -1,6 +1,7 @@
 # F480: smoke-test repairs and nightly coverage — 2026-10-26
 
-Implementation pending CI and delivery. The parked F480 commits through
+Delivered in [PR #330](https://github.com/songadaymann/wamp/pull/330), merged
+`c5492b3e`. The parked F480 commits through
 `e00e7f04` and the two subsequent Dropbox working-file edits were recovered onto
 main after the F333 release (`81997368`).
 
@@ -69,13 +70,29 @@ main after the F333 release (`81997368`).
 - The email-code screenshot was inspected. Artifacts and server logs are in
   ignored `output/nightly-smokes/` and `output/web-game/`.
 
-The complete seven-group run and normal PR checks still need to pass. Three
-acknowledged regressions remain explicitly listed in the manifest: WampOS
+The final head `2c1b1bfc` passed all 18 normal PR jobs and all seven nightly
+groups plus their combined report. [Quality run](https://github.com/songadaymann/wamp/actions/runs/40359839708);
+[nightly run and complete report](https://github.com/songadaymann/wamp/actions/runs/40359839970).
+The report contains all 35 expected entries: **32 passed, zero unexpected
+failures, three known findings**, and no previously known findings now passing.
+
+Three acknowledged findings remain explicitly listed in the manifest: WampOS
 single-shape tool selection, tablet Undo/Redo overlap, and the rating batch's
-saved-state update. These are not silently converted into passing assertions.
+saved-state update (product versus fixture cause remains unresolved for the
+rating finding). These are not silently converted into passing assertions.
 
 The Play entries are split into onboarding/input and panel/presentation groups,
 so text and panel probes do not wait behind the complete controls-device matrix.
 The rating-modal fixture waits for actual boot and pauses scene rendering before
 setting its synthetic app mode; a fixed boot delay could be overwritten by the
 real transition on a slow runner. Its saved-state assertion remains unchanged.
+
+No API Worker deployment or migration is needed. The API remains on the F333
+release `da8a844f`; production test hooks remain absent from normal builds.
+
+Read-only production smoke passed after merge: frontend, auth/session, presence
+configuration, D1 health and world-tile availability. Pages deployment
+`c15f0ba4-963a-460f-8f8e-c7b3274758c1` for `c5492b3` was Active.
+The live bundle graph (206 JavaScript chunks) contains none of
+`openSyntheticPoliceEditor`, `openSyntheticEditor` or `run_preview_smoke_action`.
+The checklist and ledger record tests passed (9 tests).
