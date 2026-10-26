@@ -38,6 +38,11 @@ main after the F333 release (`81997368`).
   runs, corrupt artifacts, timeouts, and unrelated errors mentioning a known
   regression.
 - The current inline email-link browser smoke passed on the isolated stack.
+- All four local stack-group checks passed, as did its complete combined report.
+- The first-play-controls smoke passed all 24 cases across six device profiles
+  after waiting for queued touch Stop input and checking that controls are
+  reachable within the scrollable landscape dialog. No movement/timer
+  assertions were removed.
 - The police-enemy browser smoke passed on the isolated stack. Its initial
   failure identified a missing COMPACT_WORLD_READS test-stack flag; the config
   now enables compact reads without using production resources.

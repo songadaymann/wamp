@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: nightly-smokes-${{ github.event.pull_request.number || github.event_name }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

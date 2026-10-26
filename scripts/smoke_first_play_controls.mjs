@@ -40,9 +40,10 @@ async function checkGuide(page, touch) {
   assert.equal(await controls.getAttribute('data-play-controls-input'), touch ? 'touch' : 'keyboard');
   const text = await controls.innerText();
   for (const word of touch ? ['Left stick', 'Jump', 'Sword', 'Shoot'] : ['A', 'D', 'Space', 'W', 'Z', 'Q', 'X', 'E']) assert.ok(text.includes(word), text);
-  // A clipped guide or Start button is recorded rather than thrown, so every device still runs;
-  // the smoke fails at the end if anything was cut off.
+  // Short landscape dialogs scroll. Each control must be reachable after scrolling its container;
+  // hidden or clipped controls are still recorded, and fail the smoke after every device runs.
   for (const selector of ['#room-goal-intro-controls', '#btn-room-goal-intro-start']) {
+    await page.locator(selector).scrollIntoViewIfNeeded();
     const box = await page.locator(selector).boundingBox();
     const viewport = page.viewportSize();
     if (!(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1)) {
@@ -162,7 +163,12 @@ try {
         if (selector.startsWith('#btn-world-') && await page.locator('#auth-panel').evaluate(node => node.classList.contains('menu-open'))) {
           await nativeTap('#menu-toggle');
         }
-        return nativeTap(selector);
+        await nativeTap(selector);
+        // Touch Stop is consumed by the next game frame. Opening a modal immediately can pause
+        // that frame, so finish stopping before the next navigation or playlist guide.
+        if (selector === '#btn-mobile-world-stop') {
+          await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.mode === 'browse');
+        }
       };
       if (kind === 'home') {
         await page.locator('#welcome-modal').waitFor({ state: 'visible' });
@@ -272,7 +278,7 @@ try {
     return !interruptedPoll;
   });
   assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.unexpectedConsoleErrors, []);
-  assert.deepEqual(report.clipped, [], 'The goal intro guide and Start button must fit on screen');
+  assert.deepEqual(report.clipped, [], 'The goal intro guide and Start button must be reachable on screen');
   report.ok = true;
 } catch (error) {
   report.failure = { name: activeName, message: String(error) };
