@@ -19,8 +19,8 @@ Delivers round-2 items F487, F484 and F481: route tests for the riskiest write p
 
 ## For later
 
-- **World claim rows:** a room claimed before Worlds were switched on may have no World claim row. A test is skipped pending a production count. Query: `SELECT COUNT(*) FROM rooms r WHERE (claimer_user_id IS NOT NULL OR published_json IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM world_room_claims c WHERE c.room_id = r.id)`.
-- **Expanded Room whole-draft saves** have no edit-conflict check, unlike cell saves (F379). It's a `todo` test.
+- **World claim rows:** follow-up count on 2026-10-26 found zero claimed/published rooms missing a claim row; no current-data backfill is needed ([receipt](wamp-round2-followups-2026-10-26.md)). The hypothetical legacy policy remains undecided. Original context: a room claimed before Worlds were switched on may have no World claim row. A test is skipped pending a production count. Query: `SELECT COUNT(*) FROM rooms r WHERE (claimer_user_id IS NOT NULL OR published_json IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM world_room_claims c WHERE c.room_id = r.id)`.
+- **Expanded Room whole-draft saves** have no edit-conflict check, unlike cell saves (F379). Follow-up on 2026-10-26 replaces the todo with an executable expected-failure test; the protection remains unimplemented ([receipt](wamp-round2-followups-2026-10-26.md)).
 - **Timing-sensitive tests:** three Sword Hunter warm-up tests time out under very heavy machine load. They should be made deterministic.
 
 ## Checks

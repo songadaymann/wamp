@@ -264,5 +264,26 @@ describe('publishing an Expanded Room', () => {
   });
 });
 
-// Not built yet: the draft save takes no base, so two tabs saving the whole draft overwrite each other.
-it.todo('refuses an Expanded Room draft save based on an older save (cell saves have this check since F379)');
+// Known gap: whole-draft saves ignore the base, unlike cell saves (F379). Keep the desired
+// two-tab contract executable before the shared-backend work; remove .fails when it is fixed.
+it.fails('refuses an Expanded Room whole-draft save based on an older save', async () => {
+  const created = await create('er', [ref(0, 0), ref(1, 0), ref(2, 0)], complete);
+  expect(created.status).toBe(200);
+  const original = created.body.draft;
+  const base = original.updatedAt as string;
+  const saveFromBase = (title: string) => api.call(
+    `${path('er', '/draft')}?baseUpdatedAt=${encodeURIComponent(base)}`,
+    { method: 'PUT', session: builder, body: { ...original, title } },
+  );
+
+  tick();
+  const otherTab = await saveFromBase('Other tab');
+  expect(otherTab.status).toBe(200);
+  expect(otherTab.body.draft.updatedAt).not.toBe(base);
+
+  tick();
+  const staleTab = await saveFromBase('Stale tab');
+  expect(staleTab.status).toBe(409);
+  const stored = await api.call(path('er', '/editor-record'), { session: builder });
+  expect(stored.body.draft.title).toBe('Other tab');
+});
