@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: measures frame time while zooming the overworld on a
+// running frontend. Never scheduled; see scripts/lib/smokeManifest.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import './lib/mutedBrowsers.mjs';

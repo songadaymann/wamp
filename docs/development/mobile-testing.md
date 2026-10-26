@@ -24,6 +24,18 @@ npm run smoke:mobile:ci -- --record
 
 Both engines use phone/tablet viewports and touch emulation; WebKit uses Canvas. This catches engine, layout and control differences. It does not reproduce physical iOS input zoom, collapsing toolbars, safe areas or audio unlock; those still need a real device. Keyboard cases shrink only visualViewport while keeping the layout viewport in portrait, type actual key events, check 16px field text and visibility, then restore the viewport. Chat/Say use synthetic signed API responses, refuse sockets and send no messages.
 
+## Nightly Smokes
+
+The other browser smokes run every night and when a pull request changes their runner, manifest, replay fixture helper or workflow (`.github/workflows/nightly-smokes.yml`, also startable by hand from the Actions tab). `scripts/lib/smokeManifest.mjs` lists every smoke and probe script with what it covers and where it runs: `ci`, `nightly` (with its group), `deploy`, `manual` (with the reason) or `devtool`. `scripts/smoke_manifest.test.ts` fails when a new script isn't listed or a Playwright script doesn't import `scripts/lib/mutedBrowsers.mjs`.
+
+```bash
+npm run smoke:nightly -- --list
+npm run smoke:nightly -- --group editor
+npm run smoke:nightly -- --only smoke_police_enemies.mjs --skip-build
+```
+
+Each run builds the test-hook frontend into `dist-mobile-smoke/` and starts `wrangler dev --local` on `127.0.0.1:8788` with a new D1 directory, a dedicated config, throwaway secrets and debug sign-in links. The config has no production email, queue, or service bindings, and the stack and temporary database directory are removed at exit. Logs and `results.json` land in `output/nightly-smokes/<group>/`. A terminal error that matches a script's `knownIssue` is reported as a known product bug without failing the night; matching earlier diagnostic output is insufficient. Timeouts always fail. The combined report fails for missing or incomplete group artifacts; manually selected groups are checked only against their selected group.
+
 ## Fast Automated Smoke
 
 Start a frontend that can reach a real API, then run the mobile smoke:

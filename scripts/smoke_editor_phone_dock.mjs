@@ -60,10 +60,12 @@ try {
         assert.ok(box.height >= minimum, `${selector} target too short`);
       }
       async function selection() {
-        return page.evaluate(async () => {
-          const { editorState } = await import('/src/config.ts');
-          return { paletteMode: editorState.paletteMode, selectedObjectId: editorState.selectedObjectId, activeTool: editorState.activeTool };
-        });
+        // What the editor shows: palette mode, the pressed object tile, and the active drawing tool.
+        return page.evaluate(() => ({
+          paletteMode: document.body.dataset.editorPaletteMode,
+          selectedObjectId: document.querySelector('#object-grid .object-item[aria-pressed="true"]')?.dataset.objectId ?? null,
+          activeTool: document.querySelector('.editor-shell-tools [data-tool].active')?.dataset.tool ?? null,
+        }));
       }
       for (const selector of ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar']) await bounds(selector);
       for (const selector of ['[data-editor-shell-action="test"]', '[data-editor-shell-action="publish"]', '#btn-editor-phone-menu', '#btn-mobile-editor-toggle']) await bounds(selector, 44);
@@ -227,11 +229,44 @@ try {
         const sheet = document.getElementById('editor-sidebar-scroll').getBoundingClientRect();
         return { x: canvas.x, y: canvas.y, width: canvas.width, bottom: canvas.bottom, top: sheet.top, sheetBottom: sheet.bottom };
       });
-      const tileSelection = () => page.evaluate(async () => {
-        const { editorState } = await import('/src/config.ts');
-        const { tilesetKey, startCol, startRow, width, height } = editorState.selection;
-        return { tilesetKey, startCol, startRow, width, height };
-      });
+      // The picker canvas draws the selected tiles' highlight, so its pixels show what is selected.
+      const readPicker = () => page.evaluate(() => ({
+        tilesetKey: document.getElementById('tileset-select').value,
+        image: document.getElementById('palette-canvas').toDataURL(),
+      }));
+      // Wait for the picker to finish drawing (the tileset image loads after the select changes).
+      const tileSelection = async () => {
+        let previous = await readPicker();
+        for (let attempt = 0; attempt < 40; attempt++) {
+          await page.waitForTimeout(150);
+          const current = await readPicker();
+          if (current.image === previous.image && current.tilesetKey === previous.tilesetKey) return current;
+          previous = current;
+        }
+        return previous;
+      };
+      // Picker cells whose pixels differ from an earlier picker image (12 columns for WampOS 95).
+      const changedCells = (earlier) => page.evaluate(async (earlierImage) => {
+        const canvas = document.getElementById('palette-canvas');
+        const image = new Image();
+        image.src = earlierImage;
+        await image.decode();
+        const scratch = document.createElement('canvas');
+        scratch.width = canvas.width; scratch.height = canvas.height;
+        const scratchContext = scratch.getContext('2d');
+        scratchContext.drawImage(image, 0, 0);
+        const before = scratchContext.getImageData(0, 0, canvas.width, canvas.height).data;
+        const after = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        const tile = canvas.width / 12, cells = new Set();
+        for (let index = 0; index < after.length; index += 4) {
+          if (after[index] === before[index] && after[index + 1] === before[index + 1] && after[index + 2] === before[index + 2]) continue;
+          const pixel = index / 4, x = pixel % canvas.width, y = Math.floor(pixel / canvas.width);
+          // The highlight's 2px outline bleeds a pixel into neighbouring cells; count cell interiors only.
+          if (x % tile < 3 || x % tile > tile - 3 || y % tile < 3 || y % tile > tile - 3) continue;
+          cells.add(`${Math.floor(x / tile)},${Math.floor(y / tile)}`);
+        }
+        return [...cells].sort();
+      }, earlier.image);
       const beforeSwipes = await tileSelection();
       let box = await picker();
       for (let swipes = 0; box.bottom > box.sheetBottom - 2; swipes++) {
@@ -240,18 +275,33 @@ try {
         const from = Math.min(box.sheetBottom - 20, box.bottom - 10);
         const to = Math.max(box.top + 20, from - 160, from - Math.max(40, box.bottom - box.sheetBottom + 10));
         await touch('touchStart', x, from);
-        for (let step = 1; step <= 8; step++) { await touch('touchMove', x, from + (to - from) * step / 8); await page.waitForTimeout(16); }
+        // Every step travels past the 10px tap slop, so a slow machine can't turn the swipe into a
+        // 400ms hold-to-select before the finger has visibly moved.
+        const steps = Math.max(1, Math.min(8, Math.floor(Math.abs(to - from) / 12)));
+        for (let step = 1; step <= steps; step++) { await touch('touchMove', x, from + (to - from) * step / steps); await page.waitForTimeout(16); }
         // Finish still, so the swipe does not fling past the end.
         await page.waitForTimeout(150);
         await touch('touchEnd');
         await page.waitForTimeout(250);
         box = await picker();
       }
-      assert.deepEqual(await tileSelection(), beforeSwipes, 'swiping the picker must not select tiles');
+      assert.deepEqual(await changedCells(beforeSwipes), [], 'swiping the picker must not select tiles');
+      // Let any momentum scroll settle so the tap lands on one cell.
+      for (let settle = 0; settle < 40; settle++) {
+        await page.waitForTimeout(150);
+        const settled = await picker();
+        if (settled.y === box.y) break;
+        box = settled;
+      }
       const tile = box.width / 12;
       await page.touchscreen.tap(box.x + tile * 11.5, box.y + tile * 26.5);
       await page.waitForTimeout(200);
-      assert.deepEqual(await tileSelection(), { tilesetKey: 'wampos95', startCol: 11, startRow: 26, width: 1, height: 1 });
+      const tapped = await tileSelection();
+      assert.equal(tapped.tilesetKey, 'wampos95');
+      // The earlier one-tile highlight clears and only the tapped last-row tile (11,26) lights up.
+      const tapChanges = await changedCells(beforeSwipes);
+      assert.ok(tapChanges.includes('11,26') && tapChanges.length <= 2,
+        `the tap must select only the last-row tile it touched: ${JSON.stringify(tapChanges)}`);
       assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'true');
       passed.push('swipe scrolls the WampOS 95 picker and its last row can be tapped');
 
@@ -260,7 +310,7 @@ try {
         await tap(`[data-editor-phone-tool="${tool}"]`);
         assert.equal((await selection()).activeTool, tool);
         assert.equal(await page.locator(`[data-editor-phone-tool="${tool}"]`).getAttribute('aria-pressed'), 'true');
-        assert.deepEqual(await tileSelection(), { tilesetKey: 'wampos95', startCol: 11, startRow: 26, width: 1, height: 1 });
+        assert.deepEqual(await tileSelection(), tapped);
       }
       passed.push('Draw/Erase switch changes the tool in one tap and keeps the tile');
 

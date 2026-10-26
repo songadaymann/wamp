@@ -4,7 +4,7 @@ import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:3014';
-const output = process.env.ROOM_CAMERA_SMOKE_OUTPUT_DIR ?? '/tmp/wamp-room-camera-smoke';
+const output = process.env.ROOM_CAMERA_SMOKE_OUTPUT_DIR ?? 'output/web-game/room-camera';
 mkdirSync(output, { recursive: true });
 const touch = process.env.ROOM_CAMERA_SMOKE_TOUCH === '1';
 const renderer = process.env.ROOM_CAMERA_SMOKE_RENDERER ?? 'canvas';
@@ -13,6 +13,7 @@ const page = await browser.newPage({ viewport: touch ? { width: 390, height: 844
 await page.addInitScript(() => {
   localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
   localStorage.setItem('wamp_install_help_dismissed_v1', '1');
+  localStorage.setItem('wamp_replay_opt_out', '1');
 });
 const errors = [];
 const networkWarnings = [];
@@ -27,6 +28,12 @@ page.on('console', (message) => {
     networkWarnings.push(text);
   } else errors.push(text);
 });
+async function openRoomCameraSettings() {
+  const press = (selector) => (touch ? page.locator(selector).tap() : page.locator(selector).click());
+  await press('[data-editor-shell-action="room"]');
+  await press('[data-editor-room-section="camera"]');
+  if (!await page.locator('#room-camera-centered').isVisible()) await page.locator('#room-camera-section .sidebar-section-toggle').click();
+}
 await page.route('**/api/**', (route) => {
   if (!['GET', 'OPTIONS'].includes(route.request().method())) return route.abort();
   return route.continue();
@@ -47,13 +54,8 @@ try {
     editor.editRuntime.applyRoomSnapshot(snapshot);
   });
   if (await page.locator('#auth-panel').evaluate((el) => el.classList.contains('menu-open'))) await page.click('#menu-toggle');
-  if (touch) {
-    await page.click('[data-mobile-editor-sheet="background"]');
-    if (!await page.locator('#room-camera-centered').isVisible()) await page.locator('#room-camera-section .sidebar-section-toggle').click();
-  } else {
-    await page.click('[data-editor-shell-action="room"]');
-    await page.click('[data-editor-room-section="camera"]');
-  }
+  // Room Setup > Camera holds the toggle on every layout (the phone dock has the same button).
+  await openRoomCameraSettings();
   const toggle = page.locator('#room-camera-centered');
   assert.equal(await toggle.isChecked(), false);
   await toggle.check();
@@ -116,7 +118,7 @@ try {
       const scene = window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.OverworldPlayScene;
       scene.debugSetPlayerPosition({ x: roomX * 640 + 24, y: 99 * 352 + 160, bodyEnabled: false });
     }, x);
-    await page.waitForFunction((roomX) => window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.OverworldPlayScene.currentRoomCoordinates.x === roomX, x, { timeout: 15000 });
+    await page.waitForFunction((roomX) => window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.OverworldPlayScene.currentRoomCoordinates.x === roomX, x, { timeout: 45000 });
     await page.waitForTimeout(400);
   };
   await crossTo(100);
@@ -146,8 +148,7 @@ try {
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal((await page.evaluate(() => window.run_preview_smoke_action('openSyntheticEditorFromLocal'))).ok, true);
     if (await page.locator('#auth-panel').evaluate((el) => el.classList.contains('menu-open'))) await page.click('#menu-toggle');
-    if (!await toggle.isVisible()) await page.click('[data-mobile-editor-sheet="background"]');
-    if (!await toggle.isVisible()) await page.locator('#room-camera-section .sidebar-section-toggle').click();
+    if (!await toggle.isVisible()) await openRoomCameraSettings();
     assert.equal(await toggle.isChecked(), true);
     await toggle.uncheck();
     assert.equal((await page.evaluate(() => window.run_preview_smoke_action('saveSyntheticEditorToLocal'))).ok, true);

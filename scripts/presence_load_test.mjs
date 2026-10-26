@@ -1,3 +1,5 @@
+// Developer tool, not a pass/fail check: load-tests presence with many simulated players. Never
+// scheduled; see scripts/lib/smokeManifest.mjs.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import './lib/mutedBrowsers.mjs';

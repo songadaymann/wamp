@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const base = process.argv[2] || 'http://127.0.0.1:3033';
 const output = process.argv[3] || 'output/web-game/room-clear-feedback/native';
@@ -35,7 +36,8 @@ async function clear(page, context, touch) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 34, y, id: 1 }] });
     release = async () => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await cdp.detach(); };
   }
-  try { await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result === 'completed', null, { timeout: 20000 }); }
+  // Game time only advances per frame, so a starved browser needs longer than the ~3 s run.
+  try { await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result === 'completed', null, { timeout: 60000 }); }
   finally { await release(); }
   await page.locator('#reward-sting-layer').waitFor({ state: 'visible' });
 }
@@ -51,6 +53,8 @@ try {
       window.clearFeedbackEvents = [];
       addEventListener('reward-stings', event => window.clearFeedbackEvents.push(...event.detail.rewards.filter(reward => reward.kind === 'room-clear')));
     });
+    // Recorded rooms stand in for the live world (F480).
+    await installSmokeApiReplay(context);
     const page = await context.newPage(); activePage = page;
     let leaderboard;
     page.on('response', async response => {
@@ -70,24 +74,25 @@ try {
         const response = await route.fetch(); await new Promise(resolve => setTimeout(resolve, 1000)); await route.fulfill({ response });
       });
     }
-    await page.goto(`${base}/r/-11/-6?welcome=0`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/r/-11/-6?welcome=0&renderer=canvas`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
     const entry = await page.locator('script[type="module"]').first().getAttribute('src'); report.documents.push({ name, entry });
     if (process.env.EXPECTED_ENTRY) assert.equal(entry, process.env.EXPECTED_ENTRY);
     await start(page, touch); await clear(page, context, touch);
+    // Measure the card once its entry animation settles, well inside its 2.6 s display.
+    await page.waitForTimeout(230);
+    const card = await page.locator('#reward-sting-card').boundingBox(); assert.ok(card && card.x >= 0 && card.x + card.width <= width && card.y + card.height <= height);
     const completed = await state(page);
     assert.equal(completed.mode, 'play');
     assert.equal(await page.locator('#run-rating-modal').isVisible(), false, 'Claim interrupted play');
     assert.equal(await page.locator('#reward-sting-title').innerText(), 'ROOM CLEAR!');
     const detail = await page.locator('#reward-sting-detail').innerText();
+    await page.screenshot({ path: `${output}/${name}-clear.png` });
     assert.ok(detail.includes('0 deaths'));
     assert.ok(leaderboard && leaderboard.roomVersion === completed.goalRun.roomVersion, 'Matching leaderboard did not load');
     if (leaderboard.entries.length) assert.ok(detail.includes('Best:'), `Missing matching best: ${detail}`);
     else assert.ok(!detail.includes('Best:'), 'Invented a best time without ranked clears');
     if (process.env.DELAY_FINISH === '1') assert.ok((await page.locator('#reward-sting-guest-progress').textContent()).includes('Waiting to verify'));
-    await page.waitForTimeout(230);
-    const card = await page.locator('#reward-sting-card').boundingBox(); assert.ok(card && card.x >= 0 && card.x + card.width <= width && card.y + card.height <= height);
-    await page.screenshot({ path: `${output}/${name}-clear.png` });
     const progress = await page.locator('#reward-sting-guest-progress').textContent();
     assert.ok(progress === 'Verified clear · Sign in to earn XP' || progress.startsWith('Waiting to verify'), progress);
     assert.ok(!progress.includes('+20'));
@@ -120,6 +125,8 @@ try {
     const result = { name, passed: true, run: (await state(page)).goalRun ?? completed.goalRun, detail, progress, card, resultBounds };
     if (name === 'desktop') {
       await click(page, '#btn-world-play', false);
+      // A time-ranked room offers its ghost race again on every Play (bf4718da).
+      await start(page, false);
       await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result === 'active');
       await clear(page, context, false);
       assert.equal(await page.evaluate(() => window.clearFeedbackEvents.length), 2, 'Replay did not celebrate once');

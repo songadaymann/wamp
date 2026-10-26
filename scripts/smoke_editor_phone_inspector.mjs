@@ -5,7 +5,9 @@ import { chromium } from 'playwright';
 const base=process.argv[2]||'http://127.0.0.1:3031';
 assert.ok(['localhost','127.0.0.1'].includes(new URL(base).hostname),'Fixtures are local only.');
 const output='output/web-game/phone-inspector';mkdirSync(output,{recursive:true});
-const report={scenarios:[],errors:[]};const browser=await chromium.launch();
+const report={scenarios:[],errors:[]};
+// The palette tab each placed object is listed under (platform objects sit under Utility).
+const PALETTE_TABS={floor_trigger:'interactive',door_metal:'interactive',treasure_chest:'interactive',coin_gold:'collectible',swordsman_ai:'enemy',police_patrolman:'enemy',jimothy:'npc'};const browser=await chromium.launch();
 try {
  for(const [device,viewport] of [['portrait',{width:390,height:844}],['landscape',{width:844,height:390}],['narrow',{width:320,height:568}]]) {
   if(process.env.INSPECTOR_DEVICES&&!process.env.INSPECTOR_DEVICES.split(',').includes(device))continue;
@@ -30,7 +32,7 @@ try {
    const snapshot=()=>page.evaluate(()=>window.__inspectorFixture.runtime.exportRoomSnapshot());
    const get=async id=>(await snapshot()).placedObjects.find(p=>p.id===id);
    const frame=async()=>{
-    await page.evaluate(async()=>{const f=window.__inspectorFixture,c=f.scene.cameras.main;const {updateEditorState}=await import('/src/config.ts');c.setZoom(Math.min(c.width/640,c.height/352)*.85);if(f.expanded){f.scene.inspectZoom=c.zoom;f.scene.syncCameraBounds();}else updateEditorState({zoom:c.zoom});c.centerOn(f.origin.x+320,f.origin.y+176);});
+    await page.evaluate(()=>{const f=window.__inspectorFixture,c=f.scene.cameras.main;c.setZoom(Math.min(c.width/640,c.height/352)*.85);if(f.expanded){f.scene.inspectZoom=c.zoom;f.scene.syncCameraBounds();}c.centerOn(f.origin.x+320,f.origin.y+176);});
     await page.waitForTimeout(180);
    };
    const canvasTap=async(x,y)=>{
@@ -41,10 +43,10 @@ try {
    const objectTap=async id=>{const p=await get(id);assert.ok(p,id);await canvasTap(p.x,p.y-3);};
    const choose=async(id,panel='stuff')=>{
     await tap(`[data-editor-dock="${panel}"]`);await page.locator('#object-search-input').fill('');
-    const category=await page.evaluate(async id=>{const {getObjectById}=await import('/src/config.ts');const c=getObjectById(id).category;return c==='platform'?'interactive':c;},id);await tap(`.obj-cat-tab[data-category="${category}"]`);await tap(`#object-grid [data-object-id="${id}"]`);
+    const category=PALETTE_TABS[id];assert.ok(category,`No palette tab listed for ${id}`);await tap(`.obj-cat-tab[data-category="${category}"]`);await tap(`#object-grid [data-object-id="${id}"]`);
     if(await page.locator('#sidebar').isVisible())await tap('#btn-mobile-editor-toggle');
    };
-   const place=async(id,x,y,panel='stuff')=>{await choose(id,panel);const origin=await page.evaluate(()=>window.__inspectorFixture.origin);await canvasTap(origin.x+x,origin.y+y);if(!await get(id)){await page.screenshot({path:`${prefix}-placement-failure.png`});console.log(await page.evaluate(async()=>{const {editorState}=await import('/src/config.ts');const f=window.__inspectorFixture;return{selected:editorState.selectedObjectId,mode:editorState.paletteMode,tool:editorState.activeTool,body:document.body.dataset,objects:f.runtime.exportRoomSnapshot().placedObjects,pointer:{x:f.scene.input.activePointer.x,y:f.scene.input.activePointer.y,worldX:f.scene.input.activePointer.worldX,worldY:f.scene.input.activePointer.worldY},camera:{x:f.scene.cameras.main.scrollX,y:f.scene.cameras.main.scrollY,width:f.scene.cameras.main.width,height:f.scene.cameras.main.height,zoom:f.scene.cameras.main.zoom}};}));}assert.ok(await get(id),`native placement ${id}`);};
+   const place=async(id,x,y,panel='stuff')=>{await choose(id,panel);const origin=await page.evaluate(()=>window.__inspectorFixture.origin);await canvasTap(origin.x+x,origin.y+y);if(!await get(id)){await page.screenshot({path:`${prefix}-placement-failure.png`});console.log(await page.evaluate(()=>{const f=window.__inspectorFixture;return{selected:document.querySelector('#object-grid .object-item[aria-pressed="true"]')?.dataset.objectId??null,mode:document.body.dataset.editorPaletteMode,tool:document.querySelector('.tool-btn.active[data-tool]')?.dataset.tool??null,body:document.body.dataset,objects:f.runtime.exportRoomSnapshot().placedObjects,pointer:{x:f.scene.input.activePointer.x,y:f.scene.input.activePointer.y,worldX:f.scene.input.activePointer.worldX,worldY:f.scene.input.activePointer.worldY},camera:{x:f.scene.cameras.main.scrollX,y:f.scene.cameras.main.scrollY,width:f.scene.cameras.main.width,height:f.scene.cameras.main.height,zoom:f.scene.cameras.main.zoom}};}));}assert.ok(await get(id),`native placement ${id}`);};
    const open=async()=>{assert.equal(await page.locator('#editor-inspector').isVisible(),true);assert.equal(await page.locator('#sidebar').isVisible(),false);const r=await page.locator('#editor-inspector').boundingBox();assert.ok(r.x>=-1&&r.y>=48&&r.x+r.width<=viewport.width+1&&r.y+r.height<=viewport.height-53,JSON.stringify(r));const done=await page.locator('#btn-editor-inspector-done').boundingBox();assert.ok(done.height>=44);const stage=await page.locator('#game-container').boundingBox();assert.ok(stage.y+stage.height<=r.y+1,`Inspector covers canvas: ${JSON.stringify({stage,r})}`);};
    const done=async()=>{await tap('#btn-editor-inspector-done');assert.equal(await page.locator('#editor-inspector').isVisible(),false);assert.equal(await page.evaluate(()=>document.body.dataset.editorPhoneLinking),'false');};
    // Plate before any target: the prompt remains cancellable after an empty tap.

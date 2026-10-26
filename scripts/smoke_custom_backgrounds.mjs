@@ -21,14 +21,16 @@ for (const [name, engine, phone] of [
   ["chrome-phone", chromium, true],
   ["webkit-phone", webkit, true],
 ].filter(([n]) => !process.env.PROFILE || n === process.env.PROFILE)) {
+  // Bundled Chromium with software WebGL by default, so CI and Linux can run it. Set
+  // CUSTOM_BACKGROUNDS_CHROME to an installed Chrome (macOS: /Applications/Google
+  // Chrome.app/Contents/MacOS/Google Chrome) to render through its GPU instead.
+  const chrome = process.env.CUSTOM_BACKGROUNDS_CHROME;
   const browser = await engine.launch({
     headless: true,
     ...(engine === chromium
-      ? {
-          executablePath:
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-          args: ["--use-angle=metal", "--mute-audio"],
-        }
+      ? chrome
+        ? { executablePath: chrome, args: ["--use-angle=metal"] }
+        : { args: ["--use-gl=angle", "--use-angle=swiftshader"] }
       : {}),
   });
   const context = await browser.newContext({
