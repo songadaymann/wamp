@@ -52,14 +52,21 @@ try {
       await page.waitForTimeout(350);
       const before = await state();
       await page.keyboard.down('ArrowRight');
-      await page.waitForTimeout(250);
+      await page.waitForFunction(x => JSON.parse(window.render_game_to_text()).activeScene.player.x > x + 5, before.player.x, { timeout: 3000 });
       await page.keyboard.up('ArrowRight');
       const moved = await state();
       assert.ok(moved.player.x > before.player.x + 5, `Movement frozen after ${startWith}, entry ${entry}`);
       await page.keyboard.down('w');
-      await page.waitForTimeout(100);
-      await page.keyboard.up('w');
-      const jumped = await state();
+      // Observe the rising frame while the key is held; slow WebKit frames can consume
+      // a timed key press between updates or let the player land before the sample.
+      let jumped;
+      try {
+        const rise = await page.waitForFunction(y => {
+          const s = JSON.parse(window.render_game_to_text()).activeScene;
+          return s.player.y < y - 5 ? s : null;
+        }, moved.player.y, { timeout: 3000 });
+        jumped = await rise.jsonValue();
+      } finally { await page.keyboard.up('w'); }
       assert.ok(jumped.player.y < moved.player.y - 5, `Jump frozen after ${startWith}, entry ${entry}`);
       report.cases.push({ startWith, entry, movedPx: moved.player.x - before.player.x, jumpedPx: moved.player.y - jumped.player.y });
       await page.screenshot({ path: `${output}/${startWith}-${entry}.png` });
@@ -80,9 +87,14 @@ try {
         await page.waitForTimeout(250);
         const ground = await state();
         await page.keyboard.down('Space');
-        await page.waitForTimeout(100);
-        const air = await state();
-        await page.keyboard.up('Space');
+        let air;
+        try {
+          const rise = await page.waitForFunction(y => {
+            const s = JSON.parse(window.render_game_to_text()).activeScene;
+            return s.player.y < y - 5 ? s : null;
+          }, ground.player.y, { timeout: 3000 });
+          air = await rise.jsonValue();
+        } finally { await page.keyboard.up('Space'); }
         assert.ok(air.player.y < ground.player.y - 5, `Space didn't jump after restart ${restart}, ${startWith}`);
         for (let press = 0; press < 3; press++) await page.keyboard.press('Space');
         const clicksAfter = await page.evaluate(() => window.restartClicks);

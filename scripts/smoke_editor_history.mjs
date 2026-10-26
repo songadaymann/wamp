@@ -113,13 +113,26 @@ try {
       assert.ok(await redo.isEnabled());
       await press(redo, hasTouch, `${name} ${mode} Redo`);
       assert.equal(await inspect(page, expanded), after);
-      for (const lock of ['editorMusicUiLocked', 'editorSpriteUiLocked']) {
-        await page.evaluate((lock) => { document.body.dataset[lock] = 'true'; }, lock);
-        await page.waitForTimeout(50);
-        assert.ok(await undo.isDisabled());
-        await page.evaluate((lock) => { document.body.dataset[lock] = 'false'; }, lock);
-        await page.waitForTimeout(50);
-        assert.ok(await undo.isEnabled());
+      // These synthetic lock flags are normally owned by the music/sprite UI. Pause scene
+      // rendering while asserting them so a music render cannot overwrite the fixture flag.
+      await page.evaluate(() => window.__EVERYBODYS_PLATFORMER_GAME__.loop.sleep());
+      try {
+        for (const lock of ['editorMusicUiLocked', 'editorSpriteUiLocked']) {
+          await page.evaluate((lock) => { document.body.dataset[lock] = 'true'; }, lock);
+          await page.waitForFunction(selector => document.querySelector(selector)?.disabled === true,
+            `${prefix}[data-editor-history="undo"]`);
+          assert.ok(await undo.isDisabled());
+          await page.evaluate((lock) => { document.body.dataset[lock] = 'false'; }, lock);
+          await page.waitForFunction(selector => document.querySelector(selector)?.disabled === false,
+            `${prefix}[data-editor-history="undo"]`);
+          assert.ok(await undo.isEnabled());
+        }
+      } finally {
+        await page.evaluate(() => {
+          document.body.dataset.editorMusicUiLocked = 'false';
+          document.body.dataset.editorSpriteUiLocked = 'false';
+          window.__EVERYBODYS_PLATFORMER_GAME__.loop.wake();
+        });
       }
       await press(undo, hasTouch, `${name} ${mode} Undo`);
       await paint(page, expanded, 13);

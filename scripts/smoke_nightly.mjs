@@ -13,6 +13,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import { NIGHTLY_GROUPS, SMOKES } from './lib/smokeManifest.mjs';
 import { classifySmokeResult } from './lib/smokeReports.mjs';
@@ -98,10 +99,14 @@ try {
   if (entries.some((entry) => entry.server === 'vite-dev')) await startViteDev();
 
   for (const entry of entries) {
+    console.log(`RUN     ${nameOf(entry)}`);
     const result = await runEntry(entry, stack);
     results.push(result);
     console.log(`${result.status.toUpperCase().padEnd(7)} ${nameOf(entry)} (${result.seconds}s)`);
-    if (result.status === 'fail' || result.status === 'timeout') exitCode = 1;
+    if (result.status === 'fail' || result.status === 'timeout') {
+      exitCode = 1;
+      console.error(result.tail);
+    }
   }
 } catch (error) {
   console.error(error);
@@ -116,8 +121,7 @@ try {
 process.exit(exitCode);
 
 async function startStack() {
-  const probe = await fetch(`${STACK}/api/health`, { signal: AbortSignal.timeout(2000) }).then(() => true, () => false);
-  if (probe) throw new Error(`Port ${STACK_PORT} is already in use; the nightly stack needs it`);
+  await requireFreePort(STACK_PORT);
   const persistTo = mkdtempSync(path.join(tmpdir(), 'wamp-nightly-d1-'));
   scratchDirs.push(persistTo);
   const configFile = path.resolve(outputDir, 'wrangler.json');
@@ -167,8 +171,17 @@ async function startStack() {
 }
 
 async function startViteDev() {
+  await requireFreePort(VITE_DEV_PORT);
+  // Vite's project config opens a browser and proxies to another local app's port. Override
+  // both explicitly for this isolated stack; --open false can be parsed as the path "false".
+  const configFile = path.resolve(outputDir, 'vite.config.mjs');
+  writeFileSync(configFile, `import { mergeConfig } from 'vite';
+import base from ${JSON.stringify(path.resolve('vite.config.ts'))};
+export default async (env) => mergeConfig(typeof base === 'function' ? await base(env) : await base,
+  { server: { open: false, proxy: { '/api': { target: ${JSON.stringify(STACK)}, changeOrigin: true } } } });
+`);
   const log = createWriteStream(path.join(outputDir, 'vite-dev.log'));
-  const child = spawn(process.execPath, [VITE, '--port', String(VITE_DEV_PORT), '--strictPort', '--host', '127.0.0.1', '--open', 'false'], {
+  const child = spawn(process.execPath, [VITE, '--config', configFile, '--port', String(VITE_DEV_PORT), '--strictPort', '--host', '127.0.0.1'], {
     detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, VITE_ENABLE_TEST_RESET: '1', VITE_ROOM_API_BASE_URL: STACK, VITE_PARTYKIT_HOST: '' },
   });
@@ -181,6 +194,14 @@ async function startViteDev() {
 
 function wranglerEnv() {
   return { ...process.env, WRANGLER_SEND_METRICS: 'false' };
+}
+
+async function requireFreePort(port) {
+  await new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', () => reject(new Error(`Port ${port} is already in use; the nightly stack needs it`)));
+    probe.listen(port, '127.0.0.1', () => probe.close(resolve));
+  });
 }
 
 async function waitForUrl(url, timeoutMs, child) {
@@ -206,6 +227,7 @@ async function runEntry(entry, stack) {
   const log = createWriteStream(path.join(outputDir, logName));
   const started = Date.now();
   const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  children.push(child);
   let tail = '';
   const keep = (chunk) => { log.write(chunk); tail = (tail + chunk.toString()).slice(-6000); };
   child.stdout.on('data', keep);

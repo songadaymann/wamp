@@ -46,6 +46,14 @@ main after the F333 release (`81997368`).
 - The police-enemy browser smoke passed on the isolated stack. Its initial
   failure identified a missing COMPACT_WORLD_READS test-stack flag; the config
   now enables compact reads without using production resources.
+- Local touch suite passed all room/expanded gestures, including landscape.
+  Dock smoke passed with animations disabled for screenshots and a 60-second
+  capture timeout. The history fixture pauses scene rendering while testing
+  synthetic music/sprite lock flags, avoiding the real UI overwriting them;
+  all eight cases then reach only the acknowledged tablet overlap finding.
+- The generated Vite config disables browser auto-open and points API traffic
+  at the isolated stack. Draft recovery passed with that config. Both server
+  ports are checked before starting, and active smoke processes join cleanup.
 - The email-code screenshot was inspected. Artifacts and server logs are in
   ignored `output/nightly-smokes/` and `output/web-game/`.
 

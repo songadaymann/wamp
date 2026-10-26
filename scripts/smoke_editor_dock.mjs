@@ -188,7 +188,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
   assert.equal(await page.locator('#goal-section').isVisible(), false);
   assert.equal(await page.locator('#btn-course-editor-save-course').isVisible(), true);
   assert.equal(await page.locator('#btn-course-editor-publish-course').isVisible(), true);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-goal.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'expanded-goal.png') });
   await page.locator('[data-editor-dock="markers"]').click();
   await page.locator('[data-editor-marker-action="spawn"]').click();
   assert.equal(await page.evaluate(() => document.body.dataset.editorSpawnPlacement), 'true');
@@ -206,7 +206,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
     await page.locator(`button[data-editor-room-section="${section}"]`).click();
     assert.equal(await page.locator(target).isVisible(), true, `Expanded room ${section} should be available`);
   }
-  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-room-environment.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'expanded-room-environment.png') });
   await page.locator('button[data-editor-room-section="music"]').click();
   assert.equal(await page.locator('#editor-music-overlay').isVisible(), true, 'Music Editor should open in expanded rooms');
   await page.keyboard.press('Escape');
@@ -229,7 +229,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
     assert.equal(await page.locator(target).isVisible(), true, `${target} should be available in expanded rooms`);
   }
   assert.deepEqual(await page.locator('.editor-shape-fill-button').allTextContents(), ['Stamp', 'Pattern', 'Shuffle']);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-advanced-terrain.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'expanded-advanced-terrain.png') });
 
   await page.locator('#btn-editor-shell-eraser').click();
   assert.equal(await page.locator('#btn-editor-shell-nuke-terrain').isVisible(), true);
@@ -255,7 +255,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
   const afterDrag = (await inspectCourse(page)).snapshot.placedObjects;
   assert.equal(afterDrag.length, before.length + 5, 'expanded editor should interpolate a five-cell object drag');
   assert.equal(afterDrag.slice(-5).every((placed) => placed.layer === 'background'), true);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-object-drag.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'expanded-object-drag.png') });
 
   await page.locator('#layers-section .layer-btn[data-layer="terrain"]').click();
   await page.locator('.editor-shell-tools [data-tool="fill"]').click();
@@ -270,7 +270,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
   const afterFill = afterFillProbe.snapshot.placedObjects;
   assert.equal(afterFill.length, afterDrag.length + 6, `expanded editor should fill six cells: ${JSON.stringify({ before: { toolState: beforeFill.toolState, tileValue: beforeFill.tileValue, count: beforeFill.snapshot.placedObjects.length, fillPoint }, after: { toolState: afterFillProbe.toolState, tileValue: afterFillProbe.tileValue, count: afterFill.length } })}`);
   assert.equal(afterFill.slice(-6).every((placed) => placed.layer === 'terrain'), true);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'expanded-object-fill.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'expanded-object-fill.png') });
 
   await page.keyboard.press('Meta+z');
   assert.equal((await inspectCourse(page)).snapshot.placedObjects.length, afterDrag.length, 'Fill should undo as one action');
@@ -334,7 +334,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   if (await onlineTrigger.isVisible()) {
     await onlineTrigger.click();
     await page.waitForFunction(() => !document.getElementById('world-online-popover')?.classList.contains('hidden'));
-    await page.screenshot({ path: path.join(viewportOutputDir, 'players-online.png') });
+    await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'players-online.png') });
     await onlineTrigger.click();
     await page.waitForFunction(() => document.getElementById('world-online-popover')?.classList.contains('hidden'));
   }
@@ -435,7 +435,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(firstPreviewBox);
   assert.ok(Math.abs((firstPreviewBox.width / firstPreviewBox.height) - (5 / 3)) < 0.03);
   assert.deepEqual(await firstPreview.evaluate((canvas) => [canvas.width, canvas.height]), [160, 96]);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-beginner.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'terrain-beginner.png') });
 
   const shellEraser = page.locator('#btn-editor-shell-eraser');
   const eraserSizePicker = page.locator('#editor-shell-eraser-size-picker');
@@ -466,7 +466,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     await page.locator('[data-erase-brush-size="1"]').evaluate((button) => getComputedStyle(button).backgroundColor),
     'destructive actions should be visually distinct from Erase sizes',
   );
-  await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-erase-sizes.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'terrain-erase-sizes.png') });
   await page.keyboard.press('b');
   assert.equal(await eraserSizePicker.isVisible(), false);
   assert.equal(await shellEraser.getAttribute('aria-expanded'), 'false');
@@ -487,7 +487,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(markersPopoverBox.x >= 0 && markersPopoverBox.x + markersPopoverBox.width <= viewport.width + 1);
   assert.ok(spawnButtonBox.height >= 82 && spawnButtonBox.width > spawnButtonBox.height);
   assert.ok(goalButtonBox.height >= 82 && goalButtonBox.width > goalButtonBox.height);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'markers-responsive.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'markers-responsive.png') });
   await page.locator('#btn-editor-markers-close').click();
 
   const shareTrigger = page.locator('[data-editor-shell-action="share"]');
@@ -496,7 +496,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(sharePopoverBox);
   assert.ok(sharePopoverBox.x >= 0 && sharePopoverBox.x + sharePopoverBox.width <= viewport.width + 1);
   assert.deepEqual(await page.locator('#editor-share-popover [data-editor-share-action]').evaluateAll(nodes => nodes.map(node => node.dataset.editorShareAction)), ['wampogram', 'copy']);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'share-responsive.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'share-responsive.png') });
   await page.keyboard.press('Escape');
 
   await page.locator('[data-smart-theme-id="cyber"]').click();
@@ -517,7 +517,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(Math.abs(minWidth - 280) <= 1, `expected 280px drawer, received ${minWidth}`);
   const fittedMinZoom = (await activeScene(page)).zoom;
   assert.ok(fittedMinZoom >= fittedDefaultZoom);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'drawer-min.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'drawer-min.png') });
 
   const canvas = page.locator('#game-container canvas').last();
   await canvas.hover();
@@ -549,7 +549,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(drawerScrollBox && objectPaletteBox);
   const unusedPickerHeight = drawerScrollBox.y + drawerScrollBox.height - objectPaletteBox.y - objectPaletteBox.height;
   assert.ok(unusedPickerHeight <= 4, `object picker should fill drawer; found ${unusedPickerHeight}px unused`);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'stuff-max.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'stuff-max.png') });
 
   const roomTrigger = page.locator('[data-editor-shell-action="room"]');
   await roomTrigger.click();
@@ -566,7 +566,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.ok(musicCloseBox.x + musicCloseBox.width <= musicHeadingBox.x + musicHeadingBox.width + 1);
   assert.ok(musicSwingBox.x >= musicStripBox.x && musicSwingBox.x + musicSwingBox.width <= musicStripBox.x + musicStripBox.width + 1);
   assert.ok(musicSwingBox.y >= musicStripBox.y && musicSwingBox.y + musicSwingBox.height <= musicStripBox.y + musicStripBox.height + 1);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'music-workbench.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'music-workbench.png') });
   await page.locator('#btn-editor-music-close').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
 
@@ -620,7 +620,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(countTiles(afterNukeTerrain.tileData), 0);
   assert.deepEqual(afterNukeTerrainUndo.tileData, beforeNukeTerrain.tileData);
   assert.deepEqual(afterNukeTerrainUndo.smartTerrain, beforeNukeTerrain.smartTerrain);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'nuke-actions.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'nuke-actions.png') });
   await page.keyboard.press('b');
 
   for (const [dock, layer] of [
@@ -640,7 +640,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   const stuff = page.locator('[data-editor-dock="stuff"]');
   await stuff.click();
   await page.locator('#layers-section .layer-btn[data-layer="background"]').click();
-  await page.screenshot({ path: path.join(viewportOutputDir, 'object-layer-stuff.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'object-layer-stuff.png') });
   await page.locator('.obj-cat-tab[data-category="collectible"]').click();
   const { beforeObjectPlacement } = await runEditorCommands(page, [
     { op: 'capture', name: 'beforeObjectPlacement' },
@@ -666,7 +666,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await page.locator('#btn-editor-shell-nuke-terrain').isVisible(), false);
   const nukeObjectsButton = page.locator('#btn-editor-shell-nuke-objects');
   assert.equal(await nukeObjectsButton.isVisible(), true);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'nuke-objects.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'nuke-objects.png') });
   await clickConfirmed(
     page,
     nukeObjectsButton,
@@ -725,7 +725,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.ok((await page.locator('[data-editor-marker-action="goal"] .editor-game-icon')
     .evaluate((icon) => getComputedStyle(icon).backgroundImage)).includes('flag-checkered.png'));
   assert.equal((await page.locator('#editor-markers-popover').textContent()).toLowerCase().includes('checkpoint'), false);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'markers-over-panel.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'markers-over-panel.png') });
 
   const originalSpawn = (await activeScene(page)).spawnPoint;
   await page.locator('[data-editor-marker-action="spawn"]').click();
@@ -759,7 +759,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.keyboard.press('Escape');
   assert.equal((await activeScene(page)).goalPlacementMode, null);
   assert.equal(await page.evaluate(() => document.body.dataset.editorShellPanel), 'goal');
-  await page.screenshot({ path: path.join(viewportOutputDir, 'goal-checkpoints.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'goal-checkpoints.png') });
 
   const roomTrigger = page.locator('[data-editor-shell-action="room"]');
   await roomTrigger.click();
@@ -772,7 +772,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await page.locator('button[data-editor-room-section="environment"]').click();
   assert.deepEqual(await page.locator('[data-lighting-mode-value]').allTextContents(), ['Normal', 'Dark Aura']);
   assert.deepEqual(await page.locator('[data-weather-mode-value]').allTextContents(), ['Clear', 'Rain', 'Snow', 'Fog']);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'room-environment.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'room-environment.png') });
 
   await page.locator('button[data-editor-room-section="music"]').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'true');
@@ -780,7 +780,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   assert.equal(await page.locator('#btn-editor-music-close').isVisible(), true);
   assert.equal(await page.locator('#btn-editor-music-close').getAttribute('aria-label'), 'Back to Room settings');
   assert.equal(await page.locator('#editor-music-overlay .editor-workbench-heading-title').textContent(), 'Music Editor');
-  await page.screenshot({ path: path.join(viewportOutputDir, 'music-workbench.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'music-workbench.png') });
   await page.locator('#btn-editor-music-close').click();
   await page.waitForFunction(() => document.body.dataset.editorMusicMode === 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
@@ -797,7 +797,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   ]);
   assert.ok(spriteCloseBox && spriteStripBox);
   assert.ok(spriteCloseBox.y < spriteStripBox.y, 'Sprite exit should sit above the editing toolbar');
-  await page.screenshot({ path: path.join(viewportOutputDir, 'sprite-workbench.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'sprite-workbench.png') });
   await page.locator('#btn-editor-sprite-close').click();
   await page.waitForFunction(() => document.body.dataset.editorSpriteMode === 'false');
   assert.equal(await roomTrigger.getAttribute('aria-expanded'), 'true');
@@ -822,7 +822,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   const shareColors = await page.locator('#editor-share-popover [data-editor-share-action]')
     .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).backgroundColor));
   assert.equal(new Set(shareColors).size, 2);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'share-popover.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'share-popover.png') });
   await page.evaluate(() => {
     document.getElementById('btn-mint-room')?.classList.add('hidden');
     document.getElementById('btn-refresh-room-metadata')?.classList.remove('hidden');
@@ -934,7 +934,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
 
   await page.locator('.palette-tab[data-mode="smart"]').click();
   assert.equal(await page.locator('#smart-theme-select').isVisible(), true);
-  await page.screenshot({ path: path.join(viewportOutputDir, 'terrain-advanced.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'terrain-advanced.png') });
 
   await page.evaluate(() => {
     document.body.dataset.editorCourseMode = 'true';

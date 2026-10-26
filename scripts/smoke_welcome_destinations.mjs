@@ -5,6 +5,8 @@ import { chromium } from 'playwright';
 import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:3034';
 const output = process.argv[3] || 'output/web-game/welcome-destinations/native';
+// Exercise onboarding/input against Canvas, avoiding software WebGL frame starvation in CI.
+// RENDERER can explicitly opt into a GPU-backed renderer for manual coverage.
 const devices = [['desktop',1280,800,false],['phone',390,844,true],['tablet',1024,768,true],['landscape',844,390,true],['narrow-phone',320,568,true]];
 mkdirSync(output,{recursive:true});
 const report={at:new Date().toISOString(),base,scenarios:[],documents:[],errors:[]};
@@ -39,7 +41,7 @@ try {
   const page=await context.newPage();activePage=page;
   page.on('pageerror',error=>report.errors.push({scenario,message:error.message}));
   page.on('console',message=>{if(message.type()==='error'&&!(base.includes('127.0.0.1')&&message.location().url.includes('/api/presence/identity-token')))report.errors.push({scenario,message:message.text(),url:message.location().url});});
-  await page.goto(`${base}/?welcome=1${process.env.RENDERER?'&renderer='+process.env.RENDERER:''}`,{waitUntil:'domcontentloaded'});
+  await page.goto(`${base}/?welcome=1&renderer=${process.env.RENDERER || 'canvas'}`,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.body.dataset.appReady==='true',null,{timeout:120000});
   const entry=await page.locator('script[type="module"]').first().getAttribute('src');report.documents.push({scenario,url:page.url(),entry});
   if(process.env.EXPECTED_ENTRY)assert.equal(entry,process.env.EXPECTED_ENTRY);
@@ -105,7 +107,7 @@ try {
  }
  assert.equal(report.errors.length,0,JSON.stringify(report.errors));
 } catch(error) {
- report.failure={scenario:activeName,message:error.message};
+ report.failure={scenario:activeName,message:error.message,state:activePage?await state(activePage).catch(()=>null):null};
  if(activePage)await activePage.screenshot({path:`${output}/failure.png`}).catch(()=>{});
  throw error;
 } finally {writeFileSync(`${output}/report.json`,JSON.stringify(report,null,2));await browser.close();}
