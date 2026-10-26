@@ -26,7 +26,7 @@ it('explains every on-demand menu in controllers.ts that fails to download, by i
   const names = Object.fromEntries([...lazyConstructions(source)].map(([key, call]) =>
     [key, /explainMenuLoadFailure\('([^']+)'\)\)$/.exec(call)?.[1] ?? 'missing']));
   expect(names).toEqual({
-    leaderboardModal: 'Leaderboard', controlsModal: 'controls list', exploreModal: 'Explore', roomRushResultModal: 'Room Rush results',
+    leaderboardModal: 'Leaderboard', controlsModal: 'controls list', exploreModal: 'Explore page', roomRushResultModal: 'Room Rush results',
     guestProgressClaimModal: 'Guest Clears list', historyModal: 'version history', guestBuilderClaimModal: 'sign-in prompt',
     guestRoomRecoveryModal: 'Guest Drafts list', guestbookModal: 'Guestbook', aboutModal: 'About page', chatModerationModal: 'chat moderation tools',
     profileModal: 'profile', playlistModal: 'playlist', roomRushModal: 'Room Rush', signTextModal: 'sign editor', wampOGramModal: 'Wamp-O-Gram',
@@ -36,13 +36,13 @@ it('explains every on-demand menu in controllers.ts that fails to download, by i
 it('an Explore download that fails shows one card and one report, and leaves nothing paused', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   const explore = new LazyModal<{ init(): void; open(tab?: string): void; close(): void }>(
-    () => Promise.reject(new TypeError('Failed to fetch dynamically imported module')), [], explainMenuLoadFailure('Explore'));
+    () => Promise.reject(new TypeError('Failed to fetch dynamically imported module')), [], explainMenuLoadFailure('Explore page'));
   await expect(explore.open('unrated')).resolves.toBeUndefined();
   expect(showBusyError).toHaveBeenCalledExactlyOnceWith(
-    "The Explore couldn't load. Check your connection, then reload WAMP. Save anything you are working on first.",
-    expect.objectContaining({ title: 'Explore', retryLabel: 'Reload', closeLabel: 'Not now' }));
+    "The Explore page couldn't load. Check your connection, then reload WAMP. Save anything you are working on first.",
+    expect.objectContaining({ title: 'Explore page', retryLabel: 'Reload', closeLabel: 'Not now' }));
   expect(reportClientError).toHaveBeenCalledOnce();
-  expect(vi.mocked(reportClientError).mock.lastCall![0].message).toBe('Explore failed to load: Failed to fetch dynamically imported module');
+  expect(vi.mocked(reportClientError).mock.lastCall![0].message).toBe('Explore page failed to load: Failed to fetch dynamically imported module');
   expect(hasPendingDialog()).toBe(false);
 });
 
@@ -56,7 +56,7 @@ it('a common-noun name reads in lower case in the sentence and starts the title 
 it('an Explore failure over a save in progress or an open choice is reported without a card', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   feedback.free = false;
-  const explore = new LazyModal<{ init(): void; open(): void; close(): void }>(() => Promise.reject(new Error('offline')), [], explainMenuLoadFailure('Explore'));
+  const explore = new LazyModal<{ init(): void; open(): void; close(): void }>(() => Promise.reject(new Error('offline')), [], explainMenuLoadFailure('Explore page'));
   await explore.open();
   expect(showBusyError).not.toHaveBeenCalled();
   expect(reportClientError).toHaveBeenCalledOnce();

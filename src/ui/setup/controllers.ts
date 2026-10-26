@@ -116,7 +116,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     explainMenuLoadFailure('controls list'));
   const playlistIntroModal = new PlaylistIntroModalController();
   const exploreModal = new LazyModal(async () => new (await import('./exploreModal')).ExploreModalController(game), ['explore-modal'],
-    explainMenuLoadFailure('Explore'));
+    explainMenuLoadFailure('Explore page'));
   const roomRushResultModal = new LazyModal(async () => new (await import('./roomRushResultModal')).RoomRushResultModalController(game), [],
     explainMenuLoadFailure('Room Rush results'));
   const buildPrompts = new BuildPromptsController(() => exploreModal.close()); buildPrompts.init();

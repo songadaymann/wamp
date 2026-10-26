@@ -220,7 +220,9 @@ describe('placing rooms in and around a World', () => {
   });
 
   it.skip('treats a claimed room with no World claim row as WAMP 0', async () => {
-    // Skipped until decided: a room claimed while Worlds were switched off has no World claim row
+    // Policy remains undecided for this legacy fixture. The read-only production count on
+    // 2026-10-26 found zero claimed/published rooms missing World claim rows (F487 follow-up).
+    // A room claimed while Worlds were switched off has no World claim row
     // (like the fixture's 0,0), so naming a World lets its members save it under that World's rules.
     const { worldId } = await worldWithMember();
     const legacy = await saveRoomDraft(api, member, roomSnapshot(0, 0, { title: 'Pulled into World 1' }), inWorld(worldId));
