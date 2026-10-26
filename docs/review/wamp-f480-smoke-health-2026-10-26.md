@@ -42,8 +42,11 @@ main after the F333 release (`81997368`).
 - The first-play-controls smoke passed all 24 cases across six device profiles
   after waiting for queued touch Stop input and checking that controls are
   reachable within the scrollable landscape dialog. No movement/timer
-  assertions were removed.
-- The police-enemy browser smoke passed on the isolated stack. Its initial
+  assertions were removed. Touch jump input is held until a rising frame is
+  observed, just as keyboard input is; taps cannot disappear between slow frames.
+- The police-enemy browser smoke passed on the isolated stack. Diagnostic
+  captures pause the game and do not consume the bounded observation window;
+  the full attack/reload/second-attack assertions remain. Its initial
   failure identified a missing COMPACT_WORLD_READS test-stack flag; the config
   now enables compact reads without using production resources.
 - Local touch suite passed all room/expanded gestures, including landscape.
@@ -54,6 +57,15 @@ main after the F333 release (`81997368`).
 - The generated Vite config disables browser auto-open and points API traffic
   at the isolated stack. Draft recovery passed with that config. Both server
   ports are checked before starting, and active smoke processes join cleanup.
+- Chromium and WebKit room-entry keyboard smokes passed locally (six entries
+  and eighteen restart/jump cases per engine). Jump checks observe a rising
+  frame while input is held rather than sampling after a fixed delay.
+- Welcome destinations passed all 15 scenarios across five device profiles.
+  Canvas is the deterministic default for onboarding/input and clear-feedback
+  checks (including the nightly first-play entry); the readable-text suite
+  retains its WebGL coverage. Manual
+  RENDERER overrides retain renderer-specific coverage. Failure reports also
+  retain the active scene state.
 - The email-code screenshot was inspected. Artifacts and server logs are in
   ignored `output/nightly-smokes/` and `output/web-game/`.
 

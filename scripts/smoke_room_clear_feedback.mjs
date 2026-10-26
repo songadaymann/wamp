@@ -74,7 +74,7 @@ try {
         const response = await route.fetch(); await new Promise(resolve => setTimeout(resolve, 1000)); await route.fulfill({ response });
       });
     }
-    await page.goto(`${base}/r/-11/-6?welcome=0`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/r/-11/-6?welcome=0&renderer=canvas`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
     const entry = await page.locator('script[type="module"]').first().getAttribute('src'); report.documents.push({ name, entry });
     if (process.env.EXPECTED_ENTRY) assert.equal(entry, process.env.EXPECTED_ENTRY);

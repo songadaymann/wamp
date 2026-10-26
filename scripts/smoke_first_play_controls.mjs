@@ -92,8 +92,13 @@ async function moveAndJump(page, context, touch) {
   }, ground.player.y, { timeout: 3000 }).then(handle => handle.jsonValue(), () => null);
   let risen;
   if (touch) {
-    await page.locator('#btn-mobile-jump').tap();
-    risen = await rose();
+    const box = await page.locator('#btn-mobile-jump').boundingBox(); assert.ok(box);
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2, id: 1 }] });
+    try { risen = await rose(); } finally {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+    }
   } else {
     await page.keyboard.down('w');
     try { risen = await rose(); } finally { await page.keyboard.up('w'); }

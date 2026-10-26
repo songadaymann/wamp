@@ -141,9 +141,22 @@ try {
   assert.ok(initialPatrolWalker, 'Plain patrol police enemy was not created.');
   let maxPatrolDisplacement = 0;
   const runtimeSamples = [];
+  let captureMs = 0;
+  const captureState = async (name) => {
+    const started = Date.now();
+    // Screenshot/font waits must not consume a firing cycle that the probe cannot observe.
+    await page.evaluate(() => window.__EVERYBODYS_PLATFORMER_GAME__.loop.sleep());
+    try {
+      await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, name) });
+    } finally {
+      await page.evaluate(() => window.__EVERYBODYS_PLATFORMER_GAME__.loop.wake());
+      captureMs += Date.now() - started;
+    }
+  };
   const startedAt = Date.now();
-  // The loop stops as soon as every state is seen; the long ceiling covers slow CI machines.
-  while (Date.now() - startedAt < 20_000) {
+  // CI can deliver only a few game frames per second. Keep observing for up to a minute,
+  // excluding paused captures, and stop immediately when every original assertion is covered.
+  while (Date.now() - startedAt - captureMs < 60_000) {
     const state = await readState(page);
     lastObservedState = state;
     const police = policeObjects(state);
@@ -193,7 +206,7 @@ try {
     }
     if (hunter?.aiState === 'attack' && !observedHunterState) {
       observedHunterState = state;
-      await page.screenshot({ path: path.join(outputDir, 'police-hunter-shoot-registration.png') });
+      await captureState('police-hunter-shoot-registration.png');
     }
     if (
       hunter?.aiState === 'cooldown'
@@ -201,7 +214,7 @@ try {
       && !observedHunterReloadState
     ) {
       observedHunterReloadState = state;
-      await page.screenshot({ path: path.join(outputDir, 'police-hunter-reload-registration.png') });
+      await captureState('police-hunter-reload-registration.png');
     }
     if (
       observedHunterReloadState

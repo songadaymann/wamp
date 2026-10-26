@@ -79,7 +79,7 @@ try {
     chatReady: bootState.chat !== null,
     appReady: bootState.appFeedback?.ready ?? false,
   };
-  await page.screenshot({ path: path.join(outputDir, 'browse.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'browse.png') });
 
   const targetRoom = await page.evaluate(
     ({ requestedRoomId }) => window.run_preview_smoke_action?.('selectEditableRoom', {
@@ -107,7 +107,7 @@ try {
   if (await goalIntroStart.count()) {
     await goalIntroStart.click();
   }
-  await page.screenshot({ path: path.join(outputDir, 'play.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'play.png') });
 
   await page.click('#btn-world-play');
   const browseStateAfterPlay = await waitForAppState(
@@ -139,7 +139,7 @@ try {
   summary.steps.edit = {
     activeScene: editState.activeScene,
   };
-  await page.screenshot({ path: path.join(outputDir, 'editor.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'editor.png') });
 
   summary.finishedAt = new Date().toISOString();
   summary.ok = summary.consoleErrors.length === 0 && summary.pageErrors.length === 0;

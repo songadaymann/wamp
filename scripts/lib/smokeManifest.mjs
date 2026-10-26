@@ -86,7 +86,7 @@ export const SMOKES = [
   // Nightly: play (first visit, Play and guest flows, with recorded rooms standing in for the world).
   // The recorded API responses (scripts/lib/smokeApiReplay.mjs) stand in for the live world.
   { file: 'smoke_first_visit.mjs', covers: 'First visit: a delayed boot shows only the goal intro, Welcome waits, dismissal survives reload', runs: 'nightly', group: 'play', args: ['{stack}'] },
-  { file: 'smoke_first_play_controls.mjs', covers: 'Controls guide before first Play on six devices: shared, home, goal-less and Expanded Room', runs: 'nightly', group: 'play', args: ['{stack}'], timeoutMinutes: 20 },
+  { file: 'smoke_first_play_controls.mjs', covers: 'Controls guide before first Play on six devices: shared, home, goal-less and Expanded Room', runs: 'nightly', group: 'play', args: ['{stack}'], env: { F104_RENDERER: 'canvas' }, timeoutMinutes: 20 },
   { file: 'smoke_welcome_destinations.mjs', covers: 'Welcome Explore, Play (First Steps) and Build on five devices', runs: 'nightly', group: 'play', args: ['{stack}'], timeoutMinutes: 15 },
   { file: 'smoke_discovery.mjs', covers: 'Explore sorts, filters and the Play All queue on five devices', runs: 'nightly', group: 'play', args: ['{stack}'], timeoutMinutes: 15 },
   { file: 'smoke_room_clear_feedback.mjs', covers: 'Clear sting, results modal, guest claim copy, and a replay celebrates once', runs: 'nightly', group: 'play', args: ['{stack}'] },
