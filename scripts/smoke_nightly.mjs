@@ -11,10 +11,11 @@
 // links. Nothing leaves the machine. Logs and results.json go to output/nightly-smokes/<group>/.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { NIGHTLY_GROUPS, SMOKES } from './lib/smokeManifest.mjs';
+import { classifySmokeResult } from './lib/smokeReports.mjs';
 
 const STACK_PORT = 8788;
 const VITE_DEV_PORT = Number(process.env.NIGHTLY_VITE_DEV_PORT ?? 4361);
@@ -62,13 +63,23 @@ const outputDir = path.join(OUTPUT_ROOT, label);
 mkdirSync(outputDir, { recursive: true });
 
 const children = [];
-const stopChildren = () => {
-  for (const child of children) {
-    try { process.kill(-child.pid, 'SIGTERM'); } catch { /* Already gone. */ }
-  }
+const scratchDirs = [];
+const stopChildren = async () => {
+  await Promise.all(children.filter((child) => child.pid && child.exitCode === null && child.signalCode === null)
+    .map((child) => new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* Already gone. */ }
+        resolve();
+      }, 5000);
+      child.once('close', () => { clearTimeout(timeout); resolve(); });
+      try { process.kill(-child.pid, 'SIGTERM'); } catch { clearTimeout(timeout); resolve(); }
+    })));
 };
-process.on('SIGINT', () => { stopChildren(); process.exit(130); });
-process.on('SIGTERM', () => { stopChildren(); process.exit(143); });
+const removeScratchDirs = () => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+};
+process.on('SIGINT', async () => { await stopChildren(); removeScratchDirs(); process.exit(130); });
+process.on('SIGTERM', async () => { await stopChildren(); removeScratchDirs(); process.exit(143); });
 
 const results = [];
 let exitCode = 0;
@@ -97,18 +108,36 @@ try {
   results.push({ name: 'setup', file: '', status: 'fail', seconds: 0, tail: String(error?.stack ?? error) });
   exitCode = 1;
 } finally {
-  stopChildren();
+  await stopChildren();
+  removeScratchDirs();
   writeFileSync(path.join(outputDir, 'results.json'), JSON.stringify({ group: label, results }, null, 2));
   writeSummary(label, results);
 }
 process.exit(exitCode);
 
 async function startStack() {
-  const probe = await fetch(`${STACK}/api/health`).then(() => true, () => false);
+  const probe = await fetch(`${STACK}/api/health`, { signal: AbortSignal.timeout(2000) }).then(() => true, () => false);
   if (probe) throw new Error(`Port ${STACK_PORT} is already in use; the nightly stack needs it`);
   const persistTo = mkdtempSync(path.join(tmpdir(), 'wamp-nightly-d1-'));
-  for (const database of ['DB', 'wamp-solo-room-jam-db']) {
-    const migrate = spawnSync(process.execPath, [WRANGLER, 'd1', 'migrations', 'apply', database, '--local', '--persist-to', persistTo], {
+  scratchDirs.push(persistTo);
+  const configFile = path.resolve(outputDir, 'wrangler.json');
+  // Deliberately independent of production bindings, secrets, queues and service connections.
+  writeFileSync(configFile, JSON.stringify({
+    name: `wamp-nightly-${label}`, main: path.resolve('src/cloudflare/worker.ts'),
+    compatibility_date: '2026-03-08', compatibility_flags: ['global_fetch_strictly_public'],
+    assets: { directory: path.resolve(BUILD_DIR), binding: 'ASSETS',
+      run_worker_first: ['/api/*', '/parties/*'], not_found_handling: 'single-page-application' },
+    durable_objects: { bindings: [{ name: 'PRESENCE_ROOMS', class_name: 'PresenceDurableObject' }] },
+    migrations: [{ tag: 'presence-v1', new_sqlite_classes: ['PresenceDurableObject'] }],
+    d1_databases: [
+      { binding: 'DB', database_name: 'wamp-nightly-db', database_id: randomUUID(), migrations_dir: path.resolve('migrations') },
+      { binding: 'JAM_DB', database_name: 'wamp-nightly-jam-db', database_id: randomUUID(), migrations_dir: path.resolve('jam-migrations') },
+    ],
+    vars: { WORLDS_ENABLED: '1', COMPACT_WORLD_READS: '1', PLAYABLE_CONTENT_INDEX_READS: '1', TILED_OVERWORLD_READS: '0', WORLD_TILE_GENERATION_ENABLED: '0', WORLD_MAP_HEALTH_ALERTS_ENABLED: '0',
+      RUN_GHOST_COST_ALERTS_ENABLED: '0', ENABLE_SNAPSHOT_ADMIN: '1' },
+  }, null, 2));
+  for (const database of ['DB', 'JAM_DB']) {
+    const migrate = spawnSync(process.execPath, [WRANGLER, 'd1', 'migrations', 'apply', database, '--config', configFile, '--local', '--persist-to', persistTo], {
       encoding: 'utf8', env: wranglerEnv(), maxBuffer: 20 * 1024 * 1024,
     });
     writeFileSync(path.join(outputDir, `migrate-${database}.log`), (migrate.stdout ?? '') + (migrate.stderr ?? ''));
@@ -124,7 +153,7 @@ async function startStack() {
     ADMIN_API_KEY: adminKey,
   };
   const log = createWriteStream(path.join(outputDir, 'stack.log'));
-  const child = spawn(process.execPath, [WRANGLER, 'dev', '--local', '--ip', '127.0.0.1', '--port', String(STACK_PORT),
+  const child = spawn(process.execPath, [WRANGLER, 'dev', '--config', configFile, '--local', '--ip', '127.0.0.1', '--port', String(STACK_PORT),
     '--inspector-port', String(STACK_PORT + 551), '--persist-to', persistTo, '--assets', BUILD_DIR,
     '--show-interactive-dev-session=false', ...Object.entries(vars).flatMap(([key, value]) => ['--var', `${key}:${value}`])], {
     detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: wranglerEnv(),
@@ -158,7 +187,7 @@ async function waitForUrl(url, timeoutMs, child) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (child.exitCode !== null) throw new Error(`Server for ${url} exited with ${child.exitCode}`);
-    if (await fetch(url).then((response) => response.ok, () => false)) return;
+    if (await fetch(url, { signal: AbortSignal.timeout(2000) }).then((response) => response.ok, () => false)) return;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`Server did not answer at ${url} within ${timeoutMs / 1000}s`);
@@ -186,14 +215,14 @@ async function runEntry(entry, stack) {
     timedOut = true;
     try { process.kill(-child.pid, 'SIGKILL'); } catch { /* Already gone. */ }
   }, (entry.timeoutMinutes ?? 10) * 60_000);
-  const code = await new Promise((resolve) => child.on('close', resolve));
+  const code = await new Promise((resolve) => {
+    child.once('error', (error) => { keep(`Could not start ${script}: ${error.message}\n`); resolve(-1); });
+    child.once('close', resolve);
+  });
   clearTimeout(timer);
   await new Promise((resolve) => log.end(resolve));
   const output = readFileSync(path.join(outputDir, logName), 'utf8');
-  const known = entry.knownIssue && output.includes(entry.knownIssue.match);
-  const status = timedOut ? 'timeout'
-    : code === 0 ? (entry.knownIssue ? 'fixed' : 'pass')
-    : known ? 'known' : 'fail';
+  const status = classifySmokeResult(code, timedOut, output, entry.knownIssue);
   return { name: nameOf(entry), file: entry.file, status, seconds: Math.round((Date.now() - started) / 1000),
     note: entry.knownIssue?.note, log: logName, tail: status === 'pass' ? '' : tail.split('\n').slice(-40).join('\n') };
 }
@@ -221,16 +250,30 @@ function writeSummary(title, rows) {
 function writeCombinedReport(dir) {
   const rows = [];
   const missing = [];
-  for (const name of NIGHTLY_GROUPS) {
+  const selected = option('--group');
+  const expected = !selected || selected === 'all' ? NIGHTLY_GROUPS : [selected];
+  if (expected.some((name) => !NIGHTLY_GROUPS.includes(name))) throw new Error('Unknown report group');
+  for (const name of expected) {
     const file = [path.join(dir, name, 'results.json'), path.join(dir, `nightly-smokes-${name}`, 'results.json')].find(existsSync);
     if (!file) { missing.push(name); continue; }
-    for (const row of JSON.parse(readFileSync(file, 'utf8')).results) rows.push({ ...row, group: name });
+    try {
+      const result = JSON.parse(readFileSync(file, 'utf8'));
+      if (result.group !== name || !Array.isArray(result.results)) throw new Error('Invalid group result');
+      const expectedNames = SMOKES.filter((entry) => entry.runs === 'nightly' && entry.group === name).map(nameOf);
+      const actualNames = result.results.map((row) => row.name);
+      if (new Set(actualNames).size !== actualNames.length
+        || expectedNames.some((entry) => !actualNames.includes(entry))
+        || result.results.some((row) => !Object.hasOwn(STATUS_TEXT, row.status))) {
+        throw new Error('Incomplete or invalid script results');
+      }
+      for (const row of result.results) rows.push({ ...row, group: name });
+    } catch (error) {
+      rows.push({ name: `${name} results`, group: name, status: 'fail', seconds: 0, tail: String(error) });
+    }
   }
-  // A group can be missing because a manual run picked one group, or because its job failed before
-  // the smokes started; that job's own log says which.
   const markdown = summaryMarkdown('Nightly smokes', rows)
     + (missing.length > 0 ? `\nNo results from: ${missing.join(', ')}.\n` : '');
   console.log(markdown);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
-  return rows.some((row) => row.status === 'fail' || row.status === 'timeout') ? 1 : 0;
+  return missing.length > 0 || rows.some((row) => row.status === 'fail' || row.status === 'timeout') ? 1 : 0;
 }

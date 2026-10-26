@@ -15,7 +15,7 @@ const devices = [
   ['touch-laptop', 1280, 800, false],
 ];
 mkdirSync(output, { recursive: true });
-const report = { checkedAt: new Date().toISOString(), base, scenarios: [], pageErrors: [], unexpectedConsoleErrors: [], expectedLocalErrors: [], navigationAborts: [], expectedNavigationErrors: [] };
+const report = { checkedAt: new Date().toISOString(), base, scenarios: [], pageErrors: [], unexpectedConsoleErrors: [], expectedLocalErrors: [], navigationAborts: [], expectedNavigationErrors: [], clipped: [] };
 const browser = await chromium.launch();
 let activePage, activeName;
 let navigating = false;
@@ -40,9 +40,14 @@ async function checkGuide(page, touch) {
   assert.equal(await controls.getAttribute('data-play-controls-input'), touch ? 'touch' : 'keyboard');
   const text = await controls.innerText();
   for (const word of touch ? ['Left stick', 'Jump', 'Sword', 'Shoot'] : ['A', 'D', 'Space', 'W', 'Z', 'Q', 'X', 'E']) assert.ok(text.includes(word), text);
+  // A clipped guide or Start button is recorded rather than thrown, so every device still runs;
+  // the smoke fails at the end if anything was cut off.
   for (const selector of ['#room-goal-intro-controls', '#btn-room-goal-intro-start']) {
     const box = await page.locator(selector).boundingBox();
-    assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= page.viewportSize().width + 1 && box.y + box.height <= page.viewportSize().height + 1, `${selector} clipped: ${JSON.stringify(box)}`);
+    const viewport = page.viewportSize();
+    if (!(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1)) {
+      report.clipped.push(`${activeName} ${viewport.width}x${viewport.height}: ${selector} ${JSON.stringify(box)}`);
+    }
   }
   const layers = await page.evaluate(() => {
     const modalZ = Number(getComputedStyle(document.getElementById('room-goal-intro-modal')).zIndex);
@@ -77,15 +82,22 @@ async function moveAndJump(page, context, touch) {
   const moved = await state(page); assert.ok(moved.player.x > before.player.x + 2, `Move failed: ${JSON.stringify({ before: before.player, moved: moved.player })}`);
   await page.waitForTimeout(250);
   const ground = await state(page);
+  // A starved browser advances the game a frame at a time: hold the key until the jump shows (up to
+  // a few seconds), so a press and release can't both land between two frames. The rise is judged
+  // in the frame it happens; a later sample can catch the player already landing.
+  const rose = () => page.waitForFunction(y => {
+    const player = JSON.parse(window.render_game_to_text()).activeScene.player;
+    return player && player.y < y - 2 ? player : null;
+  }, ground.player.y, { timeout: 3000 }).then(handle => handle.jsonValue(), () => null);
+  let risen;
   if (touch) {
     await page.locator('#btn-mobile-jump').tap();
+    risen = await rose();
   } else {
-    await page.keyboard.down('w'); await page.waitForTimeout(60); await page.keyboard.up('w');
+    await page.keyboard.down('w');
+    try { risen = await rose(); } finally { await page.keyboard.up('w'); }
   }
-  await page.waitForTimeout(100);
-  // A starved browser advances the game a frame at a time; give the jump a few seconds to show.
-  await page.waitForFunction(y => JSON.parse(window.render_game_to_text()).activeScene.player.y < y - 2, ground.player.y, { timeout: 3000 }).catch(() => {});
-  const jumped = await state(page); assert.ok(jumped.player.y < ground.player.y - 2, `Jump failed: ${JSON.stringify({ ground: ground.player, jumped: jumped.player })}`);
+  assert.ok(risen, `Jump failed: ${JSON.stringify({ ground: ground.player, after: (await state(page)).player })}`);
   return { moved: true, jumped: true };
 }
 
@@ -260,6 +272,7 @@ try {
     return !interruptedPoll;
   });
   assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.unexpectedConsoleErrors, []);
+  assert.deepEqual(report.clipped, [], 'The goal intro guide and Start button must fit on screen');
   report.ok = true;
 } catch (error) {
   report.failure = { name: activeName, message: String(error) };

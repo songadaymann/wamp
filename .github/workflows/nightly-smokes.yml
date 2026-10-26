@@ -6,6 +6,12 @@ name: Nightly smokes
 # its table, and the report job puts every group in one table.
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/nightly-smokes.yml'
+      - 'scripts/smoke_nightly.mjs'
+      - 'scripts/lib/smokeManifest.mjs'
+      - 'scripts/lib/smokeApiReplay.mjs'
   schedule:
     - cron: '43 9 * * *'
   workflow_dispatch:
@@ -17,7 +23,7 @@ on:
         options: [all, editor, editor-phone, editor-dock, editor-touch, play, stack]
 
 concurrency:
-  group: nightly-smokes
+  group: nightly-smokes-${{ github.event.pull_request.number || github.event_name }}
   cancel-in-progress: false
 
 permissions:
@@ -80,4 +86,4 @@ jobs:
           pattern: nightly-smokes-*
           path: output/nightly-smokes
       # One table for the whole night; fails when any group had an unexpected failure.
-      - run: node scripts/smoke_nightly.mjs --report output/nightly-smokes
+      - run: node scripts/smoke_nightly.mjs --report output/nightly-smokes --group ${{ inputs.group || 'all' }}

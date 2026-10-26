@@ -165,6 +165,32 @@ async function installStandIns(context, recorded) {
     const origin = route.request().headers().origin;
     return route.fulfill({ json, headers: origin ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true' } : {} });
   };
+  // A chunk window the recording lacks would otherwise get the latest recorded window, whose bounds
+  // don't match, and the world stream around Build's random starter cell fails. Assemble the
+  // requested window from every recorded chunk instead, leaving unrecorded chunks empty.
+  const recordedChunks = new Map();
+  const recordedWindows = new Set();
+  for (const entry of recorded.entries) {
+    if (entry.path !== '/api/world/chunks/summary' || !entry.text) continue;
+    const window = JSON.parse(entry.text);
+    recordedWindows.add(JSON.stringify(window.chunkBounds));
+    for (const chunk of window.chunks ?? []) recordedChunks.set(chunk.id, chunk);
+  }
+  await context.route((url) => url.pathname === '/api/world/chunks/summary', (route) => {
+    const url = new URL(route.request().url());
+    const bound = (name) => Number(url.searchParams.get(name) ?? 0);
+    const chunkBounds = { minChunkX: bound('minChunkX'), maxChunkX: bound('maxChunkX'), minChunkY: bound('minChunkY'), maxChunkY: bound('maxChunkY') };
+    if (route.request().method() !== 'GET' || recordedWindows.has(JSON.stringify(chunkBounds))) return route.fallback();
+    const roomBoundsOf = (minX, maxX, minY, maxY) => ({ minX: minX * 8, maxX: (maxX + 1) * 8 - 1, minY: minY * 8, maxY: (maxY + 1) * 8 - 1 });
+    const chunks = [];
+    for (let y = chunkBounds.minChunkY; y <= chunkBounds.maxChunkY; y += 1) {
+      for (let x = chunkBounds.minChunkX; x <= chunkBounds.maxChunkX; x += 1) {
+        chunks.push(recordedChunks.get(`${x},${y}`)
+          ?? { id: `${x},${y}`, coordinates: { x, y }, roomBounds: roomBoundsOf(x, x, y, y), rooms: [], chunkPreviewHash: 'smoke-empty' });
+      }
+    }
+    return reply(route, { chunkBounds, roomBounds: roomBoundsOf(chunkBounds.minChunkX, chunkBounds.maxChunkX, chunkBounds.minChunkY, chunkBounds.maxChunkY), chunks });
+  });
   // Registered after the replay, so these routes run first and fall back to it for recorded paths.
   await context.route((url) => ROOM_ROUTE.test(url.pathname) || LEADERBOARD_ROUTE.test(url.pathname), (route) => {
     const request = route.request();
@@ -296,10 +322,19 @@ async function installStandIns(context, recorded) {
   const baseProfile = recorded.entries.find((entry) => PROFILE_ROUTE.test(entry.path));
   const builders = new Map([...cells.values()].filter((cell) => cell.creatorUserId)
     .map((cell) => [cell.creatorUserId, cell.creatorDisplayName]));
-  await context.route((url) => PROFILE_ROUTE.test(url.pathname) || url.pathname === '/api/world', (route) => {
+  await context.route((url) => PROFILE_ROUTE.test(url.pathname) || url.pathname === '/api/world' || url.pathname === '/api/world/chunks', (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (request.method() !== 'GET' || recordedPaths.has(`GET ${url.pathname}`)) return route.fallback();
+    if (url.pathname === '/api/world/chunks') {
+      // The legacy chunk window (used after a compact read fails) was never recorded; an empty
+      // window keeps the world stream alive so Build's starter room still loads.
+      const bound = (name) => Number(url.searchParams.get(name) ?? 0);
+      const chunkBounds = { minChunkX: bound('minChunkX'), maxChunkX: bound('maxChunkX'), minChunkY: bound('minChunkY'), maxChunkY: bound('maxChunkY') };
+      const roomBounds = { minX: chunkBounds.minChunkX * 8, maxX: (chunkBounds.maxChunkX + 1) * 8 - 1,
+        minY: chunkBounds.minChunkY * 8, maxY: (chunkBounds.maxChunkY + 1) * 8 - 1 };
+      return reply(route, { chunkBounds, roomBounds, chunks: [] });
+    }
     if (url.pathname === '/api/world') {
       const center = { x: Number(url.searchParams.get('centerX') ?? 0), y: Number(url.searchParams.get('centerY') ?? 0) };
       const radius = Number(url.searchParams.get('radius') ?? 1);
