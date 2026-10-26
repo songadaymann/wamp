@@ -1,0 +1,1 @@
+| 2026-10-26 | F374, F487 | [#331](https://github.com/songadaymann/wamp/pull/331) | [receipt](docs/review/wamp-round2-followups-2026-10-26.md) | Close parked follow-ups: Explore wording, draft-conflict test and read-only World claim audit |

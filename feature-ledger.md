@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-26 | F374, F487 | [#331](https://github.com/songadaymann/wamp/pull/331) | [receipt](docs/review/wamp-round2-followups-2026-10-26.md) | Close parked follow-ups: Explore wording, draft-conflict test and read-only World claim audit |
 | 2026-10-26 | F480 | [#330](https://github.com/songadaymann/wamp/pull/330) | [receipt](docs/review/wamp-f480-smoke-health-2026-10-26.md) | Repair stale browser smokes and run 35 nightly checks in seven isolated groups |
 | 2026-10-26 | F333 | [#329](https://github.com/songadaymann/wamp/pull/329) | [receipt](docs/review/wamp-f333-finish-waits-2026-10-24.md) | Cut dependent database waits for run finishes while preserving concurrent retries and rewards |
 | 2026-10-25 | — | [#328](https://github.com/songadaymann/wamp/pull/328) | [receipt](docs/review/wamp-cloudflare-email-2026-10-25.md) | Use Cloudflare Email Service for login, notifications and alerts, with a Resend rollback path |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-14 | F006 | [#196](https://github.com/songadaymann/wamp/pull/196) | [receipt](docs/review/wamp-special-tile-cache-2026-10-13.md) | Special tiles are cached, and duplicate actor scans are gone |
 | 2026-10-13 | F019 | [#195](https://github.com/songadaymann/wamp/pull/195) | [receipt](docs/review/wamp-lazy-dialogs-cache-2026-10-13.md) | Seven more dialogs load on demand, and stable room data is cached |
 | 2026-10-13 | F089 | [#194](https://github.com/songadaymann/wamp/pull/194) | [receipt](docs/review/wamp-recording-notice-phone-2026-10-13.md) | The recording notice stays clear of phone play controls |
-| 2026-10-13 | F173 | [#193](https://github.com/songadaymann/wamp/pull/193) | [receipt](docs/review/wamp-comfort-settings-2026-10-13.md) | Comfort settings, and the play camera style is remembered |

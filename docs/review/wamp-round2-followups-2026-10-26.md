@@ -1,6 +1,7 @@
 # Round 2 handoff follow-ups — 2026-10-26
 
-Closes the three small follow-ups parked in the October 23 handoff, after F333
+Delivered in [PR #331](https://github.com/songadaymann/wamp/pull/331), merged
+`35e1162c`. Closes the three small follow-ups parked in the October 23 handoff, after F333
 and F480. These refine delivered work; the Round 2 count remains 70 of 248.
 
 ## Changes and findings
@@ -38,4 +39,12 @@ D1 returned 0, with 1,473 rows read, zero rows written, and `changed_db: false`.
   because the stale save returns 200 rather than 409.
 - Full `npm run check` passed: 707 files, 6,039 passing tests, 10 expected
   failures and two skipped tests; lint, dead code, types, DOM, build, bundle
-  budget and asset checks passed. PR CI pending.
+  budget and asset checks passed. All 18 PR jobs passed on `05dfa4fd`: [CI run](https://github.com/songadaymann/wamp/actions/runs/40404886318).
+- Read-only production smoke passed after merge (frontend, auth/session,
+  presence configuration, database health and world tiles).
+
+Pages deployment `1f214110-7849-4c06-af96-bc78fc4f2188` for `35e1162`
+was Active. After propagation, the public bundle
+`assets/cache-v2/main-NOLmB3M-.js` contains the new Explore page wording.
+Production smoke passed again against that live deployment. The checklist and
+ledger record checks passed (9 tests); the total remains 70 of 248.
