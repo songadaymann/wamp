@@ -20,7 +20,7 @@ on:
         description: Group to run
         type: choice
         default: all
-        options: [all, editor, editor-phone, editor-dock, editor-touch, play, stack]
+        options: [all, editor, editor-phone, editor-dock, editor-touch, play, play-panels, stack]
 
 concurrency:
   group: nightly-smokes-${{ github.event.pull_request.number || github.event_name }}
@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         # The groups in NIGHTLY_GROUPS (scripts/smoke_manifest.test.ts keeps them in step).
-        group: ${{ fromJSON(inputs.group && inputs.group != 'all' && format('["{0}"]', inputs.group) || '["editor","editor-phone","editor-dock","editor-touch","play","stack"]') }}
+        group: ${{ fromJSON(inputs.group && inputs.group != 'all' && format('["{0}"]', inputs.group) || '["editor","editor-phone","editor-dock","editor-touch","play","play-panels","stack"]') }}
     steps:
       - uses: actions/checkout@v4
       # The container runs as root over a workspace the runner owns; the build reads git.

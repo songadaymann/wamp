@@ -9,7 +9,7 @@ main after the F333 release (`81997368`).
 - A manifest assigns every smoke/probe to pull-request CI, a nightly group,
   deployment verification, manual use with a reason, or a developer tool.
   Tests keep that inventory complete, keep Playwright imports muted, and keep
-  the six workflow groups synchronized with the manifest.
+  the seven workflow groups synchronized with the manifest.
 - The DOM contract also checks selectors in smoke scripts. The wallet/email
   smoke uses the current inline email-code UI. Editor suites use the current
   dock, inspector and palette; the game object is exposed to test-hook builds
@@ -18,7 +18,7 @@ main after the F333 release (`81997368`).
   unrecorded published cells, instead of depending on production data.
 - The rollout tool uses installed viem signing and targets local D1 cleanup
   when its backend is local.
-- Six groups run daily at 09:43 UTC, on manual dispatch, and on PRs that change
+- Seven groups run daily at 09:43 UTC, on manual dispatch, and on PRs that change
   the nightly runner, manifest, replay helper or workflow. Every group builds
   its test frontend and starts a fresh local Worker/D1 stack. The generated
   config omits production email, queue and service bindings. Servers and the
@@ -69,7 +69,13 @@ main after the F333 release (`81997368`).
 - The email-code screenshot was inspected. Artifacts and server logs are in
   ignored `output/nightly-smokes/` and `output/web-game/`.
 
-The complete six-group run and normal PR checks still need to pass. Three
+The complete seven-group run and normal PR checks still need to pass. Three
 acknowledged regressions remain explicitly listed in the manifest: WampOS
 single-shape tool selection, tablet Undo/Redo overlap, and the rating batch's
 saved-state update. These are not silently converted into passing assertions.
+
+The Play entries are split into onboarding/input and panel/presentation groups,
+so text and panel probes do not wait behind the complete controls-device matrix.
+The rating-modal fixture waits for actual boot and pauses scene rendering before
+setting its synthetic app mode; a fixed boot delay could be overwritten by the
+real transition on a slow runner. Its saved-state assertion remains unchanged.

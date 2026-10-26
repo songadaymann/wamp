@@ -240,9 +240,13 @@ await page.route('**/api/rooms/smoke-room-*/ratings', async (route) => {
 });
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(1500);
+// The modal uses a synthetic app mode. Wait for real boot, then pause scene updates
+// so the world cannot overwrite that fixture state while the DOM queue is exercised.
+await page.waitForFunction(() => document.body.dataset.appReady === 'true'
+  && document.body.dataset.appMode === 'world'
+  && typeof window.run_preview_smoke_action === 'function', null, { timeout: 120000 });
 await page.evaluate(() => {
-  document.body.dataset.appReady = 'true';
+  window.__EVERYBODYS_PLATFORMER_GAME__.loop.sleep();
   document.body.dataset.appMode = 'play-world';
   document.getElementById('boot-splash')?.classList.add('hidden');
   document.getElementById('busy-overlay')?.classList.add('hidden');

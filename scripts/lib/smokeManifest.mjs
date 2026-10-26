@@ -18,7 +18,7 @@
 // flagged so the note can be removed.
 
 /** @type {readonly string[]} */
-export const NIGHTLY_GROUPS = ['editor', 'editor-phone', 'editor-dock', 'editor-touch', 'play', 'stack'];
+export const NIGHTLY_GROUPS = ['editor', 'editor-phone', 'editor-dock', 'editor-touch', 'play', 'play-panels', 'stack'];
 
 const ci = (file, covers) => ({ file, covers, runs: 'ci' });
 const devtool = (file, covers) => ({ file, covers, runs: 'devtool' });
@@ -92,14 +92,15 @@ export const SMOKES = [
   { file: 'smoke_room_clear_feedback.mjs', covers: 'Clear sting, results modal, guest claim copy, and a replay celebrates once', runs: 'nightly', group: 'play', args: ['{stack}'] },
   { file: 'smoke_room_entry_keyboard.mjs', covers: 'Movement and jump after a mouse or Enter start; Restart versus Space focus', runs: 'nightly', group: 'play', args: ['{stack}'] },
   { file: 'smoke_room_entry_keyboard.mjs', name: 'smoke_room_entry_keyboard.mjs (webkit)', covers: 'The same keyboard checks in WebKit', runs: 'nightly', group: 'play', args: ['{stack}'], env: { ROOM_ENTRY_BROWSER: 'webkit' } },
-  { file: 'smoke_returning_guest_panel.mjs', covers: 'A returning guest never gets the menu or focus stolen; save-clear reminder', runs: 'nightly', group: 'play', args: ['{stack}'] },
-  { file: 'smoke_readable_text.mjs', covers: 'Readable text and text size settings across seven profiles, editors and the eraser picker', runs: 'nightly', group: 'play', args: ['{stack}'] },
-  { file: 'smoke_guest_claim_modal.mjs', covers: 'Guest claim prompt waits out Play, then shows the run time; Save opens sign-in', runs: 'nightly', group: 'play', args: ['{stack}/?previewSmoke=1'] },
-  { file: 'smoke_progression_rating_modal.mjs', covers: 'Rating prompts wait out Play; a two-room batch and a single prompt', runs: 'nightly', group: 'play', args: ['{stack}/?previewSmoke=1'],
+  // Nightly: play-panels (returning guests, text/presentation and post-run panels).
+  { file: 'smoke_returning_guest_panel.mjs', covers: 'A returning guest never gets the menu or focus stolen; save-clear reminder', runs: 'nightly', group: 'play-panels', args: ['{stack}'] },
+  { file: 'smoke_readable_text.mjs', covers: 'Readable text and text size settings across seven profiles, editors and the eraser picker', runs: 'nightly', group: 'play-panels', args: ['{stack}'] },
+  { file: 'smoke_guest_claim_modal.mjs', covers: 'Guest claim prompt waits out Play, then shows the run time; Save opens sign-in', runs: 'nightly', group: 'play-panels', args: ['{stack}/?previewSmoke=1'] },
+  { file: 'smoke_progression_rating_modal.mjs', covers: 'Rating prompts wait out Play; a two-room batch and a single prompt', runs: 'nightly', group: 'play-panels', args: ['{stack}/?previewSmoke=1'],
     knownIssue: { match: 'Unexpected saved batch state', note: 'After Submit the batch never marks the room Rated (same on main); product bug or fixture gap not yet settled' } },
-  { file: 'preview_smoke_readonly.mjs', covers: 'Read-only preview walk: boot, select a room, Play, Edit', runs: 'nightly', group: 'play', args: ['--url', '{stack}'] },
-  { file: 'smoke_wallet_email_link_modal.mjs', covers: 'A wallet-only account adds an email with the inline code panel', runs: 'nightly', group: 'play', env: { WAMP_SMOKE_URL: '{stack}' } },
-  { file: 'smoke_launch_admin_game_jams.mjs', covers: 'Launch admin Game Jams panel, Activity placement and contact details, no phone overflow', runs: 'nightly', group: 'play', env: { WAMP_SMOKE_URL: '{stack}' } },
+  { file: 'preview_smoke_readonly.mjs', covers: 'Read-only preview walk: boot, select a room, Play, Edit', runs: 'nightly', group: 'play-panels', args: ['--url', '{stack}'] },
+  { file: 'smoke_wallet_email_link_modal.mjs', covers: 'A wallet-only account adds an email with the inline code panel', runs: 'nightly', group: 'play-panels', env: { WAMP_SMOKE_URL: '{stack}' } },
+  { file: 'smoke_launch_admin_game_jams.mjs', covers: 'Launch admin Game Jams panel, Activity placement and contact details, no phone overflow', runs: 'nightly', group: 'play-panels', env: { WAMP_SMOKE_URL: '{stack}' } },
 
   // Nightly: stack (API flows against the real local Worker and D1).
   { file: 'smoke_worlds_pilot.ts', covers: 'Worlds: invites, membership, publication approval and freeze', runs: 'nightly', group: 'stack', args: ['{stack}'], env: { WORLDS_SMOKE_ADMIN_KEY: '{adminKey}' } },
