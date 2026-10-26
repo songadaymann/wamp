@@ -17,6 +17,8 @@ interface ApiOptions {
   /** null sends no Origin header. */
   origin?: string | null;
   admin?: boolean;
+  /** Extra request headers, such as a guest player's identity. */
+  headers?: Record<string, string>;
 }
 
 interface ApiResponse {
@@ -38,7 +40,7 @@ export function workerApi(envOverrides: Partial<Env> = {}) {
   const context = { waitUntil: (promise: Promise<unknown>) => { deferred.push(promise); } };
 
   async function call(path: string, options: ApiOptions = {}): Promise<ApiResponse> {
-    const headers = new Headers();
+    const headers = new Headers(options.headers);
     if (options.origin !== null) headers.set('Origin', options.origin ?? ORIGIN);
     if (options.session) headers.set('Cookie', `ep_session=${options.session}`);
     if (options.bearer) headers.set('Authorization', `Bearer ${options.bearer}`);

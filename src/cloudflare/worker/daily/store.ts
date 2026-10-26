@@ -284,11 +284,20 @@ export async function overrideDailyPick(env: Env, roomId: string, now = new Date
 }
 export async function awardDailyClear(env: Env, userId: string, type: 'room' | 'course', id: string, version: number, completedAt: string,
   options: LaneAwardOptions = {}): Promise<number> {
+  const date = await findDailyClearDate(env, type, id, version, completedAt);
+  return date ? awardDailyClearOn(env, userId, date, completedAt, options) : 0;
+}
+/** The UTC day whose daily room this clear is, or null when it isn't that day's daily. */
+export async function findDailyClearDate(env: Env, type: 'room' | 'course', id: string, version: number,
+  completedAt: string): Promise<string | null> {
   const { date } = dailyWindow(completedAt);
   const row = await env.DB.prepare(`SELECT date FROM daily_rooms WHERE date = ? AND version = ?
     AND (? = 'room' AND target_type = 'room' AND content_id = ?
       OR ? = 'course' AND target_type = 'expanded_room' AND (content_id = ? OR legacy_course_id = ?))`)
     .bind(date,version,type,id,type,id,id).first<{date:string}>();
-  if (!row) return 0;
+  return row ? date : null;
+}
+export function awardDailyClearOn(env: Env, userId: string, date: string, completedAt: string,
+  options: LaneAwardOptions = {}): Promise<number> {
   return awardLaneDelta(env,userId,'pxp','daily_clear','daily_room',date,`pxp:daily_clear:${userId}:${date}`,DAILY_CLEAR_PXP,completedAt,null,options);
 }
