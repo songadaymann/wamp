@@ -1,6 +1,6 @@
 # F333: faster run finishes — 2026-10-24
 
-Implemented on `codex/f333-finish-waits-2026-10-24`, based on current main `b2509e99`. The change is awaiting review, merge and an API Worker release. No migration is needed. F333 stays unchecked until delivery.
+Delivered on 2026-10-26 in [PR #329](https://github.com/songadaymann/wamp/pull/329), merged as `b5c5d5a7`. API Worker `da8a844f-5a99-4ab5-9325-4601e4d8cb62` is live. No migration was needed. The October 24 implementation and review fixes were recovered from Git/Dropbox; the earlier validation below is retained as history.
 
 ## What changed
 
@@ -38,9 +38,9 @@ The run reload and post-finalize earlier-clear queries remain: dropping them wou
 
 Local evidence is in ignored `output/f333/`. The source commit `da3eca94` and the parked review patch were recovered into this worktree; the original worktrees were left intact.
 
-## Delivery still needed
+## Delivery
 
-After review and green CI, merge and deploy the API Worker from clean main, then run the production smoke and health check. Check F333 off, update the round-2 progress count, and add its delivery ledger entry with the PR and release receipt.
+All 18 PR checks passed before merge. Deployed from a clean checkout of merged main after confirming both databases had no pending migrations and the previous production Worker was unchanged. The strict world-map release guard and fresh production build passed. Production smoke passed for the frontend, auth configuration, database, direct alerts and live world tiles. Email delivery remains configured through Cloudflare. Round 2 is now 69 of 248 done.
 
 ## Resumed verification — 2026-10-26
 
@@ -65,6 +65,4 @@ Current verification:
   local; no production writes or email sends were used. The unused optional
   Resend React renderer was stubbed in this local harness.
 
-Fresh local evidence is in ignored `output/f333-current/`. Delivery remains
-pending until the current PR's checks pass, it is merged and the API Worker is
-released.
+Fresh local evidence is in ignored `output/f333-current/`. PR #329 subsequently passed all CI checks, merged and reached production as recorded above.
