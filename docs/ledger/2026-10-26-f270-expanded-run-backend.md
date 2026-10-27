@@ -1,0 +1,1 @@
+| 2026-10-26 | F270 | [#332](https://github.com/songadaymann/wamp/pull/332) | [receipt](docs/review/wamp-f270-expanded-run-backend-2026-10-26.md) | Unify course play routes with Expanded Room accounting while preserving historical runs and rewards |

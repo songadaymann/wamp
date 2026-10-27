@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 70 of 248 done.**
+**Progress: 71 of 248 done.**
 
 ## How to use this file
 
@@ -137,7 +137,7 @@ There are almost no dead files. But about 3,000 lines of unused functions remain
 
 The Expanded Room work left two copies of several things: server routes, progression rules, editor input and the object inspector. Those copies have already drifted into bugs, so they come first. Smaller copy-paste follows, such as pop-up skins, thumbnail loaders and small helpers.
 
-- [ ] **F270** Expanded Room runs, leaderboards and ratings run through two copy-pasted backends that can split the leaderboard · medium impact · medium effort
+- [x] **F270** Expanded Room runs, leaderboards and ratings run through two copy-pasted backends that can split the leaderboard · medium impact · medium effort — **done 2026-10-26** ([PR #332](https://github.com/songadaymann/wamp/pull/332)): legacy play routes delegate to the canonical Expanded Room backend; historical attempts and rewards are preserved. Migration 0075 and Worker rollout verified live. [Receipt](wamp-f270-expanded-run-backend-2026-10-26.md).
 - [ ] **F268** Every Expanded Room rating is written twice, recomputes badges up to 3 times, and can vanish from Explore after a rename-only republish · medium impact · medium effort
 - [ ] **F274** The Expanded Room editor has its own 930-line copy of the room editor's mouse, drawing and camera code, and it has already drifted · medium impact · large effort
 - [ ] **F275** The two object inspectors are still separate 1,250-line copies, and each has picked up half of the recent fixes · medium impact · medium effort

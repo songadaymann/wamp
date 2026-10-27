@@ -1,6 +1,7 @@
 # F270: one Expanded Room run backend — 2026-10-26
 
-Implementation pending final checks and delivery. This is convergence steps 1–2
+Shipped in [PR #332](https://github.com/songadaymann/wamp/pull/332), merged
+`77bb87d38774df4fec0d9a626bd185408f016545`. This is convergence steps 1–2
 from the F270 review; legacy tables and dual writes remain behind the separate
 30-day parity/deletion gate in `docs/expanded-room-convergence.md`.
 
@@ -61,5 +62,14 @@ removed in this release.
   nonce preservation, invalid-nonce rejection/replay, an old Worker's winning
   outcome, and one reward per attempt. No production calls were made by this
   probe. Artifacts: ignored `output/f270-native/`; log `/tmp/wamp-f270-native.log`.
-- PR CI and production delivery pending. Migration 0075 must precede the Worker
-  deployment; existing data remains available to an older Worker rollback.
+- All 18 [PR CI jobs](https://github.com/songadaymann/wamp/actions/runs/40434130537) passed.
+- Migration 0075 applied before the guarded production Worker deployment.
+  Worker `2a093888-12fc-458a-86e2-7f077855e772` serves 100% of traffic.
+  Production smoke passed, including database migration health and World tiles.
+- Post-release read-only audit: zero legacy-only attempts, missing parents,
+  missing historical versions, or run-copy outcome/binding mismatches.
+- Production Pages deployment `a4cbcaf2-9e3c-4670-aa24-ae39969a8218`
+  uses merged source `77bb87d`. Public JavaScript verification followed 206
+  files and confirmed the removed legacy-start fallback is absent.
+- Existing legacy data and dual writes remain available for rollback and the
+  separate 30-day parity/deletion gate. F268 and F273 remain open.
