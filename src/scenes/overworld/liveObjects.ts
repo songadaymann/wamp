@@ -279,6 +279,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
   private readonly ballStates = new WeakMap<LoadedRoomObject, BallSimState>();
   private playerOnTriangle = false;
+  private readonly playerSlopeSlide = { active: false };
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
@@ -896,13 +897,15 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     return this.playerOnTriangle;
   }
 
-  stepUtilityPhysics(delta: number, playerIntent: number): void {
+  stepUtilityPhysics(delta: number, playerIntent: number, playerButtStomping = false): void {
     const rooms = [...this.options.getLoadedFullRooms()];
     this.playerOnTriangle = stepUtilityObjects({
       rooms,
       delta,
       playerBody: this.options.getPlayerBody(),
       playerIntent,
+      playerButtStomping,
+      slopeSlide: this.playerSlopeSlide,
       states: this.ballStates,
       sampleEnvironment: (probe) => {
         const environment = this.options.getSpecialTileEnvironmentForBody(probe, 'down');

@@ -3,9 +3,13 @@ import { isSolidRuntimeObjectConfig } from '../../../config';
 import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../../config/rollingBall';
 import {
   evaluateSlopeWalk,
+  hypotenuseY,
+  isFloorTriangle,
+  isSteepTriangle,
   isTrianglePieceObjectId,
   separationFromTriangle,
-  TRIANGLE_SLIDE_SPEED,
+  slopeSlideVelocity,
+  uphillTravelCorrection,
 } from '../../../config/trianglePiece';
 import { getGravityVector, type PlayerGravityDirection } from '../specialTiles';
 import type { ArcadeObjectBody } from './bodies';
@@ -18,6 +22,7 @@ import {
   BALL_WATER_GRAVITY_FACTOR,
   BALL_WATER_MAX_SPEED,
   ACTOR_MASS,
+  ballTopSupport,
   circleIntersectsRect,
   createBallState,
   separateBalls,
@@ -41,6 +46,8 @@ export interface UtilityStepOptions {
   delta: number;
   playerBody: Phaser.Physics.Arcade.Body | null;
   playerIntent: number;
+  playerButtStomping?: boolean;
+  slopeSlide?: { active: boolean };
   states: WeakMap<LoadedRoomObject, BallSimState>;
   sampleEnvironment: (
     probe: Phaser.Physics.Arcade.Body,
@@ -56,7 +63,9 @@ export interface UtilityStepOptions {
 
 export function stepUtilityObjects(options: UtilityStepOptions): boolean {
   const dt = Math.max(options.delta / 1000, 1 / 120);
-  let playerSupported = false;
+  let playerOnSlope = false;
+  let playerOnBall = false;
+  const forceSlopeSlide = options.playerButtStomping === true || options.slopeSlide?.active === true;
   const balls: BallSimState[] = [];
   const ballObjects: LoadedRoomObject[] = [];
 
@@ -121,10 +130,20 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
       const geometry = triangleGeometry(triangle);
       if (!geometry) continue;
       for (const actor of actors) {
-        const supported = supportActor(actor, geometry, dt);
-        if (supported && actor.liveObject === null) playerSupported = true;
+        const supported = supportActor(
+          actor,
+          geometry,
+          dt,
+          forceSlopeSlide && actor.liveObject === null,
+        );
+        if (supported && actor.liveObject === null) playerOnSlope = true;
       }
     }
+  }
+
+  if (seatActorsOnBalls(actors, balls)) playerOnBall = true;
+  if (options.slopeSlide) {
+    options.slopeSlide.active = playerOnSlope && forceSlopeSlide;
   }
 
   balls.forEach((ball, index) => {
@@ -134,7 +153,7 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
     hurtOverlaps(ball, actors, options);
   });
 
-  return playerSupported;
+  return playerOnSlope || playerOnBall;
 }
 
 function lastActorCorrection(
@@ -360,6 +379,10 @@ function moveActor(
   const appliedDvy = dy > 0 && dvy > 0 ? 0 : dvy;
   shiftBody(actor.body, dx, appliedDy);
   actor.body.setVelocity(actor.body.velocity.x + dvx, actor.body.velocity.y + appliedDvy);
+  syncActorRect(actor);
+}
+
+function syncActorRect(actor: TrackedActor): void {
   actor.rect.left = actor.body.left;
   actor.rect.right = actor.body.right;
   actor.rect.top = actor.body.top;
@@ -368,11 +391,50 @@ function moveActor(
   actor.rect.vy = actor.body.velocity.y;
 }
 
+function seatActorsOnBalls(actors: TrackedActor[], balls: BallSimState[]): boolean {
+  let playerSeated = false;
+  for (const actor of actors) {
+    for (const ball of balls) {
+      const support = ballTopSupport(ball, {
+        centerX: actor.body.center.x,
+        bottom: actor.body.bottom,
+        vy: actor.body.velocity.y,
+      });
+      if (!support) continue;
+      shiftBody(actor.body, 0, support.dy);
+      actor.body.setVelocityY(support.vy);
+      syncActorRect(actor);
+      if (actor.liveObject === null) playerSeated = true;
+      break;
+    }
+  }
+  return playerSeated;
+}
+
 function supportActor(
   actor: TrackedActor,
   triangle: TriangleSolid,
   dt: number,
+  forceSlide: boolean,
 ): boolean {
+  const surfaceAtFeet = hypotenuseY(
+    triangle.anchorX,
+    triangle.anchorY,
+    triangle.legX,
+    triangle.legY,
+    actor.body.center.x,
+  );
+  if (surfaceAtFeet != null) {
+    const correction = uphillTravelCorrection({
+      legX: triangle.legX,
+      legY: triangle.legY,
+      traveledX: actor.body.position.x - actor.body.prev.x,
+      feetDelta: actor.body.bottom - surfaceAtFeet,
+      verticalVelocity: actor.body.velocity.y,
+      forceSlide,
+    });
+    if (correction !== 0) shiftBody(actor.body, correction, 0);
+  }
   const walk = evaluateSlopeWalk({
     ...triangle,
     feetX: actor.body.center.x,
@@ -380,21 +442,48 @@ function supportActor(
     verticalVelocity: actor.body.velocity.y,
     horizontalIntent: actor.intent,
     deltaSeconds: dt,
+    forceSlide,
   });
   if (walk?.supported) {
     const slope = triangle.legX === 0 ? 0 : -triangle.legY / triangle.legX;
-    shiftBody(actor.body, walk.slideX, walk.feetY - actor.body.bottom);
     if (walk.slideX !== 0) {
-      const speed = Math.sign(walk.slideX) * TRIANGLE_SLIDE_SPEED;
-      actor.body.setVelocity(speed, speed * slope);
+      const slide = slopeSlideVelocity(triangle.legX, triangle.legY);
+      const traveled = actor.body.position.x - actor.body.prev.x;
+      const sign = Math.sign(slide.x) || 1;
+      const already = Math.max(0, traveled * sign);
+      const extra = Math.max(0, Math.abs(slide.x) * dt - already);
+      shiftBody(actor.body, sign * extra, 0);
+      const surface = hypotenuseY(
+        triangle.anchorX,
+        triangle.anchorY,
+        triangle.legX,
+        triangle.legY,
+        actor.body.center.x,
+      );
+      shiftBody(actor.body, 0, (surface ?? walk.feetY) - actor.body.bottom);
+      actor.body.setVelocity(slide.x, slide.y);
     } else if (walk.blockUphill) {
+      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
       actor.body.setVelocity(0, 0);
     } else if (actor.body.velocity.y > -40) {
+      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
       actor.body.setVelocityY(actor.body.velocity.x * slope);
+    } else {
+      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
     }
+    syncActorRect(actor);
     return true;
   }
-  const separation = separationForBody(actor.body, triangle);
+  let separation = separationForBody(actor.body, triangle);
+  if (
+    separation &&
+    isFloorTriangle(triangle.legY) &&
+    isSteepTriangle(triangle.legX, triangle.legY) &&
+    Math.abs(actor.body.bottom - triangle.anchorY) <= 8 &&
+    separation.dy < 0
+  ) {
+    separation = Math.abs(separation.dx) < 0.2 ? null : { dx: separation.dx, dy: 0 };
+  }
   if (!separation) return false;
   shiftBody(actor.body, separation.dx, separation.dy);
   const length = Math.hypot(separation.dx, separation.dy) || 1;

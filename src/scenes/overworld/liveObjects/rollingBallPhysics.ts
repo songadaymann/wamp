@@ -89,6 +89,27 @@ export function createBallState(x: number, y: number, settings: RollingBallSetti
   };
 }
 
+const BALL_TOP_CAP = 0.65;
+
+/** Feet resting on the upper cap of a ball. Sides stay a push, not a floor. */
+export function ballTopSupport(
+  ball: { x: number; y: number; radius: number },
+  actor: { centerX: number; bottom: number; vy: number },
+): { dy: number; vy: number } | null {
+  const dx = actor.centerX - ball.x;
+  const cap = ball.radius * BALL_TOP_CAP;
+  if (Math.abs(dx) > cap) return null;
+  const rise = Math.sqrt(Math.max(0, ball.radius * ball.radius - dx * dx));
+  const surfaceY = ball.y - rise;
+  const delta = actor.bottom - surfaceY;
+  if (delta < -8 || delta > 12) return null;
+  if (actor.vy < -40) return null;
+  return {
+    dy: -delta,
+    vy: actor.vy > 0 ? 0 : actor.vy,
+  };
+}
+
 export function circleIntersectsRect(
   x: number,
   y: number,
@@ -146,13 +167,13 @@ export function stepRollingBalls(input: {
   for (let pass = 0; pass < 3; pass += 1) {
     input.balls.forEach((ball, ballIndex) => {
       let touchedGround = false;
-      let lastNormal: { x: number; y: number } | null = null;
+      let supportNormal: { x: number; y: number } | null = null;
       for (const solid of input.solids) {
         const normal = resolveCircleSolid(ball, solid);
         if (!normal) continue;
-        lastNormal = normal;
         if (isSupportNormal(normal, input.gravityX, input.gravityY)) {
           touchedGround = true;
+          supportNormal = normal;
           if (solid.kind === 'platform' && !carried.has(ball)) {
             carried.add(ball);
             carryOnPlatform(ball, solid, normal, dt);
@@ -162,8 +183,10 @@ export function stepRollingBalls(input: {
       for (const triangle of input.triangles) {
         const normal = resolveCircleTriangle(ball, triangle);
         if (!normal) continue;
-        lastNormal = normal;
-        if (isSupportNormal(normal, input.gravityX, input.gravityY)) touchedGround = true;
+        if (isSupportNormal(normal, input.gravityX, input.gravityY)) {
+          touchedGround = true;
+          supportNormal = normal;
+        }
       }
       if (ball.pushable) {
         input.actors.forEach((actor, actorIndex) => {
@@ -179,11 +202,12 @@ export function stepRollingBalls(input: {
           actor.bottom += correction.dy;
           actor.vx += correction.dvx;
           actor.vy += correction.dvy;
-          lastNormal = correction.normal;
         });
       }
       separateBalls(input.balls);
-      if (lastNormal) contactNormals[ballIndex] = lastNormal;
+      // A sideways push is not the rolling surface. Spin follows the ground
+      // so a ball rolls while a player, crate, or other ball is pushing it.
+      if (supportNormal) contactNormals[ballIndex] = supportNormal;
       if (touchedGround) grounded[ballIndex] = true;
     });
   }
@@ -360,6 +384,23 @@ function separateBallAndActor(
   const nx = dist === 0 ? dx : dx / dist;
   const ny = dist === 0 ? dy : dy / dist;
   const pen = ball.radius - dist;
+  const actorCenterX = (actor.left + actor.right) / 2;
+  const standingOnTop = ny > 0.55
+    && Math.abs(actorCenterX - ball.x) <= ball.radius * BALL_TOP_CAP
+    && actor.bottom <= ball.y + ball.radius * 0.25;
+  if (standingOnTop) {
+    const lift = actor.bottom - (ball.y - ball.radius);
+    if (lift > 0.01) {
+      return {
+        dx: 0,
+        dy: -lift,
+        dvx: 0,
+        dvy: actor.vy > 0 ? -actor.vy : 0,
+        normal: { x: nx, y: ny },
+      };
+    }
+    return null;
+  }
   const ballShare = actor.mass / (actor.mass + ball.weight);
   const actorShare = ball.weight / (actor.mass + ball.weight);
   let actorDx = -nx * pen * actorShare;

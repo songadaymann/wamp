@@ -10,10 +10,13 @@ import {
   dragTriangleHandle as dragHandle,
   evaluateSlopeWalk as slopeWalk,
   isSteepTriangle as steep,
+  slopeSlideVelocity,
   triangleEdges,
   triangleVertices,
+  uphillTravelCorrection,
 } from '../../../config/trianglePiece';
 import {
+  ballTopSupport,
   createBallState,
   stepRollingBalls,
   type SolidRect,
@@ -114,6 +117,27 @@ describe('rolling ball and triangle helpers', () => {
     expect(ball.y).toBeLessThan(8);
   });
 
+  it('rolls a grounded ball while an actor is pushing it', () => {
+    const ball = createBallState(40, 16, settingsFromGraphic('basic'));
+    ball.vx = 80;
+    const floor: SolidRect = { left: 0, right: 80, top: 30, bottom: 46, vx: 0, vy: 0, kind: 'tile' };
+    stepRollingBalls({
+      balls: [ball],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 1,
+      gravityAccel: 700,
+      maxSpeed: 500,
+      inWater: false,
+      solids: [floor],
+      triangles: [],
+      actors: [{ left: 0, right: 28, top: 0, bottom: 24, vx: 0, vy: 0, mass: 1 }],
+    });
+    expect(ball.grounded).toBe(true);
+    expect(Math.sign(ball.spin)).toBe(Math.sign(ball.vx));
+    expect(Math.abs(ball.spin)).toBeGreaterThan(1);
+  });
+
   it('gives a light ball more speed from the same push than a heavy ball', () => {
     const push = (weight: number) => {
       const settings = { ...settingsFromGraphic('basic'), weight };
@@ -198,6 +222,130 @@ describe('rolling ball and triangle helpers', () => {
     expect(slide?.blockUphill).toBe(true);
     expect(slide?.downhillX).toBe(1);
     expect(slide?.slideX).toBeGreaterThan(0);
+    const slideSpeed = slopeSlideVelocity(16, -32);
+    expect(slideSpeed.x).toBeGreaterThan(0);
+    expect(slideSpeed.y).toBeGreaterThan(0);
+    expect(Math.hypot(slideSpeed.x, slideSpeed.y)).toBeCloseTo(70, 4);
+  });
+
+  it('does not grab the floor at the bottom of a steep slope when walking uphill', () => {
+    expect(slopeWalk({
+      anchorX: 0,
+      anchorY: 64,
+      legX: 16,
+      legY: -64,
+      feetX: 14,
+      feetY: 64,
+      verticalVelocity: 0,
+      horizontalIntent: -1,
+      deltaSeconds: 1 / 60,
+    })).toBeNull();
+    const riding = slopeWalk({
+      anchorX: 0,
+      anchorY: 64,
+      legX: 16,
+      legY: -64,
+      feetX: 8,
+      feetY: 32,
+      verticalVelocity: 40,
+      horizontalIntent: -1,
+      deltaSeconds: 1 / 60,
+    });
+    expect(riding?.supported).toBe(true);
+    expect(riding?.slideX).toBeGreaterThan(0);
+  });
+
+  it('cancels uphill travel on a steep slope and slides a shallow slope after a butt stomp', () => {
+    expect(uphillTravelCorrection({
+      legX: 16,
+      legY: -64,
+      traveledX: -2.5,
+      feetDelta: 0,
+      verticalVelocity: 0,
+    })).toBeCloseTo(2.5);
+    expect(uphillTravelCorrection({
+      legX: 16,
+      legY: -64,
+      traveledX: 1.2,
+      feetDelta: 0,
+      verticalVelocity: 0,
+    })).toBe(0);
+    expect(uphillTravelCorrection({
+      legX: 16,
+      legY: -64,
+      traveledX: -2.5,
+      feetDelta: 0,
+      verticalVelocity: -80,
+    })).toBe(0);
+    expect(uphillTravelCorrection({
+      legX: 32,
+      legY: -32,
+      traveledX: -2.5,
+      feetDelta: 0,
+      verticalVelocity: 520,
+    })).toBe(0);
+    expect(uphillTravelCorrection({
+      legX: 32,
+      legY: -32,
+      traveledX: -2.5,
+      feetDelta: 0,
+      verticalVelocity: 520,
+      forceSlide: true,
+    })).toBeCloseTo(2.5);
+    const stomp = slopeWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: -32,
+      feetX: 16,
+      feetY: 16,
+      verticalVelocity: 520,
+      horizontalIntent: -1,
+      deltaSeconds: 1 / 60,
+      forceSlide: true,
+    });
+    expect(stomp?.slideX).toBeGreaterThan(0);
+    expect(slopeWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: -32,
+      feetX: 16,
+      feetY: 16,
+      verticalVelocity: 0,
+      horizontalIntent: 1,
+      deltaSeconds: 1 / 60,
+    })?.slideX).toBe(0);
+  });
+
+  it('treats the top of a ball as ground and leaves side hits as a push', () => {
+    const ball = { x: 16, y: 40, radius: 15 };
+    const landed = ballTopSupport(ball, { centerX: 16, bottom: 30, vy: 200 });
+    expect(landed?.dy).toBeCloseTo(-5);
+    expect(landed?.vy).toBe(0);
+    const resting = ballTopSupport(ball, { centerX: 16, bottom: 25, vy: 0 });
+    expect(resting?.dy).toBeCloseTo(0);
+    expect(resting?.vy).toBe(0);
+    expect(ballTopSupport(ball, { centerX: 30, bottom: 30, vy: 0 })).toBeNull();
+    expect(ballTopSupport(ball, { centerX: 16, bottom: 24, vy: -120 })).toBeNull();
+
+    const rolling = createBallState(16, 40, settingsFromGraphic('basic'));
+    const actor = { left: 8, right: 24, top: 0, bottom: 30, vx: 0, vy: 200, mass: 1 };
+    const result = stepRollingBalls({
+      balls: [rolling],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 0,
+      gravityAccel: 0,
+      maxSpeed: 500,
+      inWater: false,
+      solids: [],
+      triangles: [],
+      actors: [actor],
+    });
+    expect(result.actorCorrections[0].dy).toBeLessThan(0);
+    expect(result.actorCorrections[0].dvy).toBeLessThan(0);
+    expect(rolling.y).toBeCloseTo(40, 4);
   });
 
   it('snaps a hypotenuse drag to one grid axis', () => {

@@ -20,17 +20,19 @@ function harness(gravityDirection: PlayerGravityDirection = 'down') {
     activeCrateInteractionMode: null, activeCrateInteractionFacing: null,
     weaponKnockbackUntil: 0, isClimbingLadder: false, isWallSliding: false,
     wallContactSide: 0 as const, wallJumpActive: false };
+  const input = { horizontalInput: 1, verticalInput: 0 };
+  const state = { animationState: 'run' as 'run' | 'idle', facing: 1 as -1 | 1, wasGrounded: true, landAnimationUntil: 0 };
   const controller = new OverworldPlayerPresentationController({
-    state: { animationState: 'run', facing: 1, wasGrounded: true, landAnimationUntil: 0 },
+    state,
     getCurrentTime: () => 1000, getPlayer: () => player as never,
     getPlayerBody: () => body as never, getPlayerSprite: () => sprite as never,
     getPlayerPickupSensor: () => null, getPlayerPickupSensorBody: () => null,
-    getSpecialTileEnvironment: () => environment, getLastMovementInput: () => ({ horizontalInput: 1, verticalInput: 0 }),
+    getSpecialTileEnvironment: () => environment, getLastMovementInput: () => input,
     getQuicksandVisualSink: () => 0, getMovementPresentationState: () => movement,
     getGroundedOverride: () => true, getCurrentAttackAnimation: () => null, playLandingDustFx: vi.fn(),
   }, { playerPickupSensorExtraHeight: 4, playerVisualFeetOffset: 1, landingAnimationMs: 100,
     facingVelocityThreshold: 1, jumpRiseVelocityThreshold: -1, crouchMoveVelocityThreshold: 1, runVelocityThreshold: 1 });
-  return { controller, player, body, sprite };
+  return { controller, player, body, sprite, input, state };
 }
 
 describe('player presentation during the Arcade update handoff', () => {
@@ -65,5 +67,20 @@ describe('player presentation during the Arcade update handoff', () => {
     const expected = gravity === 'up' ? [body.center.x, body.top - 1]
       : gravity === 'left' ? [body.left - 1, body.center.y] : [body.right + 1, body.center.y];
     expect([sprite.x, sprite.y]).toEqual(expected);
+  });
+
+  it('faces the held key while velocity slides the other way and keeps running into a blocked crest', () => {
+    const { controller, body, sprite, input, state } = harness();
+    body.velocity.x = -80;
+    input.horizontalInput = 1;
+    state.facing = -1;
+    controller.syncPlayerVisual(false);
+    expect(sprite.setFlipX).toHaveBeenCalledWith(false);
+
+    body.velocity.x = 0;
+    sprite.anims.currentAnim = { key: 'idle' };
+    state.animationState = 'idle';
+    controller.syncPlayerVisual(false);
+    expect(state.animationState).toBe('run');
   });
 });

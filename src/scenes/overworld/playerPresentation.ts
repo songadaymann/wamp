@@ -137,10 +137,15 @@ export class OverworldPlayerPresentationController {
     const facingLockedByWeaponKnockback = now < movement.weaponKnockbackUntil;
     const wallContactSide = movement.wallContactSide;
     const tangentVelocity = getBodyVelocityAlongVector(playerBody, getGravityRightVector(gravityDirection));
+    const heldDirection = this.host.getLastMovementInput().horizontalInput;
     if (movement.isWallSliding && wallContactSide !== 0) {
       this.host.state.facing = wallContactSide;
     } else if (movement.activeCrateInteractionFacing !== null) {
       this.host.state.facing = movement.activeCrateInteractionFacing;
+    } else if (!facingLockedByWeaponKnockback && heldDirection !== 0) {
+      // Sliding and wall contact can reverse velocity while a key is held.
+      // The sprite keeps the key direction, so a failed climb slides backwards.
+      this.host.state.facing = this.resolveSpriteFacingForGravity(gravityDirection, heldDirection);
     } else if (
       !facingLockedByWeaponKnockback &&
       Math.abs(tangentVelocity) > this.options.facingVelocityThreshold
@@ -289,6 +294,12 @@ export class OverworldPlayerPresentationController {
       );
     if (movingOnlyFromSurface) {
       return 'idle';
+    }
+
+    // A crest or steep face can cancel velocity for a frame while the key is
+    // still held. Keep the run cycle instead of flickering back to idle.
+    if (lastMovementInput.horizontalInput !== 0) {
+      return 'run';
     }
 
     if (Math.abs(tangentVelocity) > this.options.runVelocityThreshold) {
