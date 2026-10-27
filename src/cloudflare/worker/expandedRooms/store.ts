@@ -908,7 +908,7 @@ function getPublishedGameplaySettings(raw: string | null): {
   }
 }
 
-function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {
+export function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {
   return expandedRoomId.startsWith('course:') ? expandedRoomId.slice('course:'.length) : null;
 }
 

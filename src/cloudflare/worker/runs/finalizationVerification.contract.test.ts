@@ -20,7 +20,6 @@ vi.mock('../courses/requestBodies', async (original) => ({ ...await original<typ
 vi.mock('./points', async (original) => ({ ...await original<typeof import('./points')>(), getRunMetricCapsForSnapshot: () => ({ maxCollectibles: 100, maxEnemies: 100, maxCheckpoints: 100 }), clampRunMetricsToSnapshot: (_: unknown, metrics: unknown) => metrics, loadBestCompletedRunForUserAndRoomVersion: vi.fn(async () => null), previewRunFinalizePoints: () => ({ points: 1 }) }));
 vi.mock('./roomLeaderboardAggregation', async (original) => ({ ...await original<typeof import('./roomLeaderboardAggregation')>(), resolveAggregatedRoomLeaderboardSelection: () => ({ leaderboardFamilyVersions: [1] }) }));
 vi.mock('./leaderboards', async (original) => ({ ...await original<typeof import('./leaderboards')>(), loadRankedRoomLeaderboardRows: vi.fn(async () => []), loadViewerRankedRoomLeaderboardRow: vi.fn(async () => null) }));
-vi.mock('../courses/leaderboards', async (original) => ({ ...await original<typeof import('../courses/leaderboards')>(), loadRankedCourseLeaderboardRows: vi.fn(async () => []), loadViewerRankedCourseLeaderboardRow: vi.fn(async () => null) }));
 vi.mock('../expandedRooms/leaderboards', async (original) => ({ ...await original<typeof import('../expandedRooms/leaderboards')>(), loadRankedExpandedRoomLeaderboardRows: vi.fn(async () => []), loadViewerRankedExpandedRoomLeaderboardRow: vi.fn(async () => null) }));
 
 import { HttpError } from '../core/http';
@@ -99,7 +98,7 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
       if (scenario === 'timeout') mocks.verify.mockResolvedValue({ status: 'timeout', reason: 'trace_timeout', derivedMetrics, summary: { elapsed: true } });
       const { writes, batch, error } = await finish();
       expect(batch).toHaveBeenCalledTimes(1);
-      expect(writes.map(({ sql }) => sql.match(/UPDATE (\w+)/)?.[1])).toEqual(kind === 'expanded' ? ['expanded_room_runs', 'course_runs'] : [`${kind}_runs`]);
+      expect(writes.map(({ sql }) => sql.match(/UPDATE (\w+)/)?.[1])).toEqual(kind === 'room' ? ['room_runs'] : ['expanded_room_runs', 'course_runs']);
       const status = scenario === 'relaxed' ? 'not_required' : scenario === 'missing_trace' ? 'failed' : scenario;
       const reason = scenario === 'failed' ? 'trace_goal' : scenario === 'missing_trace' ? 'missing_trace' : scenario === 'timeout' ? 'trace_timeout' : null;
       for (const write of writes) {
@@ -123,8 +122,8 @@ for (const [kind, handler] of [['room', handleRunFinish], ['course', handleCours
         // Relaxed (skipped) runs keep their recording for later review.
         expect(audit.trace).toEqual(scenario === 'missing_trace' ? null : body.verificationTrace);
         expect(audit.summary).toEqual(scenario === 'relaxed'
-          ? { trigger, ...(kind === 'expanded' ? { expandedRoomId: 'expanded' } : {}), policy: 't1_audit_only', trustTier: 'T1', verifier: null }
-          : { trigger, verifier: scenario === 'missing_trace' ? { issue: 'missing_trace' } : scenario === 'failed' ? { invalid: true } : scenario === 'timeout' ? { elapsed: true } : { checked: true }, ...(kind === 'expanded' ? { expandedRoomId: 'expanded' } : {}) });
+          ? { trigger, ...(kind !== 'room' ? { expandedRoomId: 'expanded' } : {}), policy: 't1_audit_only', trustTier: 'T1', verifier: null }
+          : { trigger, verifier: scenario === 'missing_trace' ? { issue: 'missing_trace' } : scenario === 'failed' ? { invalid: true } : scenario === 'timeout' ? { elapsed: true } : { checked: true }, ...(kind !== 'room' ? { expandedRoomId: 'expanded' } : {}) });
       }
       // The fixture deliberately ends at the post-audit reload for accepted runs.
       expect(error).toBeInstanceOf(HttpError);
@@ -191,7 +190,10 @@ describe('Expanded Room course_runs copy (F351)', () => {
     });
     const response = await handleExpandedRoomRunFinish(new Request('https://example.test/finish'), db.env, 'attempt');
     expect(response.status).toBe(204);
-    expect(db.batch).toHaveBeenCalledTimes(1);
+    expect(db.batch).toHaveBeenCalledTimes(2);
+    expect(db.writes[2].sql).toContain('UPDATE expanded_room_runs');
+    expect(db.writes[2].sql).toContain("result = 'active'");
+    expect(db.writes[3].sql).toContain('INSERT OR IGNORE INTO run_settlements');
     expect(db.writes[0].sql).toMatch(/NOT EXISTS \(\s*SELECT 1 FROM course_runs\s+WHERE course_runs.attempt_id = expanded_room_runs.attempt_id AND course_runs.result <> 'active'/);
     expect(mocks.audit).not.toHaveBeenCalled();
   });

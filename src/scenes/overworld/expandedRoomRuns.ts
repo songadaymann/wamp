@@ -20,7 +20,7 @@ export interface ActiveExpandedRoomRunState {
   course: CourseSnapshot;
   expandedRoomId: string | null;
   expandedRoomVersion: number | null;
-  submissionTarget: 'course' | 'expanded_room' | null;
+  submissionTarget: 'expanded_room' | null;
   returnCoordinates: RoomCoordinates;
   startRoomId: string | null;
   elapsedMs: number;

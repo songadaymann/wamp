@@ -11,14 +11,8 @@ import {
 } from './model';
 import type {
   CourseLeaderboardResponse,
-  CourseProgressRatingRequestBody,
-  CourseProgressRatingResponse,
-  CourseRunFinishRequestBody,
-  CourseRunStartRequestBody,
-  CourseRunStartResponse,
 } from './runModel';
 import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
-import { rankedFinishRequestInit } from '../runs/rankedFinishDelivery';
 
 export interface CourseRepository {
   createCourse(snapshot: CourseSnapshot): Promise<CourseRecord>;
@@ -27,12 +21,6 @@ export interface CourseRepository {
   saveDraft(snapshot: CourseSnapshot): Promise<CourseRecord>;
   publishCourse(courseId: string): Promise<CourseRecord>;
   unpublishCourse(courseId: string): Promise<CourseRecord>;
-  startRun(courseId: string, body: CourseRunStartRequestBody): Promise<CourseRunStartResponse>;
-  finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void>;
-  submitCourseRating(
-    courseId: string,
-    body: CourseProgressRatingRequestBody
-  ): Promise<CourseProgressRatingResponse>;
   loadCourseLeaderboard(
     courseId: string,
     version?: number | null,
@@ -95,33 +83,6 @@ class ApiCourseRepository implements CourseRepository {
     return this.request<CourseRecord>(`/api/courses/${encodeURIComponent(courseId)}/unpublish`, {
       method: 'POST',
     });
-  }
-
-  async startRun(
-    courseId: string,
-    body: CourseRunStartRequestBody
-  ): Promise<CourseRunStartResponse> {
-    return this.request<CourseRunStartResponse>(`/api/courses/${encodeURIComponent(courseId)}/runs/start`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  }
-
-  async finishRun(attemptId: string, body: CourseRunFinishRequestBody): Promise<void> {
-    await this.request(`/api/course-runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
-    this.invalidateLeaderboards();
-  }
-
-  async submitCourseRating(
-    courseId: string,
-    body: CourseProgressRatingRequestBody
-  ): Promise<CourseProgressRatingResponse> {
-    const response = await this.request<CourseProgressRatingResponse>(`/api/courses/${encodeURIComponent(courseId)}/ratings`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    this.invalidateLeaderboards();
-    return response;
   }
 
   async loadCourseLeaderboard(
@@ -212,6 +173,6 @@ export function createCourseRepository(): CourseRepository {
   return new ApiCourseRepository(getApiBaseUrl());
 }
 
-export function isCourseApiError(error: unknown): error is CourseApiError {
+function isCourseApiError(error: unknown): error is CourseApiError {
   return error instanceof CourseApiError;
 }

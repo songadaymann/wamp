@@ -1,3 +1,5 @@
+import { inheritLegacyCourseSettlement, promoteLegacyCourseRun, reconcileLegacyCourseRun } from './legacyRuns';
+import { parseExpandedRoomRatingBody, parseExpandedRoomRunStartBody } from './runBodies';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { assertSoloCourseRun } from '../runs/coopPolicy';
 import { scheduleActivityEmails } from '../activity/emails';
@@ -20,14 +22,11 @@ import {
   compareCourseLeaderboardEntries,
 } from '../../../courses/scoring';
 import type {
-  CourseProgressRatingRequestBody,
   CourseRunFinishRequestBody,
   CourseRunRecord,
 } from '../../../courses/runModel';
 import type {
-  ExpandedRoomProgressRatingRequestBody,
   ExpandedRoomProgressRatingResponse,
-  ExpandedRoomRunStartRequestBody,
   ExpandedRoomRunStartResponse,
 } from '../../../expandedRooms/runModel';
 import { cloneRoomSnapshot, type RoomSnapshot } from '../../../persistence/roomModel';
@@ -37,9 +36,6 @@ import {
   HttpError,
   jsonResponse,
   noContentResponse,
-  normalizeIsoTimestamp,
-  normalizePositiveInteger,
-  parseJsonBody,
   parseOptionalPositiveIntegerQueryParam,
   parsePositiveIntegerQueryParam,
 } from '../core/http';
@@ -104,6 +100,7 @@ import {
 } from './leaderboards';
 import {
   loadExpandedRoomTarget,
+  getLegacyCourseIdFromExpandedRoomId,
 } from './store';
 
 interface LegacyExpandedRoomCourseContext {
@@ -142,6 +139,7 @@ export async function handleExpandedRoomRunStart(
   request: Request,
   env: Env,
   expandedRoomId: string,
+  legacyCourseId?: string,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -149,7 +147,7 @@ export async function handleExpandedRoomRunStart(
     'submit expanded room runs',
     'runs:write',
   );
-  const body = await parseExpandedRoomRunStartBody(request, expandedRoomId);
+  const body = await parseExpandedRoomRunStartBody(request, expandedRoomId, legacyCourseId);
   const context = await resolveLegacyExpandedRoomCourseContext(
     env,
     body.expandedRoomId,
@@ -282,6 +280,7 @@ export async function handleExpandedRoomRunFinish(
   env: Env,
   attemptId: string,
   executionContext?: WorkerExecutionContextLike,
+  allowLegacyCourseAttempt = false,
 ): Promise<Response> {
   // The run row needs only the attempt id, so it loads while the player signs in (F333). A request
   // with no credentials fails sign-in without a read, so it doesn't start one.
@@ -293,7 +292,11 @@ export async function handleExpandedRoomRunFinish(
     'runs:write',
   );
   const body = await parseCourseRunFinishBody(request);
-  const existing = await (existingRead ?? loadExpandedRoomRunByAttemptId(env, attemptId));
+  let existing = await (existingRead ?? loadExpandedRoomRunByAttemptId(env, attemptId));
+  if (!existing && allowLegacyCourseAttempt) {
+    await promoteLegacyCourseRun(env, attemptId, auth.user.id);
+    existing = await loadExpandedRoomRunByAttemptId(env, attemptId);
+  }
   if (!existing) {
     throw new HttpError(404, 'Expanded room run attempt was not found.');
   }
@@ -305,6 +308,7 @@ export async function handleExpandedRoomRunFinish(
   // A resend of a finished attempt replays its stored answer (F351).
   const resend = existing.result !== 'active';
   if (resend) {
+    if (allowLegacyCourseAttempt) await inheritLegacyCourseSettlement(env, attemptId);
     assertReplayableRunFinish(existing, body.result, EXPANDED_ROOM_RUN_FINISH_MESSAGES);
     if (!(await runNeedsResettle(env, 'expanded_room', attemptId, existing.finishedAt))) return noContentResponse(request);
   }
@@ -566,7 +570,9 @@ export async function handleExpandedRoomRunFinish(
       assertReplayableRunFinish(stored, body.result, EXPANDED_ROOM_RUN_FINISH_MESSAGES);
       return settleResend(stored);
     }
-    // Before F351 a course-run finish of the copy could win; it awarded this attempt already.
+    // A pre-cutover Worker can still win the legacy row while this request verifies.
+    // Preserve that outcome in the canonical board too, without judging or rewarding it again.
+    await reconcileLegacyCourseRun(env, attemptId);
     assertReplayableRunFinish(await loadCourseRunCopyOutcome(env, attemptId), body.result, EXPANDED_ROOM_RUN_FINISH_MESSAGES);
     return noContentResponse(request);
   }
@@ -741,6 +747,7 @@ export async function handleExpandedRoomRatingSubmit(
   env: Env,
   expandedRoomId: string,
   executionContext?: WorkerExecutionContextLike,
+  legacyBody = false,
 ): Promise<Response> {
   const auth = await requireAuthenticatedRequestAuth(
     env,
@@ -748,7 +755,7 @@ export async function handleExpandedRoomRatingSubmit(
     'rate expanded rooms',
     'runs:write',
   );
-  const body = await parseExpandedRoomRatingBody(request);
+  const body = await parseExpandedRoomRatingBody(request, legacyBody);
   const context = await resolveLegacyExpandedRoomCourseContext(
     env,
     expandedRoomId,
@@ -813,97 +820,29 @@ export async function handleExpandedRoomRatingSubmit(
   return jsonResponse(request, responseBody);
 }
 
-async function parseExpandedRoomRunStartBody(
-  request: Request,
-  fallbackExpandedRoomId: string,
-): Promise<ExpandedRoomRunStartRequestBody> {
-  const body = await parseJsonBody<
-    Partial<ExpandedRoomRunStartRequestBody> & {
-      courseVersion?: unknown;
-    }
-  >(request);
-  const expandedRoomId =
-    typeof body.expandedRoomId === 'string' && body.expandedRoomId.trim()
-      ? body.expandedRoomId.trim()
-      : fallbackExpandedRoomId;
-  const expandedRoomVersion = normalizePositiveInteger(
-    body.expandedRoomVersion ?? body.courseVersion,
-    'expandedRoomVersion',
-  );
-  const goal = normalizeCourseGoal(body.goal);
-
-  if (!expandedRoomId) {
-    throw new HttpError(400, 'expandedRoomId is required.');
-  }
-  if (expandedRoomId !== fallbackExpandedRoomId) {
-    throw new HttpError(400, 'expandedRoomId must match the URL.');
-  }
-  if (!goal) {
-    throw new HttpError(400, 'goal must be a valid expanded room goal.');
-  }
-
-  return {
-    expandedRoomId,
-    expandedRoomVersion,
-    goal,
-    startedAt: normalizeIsoTimestamp(body.startedAt),
-  };
-}
-
-async function parseExpandedRoomRatingBody(
-  request: Request,
-): Promise<ExpandedRoomProgressRatingRequestBody> {
-  const body = await parseJsonBody<
-    Partial<ExpandedRoomProgressRatingRequestBody & CourseProgressRatingRequestBody>
-  >(request);
-  return {
-    expandedRoomVersion: normalizePositiveInteger(
-      body.expandedRoomVersion ?? body.courseVersion,
-      'expandedRoomVersion',
-    ),
-    qualityStars:
-      body.qualityStars === null || body.qualityStars === undefined
-        ? null
-        : normalizePositiveInteger(body.qualityStars, 'qualityStars'),
-    difficultyChoice: parseExpandedRoomDifficulty(body.difficultyChoice),
-    autoSuggestedDifficulty: parseExpandedRoomDifficulty(body.autoSuggestedDifficulty),
-  };
-}
-
-function parseExpandedRoomDifficulty(
-  value: unknown,
-): CourseProgressRatingRequestBody['difficultyChoice'] {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  if (typeof value === 'string' && ['easy', 'medium', 'hard', 'extreme'].includes(value)) {
-    return value as CourseProgressRatingRequestBody['difficultyChoice'];
-  }
-  throw new HttpError(400, 'difficultyChoice must be easy, medium, hard, extreme, or null.');
-}
-
 async function resolveLegacyExpandedRoomCourseContext(
   env: Env,
   expandedRoomId: string,
   version?: number,
 ): Promise<LegacyExpandedRoomCourseContext> {
   const target = await loadExpandedRoomTarget(env, expandedRoomId);
-  if (!target) {
+  const legacyCourseId = target?.legacyCourseId ?? getLegacyCourseIdFromExpandedRoomId(expandedRoomId);
+  if (!target && (!legacyCourseId || version === undefined)) {
     throw new HttpError(404, 'Expanded room not found.');
   }
-  if (!target.legacyCourseId) {
+  if (!legacyCourseId) {
     throw new HttpError(
       409,
       'Ranked expanded room runs are currently available for course-backed expanded rooms only.',
     );
   }
 
-  const snapshot = await resolvePublishedCourseVersion(env, target.legacyCourseId, version);
+  const snapshot = await resolvePublishedCourseVersion(env, legacyCourseId, version);
   return {
-    expandedRoomId: target.expandedRoomId,
-    expandedRoomTitle: target.title,
+    expandedRoomId: target?.expandedRoomId ?? expandedRoomId,
+    expandedRoomTitle: target?.title ?? snapshot.title,
     expandedRoomVersion: snapshot.version,
-    legacyCourseId: target.legacyCourseId,
+    legacyCourseId,
     snapshot,
   };
 }

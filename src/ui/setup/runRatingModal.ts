@@ -1,3 +1,4 @@
+import { expandedRoomIdFromLegacyCourseId } from '../../expandedRooms/model';
 import Phaser from 'phaser';
 import { setLiveMessage } from '../friendlyError';
 import { setToggleState } from '../toggleState';
@@ -836,19 +837,14 @@ export class RunRatingModalController {
         requestProfileInvalidation(authUserId);
         this.emitProgressionFeedback(request, response.progression, response.progressionDelta);
       } else {
-        const response = request.contentType === 'expanded_room' || request.expandedRoomId
-          ? await this.expandedRoomRepository.submitExpandedRoomRating(request.expandedRoomId ?? request.contentId, {
-              expandedRoomVersion: request.version,
-              qualityStars: this.currentQualityStars,
-              difficultyChoice: this.currentDifficultyChoice,
-              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
-            })
-          : await this.courseRepository.submitCourseRating(request.contentId, {
-              courseVersion: request.version,
-              qualityStars: this.currentQualityStars,
-              difficultyChoice: this.currentDifficultyChoice,
-              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
-            });
+        const expandedRoomId = request.expandedRoomId ?? (request.contentType === 'expanded_room'
+          ? request.contentId : expandedRoomIdFromLegacyCourseId(request.contentId));
+        const response = await this.expandedRoomRepository.submitExpandedRoomRating(expandedRoomId, {
+          expandedRoomVersion: request.version,
+          qualityStars: this.currentQualityStars,
+          difficultyChoice: this.currentDifficultyChoice,
+          autoSuggestedDifficulty: request.autoSuggestedDifficulty,
+        });
         if (!isCurrent()) return;
         this.courseSummary = this.mergeCourseSummary(response);
         this.savedProgression = response.progression;
