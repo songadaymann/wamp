@@ -94,21 +94,6 @@ export async function recordRunSettlement(env: Env, kind: RunFinishKind, attempt
 }
 
 /**
- * This run's place in commit order, for first-clear and personal-best checks. finalize_seq is
- * numbered inside the finalize batch; the stored finish time is taken before verification.
- */
-export async function loadRunFinishOrder(
-  env: Env,
-  table: 'room_runs' | 'course_runs' | 'expanded_room_runs',
-  attemptId: string,
-  finishedAt: string,
-): Promise<RunFinishOrder> {
-  const row = await env.DB.prepare(`SELECT finalize_seq FROM ${table} WHERE attempt_id = ? LIMIT 1`)
-    .bind(attemptId).first<{ finalize_seq: number | null }>();
-  return { finalizeSeq: row?.finalize_seq ?? null, finishedAt, attemptId };
-}
-
-/**
  * A reloaded run's place in commit order, read from the run row itself (F333). The stored finish
  * time keeps a resend on the original clear's place.
  */

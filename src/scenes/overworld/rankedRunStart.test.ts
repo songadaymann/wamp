@@ -12,7 +12,7 @@ const { courseStart, expandedStart, courseFinish, expandedFinish } = vi.hoisted(
 }));
 vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: true, source: 'session', user: { displayName: 'Builder' } }) }));
 vi.mock('../../courses/courseRepository', () => ({ createCourseRepository: () => ({ startRun: courseStart, finishRun: courseFinish, loadCourseLeaderboard: vi.fn().mockResolvedValue(null) }), isCourseApiError: () => false }));
-vi.mock('../../expandedRooms/repository', () => ({ createExpandedRoomRepository: () => ({ startRun: expandedStart, finishRun: expandedFinish, loadExpandedRoomLeaderboard: vi.fn().mockResolvedValue(null) }), isExpandedRoomApiError: () => false }));
+vi.mock('../../expandedRooms/repository', () => ({ createExpandedRoomRepository: () => ({ startRun: expandedStart, finishRun: expandedFinish, loadExpandedRoomLeaderboard: vi.fn().mockResolvedValue(null) }), isExpandedRoomApiError: (error: unknown) => error instanceof Error && 'status' in error }));
 vi.mock('../../persistence/roomRepository', () => ({ createRoomRepository: () => ({}) }));
 vi.mock('../../progression/postRunRatingEvents', () => ({ requestPostRunGuestClaim: vi.fn(), requestPostRunRating: vi.fn() }));
 vi.mock('../../progression/rewardStings', async importOriginal => ({
@@ -147,6 +147,8 @@ describe('ranked trace capture while the start request is pending', () => {
     run.expandedRoomVersion = expandedRoomId ? 1 : null;
     controller.startRunAfterSpawn(); controller.startRunAfterSpawn();
     expect(courseStart.mock.calls.length + expandedStart.mock.calls.length).toBe(1);
+    expect(courseStart).not.toHaveBeenCalled();
+    expect(expandedStart).toHaveBeenCalledWith(expandedRoomId ?? 'course:test', expect.objectContaining({ expandedRoomId: expandedRoomId ?? 'course:test', expandedRoomVersion: 1 }));
     touchAndDie(recorder);
     pending.resolve({ ...binding, attemptId: 'attempt', userDisplayName: 'Builder' }); await settle();
     expectRetained(recorder); controller.startRunAfterSpawn();
@@ -182,12 +184,34 @@ describe('ranked trace capture while the start request is pending', () => {
     await controller.finalizeActiveCourseRun('completed');
     expect(courseFinish).not.toHaveBeenCalled(); expect(expandedFinish).not.toHaveBeenCalled(); expect(recorder.isActive()).toBe(false);
     pending.resolve({ ...binding, attemptId: 'early-attempt', userDisplayName: 'Builder' });
-    await vi.waitFor(() => expect(expandedRoomId ? expandedFinish : courseFinish).toHaveBeenCalledTimes(1));
-    const [attemptId, body] = (expandedRoomId ? expandedFinish : courseFinish).mock.calls[0];
+    await vi.waitFor(() => expect(expandedFinish).toHaveBeenCalledTimes(1));
+    const [attemptId, body] = expandedFinish.mock.calls[0];
     expect(attemptId).toBe('early-attempt'); expect(body.result).toBe('completed'); expect(body.deaths).toBe(1);
     expect(body.verificationTrace).toMatchObject({ verificationNonce: binding.verificationNonce,
       snapshotHash: binding.snapshotHash, schemaVersion: 1, traceDurationMs: 1500 });
     expect(body.verificationTrace.respawnEvents).toHaveLength(1); expect(body.verificationTrace.goalEvents).toHaveLength(1);
     expect(onStarted).not.toHaveBeenCalled(); expect(run.submissionState).toBe('submitted');
   });
+  it.each([404, 503])('never starts a second legacy attempt after canonical start returns %s', async status => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expandedStart.mockRejectedValue(Object.assign(new Error('Unavailable'), { status }));
+      courseStart.mockResolvedValue({ ...binding, attemptId: 'wrong-legacy-attempt', userDisplayName: 'Builder' });
+      const course = { ...createDefaultCourseSnapshot('no-fallback'), version: 1, status: 'published' as const,
+        roomRefs: [{ roomId: '0,0', coordinates: { x: 0, y: 0 }, roomVersion: 1, roomTitle: null }],
+        goal: { type: 'reach_exit' as const, exit: { roomId: '0,0', x: 96, y: 256 }, timeLimitMs: null } };
+      const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
+        getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
+        getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(), countRoomObjectsByCategory: () => 0,
+        setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+        setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
+      });
+      const run = controller.createCourseRunState(course);
+      controller.startRunAfterSpawn(); await settle();
+      expect(expandedStart).toHaveBeenCalledTimes(1);
+      expect(courseStart).not.toHaveBeenCalled();
+      expect(run.submissionState).toBe('error');
+    } finally { log.mockRestore(); }
+  });
+
 });
