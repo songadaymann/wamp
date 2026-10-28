@@ -232,6 +232,7 @@ export async function buildExpandedRoomLeaderboardResponse(
     params.courseRecord,
     snapshot.version,
     params.viewerUserId ?? null,
+    params.expandedRoomId,
   );
 
   return {

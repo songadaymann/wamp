@@ -1,3 +1,4 @@
+import { loadDiscoveryRatingVersionKeys, ratingVersionIdentity } from '../progression/discoveryRatingWindows';
 import { storedRoomProtectionSql } from '../rooms/protection';
 import {
   loadDiscoveryViewerRoomStates, loadDiscoveryViewerExpandedRoomStates, createEmptyDiscoveryViewerRoomState,
@@ -1246,7 +1247,8 @@ async function loadRoomDiscoveryRatingAggregateRows(
     const whereClause = roomVersionChunk
       .map(() => '(room_id = ? AND version_key = ?)')
       .join(' OR ');
-    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const buckets = await loadDiscoveryRatingVersionKeys(env, 'room', roomVersionChunk.map(entry => ({ id: entry.roomId, version: entry.roomVersion })));
+    const bindings = roomVersionChunk.flatMap(entry => [entry.roomId, buckets.get(ratingVersionIdentity(entry.roomId, entry.roomVersion)) ?? entry.roomVersion]);
     const chunkRows = await env.DB.prepare(
       `
         SELECT
@@ -1290,9 +1292,10 @@ async function loadExpandedRoomDiscoveryRatingAggregateRows(
     const whereClause = versionChunk
       .map(() => '(expanded_room_id = ? AND version_key = ?)')
       .join(' OR ');
+    const buckets = await loadDiscoveryRatingVersionKeys(env, 'expanded_room', versionChunk.map(entry => ({ id: entry.expandedRoomId, version: entry.expandedRoomVersion })));
     const bindings = versionChunk.flatMap((entry) => [
       entry.expandedRoomId,
-      entry.expandedRoomVersion,
+      buckets.get(ratingVersionIdentity(entry.expandedRoomId, entry.expandedRoomVersion)) ?? entry.expandedRoomVersion,
     ]);
     try {
       const chunkRows = await env.DB.prepare(
@@ -1340,11 +1343,12 @@ async function loadRoomDiscoveryTrophyRows(
   roomVersionKeys: DiscoveryRoomVersionKey[],
 ): Promise<{ results: ContentTrophyRow[] }> {
   const results: ContentTrophyRow[] = [];
-  for (const roomVersionChunk of chunkValues(roomVersionKeys, 40)) {
+  for (const roomVersionChunk of chunkValues(roomVersionKeys, 30)) {
+    const buckets = await loadDiscoveryRatingVersionKeys(env, 'room', roomVersionChunk.map(t => ({ id: t.roomId, version: t.roomVersion })));
     const whereClause = roomVersionChunk
-      .map(() => '(content_id = ? AND version_key = ?)')
+      .map(() => "(content_id = ? AND ((trophy_type = 'quality' AND version_key = ?) OR (trophy_type <> 'quality' AND version_key = ?)))")
       .join(' OR ');
-    const bindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const bindings = roomVersionChunk.flatMap(entry => [entry.roomId, buckets.get(ratingVersionIdentity(entry.roomId, entry.roomVersion)) ?? entry.roomVersion, entry.roomVersion]);
     const chunkRows = await env.DB.prepare(
       `
         SELECT
