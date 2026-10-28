@@ -11,11 +11,15 @@ import {
   evaluateSlopeWalk as slopeWalk,
   isSteepTriangle as steep,
   slopeSlideVelocity,
+  steepSlopeMotion,
   triangleEdges,
   triangleVertices,
   uphillTravelCorrection,
 } from '../../../config/trianglePiece';
 import {
+  BALL_ICE_DRAG,
+  BALL_STICKY_DRAG,
+  BALL_STICKY_PUSH_SCALE,
   ballTopSupport,
   createBallState,
   stepRollingBalls,
@@ -255,57 +259,42 @@ describe('rolling ball and triangle helpers', () => {
     expect(riding?.slideX).toBeGreaterThan(0);
   });
 
-  it('cancels uphill travel on a steep slope and slides a shallow slope after a butt stomp', () => {
+  it('never raises a body that is on a steep slope, including while jumping', () => {
     expect(uphillTravelCorrection({
       legX: 16,
       legY: -64,
       traveledX: -2.5,
       feetDelta: 0,
-      verticalVelocity: 0,
     })).toBeCloseTo(2.5);
     expect(uphillTravelCorrection({
       legX: 16,
       legY: -64,
       traveledX: 1.2,
       feetDelta: 0,
-      verticalVelocity: 0,
     })).toBe(0);
     expect(uphillTravelCorrection({
+      legX: 32,
+      legY: -32,
+      traveledX: -2.5,
+      feetDelta: 0,
+    })).toBe(0);
+    const climbed = steepSlopeMotion({
+      anchorX: 0,
+      anchorY: 64,
       legX: 16,
       legY: -64,
+      feetX: 8,
+      feetY: 28,
       traveledX: -2.5,
-      feetDelta: 0,
-      verticalVelocity: -80,
-    })).toBe(0);
-    expect(uphillTravelCorrection({
-      legX: 32,
-      legY: -32,
-      traveledX: -2.5,
-      feetDelta: 0,
-      verticalVelocity: 520,
-    })).toBe(0);
-    expect(uphillTravelCorrection({
-      legX: 32,
-      legY: -32,
-      traveledX: -2.5,
-      feetDelta: 0,
-      verticalVelocity: 520,
-      forceSlide: true,
-    })).toBeCloseTo(2.5);
-    const stomp = slopeWalk({
-      anchorX: 0,
-      anchorY: 32,
-      legX: 32,
-      legY: -32,
-      feetX: 16,
-      feetY: 16,
-      verticalVelocity: 520,
-      horizontalIntent: -1,
+      traveledY: -4,
       deltaSeconds: 1 / 60,
-      forceSlide: true,
     });
-    expect(stomp?.slideX).toBeGreaterThan(0);
-    expect(slopeWalk({
+    expect(climbed).not.toBeNull();
+    expect(climbed!.dy).toBeGreaterThanOrEqual(0);
+    expect(climbed!.dx).toBeGreaterThan(0);
+    expect(climbed!.vy).toBeGreaterThan(0);
+    expect(28 + climbed!.dy).toBeGreaterThanOrEqual(28);
+    const walked = slopeWalk({
       anchorX: 0,
       anchorY: 32,
       legX: 32,
@@ -313,9 +302,50 @@ describe('rolling ball and triangle helpers', () => {
       feetX: 16,
       feetY: 16,
       verticalVelocity: 0,
-      horizontalIntent: 1,
+      horizontalIntent: -1,
       deltaSeconds: 1 / 60,
-    })?.slideX).toBe(0);
+    });
+    expect(walked?.slideX).toBe(0);
+    expect(steepSlopeMotion({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: -32,
+      feetX: 16,
+      feetY: 16,
+      traveledX: 0,
+      traveledY: 4,
+      deltaSeconds: 1 / 60,
+    })).toBeNull();
+    const stomp = steepSlopeMotion({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: -32,
+      feetX: 16,
+      feetY: 16,
+      traveledX: -2,
+      traveledY: 8,
+      deltaSeconds: 1 / 60,
+      forceSlide: true,
+      verticalVelocity: 520,
+    });
+    expect(stomp).not.toBeNull();
+    expect(stomp!.dx).toBeGreaterThan(0);
+    expect(stomp!.vy).toBeGreaterThan(0);
+    expect(steepSlopeMotion({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 64,
+      legY: -32,
+      feetX: 32,
+      feetY: 16,
+      traveledX: 0,
+      traveledY: 8,
+      deltaSeconds: 1 / 60,
+      forceSlide: true,
+      verticalVelocity: 520,
+    })).toBeNull();
   });
 
   it('treats the top of a ball as ground and leaves side hits as a push', () => {
@@ -360,6 +390,200 @@ describe('rolling ball and triangle helpers', () => {
     expect(moved.legY).toBe(-32);
     expect(Math.abs(moved.legX)).toBeGreaterThanOrEqual(16);
     expect(moved.legX % 16).toBe(0);
+  });
+
+  it('keeps more speed on ice than on ordinary ground, and less when the surface is sticky', () => {
+    const coast = (drag?: number) => {
+      const ball = createBallState(20, 16, settingsFromGraphic('basic'));
+      ball.vx = 200;
+      const floor: SolidRect = { left: 0, right: 80, top: 30, bottom: 46, vx: 0, vy: 0, kind: 'tile' };
+      for (let frame = 0; frame < 40; frame += 1) {
+        stepRollingBalls({
+          balls: [ball],
+          deltaSeconds: 1 / 60,
+          gravityX: 0,
+          gravityY: 1,
+          gravityAccel: 700,
+          maxSpeed: 500,
+          inWater: false,
+          groundDrag: drag,
+          solids: [floor],
+          triangles: [],
+          actors: [],
+        });
+      }
+      return ball.vx;
+    };
+    const ice = coast(BALL_ICE_DRAG);
+    const ground = coast();
+    const sticky = coast(BALL_STICKY_DRAG);
+    expect(ice).toBeGreaterThan(ground);
+    expect(ground).toBeGreaterThan(sticky);
+  });
+
+  it('makes a sticky ball harder to push', () => {
+    const shove = (pushScale: number) => {
+      const ball = createBallState(40, 16, settingsFromGraphic('basic'));
+      ball.pushScale = pushScale;
+      stepRollingBalls({
+        balls: [ball],
+        deltaSeconds: 1 / 60,
+        gravityX: 0,
+        gravityY: 0,
+        gravityAccel: 0,
+        maxSpeed: 500,
+        inWater: false,
+        solids: [],
+        triangles: [],
+        actors: [{ left: 0, right: 30, top: 0, bottom: 32, vx: 120, vy: 0, mass: 1 }],
+      });
+      return ball.vx;
+    };
+    expect(shove(1)).toBeGreaterThan(shove(BALL_STICKY_PUSH_SCALE));
+  });
+
+  it('sinks a heavier ball faster in water', () => {
+    const drop = (weight: number) => {
+      const ball = createBallState(0, 0, { ...settingsFromGraphic('basic'), weight });
+      ball.weight = weight;
+      for (let frame = 0; frame < 30; frame += 1) {
+        stepRollingBalls({
+          balls: [ball],
+          deltaSeconds: 1 / 60,
+          gravityX: 0,
+          gravityY: 1,
+          gravityAccel: 700 * 0.35 * weight,
+          maxSpeed: Math.min(500, 118 * weight),
+          inWater: true,
+          solids: [],
+          triangles: [],
+          actors: [],
+        });
+      }
+      return ball.y;
+    };
+    expect(drop(4)).toBeGreaterThan(drop(0.25));
+  });
+
+  it('lets wind push a light ball farther than a heavy one', () => {
+    const blow = (weight: number) => {
+      const ball = createBallState(0, 0, { ...settingsFromGraphic('basic'), weight });
+      ball.weight = weight;
+      for (let frame = 0; frame < 20; frame += 1) {
+        stepRollingBalls({
+          balls: [ball],
+          deltaSeconds: 1 / 60,
+          gravityX: 0,
+          gravityY: 0,
+          gravityAccel: 0,
+          maxSpeed: 500,
+          inWater: false,
+          windX: 1,
+          solids: [],
+          triangles: [],
+          actors: [],
+        });
+      }
+      return ball.vx;
+    };
+    expect(blow(0.25)).toBeGreaterThan(blow(4));
+    expect(blow(0.25)).toBeGreaterThan(0);
+  });
+
+  it('rides a conveyor and bounces off a bounce tile', () => {
+    const ball = createBallState(20, 16, settingsFromGraphic('basic'));
+    const floor: SolidRect = { left: 0, right: 80, top: 30, bottom: 46, vx: 0, vy: 0, kind: 'tile' };
+    stepRollingBalls({
+      balls: [ball],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 1,
+      gravityAccel: 700,
+      maxSpeed: 500,
+      inWater: false,
+      conveyorX: 1,
+      solids: [floor],
+      triangles: [],
+      actors: [],
+    });
+    expect(ball.vx).toBeGreaterThan(0);
+
+    const resting = createBallState(20, 16, settingsFromGraphic('basic'));
+    const launched = stepRollingBalls({
+      balls: [resting],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 1,
+      gravityAccel: 700,
+      maxSpeed: 500,
+      inWater: false,
+      bounce: true,
+      now: 0,
+      solids: [floor],
+      triangles: [],
+      actors: [],
+    });
+    expect(launched.bounced).toBe(true);
+    expect(resting.vy).toBeLessThan(0);
+  });
+
+  it('builds speed along a ceiling slope when gravity points up', () => {
+    const ball = createBallState(32 + 15 / Math.SQRT2, 32 + 15 / Math.SQRT2, settingsFromGraphic('basic'));
+    for (let frame = 0; frame < 8; frame += 1) {
+      stepRollingBalls({
+        balls: [ball],
+        deltaSeconds: 1 / 60,
+        gravityX: 0,
+        gravityY: -1,
+        gravityAccel: 700,
+        maxSpeed: 500,
+        inWater: false,
+        solids: [],
+        triangles: [{ anchorX: 0, anchorY: 0, legX: 64, legY: 64 }],
+        actors: [],
+      });
+    }
+    const speed = Math.hypot(ball.vx, ball.vy);
+    expect(ball.grounded).toBe(true);
+    expect(speed).toBeGreaterThan(20);
+    expect(ball.vx).toBeGreaterThan(0);
+    expect(ball.vy).toBeLessThan(0);
+  });
+
+  it('passes through a one-way platform from below and lands on it from above', () => {
+    const platform: SolidRect = { left: 0, right: 64, top: 40, bottom: 56, vx: 0, vy: 0, kind: 'tile', oneWay: true };
+    const rising = createBallState(32, 70, settingsFromGraphic('basic'));
+    rising.vy = -200;
+    stepRollingBalls({
+      balls: [rising],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 1,
+      gravityAccel: 0,
+      maxSpeed: 500,
+      inWater: false,
+      solids: [platform],
+      triangles: [],
+      actors: [],
+    });
+    expect(rising.y).toBeLessThan(70);
+
+    const falling = createBallState(32, 24, settingsFromGraphic('basic'));
+    falling.vy = 200;
+    stepRollingBalls({
+      balls: [falling],
+      deltaSeconds: 1 / 60,
+      gravityX: 0,
+      gravityY: 1,
+      gravityAccel: 0,
+      maxSpeed: 500,
+      inWater: false,
+      solids: [platform],
+      triangles: [],
+      actors: [],
+    });
+    expect(falling.y + falling.radius).toBeLessThanOrEqual(platform.top + 1);
+    expect(falling.grounded).toBe(true);
   });
 
   it('lets every rolling ball press a plate, including one that cannot be pushed', () => {

@@ -245,6 +245,24 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
 
   describeCrumblingTiles() { return this.crumblingTiles.describe(this.host.getCurrentTime()); }
 
+  supportCrumblingTilesFromBody(
+    body: Phaser.Physics.Arcade.Body,
+    direction: PlayerGravityDirection,
+  ): void {
+    if (this.host.getMode() !== 'play') return;
+    const contacts = this.findSpecialTilesAtGravityContact(body, direction).filter((match) =>
+      match.kind === 'crumbling'
+      && match.layerName === 'terrain'
+      && Boolean(match.loadedRoom.terrainLayer.getTileAt(match.tileX, match.tileY)),
+    );
+    if (contacts.length === 0) return;
+    this.crumblingTiles.update(this.host.getCurrentTime(), contacts.map((match) => ({
+      roomId: match.loadedRoom.room.id,
+      tileX: match.tileX,
+      tileY: match.tileY,
+    })));
+  }
+
   getEnvironmentForBody(
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection = 'down',

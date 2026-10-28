@@ -16,6 +16,14 @@ export const BALL_WATER_GRAVITY_FACTOR = 0.35;
 export const BALL_WATER_MAX_SPEED = 118;
 export const BALL_WATER_DAMPING = 0.965;
 export const BALL_GROUND_DRAG = 40;
+export const BALL_ICE_DRAG = 8;
+export const BALL_STICKY_DRAG = 160;
+export const BALL_STICKY_PUSH_SCALE = 3;
+export const BALL_CONVEYOR_SPEED = 48;
+export const BALL_WIND_ACCELERATION = 980;
+export const BALL_WIND_MAX_SPEED = 280;
+export const BALL_BOUNCE_SPEED = 392;
+export const BALL_BOUNCE_COOLDOWN_MS = 180;
 export const ACTOR_MASS = 1;
 
 export interface BallSimState {
@@ -29,6 +37,11 @@ export interface BallSimState {
   radius: number;
   weight: number;
   pushable: boolean;
+  /** Multiplies weight while a push is resolved. Sticky gum raises it. */
+  pushScale: number;
+  gravityDirection: 'down' | 'up' | 'left' | 'right';
+  gravityRoomId: string | null;
+  bounceCooldownUntil: number;
   grounded: boolean;
   settings: RollingBallSettings;
 }
@@ -41,6 +54,8 @@ export interface SolidRect {
   vx: number;
   vy: number;
   kind: 'tile' | 'solid' | 'platform';
+  /** Jump-through from the side opposite gravity. */
+  oneWay?: boolean;
 }
 
 export interface ActorRect {
@@ -70,6 +85,7 @@ export interface ActorCorrection {
 
 export interface BallStepResult {
   actorCorrections: ActorCorrection[];
+  bounced: boolean;
 }
 
 export function createBallState(x: number, y: number, settings: RollingBallSettings): BallSimState {
@@ -84,6 +100,10 @@ export function createBallState(x: number, y: number, settings: RollingBallSetti
     radius: ROLLING_BALL_RADIUS,
     weight: settings.weight,
     pushable: settings.pushable,
+    pushScale: 1,
+    gravityDirection: 'down',
+    gravityRoomId: null,
+    bounceCooldownUntil: 0,
     grounded: false,
     settings,
   };
@@ -136,6 +156,11 @@ export function stepRollingBalls(input: {
   solids: SolidRect[];
   triangles: TriangleSolid[];
   actors: ActorRect[];
+  windX?: -1 | 0 | 1;
+  conveyorX?: -1 | 0 | 1;
+  groundDrag?: number;
+  bounce?: boolean;
+  now?: number;
 }): BallStepResult {
   const dt = Math.min(Math.max(input.deltaSeconds, 0), 0.05);
   const actorCorrections: ActorCorrection[] = input.actors.map(() => ({
@@ -145,17 +170,20 @@ export function stepRollingBalls(input: {
     dvx: 0,
     dvy: 0,
   }));
+  let bounced = false;
   actorCorrections.forEach((correction, index) => {
     correction.index = index;
   });
 
+  const approach = input.balls.map((ball) => ({ x: ball.x, y: ball.y }));
   for (const ball of input.balls) {
+    applyWind(ball, input.windX ?? 0, dt);
     applyGravity(ball, input, dt);
     if (input.inWater) {
       ball.vx *= BALL_WATER_DAMPING;
       ball.vy *= BALL_WATER_DAMPING;
     }
-    if (ball.grounded) applyGroundDrag(ball, dt);
+    if (ball.grounded) applyGroundDrag(ball, input.groundDrag ?? BALL_GROUND_DRAG, dt);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
     ball.animTime += dt;
@@ -169,6 +197,10 @@ export function stepRollingBalls(input: {
       let touchedGround = false;
       let supportNormal: { x: number; y: number } | null = null;
       for (const solid of input.solids) {
+        if (
+          solid.oneWay
+          && !ballLandsOnOneWay(approach[ballIndex], ball, solid, input.gravityY)
+        ) continue;
         const normal = resolveCircleSolid(ball, solid);
         if (!normal) continue;
         if (isSupportNormal(normal, input.gravityX, input.gravityY)) {
@@ -214,6 +246,8 @@ export function stepRollingBalls(input: {
 
   input.balls.forEach((ball, index) => {
     ball.grounded = grounded[index];
+    if (ball.grounded) applyConveyor(ball, input.conveyorX ?? 0);
+    if (launchFromBounceTile(ball, input, grounded[index])) bounced = true;
     const contactNormal = contactNormals[index];
     if (contactNormal && grounded[index]) {
       const tx = -contactNormal.y;
@@ -224,7 +258,7 @@ export function stepRollingBalls(input: {
     ball.angle += ball.spin * dt;
   });
 
-  return { actorCorrections };
+  return { actorCorrections, bounced };
 }
 
 function applyGravity(
@@ -239,17 +273,58 @@ function applyGravity(
   ball.vy += input.gravityY * delta;
 }
 
-function applyGroundDrag(ball: BallSimState, dt: number): void {
+function applyWind(ball: BallSimState, windX: -1 | 0 | 1, dt: number): void {
+  if (windX === 0) return;
+  const accel = windX * (BALL_WIND_ACCELERATION / ball.weight) * dt;
+  ball.vx = clamp(ball.vx + accel, -BALL_WIND_MAX_SPEED, BALL_WIND_MAX_SPEED);
+}
+
+function applyGroundDrag(ball: BallSimState, drag: number, dt: number): void {
   const speed = Math.hypot(ball.vx, ball.vy);
   if (speed <= 0.01) {
     ball.vx = 0;
     ball.vy = 0;
     return;
   }
-  const drop = Math.min(speed, (BALL_GROUND_DRAG / ball.weight) * dt);
+  const drop = Math.min(speed, (drag / ball.weight) * dt);
   const scale = (speed - drop) / speed;
   ball.vx *= scale;
   ball.vy *= scale;
+}
+
+function applyConveyor(ball: BallSimState, conveyorX: -1 | 0 | 1): void {
+  if (conveyorX === 0) return;
+  const belt = conveyorX * BALL_CONVEYOR_SPEED;
+  if (ball.vx * Math.sign(belt) >= Math.abs(belt)) return;
+  const next = ball.vx + Math.sign(belt) * Math.min(BALL_CONVEYOR_SPEED, Math.abs(belt - ball.vx));
+  ball.vx = next;
+}
+
+function launchFromBounceTile(
+  ball: BallSimState,
+  input: { gravityX: number; gravityY: number; bounce?: boolean; now?: number },
+  grounded: boolean,
+): boolean {
+  if (!input.bounce || !grounded) return false;
+  const now = input.now ?? 0;
+  if (now < ball.bounceCooldownUntil) return false;
+  const along = ball.vx * input.gravityX + ball.vy * input.gravityY;
+  if (along < -24) return false;
+  ball.vx += input.gravityX * (-BALL_BOUNCE_SPEED - along);
+  ball.vy += input.gravityY * (-BALL_BOUNCE_SPEED - along);
+  ball.bounceCooldownUntil = now + BALL_BOUNCE_COOLDOWN_MS;
+  return true;
+}
+
+function ballLandsOnOneWay(
+  previous: { x: number; y: number },
+  ball: BallSimState,
+  rect: SolidRect,
+  gravityY: number,
+): boolean {
+  if (gravityY > 0) return previous.y + ball.radius <= rect.top + 6 && ball.vy >= -12;
+  if (gravityY < 0) return previous.y - ball.radius >= rect.bottom - 6 && ball.vy <= 12;
+  return false;
 }
 
 function resolveCircleSolid(ball: BallSimState, rect: SolidRect): { x: number; y: number } | null {
@@ -401,8 +476,9 @@ function separateBallAndActor(
     }
     return null;
   }
-  const ballShare = actor.mass / (actor.mass + ball.weight);
-  const actorShare = ball.weight / (actor.mass + ball.weight);
+  const resistance = ball.weight * (ball.pushScale || 1);
+  const ballShare = actor.mass / (actor.mass + resistance);
+  const actorShare = resistance / (actor.mass + resistance);
   let actorDx = -nx * pen * actorShare;
   let actorDy = -ny * pen * actorShare;
   let dvx = 0;

@@ -1,24 +1,30 @@
 import Phaser from 'phaser';
-import { isSolidRuntimeObjectConfig } from '../../../config';
+import { isSolidRuntimeObjectConfig, isSpecialTileKindGid } from '../../../config';
 import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../../config/rollingBall';
 import {
   evaluateSlopeWalk,
-  hypotenuseY,
+  isButtStompSlideTriangle,
   isFloorTriangle,
   isSteepTriangle,
   isTrianglePieceObjectId,
   separationFromTriangle,
-  slopeSlideVelocity,
-  uphillTravelCorrection,
+  steepSlopeMotion,
 } from '../../../config/trianglePiece';
-import { getGravityVector, type PlayerGravityDirection } from '../specialTiles';
+import {
+  getGravityVector,
+  type PlayerGravityDirection,
+  type SpecialTilePlayerEnvironment,
+} from '../specialTiles';
 import type { ArcadeObjectBody } from './bodies';
 import { isDynamicArcadeBody } from './bodies';
 import { getLiveObjectBehavior } from './behaviorRegistry';
 import type { LoadedRoomObject } from './model';
 import {
   BALL_GRAVITY,
+  BALL_ICE_DRAG,
   BALL_MAX_SPEED,
+  BALL_STICKY_DRAG,
+  BALL_STICKY_PUSH_SCALE,
   BALL_WATER_GRAVITY_FACTOR,
   BALL_WATER_MAX_SPEED,
   ACTOR_MASS,
@@ -51,7 +57,13 @@ export interface UtilityStepOptions {
   states: WeakMap<LoadedRoomObject, BallSimState>;
   sampleEnvironment: (
     probe: Phaser.Physics.Arcade.Body,
-  ) => { gravityDirection: PlayerGravityDirection; inWater: boolean };
+    gravityDirection: PlayerGravityDirection,
+  ) => { environment: SpecialTilePlayerEnvironment; roomId: string };
+  onDestroy: (room: UtilityRoom, liveObject: LoadedRoomObject) => void;
+  supportCrumbling?: (
+    probe: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+  ) => void;
   now: number;
   bounceSpeed: number;
   bounceCooldownMs: number;
@@ -65,9 +77,9 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
   const dt = Math.max(options.delta / 1000, 1 / 120);
   let playerOnSlope = false;
   let playerOnBall = false;
+  let playerStompSliding = false;
   const forceSlopeSlide = options.playerButtStomping === true || options.slopeSlide?.active === true;
-  const balls: BallSimState[] = [];
-  const ballObjects: LoadedRoomObject[] = [];
+  const entries: Array<{ room: UtilityRoom; liveObject: LoadedRoomObject; state: BallSimState }> = [];
 
   for (const room of options.rooms) {
     for (const liveObject of room.liveObjects) {
@@ -84,31 +96,51 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
       state.weight = liveObject.ball.weight;
       state.pushable = liveObject.ball.pushable;
       state.settings = liveObject.ball;
-      balls.push(state);
-      ballObjects.push(liveObject);
+      entries.push({ room, liveObject, state });
     }
   }
+  const balls = entries.map((entry) => entry.state);
 
   const solids = collectSolids(options.rooms, balls);
   const triangles = collectTriangles(options.rooms);
   const actors = collectActors(options.rooms, options.playerBody, options.playerIntent);
 
-  balls.forEach((ball) => {
-    const environment = sampleBallEnvironment(ball, options.sampleEnvironment);
+  const rolling: typeof entries = [];
+  for (const entry of entries) {
+    const environment = sampleBallEnvironment(entry.state, options.sampleEnvironment);
+    if (environment.onDamage) {
+      options.onDestroy(entry.room, entry.liveObject);
+      continue;
+    }
     const gravity = getGravityVector(environment.gravityDirection);
     const inWater = environment.inWater;
+    const sticky = environment.onSticky;
+    entry.state.pushScale = sticky ? BALL_STICKY_PUSH_SCALE : 1;
     const result = stepRollingBalls({
-      balls: [ball],
+      balls: [entry.state],
       deltaSeconds: dt,
       gravityX: gravity.x,
       gravityY: gravity.y,
-      gravityAccel: BALL_GRAVITY * (inWater ? BALL_WATER_GRAVITY_FACTOR : 1),
-      maxSpeed: inWater ? BALL_WATER_MAX_SPEED : BALL_MAX_SPEED,
+      gravityAccel: BALL_GRAVITY * (inWater ? BALL_WATER_GRAVITY_FACTOR * entry.state.weight : 1),
+      maxSpeed: inWater
+        ? Math.min(BALL_MAX_SPEED, BALL_WATER_MAX_SPEED * entry.state.weight)
+        : BALL_MAX_SPEED,
       inWater,
+      windX: environment.windX,
+      conveyorX: environment.conveyorX,
+      groundDrag: sticky ? BALL_STICKY_DRAG : environment.onIce ? BALL_ICE_DRAG : undefined,
+      bounce: environment.onBounce,
+      now: options.now,
       solids,
       triangles,
       actors: actors.map((actor) => actor.rect),
     });
+    if (result.bounced) {
+      options.onBounce(entry.state.x, entry.state.y, entry.room.room.coordinates);
+    }
+    if (entry.state.grounded) {
+      options.supportCrumbling?.(ballProbe(entry.state), environment.gravityDirection);
+    }
     for (const correction of result.actorCorrections) {
       const actor = actors[correction.index];
       actor.correction.dx += correction.dx;
@@ -116,8 +148,9 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
       actor.correction.dvx += correction.dvx;
       actor.correction.dvy += correction.dvy;
     }
-  });
-  separateBalls(balls);
+    rolling.push(entry);
+  }
+  separateBalls(rolling.map((entry) => entry.state));
 
   actors.forEach((actor, index) => {
     const correction = lastActorCorrection(actors, index);
@@ -130,24 +163,20 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
       const geometry = triangleGeometry(triangle);
       if (!geometry) continue;
       for (const actor of actors) {
-        const supported = supportActor(
-          actor,
-          geometry,
-          dt,
-          forceSlopeSlide && actor.liveObject === null,
-        );
-        if (supported && actor.liveObject === null) playerOnSlope = true;
+        const supported = supportActor(actor, geometry, dt, forceSlopeSlide && actor.liveObject === null);
+        if (!supported || actor.liveObject !== null) continue;
+        playerOnSlope = true;
+        if (forceSlopeSlide && isButtStompSlideTriangle(geometry.legX, geometry.legY)) {
+          playerStompSliding = true;
+        }
       }
     }
   }
 
-  if (seatActorsOnBalls(actors, balls)) playerOnBall = true;
-  if (options.slopeSlide) {
-    options.slopeSlide.active = playerOnSlope && forceSlopeSlide;
-  }
+  if (options.slopeSlide) options.slopeSlide.active = playerStompSliding;
+  if (seatActorsOnBalls(actors, rolling.map((entry) => entry.state))) playerOnBall = true;
 
-  balls.forEach((ball, index) => {
-    const liveObject = ballObjects[index];
+  rolling.forEach(({ liveObject, state: ball }) => {
     presentBall(liveObject, ball);
     launchFromPads(ball, liveObject, options);
     hurtOverlaps(ball, actors, options);
@@ -165,23 +194,62 @@ function lastActorCorrection(
   return stored;
 }
 
+interface BallSurfaceProbe {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  center: { x: number; y: number };
+  width: number;
+  height: number;
+}
+
+const ballProbes = new WeakMap<BallSimState, BallSurfaceProbe>();
+
+const IDLE_SURFACE: SpecialTilePlayerEnvironment = {
+  gravityDirection: 'down',
+  inWater: false,
+  windX: 0,
+  conveyorX: 0,
+  onIce: false,
+  onSticky: false,
+  onBounce: false,
+  onDamage: false,
+};
+
+function ballProbe(ball: BallSimState): Phaser.Physics.Arcade.Body {
+  let probe = ballProbes.get(ball);
+  if (!probe) {
+    probe = { left: 0, right: 0, top: 0, bottom: 0, center: { x: 0, y: 0 }, width: 0, height: 0 };
+    ballProbes.set(ball, probe);
+  }
+  probe.left = ball.x - ball.radius;
+  probe.right = ball.x + ball.radius;
+  probe.top = ball.y - ball.radius;
+  probe.bottom = ball.y + ball.radius;
+  probe.center.x = ball.x;
+  probe.center.y = ball.y;
+  probe.width = ball.radius * 2;
+  probe.height = ball.radius * 2;
+  return probe as Phaser.Physics.Arcade.Body;
+}
+
 function sampleBallEnvironment(
   ball: BallSimState,
   sample: UtilityStepOptions['sampleEnvironment'],
-): { gravityDirection: PlayerGravityDirection; inWater: boolean } {
-  const probe = {
-    left: ball.x - ball.radius,
-    right: ball.x + ball.radius,
-    top: ball.y - ball.radius,
-    bottom: ball.y + ball.radius,
-    center: { x: ball.x, y: ball.y },
-    width: ball.radius * 2,
-    height: ball.radius * 2,
-  } as Phaser.Physics.Arcade.Body;
+): SpecialTilePlayerEnvironment {
+  const probe = ballProbe(ball);
   try {
-    return sample(probe);
+    let sampled = sample(probe, ball.gravityDirection);
+    if (ball.gravityRoomId !== sampled.roomId) {
+      ball.gravityRoomId = sampled.roomId;
+      ball.gravityDirection = 'down';
+      sampled = sample(probe, 'down');
+    }
+    ball.gravityDirection = sampled.environment.gravityDirection;
+    return sampled.environment;
   } catch {
-    return { gravityDirection: 'down', inWater: false };
+    return { ...IDLE_SURFACE, gravityDirection: ball.gravityDirection };
   }
 }
 
@@ -213,6 +281,7 @@ function collectSolids(rooms: UtilityRoom[], balls: BallSimState[]): SolidRect[]
               vx: 0,
               vy: 0,
               kind: 'tile',
+              oneWay: isSpecialTileKindGid(tile.index, 'oneWayPlatform'),
             });
           }
         }
@@ -417,23 +486,21 @@ function supportActor(
   dt: number,
   forceSlide: boolean,
 ): boolean {
-  const surfaceAtFeet = hypotenuseY(
-    triangle.anchorX,
-    triangle.anchorY,
-    triangle.legX,
-    triangle.legY,
-    actor.body.center.x,
-  );
-  if (surfaceAtFeet != null) {
-    const correction = uphillTravelCorrection({
-      legX: triangle.legX,
-      legY: triangle.legY,
-      traveledX: actor.body.position.x - actor.body.prev.x,
-      feetDelta: actor.body.bottom - surfaceAtFeet,
-      verticalVelocity: actor.body.velocity.y,
-      forceSlide,
-    });
-    if (correction !== 0) shiftBody(actor.body, correction, 0);
+  const motion = steepSlopeMotion({
+    ...triangle,
+    feetX: actor.body.center.x,
+    feetY: actor.body.bottom,
+    traveledX: actor.body.position.x - actor.body.prev.x,
+    traveledY: actor.body.position.y - actor.body.prev.y,
+    deltaSeconds: dt,
+    forceSlide,
+    verticalVelocity: actor.body.velocity.y,
+  });
+  if (motion) {
+    shiftBody(actor.body, motion.dx, motion.dy);
+    actor.body.setVelocity(motion.vx, motion.vy);
+    syncActorRect(actor);
+    return true;
   }
   const walk = evaluateSlopeWalk({
     ...triangle,
@@ -442,34 +509,15 @@ function supportActor(
     verticalVelocity: actor.body.velocity.y,
     horizontalIntent: actor.intent,
     deltaSeconds: dt,
-    forceSlide,
   });
   if (walk?.supported) {
     const slope = triangle.legX === 0 ? 0 : -triangle.legY / triangle.legX;
-    if (walk.slideX !== 0) {
-      const slide = slopeSlideVelocity(triangle.legX, triangle.legY);
-      const traveled = actor.body.position.x - actor.body.prev.x;
-      const sign = Math.sign(slide.x) || 1;
-      const already = Math.max(0, traveled * sign);
-      const extra = Math.max(0, Math.abs(slide.x) * dt - already);
-      shiftBody(actor.body, sign * extra, 0);
-      const surface = hypotenuseY(
-        triangle.anchorX,
-        triangle.anchorY,
-        triangle.legX,
-        triangle.legY,
-        actor.body.center.x,
-      );
-      shiftBody(actor.body, 0, (surface ?? walk.feetY) - actor.body.bottom);
-      actor.body.setVelocity(slide.x, slide.y);
-    } else if (walk.blockUphill) {
-      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
+    const dy = walk.feetY - actor.body.bottom;
+    shiftBody(actor.body, 0, dy < 0 && isSteepTriangle(triangle.legX, triangle.legY) ? 0 : dy);
+    if (walk.blockUphill) {
       actor.body.setVelocity(0, 0);
     } else if (actor.body.velocity.y > -40) {
-      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
       actor.body.setVelocityY(actor.body.velocity.x * slope);
-    } else {
-      shiftBody(actor.body, 0, walk.feetY - actor.body.bottom);
     }
     syncActorRect(actor);
     return true;
@@ -479,7 +527,6 @@ function supportActor(
     separation &&
     isFloorTriangle(triangle.legY) &&
     isSteepTriangle(triangle.legX, triangle.legY) &&
-    Math.abs(actor.body.bottom - triangle.anchorY) <= 8 &&
     separation.dy < 0
   ) {
     separation = Math.abs(separation.dx) < 0.2 ? null : { dx: separation.dx, dy: 0 };

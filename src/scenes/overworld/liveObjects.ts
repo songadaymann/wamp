@@ -169,6 +169,10 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
   ) => Readonly<SpecialTilePlayerEnvironment>;
+  supportCrumblingTiles?: (
+    body: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+  ) => void;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -907,13 +911,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       playerButtStomping,
       slopeSlide: this.playerSlopeSlide,
       states: this.ballStates,
-      sampleEnvironment: (probe) => {
-        const environment = this.options.getSpecialTileEnvironmentForBody(probe, 'down');
-        return {
-          gravityDirection: environment.gravityDirection,
-          inWater: environment.inWater,
-        };
+      sampleEnvironment: (probe, gravityDirection) => ({
+        environment: this.options.getSpecialTileEnvironmentForBody(probe, gravityDirection),
+        roomId: this.options.getBodyRoomId(probe),
+      }),
+      onDestroy: (room, liveObject) => {
+        this.removeLiveObject(
+          room as LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+          liveObject,
+        );
       },
+      supportCrumbling: this.options.supportCrumblingTiles,
       now: this.options.getCurrentTime(),
       bounceSpeed: this.options.settings.bouncePadVelocity,
       bounceCooldownMs: this.options.settings.bouncePadCooldownMs,

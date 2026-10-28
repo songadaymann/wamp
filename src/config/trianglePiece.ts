@@ -76,6 +76,11 @@ export function isSteepTriangle(legX: number, legY: number): boolean {
   return Math.abs(legY) > Math.abs(legX);
 }
 
+/** Floor slopes a butt stomp slides down: 45 degrees and steeper. */
+export function isButtStompSlideTriangle(legX: number, legY: number): boolean {
+  return isFloorTriangle(legY) && legX !== 0 && Math.abs(legY) >= Math.abs(legX);
+}
+
 export function downhillSignX(legX: number, legY: number): -1 | 1 {
   if (legX === 0) return 1;
   return -legY / legX >= 0 ? 1 : -1;
@@ -93,24 +98,70 @@ export function slopeSlideVelocity(legX: number, legY: number): { x: number; y: 
 
 /**
  * Horizontal correction that removes this step's uphill travel.
- * A steep slope (or a butt-stomp slide) must not be climbed by the walk speed
- * that physics already integrated before the slope pass.
+ * A jump does not earn an exception: a steep face cannot be climbed.
  */
 export function uphillTravelCorrection(input: {
   legX: number;
   legY: number;
   traveledX: number;
   feetDelta: number;
-  verticalVelocity: number;
-  forceSlide?: boolean;
 }): number {
-  if (!isFloorTriangle(input.legY)) return 0;
-  if (!isSteepTriangle(input.legX, input.legY) && !input.forceSlide) return 0;
-  if (input.verticalVelocity < -40) return 0;
+  if (!isFloorTriangle(input.legY) || !isSteepTriangle(input.legX, input.legY)) return 0;
   if (input.feetDelta < -8 || input.feetDelta > 20) return 0;
   const downhill = downhillSignX(input.legX, input.legY);
   if (input.traveledX * downhill >= 0) return 0;
   return -input.traveledX;
+}
+
+export interface SteepSlopeMotion {
+  dx: number;
+  dy: number;
+  vx: number;
+  vy: number;
+}
+
+/**
+ * Slide down a steep floor. The returned dy is never upward: a held direction
+ * or a jump cannot raise the body while it is on the face.
+ */
+export function steepSlopeMotion(input: {
+  anchorX: number;
+  anchorY: number;
+  legX: number;
+  legY: number;
+  feetX: number;
+  feetY: number;
+  traveledX: number;
+  traveledY: number;
+  deltaSeconds: number;
+  /** Butt-stomp slide. Applies on a 45 degree floor and anything steeper. */
+  forceSlide?: boolean;
+  verticalVelocity?: number;
+}): SteepSlopeMotion | null {
+  const steep = isFloorTriangle(input.legY) && isSteepTriangle(input.legX, input.legY);
+  const stompSlide = input.forceSlide === true && isButtStompSlideTriangle(input.legX, input.legY);
+  if (!steep && !stompSlide) return null;
+  const surfaceY = hypotenuseY(input.anchorX, input.anchorY, input.legX, input.legY, input.feetX);
+  if (surfaceY == null) return null;
+  const delta = input.feetY - surfaceY;
+  if (delta < -8 || delta > 14) return null;
+  if (!steep && (input.verticalVelocity ?? 0) < -40 && delta < 0) return null;
+  if (steep && Math.abs(input.feetY - input.anchorY) <= 6) return null;
+
+  const slide = slopeSlideVelocity(input.legX, input.legY);
+  const downhill = Math.sign(slide.x) || 1;
+  let dx = input.traveledX * downhill < 0 ? -input.traveledX : 0;
+  let dy = input.traveledY < 0 ? -input.traveledY : 0;
+  const snapDown = (feetX: number, feetY: number) => {
+    const surface = hypotenuseY(input.anchorX, input.anchorY, input.legX, input.legY, feetX);
+    if (surface != null && surface > feetY) dy += surface - feetY;
+  };
+  snapDown(input.feetX + dx, input.feetY + dy);
+  const already = Math.max(0, (input.traveledX + dx) * downhill);
+  const extra = Math.max(0, Math.abs(slide.x) * input.deltaSeconds - already);
+  dx += downhill * extra;
+  snapDown(input.feetX + dx, input.feetY + dy);
+  return { dx, dy, vx: slide.x, vy: slide.y };
 }
 
 export function triangleVertices(anchorX: number, anchorY: number, legX: number, legY: number): {
@@ -218,7 +269,6 @@ export function evaluateSlopeWalk(input: {
   verticalVelocity: number;
   horizontalIntent: number;
   deltaSeconds: number;
-  forceSlide?: boolean;
 }): SlopeWalk | null {
   if (!isFloorTriangle(input.legY)) return null;
   const surfaceY = hypotenuseY(input.anchorX, input.anchorY, input.legX, input.legY, input.feetX);
@@ -231,16 +281,15 @@ export function evaluateSlopeWalk(input: {
   const steep = isSteepTriangle(input.legX, input.legY);
   const downhillX = downhillSignX(input.legX, input.legY);
   const uphillIntent = input.horizontalIntent * downhillX < 0;
-  const slide = steep || input.forceSlide === true;
   // The low tip is the floor. Grabbing it while walking uphill slides the body
   // back off, then the walk speed pulls it in again.
-  if (steep && uphillIntent && !input.forceSlide && Math.abs(input.feetY - input.anchorY) <= 6) {
+  if (steep && uphillIntent && Math.abs(input.feetY - input.anchorY) <= 6) {
     return null;
   }
   return {
     supported: true,
     feetY: surfaceY,
-    slideX: slide ? slopeSlideVelocity(input.legX, input.legY).x * input.deltaSeconds : 0,
+    slideX: steep ? slopeSlideVelocity(input.legX, input.legY).x * input.deltaSeconds : 0,
     blockUphill: steep && uphillIntent,
     downhillX,
   };
