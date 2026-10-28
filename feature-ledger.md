@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-28 | F268 | [#333](https://github.com/songadaymann/wamp/pull/333) | [receipt](docs/review/wamp-f268-rating-windows-2026-10-28.md) | Keep ratings visible across minor republishes and remove duplicate trophy and badge work |
 | 2026-10-26 | F270 | [#332](https://github.com/songadaymann/wamp/pull/332) | [receipt](docs/review/wamp-f270-expanded-run-backend-2026-10-26.md) | Unify course play routes with Expanded Room accounting while preserving historical runs and rewards |
 | 2026-10-26 | F374, F487 | [#331](https://github.com/songadaymann/wamp/pull/331) | [receipt](docs/review/wamp-round2-followups-2026-10-26.md) | Close parked follow-ups: Explore wording, draft-conflict test and read-only World claim audit |
 | 2026-10-26 | F480 | [#330](https://github.com/songadaymann/wamp/pull/330) | [receipt](docs/review/wamp-f480-smoke-health-2026-10-26.md) | Repair stale browser smokes and run 35 nightly checks in seven isolated groups |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-14 | F035 | [#198](https://github.com/songadaymann/wamp/pull/198) | [receipt](docs/review/wamp-preview-deltas-2026-10-14.md) | Builders' room previews are sent only when the room changes, and client snapshots are reused |
 | 2026-10-14 | F008 | [#197](https://github.com/songadaymann/wamp/pull/197) | [receipt](docs/review/wamp-grouped-collisions-2026-10-14.md) | World obstacle collisions use spatial groups (856 to 431 collision links in a busy area) |
 | 2026-10-14 | F006 | [#196](https://github.com/songadaymann/wamp/pull/196) | [receipt](docs/review/wamp-special-tile-cache-2026-10-13.md) | Special tiles are cached, and duplicate actor scans are gone |
-| 2026-10-13 | F019 | [#195](https://github.com/songadaymann/wamp/pull/195) | [receipt](docs/review/wamp-lazy-dialogs-cache-2026-10-13.md) | Seven more dialogs load on demand, and stable room data is cached |

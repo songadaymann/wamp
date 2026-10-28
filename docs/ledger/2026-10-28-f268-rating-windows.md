@@ -1,0 +1,1 @@
+| 2026-10-28 | F268 | [#333](https://github.com/songadaymann/wamp/pull/333) | [receipt](docs/review/wamp-f268-rating-windows-2026-10-28.md) | Keep ratings visible across minor republishes and remove duplicate trophy and badge work |
