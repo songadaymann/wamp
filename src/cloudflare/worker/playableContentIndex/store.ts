@@ -1,3 +1,4 @@
+import { loadDiscoveryRatingVersionKeys } from '../progression/discoveryRatingWindows';
 import type { Env, WorkerExecutionContextLike } from '../core/types';
 
 interface IndexedMemberRow {
@@ -70,6 +71,7 @@ export async function refreshPlayableContentIndexForExpandedRoom(
       ).bind(expandedRoomId).all<IndexedMemberRow>(),
     ]);
 
+    await cachePublishedRatingKey(env, 'expanded_room', expandedRoomId);
     await env.DB.batch([
       env.DB.prepare('DELETE FROM playable_content_index_members WHERE target_key = ?').bind(targetKey),
       env.DB.prepare('DELETE FROM playable_content_index WHERE target_key = ?').bind(targetKey),
@@ -99,6 +101,7 @@ export async function refreshPlayableContentIndexForExpandedRoom(
 }
 
 async function refreshStandalonePlayableContentIndexRow(env: Env, roomId: string): Promise<void> {
+  await cachePublishedRatingKey(env, 'room', roomId);
   await env.DB.batch([
     env.DB.prepare('DELETE FROM playable_content_index WHERE target_key = ?').bind(`room:${roomId}`),
     env.DB.prepare(
@@ -123,7 +126,8 @@ async function refreshStandalonePlayableContentIndexRow(env: Env, roomId: string
             SUM(CASE WHEN difficulty_choice = 'extreme' THEN trust_weight ELSE 0 END) AS extreme_weight
           FROM room_ratings ratings
           WHERE ratings.room_id = ?
-            AND ratings.version_key = CAST(json_extract((SELECT published_json FROM rooms WHERE id = ?), '$.version') AS INTEGER)
+            AND ratings.version_key = (SELECT COALESCE(v.rating_version_key,v.version) FROM room_versions v JOIN rooms r ON r.id=v.room_id
+              WHERE r.id=? AND v.version=CAST(json_extract(r.published_json,'$.version') AS INTEGER))
         )
         SELECT
           'room:' || rooms.id, 'room', rooms.id,
@@ -204,7 +208,8 @@ function buildExpandedRoomIndexInsert(env: Env, expandedRoomId: string) {
           SUM(CASE WHEN difficulty_choice = 'extreme' THEN trust_weight ELSE 0 END) AS extreme_weight
         FROM expanded_room_ratings ratings
         INNER JOIN expanded_rooms expanded ON expanded.id = ratings.expanded_room_id
-        WHERE ratings.expanded_room_id = ? AND ratings.version_key = expanded.published_version
+        INNER JOIN expanded_room_versions v ON v.expanded_room_id=expanded.id AND v.version=expanded.published_version
+        WHERE ratings.expanded_room_id = ? AND ratings.version_key = COALESCE(v.rating_version_key,v.version)
       )
       SELECT
         'expanded_room:' || expanded.id, 'expanded_room', expanded.id, expanded.published_version,
@@ -246,4 +251,15 @@ function handleMissingPlayableContentIndex(error: unknown): void {
     return;
   }
   throw error;
+}
+
+async function cachePublishedRatingKey(env: Env, kind: 'room' | 'expanded_room', id: string): Promise<void> {
+  const row = await env.DB.prepare(kind === 'room'
+    ? `SELECT v.version,v.rating_version_key FROM rooms r JOIN room_versions v ON v.room_id=r.id
+        AND v.version=CAST(json_extract(r.published_json,'$.version') AS INTEGER) WHERE r.id=?`
+    : `SELECT v.version,v.rating_version_key FROM expanded_rooms e JOIN expanded_room_versions v
+        ON v.expanded_room_id=e.id AND v.version=e.published_version WHERE e.id=?`)
+    .bind(id).first<{ version: number; rating_version_key: number | null }>();
+  if (!row || row.rating_version_key !== null) return;
+  await loadDiscoveryRatingVersionKeys(env,kind,[{ id,version:row.version }],true);
 }

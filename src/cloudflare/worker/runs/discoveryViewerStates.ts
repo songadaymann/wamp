@@ -1,3 +1,4 @@
+import { loadDiscoveryRatingVersionKeys, ratingVersionIdentity } from '../progression/discoveryRatingWindows';
 import type { Env } from '../core/types';
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 
@@ -64,7 +65,8 @@ export async function loadDiscoveryViewerRoomStates(
     const ratingWhereClause = roomVersionChunk
       .map(() => '(room_id = ? AND version_key = ?)')
       .join(' OR ');
-    const ratingBindings = roomVersionChunk.flatMap((entry) => [entry.roomId, entry.roomVersion]);
+    const buckets = await loadDiscoveryRatingVersionKeys(env, 'room', roomVersionChunk.map(entry => ({ id: entry.roomId, version: entry.roomVersion })));
+    const ratingBindings = roomVersionChunk.flatMap(entry => [entry.roomId, buckets.get(ratingVersionIdentity(entry.roomId, entry.roomVersion)) ?? entry.roomVersion]);
     const ratingRows = await env.DB.prepare(
       `
         SELECT
@@ -80,10 +82,13 @@ export async function loadDiscoveryViewerRoomStates(
       .all<{ room_id: string; version_key: number | string | null }>();
 
     for (const row of ratingRows.results) {
-      const key = buildDiscoveryRoomVersionKey(row.room_id, parseRowNumber(row.version_key));
-      const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-      state.rated = true;
-      states.set(key, state);
+      for (const target of roomVersionChunk) {
+        if (target.roomId !== row.room_id || buckets.get(ratingVersionIdentity(target.roomId, target.roomVersion)) !== parseRowNumber(row.version_key)) continue;
+        const key = buildDiscoveryRoomVersionKey(target.roomId, target.roomVersion);
+        const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
+        state.rated = true;
+        states.set(key, state);
+      }
     }
   }
 
@@ -147,9 +152,10 @@ export async function loadDiscoveryViewerExpandedRoomStates(
       const ratingWhereClause = versionChunk
         .map(() => '(expanded_room_id = ? AND version_key = ?)')
         .join(' OR ');
+      const buckets = await loadDiscoveryRatingVersionKeys(env, 'expanded_room', versionChunk.map(entry => ({ id: entry.expandedRoomId, version: entry.expandedRoomVersion })));
       const ratingBindings = versionChunk.flatMap((entry) => [
         entry.expandedRoomId,
-        entry.expandedRoomVersion,
+        buckets.get(ratingVersionIdentity(entry.expandedRoomId, entry.expandedRoomVersion)) ?? entry.expandedRoomVersion,
       ]);
       const ratingRows = await env.DB.prepare(
         `
@@ -166,13 +172,13 @@ export async function loadDiscoveryViewerExpandedRoomStates(
         .all<{ expanded_room_id: string; version_key: number | string | null }>();
 
       for (const row of ratingRows.results) {
-        const key = buildDiscoveryExpandedRoomVersionKey(
-          row.expanded_room_id,
-          parseRowNumber(row.version_key),
-        );
-        const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
-        state.rated = true;
-        states.set(key, state);
+        for (const target of versionChunk) {
+          if (target.expandedRoomId !== row.expanded_room_id || buckets.get(ratingVersionIdentity(target.expandedRoomId, target.expandedRoomVersion)) !== parseRowNumber(row.version_key)) continue;
+          const key = buildDiscoveryExpandedRoomVersionKey(target.expandedRoomId, target.expandedRoomVersion);
+          const state = states.get(key) ?? createEmptyDiscoveryViewerRoomState();
+          state.rated = true;
+          states.set(key, state);
+        }
       }
     } catch (error) {
       if (isExpandedRoomSchemaMissingError(error)) {

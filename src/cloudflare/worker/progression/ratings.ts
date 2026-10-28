@@ -1,3 +1,4 @@
+import { mirrorCourseRatingToExpandedRoomRating } from './ratingMirror';
 import type { CourseRecord } from '../../../courses/model';
 import { getRoomVersionFacts, type RoomRecordView, type RoomVersionSource } from '../../../persistence/roomVersionLineage';
 import {
@@ -259,6 +260,7 @@ async function buildCourseRatingSummary(
   courseId: string,
   ratingWindow: RatingWindow,
   options: RatingSummaryOptions,
+  expandedRoomId?: string,
 ): Promise<RatingAggregateSummary> {
   const rows = await loadCourseRatingsForVersionKey(env, courseId, ratingWindow.versionKey);
   const viewerRow =
@@ -277,7 +279,8 @@ async function buildCourseRatingSummary(
           updatedAt: viewerRow.updated_at,
         }
       : null,
-    trophy: await loadTrophyForContentVersion(env, 'course', courseId, ratingWindow.versionKey),
+    trophy: (expandedRoomId ? await loadTrophyForContentVersion(env, 'expanded_room', expandedRoomId, ratingWindow.versionKey) : null)
+      ?? await loadTrophyForContentVersion(env, 'course', courseId, ratingWindow.versionKey),
   };
 }
 
@@ -719,7 +722,6 @@ export async function submitRoomRating(
       ),
     };
     await persistProgressIncrement(env, params.roomRecord.claimerUserId, creatorDelta, now);
-    await syncUserBadges(env, params.roomRecord.claimerUserId);
   }
 
   await persistProgressIncrement(env, params.userId, delta, now);
@@ -730,7 +732,11 @@ export async function submitRoomRating(
   });
   await syncContentTrophy(env, 'room', published.id, ratingWindow.versionKey, summary.quality);
   await refreshContentOwnerProgressCounts(env, 'room', published.id, ratingWindow.versionKey);
-  await syncUserBadges(env, params.userId);
+  const trophyOwner = params.roomRecord.versions.find(version => version.version === ratingWindow.versionKey)?.publishedByUserId;
+  if (firstRewardedSubmission && params.roomRecord.claimerUserId && params.roomRecord.claimerUserId !== trophyOwner) {
+    await syncUserBadges(env, params.roomRecord.claimerUserId);
+  }
+  if (trophyOwner !== params.userId) await syncUserBadges(env, params.userId);
 
   return {
     ok: true,
@@ -750,6 +756,7 @@ export async function submitCourseRating(
   env: Env,
   params: {
     courseRecord: CourseRecord;
+    expandedRoomId?: string;
     userId: string;
     body: CourseRatingRequestBody;
     now?: string;
@@ -881,7 +888,6 @@ export async function submitCourseRating(
       ),
     };
     await persistProgressIncrement(env, params.courseRecord.ownerUserId, creatorDelta, now);
-    await syncUserBadges(env, params.courseRecord.ownerUserId);
   }
 
   await persistProgressIncrement(env, params.userId, delta, now);
@@ -890,20 +896,35 @@ export async function submitCourseRating(
     viewerCanVote: true,
     viewerNeedsRun: false,
   });
-  await syncContentTrophy(env, 'course', published.id, ratingWindow.versionKey, summary.quality);
-  await refreshContentOwnerProgressCounts(env, 'course', published.id, ratingWindow.versionKey);
-  await syncUserBadges(env, params.userId);
+  if (params.expandedRoomId) {
+    await mirrorCourseRatingToExpandedRoomRating(env, {
+      expandedRoomId: params.expandedRoomId, legacyCourseId: published.id,
+      versionKey: ratingWindow.versionKey, userId: params.userId,
+    });
+    // Retire derived duplicate quality trophies for this window, including the old
+    // route's raw-version copies. Keep other trophy types and historical windows.
+    await env.DB.batch([env.DB.prepare(`DELETE FROM content_trophies WHERE trophy_type = 'quality'
+      AND ((content_type = 'course' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)))
+        OR (content_type = 'expanded_room' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)) AND version_key <> ?))`)
+      .bind(published.id, JSON.stringify(ratingWindow.versionFamily), params.expandedRoomId,
+        JSON.stringify(ratingWindow.versionFamily), ratingWindow.versionKey)]);
+  }
+  const trophyType = params.expandedRoomId ? 'expanded_room' : 'course';
+  const trophyId = params.expandedRoomId ?? published.id;
+  await syncContentTrophy(env, trophyType, trophyId, ratingWindow.versionKey, summary.quality);
+  await refreshContentOwnerProgressCounts(env, trophyType, trophyId, ratingWindow.versionKey);
+  const trophyOwner = params.courseRecord.versions.find(version => version.version === ratingWindow.versionKey)?.publishedByUserId;
+  if (firstRewardedSubmission && params.courseRecord.ownerUserId && params.courseRecord.ownerUserId !== trophyOwner) {
+    await syncUserBadges(env, params.courseRecord.ownerUserId);
+  }
+  if (trophyOwner !== params.userId) await syncUserBadges(env, params.userId);
 
   return {
     ok: true,
     courseId: published.id,
     courseVersion: published.version,
     progressionDelta: delta,
-    summary: await buildCourseRatingSummary(env, published.id, ratingWindow, {
-      viewerUserId: params.userId,
-      viewerCanVote: true,
-      viewerNeedsRun: false,
-    }),
+    summary: { ...summary, trophy: await loadTrophyForContentVersion(env, trophyType, trophyId, ratingWindow.versionKey) },
     progression: await loadPublicProgressionSummary(env, params.userId),
   };
 }
@@ -965,6 +986,7 @@ export async function loadCourseAggregateRatingSummaryForVersion(
   courseRecord: CourseRecord,
   courseVersion: number,
   viewerUserId: string | null,
+  expandedRoomId?: string,
 ): Promise<RatingAggregateSummary> {
   const ratingWindow = buildCourseRatingWindow(courseRecord.versions, courseVersion, courseRecord.draft.id);
   const viewerNeedsRun =
@@ -976,5 +998,5 @@ export async function loadCourseAggregateRatingSummaryForVersion(
     viewerUserId,
     viewerCanVote: viewerUserId !== null && courseRecord.published?.version === courseVersion && !viewerNeedsRun,
     viewerNeedsRun,
-  });
+  }, expandedRoomId);
 }

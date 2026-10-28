@@ -41,6 +41,7 @@
     "scripts/backfill-room-token-metadata.ts",
     "scripts/reconcile-room-token-cache.ts",
     "scripts/backfill_badges.mjs",
+    "scripts/repair_rating_index.ts",
     "scripts/build-player-combat-actions-atlas.mjs",
     "scripts/build_pages_worker.mjs",
     "scripts/build_tree_atlases.mjs",

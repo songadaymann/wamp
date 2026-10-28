@@ -89,9 +89,6 @@ import {
   submitCourseRating,
 } from '../progression/store';
 import {
-  loadTrophyForContentVersion,
-  refreshContentOwnerProgressCounts,
-  syncContentTrophy,
 } from '../progression/badgesTrophies';
 import {
   buildExpandedRoomLeaderboardResponse,
@@ -768,6 +765,7 @@ export async function handleExpandedRoomRatingSubmit(
 
   const response = await submitCourseRating(env, {
     courseRecord: record,
+    expandedRoomId: context.expandedRoomId,
     userId: auth.user.id,
     body: {
       courseVersion: body.expandedRoomVersion,
@@ -776,25 +774,6 @@ export async function handleExpandedRoomRatingSubmit(
       autoSuggestedDifficulty: body.autoSuggestedDifficulty,
     },
   });
-  await mirrorCourseRatingToExpandedRoomRating(env, {
-    expandedRoomId: context.expandedRoomId,
-    legacyCourseId: context.legacyCourseId,
-    courseVersion: body.expandedRoomVersion,
-    userId: auth.user.id,
-  });
-  await syncContentTrophy(
-    env,
-    'expanded_room',
-    context.expandedRoomId,
-    body.expandedRoomVersion,
-    response.summary.quality,
-  );
-  await refreshContentOwnerProgressCounts(
-    env,
-    'expanded_room',
-    context.expandedRoomId,
-    body.expandedRoomVersion,
-  );
   schedulePlayableContentIndexRefresh(
     executionContext,
     refreshPlayableContentIndexForExpandedRoom(env, context.expandedRoomId),
@@ -806,15 +785,7 @@ export async function handleExpandedRoomRatingSubmit(
     legacyCourseId: context.legacyCourseId,
     ok: true,
     progressionDelta: response.progressionDelta,
-    summary: {
-      ...response.summary,
-      trophy: await loadTrophyForContentVersion(
-        env,
-        'expanded_room',
-        context.expandedRoomId,
-        body.expandedRoomVersion,
-      ),
-    },
+    summary: response.summary,
     progression: response.progression,
   };
   return jsonResponse(request, responseBody);
@@ -1110,60 +1081,4 @@ async function resolvePublishedCourseOwnerUserId(
     .first<{ owner_user_id: string | null }>();
 
   return row?.owner_user_id ?? null;
-}
-
-async function mirrorCourseRatingToExpandedRoomRating(
-  env: Env,
-  params: {
-    expandedRoomId: string;
-    legacyCourseId: string;
-    courseVersion: number;
-    userId: string;
-  },
-): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT OR REPLACE INTO expanded_room_ratings (
-          expanded_room_id,
-          lineage_key,
-          version_key,
-          user_id,
-          quality_stars,
-          difficulty_choice,
-          auto_difficulty_choice,
-          trust_weight,
-          completed_attempt_id,
-          first_rated_at,
-          updated_at,
-          rewarded_at,
-          legacy_course_id
-        )
-        SELECT
-          ?,
-          lineage_key,
-          version_key,
-          user_id,
-          quality_stars,
-          difficulty_choice,
-          auto_difficulty_choice,
-          trust_weight,
-          completed_attempt_id,
-          first_rated_at,
-          updated_at,
-          rewarded_at,
-          ?
-        FROM course_ratings
-        WHERE course_id = ?
-          AND version_key = ?
-          AND user_id = ?
-      `
-    ).bind(
-      params.expandedRoomId,
-      params.legacyCourseId,
-      params.legacyCourseId,
-      params.courseVersion,
-      params.userId,
-    ),
-  ]);
 }
