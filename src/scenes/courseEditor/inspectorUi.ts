@@ -5,7 +5,6 @@ export {
   getContainerAcceptedContentsLabel,
   getContainerLabel,
   getContainerName,
-  getPressurePlateTargetLabel,
   type ContainerInspectorOptions,
   type PressurePlateInspectorOptions,
 } from '../editor/inspectorViewModel';

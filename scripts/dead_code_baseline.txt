@@ -396,7 +396,6 @@ export src/runs/rankedFinishDelivery.ts RANKED_FINISH_RETRY_DELAYS_MS
 export src/runs/rankedFinishDelivery.ts RANKED_FINISH_TIMEOUT_MS
 export src/runs/scoring.ts sortRoomLeaderboardEntries
 export src/scenes/courseEditor/inspectorUi.ts getContainerLabel
-export src/scenes/courseEditor/inspectorUi.ts getPressurePlateTargetLabel
 export src/scenes/editor/clearCheckUi.ts renderChecklistRows
 export src/scenes/editor/courseEditing.ts cloneCourseDraftForMutation
 export src/scenes/editor/courseEditing.ts getCourseEditorContextStatusText
@@ -406,7 +405,6 @@ export src/scenes/editor/editorToolSelection.ts isShapeFillEditorTool
 export src/scenes/editor/editorToolSelection.ts toggleEditorShapeOutline
 export src/scenes/editor/floodFillMatch.ts encodedTileFloodKey
 export src/scenes/editor/inspectorViewModel.ts getContainerLabel
-export src/scenes/editor/inspectorViewModel.ts getPressurePlateTargetLabel
 export src/scenes/editor/randomizeTiles.ts applyRandomizeFlipsToWindow
 export src/scenes/editor/selectionPattern.ts isSelectionCellOccupied
 export src/scenes/editor/selectionPattern.ts paletteCellKey

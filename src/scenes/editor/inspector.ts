@@ -1,3 +1,4 @@
+import { EditorObjectLinkCopy } from './objectLinkCopy';
 import { buildActorInspectorState } from './actorInspectorViewModel';
 import { canConfigureCoopPlate, isCoopPressurePlate } from '../../placedObjects/coopPressurePlates';
 import Phaser from 'phaser';
@@ -11,8 +12,6 @@ import {
   editorState,
   getObjectById,
   isMovingPlatformEndpointObjectId,
-  isMovingPlatformObjectId,
-  isPortalObjectId,
   type PlacedObject,
 } from '../../config';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
@@ -57,6 +56,9 @@ import {
 type PinnedInspector = { kind: 'pressure' | 'container' | 'swordsman' | 'police' | 'npc'; instanceId: string } | null;
 
 export class EditorInspectorController {
+  private readonly linkCopy = new EditorObjectLinkCopy(() => ({
+    scope: 'room', videoAnchor: Boolean(getRoomVideo(this.editRuntime)?.trigger),
+  }));
   private focusedPressurePlateInstanceId: string | null = null;
   private connectingPressurePlateInstanceId: string | null = null;
   private pressurePlateStatusText: string | null = null;
@@ -576,7 +578,7 @@ export class EditorInspectorController {
       this.pinnedInspector = null;
     }
     if (canPlacedObjectBePressurePlateTarget(removed) || isMovingPlatformEndpointObjectId(removed.id)) {
-      this.pressurePlateStatusText = `${this.getObjectLinkTargetLabel(removed.id)} removed. Linked objects were cleared.`;
+      this.pressurePlateStatusText = `${this.linkCopy.targetLabel(removed.id)} removed. Linked objects were cleared.`;
     }
     if (canPlacedObjectBeContainer(removed)) {
       this.containerStatusText = `${getContainerName(removed.id)} removed.`;
@@ -622,7 +624,7 @@ export class EditorInspectorController {
     }
 
     if (this.editRuntime.setObjectLinkTarget(focused.instanceId, null)) {
-      this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(focused)} link cleared.`;
+      this.pressurePlateStatusText = `${this.linkCopy.sourceLabel(focused)} link cleared.`;
       this.connectingPressurePlateInstanceId = null;
       this.focusedPressurePlateInstanceId = focused.instanceId;
       this.pinInspector('pressure', focused.instanceId);
@@ -637,7 +639,7 @@ export class EditorInspectorController {
 
     this.connectingPressurePlateInstanceId = null;
     const focused = this.getFocusedPressurePlate();
-    this.pressurePlateStatusText = `${this.getObjectLinkSourceLabel(focused)} left unlinked for now.`;
+    this.pressurePlateStatusText = `${this.linkCopy.sourceLabel(focused)} left unlinked for now.`;
     if (this.focusedPressurePlateInstanceId) {
       this.pinInspector('pressure', this.focusedPressurePlateInstanceId);
     }
@@ -942,18 +944,18 @@ export class EditorInspectorController {
       const pressureStatusText =
           this.pressurePlateStatusText ??
           (connectMode
-            ? this.getObjectLinkConnectStatus(source, eligibleTargetCount)
+            ? this.linkCopy.connectStatus(source, eligibleTargetCount)
             : targets.length > 0
-              ? this.getObjectLinkLinkedStatus(source, targets)
+              ? this.linkCopy.linkedStatus(source, targets)
               : videoLinked
-                ? `${this.getObjectLinkSourceLabel(source)} linked to the video.`
-                : `${this.getObjectLinkSourceLabel(source)} is not linked yet.`);
+                ? `${this.linkCopy.sourceLabel(source)} linked to the video.`
+                : `${this.linkCopy.sourceLabel(source)} is not linked yet.`);
       render(buildPressurePlateInspectorState({
         statusText: pressureStatusText,
         connectMode,
         targetSummary: targets.length > 0 || videoLinked ? pressureStatusText : null,
         eligibleTargetCount,
-        connectTitle: this.getObjectLinkNoTargetsTitle(source),
+        connectTitle: this.linkCopy.noTargetsTitle(source),
         allowReconnectWithTarget: true,
         coopAvailable: canConfigureCoopPlate(source),
         coopPlate: isCoopPressurePlate(source),
@@ -1008,8 +1010,8 @@ export class EditorInspectorController {
     const eligibleTargets = this.editRuntime.getObjectLinkEligibleTargets(trigger.instanceId);
     this.pressurePlateStatusText =
       eligibleTargets.length > 0
-        ? this.getObjectLinkBeginStatus(trigger, autoPlaced)
-        : this.getObjectLinkNoTargetsStatus(trigger);
+        ? this.linkCopy.beginStatus(trigger, autoPlaced)
+        : this.linkCopy.noTargetsStatus(trigger);
     this.renderPressurePlatePanel();
   }
 
@@ -1037,7 +1039,7 @@ export class EditorInspectorController {
       (placed) => this.canUseObjectLinkTarget(source, placed),
     );
     if (!target) {
-      this.pressurePlateStatusText = this.getObjectLinkPickTargetStatus(source);
+      this.pressurePlateStatusText = this.linkCopy.pickTargetStatus(source);
       this.renderPressurePlatePanel();
       return true;
     }
@@ -1051,8 +1053,8 @@ export class EditorInspectorController {
         this.pinInspector('pressure', source.instanceId);
         this.pressurePlateStatusText =
           toggleResult === 'added'
-            ? `Added ${this.getObjectLinkTargetLabel(target.id)} stop ${targetCount}. Click another anchor, or use Done Later.`
-            : `Removed ${this.getObjectLinkTargetLabel(target.id)} from the path. Click another anchor, or use Done Later.`;
+            ? `Added ${this.linkCopy.targetLabel(target.id)} stop ${targetCount}. Click another anchor, or use Done Later.`
+            : `Removed ${this.linkCopy.targetLabel(target.id)} from the path. Click another anchor, or use Done Later.`;
         this.renderPressurePlatePanel();
       }
       return true;
@@ -1063,7 +1065,7 @@ export class EditorInspectorController {
       this.focusedPressurePlateInstanceId = source.instanceId;
       this.pinInspector('pressure', source.instanceId);
       this.pressurePlateStatusText =
-        `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(target.id)}.`;
+        `${this.linkCopy.sourceLabel(source)} linked to ${this.linkCopy.targetLabel(target.id)}.`;
       this.renderPressurePlatePanel();
     }
     return true;
@@ -1227,127 +1229,6 @@ export class EditorInspectorController {
       ? currentTargets.filter((target) => target.instanceId !== hoveredTarget.instanceId)
       : currentTargets;
     return pathTargets[pathTargets.length - 1] ?? source;
-  }
-
-  private getObjectLinkLinkedStatus(source: PlacedObject, targets: PlacedObject[]): string {
-    if (canPlacedObjectUseObjectPath(source)) {
-      const stopLabel = targets.length === 1 ? 'stop' : 'stops';
-      return `Moving platform path has ${targets.length} ${stopLabel}.`;
-    }
-
-    if (isRoomVideoLinkTarget(source.triggerTargetInstanceId)) {
-      return `${this.getObjectLinkSourceLabel(source)} linked to the video.`;
-    }
-    return `${this.getObjectLinkSourceLabel(source)} linked to ${this.getObjectLinkTargetLabel(targets[0].id)}.`;
-  }
-
-  private getObjectLinkSourceLabel(source: PlacedObject | null): string {
-    if (source && isMovingPlatformObjectId(source.id)) {
-      return 'Moving platform';
-    }
-    if (source && isPortalObjectId(source.id)) {
-      return getObjectById(source.id)?.name ?? 'Portal';
-    }
-
-    return 'Pressure plate';
-  }
-
-  private getObjectLinkConnectStatus(source: PlacedObject, eligibleTargetCount: number): string {
-    if (eligibleTargetCount <= 0) {
-      return this.getObjectLinkNoTargetsStatus(source);
-    }
-
-    return this.getObjectLinkPickTargetStatus(source);
-  }
-
-  private getObjectLinkBeginStatus(source: PlacedObject, autoPlaced: boolean): string {
-    if (isMovingPlatformObjectId(source.id)) {
-      return autoPlaced
-        ? 'Moving platform placed. Click Moving Platform Anchors to add path stops.'
-        : 'Click Moving Platform Anchors to add or remove path stops.';
-    }
-    if (isPortalObjectId(source.id)) {
-      const sourceLabel = this.getObjectLinkSourceLabel(source);
-      return autoPlaced
-        ? `${sourceLabel} placed. Click the opposite portal to connect it.`
-        : `Click the opposite portal to connect this ${sourceLabel}.`;
-    }
-
-    const videoAnchor = getRoomVideo(this.editRuntime)?.trigger ? ', or the video anchor' : '';
-    return autoPlaced
-      ? `Pressure plate placed. Click a door, barricade, cage, or chest${videoAnchor} to link it.`
-      : `Click a door, barricade, cage, or chest${videoAnchor} to link this pressure plate.`;
-  }
-
-  private getObjectLinkPickTargetStatus(source: PlacedObject): string {
-    if (isMovingPlatformObjectId(source.id)) {
-      return 'Pick Moving Platform Anchors in this room.';
-    }
-    if (isPortalObjectId(source.id)) {
-      return 'Pick the opposite portal in this room.';
-    }
-    return getRoomVideo(this.editRuntime)?.trigger
-      ? 'Pick a door, cage, chest, or the video anchor.'
-      : 'Pick a door, cage, or chest in this room.';
-  }
-
-  private getObjectLinkNoTargetsStatus(source: PlacedObject): string {
-    if (isMovingPlatformObjectId(source.id)) {
-      return 'No Moving Platform Anchor is in this room yet. You can link this moving platform later.';
-    }
-    if (isPortalObjectId(source.id)) {
-      return 'No opposite portal is in this room yet. You can link this portal later.';
-    }
-    if (getRoomVideo(this.editRuntime)?.trigger) {
-      return 'Click the anchor on the video to link this pressure plate.';
-    }
-    return 'No door, barricade, cage, or chest is in this room yet. You can link this pressure plate later.';
-  }
-
-  private getObjectLinkNoTargetsTitle(source: PlacedObject): string {
-    if (isMovingPlatformObjectId(source.id)) {
-      return 'Add a Moving Platform Anchor first.';
-    }
-    if (isPortalObjectId(source.id)) {
-      return 'Add the opposite portal first.';
-    }
-    return 'Add a door, cage, or chest first.';
-  }
-
-  private getObjectLinkTargetLabel(objectId: string): string {
-    if (isMovingPlatformEndpointObjectId(objectId)) {
-      return 'Moving Platform Anchor';
-    }
-    if (isPortalObjectId(objectId)) {
-      return getObjectById(objectId)?.name ?? 'Portal';
-    }
-
-    switch (objectId) {
-      case 'door_locked':
-        return 'door';
-      case 'door_metal':
-        return 'metal door';
-      case 'treasure_chest':
-        return 'treasure chest';
-      case 'cage':
-        return 'cage';
-      case 'trapdoor_metal':
-        return 'metal trapdoor';
-      case 'trapdoor_locked':
-        return 'locked trapdoor';
-      case 'blast_door':
-        return 'blast door';
-      case 'barricade':
-        return 'barricade';
-      case 'door_locked_narrow':
-        return 'narrow door';
-      case 'door_metal_narrow':
-        return 'narrow metal door';
-      case 'wooden_bridge':
-        return 'wooden bridge';
-      default:
-        return getObjectById(objectId)?.name ?? 'object';
-    }
   }
 
   private openSignTextEditor(placed: PlacedObject): void {

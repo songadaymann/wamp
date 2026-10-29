@@ -1,4 +1,4 @@
-import { getObjectById, type GameObjectConfig } from '../../config';
+import type { GameObjectConfig } from '../../config';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
@@ -117,35 +117,6 @@ export function buildContainerInspectorState(
     containerClearDisabled: !options.hasContents,
     containerClearTitle: options.hasContents ? '' : 'This container is empty.',
   };
-}
-
-export function getPressurePlateTargetLabel(objectId: string): string {
-  switch (objectId) {
-    case 'door_locked':
-      return 'door';
-    case 'door_metal':
-      return 'metal door';
-    case 'trapdoor_locked':
-      return 'trapdoor';
-    case 'trapdoor_metal':
-      return 'metal trapdoor';
-    case 'treasure_chest':
-      return 'treasure chest';
-    case 'cage':
-      return 'cage';
-    case 'blast_door':
-      return 'blast door';
-    case 'barricade':
-      return 'barricade';
-    case 'door_locked_narrow':
-      return 'narrow door';
-    case 'door_metal_narrow':
-      return 'narrow metal door';
-    case 'wooden_bridge':
-      return 'wooden bridge';
-    default:
-      return getObjectById(objectId)?.name ?? 'object';
-  }
 }
 
 export function getContainerLabel(objectId: string): string {
