@@ -968,7 +968,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       statusMessage: this.statusText ?? null,
     };
     this.scene.stop();
-    this.scene.wake('CourseComposerScene', wakeData);
+    this.scene.run('CourseComposerScene', wakeData);
   }
 
   setRoomTitle(title: string | null): void {

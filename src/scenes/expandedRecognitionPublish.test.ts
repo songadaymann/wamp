@@ -28,3 +28,13 @@ describe('Expanded publication recognition boundaries',()=>{
    expect(confirmPublishRecognition).toHaveBeenCalledWith(expect.objectContaining({targetKey:'room:1,0',version:4,label:'First room'}));
  });
 });
+
+it('starts setup on first return from a directly opened Expanded cell editor',async()=>{
+  const stop=vi.fn(),run=vi.fn(),wake=vi.fn(),host={handleTouchBlur:vi.fn(),musicWorkflow:{setMusicModeActive:vi.fn()},
+    backupDebouncer:{flush:vi.fn()},persistSessionOverridesForPlayableSlices:vi.fn(),getSelectedSlice:()=>({coordinates:{x:1,y:0}}),
+    courseRecord:{draft:{id:'legacy'}},scene:{stop,run,wake}};
+  await CourseEditorScene.prototype.returnToCourseBuilder.call(host as never);
+  expect(stop).toHaveBeenCalledOnce();expect(wake).not.toHaveBeenCalled();
+  expect(run).toHaveBeenCalledWith('CourseComposerScene',expect.objectContaining({courseId:'legacy',selectedCoordinates:{x:1,y:0}}));
+  expect(stop.mock.invocationCallOrder[0]).toBeLessThan(run.mock.invocationCallOrder[0]);
+});
