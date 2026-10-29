@@ -1,3 +1,4 @@
+import { loadChallengeGhost } from './challengeGhost';
 import { buildRunGhost, MAX_GHOST_BYTES, normalizeRunGhost, supportsGhostRace,
   type GhostOption, type RoomGhostResponse, type RunGhost } from '../../../runs/ghostRace';
 import { normalizeRankedRunVerificationTrace } from '../../../runs/verificationTrace';
@@ -90,16 +91,17 @@ export async function handleRoomGhosts(request: Request, url: URL, env: Env, roo
   });
   const selection = resolveAggregatedRoomLeaderboardSelection(record, version);
   const unavailable: GhostOption = { ghost: null, reason: 'unsupported' };
-  const response: RoomGhostResponse = { roomId, roomVersion: selection.roomVersion, top: unavailable, personal: unavailable };
+  const response: RoomGhostResponse = { roomId, roomVersion: selection.roomVersion, top: unavailable, personal: unavailable, challenge: unavailable };
   if (supportsGhostRace(selection.snapshot.goal)) {
     const [topRows, best] = await Promise.all([
       loadRankedRoomLeaderboardRows(env, roomId, selection.leaderboardFamilyVersions, selection.snapshot.goal!, 1),
       auth ? loadViewerRankedRoomLeaderboardRow(env, roomId, selection.leaderboardFamilyVersions,
         selection.snapshot.goal!, auth.user.id) : Promise.resolve(null),
     ]);
-    [response.top, response.personal] = await Promise.all([
+    [response.top, response.personal, response.challenge] = await Promise.all([
       loadGhostOption(env, roomId, selection.equivalentRoomVersions, topRows[0] ?? null),
       auth ? loadGhostOption(env, roomId, selection.equivalentRoomVersions, best) : Promise.resolve({ ghost: null, reason: 'sign_in' } as GhostOption),
+      loadChallengeGhost(env,roomId,selection.equivalentRoomVersions,url.searchParams.get('vs')),
     ]);
   }
   return jsonResponse(request, response, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Origin, Cookie, Authorization' } });

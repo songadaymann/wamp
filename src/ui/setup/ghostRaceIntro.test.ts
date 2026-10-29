@@ -10,8 +10,8 @@ const ghost = { schemaVersion: 1, attemptId: 'best', roomId: '1,2', roomVersion:
 class Node extends EventTarget {
   textContent = ''; value = 'off'; disabled = false;
   classList = { add: vi.fn(), toggle: vi.fn() };
-  options = { top: new EventTarget(), personal: new EventTarget() };
-  querySelector(selector: string) { return selector.includes('top') ? this.options.top : this.options.personal; }
+  options = { top: new EventTarget(), personal: new EventTarget(), challenge: new EventTarget() };
+  querySelector(selector: string) { return selector.includes('top') ? this.options.top : selector.includes('challenge') ? this.options.challenge : this.options.personal; }
 }
 const controllers = new Set<GhostRaceIntro>();
 function fixture() {
@@ -29,6 +29,14 @@ const flush = async () => { await new Promise(resolve => setTimeout(resolve, 0))
 afterEach(() => { for (const controller of controllers) controller.destroy(); controllers.clear(); vi.unstubAllGlobals(); });
 beforeEach(() => notifyGhostBestUpdated('1,2'));
 describe('optional intro races', () => {
+  it('preselects the scoped shared run with its server name and time, even when Start is quick', async () => {
+    const f=fixture(); (window.location as unknown as {href:string}).href='https://wamp.land/r/1/2?vs=shared';
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({...response(),challenge:{ghost:{...ghost,attemptId:'shared',displayName:'Friend'},reason:null}})));
+    f.controller.open(f.room,false); expect(f.controller.take().choice).toBe('challenge');
+    f.controller.open(f.room,false); await flush();
+    expect(f.select.value).toBe('challenge');expect(f.status.textContent).toBe('Beat Friend · 1.00s');
+    expect(f.controller.take().ghost?.attemptId).toBe('shared');
+  });
   it('defaults to the room record rather than the viewer personal best', async () => {
     const f = fixture(); vi.stubGlobal('fetch', vi.fn(async () => Response.json(response())));
     f.controller.open(f.room, false); await flush();

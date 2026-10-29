@@ -25,6 +25,8 @@ interface BasePostRunRatingRequestDetail {
 
 export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
   contentType: 'room';
+  ghostAttemptId?: string;
+  ghostChallengeEligible?: boolean;
   roomCoordinates: RoomCoordinates;
 }
 

@@ -81,7 +81,7 @@ describe('room ghost lookup reads (F329)', () => {
       const expected = await legacyTop(f, version);
       const seen = countSnapshotRows(f);
       const response = await ghosts(f, version);
-      expect(response).toEqual({ roomId: '0,0', ...expected, personal: { ghost: null, reason: 'sign_in' } });
+      expect(response).toEqual({ roomId: '0,0', ...expected, personal: { ghost: null, reason: 'sign_in' }, challenge: {ghost:null,reason:'no_run'} });
       // The published snapshot comes from the room row; only an older requested version is read.
       expect(seen.rows).toBe(version === null || version === changed ? 0 : 1);
     }

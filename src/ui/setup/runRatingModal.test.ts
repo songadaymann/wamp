@@ -1,3 +1,4 @@
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT } from '../../guestRooms/runService';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ default: {} }));
 vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthDebugState: () => ({ authenticated: false }), promptForSignIn: vi.fn() }));
@@ -39,6 +40,14 @@ const leaderboard = { roomId: '0,0', roomVersion: 1, rankingMode: 'time', entrie
 async function settle() { for (let i = 0; i < 4; i++) await Promise.resolve(); }
 afterEach(() => vi.clearAllMocks());
 describe('deferred guest result', () => {
+  it('updates every share action when a queued guest clear becomes saved',async()=>{
+    const f=fixture();f.request({...detail,ghostChallengeEligible:true,guestProgress:{...detail.guestProgress!,status:'queued'}});f.stop();await settle();
+    f.elements.get('btn-run-share-copy')!.dispatchEvent(new Event('click'));await settle();
+    expect(f.navigator.clipboard.writeText).toHaveBeenLastCalledWith('https://wamp.land/r/0/0?from=share');
+    f.win.dispatchEvent(new CustomEvent(GUEST_RUN_PROGRESS_CHANGED_EVENT,{detail:{...detail.guestProgress!,status:'saved',attemptId:'saved-guest'}}));
+    f.elements.get('btn-run-share-copy')!.dispatchEvent(new Event('click'));await settle();
+    expect(f.navigator.clipboard.writeText).toHaveBeenLastCalledWith('https://wamp.land/r/0/0?from=share&vs=saved-guest');f.controller.destroy();
+  });
   it.each(['room', 'expanded_room'])('keeps a new %s summary when an earlier save finishes loading after close', async kind => {
     const f = fixture(), late = deferred<typeof leaderboard & { viewerRank: number }>();
     const load = kind === 'room' ? f.roomRepo.loadRoomLeaderboard : f.expandedRepo.loadExpandedRoomLeaderboard;

@@ -4,7 +4,7 @@ import type { RankedRunVerificationTrace } from './verificationTrace';
 
 export const MAX_GHOST_POINTS = 2304;
 export const MAX_GHOST_BYTES = 300_000;
-export type GhostRaceChoice = 'off' | 'top' | 'personal';
+export type GhostRaceChoice = 'off' | 'top' | 'personal' | 'challenge';
 export interface GhostPoint {
   atMs: number; roomX: number; roomY: number; x: number; y: number;
   vx: number; vy: number; grounded: boolean; snap: boolean;
@@ -16,7 +16,7 @@ export interface RunGhost {
 export type GhostUnavailable = 'no_run' | 'no_recording' | 'layout_changed' | 'sign_in' | 'unsupported';
 export interface GhostOption { ghost: RunGhost | null; reason: GhostUnavailable | null }
 export interface RoomGhostResponse {
-  roomId: string; roomVersion: number; top: GhostOption; personal: GhostOption;
+  roomId: string; roomVersion: number; top: GhostOption; personal: GhostOption; challenge: GhostOption;
 }
 export function supportsGhostRace(goal: RoomGoal | null): boolean {
   return goal !== null && getLeaderboardRankingMode(goal) === 'time';

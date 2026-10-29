@@ -157,7 +157,7 @@ export class RunRatingModalController {
   private readonly handleShareTwitterClick = () => {
     const request = this.activeRequest;
     if (!request || this.ratingOnly) return;
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     openTwitterShareIntent(this.windowObj, buildRunShareText(request, this.getShareContentTitle(request)), url);
     this.setShareStatus('Opened X.', 'default');
@@ -398,7 +398,7 @@ export class RunRatingModalController {
   recordGuestSave(result: GuestRunSaveResult): void {
     this.guestSaveResults.set(result.clientRunId, result);
     if (this.guestSaveResults.size > 50) this.guestSaveResults.delete(this.guestSaveResults.keys().next().value!);
-    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) this.renderGuestClaim();
+    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) { this.renderGuestClaim(); this.renderShare(this.activeRequest); }
   }
 
   private enqueuePrompt(prompt: { mode: RunRatingModalMode; detail: PostRunRatingRequestDetail }): void {
@@ -695,7 +695,7 @@ export class RunRatingModalController {
     }
     const loadToken = this.loadToken;
     const text = buildRunShareText(request, this.getShareContentTitle(request));
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     try {
       const file = this.shareImage ? createRunShareImageFile(this.shareImage) : null;
@@ -722,7 +722,7 @@ export class RunRatingModalController {
     const request = this.activeRequest;
     if (!request || this.ratingOnly) return;
     const loadToken = this.loadToken;
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     try {
       await copyShareLink(this.doc, this.windowObj.navigator, url);
@@ -1093,7 +1093,7 @@ export class RunRatingModalController {
     const hasRoomImage = request.contentType === 'room';
     this.elements.sharePreview?.classList.toggle('hidden', !hasRoomImage);
     this.elements.shareSection?.classList.toggle('run-share-text-only', !hasRoomImage);
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     const shareText = buildRunShareText(request, this.getShareContentTitle(request));
     if (this.elements.shareMessage) {
       this.elements.shareMessage.textContent = shareText;

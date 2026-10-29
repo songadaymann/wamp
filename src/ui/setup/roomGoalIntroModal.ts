@@ -199,6 +199,7 @@ function ensureRoomGoalIntroModalMarkup(doc: Document): void {
             <option value="off">No ghost</option>
             <option value="top" disabled>Race #1 · unavailable</option>
             <option value="personal" disabled>Race my best · unavailable</option>
+            <option value="challenge" disabled hidden>Shared challenge · unavailable</option>
           </select>
           <div id="room-ghost-race-status" role="status"></div>
         </div>
