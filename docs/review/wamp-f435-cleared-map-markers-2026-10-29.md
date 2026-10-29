@@ -50,3 +50,8 @@ Final full check passed:728files, 6,186tests, one existing expected failure and
 two skips. All lint, types, DOM, generated binding, build and asset stages pass.
 Boot667.9KB/670KB. Worker-safety and strict immutable map-asset contract probes
 pass. Final check: `/tmp/wamp-f435-final-check.log`.
+
+CI initially exposed missing isolated responses for the new signed-in map read in
+existing browser fixtures. Added session-bound empty progress to those fixtures;
+their missing-request, HTTP and console-error assertions remain unchanged. Native
+Worker/D1 progress tests continue to exercise the real endpoint and nonempty data.
