@@ -128,3 +128,17 @@ describe('bounded death positions', () => {
     expect(JSON.parse(deathLocationsJson(normalized,binding,[frame.roomCoordinates],1000,3)!)).toHaveLength(3);
   });
 });
+
+it('keeps Expanded statistics exact-version even when its two versions have the same content',async()=>{
+ const f=setup();course(f);
+ const row=f.sqlite.prepare("SELECT snapshot_json FROM expanded_room_versions WHERE expanded_room_id='native1' AND version=1").get() as {snapshot_json:string};
+ const snapshot={...JSON.parse(row.snapshot_json),version:2};
+ f.sqlite.prepare("INSERT INTO expanded_room_versions(expanded_room_id,version,snapshot_json,created_at,published_by_user_id) VALUES('native1',2,?,?,'builder')").run(JSON.stringify(snapshot),NOW);
+ f.sqlite.prepare("UPDATE expanded_rooms SET published_json=?,published_version=2 WHERE id='native1'").run(JSON.stringify(snapshot));
+ f.sqlite.exec("INSERT INTO expanded_room_cells(expanded_room_id,expanded_room_version,cell_order,room_id,room_x,room_y,room_version) SELECT expanded_room_id,2,cell_order,room_id,room_x,room_y,room_version FROM expanded_room_cells WHERE expanded_room_id='native1' AND expanded_room_version=1");
+ for(const version of [1,2])f.sqlite.prepare(`INSERT INTO expanded_room_runs(attempt_id,expanded_room_id,expanded_room_version,goal_type,goal_json,user_id,user_display_name,started_at,finished_at,result,elapsed_ms,verification_status)
+  VALUES(?,'native1',?,'reach_exit','{}','p1','Player',?,?,'completed',?,'passed')`).run(`exact-${version}`,version,NOW,NOW,version*1000);
+ const url=new URL('https://api.wamp.land/api/expanded-rooms/native1/stats?version=2');
+ const response=await handleRoomInsights(new Request(url),url,f.env,'expanded_room','native1');
+ expect(await response.json()).toMatchObject({summary:{attempts:1,medianClearMs:2000},equivalentVersions:[2],versionGrouping:'exact',comparison:null});
+});

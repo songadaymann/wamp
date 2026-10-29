@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import type { DeathMapCell, RoomInsightsResponse, RoomInsightTarget } from '../../insights/model';
+import type { DeathMapCell, RoomInsightsResponse, RoomInsightTarget, RoomInsightSummary, RoomInsightVersionStats } from '../../insights/model';
 import { loadRoomInsights } from '../../insights/repository';
 import { createModalLifecycle } from './modalLifecycle';
 import { subscribeEditorUi } from '../../scenes/editor/uiEvents';
@@ -13,6 +13,8 @@ export class RoomInsightsController {
   private readonly metrics;
   private readonly coverage;
   private readonly toggle;
+  private readonly mapVersionSelect;
+  private mapVersion: 'current' | 'previous' = 'current';
   private readonly retry;
   private stopEditorUi: (() => void) | null = null;
   private generation = 0;
@@ -30,9 +32,11 @@ export class RoomInsightsController {
     this.status = doc.getElementById('room-insights-status'); this.metrics = doc.getElementById('room-insights-metrics');
     this.coverage = doc.getElementById('room-insights-coverage'); this.toggle = doc.getElementById('room-insights-map') as HTMLInputElement | null;
     this.retry = doc.getElementById('btn-room-insights-retry');
+    this.mapVersionSelect = doc.getElementById('room-insights-map-version') as HTMLSelectElement | null;
     this.lifecycle = createModalLifecycle({ doc, modal: this.modal, onClose: () => this.close() });
   }
   init(): void {
+    this.mapVersionSelect?.addEventListener('change',this.onMapVersion);
     this.lifecycle.attach(); this.closeButton?.addEventListener('click',this.onClose);
     this.retry?.addEventListener('click',this.onRetry); this.toggle?.addEventListener('change',this.onToggle);
     this.win.addEventListener('room-insights-open',this.onOpen); this.stopEditorUi?.(); this.stopEditorUi = subscribeEditorUi(this.win,this.onEditorChange);
@@ -42,6 +46,7 @@ export class RoomInsightsController {
   }
   destroy(): void {
     this.close(); this.clearMap(); this.lifecycle.detach();
+    this.mapVersionSelect?.removeEventListener('change',this.onMapVersion);
     this.closeButton?.removeEventListener('click',this.onClose); this.retry?.removeEventListener('click',this.onRetry);
     this.toggle?.removeEventListener('change',this.onToggle); this.win.removeEventListener('room-insights-open',this.onOpen);
     this.stopEditorUi?.(); this.stopEditorUi = null; this.doc.removeEventListener('click',this.onEditorClick);
@@ -69,9 +74,14 @@ export class RoomInsightsController {
     this.editorSource?.events.off('shutdown',this.onSourceExit); this.editorSource?.events.off('sleep',this.onSourceExit);
     this.returnFocus = this.doc.activeElement instanceof HTMLElement ? this.doc.activeElement : null;
     this.openingEditorKey = scene ? JSON.stringify(scene.getRoomInsightsTarget()) : null;
+    if (!scene || this.mappedScene !== scene || this.mappedKey !== this.openingEditorKey) { this.clearMap(); this.mapVersion = 'current'; }
+    this.doc.getElementById('room-insights-previous')?.classList.add('hidden');
+    this.doc.getElementById('room-insights-map-version-label')?.classList.add('hidden');
     this.target = target; this.editorSource = scene; this.result = null; this.generation++;
     scene?.events.on('shutdown',this.onSourceExit); scene?.events.on('sleep',this.onSourceExit);
     this.metrics?.replaceChildren(); if (this.coverage) this.coverage.textContent = '';
+    this.text('room-insights-selected-title','Selected version');
+    this.text('room-insights-selected-versions','');
     if (this.toggle) { this.toggle.checked = false; this.toggle.disabled = true; }
     this.retry?.classList.add('hidden'); this.lifecycle.show(); this.closeButton?.focus();
     if (!target) { if (this.status) this.status.textContent = 'Publish this level to collect play statistics.'; return; }
@@ -98,7 +108,7 @@ export class RoomInsightsController {
       return;
     }
     if (event.key !== 'Tab') return;
-    const items = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)') ?? []).filter(el => el.getClientRects().length);
+    const items = Array.from(this.modal?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)') ?? []).filter(el => el.getClientRects().length);
     event.preventDefault();
     const index = items.indexOf(active as HTMLElement);
     items[(index + (event.shiftKey ? -1 : 1) + items.length) % items.length]?.focus();
@@ -120,29 +130,64 @@ export class RoomInsightsController {
   private readonly onToggle = () => {
     if (!this.toggle?.checked) { this.clearMap(); return; }
     if (!this.result || !this.editorSource || this.currentEditor() !== this.editorSource) return;
-    this.clearMap(); this.editorSource.setRoomDeathMap(this.result.deathMap);
+    const selected = this.selectedMap(); if (!selected?.deathMap.length) { this.clearMap(); return; }
+    this.clearMap(); this.editorSource.setRoomDeathMap(selected.deathMap);
     this.mappedScene = this.editorSource; this.mappedKey = JSON.stringify(this.editorSource.getRoomInsightsTarget());
     this.mappedScene.events.on('shutdown',this.onMappedExit); this.mappedScene.events.on('sleep',this.onMappedExit);
-    this.toggle.checked = true; this.doc.getElementById('editor-death-map-key')?.classList.remove('hidden');
+    this.toggle.checked = true;
+    this.text('editor-death-map-version',`Death map v${selected.target.version} · orange = busiest tiles`);
+    this.doc.getElementById('editor-death-map-key')?.classList.remove('hidden');
+  };
+  private text(id:string,value:string):void { const el=this.doc.getElementById(id);if(el)el.textContent=value; }
+  private selectedMap():RoomInsightVersionStats|null { return this.mapVersion==='previous' ? this.result?.comparison??this.result : this.result; }
+  private versionLabel(stats:RoomInsightVersionStats):string {
+    const versions=stats.equivalentVersions??[stats.target.version!];
+    if(stats.versionGrouping!=='matching')return `Exact published v${stats.target.version}`;
+    return versions.length<=6?`Matching leaderboard versions: ${versions.map(v=>`v${v}`).join(', ')}`
+      :`${versions.length} matching leaderboard versions, from v${versions[0]} to v${versions[versions.length-1]}`;
+  }
+  private renderMetrics(target:HTMLElement|null,stats:RoomInsightSummary):void {
+    const rows:[string,string][]=[['Finished attempts',stats.attempts.toLocaleString()],['Players',stats.uniquePlayers.toLocaleString()],['Clears',stats.completions.toLocaleString()],
+      ['Clear rate',stats.clearRate===null?'—':`${Math.round(stats.clearRate*100)}%`],['Median clear',stats.medianClearMs===null?'—':`${(stats.medianClearMs/1000).toFixed(1)}s`],
+      ['Deaths / attempt',stats.averageDeaths===null?'—':stats.averageDeaths.toFixed(1)],['Failed',stats.failures.toLocaleString()],['Abandoned',stats.abandonments.toLocaleString()],
+      ['Last played',stats.lastPlayedAt?new Date(stats.lastPlayedAt).toLocaleString():'No plays yet']];
+    target?.replaceChildren(...rows.map(([label,value])=>{const row=this.doc.createElement('div'),dt=this.doc.createElement('dt'),dd=this.doc.createElement('dd');dt.textContent=label;dd.textContent=value;row.append(dt,dd);return row;}));
+  }
+  private renderCoverage():void {
+    const selected=this.selectedMap();if(!selected)return;const stats=selected.summary;
+    if(this.coverage)this.coverage.textContent=stats.mappedAttempts
+      ?`v${selected.target.version}: ${stats.mappedDeaths.toLocaleString()} of ${stats.totalDeaths.toLocaleString()} deaths have locations, from ${stats.mappedAttempts.toLocaleString()} attempts. The first 50 deaths per attempt are recorded. ${selected.deathMapTruncated?'Showing the 4,096 busiest tiles. ':''}${this.editorSource?'Selected-version deaths are drawn over the open draft; layouts may differ. Close this panel to see the map.':'Open this level in the editor, then Room → Insights to see its death map.'}`
+      :'Death locations are collected on new plays. Earlier attempts have statistics but no map locations.';
+    if(this.toggle){this.toggle.disabled=!this.editorSource||!selected.deathMap.length;this.toggle.checked=this.mappedScene===this.editorSource&&this.mappedKey===JSON.stringify(this.editorSource?.getRoomInsightsTarget());}
+  }
+  private readonly onMapVersion=()=>{
+    const checked=this.toggle?.checked;this.mapVersion=this.mapVersionSelect?.value==='previous'?'previous':'current';
+    this.clearMap();this.renderCoverage();if(checked&&this.toggle&&!this.toggle.disabled){this.toggle.checked=true;this.onToggle();}
   };
   private async refresh(): Promise<void> {
     if (!this.target) return;
     const generation = ++this.generation; if (this.status) this.status.textContent = 'Loading play statistics…'; this.retry?.classList.add('hidden');
     try {
       const result = await this.load(this.target); if (generation !== this.generation || !this.lifecycle.isOpen()) return;
-      this.result = result; const stats = result.summary;
+      this.result = result;
       if (this.status) this.status.textContent = `${result.title || 'Untitled level'} · published v${result.target.version} · ${result.cells.length} cell${result.cells.length === 1 ? '' : 's'}`;
-      const rows: [string,string][] = [
-        ['Finished attempts',stats.attempts.toLocaleString()],['Players',stats.uniquePlayers.toLocaleString()],['Clears',stats.completions.toLocaleString()],
-        ['Clear rate',stats.clearRate === null ? '—' : `${Math.round(stats.clearRate*100)}%`],['Median clear',stats.medianClearMs === null ? '—' : `${(stats.medianClearMs/1000).toFixed(1)}s`],
-        ['Deaths / attempt',stats.averageDeaths === null ? '—' : stats.averageDeaths.toFixed(1)],['Failed',stats.failures.toLocaleString()],['Abandoned',stats.abandonments.toLocaleString()],
-        ['Last played',stats.lastPlayedAt ? new Date(stats.lastPlayedAt).toLocaleString() : 'No plays yet'],
-      ];
-      this.metrics?.replaceChildren(...rows.map(([label,value]) => { const row = this.doc.createElement('div'); const dt = this.doc.createElement('dt'); const dd = this.doc.createElement('dd'); dt.textContent = label; dd.textContent = value; row.append(dt,dd); return row; }));
-      if (this.coverage) this.coverage.textContent = stats.mappedAttempts
-        ? `${stats.mappedDeaths.toLocaleString()} of ${stats.totalDeaths.toLocaleString()} deaths have map locations, from ${stats.mappedAttempts.toLocaleString()} attempts. The first 50 deaths per attempt are recorded. ${result.deathMapTruncated ? 'Showing the 4,096 busiest tiles. ' : ''}${this.editorSource ? 'Orange tiles mark the busiest spots. The map shows the published version while you edit a draft. Close this panel to see the map.' : 'Open this level in the editor, then Room → Insights to see its death map.'}`
-        : 'Death locations are collected on new plays. Earlier attempts have statistics but no map locations.';
-      if (this.toggle) { this.toggle.disabled = !this.editorSource || !result.deathMap.length; this.toggle.checked = this.mappedScene === this.editorSource && this.mappedKey === JSON.stringify(this.editorSource?.getRoomInsightsTarget()); }
+      this.text('room-insights-selected-title',`Selected layout · v${result.target.version}`);
+      this.text('room-insights-selected-versions',this.versionLabel(result));this.renderMetrics(this.metrics,result.summary);
+      this.doc.getElementById('room-insights-previous')?.classList.toggle('hidden',!result.comparison);
+      if (result.comparison) {
+        this.text('room-insights-previous-title',`Previous different layout · v${result.comparison.target.version}`);
+        this.text('room-insights-previous-versions',this.versionLabel(result.comparison));
+        this.renderMetrics(this.doc.getElementById('room-insights-previous-metrics'),result.comparison.summary);
+      } else this.mapVersion = 'current';
+      if (this.mapVersionSelect) {
+        const choices = [[`Selected v${result.target.version}`,'current'],...(result.comparison?[[`Previous v${result.comparison.target.version}`,'previous']]:[])];
+        this.mapVersionSelect.replaceChildren(...choices.map(([label,value])=>{const option=this.doc.createElement('option');option.textContent=label;option.value=value;return option;}));
+        this.mapVersionSelect.value=this.mapVersion;
+      }
+      this.doc.getElementById('room-insights-map-version-label')?.classList.toggle('hidden',!result.comparison);
+      const restoreMap=this.mappedScene===this.editorSource && this.mappedKey===JSON.stringify(this.editorSource?.getRoomInsightsTarget());
+      this.renderCoverage();
+      if (restoreMap && this.toggle) { if (!this.toggle.disabled) { this.toggle.checked=true;this.onToggle(); } else this.clearMap(); }
     } catch (error) {
       if (generation !== this.generation || !this.lifecycle.isOpen()) return;
       if (this.status) this.status.textContent = error instanceof Error ? error.message : 'Play statistics could not load.';
