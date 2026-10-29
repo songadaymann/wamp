@@ -1,3 +1,4 @@
+import { BUILD_PROMPT_OPEN_REQUEST } from '../../buildPrompts/events';
 import { activityDescription, type BuilderActivity } from '../../activity/model';
 
 export function createActivityEntry(doc: Document, entry: BuilderActivity, guestView: boolean,
@@ -15,6 +16,15 @@ export function createActivityEntry(doc: Document, entry: BuilderActivity, guest
   }
   const link = doc.createElement('a'); link.href = entry.contentPath;
   link.textContent = guestView || entry.guestActivityRef !== undefined ? description.slice(entry.actorName.length + 1) : description;
+  const slug = entry.kind === 'prompt_result' ? entry.recognition?.promptSlug : null;
+  if (slug) {
+    link.href = `/?buildPrompt=${encodeURIComponent(slug)}`;
+    link.addEventListener('click', event => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const win = doc.defaultView; if (!win) return;
+      event.preventDefault(); win.dispatchEvent(new CustomEvent(BUILD_PROMPT_OPEN_REQUEST, { detail: { slug } }));
+    });
+  }
   const time = doc.createElement('div'); time.className = 'history-modal-meta';
   time.textContent = `v${entry.contentVersion} · ${new Date(entry.createdAt).toLocaleString()}`;
   row.append(link, time);

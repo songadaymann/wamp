@@ -1,3 +1,5 @@
+import { openPlacedSignTextEditor } from './courseEditor/signText';
+import { confirmCellPublishRecognition, confirmExpandedPublishRecognition } from './courseEditor/recognition';
 import { EditorWorkspaceDrawingController } from './editor/workspaceDrawing';
 import { drawEditorShapePreview } from './editor/shapeInteraction';
 import { applyEditorMusicCameraFit } from './editor/musicCameraFit';
@@ -29,7 +31,6 @@ import {
 } from '../music/model';
 import {
   canPlacedObjectUseObjectLink,
-  getObjectById,
   LAYER_NAMES,
   placedObjectContributesToCategory,
   ROOM_HEIGHT,
@@ -107,8 +108,7 @@ import {
   sliceContentRevision, writeSliceAgainstBase, type SliceWriteProgress,
 } from './courseEditor/sliceEditConflict';
 import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
-import { requestSignTextEdit } from '../signs/events';
-import { canPlacedObjectHaveSignText, getPlacedObjectSignText } from '../signs/model';
+import { canPlacedObjectHaveSignText } from '../signs/model';
 import type { EditorCourseUiState, EditorMarkerPlacementMode, CourseWorkspaceSceneBridge } from '../ui/setup/sceneBridge';
 import { EditorUiBridge } from './editor/uiBridge';
 import { drawDeadlyPitBoundary, drawEditorGrid } from './editor/grid';
@@ -1296,7 +1296,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return null;
     }
 
-    showBusyOverlay('Publishing expanded room cells...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
     const progress = createSliceWriteProgress('publish');
     try {
       await refreshAuthSession();
@@ -1314,6 +1313,9 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         return null;
       }
 
+      const userId = getAuthDebugState().user?.id ?? null;
+      if (!await confirmCellPublishRecognition(targetSlices, userId, slice => this.scene.isActive() && this.roomSlices.get(slice.roomId) === slice, this.events)) return null;
+      showBusyOverlay('Publishing expanded room cells...', `Publishing ${targetSlices.length} room${targetSlices.length === 1 ? '' : 's'}...`);
       if (!(await this.writeSlices(targetSlices, progress))) return progress.lastRecord;
       await refreshAuthSession();
       this.backupDebouncer.flush();
@@ -1404,6 +1406,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       && getAuthDebugState().user?.id === userId;
     this.coursePublishing = true;
     try {
+      if (!await confirmExpandedPublishRecognition(courseRecord, userId, current, this.events)) return;
       const promptChoice = await prepareBuildPromptEntry(userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(courseId)}`);
       if (!promptChoice || !current()) return;
       showBusyOverlay('Publishing expanded room...', 'Saving expanded room goal and publishing the expanded room...');
@@ -2616,7 +2619,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         (placed) => canPlacedObjectHaveSignText(placed),
       );
       if (clickedSign?.instanceId) {
-        this.openPlacedSignTextEditor(clickedSign, this.getSliceLabel(slice));
+        openPlacedSignTextEditor(clickedSign, this.getSliceLabel(slice));
         this.renderUi();
         return;
       }
@@ -2679,7 +2682,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     if (placed?.instanceId && canPlacedObjectHaveSignText(placed)) {
-      this.openPlacedSignTextEditor(placed, this.getSliceLabel(slice));
+      openPlacedSignTextEditor(placed, this.getSliceLabel(slice));
     }
   }
 
@@ -3127,20 +3130,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   private getSliceLabel(slice: CourseRoomSlice): string {
     return slice.roomTitle?.trim() || `Room ${slice.coordinates.x},${slice.coordinates.y}`;
-  }
-
-  private openPlacedSignTextEditor(placed: PlacedObject, sliceLabel: string): void {
-    if (!placed.instanceId) {
-      return;
-    }
-
-    requestSignTextEdit({
-      instanceId: placed.instanceId,
-      objectId: placed.id,
-      objectLabel: getObjectById(placed.id)?.name ?? 'Sign',
-      currentText: getPlacedObjectSignText(placed) ?? '',
-      contextHint: sliceLabel,
-    });
   }
 
   private handleShutdown = (): void => {

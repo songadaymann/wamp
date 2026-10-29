@@ -165,3 +165,17 @@ describe('activity inbox lifecycle', () => {
     expect(f.elements.get('activity-tab-my')?.attributes.get('aria-selected')).toBe('true');
   });
 });
+
+it('routes a prompt-result notice to results and closes the inbox without leaking markup',async()=>{
+  const f=fixture();Object.assign(f.doc,{defaultView:f.win});
+  const feed=response();feed.entries[0]={...feed.entries[0],kind:'prompt_result',actorName:'WAMP',
+    recognition:{promptSlug:'older-week',promptTitle:'<svg> theme',rank:2,entryCount:4}};
+  f.repository.load.mockResolvedValue(feed);f.click('btn-activity-open');await settle();
+  const row=f.elements.get('activity-list')!.children[0],link=row.children[0],open=vi.fn();
+  f.win.addEventListener('build-prompt-open-request',open);
+  expect(link.href).toBe('/?buildPrompt=older-week');expect(link.textContent).toContain('placed #2 in <svg> theme');
+  const event=new Event('click',{cancelable:true});link.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);expect(open).toHaveBeenCalledOnce();
+  expect((open.mock.calls[0][0] as CustomEvent).detail).toEqual({slug:'older-week'});
+  expect(f.elements.get('activity-modal')!.classList.contains('hidden')).toBe(true);
+});

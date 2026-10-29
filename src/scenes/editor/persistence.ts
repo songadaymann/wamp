@@ -1,3 +1,4 @@
+import { confirmPublishRecognition } from '../../publishing/recognition';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../../buildPrompts/publishing';
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
@@ -47,6 +48,7 @@ interface EditorPersistenceControllerHost {
 
 export class EditorPersistenceController {
   private publishing = false;
+  private recognitionAbort: AbortController | null = null;
   private readonly collection: RoomCollectionFlow;
   private unwatchWalletRecovery: (() => void) | null = null;
   constructor(
@@ -96,7 +98,7 @@ export class EditorPersistenceController {
     });
   }
 
-  destroy(): void { this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
+  destroy(): void { this.recognitionAbort?.abort(); this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
 
   get statusText(): string {
     return this.roomSession.statusText;
@@ -194,6 +196,10 @@ export class EditorPersistenceController {
         if (!title || this.roomSession.currentRoomId !== roomId || getAuthDebugState().user?.id !== userId) return null;
         this.setRoomTitle(title);
       }
+      this.recognitionAbort = new AbortController();
+      if (!await confirmPublishRecognition({ targetKey: `room:${roomId}`, version: this.roomSession.currentPublishedVersion,
+        userId, signal: this.recognitionAbort.signal, current: () => (this.host.isActive?.() ?? true)
+          && this.roomSession.currentRoomId === roomId && (!userId || getAuthDebugState().user?.id === userId) })) return null;
       const promptChoice = await prepareBuildPromptEntry(userId, `room:${roomId}`);
       if (!promptChoice || this.roomSession.currentRoomId !== roomId || (userId && getAuthDebugState().user?.id !== userId)) return null;
       const previousProgression = await capturePublishProgression(userId);
@@ -215,6 +221,7 @@ export class EditorPersistenceController {
       }
       return record;
     } finally {
+      this.recognitionAbort?.abort(); this.recognitionAbort = null;
       this.publishing = false;
       if (showingBusy && getAppFeedbackDebugState().busyState !== 'error') {
         hideBusyOverlay();

@@ -1,3 +1,4 @@
+import { confirmPublishRecognition } from '../../publishing/recognition';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../../buildPrompts/publishing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneRoomSnapshot, createDefaultRoomRecord } from '../../persistence/roomRepository';
@@ -7,6 +8,7 @@ import type { EditorRoomSession } from './roomSession';
 import { EditorPersistenceController } from './persistence';
 
 const state = vi.hoisted(() => ({ userId: 'builder' as string | null }));
+vi.mock('../../publishing/recognition', () => ({ confirmPublishRecognition: vi.fn(async () => true) }));
 vi.mock('../../buildPrompts/publishing', () => ({ prepareBuildPromptEntry: vi.fn(async () => ({ slug: null })), completeBuildPromptEntry: vi.fn(async () => {}) }));
 vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: !!state.userId, user: { id: state.userId } }) }));
 vi.mock('../../publishing/events', () => ({ requestRoomPublishName: vi.fn(async () => 'Treasure Hunt'), suggestRoomTitle: () => 'A suggested name' }));
@@ -47,7 +49,7 @@ describe('explicit first publication', () => {
     vi.mocked(prepareBuildPromptEntry).mockResolvedValue(null); const f = fixture('Named');
     expect(await f.controller.publishRoom()).toBeNull(); expect(f.publishRoom).not.toHaveBeenCalled();
     let resolve!: (choice: { slug: string | null }) => void; vi.mocked(prepareBuildPromptEntry).mockImplementation(() => new Promise(done => { resolve = done; }));
-    const pending = f.controller.publishRoom(); state.userId = 'other'; resolve({ slug: 'fixture-week' }); await pending; expect(f.publishRoom).not.toHaveBeenCalled();
+    const pending = f.controller.publishRoom(); await vi.waitFor(() => expect(resolve).toBeTypeOf('function')); state.userId = 'other'; resolve({ slug: 'fixture-week' }); await pending; expect(f.publishRoom).not.toHaveBeenCalled();
   });
   it('cancellation makes no title change or publish request', async () => {
     vi.mocked(requestRoomPublishName).mockResolvedValue(null); const f = fixture();
@@ -93,4 +95,10 @@ describe('course session copy after a room editor save (F379)', () => {
     await f.controller.saveDraft(true);
     expect(f.host.syncActiveCourseRoomSessionSnapshot).not.toHaveBeenCalled();
   });
+});
+
+it('does not publish a recognized version when its confirmation is cancelled',async()=>{
+  const f=fixture('Already named',6);vi.mocked(confirmPublishRecognition).mockResolvedValueOnce(false);
+  expect(await f.controller.publishRoom()).toBeNull();expect(f.publishRoom).not.toHaveBeenCalled();
+  expect(confirmPublishRecognition).toHaveBeenCalledWith(expect.objectContaining({targetKey:'room:1,2',version:6,userId:'builder'}));
 });

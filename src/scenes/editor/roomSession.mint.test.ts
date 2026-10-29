@@ -14,6 +14,7 @@ import { requestRoomWalletConsent } from '../../ui/roomWalletConsent';
 
 const wallet = '0x2222222222222222222222222222222222222222';
 const state = vi.hoisted(() => ({ authenticated: true, userId: 'buyer', wallet: '0x2222222222222222222222222222222222222222', signer: null as string | null, busyTitle: null as string | null }));
+vi.mock('../../publishing/recognition', () => ({ confirmPublishRecognition: vi.fn(async () => true) }));
 vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth-state-changed', getAuthDebugState: () => ({ authenticated: state.authenticated, walletAddress: state.signer, user: { id: state.userId, walletAddress: state.wallet } }), refreshAuthSession: vi.fn(async () => {}), sendPreparedWalletTransaction: vi.fn(), promptForSignIn: vi.fn() }));
 vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn(async () => 'data:image/png;base64,aGVsbG8=') }));
 vi.mock('../../ui/roomWalletConsent', () => ({ requestRoomWalletConsent: vi.fn(async () => true) }));

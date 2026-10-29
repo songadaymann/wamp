@@ -1,3 +1,4 @@
+import { confirmPublishRecognition } from '../publishing/recognition';
 import { applyInspectPointerPan, pointerPassedPanThreshold, zoomInspectCamera } from './overworld/inspectCameraGestures';
 import * as goalAuthoring from '../courses/goalAuthoring';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
@@ -91,6 +92,7 @@ interface CoursePublishedRoomMeta {
 }
 
 export class CourseComposerScene extends Phaser.Scene implements CourseComposerSceneBridge {
+  private recognitionAbort: AbortController | null = null;
   private readonly worldRepository = createWorldRepository();
   private readonly draftBackup = new CourseDraftBackupController();
   private readonly backupDebouncer = new DraftBackupDebouncer(() => this.flushDraftBackup());
@@ -622,6 +624,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       const courseId = this.record.draft.id;
       const userId = getAuthDebugState().user?.id ?? null;
       const firstPublish = !this.record.published && this.record.versions.length === 0;
+      this.recognitionAbort = new AbortController();
+      if (!await confirmPublishRecognition({ targetKey: `expanded_room:${expandedRoomIdFromLegacyCourseId(courseId)}`,
+        version: this.record.published?.version ?? 0, userId, signal: this.recognitionAbort.signal,
+        current: () => this.scene.isActive() && this.record?.draft.id === courseId && getAuthDebugState().user?.id === userId })) return;
       const promptChoice = await prepareBuildPromptEntry(userId, `expanded_room:${expandedRoomIdFromLegacyCourseId(courseId)}`);
       if (!promptChoice || !this.scene.isActive() || this.record?.draft.id !== courseId || getAuthDebugState().user?.id !== userId) return;
       const previousProgression = await capturePublishProgression(userId);
@@ -652,6 +658,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
       this.statusText = error instanceof Error ? error.message : 'Failed to publish expanded room.';
       this.renderUi();
     } finally {
+      this.recognitionAbort?.abort(); this.recognitionAbort = null;
       this.loading = false;
       this.renderUi();
     }
@@ -1553,6 +1560,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private handleShutdown(): void {
+    this.recognitionAbort?.abort();
     this.backupDebouncer.flush();
     this.draftLifecycle?.destroy();
     this.draftLifecycle = null;
