@@ -26,6 +26,17 @@
     overflow-y: auto;
   }
 
+  .room-insights-comparison {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(min(100%,250px),1fr));
+    gap: 16px;
+  }
+
+  .room-insights-comparison > section { min-width: 0; }
+  .room-insights-comparison h3 { font-size: var(--ui-text-body,14px); }
+  .room-insights-map-version { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .room-insights-map-version select { min-height: 44px; max-width: 100%; font: inherit; color: var(--text); background: var(--panel); }
+
   .room-insights-metrics {
     display: grid;
     grid-template-columns: repeat(2,minmax(0,1fr));

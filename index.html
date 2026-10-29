@@ -1525,7 +1525,7 @@
         <label class="editor-room-title-label" for="room-title-input">Room Name</label>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />
       </div>
-      <div id="editor-death-map-key" class="hidden"><span>Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>
+      <div id="editor-death-map-key" class="hidden"><span id="editor-death-map-version">Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>
       <div id="editor-room-feedback" class="editor-room-feedback-overlay">
         <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
@@ -2342,7 +2342,20 @@
       <div class="room-insights-scroll">
         <p id="room-insights-status" class="history-modal-meta" role="status"></p>
         <button id="btn-room-insights-retry" class="bar-btn bar-btn-small hidden" type="button">Try Again</button>
-        <dl id="room-insights-metrics" class="room-insights-metrics"></dl>
+        <div class="room-insights-comparison">
+          <section aria-labelledby="room-insights-selected-title">
+            <h3 id="room-insights-selected-title">Selected version</h3>
+            <p id="room-insights-selected-versions" class="history-modal-meta"></p>
+            <dl id="room-insights-metrics" class="room-insights-metrics"></dl>
+          </section>
+          <section id="room-insights-previous" class="hidden" aria-labelledby="room-insights-previous-title">
+            <h3 id="room-insights-previous-title">Previous different layout</h3>
+            <p id="room-insights-previous-versions" class="history-modal-meta"></p>
+            <dl id="room-insights-previous-metrics" class="room-insights-metrics"></dl>
+          </section>
+        </div>
+        <p class="history-modal-meta">Matching leaderboard versions share statistics. Expanded Rooms use the selected version only.</p>
+        <label id="room-insights-map-version-label" class="room-insights-map-version hidden">Death map version <select id="room-insights-map-version" aria-label="Death map version"></select></label>
         <p class="history-modal-meta">Finished attempts include clears, failures and reported abandonments. Builder tests, invalid clears and unfinished attempts are excluded. New intro-only visits are excluded; older counts use saved server results. Guests are included; a claim does not add another play.</p>
         <label class="room-insights-map-toggle"><input id="room-insights-map" type="checkbox" disabled> Show death map in editor</label>
         <p id="room-insights-coverage" class="history-modal-meta"></p>

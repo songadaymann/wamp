@@ -6,15 +6,19 @@ export interface RoomInsightSummary {
   totalDeaths: number; lastPlayedAt: string | null; mappedAttempts: number; mappedDeaths: number;
 }
 export interface DeathMapCell { roomX: number; roomY: number; tileX: number; tileY: number; deaths: number }
-export interface RoomInsightsResponse {
+export interface RoomInsightVersionStats {
   target: RoomInsightTarget; title: string | null; summary: RoomInsightSummary; deathMap: DeathMapCell[];
   cells: RoomCoordinates[]; deathMapTruncated: boolean;
+  equivalentVersions?: number[]; versionGrouping?: 'matching' | 'exact';
 }
+export interface RoomInsightsResponse extends RoomInsightVersionStats { comparison?: RoomInsightVersionStats | null }
 export function insightTargetForRoom(room: { roomId: string; roomVersion: number; expandedRoom?: { expandedRoomId: string; expandedRoomVersion: number | null } | null }): RoomInsightTarget {
+  if(room.expandedRoom?.expandedRoomId.startsWith('room:'))return {contentType:'room',contentId:room.expandedRoom.expandedRoomId.slice(5),version:room.expandedRoom.expandedRoomVersion??room.roomVersion};
   return room.expandedRoom ? { contentType: 'expanded_room', contentId: room.expandedRoom.expandedRoomId, version: room.expandedRoom.expandedRoomVersion ?? room.roomVersion }
     : { contentType: 'room', contentId: room.roomId, version: room.roomVersion };
 }
 export function insightTargetKey(target: RoomInsightTarget): string {
+  if(target.contentType==='expanded_room'&&target.contentId.startsWith('room:'))return target.contentId;
   return `${target.contentType === 'course' ? 'expanded_room:course' : target.contentType}:${target.contentId}`;
 }
 export function emptyInsightSummary(): RoomInsightSummary {

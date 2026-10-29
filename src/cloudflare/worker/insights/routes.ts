@@ -1,4 +1,5 @@
-import type { RoomInsightTarget, RoomInsightsResponse } from '../../../insights/model';
+import { ensureInsightRoomFacts, insightEquivalentVersions, previousInsightLayout } from './lineage';
+import type { RoomInsightTarget, RoomInsightsResponse, RoomInsightVersionStats } from '../../../insights/model';
 import { emptyInsightSummary, insightTargetKey } from '../../../insights/model';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { Env } from '../core/types';
@@ -43,7 +44,19 @@ export async function handleRoomInsights(request: Request, url: URL, env: Env, t
   const db = env.DB.withSession?.('first-primary') ?? env.DB;
   const context = { ...env, DB: db };
   const metadata = await resolveInsightMetadata(context, { contentType: type, contentId: id, version });
-  const [summaries,map] = await Promise.all([loadInsightSummaries(context,[metadata.target]),loadInsightDeathMap(context,metadata.target)]);
-  const result: RoomInsightsResponse = { ...metadata, summary: summaries.get(`${insightTargetKey(metadata.target)}:${metadata.target.version}`) ?? emptyInsightSummary(), ...map };
+  const unavailable=await ensureInsightRoomFacts(context,[metadata.target],true);
+  const previousVersion=await previousInsightLayout(context,metadata.target);
+  const previous=previousVersion===null?null:await resolveInsightMetadata(context,{...metadata.target,version:previousVersion});
+  const targets=previous?[metadata.target,previous.target]:[metadata.target];
+  const [summaries,map,previousMap,versions,previousVersions]=await Promise.all([
+    loadInsightSummaries(context,targets,{factsReady:true}),loadInsightDeathMap(context,metadata.target,{factsReady:true}),
+    previous?loadInsightDeathMap(context,previous.target,{factsReady:true}):null,
+    insightEquivalentVersions(context,metadata.target),previous?insightEquivalentVersions(context,previous.target):[],
+  ]);
+  const stats=(meta:Metadata,points:Awaited<ReturnType<typeof loadInsightDeathMap>>,equivalentVersions:number[]):RoomInsightVersionStats=>({
+    ...meta,summary:summaries.get(`${insightTargetKey(meta.target)}:${meta.target.version}`)??emptyInsightSummary(),...points,equivalentVersions,
+    versionGrouping:meta.target.contentType==='room'&&!unavailable.has(`${insightTargetKey(meta.target)}:${meta.target.version}`)?'matching':'exact',
+  });
+  const result:RoomInsightsResponse={...stats(metadata,map,versions),comparison:previous&&previousMap?stats(previous,previousMap,previousVersions):null};
   return jsonResponse(request,result,{ headers: { 'Cache-Control': 'public, max-age=30' } });
 }
