@@ -1,3 +1,4 @@
+import { parseCustomBackgroundId } from '../../../backgrounds/model';
 import { listEmbeddedCustomSpriteIds } from '../../../customSprites/blockedArt';
 import { buildWampOGramPreviewPath, WAMP_O_GRAM_PREVIEW_VERSION } from '../../../wampOGram/links';
 import { corsHeaders, HttpError } from '../core/http';
@@ -9,7 +10,7 @@ import {
   ROOM_SHARE_IMAGE_HEIGHT,
   ROOM_SHARE_IMAGE_WIDTH,
   renderRoomSharePreviewPng,
-} from '../share/roomPreviewImage';
+} from '../share/imageRenderer';
 import { loadWampOGramBySlug, loadWampOGramVisibility } from './store';
 
 /** Browsers and image proxies ask again after an hour, so a taken-down preview leaves them within one. */
@@ -44,7 +45,7 @@ export async function wampOGramPreviewResponse(
   const cacheControl = url.searchParams.get('renderer') === WAMP_O_GRAM_PREVIEW_VERSION
     ? CURRENT_PREVIEW_CACHE_CONTROL
     : OTHER_PREVIEW_CACHE_CONTROL;
-  // Only drawings without community art get this tag, since nothing can change them.
+  // Only drawings without community art or uploaded photos get this tag, since nothing can change them.
   const etag = `"${slug}-v${WAMP_O_GRAM_PREVIEW_VERSION}${hidden ? '-hidden' : ''}"`;
   if (ifNoneMatchIncludes(request, etag)) {
     return new Response(null, {
@@ -84,12 +85,12 @@ async function drawPreview(request: Request, env: Env, slug: string, hidden: boo
   const [snapshot] = hidden
     ? [hiddenVersionSnapshot(record.roomSnapshot)]
     : await maskBlockedArtInSnapshots(env, [record.roomSnapshot]);
-  const hasCommunityArt = listEmbeddedCustomSpriteIds(snapshot).length > 0;
-  const bytes = await renderRoomSharePreviewPng(snapshot);
+  const hasModeratableArt = listEmbeddedCustomSpriteIds(snapshot).length > 0 || parseCustomBackgroundId(snapshot.background) !== null;
+  const bytes = await renderRoomSharePreviewPng(snapshot, request, env);
   const headers = previewHeaders(request);
-  headers.set('Cache-Control', hasCommunityArt ? STORED_COMMUNITY_ART_PREVIEW_CACHE_CONTROL : STORED_PREVIEW_CACHE_CONTROL);
+  headers.set('Cache-Control', hasModeratableArt ? STORED_COMMUNITY_ART_PREVIEW_CACHE_CONTROL : STORED_PREVIEW_CACHE_CONTROL);
   headers.set('Content-Length', String(bytes.byteLength));
-  if (!hasCommunityArt) headers.set('ETag', etag);
+  if (!hasModeratableArt) headers.set('ETag', etag);
   const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   return new Response(body, { status: 200, headers });
 }

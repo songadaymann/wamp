@@ -17,7 +17,7 @@ import {
   ROOM_SHARE_IMAGE_WIDTH,
   renderExpandedRoomSharePreviewPng,
   renderRoomSharePreviewPng,
-} from './roomPreviewImage';
+} from './imageRenderer';
 import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
 import { loadCachedShareArtwork } from './cachedArtwork';
 
@@ -95,7 +95,7 @@ export async function handleRoomShareRequest(
           });
         } catch { /* Keep the existing renderer available if R2 is temporarily unavailable. */ }
       }
-      return roomShareImageResponse(request, masked);
+      return roomShareImageResponse(request, masked, env);
     }
     return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget, artwork));
   });
@@ -218,7 +218,7 @@ async function maskBlockedShareArt(env: Env, target: RoomShareTarget): Promise<R
   };
 }
 
-async function roomShareImageResponse(request: Request, target: RoomShareTarget): Promise<Response> {
+async function roomShareImageResponse(request: Request, target: RoomShareTarget, env: Env): Promise<Response> {
   const headers = new Headers({
     'Content-Type': 'image/png',
     // An hour at the edge, so a sprite blocked by moderation leaves cached share images soon (F189).
@@ -231,8 +231,8 @@ async function roomShareImageResponse(request: Request, target: RoomShareTarget)
   }
 
   const bytes = target.expandedRoom && target.previewCells.length > 1
-    ? await renderExpandedRoomSharePreviewPng(target.previewCells)
-    : await renderRoomSharePreviewPng(target.focusSnapshot);
+    ? await renderExpandedRoomSharePreviewPng(target.previewCells, request, env)
+    : await renderRoomSharePreviewPng(target.focusSnapshot, request, env);
   const body = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,

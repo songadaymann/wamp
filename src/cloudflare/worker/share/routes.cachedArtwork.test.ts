@@ -4,13 +4,13 @@ import type { Env } from '../core/types';
 import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
 import { loadPublishedRoom } from '../rooms/store';
 import { loadCachedShareArtwork } from './cachedArtwork';
-import { renderRoomSharePreviewPng } from './roomPreviewImage';
+import { renderRoomSharePreviewPng } from './imageRenderer';
 import { handleRoomShareRequest } from './routes';
 
 vi.mock('../rooms/store', () => ({ loadPublishedRoom: vi.fn(), loadRoomSnapshotsByReferences: vi.fn() }));
 vi.mock('../customSprites/blockedArt', () => ({ maskBlockedArtInSnapshots: vi.fn() }));
 vi.mock('./cachedArtwork', () => ({ loadCachedShareArtwork: vi.fn() }));
-vi.mock('./roomPreviewImage', () => ({ ROOM_SHARE_IMAGE_WIDTH: 1200, ROOM_SHARE_IMAGE_HEIGHT: 630,
+vi.mock('./imageRenderer', () => ({ ROOM_SHARE_IMAGE_WIDTH: 1200, ROOM_SHARE_IMAGE_HEIGHT: 630,
   renderRoomSharePreviewPng: vi.fn(), renderExpandedRoomSharePreviewPng: vi.fn() }));
 const snapshot = createDefaultRoomSnapshot('1,-2', { x: 1, y: -2 });
 const cached = { url: 'https://tiles.wamp.land/world-tiles/leaf.png', key: 'world-tiles/leaf.png', width: 642, height: 354 };
@@ -58,7 +58,7 @@ describe('share routes use cached map artwork', () => {
     if (state === 'deleted') get.mockResolvedValue(null);
     if (state === 'unavailable') get.mockRejectedValue(new Error('R2 unavailable'));
     expect([...new Uint8Array(await (await request('image')).arrayBuffer())]).toEqual([9, 8, 7]);
-    expect(renderRoomSharePreviewPng).toHaveBeenCalledWith(snapshot);
+    expect(renderRoomSharePreviewPng).toHaveBeenCalledWith(snapshot, expect.any(Request), env);
   });
 
   it('uses masked fallback for blocked art rather than an old cached leaf', async () => {
@@ -69,6 +69,6 @@ describe('share routes use cached map artwork', () => {
     expect(meta.imageWidth).toBe(1200);
     await request('image');
     expect(loadCachedShareArtwork).not.toHaveBeenCalled();
-    expect(renderRoomSharePreviewPng).toHaveBeenCalledWith(masked);
+    expect(renderRoomSharePreviewPng).toHaveBeenCalledWith(masked, expect.any(Request), env);
   });
 });

@@ -1,6 +1,6 @@
 import { crc32, inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { decodePng } from '../pages/roomImagePrimitives';
+import { decodePng } from '../roomImage/roomImagePrimitives';
 import { encodePng } from './pngEncoder';
 
 interface PngChunk {

@@ -1,15 +1,15 @@
+import { resolveApiBaseUrl } from '../roomImage/environment';
+export { resolveApiBaseUrl } from '../roomImage/environment';
 import { buildPlaylistSharePath } from '../playlists/model';
 import { buildProfileSharePath } from '../profiles/username';
 import { buildWampOGramPreviewPath, buildWampOGramSharePath } from '../wampOGram/links';
 import type { PagesWorkerEnv } from './model';
 
-const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const PROFILE_META_TIMEOUT_MS = 1200;
 const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
-export const ROOM_SHARE_IMAGE_WIDTH = 1200;
-export const ROOM_SHARE_IMAGE_HEIGHT = 630;
+const ROOM_IMAGE_RENDERER_VERSION = 'assets-v6';
+import { ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT } from '../roomImage/types';
 
 export interface RoomCoordinates {
   x: number;
@@ -179,20 +179,6 @@ export async function loadPlaylistMetadata(
   }
 }
 
-export function resolveApiBaseUrl(env: PagesWorkerEnv, url: URL): string {
-  const configured = typeof env.ROOM_SHARE_API_BASE_URL === 'string'
-    ? env.ROOM_SHARE_API_BASE_URL.trim()
-    : '';
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-    return `${url.protocol}//${url.hostname}:8787`;
-  }
-
-  return DEFAULT_API_BASE_URL;
-}
 
 function buildFallbackMetadata(
   coordinates: RoomCoordinates,

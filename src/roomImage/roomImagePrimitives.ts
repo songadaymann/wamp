@@ -247,10 +247,13 @@ export function blitImageNearest(
 
       const sourceAlpha = alpha / 255;
       const inverseAlpha = 1 - sourceAlpha;
-      canvas.pixels[targetOffset] = Math.round(image.pixels[sourceOffset] * sourceAlpha + canvas.pixels[targetOffset] * inverseAlpha);
-      canvas.pixels[targetOffset + 1] = Math.round(image.pixels[sourceOffset + 1] * sourceAlpha + canvas.pixels[targetOffset + 1] * inverseAlpha);
-      canvas.pixels[targetOffset + 2] = Math.round(image.pixels[sourceOffset + 2] * sourceAlpha + canvas.pixels[targetOffset + 2] * inverseAlpha);
-      canvas.pixels[targetOffset + 3] = 255;
+      const targetAlpha = canvas.pixels[targetOffset + 3] / 255;
+      const outAlpha = sourceAlpha + targetAlpha * inverseAlpha;
+      for (let channel = 0; channel < 3; channel += 1) {
+        canvas.pixels[targetOffset + channel] = Math.round((image.pixels[sourceOffset + channel] * sourceAlpha
+          + canvas.pixels[targetOffset + channel] * targetAlpha * inverseAlpha) / outAlpha);
+      }
+      canvas.pixels[targetOffset + 3] = Math.round(outAlpha * 255);
     }
   }
 }

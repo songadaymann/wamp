@@ -1,3 +1,4 @@
+import { parseCustomBackground } from '../backgrounds/model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { encode as encodeJpeg } from 'jpeg-js';
 import type { PagesWorkerEnv } from './model';
@@ -9,12 +10,11 @@ import {
   loadAssetImageData,
   loadCustomBackgroundImageData,
   normalizeAssetPath,
-  parseCustomBackground,
-} from './roomImageAssets';
+} from '../roomImage/roomImageAssets';
 import {
   createCanvas,
   fillRect,
-} from './roomImagePrimitives';
+} from '../roomImage/roomImagePrimitives';
 import { encodePng } from '../utils/pngEncoder';
 
 async function pngResponse(
@@ -113,6 +113,31 @@ describe('room image built-in asset loading', () => {
     expect(fetchAsset).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
     expect(third).toEqual(first);
+  });
+
+  it('evicts old decoded assets instead of retaining every room theme in the Worker isolate', async () => {
+    const request = new Request('https://preview.wamp.land/r/1/2/image.png');
+    const env = createEnv(vi.fn(async () => pngResponse()));
+    const fetchAsset = vi.mocked(env.ASSETS.fetch);
+    for (let i = 0; i < 65; i += 1) await loadAssetImageData(request, env, new URL(request.url), `assets/bounded-cache-${i}.png`);
+    expect(fetchAsset).toHaveBeenCalledTimes(65);
+    await loadAssetImageData(request, env, new URL(request.url), 'assets/bounded-cache-64.png');
+    expect(fetchAsset).toHaveBeenCalledTimes(65);
+    await loadAssetImageData(request, env, new URL(request.url), 'assets/bounded-cache-0.png');
+    expect(fetchAsset).toHaveBeenCalledTimes(66);
+  });
+
+  it('also bounds decoded bytes when a small number of large assets exceed 32 MB', async () => {
+    const request = new Request('https://preview.wamp.land/r/1/2/image.png');
+    const png = await encodePng(1024, 1024, new Uint8Array(1024 * 1024 * 4));
+    const env = createEnv(vi.fn(async () => new Response(png.slice().buffer as ArrayBuffer)));
+    const fetchAsset = vi.mocked(env.ASSETS.fetch);
+    for (let i = 0; i < 9; i += 1) await loadAssetImageData(request, env, new URL(request.url), `assets/weighted-cache-${i}.png`);
+    expect(fetchAsset).toHaveBeenCalledTimes(9);
+    await loadAssetImageData(request, env, new URL(request.url), 'assets/weighted-cache-8.png');
+    expect(fetchAsset).toHaveBeenCalledTimes(9);
+    await loadAssetImageData(request, env, new URL(request.url), 'assets/weighted-cache-0.png');
+    expect(fetchAsset).toHaveBeenCalledTimes(10);
   });
 
   it('retains rejected asset promises and preserves the exact non-OK error', async () => {
@@ -245,7 +270,7 @@ describe('room image custom background loading', () => {
       url,
       't13_format_error',
     )).rejects.toThrow(
-      'Custom background t13_format_error was not returned as a supported image format.',
+      'Background image was not returned as a supported image format.',
     );
   });
 

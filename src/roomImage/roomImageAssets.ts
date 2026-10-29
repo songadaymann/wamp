@@ -1,9 +1,10 @@
+import type { CustomBackgroundFit } from '../backgrounds/model';
 import decodeJpegBytes from 'jpeg-js/lib/decoder.js';
 import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
 } from '../config';
-import type { PagesWorkerEnv } from './model';
+import type { RoomImageEnvironment } from './types';
 import {
   blitImageSmooth,
   decodePng,
@@ -11,23 +12,42 @@ import {
   isPng,
   type RoomImageData,
 } from './roomImagePrimitives';
-import { resolveApiBaseUrl } from './shareMetadata';
+import { resolveApiBaseUrl } from './environment';
 
-const CUSTOM_BACKGROUND_PREFIX = 'custom:';
-const DEFAULT_CUSTOM_BACKGROUND_FIT = 'tile';
 const MAX_TILED_PHOTO_WIDTH = 128;
 const MAX_TILED_PHOTO_HEIGHT = 96;
 const MAX_CUSTOM_BACKGROUND_DECODE_MP = 8;
 const MAX_CUSTOM_BACKGROUND_DECODE_MEMORY_MB = 96;
 
 const imageDataCache = new Map<string, Promise<RoomImageData>>();
+const imageCacheBytes = new Map<string, number>();
+const IMAGE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const IMAGE_CACHE_MAX_ENTRIES = 64;
 
-export type CustomBackgroundFit = 'stretch' | 'center' | 'tile';
-
-export interface CustomBackgroundReference {
-  id: string;
-  fit: CustomBackgroundFit;
+function cachedImage(key: string): Promise<RoomImageData> | undefined {
+  const pending = imageDataCache.get(key);
+  if (pending) { imageDataCache.delete(key); imageDataCache.set(key, pending); }
+  return pending;
 }
+
+function cacheImage(key: string, pending: Promise<RoomImageData>): Promise<RoomImageData> {
+  const tracked = pending.then(image => {
+    if (imageDataCache.get(key) === tracked) { imageCacheBytes.set(key, image.pixels.byteLength); trimImageCache(); }
+    return image;
+  });
+  imageDataCache.set(key, tracked); trimImageCache(); return tracked;
+}
+
+function trimImageCache(): void {
+  let bytes = [...imageCacheBytes.values()].reduce((sum, size) => sum + size, 0);
+  while (bytes > IMAGE_CACHE_MAX_BYTES || imageDataCache.size > IMAGE_CACHE_MAX_ENTRIES) {
+    const key = imageDataCache.keys().next().value;
+    if (key === undefined) break;
+    bytes -= imageCacheBytes.get(key) ?? 0;
+    imageDataCache.delete(key); imageCacheBytes.delete(key);
+  }
+}
+
 
 export interface ImageSize {
   width: number;
@@ -47,30 +67,6 @@ interface CloudflareImageRequestInit extends RequestInit {
   };
 }
 
-export function parseCustomBackground(value: unknown): CustomBackgroundReference | null {
-  const trimmed = String(value || '').trim();
-  if (!trimmed.toLowerCase().startsWith(CUSTOM_BACKGROUND_PREFIX)) {
-    return null;
-  }
-
-  const customValue = trimmed.slice(CUSTOM_BACKGROUND_PREFIX.length).trim();
-  const queryStart = customValue.indexOf('?');
-  const id = (queryStart >= 0 ? customValue.slice(0, queryStart) : customValue).trim();
-  if (!/^[a-zA-Z0-9_-]{8,128}$/.test(id)) {
-    return null;
-  }
-
-  const fit = queryStart >= 0
-    ? new URLSearchParams(customValue.slice(queryStart + 1)).get('fit')
-    : DEFAULT_CUSTOM_BACKGROUND_FIT;
-  return {
-    id,
-    fit: fit === 'stretch' || fit === 'center' || fit === 'tile'
-      ? fit
-      : DEFAULT_CUSTOM_BACKGROUND_FIT,
-  };
-}
-
 export function normalizeAssetPath(assetPath: unknown): string {
   const trimmed = String(assetPath || '').trim();
   return `/${trimmed.replace(/^\/+/, '')}`;
@@ -78,12 +74,12 @@ export function normalizeAssetPath(assetPath: unknown): string {
 
 export async function loadAssetImageData(
   request: Request,
-  env: PagesWorkerEnv,
+  env: RoomImageEnvironment,
   url: URL,
   assetPath: unknown,
 ): Promise<RoomImageData> {
   const normalizedPath = normalizeAssetPath(assetPath);
-  let pending = imageDataCache.get(normalizedPath);
+  let pending = cachedImage(normalizedPath);
   if (pending) {
     return pending;
   }
@@ -97,20 +93,20 @@ export async function loadAssetImageData(
 
     return decodePng(new Uint8Array(await response.arrayBuffer()));
   })();
-  imageDataCache.set(normalizedPath, pending);
-  return pending;
+  return cacheImage(normalizedPath, pending);
 }
 
 export async function loadCustomBackgroundImageData(
   request: Request,
-  env: PagesWorkerEnv,
+  env: RoomImageEnvironment,
   url: URL,
   id: string,
 ): Promise<RoomImageData> {
+  if (env.loadCustomBackground) return env.loadCustomBackground(id);
   const apiBaseUrl = resolveApiBaseUrl(env, url);
   const imageUrl = new URL(`/api/background-images/${encodeURIComponent(id)}/image`, apiBaseUrl);
   const cacheKey = `custom-background:${imageUrl.toString()}`;
-  let pending = imageDataCache.get(cacheKey);
+  let pending = cachedImage(cacheKey);
   if (pending) {
     return pending;
   }
@@ -133,16 +129,15 @@ export async function loadCustomBackgroundImageData(
     }
 
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (isPng(bytes)) {
-      return decodePng(bytes);
-    }
-    if (isJpeg(bytes)) {
-      return decodeJpegImageData(bytes);
-    }
-    throw new Error(`Custom background ${id} was not returned as a supported image format.`);
+    return decodeRoomImageBytes(bytes);
   })();
-  imageDataCache.set(cacheKey, pending);
-  return pending;
+  return cacheImage(cacheKey, pending);
+}
+
+export function decodeRoomImageBytes(bytes: Uint8Array): Promise<RoomImageData> | RoomImageData {
+  if (isPng(bytes)) return decodePng(bytes);
+  if (isJpeg(bytes)) return decodeJpegImageData(bytes);
+  throw new Error('Background image was not returned as a supported image format.');
 }
 
 export function decodeJpegImageData(bytes: Uint8Array): RoomImageData {

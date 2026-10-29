@@ -3,13 +3,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { crc32, deflateSync } from 'node:zlib';
 import { vi } from 'vitest';
 import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, TILE_SIZE } from '../config';
-import { renderExpandedRoomSharePreviewPng, renderRoomSharePreviewPng as renderApiSharePreviewPng } from '../cloudflare/worker/share/roomPreviewImage';
+import { renderExpandedRoomSharePreviewPng, renderRoomSharePreviewPng as renderApiSharePreviewPng } from '../cloudflare/worker/share/imageRenderer';
 import type { CustomRoomTileDefinition } from '../customTiles/model';
 import type { CustomSpriteDefinition } from '../customSprites/model';
 import { renderRoomSnapshotToCanvas, type MintedRoomRenderOptions } from '../mint/roomMetadataRender';
 import type { PagesWorkerEnv } from '../pages/model';
-import { decodePng } from '../pages/roomImagePrimitives';
-import { renderRoomSharePreviewPng as renderPagesSharePreviewPng } from '../pages/roomImageRenderer';
+import { decodePng } from '../roomImage/roomImagePrimitives';
+import { renderRoomSharePreviewPng as renderPagesSharePreviewPng } from '../roomImage/roomImageRenderer';
 import type { PublishedRoomSnapshot } from '../pages/shareMetadata';
 import { createDefaultRoomSnapshot, type RoomCoordinates, type RoomSnapshot } from '../persistence/roomModel';
 
@@ -18,7 +18,7 @@ import { createDefaultRoomSnapshot, type RoomCoordinates, type RoomSnapshot } fr
  * smart-autotiling reference rooms), a way to run each renderer in vitest, and pixel helpers.
  *
  * - API Worker card (cloudflare/worker/share/roomPreviewImage.ts): abstract shapes, 1200x630.
- * - Pages card (pages/roomImageRenderer.ts): real art from public/, 1200x630.
+ * - Pages card (roomImage/roomImageRenderer.ts): real art from public/, 1200x630.
  * - World-tile leaf (world-tile-render.ts over mint/roomMetadataRender.ts): real art at 16 px per
  *   tile plus a 1 px gutter, 642x354. Production runs it in Chrome through Browser Rendering, so here
  *   it draws into SoftwareCanvas, a small model of the 2D canvas: nearest-neighbour drawImage and
@@ -80,7 +80,7 @@ const CUSTOM_TILE_GREEN = '#40c060';
 const CUSTOM_TILE_BLUE = '#4060e0';
 
 /** 16x16 custom tile: red left half, green right half, a blue corner, a transparent bottom strip. */
-export function customTilePixel(x: number, y: number): string | null {
+function customTilePixel(x: number, y: number): string | null {
   if (y >= 13) return null;
   if (x < 4 && y < 4) return CUSTOM_TILE_BLUE;
   return x < 8 ? CUSTOM_TILE_RED : CUSTOM_TILE_GREEN;
@@ -179,11 +179,11 @@ export function roomWith(
 
 /** API Worker share card (link previews for Expanded Rooms and Wamp-O-Grams). */
 export async function renderApiCard(snapshot: RoomSnapshot): Promise<Raster> {
-  return decodePng(await renderApiSharePreviewPng(snapshot));
+  return decodePng(await renderApiSharePreviewPng(snapshot, new Request(PAGES_URL), PAGES_ENV as unknown as import('../cloudflare/worker/core/types').Env));
 }
 
 export async function renderApiExpandedCard(cells: Array<{ snapshot: RoomSnapshot; coordinates: RoomCoordinates }>): Promise<Raster> {
-  return decodePng(await renderExpandedRoomSharePreviewPng(cells));
+  return decodePng(await renderExpandedRoomSharePreviewPng(cells, new Request(PAGES_URL), PAGES_ENV as unknown as import('../cloudflare/worker/core/types').Env));
 }
 
 const PAGES_URL = new URL('https://wamp.land/r/3/-2/image.png');
