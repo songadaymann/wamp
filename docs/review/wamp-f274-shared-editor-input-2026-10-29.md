@@ -1,7 +1,7 @@
 # F274: shared workspace drawing and camera controls — 2026-10-29
 
-Implementation and local checks complete. Browser matrix, PR CI and production
-delivery are pending; this item is not checked off yet.
+Delivered in [PR #336](https://github.com/songadaymann/wamp/pull/336), squash
+merge `6bbe0ed7a61c5f0f50eac07695147feb14094704`.
 
 ## Shared implementation
 
@@ -50,14 +50,33 @@ Relative to main `43dd7d1b`, changed runtime TypeScript shrinks from 8,819 to
   Dead-code baseline stays 785; boot JavaScript is 665.3 KB Brotli / 670 KB.
 - The intermediate touch-controller refactor passed all 226 existing browser
   scenarios on tablet, phone and phone landscape, in both editors, with no page
-  errors. The final workspace refactor is undergoing the expanded matrix, which
-  adds actual mouse fast-Smart, stationary Spray/release/one-Undo, and middle-pan
-  scenarios. Synthetic API writes are blocked.
+  errors. The final workspace refactor passed all 244 expanded scenarios:
+  tablet 80, phone portrait 82 and phone landscape 82, with zero page errors.
+  These include actual mouse fast-Smart, stationary Spray/release/one-Undo, and
+  middle-pan scenarios. Synthetic API writes are blocked.
 
 Local logs: `/tmp/wamp-f274-workspace-check.log`,
 `/tmp/wamp-f274-browser-workspace-tablet.log`,
 `/tmp/wamp-f274-browser-workspace-phones.log`. Browser artifacts are in
 `output/web-game/editor-touch/` and the isolated phone smoke workspace.
 
-No schema migration. Delivery still requires completed browser/CI evidence,
-merged-source frontend/API deployment and production verification.
+## Production delivery
+
+All 18 jobs passed in [CI run 40889672537](https://github.com/songadaymann/wamp/actions/runs/40889672537).
+The clean merged tree matched tested candidate `2eb42362` exactly. Guarded full
+frontend/API deployment and final production smoke passed. API Worker
+`dba6144a-3a88-4e6f-8cb8-26b7d307d171` is confirmed at 100% traffic; previous
+version `29b0b3e2-41b8-425d-97e6-78f64c875473` is available for rollback.
+Pages deployment: [aa01fc17](https://aa01fc17.wampland.pages.dev).
+
+Production HTML now references `main-DplNrPGF.js`; live lazy editor bundles
+`CourseEditorScene-C_0xBRa4.js` (100,713 bytes) and `EditorScene-DPRQ0P51.js`
+(175,710 bytes) match the release build byte for byte. The initial deployment
+smoke saw the prior HTML during alias propagation; the explicit asset checks and
+final smoke confirmed the new entry and editor bundles. Database/migration 0076,
+map assets and email configuration are healthy; test reset/debug links disabled.
+No real-player room writes or emails were used for release verification.
+
+Evidence: `/tmp/wamp-f274-deploy.log`, `/tmp/wamp-f274-deployments.json`,
+`/tmp/wamp-f274-live-assets.json`, `/tmp/wamp-f274-prod-final.log`, and ignored
+`output/web-game/f274-workspace-combined-report.json`. No schema migration.

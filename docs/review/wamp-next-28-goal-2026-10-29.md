@@ -27,7 +27,7 @@ F263 is first because Jonathan specifically requested it now. Then resume the
 suggested order below. No item is checked until its actual delivery is verified.
 
 - [x] F273 — shared progression/rating/verification core; PR #335, all CI and live rollout verified.
-- [ ] F274 — share editor input and camera behavior.
+- [x] F274 — shared workspace input/camera controllers; PR #336, 244 browser scenarios, all CI and live rollout verified.
 - [ ] F275 — share object-inspector controllers and correct drift.
 - [ ] F334 — reuse cached map artwork for share previews, with fallback.
 - [ ] F269 — real-art Expanded Room and Wamp-O-Gram previews.
@@ -57,8 +57,12 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 ## Current boundary
 
-Baseline: main `417f0ca7`, Round 2 72/248. F263 delivered in PR #334
-(merged `b27f2ca9`), so this goal is **2/28 delivered** and Round 2 is **74/248**.
-F273 delivered in PR #335 (merged `229df2c6`), all 18 CI jobs passed. API Worker
-`29b0b3e2-41b8-425d-97e6-78f64c875473` serves 100%; production smoke passed,
-migration 0076 verified. F274 is in progress; the other 25 goal items remain pending.
+Baseline: main `417f0ca7`, Round 2 72/248. F263 (PR #334), F273 (PR #335)
+and F274 (PR #336, merged `6bbe0ed7`) are verified delivered. This goal is
+**3/28 delivered**, and Round 2 is **75/248**.
+
+F274 passed all 18 CI jobs and all 244 final browser scenarios. Guarded frontend
+and API deployment passed production smoke. Worker
+`dba6144a-3a88-4e6f-8cb8-26b7d307d171` serves 100%; both production editor bundles
+match the merged build byte for byte. Migration 0076 remains current.
+F275 is in progress; the other 24 goal items remain pending.
