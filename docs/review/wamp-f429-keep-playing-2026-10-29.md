@@ -1,8 +1,7 @@
 # F429 — Keep playing to another unbeaten room (2026-10-29)
 
-Draft implementation; not delivered until CI, rollout and live verification pass.
-F428 is now delivered (PR342/a36493f9, recordefd6d902). This branch builds on
-that release; Keep Playing itself remains pending CI and rollout.
+Delivered through PR #343, merge `a4ac21ea`. All 18 GitHub jobs and both
+Cloudflare previews passed for tested head `a292cd78` before merge.
 
 Every eligible published ordinary/Expanded Room clear offers a persistent
 Keep playing action, including repeat clears that do not produce another rating
@@ -66,3 +65,21 @@ Final check with cancellation handling: `/tmp/wamp-f429-chat-final-check.log`
 passes725files/6,171tests and all check stages. The exact CI keyboard workflow
 passes all six desktop/narrow-phone/Safari × ordinary/Expanded scenarios locally
 (`/tmp/wamp-f429-keyboard-local.log`), with no relaxed assertions.
+
+## Live delivery
+
+Clean merged-main release passed the migration and immutable map guards.
+Worker `c0ad084a-3ad6-459f-9d80-fea83f3c8279` is confirmed at 100%; Pages
+`60aa95e9` is published. Production entry `main-BN-sb-ON.js`, runtime,
+Keep Playing module, both editors, result dialog and styles match release bytes.
+Public discovery supplies multiple eligible goals. No production player/room
+writes or emails were used. Migration0076, database, map assets and email health
+remain healthy.
+
+The first release attempt stopped before publishing on transient D1 error7403;
+a read-only D1 list and migration guard then passed. The second published both
+services; its immediate smoke saw an old entry during asset propagation. A
+standalone production smoke then passed all19 boot scripts and health checks.
+Evidence: `/tmp/wamp-f429-deploy-retry.log`,
+`/tmp/wamp-f429-prod-smoke-retry.log`, `/tmp/wamp-f429-deployments.json`,
+`/tmp/wamp-f429-live-assets.json`, `/tmp/wamp-f429-live-discovery.json`.

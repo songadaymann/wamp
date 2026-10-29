@@ -34,7 +34,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F389 — correct standalone share-image backgrounds, custom art and geometry.
 - [ ] F436 — automatic weekly event scheduling with overrides.
 - [x] F428 — ghost challenge links carrying the shared run; PR #342, all CI and live rollout verified.
-- [ ] F429 — Keep Playing to another unbeaten room.
+- [x] F429 — Keep Playing to another unbeaten room; PR #343, all CI and live rollout verified.
 - [ ] F435 — cleared-room markers on the world map.
 - [ ] F447 — builder recognition notifications and republish warnings.
 - [ ] F451 — preserve equivalent-version insights and compare gameplay changes.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **8/28 delivered**, and Round 2 is **80/248**.
+This goal is **9/28 delivered**, and Round 2 is **81/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -86,5 +86,8 @@ and the public invitation retains its challenge parameter. No migration or
 production player/room writes. Receipt: `docs/review/wamp-f428-ghost-challenge-links-2026-10-29.md`.
 
 F436 automatic weekly events remains a draft (PR341) pending prompt-content
-approval. F429 Keep Playing is in PR343 with full local and desktop/phone native
-browser checks passed; not delivered yet. The other18 goal items remain pending.
+approval. F429 Keep Playing is delivered through PR343 (a4ac21ea): all CI, full725-file/
+6171-test check, six keyboard scenarios and native desktop/phone flows pass.
+Worker c0ad084a serves100%, Pages60aa95e9 and live assets match the release.
+Production smoke passes. F435 cleared-map markers are implemented under final
+verification; the other17 goal items remain pending.
