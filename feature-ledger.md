@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F275 | [#337](https://github.com/songadaymann/wamp/pull/337) | [receipt](docs/review/wamp-f275-shared-inspector-2026-10-29.md) | Share inspector actions, overlays and link guidance across editors; preserve cross-cell storage; verified live |
 | 2026-10-29 | F274 | [#336](https://github.com/songadaymann/wamp/pull/336) | [receipt](docs/review/wamp-f274-shared-editor-input-2026-10-29.md) | Share editor workspace drawing and camera controls; fix Spray, Smart gaps and middle-button edits; verified live |
 | 2026-10-29 | F273 | [#335](https://github.com/songadaymann/wamp/pull/335) | [receipt](docs/review/wamp-f273-shared-progression-2026-10-29.md) | Share room and Expanded Room progression, ratings and verification mapping; preserve reward identities, verified live |
 | 2026-10-29 | F263 | [#334](https://github.com/songadaymann/wamp/pull/334) | [receipt](docs/review/wamp-f263-retire-mac-avatar-queue-2026-10-29.md) | Retire the obsolete Mac avatar queue scripts while keeping cloud avatar generation |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-14 | F062 | [#202](https://github.com/songadaymann/wamp/pull/202) | [receipt](docs/review/wamp-required-scene-capabilities-2026-10-14.md) | Scenes must provide the UI capabilities they declare, checked by the compiler |
 | 2026-10-14 | F109, F089 | [#201](https://github.com/songadaymann/wamp/pull/201) | [receipt](docs/review/wamp-phone-keyboard-targets-2026-10-14.md) | 44 px phone controls, readable HUD text and Play menu access; more automated phone input checks |
 | 2026-10-14 | F019 | [#200](https://github.com/songadaymann/wamp/pull/200) | [receipt](docs/review/wamp-remaining-dialogs-2026-10-14.md) | The remaining rare dialogs load after startup (F019 complete) |
-| 2026-10-14 | F095 | [#199](https://github.com/songadaymann/wamp/pull/199) | [receipt](docs/review/wamp-shared-realtime-2026-10-14.md) | Nearby presence and chat share connections, and background connections close fully |

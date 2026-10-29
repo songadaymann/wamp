@@ -1,0 +1,1 @@
+| 2026-10-29 | F275 | [#337](https://github.com/songadaymann/wamp/pull/337) | [receipt](docs/review/wamp-f275-shared-inspector-2026-10-29.md) | Share inspector actions, overlays and link guidance across editors; preserve cross-cell storage; verified live |

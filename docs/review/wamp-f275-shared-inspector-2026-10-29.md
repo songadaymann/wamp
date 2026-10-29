@@ -1,7 +1,7 @@
 # F275: shared object inspector — 2026-10-29
 
-Implementation and local verification complete; CI and production delivery pending.
-This item remains unchecked until delivery is verified.
+Delivered in [PR #337](https://github.com/songadaymann/wamp/pull/337), squash
+merge `395ac4235eea443901960374da982cfa12c74cef`.
 
 ## Implementation
 
@@ -43,4 +43,21 @@ support was asked as an optional scope question; no answer is recorded here.
 
 ## Delivery
 
-Pending PR, CI and guarded frontend/API rollout. Goal stays 3/28 delivered.
+All 18 GitHub jobs passed in [CI run 40895538931](https://github.com/songadaymann/wamp/actions/runs/40895538931).
+The clean merged release tree matched tested candidate `4ae4847b` exactly.
+Guarded frontend/API deployment and production smoke passed. Worker
+`f0292cdb-b7f8-453a-896b-4594ed81b4d2` is confirmed at 100% traffic; previous
+Worker `dba6144a-3a88-4e6f-8cb8-26b7d307d171` remains available for rollback.
+Pages deployment: [72a03385](https://72a03385.wampland.pages.dev).
+
+Live HTML uses `main-BSeYuoUp.js`. That entry, both editor scene bundles and the
+shared inspector bundle (`keyboardShortcuts-DrgZYeu5.js`) match release bytes.
+Migration 0076 remains current; database, map and email health checks passed.
+No production room writes or emails were used for verification.
+
+The first deploy stopped before publishing on a transient D1 authorization 7403
+response. Account listing and migration recheck succeeded; the guarded retry
+exited 0. Evidence: `/tmp/wamp-f275-deploy-retry.log`,
+`/tmp/wamp-f275-deployments.json`, `/tmp/wamp-f275-live-assets.json`, and ignored
+`output/web-game/f275-inspector-combined-report.json`. Goal is 4/28 delivered;
+Round 2 is 76/248.
