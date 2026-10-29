@@ -173,23 +173,23 @@ END;
 CREATE TRIGGER builder_activity_daily_insert AFTER INSERT ON daily_rooms BEGIN
   INSERT OR IGNORE INTO builder_activity(dedupe_key,recipient_user_id,actor_user_id,kind,
     content_type,content_id,content_version,source_kind,source_id,created_at,recognition_json)
-  SELECT 'daily:'||NEW.date||':'||NEW.target_key,NEW.builder_user_id,'wamp:recognition','daily',
+  SELECT 'daily:'||NEW.date||':'||NEW.target_key||':'||NEW.version,NEW.builder_user_id,'wamp:recognition','daily',
     NEW.target_type,NEW.content_id,NEW.version,'feature',NEW.date,NEW.picked_at,
     json_object('date',NEW.date)
   WHERE EXISTS(SELECT 1 FROM users u WHERE u.id=NEW.builder_user_id)
     AND NOT EXISTS(SELECT 1 FROM builder_activity existing
-      WHERE existing.dedupe_key='daily:'||NEW.date||':'||NEW.target_key);
+      WHERE existing.dedupe_key='daily:'||NEW.date||':'||NEW.target_key||':'||NEW.version);
 END;
 
 CREATE TRIGGER builder_activity_daily_update AFTER UPDATE ON daily_rooms BEGIN
   INSERT OR IGNORE INTO builder_activity(dedupe_key,recipient_user_id,actor_user_id,kind,
     content_type,content_id,content_version,source_kind,source_id,created_at,recognition_json)
-  SELECT 'daily:'||NEW.date||':'||NEW.target_key,NEW.builder_user_id,'wamp:recognition','daily',
+  SELECT 'daily:'||NEW.date||':'||NEW.target_key||':'||NEW.version,NEW.builder_user_id,'wamp:recognition','daily',
     NEW.target_type,NEW.content_id,NEW.version,'feature',NEW.date,NEW.picked_at,
     json_object('date',NEW.date)
   WHERE EXISTS(SELECT 1 FROM users u WHERE u.id=NEW.builder_user_id)
     AND NOT EXISTS(SELECT 1 FROM builder_activity existing
-      WHERE existing.dedupe_key='daily:'||NEW.date||':'||NEW.target_key);
+      WHERE existing.dedupe_key='daily:'||NEW.date||':'||NEW.target_key||':'||NEW.version);
 END;
 
 CREATE TRIGGER builder_activity_prompt_result AFTER UPDATE OF settled_at ON build_prompts

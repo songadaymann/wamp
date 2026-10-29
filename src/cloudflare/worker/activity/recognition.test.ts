@@ -46,6 +46,11 @@ describe('builder recognition facts',()=>{
    expect(feed.entries).toHaveLength(1);expect(feed.entries[0]).toMatchObject({kind:'daily',recognition:{date:'2026-10-04'}});
    expect(activityDescription(feed.entries[0])).toContain('Room of the Day for 2026-10-04');
    expect(f.sqlite.prepare('SELECT daily_features FROM builder_activity_preferences').get()).toMatchObject({daily_features:0});
+   f.sqlite.exec("UPDATE daily_rooms SET version=2,room_version=2 WHERE date='2026-10-04'");
+   f.sqlite.exec("UPDATE daily_rooms SET notice_attempts=2 WHERE date='2026-10-04'");
+   const repicked=await loadActivity(f.env.DB,'builder',true,undefined,'rooms');
+   expect(repicked.entries).toHaveLength(2);expect(repicked.entries.map(entry=>entry.contentVersion)).toEqual([2,1]);
+
  });
  it('gives every entrant results, preserves the winner rank and does not repeat settlement notices',async()=>{
    const f=setup();
