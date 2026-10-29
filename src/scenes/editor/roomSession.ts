@@ -780,6 +780,10 @@ export class EditorRoomSession {
       } else {
         this.backupDraftForPageExit();
       }
+      if (record.worldPublicationSubmission) {
+        this.setStatusText('Draft saved and submitted for World approval. Waiting for review.');
+        return null;
+      }
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
         this.setStatusDetails({
           text: 'Room artwork is stale. Choose Add/update artwork to update the on-chain snapshot.',

@@ -403,6 +403,16 @@ describe('edits made while a room save or publish is pending', () => {
     expectLaterBackup(session);
   });
 
+  it('syncs a submitted draft baseline without reporting publication or raising a false conflict on the next save', async () => {
+    const { session, response, saved, saveDraft, isDirty, editLater } = await openedEditor();
+    const error=vi.spyOn(console,'error').mockImplementation(()=>{});
+    saved.worldPublicationSubmission={id:'review',worldId:'world-one',roomId,roomCoordinates:coordinates,roomTitle:'Review me',submittedByUserId:'builder',submittedByDisplayName:'Builder',submittedDraftUpdatedAt:responseAt,status:'pending',rejectionReason:null,submittedAt:responseAt,resolvedAt:null};
+    const pending=session.publishRoom();await Promise.resolve();response.resolve(saved);
+    expect(await pending).toBeNull();expect(isDirty()).toBe(false);expect(session.statusText).toContain('Waiting for review');expect(error).not.toHaveBeenCalled();
+    editLater();await session.saveDraft();expect(saveDraft).toHaveBeenLastCalledWith(expect.anything(),{baseUpdatedAt:responseAt});expect(session.hasPendingEditConflict).toBe(false);
+    error.mockRestore();
+  });
+
   it('leaving while an autosave is uploading waits for it instead of reporting a failure (F056)', async () => {
     const { session, response, saved, publish } = await openedEditor();
     const autosave = session.saveDraft();

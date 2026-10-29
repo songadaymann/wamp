@@ -764,7 +764,7 @@ class ApiRoomRepository implements RoomRepository {
             `/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`,
             { method: 'PUT', body: JSON.stringify(room) },
           );
-          await this.request(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`, {
+          const submitted = await this.request<{ request: import('../worlds/model').WorldPublicationRequest }>(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`, {
             method: 'POST',
             body: JSON.stringify({
               roomId: saved.draft.id,
@@ -772,7 +772,7 @@ class ApiRoomRepository implements RoomRepository {
               y: saved.draft.coordinates.y,
             }),
           });
-          throw new RoomApiError('Draft saved and submitted for World approval.', 409);
+          return { ...this.compactMutationRecord(saved), worldPublicationSubmission: submitted.request };
         }
       },
       () => this.fallback?.publish(room)

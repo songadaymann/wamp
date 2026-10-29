@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as notifications from './notifications';
 import { createDefaultCourseSnapshot } from '../../../courses/model';
 import { publishRoomAs, publishRoomSnapshot, roomSnapshot, saveRoomDraft, workerApi, type WorkerApi } from '../core/workerApi.testSupport';
 
@@ -21,7 +22,7 @@ beforeEach(async () => {
   member = await api.signIn('p1');
   outsider = await api.signIn('p3');
 });
-afterEach(() => { api.close(); vi.useRealTimers(); });
+afterEach(() => { api.close(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 // World 1's origin room, and the cells beside it.
 const ORIGIN = { x: 129, y: 0 };
@@ -302,6 +303,28 @@ describe('publication approval', () => {
     expect((await api.call(`/api/rooms/${encodeURIComponent('130,0')}/published`)).status).toBe(404);
     const queue = await api.call(world(worldId, '/publication-requests'), { session: owner });
     expect(queue.body.requests[0]).toMatchObject({ id: request.id, status: 'stale' });
+  });
+
+  it('exposes only the signed-in builder’s own history and detects changed submissions before review', async () => {
+    const { worldId } = await worldWithMember();const request=await submitted(worldId);
+    const mine=()=>api.call(world(worldId,'/publication-requests?mine=1&roomId=130%2C0'),{session:member});
+    expect((await mine()).body.requests).toMatchObject([{id:request.id,status:'pending'}]);
+    expect((await mine()).headers.get('cache-control')).toBe('private, no-store');
+    expect((await api.call(world(worldId,'/publication-requests?mine=1&submittedByUserId=p1'),{session:outsider})).body.requests).toEqual([]);
+    expect((await api.call(world(worldId,'/publication-requests?mine=1'))).status).toBe(401);
+    tick();await saveRoomDraft(api,member,roomSnapshot(130,0,{title:'New draft'}),inWorld(worldId));
+    expect((await mine()).body.requests).toMatchObject([{id:request.id,status:'stale'}]);
+    const newer=await submitted(worldId);await resolve(worldId,newer.id,{decision:'reject',rejectionReason:'Please add an exit'});
+    expect((await mine()).body.requests).toMatchObject([{id:newer.id,status:'rejected',rejectionReason:'Please add an exit'}]);
+    expect((await api.call(world(worldId,'/publication-requests?mine=1&roomId=131%2C0'),{session:member})).body.requests).toEqual([]);
+  });
+
+  it('notifies the submitter only when a decision is newly resolved', async () => {
+    const notify=vi.spyOn(notifications,'sendWorldPublicationDecisionEmail').mockResolvedValue({attempted:true,sent:true,error:null});
+    const {worldId}=await worldWithMember();const request=await submitted(worldId);
+    expect((await resolve(worldId,request.id,{decision:'approve'})).status).toBe(200);
+    expect((await resolve(worldId,request.id,{decision:'approve'})).status).toBe(200);
+    expect(notify).toHaveBeenCalledOnce();expect(notify.mock.calls[0][2]).toMatchObject({worldNumber:1,publication:{submittedByUserId:'p1',status:'approved'}});
   });
 
   it('does not publish for a builder who was suspended after submitting', async () => {

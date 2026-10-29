@@ -24,6 +24,7 @@ interface PublicationRow {
   room_x: number;
   room_y: number;
   room_title: string | null;
+  current_draft_updated_at: string | null;
 }
 
 export async function listWorldPublicationRequests(
@@ -31,15 +32,20 @@ export async function listWorldPublicationRequests(
   worldId: string,
   viewerUserId: string,
   viewerIsAdmin: boolean,
+  options: { mine?: boolean; roomId?: string } = {},
 ): Promise<WorldPublicationRequest[]> {
   const access = await loadWorldAccessById(env, worldId, viewerUserId, viewerIsAdmin);
-  if (!access?.policy.canReviewPublications) {
+  if (!access) throw new HttpError(404, 'World not found.');
+  if (!options.mine && !access.policy.canReviewPublications) {
     throw new HttpError(403, 'World publication review is required.');
   }
-  const result = await env.DB.prepare(publicationSelect('WHERE p.world_id = ? ORDER BY p.submitted_at DESC'))
-    .bind(worldId)
+  const result = await env.DB.prepare(publicationSelect(`WHERE p.world_id = ?
+    ${options.mine ? 'AND p.submitted_by_user_id = ?' : ''}
+    ${options.roomId ? 'AND p.room_id = ?' : ''}
+    ORDER BY p.submitted_at DESC,p.id DESC ${options.roomId ? 'LIMIT 1' : ''}`))
+    .bind(worldId,...(options.mine ? [viewerUserId] : []),...(options.roomId ? [options.roomId] : []))
     .all<PublicationRow>();
-  return result.results.map(mapPublication);
+  return result.results.map(row => mapPublication(row,true));
 }
 
 export async function submitWorldPublicationRequest(
@@ -102,13 +108,13 @@ export async function resolveWorldPublicationRequest(
   decision: 'approve' | 'reject',
   rejectionReason: string | null,
   auth: RequestAuth,
-): Promise<WorldPublicationRequest> {
+): Promise<{ request: WorldPublicationRequest; changed: boolean }> {
   const access = await loadWorldAccessById(env, worldId, auth.user.id, auth.isAdmin);
   if (!access?.policy.canReviewPublications) throw new HttpError(403, 'World publication review is required.');
   const request = await loadPublicationById(env, worldId, requestId);
   if (!request) throw new HttpError(404, 'Publication request was not found.');
   const resolvedStatus = decision === 'approve' ? 'approved' : 'rejected';
-  if (request.status === resolvedStatus) return request;
+  if (request.status === resolvedStatus) return { request, changed: false };
   if (request.status !== 'pending') {
     throw new HttpError(409, 'This publication request is no longer pending.');
   }
@@ -171,7 +177,7 @@ export async function resolveWorldPublicationRequest(
     }
     const updated = await loadPublicationById(env, worldId, requestId);
     if (!updated) throw new HttpError(404, 'Publication request was not found.');
-    return updated;
+    return { request: updated, changed: true };
   }
   const reason = normalizeRejectionReason(rejectionReason);
   try {
@@ -198,7 +204,7 @@ export async function resolveWorldPublicationRequest(
   }
   const updated = await loadPublicationById(env, worldId, requestId);
   if (!updated) throw new HttpError(404, 'Publication request was not found.');
-  return updated;
+  return { request: updated, changed: true };
 }
 
 async function markPublicationStale(env: Env, requestId: string, now: string): Promise<void> {
@@ -238,7 +244,8 @@ function publicationSelect(suffix: string): string {
       u.display_name AS submitted_by_display_name,
       p.submitted_draft_updated_at, p.status, p.rejection_reason,
       p.submitted_at, p.resolved_at,
-      r.x AS room_x, r.y AS room_y, r.draft_title AS room_title
+      r.x AS room_x, r.y AS room_y, r.draft_title AS room_title,
+      json_extract(r.draft_json,'$.updatedAt') AS current_draft_updated_at
     FROM world_publication_requests p
     INNER JOIN rooms r ON r.id = p.room_id
     LEFT JOIN users u ON u.id = p.submitted_by_user_id
@@ -246,7 +253,7 @@ function publicationSelect(suffix: string): string {
   `;
 }
 
-function mapPublication(row: PublicationRow): WorldPublicationRequest {
+function mapPublication(row: PublicationRow, detectStale = false): WorldPublicationRequest {
   return {
     id: row.id,
     worldId: row.world_id,
@@ -256,7 +263,7 @@ function mapPublication(row: PublicationRow): WorldPublicationRequest {
     submittedByUserId: row.submitted_by_user_id,
     submittedByDisplayName: row.submitted_by_display_name,
     submittedDraftUpdatedAt: row.submitted_draft_updated_at,
-    status: row.status,
+    status: detectStale && row.status === 'pending' && row.current_draft_updated_at !== row.submitted_draft_updated_at ? 'stale' : row.status,
     rejectionReason: row.rejection_reason,
     submittedAt: row.submitted_at,
     resolvedAt: row.resolved_at,
