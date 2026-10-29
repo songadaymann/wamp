@@ -1,0 +1,1 @@
+| 2026-10-29 | F269, F389 | [#339](https://github.com/songadaymann/wamp/pull/339) | [receipt](docs/review/wamp-f269-f389-shared-real-art-previews-2026-10-29.md) | Share one real-art painter across API, Pages and Grams; fix geometry and cached fallback versions; verified live |

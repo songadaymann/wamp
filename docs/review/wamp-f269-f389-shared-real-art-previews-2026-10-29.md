@@ -69,7 +69,7 @@ Pages assets-v6 so clients can refresh intentional drawing changes.
 
 Evidence: `/tmp/wamp-f269-complete-check.log`,
 `/tmp/wamp-f269-native-complete.log`; ignored native probe/artifacts:
-`output/f269-native/`. No migration. Goal stays 5/28 until delivery.
+`output/f269-native/`. No migration. Goal is now 7/28 delivered; Round 2 is 79/248.
 
 ## API image cache follow-up
 
@@ -81,3 +81,19 @@ fresh edge image. Cached real-art R2 URLs are unchanged. The full check passes
 again: 722 files, 6,150 tests, one expected failure/two skips; boot665.4KB/670.
 Evidence: `/tmp/wamp-f269-live-image-cache.json`,
 `/tmp/wamp-f269-cache-version-check.log`. Final delivery is still pending.
+
+## Production delivery
+
+Both PRs passed all 18 GitHub jobs (40902329739 and 40905663729).
+The final guarded full rollout passed production smoke. Worker
+`37075601-f3e9-437c-b0dd-8f70568db9ba` serves 100%; Pages `028aee15`
+and entry `main-DKwbctqr.js`, both editor bundles and main runtime match release
+bytes. Migration0076, email and map health remain healthy.
+
+Live API metadata and public Pages for 0,-3 and 1,-8 now include
+`renderer=assets-v6`; PNGs return 20,804 and 38,827 bytes respectively. The latter
+matches the fresh-render hash and replaces its previously cached abstract image.
+Two existing cached composites retain their 24,537/67,117-byte images and hashes.
+No production player/room writes or emails were used. Evidence:
+`/tmp/wamp-f269-cache-deploy.log`, `/tmp/wamp-f269-final-deployments.json`,
+`/tmp/wamp-f269-final-assets.json`, `/tmp/wamp-f269-final-live.json`.

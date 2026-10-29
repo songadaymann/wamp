@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F269, F389 | [#339](https://github.com/songadaymann/wamp/pull/339) | [receipt](docs/review/wamp-f269-f389-shared-real-art-previews-2026-10-29.md) | Share one real-art painter across API, Pages and Grams; fix geometry and cached fallback versions; verified live |
 | 2026-10-29 | F334 | [#338](https://github.com/songadaymann/wamp/pull/338) | [receipt](docs/review/wamp-f334-cached-share-artwork-2026-10-29.md) | Reuse real-art map PNGs for share links and cache version-safe Expanded composites; verified live |
 | 2026-10-29 | F275 | [#337](https://github.com/songadaymann/wamp/pull/337) | [receipt](docs/review/wamp-f275-shared-inspector-2026-10-29.md) | Share inspector actions, overlays and link guidance across editors; preserve cross-cell storage; verified live |
 | 2026-10-29 | F274 | [#336](https://github.com/songadaymann/wamp/pull/336) | [receipt](docs/review/wamp-f274-shared-editor-input-2026-10-29.md) | Share editor workspace drawing and camera controls; fix Spray, Smart gaps and middle-button edits; verified live |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-15 | — | [#204](https://github.com/songadaymann/wamp/pull/204) | [receipt](docs/review/wamp-background-thumbnails-2026-10-14.md) | Background picker previews fixed, and the picker is reachable on short phones |
 | 2026-10-14 | F062, F109 | [#203](https://github.com/songadaymann/wamp/pull/203) | [receipt](docs/review/wamp-phone-profile-overlap-2026-10-14.md) | Signed-in phone room controls and the music Close button no longer overlap |
 | 2026-10-14 | F062 | [#202](https://github.com/songadaymann/wamp/pull/202) | [receipt](docs/review/wamp-required-scene-capabilities-2026-10-14.md) | Scenes must provide the UI capabilities they declare, checked by the compiler |
-| 2026-10-14 | F109, F089 | [#201](https://github.com/songadaymann/wamp/pull/201) | [receipt](docs/review/wamp-phone-keyboard-targets-2026-10-14.md) | 44 px phone controls, readable HUD text and Play menu access; more automated phone input checks |
