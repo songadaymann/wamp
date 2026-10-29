@@ -12,8 +12,11 @@ vi.mock('../ui/appMode', () => ({ setAppMode: vi.fn() }));
 
 import { TILE_SIZE, editorState, updateEditorState } from '../config';
 import { CourseEditorScene } from './CourseEditorScene';
+import { EditorSprayTicker } from './editor/sprayTicker';
 
-const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool };
+const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool,
+  pencilSprayMode: editorState.pencilSprayMode, pencilSprayBrushSize: editorState.pencilSprayBrushSize,
+  pencilSprayRate: editorState.pencilSprayRate };
 beforeEach(() => updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil' }));
 afterEach(() => updateEditorState(saved));
 
@@ -34,7 +37,7 @@ function harness() {
     cameras: { main: { zoom: 2, scrollX: 20, scrollY: 30, setScroll: vi.fn() } },
     modifierKeys: {}, musicWorkflow: { isActive: () => false },
     pendingRightClickPanPointerId: null, isPanning: false, activeObjectDragRoomId: null,
-    tileDragMode: null, rectStart: null, pathBend: null,
+    tileDragMode: null, rectStart: null, pathController: { bend: null },
     objectMoveController, touchControls, constrainCamera: vi.fn(),
     handlePrimaryPointerDown: vi.fn(), handleSecondaryPointerClick: vi.fn(),
     handlePointerDrag: vi.fn(), finishPointerAction: vi.fn(), updateCursorHighlight: vi.fn(),
@@ -107,5 +110,26 @@ describe('Expanded Room pointer compatibility before shared input (F274)', () =>
     expect(slice.runtime.placeTileStroke).toHaveBeenCalledExactlyOnceWith([3, 4, 5].map(x => ({
       x: 640 + x * TILE_SIZE, y: 400 + 3 * TILE_SIZE,
     })));
+  });
+
+  it.each([false, true])('sprays while stationary (touch=%s) and stops on release', wasTouch => {
+    updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil', pencilSprayMode: true,
+      pencilSprayBrushSize: 5, pencilSprayRate: 1 });
+    const p = { ...pointer(10, 1, wasTouch), worldX: 700, worldY: 430 };
+    const runtime = { placeTileAt: vi.fn(), commitTileBatch: vi.fn() };
+    const slice = { roomId: 'r', runtime };
+    const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
+      input: { activePointer: p }, getSliceForPointer: () => slice,
+      roomSlices: new Map([['r', slice]]), activeTileDragRoomId: 'r',
+      tileDragMode: 'pencil', activeObjectDragRoomId: null, isPanning: false,
+      musicWorkflow: { isActive: () => false }, sprayTicker: new EditorSprayTicker(),
+      renderUi: vi.fn(),
+    });
+    scene.tickSpray(250); scene.tickSpray(250);
+    expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
+    expect(runtime.placeTileAt).toHaveBeenLastCalledWith(700, 430);
+    scene.finishPointerAction(p); scene.tickSpray(500);
+    expect(runtime.commitTileBatch).toHaveBeenCalledTimes(1);
+    expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
   });
 });

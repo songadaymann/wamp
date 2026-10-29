@@ -1,3 +1,7 @@
+import { drawEditorShapePreview, EditorPathBendController } from './editor/shapeInteraction';
+import { applyEditorMusicCameraFit } from './editor/musicCameraFit';
+import { applyInspectPointerPan, zoomInspectCamera, pointerPassedPanThreshold } from './overworld/inspectCameraGestures';
+import { drawEditorCursor } from './editor/cursorPreview';
 import * as goalAuthoring from '../courses/goalAuthoring';
 import type { EditorMusicCommands } from '../ui/setup/sceneBridge';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
@@ -116,7 +120,7 @@ import {
   resolveEditorLineEnd,
   isEditorShapeOutline,
   isPathEditorTool,
-  isPencilBrushPlacement,
+  isPencilSprayPlacement,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
@@ -126,10 +130,10 @@ import {
   requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
-import { clampRandomizeBrushSize } from './editor/randomizeTiles';
 import { forEachDraggedTileCell } from './editor/stampDrag';
 import { placeEditorPencilStroke, resolveEditorPencilOrigin } from './editor/pencilStroke';
-import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
+import { EditorSprayTicker } from './editor/sprayTicker';
+import { resolveShapeEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
 import {
@@ -140,12 +144,7 @@ import {
 import { EditorMusicPatternController } from './editor/musicPatternEditor';
 import {
   clearMusicWorkbenchFrame,
-  MUSIC_ROOM_LABEL_GUTTER,
-  MUSIC_ROOM_NEIGHBOR_PEEK,
   MusicRoomFitController,
-  planRoomCameraFit,
-  readMusicRoomViewport,
-  syncMusicWorkbenchFrame,
 } from './editor/musicRoomFit';
 import {
   type EditorMusicComposerMode,
@@ -177,7 +176,6 @@ import {
 import { CourseEditorObjectInspectorController } from './courseEditor/objectInspector';
 import { ExpandedEdgeGuideController } from './courseEditor/expandedEdgeGuides';
 import { createWorldRepository } from '../persistence/worldRepository';
-import { drawClipboardPastePreview } from './editor/clipboardObjects';
 import { loadEditorClipboard, saveEditorClipboard } from './editor/clipboardStorage';
 import { selectCustomSpriteTileForCourseRoom } from './courseEditor/customSpriteTiles';
 import type { CustomSpriteDefinition } from '../customSprites/model';
@@ -289,13 +287,23 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private lastPencilStampOrigin: { x: number; y: number } | null = null;
   private rectMode: RectMode = null;
   private shapeEraseActive = false;
-  private pathBend: {
-    roomId: string;
-    start: TilePoint;
-    end: TilePoint;
-    mid: TilePoint;
-    erase: boolean;
-  } | null = null;
+  private readonly pathController = new EditorPathBendController<string>({
+    preview: bend => {
+      const slice = this.roomSlices.get(bend.target);
+      if (slice) this.drawShapePreview(slice, 'curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y, bend.mid);
+    },
+    stamp: bend => {
+      const slice = this.roomSlices.get(bend.target);
+      if (!slice) return;
+      slice.runtime.beginTileBatch();
+      slice.runtime.stampShape('curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y,
+        { erase: bend.erase, mid: bend.mid });
+      slice.runtime.commitTileBatch();
+      this.statusText = bend.erase ? 'Erased curve.' : 'Drew curve.';
+    },
+    finish: () => { this.clearRectPreview(); this.renderUi(); },
+  });
+  private get pathBend() { return this.pathController.bend; }
   private rectStart:
     | {
         roomId: string;
@@ -899,8 +907,11 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     void this.openFromData(data);
   }
 
-  override update(): void {
+  private readonly sprayTicker = new EditorSprayTicker();
+
+  override update(_time: number, delta: number): void {
     this.touchControls.validate();
+    this.tickSpray(delta);
     const change = `${getActiveCourseDraftSessionRevision()}:${this.getDirtySlices().map((slice) => `${slice.roomId}:${slice.runtime.currentLastDirtyAt}`).join(',')}`;
     if (change !== this.lastBackupChange) {
       this.lastBackupChange = change;
@@ -1161,33 +1172,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     this.musicFitLock = true;
     try {
-      const viewport = readMusicRoomViewport(
-        this.game.canvas,
-        document,
-        camera.width,
-        camera.height,
-      );
-      const plan = planRoomCameraFit({
-        cameraWidth: camera.width,
-        cameraHeight: camera.height,
-        originX: camera.originX,
-        originY: camera.originY,
-        roomX: slice.origin.x,
-        roomY: slice.origin.y,
-        roomWidth: ROOM_PX_WIDTH,
-        roomHeight: ROOM_PX_HEIGHT,
-        viewport,
-        worldInset: {
-          left: MUSIC_ROOM_LABEL_GUTTER,
-          top: MUSIC_ROOM_NEIGHBOR_PEEK,
-          right: MUSIC_ROOM_NEIGHBOR_PEEK,
-          bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
-        },
-      });
-      this.inspectZoom = plan.zoom;
-      camera.setZoom(plan.zoom);
-      camera.setScroll(plan.scrollX, plan.scrollY);
-      syncMusicWorkbenchFrame(this.game.canvas, camera.width, camera.height, plan);
+      applyEditorMusicCameraFit(camera, this.game.canvas, slice.origin,
+        zoom => { this.inspectZoom = zoom; });
     } finally {
       this.musicFitLock = false;
     }
@@ -2550,13 +2536,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         return;
       }
       if (this.pendingRightClickPanPointerId === pointer.id) {
-        const distance = Phaser.Math.Distance.Between(
-          this.panStartPointer.x,
-          this.panStartPointer.y,
-          pointer.x,
-          pointer.y,
-        );
-        if (distance >= PAN_THRESHOLD) {
+        if (pointerPassedPanThreshold(this.panStartPointer, pointer, PAN_THRESHOLD)) {
           this.pendingRightClickPanPointerId = null;
           this.isPanning = true;
           this.applyPointerPan(pointer);
@@ -2925,6 +2905,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       }
 
       if (this.tileDragMode === 'pencil') {
+        if (isPencilSprayPlacement()) return;
         this.placeCoursePencilStamp(slice, localTile.tileX, localTile.tileY);
       } else if (this.tileDragMode === 'randomize') {
         slice.runtime.paintRandomizeAt(pointer.worldX, pointer.worldY);
@@ -2964,6 +2945,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private cancelTouchBatches(): void {
+    this.sprayTicker.reset();
     for (const id of this.touchTileRooms) this.roomSlices.get(id)?.runtime.cancelTileBatch();
     for (const id of this.touchObjectRooms) this.roomSlices.get(id)?.runtime.cancelObjectBatch();
     this.touchTileRooms.clear();
@@ -2979,16 +2961,17 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   private commitTouchPathBend(pointer: Phaser.Input.Pointer): void {
     this.updateCoursePathBendPreview(pointer);
-    const bend = this.pathBend;
-    if (!bend) return;
-    const slice = this.roomSlices.get(bend.roomId);
-    if (slice) {
-      slice.runtime.beginTileBatch();
-      slice.runtime.stampShape('curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y,
-        { erase: bend.erase, mid: bend.mid });
-      slice.runtime.commitTileBatch();
-    }
-    this.clearRectPreview();
+    this.pathController.commit();
+  }
+
+  private tickSpray(deltaMs: number): void {
+    const pointer = this.input.activePointer;
+    const slice = this.getSliceForPointer(pointer);
+    const active = !this.musicModeActive && !this.isPanning && !editorState.isPlaying
+      && this.tileDragMode === 'pencil' && isPencilSprayPlacement()
+      && pointer.leftButtonDown() && slice?.roomId === this.activeTileDragRoomId;
+    this.sprayTicker.tick(deltaMs, active, editorState.pencilSprayBrushSize, editorState.pencilSprayRate,
+      () => { slice?.runtime.placeTileAt(pointer.worldX, pointer.worldY); });
   }
 
   private placeCoursePencilStamp(
@@ -3002,6 +2985,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private finishPointerAction(pointer: Phaser.Input.Pointer): void {
+    this.sprayTicker.reset();
     if (this.activeObjectDragRoomId) {
       this.commitActiveObjectDrag();
       this.renderUi();
@@ -3240,46 +3224,11 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     y2: number,
     mid?: TilePoint,
   ): void {
-    this.rectPreviewGraphics?.clear();
-    if (!this.rectPreviewGraphics) {
-      return;
-    }
-
-    const copySelection = this.rectMode === 'copy';
-    const outline =
-      !copySelection && (kind === 'rect' || kind === 'ellipse') && isEditorShapeOutline(kind);
-    const minX = Math.min(x1, x2);
-    const minY = Math.min(y1, y2);
-    const width = Math.abs(x2 - x1) + 1;
-    const height = Math.abs(y2 - y1) + 1;
-    const pathTool = kind === 'line' || kind === 'curve';
-    this.rectPreviewGraphics.lineStyle(2, 0xffd36a, 0.92);
-    this.rectPreviewGraphics.fillStyle(0xffd36a, copySelection || !outline ? 0.12 : 0.22);
-    if (copySelection || (kind === 'rect' && !outline)) {
-      this.rectPreviewGraphics.fillRect(
-        slice.origin.x + minX * TILE_SIZE,
-        slice.origin.y + minY * TILE_SIZE,
-        width * TILE_SIZE,
-        height * TILE_SIZE,
-      );
-    } else {
-      for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, mid)) {
-        this.rectPreviewGraphics.fillRect(
-          slice.origin.x + tile.x * TILE_SIZE,
-          slice.origin.y + tile.y * TILE_SIZE,
-          TILE_SIZE,
-          TILE_SIZE,
-        );
-      }
-    }
-    if (!pathTool) {
-      this.rectPreviewGraphics.strokeRect(
-        slice.origin.x + minX * TILE_SIZE,
-        slice.origin.y + minY * TILE_SIZE,
-        width * TILE_SIZE,
-        height * TILE_SIZE,
-      );
-    }
+    const copy = this.rectMode === 'copy';
+    drawEditorShapePreview(this.rectPreviewGraphics, kind, { x: x1, y: y1 }, { x: x2, y: y2 }, {
+      origin: slice.origin, mid, copy,
+      outline: !copy && (kind === 'rect' || kind === 'ellipse') && isEditorShapeOutline(kind),
+    });
   }
 
   private beginCoursePathBend(
@@ -3288,85 +3237,19 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     end: { x: number; y: number },
     erase: boolean,
   ): void {
-    this.pathBend = {
-      roomId: slice.roomId,
-      start: { x: start.x, y: start.y },
-      end: { x: end.x, y: end.y },
-      mid: {
-        x: Math.round((start.x + end.x) / 2),
-        y: Math.round((start.y + end.y) / 2),
-      },
-      erase,
-    };
-    this.drawShapePreview(slice, 'curve', start.x, start.y, end.x, end.y, this.pathBend.mid);
+    this.pathController.begin(slice.roomId, start, end, erase);
   }
 
   private resolveCoursePathBend(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.pathBend) {
-      return false;
-    }
-
-    const slice = this.roomSlices.get(this.pathBend.roomId) ?? null;
-    if (pointer.rightButtonDown()) {
-      if (this.pathBend.erase && slice) {
-        slice.runtime.beginTileBatch();
-        slice.runtime.stampShape(
-          'curve',
-          this.pathBend.start.x,
-          this.pathBend.start.y,
-          this.pathBend.end.x,
-          this.pathBend.end.y,
-          { erase: true, mid: this.pathBend.mid },
-        );
-        slice.runtime.commitTileBatch();
-        this.statusText = 'Erased curve.';
-      }
-      this.clearRectPreview();
-      this.renderUi();
-      return true;
-    }
-
-    if (pointer.leftButtonDown()) {
-      if (!this.pathBend.erase && slice) {
-        slice.runtime.beginTileBatch();
-        slice.runtime.stampShape(
-          'curve',
-          this.pathBend.start.x,
-          this.pathBend.start.y,
-          this.pathBend.end.x,
-          this.pathBend.end.y,
-          { erase: false, mid: this.pathBend.mid },
-        );
-        slice.runtime.commitTileBatch();
-        this.statusText = 'Drew curve.';
-      }
-      this.clearRectPreview();
-      this.renderUi();
-      return true;
-    }
-
-    return false;
+    return this.pathController.resolve(pointer.leftButtonDown(), pointer.rightButtonDown());
   }
 
   private updateCoursePathBendPreview(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.pathBend) {
-      return false;
-    }
-    const slice = this.roomSlices.get(this.pathBend.roomId) ?? null;
-    if (!slice) {
-      return true;
-    }
+    if (!this.pathBend) return false;
+    const slice = this.roomSlices.get(this.pathBend.target);
+    if (!slice) return true;
     const tile = this.getClosestTileInSlice(slice, pointer.worldX, pointer.worldY);
-    this.pathBend.mid = { x: tile.tileX, y: tile.tileY };
-    this.drawShapePreview(
-      slice,
-      'curve',
-      this.pathBend.start.x,
-      this.pathBend.start.y,
-      this.pathBend.end.x,
-      this.pathBend.end.y,
-      this.pathBend.mid,
-    );
+    this.pathController.update({ x: tile.tileX, y: tile.tileY });
     return true;
   }
 
@@ -3388,7 +3271,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.rectStart = null;
     this.rectMode = null;
     this.shapeEraseActive = false;
-    this.pathBend = null;
+    this.pathController.clear();
   }
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
@@ -3408,38 +3291,15 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
 
-    if (this.clipboardPastePreviewActive && this.clipboardState && editorState.paletteMode === 'tiles') {
-      drawClipboardPastePreview(this.cursorGraphics, this.clipboardState, {
-        x: slice.origin.x + tile.tileX * TILE_SIZE,
-        y: slice.origin.y + tile.tileY * TILE_SIZE,
-      }, 0x7de5ff);
-      return;
-    }
-
-    const color = this.courseGoalPlacementMode ? RETRO_COLORS.frontier : 0x7de5ff;
-    const brushSize = editorState.activeTool === 'eraser'
-      ? editorState.eraserBrushSize
-      : editorState.activeTool === 'randomize'
-        ? clampRandomizeBrushSize(editorState.randomizeBrushSize)
-        : editorState.activeTool === 'pencil' && isPencilBrushPlacement()
-          ? clampRandomizeBrushSize(editorState.pencilBrushSize)
-          : 1;
-    const originX = tile.tileX - Math.floor(brushSize * 0.5);
-    const originY = tile.tileY - Math.floor(brushSize * 0.5);
-    this.cursorGraphics.lineStyle(2, color, 0.88);
-    this.cursorGraphics.fillStyle(color, 0.12);
-    this.cursorGraphics.fillRect(
-      slice.origin.x + originX * TILE_SIZE,
-      slice.origin.y + originY * TILE_SIZE,
-      brushSize * TILE_SIZE,
-      brushSize * TILE_SIZE,
-    );
-    this.cursorGraphics.strokeRect(
-      slice.origin.x + originX * TILE_SIZE,
-      slice.origin.y + originY * TILE_SIZE,
-      brushSize * TILE_SIZE,
-      brushSize * TILE_SIZE,
-    );
+    drawEditorCursor(this.cursorGraphics, {
+      tile: { x: tile.tileX, y: tile.tileY }, origin: slice.origin,
+      goalPlacement: Boolean(this.courseGoalPlacementMode),
+      clipboard: this.clipboardPastePreviewActive ? this.clipboardState : null,
+      stampOrigin: resolveEditorPencilOrigin(
+        this.activeTileDragRoomId === slice.roomId ? this.pencilDragStart : null,
+        { x: tile.tileX, y: tile.tileY }),
+      erasing: pointer.rightButtonDown(),
+    });
   }
 
   private pointerRequestsPan(pointer: Phaser.Input.Pointer): boolean {
@@ -3469,9 +3329,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private applyPointerPan(pointer: Phaser.Input.Pointer): void {
-    const dx = (this.panStartPointer.x - pointer.x) / this.cameras.main.zoom;
-    const dy = (this.panStartPointer.y - pointer.y) / this.cameras.main.zoom;
-    this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    applyInspectPointerPan(this.cameras.main, this.panStartPointer, this.panStartScroll, pointer);
     this.constrainCamera();
   }
 
@@ -3520,18 +3378,10 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     const camera = this.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchor = getScreenAnchorWorldPoint(screenX, screenY, camera);
-    this.inspectZoom = Number(nextZoom.toFixed(3));
-    camera.setZoom(this.inspectZoom);
-    this.syncCameraBounds();
-    const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
-    camera.setScroll(nextScroll.x, nextScroll.y);
-    this.constrainCamera();
+    if (!zoomInspectCamera({ camera, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
+      normalize: zoom => Number(zoom.toFixed(3)), storeZoom: zoom => { this.inspectZoom = zoom; },
+      updateBounds: () => this.syncCameraBounds(), constrain: () => this.constrainCamera(),
+    }, factor, { x: screenX, y: screenY })) return;
     snapRoundedCameraScroll(camera);
     this.renderUi();
   }

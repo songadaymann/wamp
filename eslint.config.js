@@ -10,7 +10,7 @@ const MAX_LINES = 1500;
 const OVERSIZED_FILE_LINES = {
   'src/scenes/OverworldPlayScene.ts': 5144,
   'src/scenes/overworld/worldStreaming.ts': 5095,
-  'src/scenes/CourseEditorScene.ts': 3454,
+  'src/scenes/CourseEditorScene.ts': 3284,
   'src/scenes/editor/editRuntime.ts': 3283,
   'src/scenes/overworld/liveObjects/swordsmanController.ts': 2596,
   'src/scenes/overworld/liveObjects.ts': 2341,

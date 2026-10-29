@@ -1,3 +1,4 @@
+import { applyInspectPointerPan, pointerPassedPanThreshold, zoomInspectCamera } from './overworld/inspectCameraGestures';
 import * as goalAuthoring from '../courses/goalAuthoring';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../buildPrompts/publishing';
 import { expandedRoomIdFromLegacyCourseId } from '../expandedRooms/model';
@@ -1308,15 +1309,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
         return;
       }
 
-      const distance = Phaser.Math.Distance.Between(
-        this.panStartPointer.x,
-        this.panStartPointer.y,
-        pointer.x,
-        pointer.y,
-      );
-      if (distance < PAN_THRESHOLD) {
-        return;
-      }
+      if (!pointerPassedPanThreshold(this.panStartPointer, pointer, PAN_THRESHOLD)) return;
 
       this.applyPan(pointer);
     });
@@ -1348,9 +1341,7 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
   }
 
   private applyPan(point: { x: number; y: number }): void {
-    const dx = (this.panStartPointer.x - point.x) / this.cameras.main.zoom;
-    const dy = (this.panStartPointer.y - point.y) / this.cameras.main.zoom;
-    this.cameras.main.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    applyInspectPointerPan(this.cameras.main, this.panStartPointer, this.panStartScroll, point);
     this.constrainInspectCamera();
   }
 
@@ -1457,23 +1448,10 @@ export class CourseComposerScene extends Phaser.Scene implements CourseComposerS
 
   private adjustZoomByFactor(factor: number, screenX: number, screenY: number): void {
     const camera = this.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(camera.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (Math.abs(nextZoom - camera.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchorWorldPoint = getScreenAnchorWorldPoint(screenX, screenY, camera);
-    this.inspectZoom = Number(nextZoom.toFixed(3));
-    camera.setZoom(this.inspectZoom);
-    const nextScroll = getScrollForScreenAnchor(
-      anchorWorldPoint.x,
-      anchorWorldPoint.y,
-      screenX,
-      screenY,
-      camera,
-    );
-    camera.setScroll(nextScroll.x, nextScroll.y);
-    this.constrainInspectCamera();
+    if (!zoomInspectCamera({ camera, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM,
+      normalize: zoom => Number(zoom.toFixed(3)), storeZoom: zoom => { this.inspectZoom = zoom; },
+      constrain: () => this.constrainInspectCamera(),
+    }, factor, { x: screenX, y: screenY })) return;
     snapRoundedCameraScroll(camera);
     this.centerCoordinates = this.getCameraCenterCoordinates();
     void this.refreshAround(this.centerCoordinates);
