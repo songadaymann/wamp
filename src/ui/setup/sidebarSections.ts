@@ -363,7 +363,6 @@ export function setupEditorSidebarShell(doc: Document = document): void {
   appendSection(scrollShell, sectionById.get('goal-section'));
   appendSection(scrollShell, sectionById.get('course-goal-section'));
   appendSection(scrollShell, sectionById.get('editor-advanced'));
-  appendSection(scrollShell, sectionById.get('tools-section'));
 
   for (const section of sections) {
     if (used.has(section)) {

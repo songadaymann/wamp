@@ -159,7 +159,6 @@ export class EditorPhoneDock {
     const inspecting = this.doc.body.dataset.editorPhoneInspector === 'true' || this.doc.body.dataset.editorPhoneLinking === 'true';
     const placingSpawn = this.doc.body.dataset.editorSpawnPlacement === 'true';
     this.doc.body.dataset.mobileEditorCollapsed = this.collapsed ? 'true' : 'false';
-    delete this.doc.body.dataset.mobileEditorSheet;
     const sidebar = this.doc.getElementById('sidebar');
     sidebar?.setAttribute('aria-hidden', this.collapsed || locked ? 'true' : 'false');
     const toggle = this.doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null;

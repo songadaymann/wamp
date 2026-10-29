@@ -62,7 +62,6 @@
   }
 
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-shell-title-slot,
-  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #mobile-editor-nav,
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] .editor-shell-action-grid {
     display: none !important;
   }
@@ -297,7 +296,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: min(320px, calc(100vw - 8px - var(--safe-left) - var(--safe-right)));
-    max-height: calc(100dvh - var(--editor-phone-bar-height) - var(--editor-phone-dock-height));
+    max-height: var(--phone-editor-stage-height);
     overflow-y: auto;
     gap: 6px;
     padding: 8px;
@@ -336,7 +335,7 @@
     left: auto;
     right: calc(4px + var(--safe-right));
     width: min(320px, calc(100vw - 8px - var(--safe-left) - var(--safe-right)));
-    max-height: calc(100dvh - var(--editor-phone-bar-height) - var(--editor-phone-dock-height));
+    max-height: var(--phone-editor-stage-height);
     overflow-y: auto;
     z-index: var(--z-phone-editor-popover);
     transform: none;
@@ -358,7 +357,6 @@
     pointer-events: none;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #sidebar #tools-section,
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #sidebar #editor-advanced {
     display: none !important;
   }
@@ -474,7 +472,7 @@
     left: calc(4px + var(--safe-left));
     width: min(380px, calc(100vw - 8px - var(--safe-left) - var(--safe-right)));
     max-width: none;
-    max-height: calc(100dvh - var(--editor-phone-bar-height) - var(--editor-phone-dock-height));
+    max-height: var(--phone-editor-stage-height);
     overflow-y: auto;
     box-shadow: none;
     z-index: var(--z-phone-editor-picker);

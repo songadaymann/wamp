@@ -69,7 +69,7 @@ try {
       }
       for (const selector of ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar']) await bounds(selector);
       for (const selector of ['[data-editor-shell-action="test"]', '[data-editor-shell-action="publish"]', '#btn-editor-phone-menu', '#btn-mobile-editor-toggle']) await bounds(selector, 44);
-      assert.equal(await page.locator('#mobile-editor-nav').isVisible(), false);
+      assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
       passed.push('persistent actions and 44px targets fit');
 
       if (device === 'portrait') {
@@ -191,6 +191,9 @@ try {
         assert.equal(await page.locator('#editor-phone-menu').isVisible(), true);
         await page.keyboard.press('Escape');
       } else await tap('#btn-editor-phone-menu');
+      await tap('#btn-editor-phone-menu');
+      await tap('#btn-editor-phone-fit');
+      passed.push('More Fit room uses the live editor control');
       await tap('#btn-editor-phone-menu');
       await tap('#btn-editor-phone-account');
       assert.equal(await page.locator('#auth-panel').evaluate(el => el.classList.contains('menu-open')), true);

@@ -279,25 +279,6 @@
   #editor-sidebar-scroll {
     display: contents;
   }
-  body[data-app-mode='editor']:not([data-device-class='phone']):not([data-editor-dock-shell='true']) #editor-fixed-stack {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-  }
-
-  body[data-app-mode='editor']:not([data-device-class='phone']):not([data-editor-dock-shell='true']) #editor-sidebar-scroll {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: 14px;
-    scrollbar-gutter: stable;
-  }
   body[data-app-mode='editor'] #sidebar {
     color: var(--editor-retro-ink);
     scrollbar-color: var(--editor-retro-blue-deep) #0b0b0b;
@@ -339,9 +320,7 @@
   body[data-app-mode='editor'] #sidebar .section-label,
   body[data-app-mode='editor'] #sidebar .editor-top-tools-label,
   body[data-app-mode='editor'] #sidebar .editor-feature-launcher-label,
-  body[data-app-mode='editor'] #sidebar .editor-tool-popover-label,
   body[data-app-mode='editor'] #sidebar .goal-control-label,
-  body[data-app-mode='editor'] #sidebar .erase-controls-label,
   body[data-app-mode='editor'] #sidebar .object-facing-label,
   body[data-app-mode='editor'] #sidebar .background-solid-color-row,
   body[data-app-mode='editor'] #sidebar .lighting-slider-label {
@@ -722,7 +701,6 @@
   body[data-app-mode='editor'] #sidebar .layer-info-tooltip,
   body[data-app-mode='editor'] #palette-tooltip,
   body[data-app-mode='editor'] #object-tooltip,
-  body[data-app-mode='editor'] #sidebar .editor-tool-popover,
   body[data-app-mode='editor'] #sidebar .pressure-plate-panel,
   body[data-app-mode='editor'] #sidebar #container-contents-panel {
     border: 2px solid var(--editor-retro-blue);
@@ -745,8 +723,7 @@
 
   body[data-app-mode='editor'] #sidebar select,
   body[data-app-mode='editor'] #sidebar .goal-input,
-  body[data-app-mode='editor'] #sidebar .object-search-input,
-  body[data-app-mode='editor'] #sidebar .editor-erase-brush-select {
+  body[data-app-mode='editor'] #sidebar .object-search-input {
     width: 100%;
     padding: 8px 10px 6px;
     border: 2px solid var(--editor-retro-blue-deep);
@@ -760,8 +737,7 @@
 
   body[data-app-mode='editor'] #sidebar select:focus,
   body[data-app-mode='editor'] #sidebar .goal-input:focus,
-  body[data-app-mode='editor'] #sidebar .object-search-input:focus,
-  body[data-app-mode='editor'] #sidebar .editor-erase-brush-select:focus {
+  body[data-app-mode='editor'] #sidebar .object-search-input:focus {
     outline: none;
     border-color: var(--editor-retro-blue);
     box-shadow: 0 0 0 2px rgba(var(--wamp-sky-rgb), 0.2);

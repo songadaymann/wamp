@@ -25,10 +25,6 @@
     margin-top: 0;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #editor-actions {
-    display: flex;
-  }
-
   body[data-device-class='phone'][data-app-mode='editor'] #editor-actions {
     flex-direction: column;
     gap: 10px;
@@ -43,86 +39,10 @@
     margin-top: 0;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) .mobile-editor-actions-panel {
-    display: flex;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-actions-panel {
-    flex-direction: column;
-    gap: 10px;
-  }
-
   body[data-device-class='phone'][data-app-mode='editor'] #editor-advanced {
     display: flex;
     flex-direction: column;
     gap: 10px;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-card {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-    padding: 10px;
-    border: 1px solid rgba(243, 238, 226, 0.08);
-    border-radius: 10px;
-    background: rgba(243, 238, 226, 0.03);
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-card-wide {
-    grid-column: 1 / -1;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-label {
-    color: var(--text-dim);
-    font-size: var(--ui-text-small, 10px);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value {
-    min-width: 0;
-    color: var(--text);
-    font-size: var(--ui-text-small, 11px);
-    line-height: 1.45;
-    word-break: break-word;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-save-status {
-    height: 2.9em;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-status-value.editor-save-status-rich {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    gap: 8px;
-    align-items: center;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-zoom-readout {
-    min-width: 0;
-    padding: 9px 10px;
-    border: 1px solid rgba(243, 238, 226, 0.08);
-    border-radius: 10px;
-    background: rgba(243, 238, 226, 0.03);
-    color: var(--text);
-    font-size: var(--ui-text-small, 11px);
-    text-align: center;
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {

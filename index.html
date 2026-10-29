@@ -268,162 +268,6 @@
         <button id="btn-room-template-replace" class="editor-drawer-tab" type="button">Templates</button>
       </div>
       <!-- Tools -->
-      <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
-        <div class="section-label">Tools</div>
-        <div id="tools" class="tools-primary-row">
-          <button class="tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
-            <span class="tool-icon">&#9998;</span>
-            <span class="tool-label">Draw</span>
-          </button>
-          <button class="tool-btn" data-tool="eraser" type="button" title="Erase (2)">
-            <span class="tool-icon">&#9003;</span>
-            <span class="tool-label">Erase</span>
-          </button>
-          <button class="tool-btn" data-tool="copy" type="button" title="Copy (3)">
-            <span class="tool-icon">&#10697;</span>
-            <span class="tool-label">Copy</span>
-          </button>
-          <button class="tool-btn" data-tool="move" type="button" title="Move (M): drag an object, or drag across an area to select it and drag inside to move it; Escape cancels"><span class="tool-icon">&#8596;</span><span class="tool-label">Move</span></button>
-          <button
-            id="btn-tool-more"
-            class="tool-btn tool-btn-more editor-more-tools-toggle"
-            type="button"
-            title="More Tools"
-          >
-            <span class="tool-icon">&#8942;</span>
-            <span class="tool-label">More</span>
-          </button>
-        </div>
-        <div id="more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
-          <div class="editor-tool-popover-label">More Tools</div>
-          <div class="editor-tool-popover-grid">
-            <button class="tool-btn tool-btn-compact" data-tool="rect" type="button" title="Rectangle Filled / Outlined (R) hold Shift for proportional">
-              <span class="tool-icon">&#9632;</span>
-              <span class="tool-label">Rectangle <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="ellipse" type="button" title="Ellipse Filled / Outlined (E) hold Shift for proportional">
-              <span class="tool-icon">&#9679;</span>
-              <span class="tool-label">Ellipse <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap">
-              <span class="tool-icon">&#9585;</span>
-              <span class="tool-label"><span class="tool-mode-label">Line</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="fill" type="button" title="Fill (G)">
-              <span class="tool-icon">&#9687;</span>
-              <span class="tool-label">Fill</span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="randomize" type="button" title="Scramble (V)">
-              <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-              <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
-            </button>
-          </div>
-        </div>
-        <div id="pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
-          <div class="editor-tool-popover-label">Draw</div>
-          <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
-            </div>
-          </div>
-          <div class="erase-controls-row editor-tile-erase-control editor-pencil-spray-size-row hidden">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Spray brush size">
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="5">5x5</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="6">6x6</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="7">7x7</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="8">8x8</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="9">9x9</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="10">10x10</button>
-            </div>
-          </div>
-          <div class="erase-controls-row editor-pencil-spray-rate-row hidden">
-            <span class="erase-controls-label">Rate</span>
-            <span class="editor-pencil-spray-rate-bound">Slow</span>
-            <input class="editor-pencil-spray-rate" type="range" min="0" max="1" step="0.01" value="0.5" aria-label="Spray rate" />
-            <span class="editor-pencil-spray-rate-bound">Fast</span>
-          </div>
-          <div class="erase-controls-row editor-pencil-continuous-row hidden">
-            <label
-              class="erase-controls-label"
-              title="Turn on to remove gap between tile stamping."
-            >
-              <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
-              Continuous Stamping
-            </label>
-          </div>
-        </div>
-        <div id="erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
-          <div class="editor-tool-popover-label">Eraser</div>
-          <div class="erase-controls-row editor-tile-erase-control">
-            <label class="erase-controls-label" for="erase-brush-select">Brush</label>
-            <select id="erase-brush-select" class="editor-erase-brush-select">
-              <option value="1">1x1</option>
-              <option value="3">3x3</option>
-              <option value="5">5x5</option>
-            </select>
-          </div>
-          <div class="erase-action-grid">
-            <button
-              id="btn-erase-clear-layer"
-              class="bar-btn bar-btn-small editor-clear-layer-btn editor-tile-erase-control"
-              type="button"
-            >
-              Clear Layer
-            </button>
-            <button
-              id="btn-erase-clear-all"
-              class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn editor-tile-erase-control"
-              type="button"
-            >
-              Nuke Terrain
-            </button>
-            <button
-              id="btn-erase-clear-objects"
-              class="bar-btn bar-btn-small bar-btn-danger editor-clear-objects-btn"
-              type="button"
-            >
-              Nuke Objects
-            </button>
-          </div>
-        </div>
-        <div id="randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-          <div class="editor-tool-popover-label">Scramble</div>
-          <div class="erase-controls-row editor-tile-erase-control">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
-            </div>
-          </div>
-        </div>
-        <div id="copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
-          <div class="editor-tool-popover-label">Copy</div>
-          <div class="erase-controls-row editor-copy-actions">
-            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
-            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
-          </div>
-          <div class="editor-tool-popover-label">My Stamps</div>
-          <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
-        </div>
-        <div id="fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
-          <div class="editor-tool-popover-label">Fill</div>
-          <div class="erase-controls-row">
-            <label class="erase-controls-label" title="Fill connected tiles even when they are flipped horizontally or vertically.">
-              <input class="editor-fill-ignore-flip" type="checkbox" />
-              Ignore tile flipping
-            </label>
-          </div>
-        </div>
-      </div>
 
       <!-- Layers -->
       <div class="sidebar-section" id="layers-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
@@ -941,30 +785,7 @@
         </div>
         <div class="editor-top-tools desktop-editor-only">
           <div class="editor-top-tools-label">Tools</div>
-          <div class="editor-top-tools-rail">
-            <button class="tool-btn editor-top-tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
-              <span class="tool-icon">&#9998;</span>
-              <span class="tool-label">Draw</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="eraser" type="button" title="Erase (2)">
-              <span class="tool-icon">&#9003;</span>
-              <span class="tool-label">Erase</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="copy" type="button" title="Copy (3)">
-              <span class="tool-icon">&#10697;</span>
-              <span class="tool-label">Copy</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="move" type="button" title="Move (M): drag an object, or drag across an area to select it and drag inside to move it; Escape cancels"><span class="tool-icon">&#8596;</span><span class="tool-label">Move</span></button>
-            <button
-              id="btn-editor-top-tool-more"
-              class="tool-btn tool-btn-more editor-more-tools-toggle editor-top-tool-btn"
-              type="button"
-              title="More Tools"
-            >
-              <span class="tool-icon">&#8942;</span>
-              <span class="tool-label">More</span>
-            </button>
-          </div>
+
           <div class="editor-feature-launcher" aria-label="Room features">
             <div class="editor-feature-launcher-label">Features</div>
             <div class="editor-feature-launcher-rail">
@@ -1173,158 +994,9 @@
               </div>
             </div>
           </div>
-          <div id="editor-top-more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
-            <div class="editor-tool-popover-label">More Tools</div>
-            <div class="editor-tool-popover-grid">
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="rect" type="button" title="Rectangle Filled / Outlined (R) hold Shift for proportional">
-                <span class="tool-icon">&#9632;</span>
-                <span class="tool-label">Rectangle <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="ellipse" type="button" title="Ellipse Filled / Outlined (E) hold Shift for proportional">
-                <span class="tool-icon">&#9679;</span>
-                <span class="tool-label">Ellipse <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap">
-                <span class="tool-icon">&#9585;</span>
-                <span class="tool-label"><span class="tool-mode-label">Line</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="fill" type="button" title="Fill (G)">
-                <span class="tool-icon">&#9687;</span>
-                <span class="tool-label">Fill</span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="randomize" type="button" title="Scramble (V)">
-                <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-                <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
-              </button>
-            </div>
-          </div>
-          <div id="editor-top-pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
-            <div class="editor-tool-popover-label">Draw</div>
-            <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
-              </div>
-            </div>
-            <div class="erase-controls-row editor-tile-erase-control editor-pencil-spray-size-row hidden">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Spray brush size">
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="5">5x5</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="6">6x6</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="7">7x7</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="8">8x8</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="9">9x9</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="10">10x10</button>
-              </div>
-            </div>
-            <div class="erase-controls-row editor-pencil-spray-rate-row hidden">
-              <span class="erase-controls-label">Rate</span>
-              <span class="editor-pencil-spray-rate-bound">Slow</span>
-              <input class="editor-pencil-spray-rate" type="range" min="0" max="1" step="0.01" value="0.5" aria-label="Spray rate" />
-              <span class="editor-pencil-spray-rate-bound">Fast</span>
-            </div>
-            <div class="erase-controls-row editor-pencil-continuous-row hidden">
-              <label
-                class="erase-controls-label"
-                title="Turn on to remove gap between tile stamping."
-              >
-                <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
-                Continuous Stamping
-              </label>
-            </div>
-          </div>
-          <div id="editor-top-erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
-            <div class="editor-tool-popover-label">Eraser</div>
-            <div class="erase-controls-row editor-tile-erase-control">
-              <label class="erase-controls-label" for="editor-top-erase-brush-select">Brush</label>
-              <select id="editor-top-erase-brush-select" class="editor-erase-brush-select">
-                <option value="1">1x1</option>
-                <option value="3">3x3</option>
-                <option value="5">5x5</option>
-              </select>
-            </div>
-            <div class="erase-action-grid">
-              <button
-                id="btn-editor-top-erase-clear-layer"
-                class="bar-btn bar-btn-small editor-clear-layer-btn editor-tile-erase-control"
-                type="button"
-              >
-                Clear Layer
-              </button>
-              <button
-                id="btn-editor-top-erase-clear-all"
-                class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn editor-tile-erase-control"
-                type="button"
-              >
-                Nuke Terrain
-              </button>
-              <button
-                id="btn-editor-top-erase-clear-objects"
-                class="bar-btn bar-btn-small bar-btn-danger editor-clear-objects-btn"
-                type="button"
-              >
-                Nuke Objects
-              </button>
-            </div>
-          </div>
-          <div id="editor-top-randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-            <div class="editor-tool-popover-label">Scramble</div>
-            <div class="erase-controls-row editor-tile-erase-control">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
-              </div>
-            </div>
-          </div>
-          <div id="editor-top-copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
-            <div class="editor-tool-popover-label">Copy</div>
-            <div class="erase-controls-row editor-copy-actions">
-              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
-              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
-            </div>
-            <div class="editor-tool-popover-label">My Stamps</div>
-            <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
-          </div>
-          <div id="editor-top-fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
-            <div class="editor-tool-popover-label">Fill</div>
-            <div class="erase-controls-row">
-              <label class="erase-controls-label" title="Fill connected tiles even when they are flipped horizontally or vertically.">
-                <input class="editor-fill-ignore-flip" type="checkbox" />
-                Ignore tile flipping
-              </label>
-            </div>
-          </div>
+
         </div>
-        <div class="mobile-editor-actions-panel mobile-editor-only">
-          <div class="mobile-editor-status-grid">
-            <div class="mobile-editor-status-card">
-              <div class="mobile-editor-status-label">Room</div>
-              <div id="mobile-editor-room-coords" class="mobile-editor-status-value">Room (0, 0)</div>
-            </div>
-            <div class="mobile-editor-status-card">
-              <div class="mobile-editor-status-label">Cursor</div>
-              <div id="mobile-editor-cursor-coords" class="mobile-editor-status-value">Tile: -, -</div>
-            </div>
-            <div class="mobile-editor-status-card mobile-editor-status-card-wide">
-              <div class="mobile-editor-status-label">Status</div>
-              <div id="mobile-editor-save-status" class="mobile-editor-status-value">Draft ready.</div>
-            </div>
-          </div>
-          <div class="mobile-editor-zoom-row">
-            <button id="btn-mobile-editor-zoom-out" aria-label="Zoom out" class="bar-btn bar-btn-small" type="button">-</button>
-            <span id="mobile-editor-zoom-level" class="mobile-editor-zoom-readout">Zoom: 2x</span>
-            <button id="btn-mobile-editor-zoom-in" aria-label="Zoom in" class="bar-btn bar-btn-small" type="button">+</button>
-            <button id="btn-mobile-editor-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
-          </div>
-        </div>
+
       </div>
 
       <div
@@ -1349,6 +1021,7 @@
 
     <div id="editor-shell-top" class="editor-shell-top" aria-label="Room editor controls">
       <div id="editor-shell-phone-bar" aria-label="Editing actions">
+        <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small" type="button" aria-label="Hide editor panels">Hide</button>
         <button id="btn-editor-phone-menu" class="editor-shell-chunky-button" type="button" aria-controls="editor-phone-menu" aria-expanded="false">More</button>
       </div>
       <div id="editor-phone-menu" class="hidden" role="dialog" aria-label="Room and sharing" aria-hidden="true">
@@ -1412,6 +1085,14 @@
             <button class="editor-erase-brush-button" type="button" data-erase-brush-size="5" aria-pressed="false">5x5</button>
           </div>
           <div class="editor-shell-eraser-danger-actions" role="group" aria-label="Clear room contents">
+            <button
+              id="btn-editor-shell-clear-layer"
+              class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-layer-btn editor-tile-erase-control"
+              type="button"
+              aria-label="Clear current tile layer"
+            >
+              Clear Layer
+            </button>
             <button
               id="btn-editor-shell-nuke-terrain"
               class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-all-btn editor-tile-erase-control"
@@ -2244,26 +1925,7 @@
         <span id="zoom-level">Zoom: 2x</span>
       </div>
     </div>
-    <div id="mobile-editor-nav" class="mobile-editor-nav hidden" aria-label="Editor panels">
-      <div class="mobile-editor-tabs">
-      <button
-        class="bar-btn bar-btn-small mobile-editor-tab mobile-editor-world-tab"
-        type="button"
-        data-mobile-editor-sheet="actions"
-        aria-label="World and editor actions"
-      >&#8592; World</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="tools">Tools</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="background">Background</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
-      </div>
-      <div class="mobile-editor-utilities" aria-label="Editing actions">
-      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled>Undo</button>
-      <button id="btn-mobile-editor-redo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled>Redo</button>
-      <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Hide</button>
-      </div>
-    </div>
+
   </div>
 
   <div id="worlds-modal-root"></div>

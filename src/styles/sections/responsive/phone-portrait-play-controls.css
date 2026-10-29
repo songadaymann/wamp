@@ -376,10 +376,3 @@
     height: calc(var(--visible-vh) - var(--mobile-portrait-console-height) - var(--safe-bottom));
   }
 }
-
-@layer responsive {
-
-  /* The console covers the bottom of the screen in portrait play. The game draws only
-   the part above it: nothing renders behind the panel, and rooms with a fixed camera
-   are centred where they can be seen. */
-}

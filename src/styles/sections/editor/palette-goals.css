@@ -63,25 +63,8 @@
     min-height: auto;
   }
 
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) .palette-tab[data-mode='tiles'],
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) #tileset-section,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) #tile-controls-section,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) #layers-section,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) #editor-advanced,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) #tools-section,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) .editor-more-tools-toggle,
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) [data-editor-feature='music'],
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) [data-editor-feature='lighting'],
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) [data-editor-feature='sprite'] {
-    display: none !important;
-  }
-
   /* The dock already exposes Copy in beginner mode. Legacy chrome keeps its
    original beginner policy without forcing a hidden state onto the dock. */
-
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-dock-shell='true']) [data-tool='copy'] {
-    display: none;
-  }
 
   .editor-layer-chip {
     display: inline-flex;

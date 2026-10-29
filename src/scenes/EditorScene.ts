@@ -956,8 +956,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         await this.persistenceController.refreshMintMetadata();
       },
       onFitToScreen: () => this.fitToScreen(),
-      onZoomIn: () => this.zoomIn(),
-      onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
       onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),

@@ -75,9 +75,9 @@ async function runEditorCommands(page, editorCommands) {
   return result.captures ?? {};
 }
 
-async function clickConfirmed(page, button, expectedMessage, accept) {
+async function clickConfirmed(page, button, expectedMessage, accept, key) {
   const dialogPromise = page.waitForEvent('dialog');
-  const clickPromise = button.click();
+  const clickPromise = key ? button.press(key) : button.click();
   const dialog = await dialogPromise;
   assert.equal(dialog.message(), expectedMessage);
   if (accept) await dialog.accept();
@@ -450,7 +450,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     const sizeButton = eraserSizePicker.locator(`[data-erase-brush-size="${size}"]`);
     await sizeButton.click();
     assert.equal(await sizeButton.getAttribute('aria-pressed'), 'true');
-    assert.equal(await page.locator('#editor-top-erase-brush-select').inputValue(), size);
+    assert.deepEqual(await eraserSizePicker.locator('[data-erase-brush-size][aria-pressed="true"]').evaluateAll(buttons => buttons.map(button => button.dataset.eraseBrushSize)), [size]);
   }
   const [eraserPickerBox, nukeTerrainBox, nukeObjectsBox] = await Promise.all([
     eraserSizePicker.boundingBox(),
@@ -594,6 +594,19 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   ]);
   assert.ok(countTiles(beforeNukeTerrain.tileData) > 0);
   await page.locator('#btn-editor-shell-eraser').click();
+  const clearLayerButton = page.locator('#btn-editor-shell-clear-layer');
+  const selectedLayer = (await activeScene(page)).selectedLayer;
+  assert.ok(beforeNukeTerrain.tileData[selectedLayer].some(row => row.some(value => value >= 0)));
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', false, 'Enter');
+  const { afterCancelledClearLayer } = await runEditorCommands(page, [{ op: 'capture', name: 'afterCancelledClearLayer' }]);
+  assert.deepEqual(afterCancelledClearLayer.tileData, beforeNukeTerrain.tileData);
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', true, 'Space');
+  const { afterClearLayer, afterClearLayerUndo } = await runEditorCommands(page, [
+    { op: 'capture', name: 'afterClearLayer' }, { op: 'undo' }, { op: 'capture', name: 'afterClearLayerUndo' },
+  ]);
+  assert.ok(afterClearLayer.tileData[selectedLayer].every(row => row.every(value => value < 0)));
+  assert.deepEqual(afterClearLayerUndo.tileData, beforeNukeTerrain.tileData);
+  assert.deepEqual(afterClearLayerUndo.smartTerrain, beforeNukeTerrain.smartTerrain);
   const nukeTerrainButton = page.locator('#btn-editor-shell-nuke-terrain');
   await clickConfirmed(
     page,
@@ -1049,7 +1062,7 @@ try {
     });
     await phonePage.waitForFunction(() => document.body.dataset.appMode === 'editor');
     assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell), 'true');
-    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), false);
+    assert.equal(await phonePage.locator('#mobile-editor-nav').count(), 0);
     assert.equal(await phonePage.locator('#editor-shell-phone-bar').isVisible(), true);
     assert.equal(await phonePage.locator('#editor-shell-dock').isVisible(), true);
     await phonePage.screenshot({ path: path.join(outputDir, 'phone-editor-dock.png') });
@@ -1062,7 +1075,7 @@ try {
     assert.equal(phoneCourseOpened?.ok, true);
     await phonePage.waitForFunction(() => document.body.dataset.editorCourseMode === 'true');
     assert.equal(await phonePage.evaluate(() => document.body.dataset.editorDockShell), 'true');
-    assert.equal(await phonePage.locator('#mobile-editor-nav').isVisible(), false);
+    assert.equal(await phonePage.locator('#mobile-editor-nav').count(), 0);
     assert.equal(await phonePage.locator('#editor-shell-phone-bar').isVisible(), true);
     assert.equal(await phonePage.locator('#editor-shell-dock').isVisible(), true);
     await phonePage.screenshot({ path: path.join(outputDir, 'phone-expanded-editor-dock.png') });

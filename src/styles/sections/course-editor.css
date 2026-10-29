@@ -25,8 +25,7 @@
   body[data-app-mode='course-composer'] #sidebar,
   body[data-app-mode='course-composer'] #world-hud,
   body[data-app-mode='course-composer'] #global-chat,
-  body[data-app-mode='course-composer'] #bottom-bar,
-  body[data-app-mode='course-composer'] #mobile-editor-nav {
+  body[data-app-mode='course-composer'] #bottom-bar {
     display: none !important;
   }
 

@@ -485,8 +485,6 @@
   }
 
   body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-action-rail,
-  body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-top-tools-rail,
-  body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-tool-popover,
   body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-btn:not([data-editor-feature='music']),
   body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-panels,
   body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-launcher-status {
@@ -503,8 +501,6 @@
     transition: opacity 0.18s ease, filter 0.18s ease;
   }
 
-  body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:not([data-mobile-editor-sheet='actions']),
-  body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-undo,
   body[data-editor-music-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-toggle {
     opacity: 0.3;
     pointer-events: none;
@@ -553,8 +549,7 @@
   }
 
   body[data-editor-music-mode='true'] #btn-fit-screen,
-  body[data-editor-music-mode='true'] #zoom-level,
-  body[data-editor-music-mode='true'] .mobile-editor-zoom-row {
+  body[data-editor-music-mode='true'] #zoom-level {
     display: none !important;
   }
 

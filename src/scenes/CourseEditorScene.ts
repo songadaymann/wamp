@@ -698,8 +698,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       onMintRoom: async () => {},
       onRefreshMintMetadata: async () => {},
       onFitToScreen: () => this.fitToScreen(),
-      onZoomIn: () => this.zoomIn(),
-      onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.getSelectedSlice()?.runtime.setRoomCameraMode(centered),
       onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),

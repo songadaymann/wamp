@@ -185,30 +185,6 @@
     display: none;
   }
 
-  .mobile-editor-nav {
-    position: fixed;
-    left: calc(8px + var(--safe-left));
-    right: calc(8px + var(--safe-right));
-    bottom: calc(46px + var(--safe-bottom));
-    z-index: var(--z-phone-editor-nav);
-    display: flex;
-    justify-content: center;
-    gap: 0;
-    overflow-x: auto;
-    padding: 0 2px 2px;
-    scrollbar-width: none;
-  }
-
-  .mobile-editor-nav .bar-btn {
-    padding: 8px 6px;
-    flex: 0 0 auto;
-    min-width: 86px;
-  }
-
-  .mobile-editor-nav::-webkit-scrollbar {
-    display: none;
-  }
-
   .mobile-goal-footer {
     display: none;
     align-items: center;

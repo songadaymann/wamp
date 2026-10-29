@@ -68,10 +68,6 @@
     display: none;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) .mobile-editor-only {
-    display: block;
-  }
-
   body[data-device-class='phone'] .desktop-editor-only {
     display: none !important;
   }
@@ -81,45 +77,6 @@
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
-    display: grid;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #sidebar .sidebar-section {
-    display: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='tools'] #sidebar .sidebar-section[data-mobile-panel='tools'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='background'] #sidebar .sidebar-section[data-mobile-panel='background'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='palette'] #sidebar .sidebar-section[data-mobile-panel='palette'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel='objects'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel-alt='objects'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #sidebar .sidebar-section[data-mobile-panel='goal'],
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='actions'] #sidebar .sidebar-section[data-mobile-panel='actions'] {
-    display: block;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #editor-actions .editor-feature-panels {
-    display: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #editor-actions {
-    display: block;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #editor-actions > :not(.editor-top-tools) {
-    display: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools.desktop-editor-only {
-    display: block !important;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools > :not(.editor-feature-panels) {
-    display: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #editor-actions .editor-feature-panels,
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true'])[data-mobile-editor-sheet='goal'] #goal-section {
     display: grid;
   }
 
@@ -136,10 +93,6 @@
     display: none;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #sidebar .sidebar-section.is-collapsed .sidebar-section-body {
-    display: block;
-  }
-
   body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
     flex: 1 1 auto;
     overflow: hidden;
@@ -150,16 +103,6 @@
     min-height: 0;
     max-height: none;
     overflow: visible;
-  }
-
-  body[data-app-mode='editor']:not([data-device-class='phone']):not([data-editor-dock-shell='true']) #object-palette-section {
-    min-height: clamp(420px, 58vh, 520px);
-    max-height: min(620px, calc(100dvh - 120px));
-  }
-
-  body[data-app-mode='editor']:not([data-device-class='phone']):not([data-editor-dock-shell='true']) #object-palette-section.has-custom-subcategories {
-    min-height: clamp(500px, 68vh, 600px);
-    max-height: min(720px, calc(100dvh - 72px));
   }
 
   body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {

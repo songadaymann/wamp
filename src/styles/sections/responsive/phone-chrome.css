@@ -132,16 +132,3 @@
     text-overflow: ellipsis;
   }
 }
-
-@layer responsive {
-
-  /*
- * The world toolbar scrolls sideways inside the screen instead of widening the page. On a
- * 390 px phone its buttons are about 35 px too wide, which pushed the whole page sideways
- * and clipped the edge buttons and full-width sheets such as Warp (F080).
- */
-
-  /* Centered while the buttons fit; these spacers shrink to nothing once they overflow. */
-
-  /* The scroller would clip the players-online popover, so on phones it opens from the bar. */
-}

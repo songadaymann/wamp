@@ -966,10 +966,7 @@
 
   body[data-editor-dock-shell='true'] #editor-actions .editor-action-rail,
   body[data-editor-dock-shell='true'] #editor-actions .editor-top-tools-label,
-  body[data-editor-dock-shell='true'] #editor-actions .editor-top-tools-rail,
-  body[data-editor-dock-shell='true'] #editor-actions .editor-feature-launcher,
-  body[data-editor-dock-shell='true'] #editor-actions > .mobile-editor-actions-panel,
-  body[data-editor-dock-shell='true'] #editor-actions .editor-tool-popover {
+  body[data-editor-dock-shell='true'] #editor-actions .editor-feature-launcher {
     display: none;
   }
 

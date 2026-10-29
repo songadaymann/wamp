@@ -47,10 +47,6 @@
     order: 0;
   }
 
-  body[data-app-mode='editor']:not([data-device-class='phone']) #tools-section {
-    display: none;
-  }
-
   body[data-app-mode='editor']:not([data-device-class='phone']) #layers-section {
     order: 4;
   }
@@ -102,12 +98,6 @@
     text-transform: uppercase;
   }
 
-  .editor-top-tools-rail {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-  }
-
   .editor-feature-launcher {
     margin-top: 8px;
   }
@@ -156,15 +146,6 @@
   .editor-feature-panel {
     display: grid;
     gap: 8px;
-  }
-
-  .editor-top-tool-btn {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .editor-top-tools .editor-tool-popover {
-    margin-top: 8px;
   }
 
   .editor-action-rail-btn {
