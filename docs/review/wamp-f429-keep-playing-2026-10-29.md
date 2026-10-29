@@ -1,7 +1,8 @@
 # F429 — Keep playing to another unbeaten room (2026-10-29)
 
 Draft implementation; not delivered until CI, rollout and live verification pass.
-This branch currently builds on F428's candidate, pending that PR's delivery.
+F428 is now delivered (PR342/a36493f9, recordefd6d902). This branch builds on
+that release; Keep Playing itself remains pending CI and rollout.
 
 Every eligible published ordinary/Expanded Room clear offers a persistent
 Keep playing action, including repeat clears that do not produce another rating
