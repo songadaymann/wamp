@@ -6,6 +6,7 @@ import {
 } from '../../../config';
 import type { EditorUiElements } from './elements';
 import type { EditorInspectorState, EditorUiViewModel } from './model';
+import { inspectorWindowLabel, isInspectorWindowMinimized } from '../inspectorWindows';
 
 export function renderEditorUiViewModel(
   elements: EditorUiElements,
@@ -75,6 +76,19 @@ export function renderInspectorPanel(
   elements: EditorUiElements,
   state: EditorInspectorState,
 ): void {
+  const windowInfo = inspectorWindowLabel(state);
+  const minimized = windowInfo !== null && isInspectorWindowMinimized(windowInfo.kind);
+  elements.inspectorRoot?.classList.toggle('is-minimized', minimized);
+  if (elements.inspectorTitle) {
+    elements.inspectorTitle.textContent = windowInfo?.title ?? 'Object options';
+  }
+  if (elements.inspectorMinimizeButton) {
+    elements.inspectorMinimizeButton.setAttribute('aria-expanded', minimized ? 'false' : 'true');
+    elements.inspectorMinimizeButton.setAttribute(
+      'aria-label',
+      minimized ? 'Expand object options' : 'Minimize object options',
+    );
+  }
   setHidden(elements.inspectorRoot, !state.visible);
   setHidden(elements.pressurePanel, !state.pressureVisible);
   setText(elements.pressureStatus, state.pressureStatusText);

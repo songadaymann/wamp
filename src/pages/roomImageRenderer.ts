@@ -7,6 +7,7 @@ import {
   TILE_FLIP_X_FLAG,
   TILE_FLIP_Y_FLAG,
   TILE_SIZE,
+  isSpecialTilesetGid,
   getObjectDefaultFrame,
   getObjectFrameSourceRect,
   getPlacedObjectLayer,
@@ -854,13 +855,13 @@ export function decodeTileValue(value: unknown): DecodedRoomImageTileValue {
   const flipY =
     numericValue >= TILE_FLIP_Y_FLAG
     && Math.floor(numericValue / TILE_FLIP_Y_FLAG) % 2 === 1;
-  return {
-    gid: numericValue
-      - (flipX ? TILE_FLIP_X_FLAG : 0)
-      - (flipY ? TILE_FLIP_Y_FLAG : 0),
-    flipX,
-    flipY,
-  };
+  const gid = numericValue
+    - (flipX ? TILE_FLIP_X_FLAG : 0)
+    - (flipY ? TILE_FLIP_Y_FLAG : 0);
+  if (isSpecialTilesetGid(gid)) {
+    return { gid, flipX: false, flipY: false };
+  }
+  return { gid, flipX, flipY };
 }
 
 export function getTileColor(gid: number, tileX: number, tileY: number): number {

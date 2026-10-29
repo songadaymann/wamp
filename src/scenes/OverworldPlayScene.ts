@@ -5025,6 +5025,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.playerPresentationController.resetTransientPlayState();
     this.specialTilesController.resetAll();
     this.portalObjectController.resetAll();
+    this.liveObjectController.resetRollingBalls();
   }
 
   private clearTouchGestureState(): void {

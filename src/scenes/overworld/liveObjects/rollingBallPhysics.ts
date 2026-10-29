@@ -25,6 +25,8 @@ export const BALL_WIND_MAX_SPEED = 280;
 export const BALL_BOUNCE_SPEED = 392;
 export const BALL_BOUNCE_COOLDOWN_MS = 180;
 export const ACTOR_MASS = 1;
+/** Player run speed. A butt stomp faster than this adds the difference to the ball. */
+export const BALL_REGULAR_PUSH_SPEED = 150;
 
 export interface BallSimState {
   x: number;
@@ -66,6 +68,8 @@ export interface ActorRect {
   vx: number;
   vy: number;
   mass: number;
+  /** Falling in a butt stomp. An edge hit can launch the ball. */
+  stomping?: boolean;
 }
 
 export interface TriangleSolid {
@@ -86,6 +90,20 @@ export interface ActorCorrection {
 export interface BallStepResult {
   actorCorrections: ActorCorrection[];
   bounced: boolean;
+}
+
+export function resetBallMotion(state: BallSimState, x: number, y: number): void {
+  state.x = x;
+  state.y = y;
+  state.vx = 0;
+  state.vy = 0;
+  state.spin = 0;
+  state.angle = 0;
+  state.grounded = false;
+  state.pushScale = 1;
+  state.gravityDirection = 'down';
+  state.gravityRoomId = null;
+  state.bounceCooldownUntil = 0;
 }
 
 export function createBallState(x: number, y: number, settings: RollingBallSettings): BallSimState {
@@ -111,22 +129,50 @@ export function createBallState(x: number, y: number, settings: RollingBallSetti
 
 const BALL_TOP_CAP = 0.65;
 
-/** Feet resting on the upper cap of a ball. Sides stay a push, not a floor. */
+/** Feet resting on the ball, on the side opposite gravity. Sides stay a push. */
 export function ballTopSupport(
   ball: { x: number; y: number; radius: number },
-  actor: { centerX: number; bottom: number; vy: number },
-): { dy: number; vy: number } | null {
-  const dx = actor.centerX - ball.x;
-  const cap = ball.radius * BALL_TOP_CAP;
-  if (Math.abs(dx) > cap) return null;
-  const rise = Math.sqrt(Math.max(0, ball.radius * ball.radius - dx * dx));
-  const surfaceY = ball.y - rise;
-  const delta = actor.bottom - surfaceY;
-  if (delta < -8 || delta > 12) return null;
-  if (actor.vy < -40) return null;
+  actor: {
+    centerX: number;
+    bottom: number;
+    vy: number;
+    left?: number;
+    right?: number;
+    top?: number;
+    vx?: number;
+    gravityX?: number;
+    gravityY?: number;
+  },
+): { dx: number; dy: number; vx: number; vy: number } | null {
+  const gravityX = actor.gravityX ?? 0;
+  const gravityY = actor.gravityY ?? 1;
+  const vx = actor.vx ?? 0;
+  const vy = actor.vy;
+  const alongGravity = Math.abs(gravityY) >= Math.abs(gravityX);
+  const centerY = actor.top === undefined ? actor.bottom : (actor.top + actor.bottom) / 2;
+  const feetX = alongGravity
+    ? actor.centerX
+    : gravityX > 0 ? (actor.right ?? actor.centerX) : (actor.left ?? actor.centerX);
+  const feetY = alongGravity
+    ? (gravityY >= 0 ? actor.bottom : (actor.top ?? actor.bottom))
+    : centerY;
+  const tangentX = -gravityY;
+  const tangentY = gravityX;
+  const along = (feetX - ball.x) * tangentX + (feetY - ball.y) * tangentY;
+  if (Math.abs(along) > ball.radius * BALL_TOP_CAP) return null;
+  const rise = Math.sqrt(Math.max(0, ball.radius * ball.radius - along * along));
+  const surfaceX = ball.x - gravityX * rise;
+  const surfaceY = ball.y - gravityY * rise;
+  const delta = (feetX - surfaceX) * gravityX + (feetY - surfaceY) * gravityY;
+  // Negative delta is a nearby foot we can catch. Positive is overlap into the ball.
+  if (delta < -8 || delta > ball.radius + 4) return null;
+  const into = vx * gravityX + vy * gravityY;
+  if (into < -40) return null;
   return {
-    dy: -delta,
-    vy: actor.vy > 0 ? 0 : actor.vy,
+    dx: -delta * gravityX,
+    dy: -delta * gravityY,
+    vx: into > 0 ? vx - into * gravityX : vx,
+    vy: into > 0 ? vy - into * gravityY : vy,
   };
 }
 
@@ -189,6 +235,7 @@ export function stepRollingBalls(input: {
     ball.animTime += dt;
   }
 
+  const arrival = input.balls.map((ball) => ({ vx: ball.vx, vy: ball.vy }));
   const contactNormals: Array<{ x: number; y: number } | null> = input.balls.map(() => null);
   const grounded: boolean[] = input.balls.map(() => false);
   const carried = new Set<BallSimState>();
@@ -201,7 +248,7 @@ export function stepRollingBalls(input: {
           solid.oneWay
           && !ballLandsOnOneWay(approach[ballIndex], ball, solid, input.gravityY)
         ) continue;
-        const normal = resolveCircleSolid(ball, solid);
+        const normal = resolveCircleSolid(ball, solid, approach[ballIndex]);
         if (!normal) continue;
         if (isSupportNormal(normal, input.gravityX, input.gravityY)) {
           touchedGround = true;
@@ -222,7 +269,13 @@ export function stepRollingBalls(input: {
       }
       if (ball.pushable) {
         input.actors.forEach((actor, actorIndex) => {
-          const correction = separateBallAndActor(ball, actor);
+          const correction = separateBallAndActor(
+            ball,
+            actor,
+            input.gravityX,
+            input.gravityY,
+            input.solids,
+          );
           if (!correction) return;
           actorCorrections[actorIndex].dx += correction.dx;
           actorCorrections[actorIndex].dy += correction.dy;
@@ -247,7 +300,7 @@ export function stepRollingBalls(input: {
   input.balls.forEach((ball, index) => {
     ball.grounded = grounded[index];
     if (ball.grounded) applyConveyor(ball, input.conveyorX ?? 0);
-    if (launchFromBounceTile(ball, input, grounded[index])) bounced = true;
+    if (launchFromBounceTile(ball, input, grounded[index], arrival[index])) bounced = true;
     const contactNormal = contactNormals[index];
     if (contactNormal && grounded[index]) {
       const tx = -contactNormal.y;
@@ -304,14 +357,22 @@ function launchFromBounceTile(
   ball: BallSimState,
   input: { gravityX: number; gravityY: number; bounce?: boolean; now?: number },
   grounded: boolean,
+  arrival: { vx: number; vy: number },
 ): boolean {
   if (!input.bounce || !grounded) return false;
   const now = input.now ?? 0;
   if (now < ball.bounceCooldownUntil) return false;
-  const along = ball.vx * input.gravityX + ball.vy * input.gravityY;
+  const gravityX = input.gravityX;
+  const gravityY = input.gravityY;
+  const along = ball.vx * gravityX + ball.vy * gravityY;
   if (along < -24) return false;
-  ball.vx += input.gravityX * (-BALL_BOUNCE_SPEED - along);
-  ball.vy += input.gravityY * (-BALL_BOUNCE_SPEED - along);
+  // The tile corner can scrape or reverse the run. Keep the speed the ball
+  // arrived with, perpendicular to gravity, and replace only the gravity part.
+  const tangentX = -gravityY;
+  const tangentY = gravityX;
+  const tangentSpeed = arrival.vx * tangentX + arrival.vy * tangentY;
+  ball.vx = tangentX * tangentSpeed - gravityX * BALL_BOUNCE_SPEED;
+  ball.vy = tangentY * tangentSpeed - gravityY * BALL_BOUNCE_SPEED;
   ball.bounceCooldownUntil = now + BALL_BOUNCE_COOLDOWN_MS;
   return true;
 }
@@ -327,12 +388,69 @@ function ballLandsOnOneWay(
   return false;
 }
 
-function resolveCircleSolid(ball: BallSimState, rect: SolidRect): { x: number; y: number } | null {
+function separateAlongAxis(
+  ball: BallSimState,
+  rect: SolidRect,
+  previous: { x: number; y: number },
+  axis: 'x' | 'y',
+): { x: number; y: number } | null {
+  let nx = 0;
+  let ny = 0;
+  if (axis === 'y') {
+    if (previous.y <= rect.top) ny = -1;
+    else if (previous.y >= rect.bottom) ny = 1;
+    else if (ball.vy > 0) ny = -1;
+    else if (ball.vy < 0) ny = 1;
+    else ny = (ball.y - rect.top) <= (rect.bottom - ball.y) ? -1 : 1;
+  } else if (previous.x <= rect.left) nx = -1;
+  else if (previous.x >= rect.right) nx = 1;
+  else if (ball.vx > 0) nx = -1;
+  else if (ball.vx < 0) nx = 1;
+  else nx = (ball.x - rect.left) <= (rect.right - ball.x) ? -1 : 1;
+  const pen = axis === 'y'
+    ? (ny < 0 ? ball.y - (rect.top - ball.radius) : (rect.bottom + ball.radius) - ball.y)
+    : (nx < 0 ? ball.x - (rect.left - ball.radius) : (rect.right + ball.radius) - ball.x);
+  if (pen <= 0) return null;
+  const nextX = ball.x + nx * pen;
+  const nextY = ball.y + ny * pen;
+  if (circleIntersectsRect(nextX, nextY, ball.radius, rect)) return null;
+  ball.x = nextX;
+  ball.y = nextY;
+  const vn = (ball.vx - rect.vx) * nx + (ball.vy - rect.vy) * ny;
+  if (vn < 0) {
+    ball.vx -= vn * nx;
+    ball.vy -= vn * ny;
+  }
+  return { x: nx, y: ny };
+}
+
+function resolveCircleSolid(
+  ball: BallSimState,
+  rect: SolidRect,
+  previous: { x: number; y: number },
+): { x: number; y: number } | null {
+  if (!circleIntersectsRect(ball.x, ball.y, ball.radius, rect)) return null;
+  // A tile seam is a corner. Leave along the axis the ball arrived on so a
+  // floor or ceiling cannot turn the run around.
+  const prevDx = Math.abs(previous.x - clamp(previous.x, rect.left, rect.right));
+  const prevDy = Math.abs(previous.y - clamp(previous.y, rect.top, rect.bottom));
+  const verticalFirst = prevDy > prevDx + 0.01 || (
+    Math.abs(prevDy - prevDx) <= 0.01 && Math.abs(ball.vy) >= Math.abs(ball.vx)
+  );
+  const axes: Array<'x' | 'y'> = verticalFirst ? ['y', 'x'] : ['x', 'y'];
+  for (const axis of axes) {
+    const separated = separateAlongAxis(ball, rect, previous, axis);
+    if (separated) return separated;
+  }
+  const savedVx = ball.vx;
+  const savedVy = ball.vy;
   const closestX = clamp(ball.x, rect.left, rect.right);
   const closestY = clamp(ball.y, rect.top, rect.bottom);
   let dx = ball.x - closestX;
   let dy = ball.y - closestY;
-  const inside = dx === 0 && dy === 0 && ball.x > rect.left && ball.x < rect.right && ball.y > rect.top && ball.y < rect.bottom;
+  const inside = dx === 0 && dy === 0
+    && ball.x > rect.left && ball.x < rect.right
+    && ball.y > rect.top && ball.y < rect.bottom;
   let dist = Math.hypot(dx, dy);
   if (inside) {
     const options = [
@@ -361,11 +479,16 @@ function resolveCircleSolid(ball: BallSimState, rect: SolidRect): { x: number; y
   }
   const nx = dx / dist;
   const ny = dy / dist;
-  const vn = (ball.vx - rect.vx) * nx + (ball.vy - rect.vy) * ny;
+  const vn = (savedVx - rect.vx) * nx + (savedVy - rect.vy) * ny;
   if (vn < 0) {
-    ball.vx -= vn * nx;
-    ball.vy -= vn * ny;
+    ball.vx = savedVx - vn * nx;
+    ball.vy = savedVy - vn * ny;
+  } else {
+    ball.vx = savedVx;
+    ball.vy = savedVy;
   }
+  if (Math.abs(ny) >= Math.abs(nx)) ball.vx = savedVx;
+  else ball.vy = savedVy;
   return { x: nx, y: ny };
 }
 
@@ -425,9 +548,39 @@ function pushCircleAlongNormal(
   return { x: nx, y: ny };
 }
 
+function circleSolidDepth(x: number, y: number, radius: number, rect: SolidRect): number {
+  if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
+    return radius + Math.min(x - rect.left, rect.right - x, y - rect.top, rect.bottom - y);
+  }
+  const dx = x - clamp(x, rect.left, rect.right);
+  const dy = y - clamp(y, rect.top, rect.bottom);
+  return Math.max(0, radius - Math.hypot(dx, dy));
+}
+
+function embedsDeeper(
+  x: number,
+  y: number,
+  radius: number,
+  solids: SolidRect[],
+  fromX: number,
+  fromY: number,
+): boolean {
+  let next = 0;
+  let current = 0;
+  for (const solid of solids) {
+    if (solid.oneWay) continue;
+    next = Math.max(next, circleSolidDepth(x, y, radius, solid));
+    current = Math.max(current, circleSolidDepth(fromX, fromY, radius, solid));
+  }
+  return next > current + 0.25;
+}
+
 function separateBallAndActor(
   ball: BallSimState,
   actor: ActorRect,
+  gravityX: number,
+  gravityY: number,
+  solids: SolidRect[],
 ): { dx: number; dy: number; dvx: number; dvy: number; normal: { x: number; y: number } } | null {
   const closestX = clamp(ball.x, actor.left, actor.right);
   const closestY = clamp(ball.y, actor.top, actor.bottom);
@@ -460,21 +613,30 @@ function separateBallAndActor(
   const ny = dist === 0 ? dy : dy / dist;
   const pen = ball.radius - dist;
   const actorCenterX = (actor.left + actor.right) / 2;
-  const standingOnTop = ny > 0.55
-    && Math.abs(actorCenterX - ball.x) <= ball.radius * BALL_TOP_CAP
-    && actor.bottom <= ball.y + ball.radius * 0.25;
-  if (standingOnTop) {
-    const lift = actor.bottom - (ball.y - ball.radius);
-    if (lift > 0.01) {
-      return {
-        dx: 0,
-        dy: -lift,
-        dvx: 0,
-        dvy: actor.vy > 0 ? -actor.vy : 0,
-        normal: { x: nx, y: ny },
-      };
-    }
-    return null;
+  // A step with no gravity still has a top. Flipped gravity moves that side.
+  const supportX = gravityX === 0 && gravityY === 0 ? 0 : gravityX;
+  const supportY = gravityX === 0 && gravityY === 0 ? 1 : gravityY;
+  const support = ballTopSupport(ball, {
+    centerX: actorCenterX,
+    left: actor.left,
+    right: actor.right,
+    top: actor.top,
+    bottom: actor.bottom,
+    vx: actor.vx,
+    vy: actor.vy,
+    gravityX: supportX,
+    gravityY: supportY,
+  });
+  // Feet on the ball: move the actor onto the surface and leave the ball put.
+  // A butt stomp is a hit, including on the edge, so it keeps the push path.
+  if (!actor.stomping && support && support.dx * supportX + support.dy * supportY < -0.01) {
+    return {
+      dx: support.dx,
+      dy: support.dy,
+      dvx: support.vx - actor.vx,
+      dvy: support.vy - actor.vy,
+      normal: { x: nx, y: ny },
+    };
   }
   const resistance = ball.weight * (ball.pushScale || 1);
   const ballShare = actor.mass / (actor.mass + resistance);
@@ -483,24 +645,74 @@ function separateBallAndActor(
   let actorDy = -ny * pen * actorShare;
   let dvx = 0;
   let dvy = 0;
+  let ballVx = ball.vx;
+  let ballVy = ball.vy;
   const vn = (ball.vx - actor.vx) * nx + (ball.vy - actor.vy) * ny;
   if (vn < 0) {
     const impulse = -vn;
-    ball.vx += nx * impulse * ballShare;
-    ball.vy += ny * impulse * ballShare;
+    ballVx += nx * impulse * ballShare;
+    ballVy += ny * impulse * ballShare;
     dvx = -nx * impulse * actorShare;
     dvy = -ny * impulse * actorShare;
   }
-  ball.x += nx * pen * ballShare;
-  ball.y += ny * pen * ballShare;
-  // A downward shove lands after tile collision and buries a standing actor.
-  // The ball takes that part of the overlap and keeps the actor on the floor.
-  if (actorDy > 0) {
-    ball.y += ny * pen * actorShare;
-    if (vn < 0) ball.vy += ny * -vn * actorShare;
-    actorDy = 0;
-    dvy = 0;
+  if (actor.stomping) {
+    const intoBall = actor.vx * nx + actor.vy * ny;
+    const bonus = Math.max(0, intoBall - BALL_REGULAR_PUSH_SPEED) * ballShare;
+    if (bonus > 0) {
+      ballVx += nx * bonus;
+      ballVy += ny * bonus;
+    }
   }
+  let ballDx = nx * pen * ballShare;
+  let ballDy = ny * pen * ballShare;
+  // A shove along gravity lands after tile collision and would bury the actor.
+  // The ball takes that part of the overlap.
+  const into = actorDx * gravityX + actorDy * gravityY;
+  if (into > 0) {
+    ballDx += nx * pen * actorShare;
+    ballDy += ny * pen * actorShare;
+    if (vn < 0) {
+      ballVx += nx * -vn * actorShare;
+      ballVy += ny * -vn * actorShare;
+    }
+    actorDx -= gravityX * into;
+    actorDy -= gravityY * into;
+    const velInto = dvx * gravityX + dvy * gravityY;
+    if (velInto > 0) {
+      dvx -= gravityX * velInto;
+      dvy -= gravityY * velInto;
+    }
+  }
+  const nextX = ball.x + ballDx;
+  const nextY = ball.y + ballDy;
+  if (embedsDeeper(nextX, nextY, ball.radius, solids, ball.x, ball.y)) {
+    let freeDx = -nx * pen;
+    let freeDy = -ny * pen;
+    const freeInto = freeDx * gravityX + freeDy * gravityY;
+    if (freeInto > 0) {
+      freeDx -= gravityX * freeInto;
+      freeDy -= gravityY * freeInto;
+    }
+    const actorVn = actor.vx * nx + actor.vy * ny;
+    let stopVx = actorVn > 0 ? -actorVn * nx : 0;
+    let stopVy = actorVn > 0 ? -actorVn * ny : 0;
+    const addedInto = stopVx * gravityX + stopVy * gravityY;
+    if (addedInto > 0) {
+      stopVx -= gravityX * addedInto;
+      stopVy -= gravityY * addedInto;
+    }
+    return {
+      dx: freeDx,
+      dy: freeDy,
+      dvx: stopVx,
+      dvy: stopVy,
+      normal: { x: nx, y: ny },
+    };
+  }
+  ball.x = nextX;
+  ball.y = nextY;
+  ball.vx = ballVx;
+  ball.vy = ballVy;
   return {
     dx: actorDx,
     dy: actorDy,

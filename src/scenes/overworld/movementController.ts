@@ -79,6 +79,7 @@ interface DirectionalGravityControls {
   crouchHeld: boolean;
   jumpPressed: boolean;
   jumpHeld: boolean;
+  stompPressed: boolean;
   horizontalInput: number;
   verticalInput: number;
 }
@@ -92,9 +93,11 @@ interface OverworldMovementControllerState {
   jumpBufferTime: number;
   wallJumpBufferTime: number;
   protectedJumpTime: number;
-  // The touch stick's down state on the previous physics step, so a butt stomp needs
-  // a fresh downward push like the keyboard's Down press, not a held or drifting stick.
+  // Touch-stick edges, so a butt stomp needs a fresh push toward gravity.
   touchDownHeld: boolean;
+  touchUpHeld: boolean;
+  touchLeftHeld: boolean;
+  touchRightHeld: boolean;
 }
 
 interface OverworldMovementControllerHost {
@@ -223,6 +226,9 @@ function createMovementControllerState(): OverworldMovementControllerState {
     wallJumpBufferTime: 0,
     protectedJumpTime: 0,
     touchDownHeld: false,
+    touchUpHeld: false,
+    touchLeftHeld: false,
+    touchRightHeld: false,
   };
 }
 
@@ -538,7 +544,13 @@ export class OverworldMovementController {
       upPressed, downPressed, leftPressed, rightPressed, spacePressed,
     } = frameInput ?? this.captureInput();
     const touchDownPressed = touchDown && !this.state.touchDownHeld;
+    const touchUpPressed = touchUp && !this.state.touchUpHeld;
+    const touchLeftPressed = touchLeft && !this.state.touchLeftHeld;
+    const touchRightPressed = touchRight && !this.state.touchRightHeld;
     this.state.touchDownHeld = touchDown;
+    this.state.touchUpHeld = touchUp;
+    this.state.touchLeftHeld = touchLeft;
+    this.state.touchRightHeld = touchRight;
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const overlappingLadder = this.host.findOverlappingLadder();
     const touchClimbUpHeld = overlappingLadder !== null && touchUp;
@@ -555,7 +567,6 @@ export class OverworldMovementController {
     playerBody.setAllowGravity(playerGravityDirection === 'down');
 
     if (playerGravityDirection !== 'down') {
-      this.clearButtStompState();
       const directionalControls = this.resolveDirectionalGravityControls(playerGravityDirection, {
         horizontalInput,
         verticalInput,
@@ -573,6 +584,10 @@ export class OverworldMovementController {
         touchRight,
         touchUp,
         touchDown,
+        touchUpPressed,
+        touchDownPressed,
+        touchLeftPressed,
+        touchRightPressed,
       });
       return this.updateDirectionalGravityMovement({
         delta,
@@ -834,7 +849,6 @@ export class OverworldMovementController {
 
     this.setPlayerLadderState(null);
     this.state.isCrouching = false;
-    this.clearButtStompState();
     this.clearCrateInteractionState();
     this.syncPlayerHitbox();
 
@@ -851,10 +865,18 @@ export class OverworldMovementController {
       ),
     );
 
-    const grounded = bodyIsBlockedInGravityDirection(playerBody, gravityDirection);
+    const grounded = bodyIsBlockedInGravityDirection(playerBody, gravityDirection)
+      || (this.host.getExternalGrounded?.() ?? false);
     if (grounded) {
+      this.clearButtStompState({ keepImpactGrace: true });
       this.state.coyoteTime = this.options.coyoteMs;
+    } else if (specialEnvironment.inWater || inQuicksand) {
+      this.clearButtStompState();
+      this.state.coyoteTime = Math.max(0, this.state.coyoteTime - delta);
     } else {
+      if (!this.buttStompState.isActive() && controls.stompPressed) {
+        this.startButtStomp(playerBody, gravityDirection);
+      }
       this.state.coyoteTime = Math.max(0, this.state.coyoteTime - delta);
     }
 
@@ -921,6 +943,7 @@ export class OverworldMovementController {
 
     const jumpPressed = !this.state.isCrouching && controls.jumpPressed;
     const performGravityJump = () => {
+      this.clearButtStompState();
       const launchVelocity =
         specialEnvironment.inWater
           ? WATER_SWIM_KICK_VELOCITY
@@ -966,7 +989,7 @@ export class OverworldMovementController {
       setBodyVelocityAlongVector(playerBody, gravityVector, currentNormalVelocity * 0.86);
     }
 
-    if (this.wallState.isSliding()) {
+    if (this.wallState.isSliding() && !this.buttStompState.isActive()) {
       const wallSlideGravityVelocity = getBodyVelocityAlongVector(playerBody, gravityVector);
       if (wallSlideGravityVelocity > this.options.wallSlideMaxFallSpeed) {
         setBodyVelocityAlongVector(
@@ -975,6 +998,9 @@ export class OverworldMovementController {
           this.options.wallSlideMaxFallSpeed,
         );
       }
+    }
+    if (this.buttStompState.isActive()) {
+      this.updateButtStompVelocity(playerBody, gravityDirection);
     }
 
     if (grounded && specialEnvironment.conveyorX !== 0) {
@@ -1017,6 +1043,10 @@ export class OverworldMovementController {
       touchRight: boolean;
       touchUp: boolean;
       touchDown: boolean;
+      touchUpPressed: boolean;
+      touchDownPressed: boolean;
+      touchLeftPressed: boolean;
+      touchRightPressed: boolean;
     },
   ): DirectionalGravityControls {
     switch (gravityDirection) {
@@ -1026,6 +1056,7 @@ export class OverworldMovementController {
           crouchHeld: input.upHeld,
           jumpPressed: input.spacePressed || input.downPressed || input.touchDown,
           jumpHeld: input.spaceHeld || input.downHeld,
+          stompPressed: input.upPressed || input.touchUpPressed,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
         };
@@ -1035,6 +1066,7 @@ export class OverworldMovementController {
           crouchHeld: input.left,
           jumpPressed: input.spacePressed || input.rightPressed || input.touchRight,
           jumpHeld: input.spaceHeld || input.right,
+          stompPressed: input.leftPressed || input.touchLeftPressed,
           horizontalInput: -input.verticalInput,
           verticalInput: input.verticalInput,
         };
@@ -1044,6 +1076,7 @@ export class OverworldMovementController {
           crouchHeld: input.right,
           jumpPressed: input.spacePressed || input.leftPressed || input.touchLeft,
           jumpHeld: input.spaceHeld || input.left,
+          stompPressed: input.rightPressed || input.touchRightPressed,
           horizontalInput: input.verticalInput,
           verticalInput: input.verticalInput,
         };
@@ -1054,6 +1087,7 @@ export class OverworldMovementController {
           crouchHeld: input.downHeld,
           jumpPressed: input.spacePressed || input.upPressed || input.touchUp,
           jumpHeld: input.spaceHeld || input.upHeld,
+          stompPressed: input.downPressed || input.touchDownPressed,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
         };
@@ -1091,34 +1125,45 @@ export class OverworldMovementController {
     });
   }
 
-  private startButtStomp(playerBody: Phaser.Physics.Arcade.Body): void {
+  private startButtStomp(
+    playerBody: Phaser.Physics.Arcade.Body,
+    direction: PlayerGravityDirection = 'down',
+  ): void {
     this.buttStompState.start(this.host.getCurrentTime(), BUTT_STOMP_FLIP_MS);
     this.resetJumpForgiveness();
     this.state.isCrouching = false;
     this.clearCrateInteractionState();
     this.resetWallMovementState();
-    this.updateButtStompVelocity(playerBody);
+    this.updateButtStompVelocity(playerBody, direction);
   }
 
   private isButtStompInFlipPause(now = this.host.getCurrentTime()): boolean {
     return this.buttStompState.isInFlipPause(now);
   }
 
-  private updateButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
-    if (this.isButtStompInFlipPause()) {
-      playerBody.setAllowGravity(false);
-      playerBody.setVelocityY(0);
+  private updateButtStompVelocity(
+    playerBody: Phaser.Physics.Arcade.Body,
+    direction: PlayerGravityDirection = 'down',
+  ): void {
+    if (direction === 'down') {
+      if (this.isButtStompInFlipPause()) {
+        playerBody.setAllowGravity(false);
+        playerBody.setVelocityY(0);
+        return;
+      }
+      playerBody.setAllowGravity(true);
+      if (playerBody.velocity.y < BUTT_STOMP_FALL_SPEED) {
+        playerBody.setVelocityY(BUTT_STOMP_FALL_SPEED);
+      }
       return;
     }
 
-    playerBody.setAllowGravity(true);
-    this.applyButtStompVelocity(playerBody);
-  }
-
-  private applyButtStompVelocity(playerBody: Phaser.Physics.Arcade.Body): void {
-    if (playerBody.velocity.y < BUTT_STOMP_FALL_SPEED) {
-      playerBody.setVelocityY(BUTT_STOMP_FALL_SPEED);
-    }
+    playerBody.setAllowGravity(false);
+    const gravity = getGravityVector(direction);
+    const along = this.isButtStompInFlipPause()
+      ? 0
+      : Math.max(getBodyVelocityAlongVector(playerBody, gravity), BUTT_STOMP_FALL_SPEED);
+    setBodyVelocityAlongVector(playerBody, gravity, along);
   }
 
   private tryPerformWallJump(

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, editorState, getSelectionTileValue } from '../../config';
+import {
+  SPECIAL_TILESET_FIRST_GID,
+  SPECIAL_TILE_LOCAL_INDICES,
+  TILE_FLIP_X_FLAG,
+  TILE_FLIP_Y_FLAG,
+  decodeTileDataValue,
+  editorState,
+  getSelectionTileValue,
+} from '../../config';
 import {
   applyEditorTileFlipModes,
   applyRandomizeFlips,
@@ -40,6 +48,20 @@ describe('randomizeTiles', () => {
     editorState.tileFlipXMode = 'rand';
     editorState.tileFlipYMode = 'off';
     expect(applyEditorTileFlipModes(12, { random: () => 0.1 })).toBe(12 + TILE_FLIP_X_FLAG);
+    editorState.tileFlipXMode = 'off';
+    editorState.tileFlipYMode = 'off';
+  });
+
+  it('keeps special tileset tiles unflipped when the brush or a copy is mirrored', () => {
+    const gid = SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_LOCAL_INDICES.gravityUp;
+    editorState.tileFlipXMode = 'on';
+    editorState.tileFlipYMode = 'on';
+    expect(applyEditorTileFlipModes(gid)).toBe(gid);
+    expect(decodeTileDataValue(gid + TILE_FLIP_X_FLAG + TILE_FLIP_Y_FLAG)).toEqual({
+      gid,
+      flipX: false,
+      flipY: false,
+    });
     editorState.tileFlipXMode = 'off';
     editorState.tileFlipYMode = 'off';
   });

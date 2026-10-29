@@ -555,10 +555,85 @@ body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector #enemy
   cursor: crosshair;
 }
 
-.editor-inspector > * {
+.editor-inspector > :not(.editor-inspector-chrome) {
   pointer-events: auto;
   box-shadow: 0 18px 42px rgba(var(--wamp-black-rgb), 0.32);
   backdrop-filter: blur(8px);
+}
+
+.editor-inspector-chrome {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.editor-inspector:not(.is-minimized) .editor-inspector-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.editor-inspector:not(.is-minimized) .pressure-plate-panel .section-label {
+  padding-right: 28px;
+}
+
+.editor-inspector.is-minimized {
+  width: max-content;
+  max-width: min(312px, calc(100% - 36px - var(--safe-left) - var(--safe-right)));
+}
+
+.editor-inspector.is-minimized > :not(.editor-inspector-chrome) {
+  display: none !important;
+}
+
+.editor-inspector.is-minimized .editor-inspector-chrome {
+  position: static;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid rgba(132, 205, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(20, 36, 52, 0.92);
+  box-shadow: 0 18px 42px rgba(var(--wamp-black-rgb), 0.32);
+}
+
+.editor-inspector-title {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.editor-inspector-minimize {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(12, 22, 32, 0.72);
+  color: #f4f7fb;
+  cursor: pointer;
+}
+
+.editor-inspector-arrow {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 6px solid currentColor;
+}
+
+.editor-inspector.is-minimized .editor-inspector-arrow {
+  transform: rotate(180deg);
 }
 
 .editor-inspector > :is(#swordsman-objective-panel, #police-behavior-panel) {

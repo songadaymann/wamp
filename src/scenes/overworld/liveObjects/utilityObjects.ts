@@ -103,7 +103,12 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
 
   const solids = collectSolids(options.rooms, balls);
   const triangles = collectTriangles(options.rooms);
-  const actors = collectActors(options.rooms, options.playerBody, options.playerIntent);
+  const actors = collectActors(
+    options.rooms,
+    options.playerBody,
+    options.playerIntent,
+    options.playerButtStomping === true,
+  );
 
   const rolling: typeof entries = [];
   for (const entry of entries) {
@@ -381,10 +386,11 @@ function collectActors(
   rooms: UtilityRoom[],
   playerBody: Phaser.Physics.Arcade.Body | null,
   playerIntent: number,
+  playerButtStomping: boolean,
 ): TrackedActor[] {
   const actors: TrackedActor[] = [];
   if (playerBody?.enable) {
-    actors.push(trackActor(playerBody, null, null, playerIntent));
+    actors.push(trackActor(playerBody, null, null, playerIntent, playerButtStomping));
   }
   for (const room of rooms) {
     for (const liveObject of room.liveObjects) {
@@ -408,6 +414,7 @@ function trackActor(
   liveObject: LoadedRoomObject | null,
   room: UtilityRoom | null,
   intent: number,
+  stomping = false,
 ): TrackedActor {
   return {
     body,
@@ -423,6 +430,7 @@ function trackActor(
       vx: body.velocity.x,
       vy: body.velocity.y,
       mass: ACTOR_MASS,
+      stomping,
     },
   };
 }
@@ -444,10 +452,10 @@ function moveActor(
   dvx: number,
   dvy: number,
 ): void {
-  const appliedDy = dy > 0 ? 0 : dy;
-  const appliedDvy = dy > 0 && dvy > 0 ? 0 : dvy;
-  shiftBody(actor.body, dx, appliedDy);
-  actor.body.setVelocity(actor.body.velocity.x + dvx, actor.body.velocity.y + appliedDvy);
+  // The ball step already drops a correction that would bury the actor in the
+  // floor. Screen-down movement is how an upside-down actor sits on a ball.
+  shiftBody(actor.body, dx, dy);
+  actor.body.setVelocity(actor.body.velocity.x + dvx, actor.body.velocity.y + dvy);
   syncActorRect(actor);
 }
 
@@ -464,14 +472,21 @@ function seatActorsOnBalls(actors: TrackedActor[], balls: BallSimState[]): boole
   let playerSeated = false;
   for (const actor of actors) {
     for (const ball of balls) {
+      const gravity = getGravityVector(ball.gravityDirection);
       const support = ballTopSupport(ball, {
         centerX: actor.body.center.x,
+        left: actor.body.left,
+        right: actor.body.right,
+        top: actor.body.top,
         bottom: actor.body.bottom,
+        vx: actor.body.velocity.x,
         vy: actor.body.velocity.y,
+        gravityX: gravity.x,
+        gravityY: gravity.y,
       });
       if (!support) continue;
-      shiftBody(actor.body, 0, support.dy);
-      actor.body.setVelocityY(support.vy);
+      shiftBody(actor.body, support.dx, support.dy);
+      actor.body.setVelocity(support.vx, support.vy);
       syncActorRect(actor);
       if (actor.liveObject === null) playerSeated = true;
       break;

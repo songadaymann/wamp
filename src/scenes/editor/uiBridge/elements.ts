@@ -156,6 +156,8 @@ export interface EditorUiElements {
   coursePlaceFinishBtn: HTMLButtonElement | null;
   courseClearMarkersBtn: HTMLButtonElement | null;
   inspectorRoot: HTMLElement | null;
+  inspectorTitle: HTMLElement | null;
+  inspectorMinimizeButton: HTMLButtonElement | null;
   pressurePanel: HTMLElement | null;
   pressureStatus: HTMLElement | null;
   pressureCoopRow: HTMLElement | null;
@@ -403,6 +405,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     coursePlaceFinishBtn: byId<HTMLButtonElement>(doc, 'btn-course-editor-place-finish'),
     courseClearMarkersBtn: byId<HTMLButtonElement>(doc, 'btn-course-editor-clear-markers'),
     inspectorRoot: byId<HTMLElement>(doc, 'editor-inspector'),
+    inspectorTitle: byId<HTMLElement>(doc, 'editor-inspector-title'),
+    inspectorMinimizeButton: byId<HTMLButtonElement>(doc, 'btn-editor-inspector-minimize'),
     pressurePanel: byId<HTMLElement>(doc, 'pressure-plate-panel'),
     pressureStatus: byId<HTMLElement>(doc, 'pressure-plate-status'),
     pressureCoopRow: byId<HTMLElement>(doc, 'pressure-plate-coop-row'),

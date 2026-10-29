@@ -15,6 +15,7 @@ import {
   isClimbableObjectConfig,
   placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
+  isRollingBallObjectId,
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
   isPushableObjectConfig,
@@ -32,7 +33,7 @@ import {
 import { getRollingBallGraphic, rollingBallFrame } from '../../config/rollingBall';
 import { placeTriangleSprite } from './liveObjects/triangleTexture';
 import { stepUtilityObjects } from './liveObjects/utilityObjects';
-import type { BallSimState } from './liveObjects/rollingBallPhysics';
+import { createBallState, resetBallMotion, type BallSimState } from './liveObjects/rollingBallPhysics';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
@@ -496,6 +497,34 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
   resetSwitchStates(): void {
     this.triggerController.resetSwitchStates();
+  }
+
+  resetRollingBalls(): void {
+    for (const room of this.options.getLoadedFullRooms()) {
+      const liveKeys = new Set(room.liveObjects.map((liveObject) => liveObject.key));
+      let created = false;
+      for (let index = 0; index < room.room.placedObjects.length; index += 1) {
+        const placed = room.room.placedObjects[index];
+        if (!isRollingBallObjectId(placed.id)) continue;
+        const key = this.options.getPlacedObjectRuntimeKey(room.room.id, placed, index);
+        if (liveKeys.has(key)) continue;
+        this.createLiveObjectsBatch(room, index, index + 1, false);
+        created = true;
+      }
+      if (created) this.finalizeLiveObjectCreation(room, false);
+      for (const liveObject of room.liveObjects) {
+        if (!isRollingBallObjectId(liveObject.config.id) || !liveObject.ball || !liveObject.sprite.active) continue;
+        const state = this.ballStates.get(liveObject) ?? createBallState(
+          liveObject.runtime.baseX,
+          liveObject.runtime.baseY,
+          liveObject.ball,
+        );
+        resetBallMotion(state, liveObject.runtime.baseX, liveObject.runtime.baseY);
+        this.ballStates.set(liveObject, state);
+        liveObject.sprite.setPosition(state.x, state.y);
+        liveObject.sprite.rotation = 0;
+      }
+    }
   }
 
   resetBossChallenges(resetRoom: (room: RoomSnapshot) => void, alreadyResetRoomId: string | null): void {

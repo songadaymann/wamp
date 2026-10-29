@@ -3,6 +3,12 @@ import { prepareBackgroundFile } from '../../backgrounds/upload';
 import { EditorColorPopover } from './colorPopover';
 import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
+import {
+  INSPECTOR_WINDOWS_RESET_EVENT,
+  inspectorWindowLabel,
+  isInspectorWindowMinimized,
+  setInspectorWindowMinimized,
+} from './inspectorWindows';
 import { bindBossInspector } from './uiBridge/bossInspector';
 import { EditorHistoryControls } from './historyControls';
 import { EditorClipboardControls } from './clipboardControls';
@@ -324,6 +330,7 @@ export class EditorUiBridge {
   private readonly clipboardControls: EditorClipboardControls;
   private readonly phoneInspector: EditorPhoneInspector;
   private lastViewModel: EditorUiViewModel | null = null;
+  private lastInspectorState: EditorInspectorState | null = null;
   private backgroundImages: BackgroundImageSummary[] = [];
   private backgroundUploadPolicy: BackgroundUploadPolicy | null = null;
   private backgroundCatalogToken = 0;
@@ -555,6 +562,7 @@ export class EditorUiBridge {
       return;
     }
 
+    this.lastInspectorState = state;
     renderInspectorPanel(this.elements, state);
     this.phoneInspector.render(state);
   }
@@ -1454,6 +1462,23 @@ export class EditorUiBridge {
       if (Number.isFinite(weight)) this.actions.onSetFocusedBallWeight(weight);
     };
     this.elements.ballWeightInput?.addEventListener('change', handleBallWeightChange);
+    const handleInspectorMinimize = () => {
+      const state = this.lastInspectorState;
+      if (!state) return;
+      const windowInfo = inspectorWindowLabel(state);
+      if (!windowInfo) return;
+      setInspectorWindowMinimized(windowInfo.kind, !isInspectorWindowMinimized(windowInfo.kind));
+      renderInspectorPanel(this.elements, state);
+    };
+    this.elements.inspectorMinimizeButton?.addEventListener('click', handleInspectorMinimize);
+    const handleInspectorWindowsReset = () => {
+      if (this.lastInspectorState) renderInspectorPanel(this.elements, this.lastInspectorState);
+    };
+    this.windowObj.addEventListener(INSPECTOR_WINDOWS_RESET_EVENT, handleInspectorWindowsReset);
+    this.cleanupCallbacks.push(() => {
+      this.elements.inspectorMinimizeButton?.removeEventListener('click', handleInspectorMinimize);
+      this.windowObj.removeEventListener(INSPECTOR_WINDOWS_RESET_EVENT, handleInspectorWindowsReset);
+    });
     const bindBallFlag = (
       checkbox: HTMLInputElement | null,
       apply: (enabled: boolean) => void,

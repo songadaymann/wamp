@@ -7,7 +7,7 @@ import {
   DEFAULT_ROOM_WEATHER_INTENSITY,
   type RoomWeatherMode,
 } from '../weather/model';
-import { getTilesetByKey } from './tilesets';
+import { getTilesetByKey, isSpecialTilesetGid } from './tilesets';
 import {
   TILE_FLIP_X_FLAG,
   TILE_FLIP_Y_FLAG,
@@ -167,11 +167,12 @@ export function encodeTileDataValue(gid: number, flipX = false, flipY = false): 
     return -1;
   }
 
+  const lockFacing = isSpecialTilesetGid(gid);
   let encoded = gid;
-  if (flipX) {
+  if (flipX && !lockFacing) {
     encoded += TILE_FLIP_X_FLAG;
   }
-  if (flipY) {
+  if (flipY && !lockFacing) {
     encoded += TILE_FLIP_Y_FLAG;
   }
   return encoded;
@@ -190,6 +191,10 @@ export function decodeTileDataValue(value: number): Readonly<DecodedTileDataValu
     value -
     (flipX ? TILE_FLIP_X_FLAG : 0) -
     (flipY ? TILE_FLIP_Y_FLAG : 0);
+
+  if (isSpecialTilesetGid(gid)) {
+    return { gid, flipX: false, flipY: false };
+  }
 
   return { gid, flipX, flipY };
 }

@@ -12,6 +12,7 @@ import {
   getTilesetByKey,
   getTilesetEditorPaletteBackgroundColor,
   getTilesetUiTheme,
+  isSpecialTilesetGid,
   isTilesetLocalTileEditorEnabled,
   MOVING_PLATFORM_OBJECT_ID,
   SPECIAL_TILE_LOCAL_INDICES,
@@ -619,13 +620,17 @@ export class PaletteController {
         const sourceDy = editorState.tileFlipYMode === 'on' ? selection.height - 1 - dy : dy;
         const sourceCol = selection.startCol + sourceDx;
         const sourceRow = selection.startRow + sourceDy;
+        const sourceGid = ts.firstGid + sourceRow * ts.columns + sourceCol;
+        const lockFacing = isSpecialTilesetGid(sourceGid);
+        const flipX = editorState.tileFlipXMode === 'on' && !lockFacing;
+        const flipY = editorState.tileFlipYMode === 'on' && !lockFacing;
 
         ctx.save();
         ctx.translate(
-          offsetX + dx * cellWidth + (editorState.tileFlipXMode === 'on' ? cellWidth : 0),
-          offsetY + dy * cellHeight + (editorState.tileFlipYMode === 'on' ? cellHeight : 0),
+          offsetX + dx * cellWidth + (flipX ? cellWidth : 0),
+          offsetY + dy * cellHeight + (flipY ? cellHeight : 0),
         );
-        ctx.scale(editorState.tileFlipXMode === 'on' ? -1 : 1, editorState.tileFlipYMode === 'on' ? -1 : 1);
+        ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
         ctx.drawImage(
           img,
           sourceCol * TILE_SIZE,
