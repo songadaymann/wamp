@@ -28,7 +28,7 @@ portrait console, stacked separately from the existing Save/Rate reminder.
 
 ## Verification
 
-- Nine new unit tests cover lazy requests, signed-in/guest selection, pagination,
+- Eleven new unit tests cover lazy requests, signed-in/guest selection, pagination,
   difficulty fallback, current/session/local clears, exhausted catalogs, active
   sequences, stale mode results, new-run reset and retryable failures.
 - Existing goal lifecycle, target/type/tick policies, objective, guest playback
@@ -46,6 +46,13 @@ Evidence: `/tmp/wamp-f429-context-tests.log`, `/tmp/wamp-f429-regression.log`,
 `/tmp/wamp-f429-native-browser-2.log`, `/tmp/wamp-f429-phone-chip.log` and ignored
 `output/f429-native/`. Final full check: `/tmp/wamp-f429-final-check.log`.
 
-Final full check passed:724files/6,167tests, one existing expected failure, two
-skips; lint, types, DOM, build, bundle budget and assets pass. Boot666.6KB/670KB.
+Final full check passed:724files/6,169tests, one existing expected failure, two
+skips; lint, types, DOM, build, bundle budget and assets pass. Boot666.9KB/670KB.
 Worker-safety and immutable map-asset contract probes also pass.
+
+Follow-up source audit moved Expanded-start context reset into the shared run-state
+creation method, covering regular published playback as well as draft preview.
+Both entry modes have regression tests; no discovery/selection behavior changed.
+
+Final check after that correction: `/tmp/wamp-f429-expanded-final-check.log`
+passed all stages; published/draft start regression and flow-control tests pass.

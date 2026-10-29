@@ -167,7 +167,6 @@ export class OverworldCoursePlaybackController {
       mode: 'draftPreview',
       roomOverrides: draftRoom ? [draftRoom] : [],
     });
-    resetKeepPlayingContext();
     this.host.setActiveCourseRun(this.createCourseRunState(snapshot));
   }
 
@@ -186,6 +185,7 @@ export class OverworldCoursePlaybackController {
     course: CourseSnapshot,
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null },
   ): ActiveExpandedRoomRunState {
+    resetKeepPlayingContext();
     const authState = getAuthDebugState();
     const startRoomRef = this.getCourseStartRoomRef(course);
     const cooperative = course.roomRefs.some(ref =>

@@ -1,3 +1,4 @@
+import { KEEP_PLAYING_RESET_EVENT } from '../../progression/keepPlayingEvents';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: false }) }));
 vi.mock('../../persistence/roomRepository', () => ({ createRoomRepository: () => ({}) }));
@@ -43,4 +44,14 @@ it.each(['native-expanded', 'course:legacy'])('keeps assisted %s clears out of g
   await f.controller.finalizeActiveCourseRun('completed');
   expect(f.guestRuns.finish).not.toHaveBeenCalled(); expect(requestPostRunGuestClaim).not.toHaveBeenCalled();
   expect(f.run.submissionState).toBe('local-only');
+});
+
+it.each(['published','draft'] as const)('resets the prior free-play suggestion at the shared %s Expanded run start',status=>{
+  const f=fixture('native-expanded'),win=new EventTarget(),reset=vi.fn();
+  win.addEventListener(KEEP_PLAYING_RESET_EVENT,reset);vi.stubGlobal('window',win);
+  try {
+    const host={...f.host,getRoomSnapshotForCoordinates:()=>null};
+    const run=new OverworldCoursePlaybackController(host as never).createCourseRunState({...f.run.course,status});
+    expect(run.course.status).toBe(status);expect(reset).toHaveBeenCalledOnce();
+  } finally {vi.unstubAllGlobals();}
 });
