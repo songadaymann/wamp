@@ -19,6 +19,7 @@ import {
   renderRoomSharePreviewPng,
 } from './roomPreviewImage';
 import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
+import { loadCachedShareArtwork } from './cachedArtwork';
 
 interface RoomShareMetadata {
   roomId: string;
@@ -76,12 +77,27 @@ export async function handleRoomShareRequest(
   return loadAnonymousPublicCache(request, context, async () => {
     const shareTarget = await loadRoomShareTarget(env, roomId, coordinates);
     if (!shareTarget) throw new HttpError(404, 'Published room not found.');
+    const masked = await maskBlockedShareArt(env, shareTarget);
+    // Moderation may have invalidated a leaf since its last render. Use the masked fallback until safe.
+    const unchanged = masked.previewCells.every((cell, i) => cell.snapshot === shareTarget.previewCells[i].snapshot);
+    const artwork = unchanged ? await loadCachedShareArtwork(env, masked.previewCells, masked.expandedRoom
+      ? { id: masked.expandedRoom.expandedRoomId, version: masked.expandedRoom.version ?? null } : null) : null;
     const target = match[2] ?? 'page';
-    if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget), {
+    if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget, artwork), {
       headers: { 'Cache-Control': 'public, max-age=20' },
     });
-    if (target === 'image' || target === 'image.png') return roomShareImageResponse(request, await maskBlockedShareArt(env, shareTarget));
-    return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
+    if (target === 'image' || target === 'image.png') {
+      if (artwork && env.WORLD_TILE_BUCKET?.get) {
+        try {
+          const object = request.method === 'HEAD' ? null : await env.WORLD_TILE_BUCKET.get(artwork.key);
+          if (request.method === 'HEAD' || object) return new Response(object ? await object.arrayBuffer() : null, {
+            headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600, s-maxage=3600', ...corsHeaders(request) },
+          });
+        } catch { /* Keep the existing renderer available if R2 is temporarily unavailable. */ }
+      }
+      return roomShareImageResponse(request, masked);
+    }
+    return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget, artwork));
   });
 }
 
@@ -243,6 +259,7 @@ function buildRoomShareMetadata(
   url: URL,
   env: Env,
   target: RoomShareTarget,
+  artwork: Awaited<ReturnType<typeof loadCachedShareArtwork>>,
 ): RoomShareMetadata {
   const snapshot = target.focusSnapshot;
   const expandedRoom = target.expandedRoom;
@@ -274,9 +291,9 @@ function buildRoomShareMetadata(
       ? buildExpandedRoomShareDescription(expandedRoom, snapshot, creditedTitle)
       : buildRoomShareDescription(snapshot, creditedTitle),
     url: publicUrl,
-    imageUrl: imageUrl.toString(),
-    imageWidth: ROOM_SHARE_IMAGE_WIDTH,
-    imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
+    imageUrl: artwork?.url ?? imageUrl.toString(),
+    imageWidth: artwork?.width ?? ROOM_SHARE_IMAGE_WIDTH,
+    imageHeight: artwork?.height ?? ROOM_SHARE_IMAGE_HEIGHT,
     expandedRoom: expandedRoom ? mapRoomShareExpandedRoomMetadata(expandedRoom, snapshot.coordinates) : null,
   };
 }

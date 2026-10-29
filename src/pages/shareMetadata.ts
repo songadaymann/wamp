@@ -447,9 +447,9 @@ function normalizeMetadata(
     title: cleanText(value.title) || fallback.title,
     description: cleanText(value.description) || fallback.description,
     url: cleanUrl(value.url) || fallback.url,
-    imageUrl: expanded
+    imageUrl: cachedArtworkUrl(value.imageUrl, expanded) || (expanded
       ? expandedRoomImageUrl(value.imageUrl, apiBaseUrl, roomId, expandedRoom.expandedRoomId) || roomImageUrl
-      : roomImageUrl,
+      : roomImageUrl),
     imageWidth: finiteNumberOr(value.imageWidth, fallback.imageWidth),
     imageHeight: finiteNumberOr(value.imageHeight, fallback.imageHeight),
   };
@@ -473,6 +473,17 @@ function expandedRoomImageUrl(value: unknown, apiBaseUrl: string, roomId: string
   const expected = new URL(`/api/share/rooms/${encodeURIComponent(roomId)}/image`, apiBaseUrl);
   return image.origin === expected.origin && [expected.pathname, `${expected.pathname}.png`].includes(image.pathname)
     && image.searchParams.get('area') === expandedRoomId ? image.toString() : null;
+}
+
+function cachedArtworkUrl(value: unknown, expanded: boolean): string | null {
+  const candidate = cleanUrl(value);
+  if (!candidate) return null;
+  const url = new URL(candidate);
+  if (url.protocol !== 'https:' || !['tiles.wamp.land', 'tiles-safety.wamp.land'].includes(url.host)
+    || url.username || url.password || url.search || url.hash) return null;
+  const path = expanded ? /^\/share-artwork\/v1\/[a-f0-9]{64}\.png$/
+    : /^\/world-tiles\/[a-zA-Z0-9._-]+\/objects\/[a-f0-9]{64}\.png$/;
+  return path.test(url.pathname) ? url.toString() : null;
 }
 
 function finiteNumberOr(value: unknown, fallback: number): number {
