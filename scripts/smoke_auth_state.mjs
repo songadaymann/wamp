@@ -76,6 +76,7 @@ for (const [name, engine, width, height, touch] of [
     });
     await context.route(u => /^\/api\/profiles\/auth-smoke-account\/summary$/.test(u.pathname), r =>
       r.fulfill({ json: { ...profile, ...session.user, userId: user.id, canEdit: true }, headers: cors(r) }));
+    await context.route(u => u.pathname === '/api/me/cleared-rooms', r => r.fulfill({ json: { userId: session.user?.id, roomIds: [], nextCursor: null }, headers: cors(r) }));
     for (const [path, json] of [
       ['/api/settings/me', { settings: null, updatedAt: null }],
       ['/api/lost-songs/progress', { roomIds: [], total: 0 }],

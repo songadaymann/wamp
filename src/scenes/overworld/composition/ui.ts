@@ -1,3 +1,4 @@
+import { hasClearedRoom, subscribeClearedRooms } from '../../../progression/clearedRooms';
 import { getLostSongService } from '../../../lostSongs/service';
 import { isRoomMinted, roomIdFromCoordinates } from '../../../persistence/roomModel';
 import { getActiveWorldId } from '../../../worlds/clientContext';
@@ -79,6 +80,8 @@ export function createRoomCellController(
     getMode: () => host.mode,
     isRoomInActiveCourse: (coordinates) => host.isRoomInActiveCourse(coordinates),
     getExpandedRoomIdAt: (coordinates) => host.getExpandedRoomIdAt(coordinates),
+    hasClearedRoom: coordinates=>!getActiveWorldId()&&hasClearedRoom(roomIdFromCoordinates(coordinates)),
+    subscribeClearedRooms,
     hasFoundLostSong: coordinates => !getActiveWorldId() && getLostSongService().hasFound(roomIdFromCoordinates(coordinates)),
   });
 }

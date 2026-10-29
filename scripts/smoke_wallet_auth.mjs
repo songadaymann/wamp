@@ -51,6 +51,11 @@ try {
           const id = new URL(r.request().url()).pathname.split('/')[3];
           return reply(r, { ...profile, userId: id, displayName: id === 'builder' ? 'builder' : id === 'p1' ? 'p1' : 'Wallet player', selectedAvatarId: null });
         });
+        await context.route(u => u.pathname === '/api/me/cleared-rooms', async r => {
+          const response = await service.call('session', undefined, cookie, new URL(base).origin);
+          const session = await response.json();
+          return reply(r, { userId: session.user?.id, roomIds: [], nextCursor: null });
+        });
         await context.route(u => u.pathname.startsWith('/api/auth/'), async r => {
           if (r.request().method() === 'OPTIONS') return reply(r, {}, 204);
           const path = new URL(r.request().url()).pathname.slice('/api/auth/'.length);

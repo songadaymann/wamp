@@ -81,6 +81,7 @@ for (const [name, engine, width, height, touch] of [
         position: { x: 200, y: 260 }, authorUserId: second.userId, authorDisplayName: second.displayName,
         authorUsername: second.username, body: 'A comment from the second account.', createdAt: '2026-10-19T00:00:00Z' }] : [], commentArea: null });
     });
+    await context.route(u => u.pathname === '/api/me/cleared-rooms', r => reply(r, { userId: session.user?.id, roomIds: [], nextCursor: null }));
     for (const [path, json] of [
       ['/api/settings/me', { settings: null, updatedAt: null }],
       ['/api/lost-songs/progress', { roomIds: [], total: 0 }],

@@ -1,3 +1,5 @@
+import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
+import { isClearedRoomId } from '../progression/clearedRooms';
 import { getApiBaseUrl } from '../api/baseUrl';
 import {
   invalidateStaleWhileRevalidateCache,
@@ -166,4 +168,14 @@ export function createExpandedRoomRepository(): ExpandedRoomRepository {
 
 export function isExpandedRoomApiError(error: unknown): error is ExpandedRoomApiError {
   return error instanceof ExpandedRoomApiError;
+}
+
+export async function loadPublishedExpandedFootprint(id:string,version:number):Promise<string[]> {
+  const response=await fetchWithPageReadLifetime(`${getApiBaseUrl()}/api/expanded-rooms/${encodeURIComponent(id)}/footprint?${new URLSearchParams({version:String(version)})}`,
+    {credentials:'include',cache:'no-store'});
+  if(!response.ok)throw new ExpandedRoomApiError('Published footprint unavailable.',response.status);
+  const value=await response.json();
+  if(value.expandedRoomId!==id||value.version!==version||!Array.isArray(value.roomIds)||value.roomIds.length>16
+    ||!value.roomIds.every(isClearedRoomId))throw new Error('Published footprint changed.');
+  return value.roomIds;
 }

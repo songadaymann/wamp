@@ -28,6 +28,7 @@ describe('capturing expanded and course clear destinations', () => {
     const detail = f.guestRuns.finish.mock.calls[0][2];
     expect(detail.contentType).toBe(id ? 'expanded_room' : 'course');
     expect(detail.shareCoordinates).toEqual({ x: 11, y: 20 });
+    expect(detail.clearedRoomIds).toEqual(['10,20','11,20']);
     f.run.course.roomRefs[1].coordinates.x = 88;
     expect(detail.shareCoordinates).toEqual({ x: 11, y: 20 });
   });

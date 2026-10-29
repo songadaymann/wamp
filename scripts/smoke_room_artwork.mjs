@@ -166,6 +166,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         if (['GET', 'HEAD'].includes(r.request().method()) || new URL(r.request().url()).pathname === '/api/rooms/snapshots/query') return r.fallback();
         unexpected.push({ method: r.request().method(), path: new URL(r.request().url()).pathname }); return reply(r, { error: 'Unexpected fixture write' }, 503);
       });
+      await context.route(u => u.pathname === '/api/me/cleared-rooms', r => reply(r, { userId: 'mobile-smoke-fixture', roomIds: [], nextCursor: null }));
       await context.route(u => u.pathname === '/api/world/tiles/config', r => reply(r, { schemaVersion: 1, available: false, rolloutPercentage: 0 }));
       await context.route(u => u.pathname === '/api/auth/session', r => reply(r, { authenticated: activeUser, source: 'session', user: activeUser ? { id: 'mobile-smoke-fixture', walletAddress: wallet, displayName: 'Artwork test', email: null } : null,
         walletProjectId: 'public-test-project-id', partykitHost: '', schoolManaged: false, school: null, chatModeration: { role: 'none', banned: false } }));

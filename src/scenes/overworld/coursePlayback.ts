@@ -322,6 +322,7 @@ export class OverworldCoursePlaybackController {
           contentId: activeCourseRun.course.id,
           contentTitle: activeCourseRun.course.title,
           expandedRoomId: activeCourseRun.expandedRoomId,
+          clearedRoomIds:activeCourseRun.course.status==='published'&&!activeCourseRun.assisted&&!activeCourseRun.cooperative?activeCourseRun.course.roomRefs.map(ref=>ref.roomId):[],
           shareCoordinates: this.getRunShareCoordinates(activeCourseRun),
           version: activeCourseRun.course.version,
           previousViewerRank: null,
@@ -518,6 +519,7 @@ export class OverworldCoursePlaybackController {
 
   private guestClearDetail(run: ActiveExpandedRoomRunState, body: RunFinishRequestBody): PostRunRatingRequestDetail {
     const base = { contentTitle: run.course.title, version: run.expandedRoomVersion ?? run.course.version,
+      clearedRoomIds:run.course.status==='published'&&!run.assisted&&!run.cooperative?run.course.roomRefs.map(ref=>ref.roomId):[],
       shareCoordinates: this.getRunShareCoordinates(run),
       previousViewerRank: null, elapsedMs: body.elapsedMs, deaths: body.deaths, score: null,
       autoSuggestedDifficulty: suggestProgressionDifficulty(body) };
