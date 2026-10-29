@@ -1,3 +1,4 @@
+import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
 import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { COURSE_SERVER_RULES } from '../../courses/goalServerRules';
 import { getAuthDebugState } from '../../auth/client';
@@ -184,6 +185,7 @@ export class OverworldCoursePlaybackController {
     course: CourseSnapshot,
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null },
   ): ActiveExpandedRoomRunState {
+    resetKeepPlayingContext();
     const authState = getAuthDebugState();
     const startRoomRef = this.getCourseStartRoomRef(course);
     const cooperative = course.roomRefs.some(ref =>
