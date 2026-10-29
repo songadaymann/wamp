@@ -1,6 +1,6 @@
 # F273: shared progression and rating rules — 2026-10-29
 
-Implementation and local verification in progress. Not delivered yet.
+Implementation and local verification complete. PR CI and production delivery pending.
 
 ## Shared behavior
 
@@ -34,7 +34,7 @@ separate from significant-change rating windows.
 ## Verification
 
 - Before changing the pipeline, persisted reward/event and creator-point
-  snapshots were captured against baseline `90704d0d`, committed in `5e344fad`.
+  snapshots were captured against baseline `90704d0d`, committed in `e794f4b8`.
   The snapshots remain unchanged after consolidation. They cover both kinds,
   reward amounts, source/dedupe keys, point breakdowns and no duplicate rewards
   after replay. Rejected and timed-out clears cannot open rating eligibility.
@@ -50,12 +50,12 @@ separate from significant-change rating windows.
   clear XP and 5/7 rating CXP, strict binding rejection, compatibility promotion
   and one reward per attempt. Room Rush concurrent duplicate handling also
   passes. No production runs or emails are created by these probes.
-- Initial full check passed: 711 files / 6,070 tests / 10 expected failures /
+- Final full check passed: 711 files / 6,071 tests / 10 expected failures /
   two skips, plus lint, types, DOM, dead-code, generated bindings, build and
-  asset checks. The additional Protect test is verified separately; a final
-  full check follows before PR delivery.
+  asset checks. Boot JavaScript: 665.4 KB Brotli / 670 KB. Approximately 300
+  duplicated runtime lines are removed, with baseline contracts added.
 
-Logs: `/tmp/wamp-f273-check.log`, `/tmp/wamp-f273-protect-baseline.log`,
+Logs: `/tmp/wamp-f273-check-final.log`, `/tmp/wamp-f273-protect-baseline.log`,
 `/tmp/wamp-f273-protect-shared.log`, `/tmp/wamp-f273-native-room.log`,
 `/tmp/wamp-f273-native-course.log`. Ignored native probes: `output/f273-native/`.
 
