@@ -1,3 +1,4 @@
+import { getChallengeAttemptId } from '../../social/ghostChallengeLinks';
 import type { RuntimeModeReader } from './runtimeContext';
 import Phaser from 'phaser';
 import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
@@ -29,6 +30,7 @@ export class OverworldGhostRaceController {
   private playback: GhostRacePlayback | null = null;
   private choice: GhostRaceChoice = 'off';
   private targetVersion = 0;
+  private challengeAttemptId: string | null = null;
   private targetRoom: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'> | null = null;
   private unsubscribe: (() => void) | null = null;
   private identity: string | null = null;
@@ -45,6 +47,7 @@ export class OverworldGhostRaceController {
     this.clear();
     if (choice === 'off' || (ghost && ghost.roomId !== room.id) || !supportsGhostRace(room.goal)
       || hasCoopPressurePlates(room.placedObjects ?? [])) return;
+    this.challengeAttemptId = choice === 'challenge' ? ghost?.attemptId ?? getChallengeAttemptId(room.coordinates) : null;
     this.choice = choice; this.targetVersion = room.version; this.targetRoom = room;
     this.identity = this.options.getUserId();
     this.unsubscribe = subscribeGhostBestUpdates(room.id, () => {
@@ -93,7 +96,7 @@ export class OverworldGhostRaceController {
     if (this.footerGhost === ghost) return;
     this.footerGhost = ghost;
     this.options.onRaceInfoChanged(ghost ? {
-      name: `${this.choice === 'top' ? '#1 ' : ''}${ghost.displayName}`,
+      name: `${this.choice === 'top' ? '#1 ' : this.choice === 'challenge' ? 'Beat ' : ''}${ghost.displayName}`,
       elapsedMs: ghost.elapsedMs,
     } : null);
   }
@@ -127,7 +130,7 @@ export class OverworldGhostRaceController {
     try {
       const ghost = choice === 'personal' && !identity
         ? loadLocalGhostBest(getGhostStorage(), room.id, room.version)
-        : await loadRaceGhost(room.id, room.version, room.coordinates, choice, request.signal);
+        : await loadRaceGhost(room.id, room.version, room.coordinates, choice, request.signal, this.challengeAttemptId);
       if (!current()) return;
       this.setRecording(ghost);
       if (!ghost) this.options.showStatus?.('Ghost recording unavailable. Playing on your own.');
@@ -143,7 +146,7 @@ export class OverworldGhostRaceController {
     this.generation++; this.sprite?.destroy();
     this.sprite = null; this.pack = null; this.position = null;
     this.updateRaceInfo(null);
-    this.playback = null; this.choice = 'off'; this.identity = this.options.getUserId();
+    this.playback = null; this.choice = 'off'; this.challengeAttemptId = null; this.identity = this.options.getUserId();
   }
   getDebugSnapshot() {
     return { choice: this.choice, attemptId: this.playback?.ghost.attemptId ?? null,

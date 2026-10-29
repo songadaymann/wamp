@@ -1,3 +1,4 @@
+import { supportsGhostRace } from '../../runs/ghostRace';
 import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
 import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
@@ -988,6 +989,7 @@ export class OverworldGoalRunController {
           requestPostRunRating({
             contentType: 'room',
             contentId: runState.roomId,
+            ghostAttemptId: supportsGhostRace(runState.goal) ? attemptId : undefined,
             contentTitle,
             roomCoordinates: { ...runState.roomCoordinates },
             version: runState.roomVersion,
@@ -1028,7 +1030,7 @@ export class OverworldGoalRunController {
   }
 
   private guestClearDetail(runState: GoalRunState, body: RunFinishRequestBody): RoomPostRunRatingRequestDetail {
-    return { contentType: 'room', contentId: runState.roomId,
+    return { contentType: 'room', contentId: runState.roomId, ghostChallengeEligible: supportsGhostRace(runState.goal),
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
       bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates }, version: runState.roomVersion, previousViewerRank: null,

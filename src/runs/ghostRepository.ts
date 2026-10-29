@@ -1,3 +1,4 @@
+import { getChallengeAttemptId } from '../social/ghostChallengeLinks';
 import { getApiBaseUrl } from '../api/baseUrl';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { normalizeRunGhost, type GhostOption, type GhostRaceChoice, type RoomGhostResponse, type RunGhost } from './ghostRace';
@@ -29,9 +30,10 @@ export function notifyGhostBestUpdated(roomId: string): void {
 }
 
 export async function loadRoomGhosts(roomId: string, version: number, coordinates: RoomCoordinates,
-  signal: AbortSignal): Promise<RoomGhostResponse> {
+  signal: AbortSignal, challengeAttemptId: string | null = getChallengeAttemptId(coordinates)): Promise<RoomGhostResponse> {
   const startedRevision = revision;
   const params = new URLSearchParams({ x: String(coordinates.x), y: String(coordinates.y), version: String(version) });
+  if(challengeAttemptId)params.set('vs',challengeAttemptId);
   const response = await fetch(`${getApiBaseUrl()}/api/rooms/${encodeURIComponent(roomId)}/ghosts?${params}`,
     { credentials: 'include', cache: 'no-store', signal });
   if (!response.ok) throw new Error('Ghost unavailable');
@@ -42,7 +44,8 @@ export async function loadRoomGhosts(roomId: string, version: number, coordinate
     if (ghost && ghost.roomId !== roomId) throw new Error('Ghost room changed');
     return { ghost, reason: ghost ? null : raw?.reason ?? 'no_recording' };
   };
-  const result = { roomId, roomVersion: version, top: option(value.top), personal: option(value.personal) };
+  const result = { roomId, roomVersion: version, top: option(value.top), personal: option(value.personal), challenge: option(value.challenge) };
+  if (result.challenge.ghost && result.challenge.ghost.attemptId !== challengeAttemptId) throw new Error('Ghost challenge changed');
   if (!signal.aborted && revision === startedRevision) {
     const key = cacheKey(roomId, version);
     recentTopGhosts.delete(key);
@@ -55,6 +58,6 @@ export async function loadRoomGhosts(roomId: string, version: number, coordinate
 }
 
 export async function loadRaceGhost(roomId: string, version: number, coordinates: RoomCoordinates,
-  choice: Exclude<GhostRaceChoice, 'off'>, signal: AbortSignal): Promise<RunGhost | null> {
-  return (await loadRoomGhosts(roomId, version, coordinates, signal))[choice].ghost;
+  choice: Exclude<GhostRaceChoice, 'off'>, signal: AbortSignal, challengeAttemptId: string | null = getChallengeAttemptId(coordinates)): Promise<RunGhost | null> {
+  return (await loadRoomGhosts(roomId, version, coordinates, signal, challengeAttemptId))[choice].ghost;
 }

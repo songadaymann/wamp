@@ -6,6 +6,14 @@ import { buildRunShareText, buildRunShareUrl } from './runShare';
 const base = { contentId: 'completed', contentTitle: 'Cybertowers', version: 3, previousViewerRank: null,
   elapsedMs: 41250, deaths: 0, score: null, autoSuggestedDifficulty: 'medium' as const };
 describe('completed level invitations', () => {
+  it('adds only accepted time-ranked room attempts and refreshes a queued guest invitation after save',()=>{
+    const room={...base,contentType:'room' as const,roomCoordinates:{x:1,y:2}};
+    expect(buildRunShareUrl({...room,ghostAttemptId:'accepted'},'https://wamp.land')).toBe('https://wamp.land/r/1/2?from=share&vs=accepted');
+    const guest={...room,ghostChallengeEligible:true,guestProgress:{clientRunId:'local',attemptId:'guest-run',status:'queued' as const,durable:true,reason:null}};
+    expect(buildRunShareUrl(guest,'https://wamp.land')).not.toContain('vs=');
+    expect(buildRunShareUrl(guest,'https://wamp.land',{...guest.guestProgress,status:'saved'})).toContain('vs=guest-run');
+    expect(buildRunShareUrl({...guest,ghostChallengeEligible:false},'https://wamp.land',{...guest.guestProgress,status:'saved'})).not.toContain('vs=');
+  });
   it('drops draft, renderer, welcome, coordinates and fragment parameters and adds attribution once', () => {
     expect(buildAttributedRoomShareUrl({ x: -4, y: 12 }, 'https://wamp.land/?draft=private&renderer=canvas&welcome=0&x=1&y=2&from=old#editor'))
       .toBe('https://wamp.land/r/-4/12?from=share');

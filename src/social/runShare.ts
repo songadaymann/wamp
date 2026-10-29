@@ -1,3 +1,5 @@
+import type { GuestRunSaveResult } from '../guestRooms/runService';
+import { normalizeChallengeAttemptId } from './ghostChallengeLinks';
 import type { PostRunRatingRequestDetail } from '../progression/postRunRatingEvents';
 import { buildAttributedRoomShareUrl } from './roomShareLinks';
 
@@ -17,10 +19,18 @@ export function buildRunShareText(
 export function buildRunShareUrl(
   detail: PostRunRatingRequestDetail,
   href: string,
+  guestProgress: GuestRunSaveResult | undefined = detail.guestProgress,
 ): string | null {
   const coordinates = detail.contentType === 'room' ? detail.roomCoordinates : detail.shareCoordinates;
   // Results can be deferred until Browse, after the player has left the completed level.
-  return coordinates ? buildAttributedRoomShareUrl(coordinates, href) : null;
+  if (!coordinates) return null;
+  const url = new URL(buildAttributedRoomShareUrl(coordinates, href));
+  if (detail.contentType === 'room') {
+    const attemptId = normalizeChallengeAttemptId(detail.ghostAttemptId
+      ?? (detail.ghostChallengeEligible && guestProgress?.status === 'saved' ? guestProgress.attemptId : null));
+    if (attemptId) url.searchParams.set('vs',attemptId);
+  }
+  return url.toString();
 }
 
 export function createRunShareImageFile(image: RunShareImage): File {

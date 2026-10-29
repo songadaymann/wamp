@@ -45,6 +45,8 @@ export function getFocusedCoordinatesFromUrl(): RoomCoordinates {
 
 export function setFocusedCoordinatesInUrl(coordinates: RoomCoordinates): void {
   const url = new URL(window.location.href);
+  const previous = parseRoomSharePath(url.pathname);
+  if (previous?.x !== coordinates.x || previous.y !== coordinates.y) url.searchParams.delete('vs');
   url.pathname = buildRoomSharePath(coordinates);
   url.searchParams.delete('x');
   url.searchParams.delete('y');
