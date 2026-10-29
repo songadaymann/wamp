@@ -181,8 +181,10 @@ class MockD1Database {
     }
 
     if (/INSERT(?: OR IGNORE)? INTO room_rush_runs/.test(query)) {
-      const start = this.starts.get(String(values[20]));
-      if (!start || start.user_id !== values[21] || start.consumed_attempt_id !== values[22]
+      // The final three binds guard the consumed start; inserted metadata may grow.
+      const [startId, userId, attemptId] = values.slice(-3);
+      const start = this.starts.get(String(startId));
+      if (!start || start.user_id !== userId || start.consumed_attempt_id !== attemptId
         || this.runs.some(run => run.user_id === values[2] && run.client_run_id === values[1])) return;
       this.runs.push({
         attempt_id: values[0],

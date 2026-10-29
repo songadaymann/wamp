@@ -52,3 +52,8 @@ Room Rush verification (F203) remains open and is not checked off here.
 Local evidence: `/tmp/wamp-f436-final-check.log`,
 `/tmp/wamp-f436-browser-8.log`, ignored `output/f436-native/` probe/screenshot.
 No production migration or deployment has occurred.
+
+CI quality found the safety probe’s fake database still locating Rush finalization
+guard binds by the old column count. It now reads the final three guard binds,
+preserving consumed-start/user/attempt checks as inserted metadata grows. The
+worker-safety probe passes locally; CI must rerun before any merge.
