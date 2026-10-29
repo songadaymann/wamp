@@ -1,3 +1,4 @@
+import { handlePublishRecognition } from './worker/activity/recognition';
 import { handleClearedRoomProgress } from './worker/runs/clearedRooms';
 import { handleCollectionPrice } from './worker/mint/price';
 import { handleCollectionRead } from './worker/collections/routes';
@@ -181,6 +182,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: '/api/client-errors',
     auth: 'public',
     handler: ({ request, env }) => handleClientErrorReport(request, env),
+  },
+  {
+    methods: ['GET'], pattern: '/api/me/publish-recognition', auth: 'authenticated',
+    handler: ({ request, url, env }) => handlePublishRecognition(request, url, env),
   },
   {
     methods: ['GET', 'POST', 'PUT'], pattern: { prefix: '/api/me/activity' }, auth: 'authenticated',

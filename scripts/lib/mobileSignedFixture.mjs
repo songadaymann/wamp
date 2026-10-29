@@ -45,6 +45,10 @@ export async function installMobileSignedFixture(context, { roomChat = false, ro
   await context.route(`**/api/profiles/${userId}/summary`, route => json(route, { ...profile, userId, displayName: 'Mobile Test', username: null, bio: null, avatarUrl: null, selectedAvatarId: 'default-player', avatarChoices: [] }));
   await context.route(`**/api/profiles/${userId}`, route => json(route, { ...profile, userId, displayName: 'Mobile Test', username: null, bio: null, avatarUrl: null, selectedAvatarId: 'default-player', avatarChoices: [], isSelf: true, canEdit: true, publishedRooms: [], playlists: [] }));
   await context.route('**/api/settings/me', route => json(route, { settings: null, updatedAt: null }));
+  await context.route('**/api/me/publish-recognition**', route => {
+    const q = new URL(route.request().url()).searchParams;
+    return json(route, { targetKey: q.get('targetKey'), version: Number(q.get('version')), featured: false, roomOfTheDay: false });
+  });
   await context.route('**/api/me/cleared-rooms**', route => json(route, { userId, roomIds: [], nextCursor: null }));
   await context.route('**/api/lost-songs/progress**', route => json(route, { roomIds: [], total: 0 }));
   await context.route('**/api/leaderboards/rooms/discover**', route => json(route, { sort: 'unrated', results: [], totalCount: 0, difficultyFilter: null }));

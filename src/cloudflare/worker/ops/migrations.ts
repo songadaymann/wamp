@@ -3,4 +3,4 @@
  * deployed before `wrangler d1 migrations apply` reports 503. migrations.test.ts fails
  * when a new migration is added without updating this.
  */
-export const LATEST_D1_MIGRATION = '0076_rating_window_keys.sql';
+export const LATEST_D1_MIGRATION = '0077_builder_recognition_activity.sql';
