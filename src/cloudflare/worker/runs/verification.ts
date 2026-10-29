@@ -217,6 +217,31 @@ export function requireVerificationTrace(
   return trace;
 }
 
+interface VerificationLeaderboardRow {
+  attempt_id: string;
+  user_id: string;
+  elapsed_ms: number;
+  deaths: number;
+  score: number;
+  finished_at: string;
+  overall_rank: number | string | null;
+}
+
+/** Translate stored ranks once, retaining each kind's comparator and trigger policy. */
+export function buildVerificationTrigger<G>(
+  create: (goal:G,input:Parameters<typeof createRoomVerificationTrigger>[1])=>RunVerificationTriggerResult,
+  goal:G,input:{candidate:Omit<VerificationComparableEntry,'overallRank'>;
+    currentTopRows:readonly VerificationLeaderboardRow[];viewerBestRow:VerificationLeaderboardRow|null;
+    pointAwardPotential:boolean},
+): RunVerificationTriggerResult {
+  const map=(row:VerificationLeaderboardRow):VerificationComparableEntry=>({
+    attemptId:row.attempt_id,userId:row.user_id,elapsedMs:row.elapsed_ms,deaths:row.deaths,
+    score:row.score,finishedAt:row.finished_at,overallRank:row.overall_rank===null ? null : Number(row.overall_rank),
+  });
+  return create(goal,{candidate:input.candidate,currentTopEntries:input.currentTopRows.map(map),
+    viewerEntry:input.viewerBestRow===null ? null : map(input.viewerBestRow),pointAwardPotential:input.pointAwardPotential});
+}
+
 export function createRoomVerificationTrigger(
   goal: RoomGoal,
   input: {

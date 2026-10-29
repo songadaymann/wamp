@@ -1,0 +1,275 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`persisted room/course reward identities before sharing the core (F273) > pins course reward amounts, event/source/dedupe bytes and replay behavior > creator points 1`] = `
+[
+  {
+    "breakdown_json": "{"courseId":"golden","courseVersion":1,"finisherUserId":"p1","attemptId":"course-attempt"}",
+    "event_type": "course_creator_completion",
+    "points": 50,
+    "source_key": "golden:1:p1",
+    "user_id": "builder",
+  },
+]
+`;
+
+exports[`persisted room/course reward identities before sharing the core (F273) > pins course reward amounts, event/source/dedupe bytes and replay behavior 1`] = `
+{
+  "bxp": [
+    {
+      "amount": 10,
+      "dedupe_key": "bxp:course_unique_completion:builder:golden:1:p1",
+      "event_type": "unique_completion_course",
+      "source_id": "golden:1:p1",
+      "source_type": "course_completion",
+      "user_id": "builder",
+    },
+    {
+      "amount": 5,
+      "dedupe_key": "bxp:course_unique_rating:builder:golden:1:p1",
+      "event_type": "unique_rating_course",
+      "source_id": "golden:1:p1",
+      "source_type": "course_rating",
+      "user_id": "builder",
+    },
+  ],
+  "cxp": [
+    {
+      "amount": 7,
+      "dedupe_key": "cxp:course_rating_submit:p1:golden:1",
+      "event_type": "course_rating_submit",
+      "source_id": "golden:1",
+      "source_type": "course_rating",
+      "user_id": "p1",
+    },
+    {
+      "amount": 3,
+      "dedupe_key": "cxp:weekly_curation:p1:UTC-2026-41",
+      "event_type": "weekly_curation",
+      "source_id": "UTC-2026-41",
+      "source_type": "user_week",
+      "user_id": "p1",
+    },
+  ],
+  "pxp": [
+    {
+      "amount": 40,
+      "dedupe_key": "pxp:course_clear_first:p1:golden:1",
+      "event_type": "course_clear_first",
+      "source_id": "golden:1",
+      "source_type": "course",
+      "user_id": "p1",
+    },
+    {
+      "amount": 5,
+      "dedupe_key": "pxp:course_rating_submit:p1:golden:1",
+      "event_type": "course_rating_submit",
+      "source_id": "golden:1",
+      "source_type": "course_rating",
+      "user_id": "p1",
+    },
+    {
+      "amount": 10,
+      "dedupe_key": "pxp:course_top10_entry:course-attempt",
+      "event_type": "top10_entry",
+      "source_id": "course-attempt",
+      "source_type": "course_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 15,
+      "dedupe_key": "pxp:course_top1_take:course-attempt",
+      "event_type": "top1_take",
+      "source_id": "course-attempt",
+      "source_type": "course_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 8,
+      "dedupe_key": "pxp:daily_course_pb:p1:golden:1:2026-10-06",
+      "event_type": "daily_personal_best",
+      "source_id": "golden:1:2026-10-06",
+      "source_type": "course",
+      "user_id": "p1",
+    },
+    {
+      "amount": 10,
+      "dedupe_key": "pxp:weekly_play:p1:UTC-2026-41",
+      "event_type": "weekly_play",
+      "source_id": "UTC-2026-41",
+      "source_type": "user_week",
+      "user_id": "p1",
+    },
+  ],
+  "trust": [
+    {
+      "amount": 3,
+      "dedupe_key": "trust:course_unique_completion:builder:golden:1:p1",
+      "event_type": "unique_completion_course",
+      "source_id": "golden:1:p1",
+      "source_type": "course_completion",
+      "user_id": "builder",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:course_unique_rating:builder:golden:1:p1",
+      "event_type": "unique_rating_course",
+      "source_id": "golden:1:p1",
+      "source_type": "course_rating",
+      "user_id": "builder",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:course_clear:p1:golden:1",
+      "event_type": "course_clear_completed",
+      "source_id": "course-attempt",
+      "source_type": "course_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:course_rating_submit:p1:golden:1",
+      "event_type": "course_rating_submit",
+      "source_id": "golden:1",
+      "source_type": "course_rating",
+      "user_id": "p1",
+    },
+  ],
+}
+`;
+
+exports[`persisted room/course reward identities before sharing the core (F273) > pins room reward amounts, event/source/dedupe bytes and replay behavior > creator points 1`] = `
+[
+  {
+    "breakdown_json": "{"roomId":"0,0","roomVersion":1,"finisherUserId":"p1","attemptId":"room-attempt"}",
+    "event_type": "room_creator_completion",
+    "points": 50,
+    "source_key": "0,0:1:p1",
+    "user_id": "builder",
+  },
+]
+`;
+
+exports[`persisted room/course reward identities before sharing the core (F273) > pins room reward amounts, event/source/dedupe bytes and replay behavior 1`] = `
+{
+  "bxp": [
+    {
+      "amount": 6,
+      "dedupe_key": "bxp:room_unique_completion:builder:0,0:1:p1",
+      "event_type": "unique_completion_room",
+      "source_id": "0,0:1:p1",
+      "source_type": "room_completion",
+      "user_id": "builder",
+    },
+    {
+      "amount": 5,
+      "dedupe_key": "bxp:room_unique_rating:builder:0,0:1:p1",
+      "event_type": "unique_rating_room",
+      "source_id": "0,0:1:p1",
+      "source_type": "room_rating",
+      "user_id": "builder",
+    },
+  ],
+  "cxp": [
+    {
+      "amount": 5,
+      "dedupe_key": "cxp:room_rating_submit:p1:0,0:1",
+      "event_type": "room_rating_submit",
+      "source_id": "0,0:1",
+      "source_type": "room_rating",
+      "user_id": "p1",
+    },
+    {
+      "amount": 3,
+      "dedupe_key": "cxp:weekly_curation:p1:UTC-2026-41",
+      "event_type": "weekly_curation",
+      "source_id": "UTC-2026-41",
+      "source_type": "user_week",
+      "user_id": "p1",
+    },
+  ],
+  "pxp": [
+    {
+      "amount": 8,
+      "dedupe_key": "pxp:daily_room_pb:p1:0,0:1:2026-10-06",
+      "event_type": "daily_personal_best",
+      "source_id": "0,0:1:2026-10-06",
+      "source_type": "room",
+      "user_id": "p1",
+    },
+    {
+      "amount": 20,
+      "dedupe_key": "pxp:room_clear_first:p1:0,0:1",
+      "event_type": "room_clear_first",
+      "source_id": "0,0:1",
+      "source_type": "room",
+      "user_id": "p1",
+    },
+    {
+      "amount": 5,
+      "dedupe_key": "pxp:room_rating_submit:p1:0,0:1",
+      "event_type": "room_rating_submit",
+      "source_id": "0,0:1",
+      "source_type": "room_rating",
+      "user_id": "p1",
+    },
+    {
+      "amount": 10,
+      "dedupe_key": "pxp:room_top10_entry:room-attempt",
+      "event_type": "top10_entry",
+      "source_id": "room-attempt",
+      "source_type": "room_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 15,
+      "dedupe_key": "pxp:room_top1_take:room-attempt",
+      "event_type": "top1_take",
+      "source_id": "room-attempt",
+      "source_type": "room_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 10,
+      "dedupe_key": "pxp:weekly_play:p1:UTC-2026-41",
+      "event_type": "weekly_play",
+      "source_id": "UTC-2026-41",
+      "source_type": "user_week",
+      "user_id": "p1",
+    },
+  ],
+  "trust": [
+    {
+      "amount": 2,
+      "dedupe_key": "trust:room_unique_completion:builder:0,0:1:p1",
+      "event_type": "unique_completion_room",
+      "source_id": "0,0:1:p1",
+      "source_type": "room_completion",
+      "user_id": "builder",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:room_unique_rating:builder:0,0:1:p1",
+      "event_type": "unique_rating_room",
+      "source_id": "0,0:1:p1",
+      "source_type": "room_rating",
+      "user_id": "builder",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:room_clear:p1:0,0:1",
+      "event_type": "room_clear_completed",
+      "source_id": "room-attempt",
+      "source_type": "room_attempt",
+      "user_id": "p1",
+    },
+    {
+      "amount": 1,
+      "dedupe_key": "trust:room_rating_submit:p1:0,0:1",
+      "event_type": "room_rating_submit",
+      "source_id": "0,0:1",
+      "source_type": "room_rating",
+      "user_id": "p1",
+    },
+  ],
+}
+`;

@@ -198,29 +198,7 @@ export async function awardRoomCreatorCompletionPoints(
     createdAt?: string;
   }
 ): Promise<PointEventRow | null> {
-  if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
-    return null;
-  }
-
-  if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
-    return null;
-  }
-
-  const sourceKey = `${input.roomId}:${input.roomVersion}:${input.finisherUserId}`;
-  return recordCreatorCompletionPointEvent(env, {
-    userId: input.creatorUserId,
-    eventType: 'room_creator_completion',
-    sourceKey,
-    equivalentSourceKeys: (input.rewardVersions ?? []).map((version) => `${input.roomId}:${version}:${input.finisherUserId}`),
-    points: ROOM_CREATOR_COMPLETION_POINTS,
-    breakdown: {
-      roomId: input.roomId,
-      roomVersion: input.roomVersion,
-      finisherUserId: input.finisherUserId,
-      attemptId: input.attemptId,
-    },
-    createdAt: input.createdAt,
-  });
+  return awardCreatorCompletionPoints(env,'room',{...input,contentId:input.roomId,version:input.roomVersion},ROOM_CREATOR_COMPLETION_POINTS);
 }
 
 export async function awardCourseCreatorCompletionPoints(
@@ -237,28 +215,22 @@ export async function awardCourseCreatorCompletionPoints(
     createdAt?: string;
   }
 ): Promise<PointEventRow | null> {
-  if (!input.creatorUserId || input.creatorUserId === input.finisherUserId) {
-    return null;
-  }
+  return awardCreatorCompletionPoints(env,'course',{...input,contentId:input.courseId,version:input.courseVersion},COURSE_CREATOR_COMPLETION_POINTS);
+}
 
-  if (!(await hasMinimumAccountAgeForCreatorReward(env, input.finisherUserId))) {
-    return null;
-  }
-
-  const sourceKey = `${input.courseId}:${input.courseVersion}:${input.finisherUserId}`;
-  return recordCreatorCompletionPointEvent(env, {
-    userId: input.creatorUserId,
-    eventType: 'course_creator_completion',
-    sourceKey,
-    equivalentSourceKeys: (input.rewardVersions ?? []).map((version) => `${input.courseId}:${version}:${input.finisherUserId}`),
-    points: COURSE_CREATOR_COMPLETION_POINTS,
-    breakdown: {
-      courseId: input.courseId,
-      courseVersion: input.courseVersion,
-      finisherUserId: input.finisherUserId,
-      attemptId: input.attemptId,
-    },
-    createdAt: input.createdAt,
+async function awardCreatorCompletionPoints(
+  env: Env,kind: 'room' | 'course',
+  input: {creatorUserId: string | null;contentId: string;version: number;finisherUserId: string;
+    attemptId: string;rewardVersions?: readonly number[];createdAt?: string},points: number,
+): Promise<PointEventRow | null> {
+  if (!input.creatorUserId || input.creatorUserId===input.finisherUserId) return null;
+  if (!(await hasMinimumAccountAgeForCreatorReward(env,input.finisherUserId))) return null;
+  const sourceKey=`${input.contentId}:${input.version}:${input.finisherUserId}`;
+  return recordCreatorCompletionPointEvent(env,{
+    userId:input.creatorUserId,eventType:`${kind}_creator_completion`,sourceKey,
+    equivalentSourceKeys:(input.rewardVersions ?? []).map(version => `${input.contentId}:${version}:${input.finisherUserId}`),
+    points,breakdown:{[`${kind}Id`]:input.contentId,[`${kind}Version`]:input.version,
+      finisherUserId:input.finisherUserId,attemptId:input.attemptId},createdAt:input.createdAt,
   });
 }
 
