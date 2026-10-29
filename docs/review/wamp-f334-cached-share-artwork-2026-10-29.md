@@ -5,7 +5,7 @@ The checklist item remains open until verified in production.
 
 ## Behavior
 
-Share metadata and HTML advertise the ready, real-art world-map leaf for a
+API and public Pages share metadata and HTML advertise the ready, real-art world-map leaf for a
 standalone room, with its actual 642×354 dimensions. The existing image/image.png
 API endpoints also serve those stored PNG bytes. The prior renderer remains the
 fallback when a leaf is absent, stale, empty, unavailable or from a different
@@ -31,11 +31,12 @@ is required. Composite objects use a separate prefix from world-tile GC.
 
 ## Verification
 
-- Full check: 722 files, 6,147 passing tests, 10 expected failures, two skips;
+- Full check: 722 files, 6,154 passing tests, 10 expected failures, two skips;
   types, lint, DOM, generated bindings, build and assets passed. Boot JavaScript
   is 665.5 KB Brotli / 670 KB. Dead-code baseline shrinks from 783 to 781 because
   the world-tile content dimensions now have a live consumer.
-- Share tests: cached URL/dimensions, HTML, both image aliases, bodyless HEAD,
+- Share tests: cached URL/dimensions, API HTML, public Pages metadata and trusted
+  tile-host/path validation, both image aliases, bodyless HEAD,
   missing/unavailable storage fallback and moderation fallback.
 - Artwork tests: ready/empty/stale/missing leaves, renderer/contract mismatch,
   older pinned versions, negative/vertical coordinates, overlap cropping,
@@ -45,5 +46,5 @@ is required. Composite objects use a separate prefix from world-tile GC.
   PNG decode/composite/encode, composite reuse, stale-generation fallback and
   pinned-version mismatch fallback. No production data writes were used.
 
-Local evidence: /tmp/wamp-f334-check.log, /tmp/wamp-f334-native.log;
+Local evidence: /tmp/wamp-f334-final-check.log, /tmp/wamp-f334-native.log;
 ignored native probe sources and bundle: output/f334-native/.

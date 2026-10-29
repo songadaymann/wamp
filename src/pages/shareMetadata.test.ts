@@ -146,6 +146,29 @@ describe('Expanded Room share previews', () => {
     },
   );
 
+  it.each([false, true])('uses cached map artwork in public Pages metadata (expanded=%s)', async expanded => {
+    const imageUrl = `https://tiles.wamp.land/${expanded ? 'share-artwork/v1' : 'world-tiles/renderer-a/objects'}/${'a'.repeat(64)}.png`;
+    stubFetch(async () => Response.json({ title: 'Cached art on WAMP', roomVersion: 7, imageUrl,
+      imageWidth: expanded ? 1200 : 642, imageHeight: expanded ? 630 : 354,
+      expandedRoom: expanded ? { expandedRoomId: 'course:fixture', cellCount: 2 } : null }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result).toMatchObject({ imageUrl, imageWidth: expanded ? 1200 : 642, imageHeight: expanded ? 630 : 354 });
+  });
+
+  it.each([
+    `https://tiles.wamp.land.evil.test/world-tiles/a/objects/${'a'.repeat(64)}.png`,
+    `http://tiles.wamp.land/world-tiles/a/objects/${'a'.repeat(64)}.png`,
+    `https://tiles.wamp.land/unrelated/${'a'.repeat(64)}.png`,
+    `https://tiles.wamp.land/world-tiles/a/objects/${'a'.repeat(64)}.png?redirect=evil`,
+    `https://tiles.wamp.land/share-artwork/v1/${'a'.repeat(64)}.png`,
+  ])('rejects an untrusted or wrong-kind cached artwork URL %s', async imageUrl => {
+    stubFetch(async () => Response.json({ title: 'Title on WAMP', roomVersion: 7, imageUrl }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v5`);
+  });
+
   it('retains the local ordinary-room image while using public builder credit', async () => {
     stubFetch(async (input) => requestUrl(input).includes('/api/share/')
       ? Response.json({ title: 'Into the fire by Builder on WAMP',
