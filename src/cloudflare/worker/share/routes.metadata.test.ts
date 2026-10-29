@@ -60,6 +60,7 @@ describe('published room share metadata builder credit', () => {
       expect(image.searchParams.get('area')).toBe('course:fixture');
       expect(image.searchParams.get('av')).toBe('3');
       expect(image.searchParams.get('v')).toBe('9');
+      expect(image.searchParams.get('renderer')).toBe('assets-v6');
       expect(metadata).not.toHaveProperty('ownerUserId');
       expect(metadata.expandedRoom).not.toHaveProperty('ownerUserId');
       expect(loadPublishedRoom).not.toHaveBeenCalled();

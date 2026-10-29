@@ -1,3 +1,4 @@
+import { ROOM_SHARE_RENDERER_VERSION } from '../../../roomImage/types';
 import { buildRoomSharePath } from '../../../social/roomShareLinks';
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import {
@@ -274,6 +275,7 @@ function buildRoomShareMetadata(
   imageUrl.searchParams.set('x', String(snapshot.coordinates.x));
   imageUrl.searchParams.set('y', String(snapshot.coordinates.y));
   imageUrl.searchParams.set('v', String(snapshot.version));
+  imageUrl.searchParams.set('renderer', ROOM_SHARE_RENDERER_VERSION);
   if (expandedRoom) {
     imageUrl.searchParams.set('area', expandedRoom.expandedRoomId);
     if (typeof expandedRoom.version === 'number') {
