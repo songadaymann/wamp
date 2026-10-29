@@ -496,8 +496,6 @@ export src/weather/model.ts ROOM_WEATHER_INTENSITY_MAX
 export src/weather/model.ts ROOM_WEATHER_INTENSITY_MIN
 export src/weather/model.ts clampRoomWeatherIntensityValue
 export src/weather/model.ts normalizeRoomWeatherMode
-export src/worldTiles/model.ts WORLD_TILE_CONTENT_HEIGHT
-export src/worldTiles/model.ts WORLD_TILE_CONTENT_WIDTH
 export src/worldTiles/model.ts WORLD_TILE_MAX_LEVEL
 export src/worldTiles/model.ts WORLD_TILE_MAX_MANIFEST_AXIS
 export src/worldTiles/model.ts WORLD_TILE_MIN_LEVEL

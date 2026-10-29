@@ -51,6 +51,8 @@ export interface R2ObjectMetadata {
 }
 
 export interface R2BucketBinding {
+  get?(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  put?(key: string, value: Uint8Array, options?: { httpMetadata: { contentType: string; cacheControl?: string } }): Promise<unknown>;
   head(key: string): Promise<R2ObjectMetadata | null>;
   list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
     objects: R2ObjectMetadata[];
