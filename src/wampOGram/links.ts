@@ -5,7 +5,7 @@ export function buildWampOGramSharePath(slug: string): string {
 }
 
 /** Bump when the preview drawing changes: the API keeps each version's drawing for good (F348). */
-export const WAMP_O_GRAM_PREVIEW_VERSION = '1';
+export const WAMP_O_GRAM_PREVIEW_VERSION = '2';
 
 /** The API path of a gram's link-preview image, carrying the preview renderer version. */
 export function buildWampOGramPreviewPath(slug: string): string {

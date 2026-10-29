@@ -11,7 +11,7 @@ import { loadBlockedCustomSpriteIdsAmong } from '../../worldTileRenderer/store';
 import type { D1Database, D1PreparedStatement, Env } from '../core/types';
 import { loadWorldTileConfig } from '../worldTiles/service';
 import { deleteOwnedCustomSprite } from './catalogStore';
-import { markBlockedCustomSprites } from '../../../pages/roomImageRenderer';
+import { markBlockedCustomSprites } from '../../../roomImage/roomImageRenderer';
 
 class Statement implements D1PreparedStatement {
   values: (string | number | null)[] = [];

@@ -1,20 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
+import { handleRoomImageRequest } from './roomImageRenderer';
+import { createDefaultRoomSnapshot } from '../persistence/roomModel';
+import { BLOCKED_ART_COLOR } from '../customSprites/blocklist';
+import { parseSolidColorBackgroundColor, resolveRoomBackground } from '../backgrounds/model';
+import { parseCustomSpriteObjectId } from '../customSprites/model';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG } from '../config';
 import type { PagesWorkerEnv } from './model';
-import { decodePng } from './roomImagePrimitives';
+import { decodePng } from '../roomImage/roomImagePrimitives';
 import {
-  backgroundPalette,
   createFallbackRoomSnapshot,
   decodeTileValue,
   getTileColor,
-  parseCustomSpriteObjectId,
-  parseSolidBackgroundColor,
   renderRoomSharePreviewPng,
-  resolvePreviewBackground,
-} from './roomImageRenderer';
+} from '../roomImage/roomImageRenderer';
 import type { PublishedRoomSnapshot } from './shareMetadata';
+
+afterEach(() => vi.unstubAllGlobals());
 
 const PAGE_URL = new URL('https://preview.wamp.land/r/11/-12/image.png');
 
@@ -68,30 +71,14 @@ describe('room image renderer model normalization', () => {
     ['grassland', null],
     [null, null],
   ])('parses legacy solid background %j', (input, expected) => {
-    expect(parseSolidBackgroundColor(input)).toBe(expected);
+    expect(parseSolidColorBackgroundColor(input)).toBe(expected === null ? null : '#' + expected.toString(16).padStart(6, '0'));
   });
 
-  it('resolves solid, custom, configured, and fallback background forms', () => {
-    expect(resolvePreviewBackground('solid:#123456')).toEqual({
-      kind: 'solid',
-      color: 0x123456,
-    });
-    expect(resolvePreviewBackground('custom:abcdefgh?fit=center')).toEqual({
-      kind: 'custom',
-      id: 'abcdefgh',
-      fit: 'center',
-      palette: backgroundPalette('grassland'),
-    });
-    expect(resolvePreviewBackground({ group: { id: 'desert' } })).toEqual({
-      kind: 'palette',
-      id: 'desert',
-      palette: backgroundPalette('desert'),
-    });
-    expect(resolvePreviewBackground(null)).toEqual({
-      kind: 'palette',
-      id: 'grassland',
-      palette: backgroundPalette('grassland'),
-    });
+  it('uses canonical solid, custom, group and default backgrounds', () => {
+    expect(resolveRoomBackground('solid:#123456')).toEqual({ kind: 'solid', color: '#123456' });
+    expect(resolveRoomBackground('custom:abcdefgh?fit=center')).toEqual({ kind: 'custom', id: 'abcdefgh', fit: 'center' });
+    expect(resolveRoomBackground('desert')).toMatchObject({ kind: 'group', group: { id: 'desert' } });
+    expect(resolveRoomBackground(null)).toEqual({ kind: 'none' });
   });
 
   it('preserves tile flip decoding and invalid-value behavior', () => {
@@ -160,7 +147,7 @@ describe('room image renderer orchestration', () => {
     expect(Array.from(image.pixels).filter((_, i) => i % 4 === 0).some((red, i) => red === 252 && image.pixels[i*4+1] === 234)).toBe(true);
   });
 
-  it('draws a real-art room with the same pixels as before in a compressed PNG (F332)', async () => {
+  it('draws a real-art room with the corrected real-art pixels in a compressed PNG (F332)', async () => {
     const snapshot = JSON.parse(readFileSync('test/fixtures/smart-autotiling/references/desert-x-7-y-3.room.json', 'utf8'))
       .snapshot as PublishedRoomSnapshot;
     const fetchAsset = vi.fn(async (request: Request) => {
@@ -171,9 +158,9 @@ describe('room image renderer orchestration', () => {
     const image = await decodePng(png);
 
     expect(fetchAsset).toHaveBeenCalled();
-    // Decoded pixels of the uncompressed 3 MB encoder before F332; update only when the drawing changes.
+    // Corrected F269/F389 real-art pixels; renderer versions were bumped with the intentional drawing changes.
     expect(createHash('sha256').update(image.pixels).digest('hex'))
-      .toBe('f88ded5b570a6923568028dc6d2e262c177ca583937bb1c1b10d6cffb2a6be3f');
+      .toBe('38c388aff5f5fa8a288f063cea4dffa3922e115f9cf7a8b052c7aa6e3c124392');
     expect(png.length).toBeLessThan(120_000);
   });
 
@@ -211,5 +198,25 @@ describe('room image renderer orchestration', () => {
     const image = await decodePng(png);
 
     expect(pixelAt(image, 60, 18)).toEqual([255, 0, 0, 255]);
+  });
+});
+
+describe('Pages image moderation for custom-tile source art', () => {
+  it.each([true, false])('masks a tile even without an embedded sprite (blocklist available=%s)', async available => {
+    const snapshot = createDefaultRoomSnapshot('11,-12', { x: 11, y: -12 });
+    snapshot.background = 'solid:#000000'; snapshot.customSprites = [];
+    snapshot.customTiles = [{ id: 'source-tile', name: 'Source tile', sourceSpriteId: 'blocked-source',
+      collision: 'none', pixels: Array(256).fill('#ff0000'), createdAt: '2026-10-29', updatedAt: '2026-10-29' }];
+    snapshot.tileData.terrain[0][0] = 10_000;
+    const fetchApi = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/api/world/tiles/config')
+      ? available ? Response.json({ blockedCustomSpriteIds: ['blocked-source'] }) : new Response(null, { status: 503 })
+      : Response.json(snapshot));
+    vi.stubGlobal('fetch', fetchApi);
+    const response = await handleRoomImageRequest(new Request(PAGE_URL), createEnv(), PAGE_URL, snapshot.coordinates);
+    const image = await decodePng(new Uint8Array(await response.arrayBuffer()));
+    const color = Number.parseInt(BLOCKED_ART_COLOR.slice(1), 16);
+    expect(pixelAt(image, 70, 28)).toEqual([(color >> 16) & 255, (color >> 8) & 255, color & 255, 255]);
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+    if (!available) expect(response.headers.get('Cache-Control')).toBe('public, max-age=60, s-maxage=60');
   });
 });

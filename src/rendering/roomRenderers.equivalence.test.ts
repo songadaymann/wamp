@@ -4,7 +4,7 @@ import { hiddenVersionSnapshot } from '../cloudflare/worker/rooms/versionRedacti
 import { maskBlockedCustomArt } from '../customSprites/blockedArt';
 import { BLOCKED_ART_COLOR } from '../customSprites/blocklist';
 import { getRoomMetadataObjectDrawRect } from '../mint/roomMetadataRenderLayout';
-import { markBlockedCustomSprites } from '../pages/roomImageRenderer';
+import { markBlockedCustomSprites } from '../roomImage/roomImageRenderer';
 import type { PublishedRoomSnapshot } from '../pages/shareMetadata';
 import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roomModel';
 import {
@@ -14,28 +14,10 @@ import {
 } from './roomRenderers.testHarness';
 
 /**
- * F484: the server-side room-image renderers must draw the same room the same way, so that "one
- * source for share pictures" (F334, F269, F389) can merge them safely.
- *
- * What each renderer draws (✓ real art, ≈ abstract shape, – not drawn):
- *
- *                                 API card   Pages card   world tile   client texture
- *   tileset tiles, flips            ≈           ✓            ✓            ✓
- *   custom tiles (gid 10000+)       ✓ pixels    ≈ block      ✓            ✓
- *   custom sprites                  –           ✓            ✓            ✓
- *   objects, NPCs, markers          ≈ shapes    ✓ †          ✓            ✓ (trees from atlases)
- *   background-layer objects        –           ✓ †          ✓            ✓
- *   'none' starfield                ≈ own       – grassland  ✓            ✓
- *   theme / solid / photo bg        ≈ palette   ✓ card-wide  ✓ room       ✓ room
- *   blocked sprite (F189)           –           ≈ ellipse    –            grey square
- *   tile cut from a blocked sprite  grey        ≈ block      grey         grey
- *   lighting, weather, video        –           –            –            – (the live game only)
- *
- * † ignores displayScale and displayOffset (F389). The API card draws for Expanded Rooms and
- * Wamp-O-Grams, the Pages card for single-room links, the world tile for the map (Chrome through
- * Browser Rendering; here SoftwareCanvas), the client texture for map previews in the game (its
- * own test is visuals/roomSnapshotTexture.equivalence.test.ts). The live Phaser room scene can't
- * run in vitest; browser smokes cover it.
+ * F484/F269/F389: API and Pages cards share one real-art painter. These comparisons
+ * keep their room content aligned with the world-tile/game canvas, including custom
+ * pixels, object display scale/offset and moderation. Card-wide backgrounds are
+ * intentionally framed differently from a native room image.
  */
 
 const RENDER_TIMEOUT_MS = 30_000;
@@ -119,18 +101,15 @@ describe('Pages card and world-tile renderer draw the same room pixels', { timeo
     expect(await pagesVersusWorldTileContent(onlyObjects((id) => !isTree(id) && !isCustomSprite(id)))).toBe(0);
   });
 
-  it.fails('feature room: custom tiles (F389: the Pages card draws them as coloured blocks)', async () => {
+  it('feature room: custom tiles match the world renderer', async () => {
     expect(await pagesVersusWorldTileContent(roomWith(feature, { customTiles: true }))).toBe(0);
   });
 
-  it.fails('feature room: the background-layer tree (F389: the Pages card ignores displayScale and displayOffset)', async () => {
+  it('feature room: the background-layer tree uses canonical display scale and offset', async () => {
     expect(await pagesVersusWorldTileContent(onlyObjects(isTree))).toBe(0);
   });
 
-  // The Pages card fills each sprite pixel to ceil((i + 1) * 27 / 16), one card pixel into the next;
-  // where that next pixel is transparent and one card pixel wide, the gap vanishes. The wampos
-  // reference sprite above has no such gap, so it matches.
-  it.fails('feature room: a custom sprite with one-pixel transparent gaps (Pages bleeds a card pixel into them)', async () => {
+  it('feature room: a custom sprite preserves one-pixel transparent gaps', async () => {
     expect(await pagesVersusWorldTileContent(onlyObjects(isCustomSprite))).toBe(0);
   });
 
@@ -139,7 +118,7 @@ describe('Pages card and world-tile renderer draw the same room pixels', { timeo
     expect(mostCommonColour(leaf)).toEqual(STARFIELD);
   });
 
-  it.fails('feature room: the Pages card draws the default background as a starfield (F389: it draws grassland)', async () => {
+  it('feature room: the Pages card draws the default background as a starfield', async () => {
     const card = await renderPagesCard(roomWith(feature, {}));
     expect(near(mostCommonColour(card), STARFIELD, 24)).toBe(true);
   });
@@ -170,7 +149,7 @@ describe('world-tile leaf', { timeout: RENDER_TIMEOUT_MS }, () => {
   });
 });
 
-describe('API card agrees with the real-art renderers where an abstract drawing can', { timeout: RENDER_TIMEOUT_MS }, () => {
+describe('API and Pages cards agree with the real-art room renderer', { timeout: RENDER_TIMEOUT_MS }, () => {
   const tilesOnly = { ...roomWith(feature, { tiles: true, customTiles: true }), background: 'solid:#203040' };
 
   it('has the same card size, room border and solid-colour margin as the Pages card', async () => {
@@ -221,17 +200,12 @@ describe('API card agrees with the real-art renderers where an abstract drawing 
     return diffRasters(cell(api, x, y), cell(expected, x, y)).count;
   }
 
-  // Custom tiles with collision get edge shading and back/front-layer ones are drawn translucent:
-  // that is the API card's abstract style, so only a plain terrain tile is compared pixel for pixel.
   it('draws a custom tile\'s pixels like the world-tile renderer', async () => {
     const [column] = FEATURE_ROOM.customTiles.columns;
     expect(await apiVersusWorldTileCustomTileCell(column, FEATURE_ROOM.customTiles.row)).toBe(0);
   });
 
-  // Like the Pages sprites: each pixel is filled to ceil((i + 1) * 27 / 16). A flipped tile is drawn
-  // right to left (or bottom to top), so that extra card pixel covers a neighbour that is one card
-  // pixel wide, and a column (or row) of the tile disappears.
-  it.fails('draws flipped custom tiles like the world-tile renderer (the API card loses a column)', async () => {
+  it('draws flipped custom tiles like the world-tile renderer', async () => {
     const [, flipX, flipY] = FEATURE_ROOM.customTiles.columns;
     expect(await apiVersusWorldTileCustomTileCell(flipX, FEATURE_ROOM.customTiles.row)).toBe(0);
     expect(await apiVersusWorldTileCustomTileCell(flipY, FEATURE_ROOM.customTiles.row)).toBe(0);
@@ -264,7 +238,7 @@ describe('API card agrees with the real-art renderers where an abstract drawing 
     },
   );
 
-  it.fails('draws background-layer objects and custom sprites (F269: the API card skips both)', async () => {
+  it('draws background-layer objects and custom sprites', async () => {
     expect((await apiObjectFootprint(FEATURE_ROOM.tree.id)).drawn).not.toBeNull();
     expect((await apiObjectFootprint(`custom_sprite:${FEATURE_ROOM.customSprite.id}`)).drawn).not.toBeNull();
   });
@@ -312,17 +286,13 @@ describe('blocked community art and hidden versions', { timeout: RENDER_TIMEOUT_
     expect(diffRasters(leaf, expected).count).toBe(0);
   });
 
-  // The art is gone, but getObjectConfig finds no config for a blocked sprite, so drawFallbackObject
-  // draws a generic green ellipse where it stood (the game draws a grey BLOCKED_ART_COLOR square).
-  it.fails('the Pages card leaves out the blocked sprite like the API card and world tile (it draws a green fallback ellipse)', async () => {
+  it('the Pages card masks blocked art like the API card and world tile', async () => {
     const room = withBlockableArt();
     const card = await renderPagesCard(markBlockedCustomSprites(room as unknown as PublishedRoomSnapshot, blocked));
-    expect(diffRasters(card, await renderPagesCard(withoutSprite(room))).count).toBe(0);
+    expect(diffRasters(card, await renderPagesCard(withoutSprite(maskBlockedCustomArt(room, blocked)))).count).toBe(0);
   });
 
-  // The Pages card has no custom-tile art yet (F389), so nothing leaks today. markBlockedCustomSprites
-  // marks sprites only; once Pages draws tile art it needs maskBlockedCustomArt like the others.
-  it.fails('the Pages card paints a blocked custom tile as the placeholder (F389: Pages draws custom tiles as blocks)', async () => {
+  it('the Pages card paints a blocked custom tile as the placeholder', async () => {
     const card = sampleRoomGrid(await renderPagesCard(maskBlockedCustomArt(withBlockableArt(), blocked)));
     expect(everyPixelIs(cell(card, tileColumn, tileRow), placeholder)).toBe(true);
   });
@@ -365,11 +335,11 @@ describe('each renderer\'s feature-room drawing, pinned', { timeout: RENDER_TIME
   // Pages card, ROOM_IMAGE_RENDERER_VERSION in pages/shareMetadata.ts; world tile,
   // WORLD_TILE_RENDER_CONTRACT and a new renderer version (map tiles are pinned to a deployment).
   it('API card', async () => {
-    expect(pixelHash(await renderApiCard(feature))).toBe('213c78ed3fa8804ca52277f9d72e2b0eec5bfb37ed4d376198eba110151e9593');
+    expect(pixelHash(await renderApiCard(feature))).toBe('30dcb711c5b9fe211fdf7f9ac10e4ca5f27a6108debd759374a189168c7a5073');
   });
 
   it('Pages card', async () => {
-    expect(pixelHash(await renderPagesCard(feature))).toBe('83c97bfc192fb43ad1593e1491117c1439641e5925c6249fc038733319655d83');
+    expect(pixelHash(await renderPagesCard(feature))).toBe('30dcb711c5b9fe211fdf7f9ac10e4ca5f27a6108debd759374a189168c7a5073');
   });
 
   it('world tile (as SoftwareCanvas rasterises its draw calls)', async () => {

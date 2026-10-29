@@ -16,7 +16,7 @@ import { hashRateLimitKey } from '../core/rateLimit';
 import type { Env, RequestAuth } from '../core/types';
 import { loadOrBackfillUserProgress } from '../progression/progressRows';
 import { HIDDEN_VERSION_TITLE, hiddenVersionSnapshot } from '../rooms/versionRedaction';
-import { ROOM_SHARE_IMAGE_HEIGHT, ROOM_SHARE_IMAGE_WIDTH, renderRoomSharePreviewPng } from '../share/roomPreviewImage';
+import { ROOM_SHARE_IMAGE_HEIGHT, ROOM_SHARE_IMAGE_WIDTH, renderRoomSharePreviewPng } from '../share/imageRenderer';
 import { handleAdminWampOGramRequest, handleWampOGramRequest } from './routes';
 import { loadWampOGramBySlug } from './store';
 
@@ -150,15 +150,15 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  async function preview(slug: string, path = 'preview.png?renderer=1', init: RequestInit = {}): Promise<Response> {
+  async function preview(slug: string, path = 'preview.png?renderer=2', init: RequestInit = {}): Promise<Response> {
     const url = new URL(`https://api.wamp.land/api/wamp-o-grams/${slug}/${path}`);
     const response = await handleWampOGramRequest(new Request(url, init), url, f.env, context);
     await Promise.all(waits.splice(0));
     return response;
   }
-  const keyFor = (slug: string, suffix = '') => `https://api.wamp.land/api/wamp-o-grams/${slug}/preview.png?renderer=1${suffix}`;
+  const keyFor = (slug: string, suffix = '') => `https://api.wamp.land/api/wamp-o-grams/${slug}/preview.png?renderer=2${suffix}`;
   const bytesOf = async (response: Response) => Buffer.from(await response.arrayBuffer());
-  const pngOf = async (snapshot: RoomSnapshot) => Buffer.from(await renderRoomSharePreviewPng(snapshot));
+  const pngOf = async (snapshot: RoomSnapshot) => Buffer.from(await renderRoomSharePreviewPng(snapshot, new Request('https://api.wamp.land/api/wamp-o-grams/test/preview.png'), f.env));
   const storedRoom = async (slug: string) => (await loadWampOGramBySlug(f.env, slug))!.roomSnapshot;
 
   it('draws a preview once, keeps this Worker\'s copy for a year, and lets clients keep it for an hour', async () => {
@@ -168,7 +168,7 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
     expect(first.status).toBe(200);
     expect(first.headers.get('Content-Type')).toBe('image/png');
     expect(first.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
-    expect(first.headers.get('ETag')).toBe(`"${slug}-v1"`);
+    expect(first.headers.get('ETag')).toBe(`"${slug}-v2"`);
     expect(first.headers.get('X-WAMP-Cache')).toBe('miss');
     const drawn = await bytesOf(first);
     expect(first.headers.get('Content-Length')).toBe(String(drawn.length));
@@ -178,7 +178,7 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
     const second = await preview(slug!);
     expect(second.headers.get('X-WAMP-Cache')).toBe('hit');
     expect(second.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
-    expect(second.headers.get('ETag')).toBe(`"${slug}-v1"`);
+    expect(second.headers.get('ETag')).toBe(`"${slug}-v2"`);
     expect((await bytesOf(second)).equals(drawn)).toBe(true);
 
     // Links without the current renderer version share the stored image, but a later version may redraw it.
@@ -202,18 +202,18 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
 
   it('answers a matching If-None-Match with 304 and no body, after checking the gram exists', async () => {
     const { slug } = await create(room());
-    for (const tag of [`"${slug}-v1"`, `W/"${slug}-v1"`, `"other", "${slug}-v1"`]) {
+    for (const tag of [`"${slug}-v2"`, `W/"${slug}-v2"`, `"other", "${slug}-v2"`]) {
       const revalidated = await preview(slug!, undefined, { headers: { 'If-None-Match': tag } });
       expect(revalidated.status).toBe(304);
       expect(revalidated.body).toBeNull();
-      expect(revalidated.headers.get('ETag')).toBe(`"${slug}-v1"`);
+      expect(revalidated.headers.get('ETag')).toBe(`"${slug}-v2"`);
       expect(revalidated.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
     }
     expect(stored.size).toBe(0);
     expect((await preview(slug!, undefined, { headers: { 'If-None-Match': `"${slug}-v0"` } })).status).toBe(200);
 
     expect((await remove(slug!)).status).toBe(200);
-    await expect(preview(slug!, undefined, { headers: { 'If-None-Match': `"${slug}-v1"` } })).rejects.toMatchObject({ status: 404 });
+    await expect(preview(slug!, undefined, { headers: { 'If-None-Match': `"${slug}-v2"` } })).rejects.toMatchObject({ status: 404 });
   });
 
   it('answers HEAD without drawing, with the stored length and tag once drawn', async () => {
@@ -230,7 +230,7 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
     expect(after.body).toBeNull();
     expect(after.headers.get('X-WAMP-Cache')).toBe('hit');
     expect(after.headers.get('Content-Length')).toBe(String(length));
-    expect(after.headers.get('ETag')).toBe(`"${slug}-v1"`);
+    expect(after.headers.get('ETag')).toBe(`"${slug}-v2"`);
     expect(after.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
   });
 
@@ -242,6 +242,16 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
     expect(stored.size).toBe(1);
     await expect(preview(slug!)).rejects.toMatchObject({ status: 404 });
     await expect(preview(slug!, undefined, { method: 'HEAD' })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('keeps uploaded-photo previews for an hour without an immutable ETag', async () => {
+    const { slug } = await create(room());
+    const snapshot = { ...await storedRoom(slug!), background: 'custom:abcdefgh?fit=stretch' };
+    f.sqlite.prepare('UPDATE wamp_o_grams SET snapshot_json = ? WHERE slug = ?').run(JSON.stringify(snapshot), slug!);
+    const response = await preview(slug!);
+    expect(response.headers.get('ETag')).toBeNull();
+    expect(response.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
+    expect(stored.get(keyFor(slug!))?.headers.get('Cache-Control')).toBe(CLIENT_HOUR);
   });
 
   it('never draws community art an admin blocked, and keeps such a preview for an hour (F189)', async () => {
@@ -279,19 +289,19 @@ describe('Wamp-O-Gram preview cache (F348)', () => {
     expect(shownRoom.background).toBe('cave');
     const shown = await preview(slug!);
     const shownBytes = await bytesOf(shown);
-    expect(shown.headers.get('ETag')).toBe(`"${slug}-v1"`);
+    expect(shown.headers.get('ETag')).toBe(`"${slug}-v2"`);
 
     const hide = f.sqlite.prepare("UPDATE room_versions SET redacted_at = ? WHERE room_id = '0,0' AND version = 1");
     hide.run('2026-10-22T12:00:00.000Z');
-    const hidden = await preview(slug!, undefined, { headers: { 'If-None-Match': `"${slug}-v1"` } });
+    const hidden = await preview(slug!, undefined, { headers: { 'If-None-Match': `"${slug}-v2"` } });
     expect(hidden.status).toBe(200);
     expect(hidden.headers.get('X-WAMP-Cache')).toBe('miss');
-    expect(hidden.headers.get('ETag')).toBe(`"${slug}-v1-hidden"`);
+    expect(hidden.headers.get('ETag')).toBe(`"${slug}-v2-hidden"`);
     const hiddenBytes = await bytesOf(hidden);
     expect(hiddenBytes.equals(await pngOf(hiddenVersionSnapshot(shownRoom)))).toBe(true);
     expect(hiddenBytes.equals(shownBytes)).toBe(false);
     expect([...stored.keys()].sort()).toEqual([keyFor(slug!), keyFor(slug!, '&room=hidden')]);
-    expect((await preview(slug!, undefined, { method: 'HEAD' })).headers.get('ETag')).toBe(`"${slug}-v1-hidden"`);
+    expect((await preview(slug!, undefined, { method: 'HEAD' })).headers.get('ETag')).toBe(`"${slug}-v2-hidden"`);
 
     const url = new URL(`https://api.wamp.land/api/wamp-o-grams/${slug}`);
     const record = await (await handleWampOGramRequest(new Request(url), url, f.env)).json() as { title: string; roomSnapshot: RoomSnapshot };

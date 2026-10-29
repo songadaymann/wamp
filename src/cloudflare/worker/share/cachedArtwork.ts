@@ -1,5 +1,6 @@
+import { composeRoomImages } from '../../../roomImage/compose';
 import { sha256Hex } from '../../../mint/roomMetadata';
-import { blitImageNearest, createCanvas, decodePng, fillRect } from '../../../pages/roomImagePrimitives';
+import { decodePng } from '../../../roomImage/roomImagePrimitives';
 import { encodePng } from '../../../utils/pngEncoder';
 import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 import { WORLD_TILE_CONTENT_HEIGHT, WORLD_TILE_CONTENT_WIDTH, WORLD_TILE_IMAGE_HEIGHT,
@@ -7,7 +8,7 @@ import { WORLD_TILE_CONTENT_HEIGHT, WORLD_TILE_CONTENT_WIDTH, WORLD_TILE_IMAGE_H
 import type { Env } from '../core/types';
 import { normalizeWorldTilePublicBaseUrl } from '../worldTiles/service';
 import { loadWorldTileManifestReadSet } from '../worldTiles/store';
-import { ROOM_SHARE_IMAGE_HEIGHT, ROOM_SHARE_IMAGE_WIDTH, type ExpandedRoomSharePreviewCell } from './roomPreviewImage';
+import { ROOM_SHARE_IMAGE_HEIGHT, ROOM_SHARE_IMAGE_WIDTH, type ExpandedRoomSharePreviewCell } from './imageRenderer';
 
 interface CachedShareArtwork { url: string; key: string; width: number; height: number }
 
@@ -50,16 +51,8 @@ export async function loadCachedShareArtwork(env: Env, cells: ExpandedRoomShareP
         if (image.width !== WORLD_TILE_IMAGE_WIDTH || image.height !== WORLD_TILE_IMAGE_HEIGHT) throw new Error('Share leaf dimensions differ.');
         return image;
       }));
-      const canvas = createCanvas(ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT);
-      fillRect(canvas, 0, 0, canvas.width, canvas.height, 0x0e1524);
-      const columns = bounds.maxRoomX - bounds.minRoomX + 1, rows = bounds.maxRoomY - bounds.minRoomY + 1;
-      const scale = Math.min((canvas.width - 48) / (columns * WORLD_TILE_CONTENT_WIDTH),
-        (canvas.height - 48) / (rows * WORLD_TILE_CONTENT_HEIGHT));
-      const w = WORLD_TILE_CONTENT_WIDTH * scale, h = WORLD_TILE_CONTENT_HEIGHT * scale;
-      const left = (canvas.width - columns * w) / 2, top = (canvas.height - rows * h) / 2;
-      sorted.forEach((cell, i) => blitImageNearest(canvas, images[i], WORLD_TILE_OVERLAP, WORLD_TILE_OVERLAP,
-        WORLD_TILE_CONTENT_WIDTH, WORLD_TILE_CONTENT_HEIGHT, left + (cell.coordinates.x - bounds.minRoomX) * w,
-        top + (cell.coordinates.y - bounds.minRoomY) * h, w, h));
+      const canvas = composeRoomImages(sorted.map((cell, i) => ({ coordinates: cell.coordinates, image: images[i],
+        crop: { x: WORLD_TILE_OVERLAP, y: WORLD_TILE_OVERLAP, width: WORLD_TILE_CONTENT_WIDTH, height: WORLD_TILE_CONTENT_HEIGHT } })));
       await bucket.put(key, await encodePng(canvas.width, canvas.height, canvas.pixels), {
         httpMetadata: { contentType: 'image/png', cacheControl: 'public, max-age=3600' },
       });

@@ -19,7 +19,7 @@ import {
   isPng,
   lighten,
   type RoomImageData,
-} from './roomImagePrimitives';
+} from '../roomImage/roomImagePrimitives';
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -171,7 +171,7 @@ describe('room image blits', () => {
     blitImageNearest(canvas, source, 0, 0, 2, 2, 0, 0, 2, 2, true, false);
 
     expect(Array.from(canvas.pixels)).toEqual([
-      0, 100, 0, 255,
+      0, 200, 0, 128,
       255, 0, 0, 255,
       255, 255, 255, 255,
       0, 0, 0, 0,
@@ -180,6 +180,18 @@ describe('room image blits', () => {
     const before = canvas.pixels.slice();
     blitImageNearest(canvas, source, 0, 0, 2, 2, 0, 0, 0, 2);
     expect(canvas.pixels).toEqual(before);
+  });
+
+  it('preserves transparent intermediate layers before compositing them over an opaque room', () => {
+    const source = image(1, 1, [200, 100, 50, 128]);
+    const layer = createCanvas(1, 1);
+    blitImageNearest(layer, source, 0, 0, 1, 1, 0, 0, 1, 1);
+    expect([...layer.pixels]).toEqual([200, 100, 50, 128]);
+    const direct = createCanvas(1, 1), composed = createCanvas(1, 1);
+    for (const target of [direct, composed]) fillRect(target, 0, 0, 1, 1, 0x203040);
+    blitImageNearest(direct, source, 0, 0, 1, 1, 0, 0, 1, 1);
+    blitImageNearest(composed, layer, 0, 0, 1, 1, 0, 0, 1, 1);
+    expect([...composed.pixels]).toEqual([...direct.pixels]);
   });
 
   it('keeps bilinear sampling centered on target pixels', () => {

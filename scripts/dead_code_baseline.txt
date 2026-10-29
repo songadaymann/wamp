@@ -49,7 +49,6 @@ export src/backgrounds/model.ts CUSTOM_BACKGROUND_FITS
 export src/backgrounds/model.ts DEFAULT_SOLID_BACKGROUND_COLOR
 export src/backgrounds/model.ts normalizeCustomBackgroundFit
 export src/backgrounds/model.ts parseCustomBackgroundFit
-export src/backgrounds/model.ts parseSolidColorBackgroundColor
 export src/backgrounds/webp.ts MAX_BACKGROUND_DECODE_PIXELS
 export src/backgrounds/webp.ts MAX_BACKGROUND_FRAMES
 export src/backgrounds/webp.ts uint24

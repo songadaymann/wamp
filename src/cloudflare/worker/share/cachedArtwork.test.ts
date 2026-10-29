@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultRoomSnapshot } from '../../../persistence/roomModel';
-import { decodePng, createCanvas, fillRect } from '../../../pages/roomImagePrimitives';
+import { decodePng, createCanvas, fillRect } from '../../../roomImage/roomImagePrimitives';
 import { encodePng } from '../../../utils/pngEncoder';
 import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 import type { Env } from '../core/types';
