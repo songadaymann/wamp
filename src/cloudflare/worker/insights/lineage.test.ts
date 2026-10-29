@@ -90,3 +90,18 @@ it('batches a large cold page within D1 bind limits without reading many snapsho
  expect(await attachRoomInsights(f.env,targets)).toHaveLength(45);expect(summaryQueries).toBe(2);expect(maxBinds).toBeLessThanOrEqual(100);
  expect(f.sqlite.prepare('SELECT COUNT(*) AS n FROM room_version_facts').get()).toMatchObject({n:45});
 });
+
+it('looks up the requested facts by room/version before expanding matching siblings',async()=>{
+ const f=setup();publish(f,2,{title:'Metadata'});run(f,'old');await ensureInsightRoomFacts(f.env,[target(2)],true);
+ const original=f.env.DB.prepare.bind(f.env.DB),plans:string[]=[];
+ vi.spyOn(f.env.DB,'prepare').mockImplementation(sql=>{
+   const statement=original(sql),bind=statement.bind.bind(statement);
+   if(sql.includes('requested(target_key,version_key)'))statement.bind=(...values)=>{
+     plans.push(...(f.sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all(...(values as (string|number|null)[])) as {detail:string}[]).map(row=>row.detail));return bind(...values);
+   };
+   return statement;
+ });
+ expect((await loadInsightSummaries(f.env,[target(2)],{factsReady:true})).get('room:0,0:2')?.attempts).toBe(1);
+ expect(plans.some(plan=>/^SCAN selected$/.test(plan))).toBe(false);
+ expect(plans.some(plan=>/SEARCH selected .*\(room_id=\? AND version=\?\)/.test(plan))).toBe(true);
+});
