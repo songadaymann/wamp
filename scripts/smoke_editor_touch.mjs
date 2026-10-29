@@ -169,6 +169,51 @@ try {
       }
 
       if (!process.env.TOUCH_LIFECYCLE_ONLY) {
+      // F274: the same workspace pipeline must handle actual mouse samples too.
+      {
+        const [start, end] = await fixture('pencil', { smart: true });
+        await page.evaluate(async () => {
+          const { updateEditorState } = await import('/src/config.ts');
+          updateEditorState({ smartTheme: 'forest', smartStyle: 'forest', smartMaterial: 'forest.ground' });
+        });
+        await hitCanvas(start); await hitCanvas(end);
+        await page.mouse.move(start.x, start.y); await page.mouse.down();
+        await page.mouse.move(end.x, end.y, { steps: 1 }); await page.mouse.up();
+        const smart = (await inspect()).rooms[0].snapshot.smartTerrain;
+        for (let cell = 8; cell <= 13; cell++) assert.ok(smart.semanticCells[`terrain:${cell},${cell}`],
+          `${device} ${mode}: fast Smart stroke skipped ${cell},${cell}`);
+        record('fast mouse Smart stroke fills skipped cells');
+      }
+      {
+        const [, , at] = await fixture('pencil', { spray: true });
+        await page.evaluate(async () => {
+          const { updateEditorState } = await import('/src/config.ts');
+          updateEditorState({ pencilSprayBrushSize: 5, pencilSprayRate: 1 });
+        });
+        await hitCanvas(at);
+        const before = (await inspect()).rooms[0].snapshot.tileData;
+        await page.mouse.move(at.x, at.y); await page.mouse.down();
+        const initial = (await inspect()).rooms[0].snapshot.tileData;
+        await page.waitForTimeout(900);
+        const held = (await inspect()).rooms[0].snapshot.tileData;
+        assert.notDeepEqual(held, initial, 'Spray must keep drawing while held stationary.');
+        await page.screenshot({ path: `${output}/${device}-${mode}-spray-preview.png` });
+        await page.mouse.up();
+        const released = (await inspect()).rooms[0].snapshot.tileData;
+        await page.waitForTimeout(150);
+        assert.deepEqual((await inspect()).rooms[0].snapshot.tileData, released, 'Released Spray must stop.');
+        await page.evaluate(() => window.__touchRuntime.undo());
+        assert.deepEqual((await inspect()).rooms[0].snapshot.tileData, before, 'One Undo removes the entire Spray stroke.');
+        record('held mouse Spray, release and one-step Undo');
+      }
+      {
+        const [, , at] = await fixture('pencil');
+        const before = await inspect();
+        await hitCanvas(at); await page.mouse.move(at.x, at.y); await page.mouse.down({ button: 'middle' });
+        await page.mouse.move(at.x + 30, at.y + 15); await page.mouse.up({ button: 'middle' });
+        assert.deepEqual(await inspect(), before, 'Middle-button pan cannot paint or alter history.');
+        record('middle mouse pans without editing');
+      }
       for (const tool of ['rect', 'ellipse', 'line', 'curve', 'copy']) {
         const [start, end] = await fixture(tool === 'curve' ? 'line' : tool, { curve: tool === 'curve' });
         await hitCanvas(start);
@@ -176,7 +221,7 @@ try {
         const before = await inspect();
         await touch('touchStart', [start]);
         await touch('touchMove', [end]);
-        assert.equal(await page.evaluate((expanded) => expanded ? Boolean(window.__touchScene.rectStart)
+        assert.equal(await page.evaluate((expanded) => expanded ? window.__touchScene.drawing.hasShape
           : window.__touchScene.interactionController.isDrawing, expanded), true);
         await page.screenshot({ path: `${output}/${device}-${mode}-${tool}-preview.png` });
         await touch('touchEnd', []);

@@ -223,6 +223,6 @@ describe('touch start outside the editable room (F274)', () => {
     const h = harness();
     h.fire('input:pointerdown', touch(1, -1, 150, 'touchstart'));
     h.fire('input:pointerup', touch(1, 1, 150, 'touchend'));
-    expect(h.calls.handleToolDown).toBeUndefined();
+    expect(h.calls.floodFill).toBeUndefined();
   });
 });

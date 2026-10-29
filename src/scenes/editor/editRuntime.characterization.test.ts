@@ -16,7 +16,7 @@ import { cloneRoomSnapshot, createDefaultRoomSnapshot, type RoomSnapshot } from 
 import type { SmartBrushId } from '../../autotiling/model';
 import { updateGameSettings } from '../../settings/userSettings';
 import { EditorEditRuntime } from './editRuntime';
-import { EditorInteractionController } from './interaction';
+import { EditorWorkspaceDrawingController } from './workspaceDrawing';
 import { buildRoomTemplate } from '../../templates/roomTemplates';
 import { EditorHistory } from './history';
 import * as smartModel from '../../autotiling/model';
@@ -915,13 +915,15 @@ describe('editor edit runtime document contracts', () => {
 
   it('submits a skipped pointer segment once in Bresenham order', () => {
     updateEditorState({ paletteMode: 'smart' });
-    const host = { placeTileAt: vi.fn(), placeTileStroke: vi.fn() };
-    const interaction = new EditorInteractionController(
-      {} as never, host as never, { getElementById: () => null } as never,
-    ) as unknown as { placeDraggedTileStamp(x: number, y: number): void };
-    interaction.placeDraggedTileStamp(2 * TILE_SIZE, 3 * TILE_SIZE);
-    interaction.placeDraggedTileStamp(6 * TILE_SIZE, 5 * TILE_SIZE);
-    interaction.placeDraggedTileStamp(6 * TILE_SIZE, 5 * TILE_SIZE);
+    const host = { beginTileBatch: vi.fn(), placeTileAt: vi.fn(), placeTileStroke: vi.fn() };
+    const interaction = new EditorWorkspaceDrawingController({
+      sliceAt: () => 0, originOf: () => ({ x: 0, y: 0 }), runtimeOf: () => host as never,
+      clampToSlice: (_slice, p) => ({ x: Math.floor(p.x / TILE_SIZE), y: Math.floor(p.y / TILE_SIZE) }),
+      placeObject: vi.fn(), copy: vi.fn(), preview: vi.fn(), clearPreview: vi.fn(),
+    });
+    interaction.begin({ x: 2 * TILE_SIZE, y: 3 * TILE_SIZE }, 'pencil');
+    interaction.move({ x: 6 * TILE_SIZE, y: 5 * TILE_SIZE });
+    interaction.move({ x: 6 * TILE_SIZE, y: 5 * TILE_SIZE });
     expect(host.placeTileAt).toHaveBeenCalledTimes(1);
     expect(host.placeTileStroke).toHaveBeenCalledExactlyOnceWith([
       { x: 3 * TILE_SIZE, y: 4 * TILE_SIZE },

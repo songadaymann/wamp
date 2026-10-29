@@ -12,7 +12,7 @@ vi.mock('../ui/appMode', () => ({ setAppMode: vi.fn() }));
 
 import { TILE_SIZE, editorState, updateEditorState } from '../config';
 import { CourseEditorScene } from './CourseEditorScene';
-import { EditorSprayTicker } from './editor/sprayTicker';
+import { EditorWorkspaceDrawingController } from './editor/workspaceDrawing';
 
 const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool,
   pencilSprayMode: editorState.pencilSprayMode, pencilSprayBrushSize: editorState.pencilSprayBrushSize,
@@ -36,8 +36,8 @@ function harness() {
     game: { events: register() }, events: register(),
     cameras: { main: { zoom: 2, scrollX: 20, scrollY: 30, setScroll: vi.fn() } },
     modifierKeys: {}, musicWorkflow: { isActive: () => false },
-    pendingRightClickPanPointerId: null, isPanning: false, activeObjectDragRoomId: null,
-    tileDragMode: null, rectStart: null, pathController: { bend: null },
+    pendingRightClickPanPointerId: null, isPanning: false,
+    drawing: { isDrawing: false, hasBend: false },
     objectMoveController, touchControls, constrainCamera: vi.fn(),
     handlePrimaryPointerDown: vi.fn(), handleSecondaryPointerClick: vi.fn(),
     handlePointerDrag: vi.fn(), finishPointerAction: vi.fn(), updateCursorHighlight: vi.fn(),
@@ -97,17 +97,14 @@ describe('Expanded Room pointer compatibility before shared input (F274)', () =>
     expect(h.scene.handleSecondaryPointerClick).not.toHaveBeenCalled();
   });
 
-  it('fills skipped smart-terrain cells in the selected slice at its world origin', () => {
+  it('routes fast smart-terrain drags through the shared workspace controller', () => {
     updateEditorState({ paletteMode: 'smart' });
-    const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
-      pencilDragStart: { x: 2, y: 3 }, lastPencilStampOrigin: null,
-    });
-    const slice = { origin: { x: 640, y: 400 }, runtime: { placeTileAt: vi.fn(), placeTileStroke: vi.fn() } };
-    scene.placeCoursePencilStamp(slice, 2, 3);
-    scene.placeCoursePencilStamp(slice, 5, 3);
-    scene.placeCoursePencilStamp(slice, 5, 3);
-    expect(slice.runtime.placeTileAt).toHaveBeenCalledExactlyOnceWith(640 + 2 * TILE_SIZE, 400 + 3 * TILE_SIZE);
-    expect(slice.runtime.placeTileStroke).toHaveBeenCalledExactlyOnceWith([3, 4, 5].map(x => ({
+    const { drawing, runtime } = drawingFixture();
+    const scene = Object.assign(Object.create(CourseEditorScene.prototype), { drawing });
+    drawing.begin({ x: 640 + 2 * TILE_SIZE, y: 400 + 3 * TILE_SIZE }, 'pencil');
+    const p = { ...pointer(10, 1), worldX: 640 + 5 * TILE_SIZE, worldY: 400 + 3 * TILE_SIZE };
+    scene.handlePointerDrag(p); scene.handlePointerDrag(p);
+    expect(runtime.placeTileStroke).toHaveBeenCalledExactlyOnceWith([3, 4, 5].map(x => ({
       x: 640 + x * TILE_SIZE, y: 400 + 3 * TILE_SIZE,
     })));
   });
@@ -116,14 +113,12 @@ describe('Expanded Room pointer compatibility before shared input (F274)', () =>
     updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil', pencilSprayMode: true,
       pencilSprayBrushSize: 5, pencilSprayRate: 1 });
     const p = { ...pointer(10, 1, wasTouch), worldX: 700, worldY: 430 };
-    const runtime = { placeTileAt: vi.fn(), commitTileBatch: vi.fn() };
-    const slice = { roomId: 'r', runtime };
+    const { drawing, runtime } = drawingFixture();
+    drawing.begin({ x: p.worldX, y: p.worldY }, 'pencil', { touch: wasTouch });
+    runtime.placeTileAt.mockClear();
     const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
-      input: { activePointer: p }, getSliceForPointer: () => slice,
-      roomSlices: new Map([['r', slice]]), activeTileDragRoomId: 'r',
-      tileDragMode: 'pencil', activeObjectDragRoomId: null, isPanning: false,
-      musicWorkflow: { isActive: () => false }, sprayTicker: new EditorSprayTicker(),
-      renderUi: vi.fn(),
+      input: { activePointer: p }, drawing, isPanning: false,
+      musicWorkflow: { isActive: () => false },
     });
     scene.tickSpray(250); scene.tickSpray(250);
     expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
@@ -133,3 +128,18 @@ describe('Expanded Room pointer compatibility before shared input (F274)', () =>
     expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
   });
 });
+
+function drawingFixture() {
+  const runtime = { beginTileBatch: vi.fn(), commitTileBatch: vi.fn(), cancelTileBatch: vi.fn(),
+    beginObjectBatch: vi.fn(), commitObjectBatch: vi.fn(), cancelObjectBatch: vi.fn(),
+    placeTileAt: vi.fn(), placeTileStroke: vi.fn(), eraseTileAt: vi.fn(), eraseStampAt: vi.fn(),
+    paintRandomizeAt: vi.fn(), floodFill: vi.fn(), floodErase: vi.fn(), stampShape: vi.fn() };
+  const drawing = new EditorWorkspaceDrawingController({
+    sliceAt: (x, y) => x >= 640 && x < 1280 && y >= 400 && y < 800 ? 0 : null,
+    originOf: () => ({ x: 640, y: 400 }), runtimeOf: () => runtime,
+    clampToSlice: (_slice, p) => ({ x: Math.min(39, Math.max(0, Math.floor((p.x - 640) / TILE_SIZE))),
+      y: Math.min(24, Math.max(0, Math.floor((p.y - 400) / TILE_SIZE))) }),
+    placeObject: vi.fn(), copy: vi.fn(), preview: vi.fn(), clearPreview: vi.fn(),
+  });
+  return { drawing, runtime };
+}

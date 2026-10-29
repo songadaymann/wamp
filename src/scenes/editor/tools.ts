@@ -1,8 +1,4 @@
-import Phaser from 'phaser';
 import {
-  ROOM_HEIGHT,
-  ROOM_WIDTH,
-  TILE_SIZE,
   editorState, updateEditorState,
   type ToolName,
 } from '../../config';
@@ -14,7 +10,6 @@ import type { EditorPersistenceController } from './persistence';
 import { applyEditorToolSelection, isDragStampEditorTool } from './editorToolSelection';
 
 interface EditorToolControllerHost {
-  startRectDrawing(tileX: number, tileY: number): void;
   clearShapePreview(): void;
   clearCoursePlacementMode(): void;
   renderUi(): void;
@@ -25,7 +20,6 @@ export class EditorToolController {
   private lastCopySelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
 
   constructor(
-    private readonly scene: Phaser.Scene,
     private readonly editRuntime: EditorEditRuntime,
     private readonly persistenceController: EditorPersistenceController,
     private readonly host: EditorToolControllerHost,
@@ -165,50 +159,6 @@ export class EditorToolController {
       'Pasted tile region. Click again to repeat, or press Esc to stop pasting.'
     );
     this.host.renderUi();
-  }
-
-  handleToolDown(pointer: Phaser.Input.Pointer): void {
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const tileX = Math.floor(worldPoint.x / TILE_SIZE);
-    const tileY = Math.floor(worldPoint.y / TILE_SIZE);
-
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return;
-    }
-
-    switch (editorState.activeTool) {
-      case 'pencil':
-        this.editRuntime.beginTileBatch();
-        this.editRuntime.placeTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'eraser':
-        this.editRuntime.beginTileBatch();
-        this.editRuntime.eraseTileAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'randomize':
-        this.editRuntime.beginTileBatch();
-        this.editRuntime.paintRandomizeAt(worldPoint.x, worldPoint.y);
-        break;
-      case 'rect':
-      case 'ellipse':
-      case 'line':
-        if (editorState.activeTool !== 'line' || !editorState.lineCurve) {
-          this.editRuntime.beginTileBatch();
-        }
-        this.host.startRectDrawing(tileX, tileY);
-        break;
-      case 'fill':
-        this.editRuntime.beginTileBatch();
-        this.editRuntime.floodFill(tileX, tileY);
-        this.editRuntime.commitTileBatch();
-        break;
-      case 'copy':
-        this.host.startRectDrawing(tileX, tileY);
-        break;
-      case 'move':
-        // EditorObjectMoveController handles Move's pointer input.
-        break;
-    }
   }
 
   captureCopySelection(x1: number, y1: number, x2: number, y2: number): void {

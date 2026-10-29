@@ -568,11 +568,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       },
     });
     this.toolController = new EditorToolController(
-      this,
       this.editRuntime,
       this.persistenceController,
       {
-        startRectDrawing: (tileX, tileY) => this.interactionController.startRectDrawing(tileX, tileY),
         clearShapePreview: () => this.interactionController.clearShapePreview(),
         clearCoursePlacementMode: () => this.courseController.clearPlacementMode(),
         renderUi: () => this.renderEditorUi(),
@@ -687,7 +685,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       beginObjectBatch: (livePreview) => this.editRuntime.beginObjectBatch(livePreview),
       commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
       cancelObjectBatch: () => this.editRuntime.cancelObjectBatch(),
-      handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
@@ -698,6 +695,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       eraseStampAt: (worldX, worldY) => this.editRuntime.eraseStampAt(worldX, worldY),
       stampShape: (kind, x1, y1, x2, y2, options) => this.editRuntime.stampShape(kind, x1, y1, x2, y2, options),
       floodErase: (tileX, tileY) => this.editRuntime.floodErase(tileX, tileY),
+      floodFill: (tileX, tileY) => this.editRuntime.floodFill(tileX, tileY),
       captureCopySelection: (x1, y1, x2, y2) => this.toolController.captureCopySelection(x1, y1, x2, y2),
       getClipboardPreview: () => this.toolController.getClipboardPreview(),
       isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),

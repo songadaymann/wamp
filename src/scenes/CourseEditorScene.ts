@@ -1,4 +1,5 @@
-import { drawEditorShapePreview, EditorPathBendController } from './editor/shapeInteraction';
+import { EditorWorkspaceDrawingController } from './editor/workspaceDrawing';
+import { drawEditorShapePreview } from './editor/shapeInteraction';
 import { applyEditorMusicCameraFit } from './editor/musicCameraFit';
 import { applyInspectPointerPan, zoomInspectCamera, pointerPassedPanThreshold } from './overworld/inspectCameraGestures';
 import { drawEditorCursor } from './editor/cursorPreview';
@@ -114,13 +115,7 @@ import { drawDeadlyPitBoundary, drawEditorGrid } from './editor/grid';
 import {
   applyEditorToolSelection,
   canRepeatSelectedEditorObject,
-  getEditorStampKind,
   isDragStampEditorTool,
-  isEditorLineCurve,
-  resolveEditorLineEnd,
-  isEditorShapeOutline,
-  isPathEditorTool,
-  isPencilSprayPlacement,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
@@ -130,10 +125,6 @@ import {
   requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
-import { forEachDraggedTileCell } from './editor/stampDrag';
-import { placeEditorPencilStroke, resolveEditorPencilOrigin } from './editor/pencilStroke';
-import { EditorSprayTicker } from './editor/sprayTicker';
-import { resolveShapeEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
 import {
@@ -197,8 +188,6 @@ function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
   return Boolean(event && 'shiftKey' in event && event.shiftKey);
 }
 
-type TileDragMode = 'pencil' | 'eraser' | 'randomize' | null;
-type RectMode = 'rect' | 'ellipse' | 'line' | 'copy' | null;
 type CourseGoalPlacementMode = EditorMarkerPlacementMode | null;
 
 interface CourseRoomSlice {
@@ -267,11 +256,9 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private pendingRightClickPanPointerId: number | null = null;
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
-  private tileDragMode: TileDragMode = null;
+  private readonly drawing: EditorWorkspaceDrawingController<CourseRoomSlice>;
   private readonly touchControls: EditorTouchController;
   private readonly objectMoveController: EditorObjectMoveController;
-  private readonly touchTileRooms = new Set<string>();
-  private readonly touchObjectRooms = new Set<string>();
   // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows button
   // releases: finish any mouse stroke, shape or pan as if it was released.
   private readonly handleTouchBlur = (): void => {
@@ -280,37 +267,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     const pointer = this.input.activePointer;
     if (pointer.isDown && !pointer.wasTouch && this.hasMousePointerAction(pointer)) this.handlePointerRelease(pointer, true);
   };
-  private activeTileDragRoomId: string | null = null;
-  private activeObjectDragRoomId: string | null = null;
-  private lastObjectDragCell: TilePoint | null = null;
-  private pencilDragStart: { x: number; y: number } | null = null;
-  private lastPencilStampOrigin: { x: number; y: number } | null = null;
-  private rectMode: RectMode = null;
-  private shapeEraseActive = false;
-  private readonly pathController = new EditorPathBendController<string>({
-    preview: bend => {
-      const slice = this.roomSlices.get(bend.target);
-      if (slice) this.drawShapePreview(slice, 'curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y, bend.mid);
-    },
-    stamp: bend => {
-      const slice = this.roomSlices.get(bend.target);
-      if (!slice) return;
-      slice.runtime.beginTileBatch();
-      slice.runtime.stampShape('curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y,
-        { erase: bend.erase, mid: bend.mid });
-      slice.runtime.commitTileBatch();
-      this.statusText = bend.erase ? 'Erased curve.' : 'Drew curve.';
-    },
-    finish: () => { this.clearRectPreview(); this.renderUi(); },
-  });
-  private get pathBend() { return this.pathController.bend; }
-  private rectStart:
-    | {
-        roomId: string;
-        x: number;
-        y: number;
-      }
-    | null = null;
   private clipboardSourceRoomId: string | null = null;
   private clipboardState: EditorClipboardState | null = null;
   private clipboardPastePreviewActive = false;
@@ -439,7 +395,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.renderUi();
         return;
       }
-      if (this.rectStart) {
+      if (this.drawing.hasShape || this.drawing.hasBend) {
         this.clearRectPreview();
         return;
       }
@@ -620,6 +576,31 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),
     });
     this.musicWorkflow.attachPatternController(this.musicPatternController);
+    this.drawing = new EditorWorkspaceDrawingController({
+      sliceAt: (x, y) => this.getSliceAtWorldPoint(x, y),
+      originOf: slice => slice.origin, runtimeOf: slice => slice.runtime,
+      clampToSlice: (slice, world) => {
+        const tile = this.getClosestTileInSlice(slice, world.x, world.y);
+        return { x: tile.tileX, y: tile.tileY };
+      },
+      placeObject: (slice, tile) => this.placeObjectAtTile(slice, tile.x, tile.y),
+      copy: (slice, start, end) => {
+        if (slice.runtime.copyTilesToClipboard(start.x, start.y, end.x, end.y)) {
+          this.clipboardState = slice.runtime.currentClipboardState;
+          this.clipboardSourceRoomId = slice.roomId; this.clipboardPastePreviewActive = true;
+          this.statusText = 'Copied tile region. Click any expanded room cell to paste.';
+        } else this.statusText = 'No tiles in that selection to copy.';
+      },
+      preview: (slice, kind, start, end, options) => drawEditorShapePreview(
+        this.rectPreviewGraphics, kind, start, end, { ...options, origin: slice.origin }),
+      clearPreview: () => { this.rectPreviewGraphics?.clear(); },
+      finished: event => {
+        if (event.kind === 'shape') this.statusText = event.limited
+          ? 'Shape edit stayed within the starting room.' : event.erase ? 'Erased room area.' : 'Filled room area.';
+        if (event.kind === 'curve') this.statusText = event.erase ? 'Erased curve.' : 'Drew curve.';
+        this.renderUi();
+      },
+    });
     this.touchControls = new EditorTouchController({
       isEnabled: () => !editorState.isPlaying && !this.musicModeActive && document.body.dataset.editorSpriteUiLocked !== 'true',
       schedule: (delay, callback) => {
@@ -627,57 +608,33 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         return () => timer.remove(false);
       },
       signature: () => `${editorTouchToolKey()}:${this.musicModeActive}:${this.courseGoalPlacementMode}:${document.body.dataset.editorSpriteUiLocked}`,
-      classify: () => this.pathBend ? 'bend'
+      classify: () => this.drawing.hasBend ? 'bend'
         : this.courseGoalPlacementMode || this.clipboardPastePreviewActive || editorState.activeTool === 'fill'
           ? 'tap'
           : editorState.paletteMode === 'objects'
             ? editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject() ? 'objects' : 'tap'
             : ['pencil', 'eraser', 'randomize'].includes(editorState.activeTool) ? 'brush' : 'draw',
-      begin: (pointer) => {
-        this.handlePrimaryPointerDown(pointer);
-        if (this.activeTileDragRoomId) this.touchTileRooms.add(this.activeTileDragRoomId);
-      },
-      beginBrush: (world) => {
+      begin: pointer => this.handlePrimaryPointerDown(pointer),
+      beginBrush: world => {
         const slice = this.getSliceAtWorldPoint(world.x, world.y);
         if (!slice) return;
         this.selectRoomById(slice.roomId);
-        slice.runtime.beginTileBatch();
-        this.touchTileRooms.add(slice.roomId);
-        const x = Math.floor((world.x - slice.origin.x) / TILE_SIZE);
-        const y = Math.floor((world.y - slice.origin.y) / TILE_SIZE);
-        this.pencilDragStart = { x, y };
-        this.lastPencilStampOrigin = null;
-        if (editorState.activeTool === 'pencil') this.placeCoursePencilStamp(slice, x, y);
-        else if (editorState.activeTool === 'eraser') slice.runtime.eraseTileAt(world.x, world.y);
-        else if (editorState.activeTool === 'randomize') slice.runtime.paintRandomizeAt(world.x, world.y);
-        this.tileDragMode = editorState.activeTool as TileDragMode;
-        this.activeTileDragRoomId = slice.roomId;
+        this.drawing.begin(world, editorState.activeTool, { touch: true });
       },
       beginObjects: (point) => {
         const world = this.cameras.main.getWorldPoint(point.x, point.y);
         const slice = this.getSliceAtWorldPoint(world.x, world.y);
         if (!slice || this.objectInspectorController.isConnectingPressurePlate()) return;
-        const x = Math.floor((world.x - slice.origin.x) / TILE_SIZE);
-        const y = Math.floor((world.y - slice.origin.y) / TILE_SIZE);
         this.selectRoomById(slice.roomId);
-        slice.runtime.beginObjectBatch(true);
-        this.touchObjectRooms.add(slice.roomId);
-        this.placeObjectAtTile(slice, x, y);
-        this.activeObjectDragRoomId = slice.roomId;
-        this.lastObjectDragCell = { x, y };
+        this.drawing.beginObjects(world, true);
       },
       move: (pointer) => this.handlePointerDrag(pointer),
-      tap: (pointer) => {
-        this.handlePrimaryPointerDown(pointer);
-        this.finishPointerAction(pointer);
-        this.commitTouchBatches();
-      },
+      tap: pointer => { this.handlePrimaryPointerDown(pointer); this.finishPointerAction(pointer); },
       finish: (pointer, bend) => {
-        if (bend) { this.updateCoursePathBendPreview(pointer); this.pathController.commit(); }
+        if (bend) { this.handlePointerDrag(pointer); this.drawing.commitBend(); }
         else this.finishPointerAction(pointer);
-        this.commitTouchBatches();
       },
-      cancel: () => this.cancelTouchBatches(),
+      cancel: () => { this.drawing.cancel(); this.renderUi(); },
       worldPoint: (x, y) => getScreenAnchorWorldPoint(x, y, this.cameras.main),
       moveTool: this.objectMoveController,
       pinch: (factor, anchor, x, y) => {
@@ -907,8 +864,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.renderMusicUi();
     void this.openFromData(data);
   }
-
-  private readonly sprayTicker = new EditorSprayTicker();
 
   override update(_time: number, delta: number): void {
     this.touchControls.validate();
@@ -1741,7 +1696,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private destroyWorkspace(): void {
-    this.commitActiveObjectDrag();
+    this.drawing.reset();
     this.clearCourseMarkers();
     for (const slice of this.roomSlices.values()) {
       destroyCourseEditorRoomBackgroundVisuals(slice.backgroundVisuals);
@@ -2567,9 +2522,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private hasMousePointerAction(pointer?: Phaser.Input.Pointer): boolean {
     return this.isPanning
       || (pointer !== undefined && this.pendingRightClickPanPointerId === pointer.id)
-      || this.activeObjectDragRoomId !== null
-      || this.tileDragMode !== null
-      || this.rectStart !== null;
+      || this.drawing.isDrawing;
   }
 
   // A release over a panel or outside the window arrives as 'pointerupoutside'; it
@@ -2610,7 +2563,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private handlePrimaryPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.resolveCoursePathBend(pointer)) {
+    if (this.drawing.resolveBend(pointer.leftButtonDown(), pointer.rightButtonDown())) {
       return;
     }
 
@@ -2695,10 +2648,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       }
 
       if (editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()) {
-        slice.runtime.beginObjectBatch(true);
-        this.placeObjectAtTile(slice, localTile.tileX, localTile.tileY);
-        this.activeObjectDragRoomId = slice.roomId;
-        this.lastObjectDragCell = { x: localTile.tileX, y: localTile.tileY };
+        this.drawing.beginObjects({ x: pointer.worldX, y: pointer.worldY }, this.touchControls.isEditing);
         this.renderUi();
         return;
       }
@@ -2713,57 +2663,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
 
-    if (pointer.rightButtonDown() && isDragStampEditorTool(editorState.activeTool)) {
-      this.rectMode = editorState.activeTool;
-      this.shapeEraseActive = true;
-      this.rectStart = { roomId: slice.roomId, x: localTile.tileX, y: localTile.tileY };
-      this.drawActiveCourseStampPreview(slice, this.rectStart.x, this.rectStart.y, localTile.tileX, localTile.tileY);
-      return;
-    }
-
-    switch (editorState.activeTool) {
-      case 'pencil':
-        slice.runtime.beginTileBatch();
-        this.pencilDragStart = { x: localTile.tileX, y: localTile.tileY };
-        this.lastPencilStampOrigin = null;
-        this.placeCoursePencilStamp(slice, localTile.tileX, localTile.tileY);
-        this.tileDragMode = 'pencil';
-        this.activeTileDragRoomId = slice.roomId;
-        break;
-      case 'eraser':
-        slice.runtime.beginTileBatch();
-        slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
-        this.tileDragMode = 'eraser';
-        this.activeTileDragRoomId = slice.roomId;
-        break;
-      case 'randomize':
-        slice.runtime.beginTileBatch();
-        slice.runtime.paintRandomizeAt(pointer.worldX, pointer.worldY);
-        this.tileDragMode = 'randomize';
-        this.activeTileDragRoomId = slice.roomId;
-        break;
-      case 'fill':
-        slice.runtime.beginTileBatch();
-        slice.runtime.floodFill(localTile.tileX, localTile.tileY);
-        slice.runtime.commitTileBatch();
-        this.renderUi();
-        break;
-      case 'ellipse':
-      case 'rect':
-      case 'line':
-      case 'copy':
-        this.rectMode = editorState.activeTool;
-        this.shapeEraseActive = false;
-        this.rectStart = { roomId: slice.roomId, x: localTile.tileX, y: localTile.tileY };
-        if (editorState.activeTool === 'copy') {
-          this.drawShapePreview(slice, 'rect', this.rectStart.x, this.rectStart.y, localTile.tileX, localTile.tileY);
-        } else {
-          this.drawActiveCourseStampPreview(slice, this.rectStart.x, this.rectStart.y, localTile.tileX, localTile.tileY);
-        }
-        break;
-      default:
-        break;
-    }
+    this.drawing.begin({ x: pointer.worldX, y: pointer.worldY }, editorState.activeTool,
+      { erase: pointer.rightButtonDown(), touch: this.touchControls.isEditing });
   }
 
   private handleObjectPlace(
@@ -2788,14 +2689,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     const worldY = slice.origin.y + tileY * TILE_SIZE + TILE_SIZE / 2;
     const placed = slice.runtime.handleObjectPlace(worldX, worldY, tileX, tileY);
     this.objectInspectorController.handleObjectPlaced(placed);
-  }
-
-  private commitActiveObjectDrag(): void {
-    if (this.activeObjectDragRoomId) {
-      this.roomSlices.get(this.activeObjectDragRoomId)?.runtime.commitObjectBatch();
-    }
-    this.activeObjectDragRoomId = null;
-    this.lastObjectDragCell = null;
   }
 
   private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {
@@ -2847,222 +2740,19 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private handlePointerDrag(pointer: Phaser.Input.Pointer): void {
-    if (this.updateCoursePathBendPreview(pointer)) {
-      return;
+    if (this.drawing.hasBend || pointer.leftButtonDown() || pointer.rightButtonDown()) {
+      this.drawing.move({ x: pointer.worldX, y: pointer.worldY }, isPointerShiftDown(pointer));
     }
-
-    const slice = this.getSliceForPointer(pointer);
-    if (!slice) {
-      return;
-    }
-
-    const localTile = this.getLocalTileForPointer(pointer, slice);
-    if (!localTile) {
-      return;
-    }
-
-    if (this.activeObjectDragRoomId && this.lastObjectDragCell && pointer.leftButtonDown()) {
-      if (slice.roomId !== this.activeObjectDragRoomId) {
-        if (this.touchControls.isEditing) {
-          if (!this.touchObjectRooms.has(slice.roomId)) {
-            slice.runtime.beginObjectBatch(true);
-            this.touchObjectRooms.add(slice.roomId);
-          }
-        } else {
-          this.commitActiveObjectDrag();
-          slice.runtime.beginObjectBatch(true);
-        }
-        this.placeObjectAtTile(slice, localTile.tileX, localTile.tileY);
-        this.activeObjectDragRoomId = slice.roomId;
-      } else {
-        forEachDraggedTileCell(this.lastObjectDragCell, { x: localTile.tileX, y: localTile.tileY }, (x, y) => {
-          this.placeObjectAtTile(slice, x, y);
-        });
-      }
-      this.lastObjectDragCell = { x: localTile.tileX, y: localTile.tileY };
-      return;
-    }
-
-    if (this.tileDragMode) {
-      if (!pointer.leftButtonDown()) {
-        return;
-      }
-      if (this.activeTileDragRoomId !== slice.roomId) {
-        const previous = this.activeTileDragRoomId
-          ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
-          : null;
-        if (this.touchControls.isEditing) {
-          if (!this.touchTileRooms.has(slice.roomId)) {
-            slice.runtime.beginTileBatch();
-            this.touchTileRooms.add(slice.roomId);
-          }
-        } else {
-          previous?.runtime.commitTileBatch();
-          slice.runtime.beginTileBatch();
-        }
-        this.pencilDragStart = { x: localTile.tileX, y: localTile.tileY };
-        this.lastPencilStampOrigin = null;
-        this.activeTileDragRoomId = slice.roomId;
-      }
-
-      if (this.tileDragMode === 'pencil') {
-        if (isPencilSprayPlacement()) return;
-        this.placeCoursePencilStamp(slice, localTile.tileX, localTile.tileY);
-      } else if (this.tileDragMode === 'randomize') {
-        slice.runtime.paintRandomizeAt(pointer.worldX, pointer.worldY);
-      } else {
-        slice.runtime.eraseTileAt(pointer.worldX, pointer.worldY);
-      }
-      return;
-    }
-
-    if (
-      this.rectStart &&
-      (pointer.leftButtonDown() || (this.shapeEraseActive && pointer.rightButtonDown()))
-    ) {
-      const startSlice = this.roomSlices.get(this.rectStart.roomId) ?? null;
-      if (!startSlice) {
-        return;
-      }
-
-      const previewTile = startSlice.roomId === slice.roomId
-        ? localTile
-        : this.getClosestTileInSlice(startSlice, pointer.worldX, pointer.worldY);
-      const end = this.resolveCourseShapeEnd(pointer, { x: previewTile.tileX, y: previewTile.tileY });
-      if (this.rectMode === 'copy') {
-        this.drawShapePreview(startSlice, 'rect', this.rectStart.x, this.rectStart.y, end.x, end.y);
-      } else {
-        this.drawActiveCourseStampPreview(startSlice, this.rectStart.x, this.rectStart.y, end.x, end.y);
-      }
-    }
-  }
-
-  private commitTouchBatches(): void {
-    for (const id of this.touchTileRooms) this.roomSlices.get(id)?.runtime.commitTileBatch();
-    for (const id of this.touchObjectRooms) this.roomSlices.get(id)?.runtime.commitObjectBatch();
-    this.touchTileRooms.clear();
-    this.touchObjectRooms.clear();
-    this.renderUi();
-  }
-
-  private cancelTouchBatches(): void {
-    this.sprayTicker.reset();
-    for (const id of this.touchTileRooms) this.roomSlices.get(id)?.runtime.cancelTileBatch();
-    for (const id of this.touchObjectRooms) this.roomSlices.get(id)?.runtime.cancelObjectBatch();
-    this.touchTileRooms.clear();
-    this.touchObjectRooms.clear();
-    this.activeTileDragRoomId = null;
-    this.activeObjectDragRoomId = null;
-    this.lastObjectDragCell = null;
-    this.tileDragMode = null;
-    this.pencilDragStart = null;
-    this.lastPencilStampOrigin = null;
-    this.clearRectPreview();
   }
 
   private tickSpray(deltaMs: number): void {
     const pointer = this.input.activePointer;
-    const slice = this.getSliceForPointer(pointer);
-    const active = !this.musicModeActive && !this.isPanning && !editorState.isPlaying
-      && this.tileDragMode === 'pencil' && isPencilSprayPlacement()
-      && pointer.leftButtonDown() && slice?.roomId === this.activeTileDragRoomId;
-    this.sprayTicker.tick(deltaMs, active, editorState.pencilSprayBrushSize, editorState.pencilSprayRate,
-      () => { slice?.runtime.placeTileAt(pointer.worldX, pointer.worldY); });
-  }
-
-  private placeCoursePencilStamp(
-    slice: CourseRoomSlice,
-    tileX: number,
-    tileY: number,
-  ): void {
-    const origin = resolveEditorPencilOrigin(this.pencilDragStart, { x: tileX, y: tileY });
-    placeEditorPencilStroke(slice.runtime, this.lastPencilStampOrigin, origin, slice.origin);
-    this.lastPencilStampOrigin = origin;
+    this.drawing.tickSpray(deltaMs, { x: pointer.worldX, y: pointer.worldY },
+      !this.musicModeActive && !this.isPanning && !editorState.isPlaying && pointer.leftButtonDown());
   }
 
   private finishPointerAction(pointer: Phaser.Input.Pointer): void {
-    this.sprayTicker.reset();
-    if (this.activeObjectDragRoomId) {
-      this.commitActiveObjectDrag();
-      this.renderUi();
-      return;
-    }
-    const activeSlice = this.activeTileDragRoomId
-      ? this.roomSlices.get(this.activeTileDragRoomId) ?? null
-      : null;
-    if (activeSlice && this.tileDragMode) {
-      activeSlice.runtime.commitTileBatch();
-      this.tileDragMode = null;
-      this.activeTileDragRoomId = null;
-      this.pencilDragStart = null;
-      this.lastPencilStampOrigin = null;
-      this.renderUi();
-      return;
-    }
-
-    if (!this.rectStart || !this.rectMode) {
-      return;
-    }
-
-    const startSlice = this.roomSlices.get(this.rectStart.roomId) ?? null;
-    if (!startSlice) {
-      this.clearRectPreview();
-      return;
-    }
-
-    const pointerSlice = this.getSliceForPointer(pointer);
-    const endTile = pointerSlice && pointerSlice.roomId === startSlice.roomId
-      ? this.getLocalTileForPointer(pointer, startSlice)
-      : this.getClosestTileInSlice(startSlice, pointer.worldX, pointer.worldY);
-    if (!endTile) {
-      this.clearRectPreview();
-      return;
-    }
-
-    const end = this.resolveCourseShapeEnd(pointer, { x: endTile.tileX, y: endTile.tileY });
-    if (this.rectMode === 'rect' || this.rectMode === 'ellipse' || this.rectMode === 'line') {
-      if (this.rectMode === 'line' && isEditorLineCurve()) {
-        this.beginCoursePathBend(startSlice, this.rectStart, end, this.shapeEraseActive);
-        this.rectStart = null;
-        this.rectMode = null;
-        this.shapeEraseActive = false;
-        this.renderUi();
-        return;
-      }
-      const kind = getEditorStampKind(this.rectMode);
-      if (kind) {
-        startSlice.runtime.beginTileBatch();
-        startSlice.runtime.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
-          outline: isEditorShapeOutline(this.rectMode),
-          erase: this.shapeEraseActive,
-        });
-        startSlice.runtime.commitTileBatch();
-      }
-      this.statusText =
-        pointerSlice && pointerSlice.roomId !== startSlice.roomId
-          ? 'Shape edit stayed within the starting room.'
-          : this.shapeEraseActive
-            ? 'Erased room area.'
-            : 'Filled room area.';
-    } else if (this.rectMode === 'copy') {
-      const copied = startSlice.runtime.copyTilesToClipboard(
-        this.rectStart.x,
-        this.rectStart.y,
-        end.x,
-        end.y,
-      );
-      if (copied) {
-        this.clipboardState = startSlice.runtime.currentClipboardState;
-        this.clipboardSourceRoomId = startSlice.roomId;
-        this.clipboardPastePreviewActive = true;
-        this.statusText = 'Copied tile region. Click any expanded room cell to paste.';
-      } else {
-        this.statusText = 'No tiles in that selection to copy.';
-      }
-    }
-
-    this.clearRectPreview();
-    this.renderUi();
+    this.drawing.finish({ x: pointer.worldX, y: pointer.worldY }, isPointerShiftDown(pointer));
   }
 
   private getSliceForPointer(pointer: Phaser.Input.Pointer): CourseRoomSlice | null {
@@ -3195,80 +2885,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     return true;
   }
 
-  private drawActiveCourseStampPreview(
-    slice: CourseRoomSlice,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    mid?: TilePoint,
-    curveBend = false,
-  ): void {
-    const kind = getEditorStampKind(editorState.activeTool, curveBend);
-    if (!kind) {
-      return;
-    }
-    this.drawShapePreview(slice, kind, x1, y1, x2, y2, mid);
-  }
-
-  private drawShapePreview(
-    slice: CourseRoomSlice,
-    kind: EditorShapeKind,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    mid?: TilePoint,
-  ): void {
-    const copy = this.rectMode === 'copy';
-    drawEditorShapePreview(this.rectPreviewGraphics, kind, { x: x1, y: y1 }, { x: x2, y: y2 }, {
-      origin: slice.origin, mid, copy,
-      outline: !copy && (kind === 'rect' || kind === 'ellipse') && isEditorShapeOutline(kind),
-    });
-  }
-
-  private beginCoursePathBend(
-    slice: CourseRoomSlice,
-    start: { x: number; y: number },
-    end: { x: number; y: number },
-    erase: boolean,
-  ): void {
-    this.pathController.begin(slice.roomId, start, end, erase);
-  }
-
-  private resolveCoursePathBend(pointer: Phaser.Input.Pointer): boolean {
-    return this.pathController.resolve(pointer.leftButtonDown(), pointer.rightButtonDown());
-  }
-
-  private updateCoursePathBendPreview(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.pathBend) return false;
-    const slice = this.roomSlices.get(this.pathBend.target);
-    if (!slice) return true;
-    const tile = this.getClosestTileInSlice(slice, pointer.worldX, pointer.worldY);
-    this.pathController.update({ x: tile.tileX, y: tile.tileY });
-    return true;
-  }
-
-  private resolveCourseShapeEnd(
-    pointer: Phaser.Input.Pointer,
-    current: { x: number; y: number },
-  ): { x: number; y: number } {
-    if (!this.rectStart || this.rectMode === 'copy') {
-      return current;
-    }
-    if (this.rectMode === 'line' || isPathEditorTool(editorState.activeTool)) {
-      return resolveEditorLineEnd(this.rectStart, current, isPointerShiftDown(pointer));
-    }
-    return resolveShapeEnd(this.rectStart, current, isPointerShiftDown(pointer));
-  }
-
-  private clearRectPreview(): void {
-    this.rectPreviewGraphics?.clear();
-    this.rectStart = null;
-    this.rectMode = null;
-    this.shapeEraseActive = false;
-    this.pathController.clear();
-  }
+  private clearRectPreview(): void { this.drawing.clearShapes(); }
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
     this.cursorGraphics?.clear();
@@ -3291,9 +2908,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       tile: { x: tile.tileX, y: tile.tileY }, origin: slice.origin,
       goalPlacement: Boolean(this.courseGoalPlacementMode),
       clipboard: this.clipboardPastePreviewActive ? this.clipboardState : null,
-      stampOrigin: resolveEditorPencilOrigin(
-        this.activeTileDragRoomId === slice.roomId ? this.pencilDragStart : null,
-        { x: tile.tileX, y: tile.tileY }),
+      stampOrigin: this.drawing.pencilOrigin(slice, { x: tile.tileX, y: tile.tileY }),
       erasing: pointer.rightButtonDown(),
     });
   }
@@ -3302,7 +2917,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     if (
       pointer.rightButtonDown() &&
       editorState.paletteMode !== 'objects' &&
-      (isDragStampEditorTool(editorState.activeTool) || Boolean(this.pathBend)) &&
+      (isDragStampEditorTool(editorState.activeTool) || this.drawing.hasBend) &&
       !this.modifierKeys.SPACE?.isDown &&
       !this.modifierKeys.ALT?.isDown
     ) {
@@ -3537,8 +3152,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.game.events.off('hidden', this.handleTouchBlur);
     this.events.off('sleep', this.handleTouchBlur);
     this.touchControls.reset();
-    this.touchTileRooms.clear();
-    this.touchObjectRooms.clear();
+    this.drawing.reset();
     this.backupDebouncer.cancel();
     this.draftBackup.flushCourse();
     this.draftLifecycle?.destroy();
