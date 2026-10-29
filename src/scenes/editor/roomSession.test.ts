@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneRoomSnapshot, createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
+import { RoomPublicationSubmissionError } from '../../persistence/roomPublicationSubmission';
 import { EditorRoomSession } from './roomSession';
 import { showBusyError } from '../../ui/appFeedback';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
@@ -408,9 +409,17 @@ describe('edits made while a room save or publish is pending', () => {
     const error=vi.spyOn(console,'error').mockImplementation(()=>{});
     saved.worldPublicationSubmission={id:'review',worldId:'world-one',roomId,roomCoordinates:coordinates,roomTitle:'Review me',submittedByUserId:'builder',submittedByDisplayName:'Builder',submittedDraftUpdatedAt:responseAt,status:'pending',rejectionReason:null,submittedAt:responseAt,resolvedAt:null};
     const pending=session.publishRoom();await Promise.resolve();response.resolve(saved);
-    expect(await pending).toBeNull();expect(isDirty()).toBe(false);expect(session.statusText).toContain('Waiting for review');expect(error).not.toHaveBeenCalled();
+    expect(await pending).toBeNull();expect(isDirty()).toBe(false);expect(session.statusText).toContain('submitted for World approval');expect(error).not.toHaveBeenCalled();
     editLater();await session.saveDraft();expect(saveDraft).toHaveBeenLastCalledWith(expect.anything(),{baseUpdatedAt:responseAt});expect(session.hasPendingEditConflict).toBe(false);
     error.mockRestore();
+  });
+
+  it.each([false,true])('keeps the saved baseline after a failed submission, preserving later edits=%s',async(later)=>{
+    const f=await openedEditor();
+    f.publish.mockImplementationOnce(async()=>{if(later)f.editLater();throw new RoomPublicationSubmissionError(f.saved,new TypeError('offline'));});
+    expect(await f.session.publishRoom()).toBeNull();expect(f.session.statusText).toContain('submission failed');expect(f.isDirty()).toBe(later);
+    if(!later)f.editLater();f.response.resolve(f.saved);await f.session.saveDraft();
+    expect(f.saveDraft).toHaveBeenLastCalledWith(expect.anything(),{baseUpdatedAt:responseAt});expect(f.session.hasPendingEditConflict).toBe(false);
   });
 
   it('leaving while an autosave is uploading waits for it instead of reporting a failure (F056)', async () => {

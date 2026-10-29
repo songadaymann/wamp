@@ -26,6 +26,7 @@ import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
 import { isRoomEditConflict } from '../../persistence/roomEditConflict';
+import { RoomPublicationSubmissionError } from '../../persistence/roomPublicationSubmission';
 import {
   formatWalletAddress,
 } from '../../mint/roomOwnership';
@@ -781,7 +782,7 @@ export class EditorRoomSession {
         this.backupDraftForPageExit();
       }
       if (record.worldPublicationSubmission) {
-        this.setStatusText('Draft saved and submitted for World approval. Waiting for review.');
+        this.setStatusText('Draft saved and submitted for World approval.');
         return null;
       }
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
@@ -798,6 +799,13 @@ export class EditorRoomSession {
     } catch (error) {
       if (this.isStale(generation)) {
         return null;
+      }
+      if (error instanceof RoomPublicationSubmissionError) {
+        const laterEdits=this.host.getLastDirtyAt()!==publishStartedAt;
+        this.syncRoomMetadata(error.savedDraft,laterEdits);
+        if(laterEdits)this.backupDraftForPageExit();
+        else{this.host.setRoomDirty(false);if(this.shouldClearLocalDraftAfterRepositoryMutation())clearLocalRoomStorageEntry(this.roomId);}
+        this.setStatusText(error.message);return null;
       }
       if (isRoomEditConflict(error)) {
         await this.handleEditConflict();
