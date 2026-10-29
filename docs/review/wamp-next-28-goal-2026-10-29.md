@@ -47,7 +47,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [ ] F265 — retire unused admin APIs/reporting and avoid server self-fetch.
 - [ ] F261 — remove unused render helpers and retire obsolete share page.
 - [ ] F259 — remove production clutter and keep developer/source assets appropriately.
-- [ ] F263 — retire obsolete Mac avatar queue (in progress).
+- [x] F263 — retire obsolete Mac avatar queue; PR #334 merged, all 18 CI jobs passed.
 - [ ] F257 — unused-helper cleanup and complete boot diagnostics correctly.
 - [ ] F255 — retire unused Cyber resolver while preserving live pieces/tests.
 - [ ] F260 — unused music-code cleanup, preserving planned/live helpers.
@@ -57,5 +57,6 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 ## Current boundary
 
-Baseline: main `417f0ca7`, Round 2 72/248. Goal begins with F263 cleanup;
-no item in this 28-item goal has been delivered yet.
+Baseline: main `417f0ca7`, Round 2 72/248. F263 delivered in PR #334
+(merged `b27f2ca9`), so this goal is **1/28 delivered** and Round 2 is **73/248**.
+F273 implementation is in progress; all other goal items remain pending.

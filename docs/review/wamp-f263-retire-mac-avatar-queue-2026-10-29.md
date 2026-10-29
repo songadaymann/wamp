@@ -1,6 +1,7 @@
 # F263: retire the Mac avatar queue — 2026-10-29
 
-Implementation and targeted local verification complete; PR CI and delivery pending.
+Delivered in [PR #334](https://github.com/songadaymann/wamp/pull/334), merged
+`b27f2ca9c4666146f604784c3b307723cc49d394`.
 
 Jonathan approved retiring the old Mac queue, including its manual processor.
 The current Mac has neither the `land.wamp.cryptopunk-avatar-queue` LaunchAgent
@@ -17,3 +18,8 @@ Targeted verification: five files / nine tests passed (executable-entry contract
 avatar registry/dynamic/unlocks and Worker entitlements). Dead-code check found
 nothing new (785 existing findings). Live code/config searches have no remaining
 references to the three removed scripts or the local-only bucket setting.
+
+All 18 [CI jobs](https://github.com/songadaymann/wamp/actions/runs/40878078970)
+passed. The complete merged tree matches the tested candidate `90704d0d`.
+No runtime source/config changed, so no avatar Worker or API deployment is needed.
+The 28-item goal is 1/28 delivered; F273 is in progress.

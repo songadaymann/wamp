@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 72 of 248 done.**
+**Progress: 73 of 248 done.**
 
 ## How to use this file
 
@@ -125,7 +125,7 @@ There are almost no dead files. But about 3,000 lines of unused functions remain
 - [ ] **F265** Unused admin endpoints: a second world-tile admin API on the renderer Worker and a 364-line report nobody calls · low impact · small effort
 - [ ] **F261** Remove dead render code: an unused NFT 'warm all art' function and the API share page nothing links to · low impact · small effort — _also covers: Remove about 30 lines of unused NFT render and export code left over from the fast PR series_
 - [ ] **F259** Clutter sweep: an OpenAI sprite prototype, a committed debug log, a dev-only page and 165 KB of unused art in production · low impact · small effort — _also covers: A developer preview page and a redirect stub are still built and deployed as full pages; About 420 KB of art source files are deployed to the live site and listed in the startup asset table_
-- [ ] **F263** The old Mac LaunchAgent avatar queue (961 lines) was replaced by a Cloudflare container in April but never removed · low impact · small effort
+- [x] **F263** The old Mac LaunchAgent avatar queue (961 lines) was replaced by a Cloudflare container in April but never removed · low impact · small effort — **done 2026-10-29** ([PR #334](https://github.com/songadaymann/wamp/pull/334)): removed three obsolete Mac queue scripts, five package commands and local-only configuration. Cloudflare avatar generation remains; no Mac LaunchAgent installed or registered. All 18 CI jobs passed. [Receipt](wamp-f263-retire-mac-avatar-queue-2026-10-29.md).
 - [ ] **F257** About 60 small dead helpers and methods scattered through the client (about 475 lines) · low impact · small effort
 - [ ] **F255** About 40% of the Cyber autotile profile (341 lines) is an older resolver that only its own tests still use · low impact · small effort
 - [ ] **F260** Music engine leftovers from the stems era and the sequencer rewrite: about 260 lines nothing calls · low impact · small effort — _also covers: About 150 lines of unused audio code, plus a 'footstep' sound that is preloaded first but never played_
