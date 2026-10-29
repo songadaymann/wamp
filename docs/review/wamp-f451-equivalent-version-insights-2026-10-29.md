@@ -40,7 +40,7 @@ Evidence: `/tmp/wamp-f451-check.log`, `/tmp/wamp-f451-expanded-tests.log`,
 `/tmp/wamp-f451-native.log`, `/tmp/wamp-f451-worker-safety.log`,
 `/tmp/wamp-f451-map-guard.log`, ignored `output/f451-native/`.
 
-CI, merge and live delivery remain pending; F451 is not yet checked off.
+This was the pre-PR verification boundary; final delivery is recorded below.
 
 ## Initial rollout and query-plan correction
 
@@ -50,7 +50,7 @@ match wamp.land. Production smoke passes and public API group/comparison data is
 correct. Expanded v5 retains5 exact-version attempts; an Explore card's player
 count matches Insights. No schema migration or production room/player/email writes.
 
-A subsequent warm Insights timing check took15.97seconds, so delivery remains open.
+A subsequent warm Insights timing check took15.97seconds, so delivery was held open.
 EXPLAIN shows the initial join scans all selected facts and expands sibling pairs
 before filtering requested target keys. Moving the room-id expression onto the
 small requested side permits the existing room/version primary key lookup first.
@@ -60,5 +60,36 @@ room/version lookup. Matching stats/maps/publisher exclusions are preserved.
 
 The initial deployment first stopped before publishing on transient D1 error7403;
 read-only listing and migration checks passed, then the guarded retry succeeded.
-The corrective PR's final CI and rollout remain pending. Do not mark F451 delivered
-until the correction and live latency are verified.
+The prior Worker0bada192 was restored at100% while the correction passed CI;
+the same read returned200 in0.358s. No bound resource rollback was required.
+
+## Final delivery
+
+PR347 testedheadb122b1ad passed all20 checks in CI40963553664 and merged as
+24c6e51a. The final local check passes734files/6223tests, one existing expected
+failure/two skips, every lint/type/DOM/generated-binding/build/asset stage and
+669.0KB/670KB boot budget. The query-plan regression requires the selected
+room/version primary-key lookup. Native workerd/D1 verifies215cold versions
+and214matching versions plus the prior changed layout.
+
+Guarded release from clean main24c6e51a passed migration/map guards and production
+smoke. MainDB remains0077 and jam0003; no F451 migration. Worker
+605d12f7-4982-40a2-92de-503041b553bf is confirmed at100%. Pages7dc29d78,
+entrymain-C3yUjQpL.js, runtime, both editors and styles match release bytes.
+
+Final public API verification confirms:
+
+- Room2,1 v215 retains45attempts and compares against v214's matching group
+  [9,11,201,211,214]. Three uncached warm reads:566/284/240ms.
+- Room0,0 v176 retains6571attempts across [174,175,176] and compares against
+  [172,173]. Three uncached warm reads:567/1017/492ms.
+- Expanded v5 retains5exact-version attempts, with no lineage comparison.
+- An Explore card's player count matches its Insights summary.
+
+These are observed samples, not a latency guarantee. Final aggregation exposes
+no player identities. No production room/player writes or live email tests.
+Evidence: `/tmp/wamp-f451-query-check.log`, `/tmp/wamp-f451-query-native.log`,
+`/tmp/wamp-f451-query-summary-fixed.json`, `/tmp/wamp-f451-rollback.log`,
+`/tmp/wamp-f451-indexed-deploy.log`, `/tmp/wamp-f451-final-api.json`,
+`/tmp/wamp-f451-live-assets.json`, `/tmp/wamp-f451-final-deployments.json`,
+`/tmp/wamp-f451-final-pages.json`. F451 is delivered; the full goal continues.

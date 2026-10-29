@@ -1,0 +1,1 @@
+| 2026-10-29 | F451 | [#346](https://github.com/songadaymann/wamp/pull/346), [#347](https://github.com/songadaymann/wamp/pull/347) | [receipt](docs/review/wamp-f451-equivalent-version-insights-2026-10-29.md) | Preserve matching-version stats and compare layouts with switchable death maps; indexed queries verified live |

@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F451 | [#346](https://github.com/songadaymann/wamp/pull/346), [#347](https://github.com/songadaymann/wamp/pull/347) | [receipt](docs/review/wamp-f451-equivalent-version-insights-2026-10-29.md) | Preserve matching-version stats and compare layouts with switchable death maps; indexed queries verified live |
 | 2026-10-29 | F447 | [#345](https://github.com/songadaymann/wamp/pull/345) | [receipt](docs/review/wamp-f447-builder-recognition-2026-10-29.md) | Notify builders of recognition and prompt results, warn before republishing and retain reviewed pins; verified live |
 | 2026-10-29 | F435 | [#344](https://github.com/songadaymann/wamp/pull/344) | [receipt](docs/review/wamp-f435-cleared-map-markers-2026-10-29.md) | Mark cleared map cells and show a total with private account progress and persistent guest checks; verified live |
 | 2026-10-29 | F429 | [#343](https://github.com/songadaymann/wamp/pull/343) | [receipt](docs/review/wamp-f429-keep-playing-2026-10-29.md) | Offer another unbeaten goal after a clear, fetch only on tap and preserve phone/keyboard flow; verified live |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-16 | F094 | [#225](https://github.com/songadaymann/wamp/pull/225) | [receipt](docs/review/wamp-custom-backgrounds-2026-10-16.md) | Animated custom backgrounds with bounded uploads and original-byte checks |
 | 2026-10-16 | F070 | [#224](https://github.com/songadaymann/wamp/pull/224) | [receipt](docs/review/wamp-f070-final-2026-10-16.md) | Each goal type's data, checks, scoring, display, clocks and editor rules live in one registry (PRs from #205) |
 | 2026-10-15 | — | [#218](https://github.com/songadaymann/wamp/pull/218)–[#219](https://github.com/songadaymann/wamp/pull/219) | [receipt](docs/review/wamp-guest-activity-2026-10-15.md) | Activity tabs, consistent guest names, and guest names that open their activity |
-| 2026-10-15 | — | [#215](https://github.com/songadaymann/wamp/pull/215) | [receipt](docs/review/wamp-spawn-pickups-2026-10-15.md) | Phone smoke covers valid spawn pickups in both browser engines |

@@ -37,7 +37,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F429 — Keep Playing to another unbeaten room; PR #343, all CI and live rollout verified.
 - [x] F435 — cleared-room markers on the world map; PR #344, all CI and live rollout verified.
 - [x] F447 — builder recognition notifications and republish warnings; PR #345, migration/CI/live rollout verified.
-- [ ] F451 — preserve equivalent-version insights and compare gameplay changes.
+- [x] F451 — matching-version insights, layout comparison and map switching; PRs #346/#347, CI/live latency verified.
 - [ ] F381 — builder-visible World approval state, results and reasons.
 - [ ] F253 — accessible Clear Layer and retire hidden editor UI.
 - [ ] F479 — wallet-only Protected sort and appropriate non-wallet payloads.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **11/28 delivered**, and Round 2 is **83/248**.
+This goal is **12/28 delivered**, and Round 2 is **84/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -97,5 +97,14 @@ Production smoke passes. F447 recognition notices and republish warnings are del
 (f5ae30a8): all20 checks, full732-file/6210-test check and native desktop/phone/
 new-tab flows pass. Migration0077 retained all1748 old Activity rows and their
 sequence; Worker0bada192 serves100%, finalPagesc8dc1091 and live assets match.
-Production smoke/private-read/public-feed checks pass. F451 equivalent-version
-insights and layout comparison are next. The remaining17 items stay open.
+Production smoke/private-read/public-feed checks pass.
+
+F451 is delivered through PR346/e49bc683 and the indexed-query correction
+PR347/24c6e51a. Both passed all20 checks; final full734-file/6223-test check,
+native desktop/phone comparisons and map switching, and215-version cold history
+pass. Initial live latency exposed a global facts scan; the prior Worker was
+restored while the primary-key correction passed CI. Final Worker605d12f7 is100%,
+Pages7dc29d78 and live assets match. Warm reads take0.24–1.02s; grouped summaries,
+prior layouts, Expanded exact versions and Explore counts pass. No migration or
+production room/player/email writes. F381 is implemented locally and in native
+verification, not delivered. The remaining16 items stay open.
