@@ -97,7 +97,7 @@ it('looks up the requested facts by room/version before expanding matching sibli
  vi.spyOn(f.env.DB,'prepare').mockImplementation(sql=>{
    const statement=original(sql),bind=statement.bind.bind(statement);
    if(sql.includes('requested(target_key,version_key)'))statement.bind=(...values)=>{
-     plans.push(...(f.sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all(...values) as {detail:string}[]).map(row=>row.detail));return bind(...values);
+     plans.push(...(f.sqlite.prepare('EXPLAIN QUERY PLAN '+sql).all(...(values as (string|number|null)[])) as {detail:string}[]).map(row=>row.detail));return bind(...values);
    };
    return statement;
  });
