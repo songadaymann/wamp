@@ -1,0 +1,1 @@
+| 2026-10-29 | F428 | [#342](https://github.com/songadaymann/wamp/pull/342) | [receipt](docs/review/wamp-f428-ghost-challenge-links-2026-10-29.md) | Share exact verified room ghosts, retain challengers on Restart and scope invitations to their room; verified live |

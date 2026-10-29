@@ -1,7 +1,6 @@
 # F428 — share the saved run as a ghost challenge (2026-10-29)
 
-Implementation and local verification in progress. F428 stays unchecked until
-CI, rollout and live read-only verification are complete.
+Delivered through PR342, merged a36493f9; all CI, rollout and live verification passed.
 
 A saved time-ranked standalone-room clear can now share `?from=share&vs=<run-id>`.
 Signed-in results gain the ID only after successful finish delivery. Guest
@@ -54,3 +53,19 @@ Local evidence: `/tmp/wamp-f428-targeted.log`, `/tmp/wamp-f428-flow-tests.log`,
 Final full check passed: 722 files, 6,158 tests, one existing expected failure,
 two skips; lint, types, DOM, build and all asset checks pass. Boot665.9KB/670KB.
 Evidence: `/tmp/wamp-f428-final-check.log`.
+
+## Production delivery
+
+All18 GitHub jobs in40910577476 passed. Guarded full rollout and production
+smoke passed. Worker `2eefd05a-072e-4dc8-af7e-1532e2314e00` serves100%;
+Pages `1207b5b3` and live entry `main-DaInX8rt.js`, main runtime, editor and
+result-modal assets match release bytes. Migration0076 remains current.
+
+Three existing public invitations return the exact requested ghost, including
+server-confirmed time and private/no-store responses; personal ghosts stay
+unavailable to a signed-out viewer. The public invitation route returns200 and
+preserves its challenge parameter. Movement payloads contain no verification
+bindings or input events. No production room/player writes or emails were used.
+Evidence: `/tmp/wamp-f428-deploy.log`, `/tmp/wamp-f428-deployments.json`,
+`/tmp/wamp-f428-live-ghosts.json`, `/tmp/wamp-f428-live-assets.json`.
+Goal8/28; Round2 80/248. Remaining goal work stays active.

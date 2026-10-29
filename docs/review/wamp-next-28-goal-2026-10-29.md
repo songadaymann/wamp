@@ -33,7 +33,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F269 — real-art Expanded Room and Wamp-O-Gram previews.
 - [x] F389 — correct standalone share-image backgrounds, custom art and geometry.
 - [ ] F436 — automatic weekly event scheduling with overrides.
-- [ ] F428 — ghost challenge links carrying the shared run.
+- [x] F428 — ghost challenge links carrying the shared run; PR #342, all CI and live rollout verified.
 - [ ] F429 — Keep Playing to another unbeaten room.
 - [ ] F435 — cleared-room markers on the world map.
 - [ ] F447 — builder recognition notifications and republish warnings.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **7/28 delivered**, and Round 2 is **79/248**.
+This goal is **8/28 delivered**, and Round 2 is **80/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -77,5 +77,14 @@ exact bytes. Native workerd/D1/ASSETS verification covers share/Gram pixel parit
 moderation cache policy, deletion and HEAD. Migration0076 remains current.
 Receipt: `docs/review/wamp-f269-f389-shared-real-art-previews-2026-10-29.md`.
 
-F436 automatic weekly events is next and remains unchecked; the proposed prompt
-bank awaits owner content approval. The other 20 goal items remain pending.
+F428 is delivered through PR342 (a36493f9): all18 GitHub jobs, full722-file/
+6158-test check, native workerd/D1 and real browser challenge/restart flows pass.
+Guarded rollout/production smoke passed; Worker2eefd05a-072e-4dc8-af7e-1532e2314e00
+serves100%, Pages1207b5b3 and live browser assets match the release. Three existing
+public run invitations return their exact ghosts, personal ghosts remain private,
+and the public invitation retains its challenge parameter. No migration or
+production player/room writes. Receipt: `docs/review/wamp-f428-ghost-challenge-links-2026-10-29.md`.
+
+F436 automatic weekly events remains a draft (PR341) pending prompt-content
+approval. F429 Keep Playing is in PR343 with full local and desktop/phone native
+browser checks passed; not delivered yet. The other18 goal items remain pending.
