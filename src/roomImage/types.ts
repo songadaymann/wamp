@@ -1,3 +1,5 @@
+/** Bump when shared room-image pixels change, so API/Pages links bypass older edge images. */
+export const ROOM_SHARE_RENDERER_VERSION = 'assets-v6';
 import type { RoomImageData } from './roomImagePrimitives';
 export const ROOM_SHARE_IMAGE_WIDTH = 1200;
 export const ROOM_SHARE_IMAGE_HEIGHT = 630;

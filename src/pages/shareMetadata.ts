@@ -8,8 +8,7 @@ import type { PagesWorkerEnv } from './model';
 const ROOM_META_TIMEOUT_MS = 1200;
 const PROFILE_META_TIMEOUT_MS = 1200;
 const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v6';
-import { ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT } from '../roomImage/types';
+import { ROOM_SHARE_RENDERER_VERSION as ROOM_IMAGE_RENDERER_VERSION, ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT } from '../roomImage/types';
 
 export interface RoomCoordinates {
   x: number;

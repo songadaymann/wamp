@@ -1,7 +1,7 @@
 # F269 / F389: shared real-art share renderer — 2026-10-29
 
-Implementation and local verification complete; PR, CI and rollout pending.
-Both checklist items remain open until production delivery is verified.
+PR #339 merged and its initial rollout passed. Final API image-URL cache
+versioning is in a follow-up; both items remain open until that rollout is verified.
 
 ## One painter and layout
 
@@ -9,7 +9,7 @@ The API share fallback and Wamp-O-Gram preview now use the same real-art painter
 as standalone Pages images. Shared primitives, assets and renderer live in
 `src/roomImage/`; Pages retains a thin HTTP adapter and the API supplies an
 injected asset/background environment. The former 721-line abstract API painter
-is removed. Changed runtime TypeScript shrinks by 684 nonblank lines relative
+is removed. Changed runtime TypeScript shrinks by 683 nonblank lines relative
 to the F334 candidate, including the new shared modules and cache bounds.
 
 Expanded fallback cells render at the native room grid, then use the same
@@ -70,3 +70,14 @@ Pages assets-v6 so clients can refresh intentional drawing changes.
 Evidence: `/tmp/wamp-f269-complete-check.log`,
 `/tmp/wamp-f269-native-complete.log`; ignored native probe/artifacts:
 `output/f269-native/`. No migration. Goal stays 5/28 until delivery.
+
+## API image cache follow-up
+
+A live image check after the first rollout found an older abstract PNG still at
+one unchanged Expanded fallback URL (30,049 bytes versus the new 38,827-byte
+image on a fresh cache key). API fallback image URLs now include the same shared
+assets-v6 renderer version used by Pages, so normal share metadata selects a
+fresh edge image. Cached real-art R2 URLs are unchanged. The full check passes
+again: 722 files, 6,150 tests, one expected failure/two skips; boot665.4KB/670.
+Evidence: `/tmp/wamp-f269-live-image-cache.json`,
+`/tmp/wamp-f269-cache-version-check.log`. Final delivery is still pending.
