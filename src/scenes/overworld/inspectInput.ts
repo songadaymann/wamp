@@ -1,3 +1,4 @@
+import { applyInspectPointerPan, pointerPassedPanThreshold } from './inspectCameraGestures';
 import Phaser from 'phaser';
 import { mouseButtonsReleased } from '../pointerRelease';
 import { hasBlockingModalOpen } from '../../ui/modalState';
@@ -192,22 +193,12 @@ export class OverworldInspectInputController {
       return;
     }
 
-    const distance = Phaser.Math.Distance.Between(
-      this.panStartPointer.x,
-      this.panStartPointer.y,
-      pointer.x,
-      pointer.y,
-    );
-    if (distance < PAN_THRESHOLD) {
-      return;
-    }
+    if (!pointerPassedPanThreshold(this.panStartPointer, pointer, PAN_THRESHOLD)) return;
 
     this.panCurrentPointer = { x: pointer.x, y: pointer.y };
 
     const camera = this.scene.cameras.main;
-    const dx = (this.panStartPointer.x - pointer.x) / camera.zoom;
-    const dy = (this.panStartPointer.y - pointer.y) / camera.zoom;
-    camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    applyInspectPointerPan(camera, this.panStartPointer, this.panStartScroll, pointer);
     this.host.constrainInspectCamera();
   };
 

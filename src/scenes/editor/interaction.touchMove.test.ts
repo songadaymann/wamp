@@ -19,7 +19,7 @@ vi.mock('../../ui/deviceLayout', async (importOriginal) => ({
 }));
 
 type Handler = (...args: unknown[]) => void;
-const saved = { activeTool: editorState.activeTool, paletteMode: editorState.paletteMode, zoom: editorState.zoom, isPlaying: editorState.isPlaying };
+const saved = { activeTool: editorState.activeTool, paletteMode: editorState.paletteMode, zoom: editorState.zoom, isPlaying: editorState.isPlaying, pencilSprayMode: editorState.pencilSprayMode, pencilSprayBrushSize: editorState.pencilSprayBrushSize, pencilSprayRate: editorState.pencilSprayRate };
 beforeEach(() => { updateEditorState({ activeTool: 'move' }); updateEditorState({ paletteMode: 'tiles', zoom: 1, isPlaying: false }); });
 afterEach(() => {
   updateEditorState(saved);
@@ -71,7 +71,7 @@ function harness(width = 400, height = 300, realMove = false) {
   const controller = new EditorInteractionController(scene as never, host as never, { getElementById: () => null } as never);
   controller.setupInput(() => {});
   const fire = (name: string, ...args: unknown[]) => handlers.get(name)!(...args);
-  return { fire, cam, objectMove: objectMove as Exclude<typeof objectMove, EditorObjectMoveController>, controller, real };
+  return { fire, cam, scene, calls, objectMove: objectMove as Exclude<typeof objectMove, EditorObjectMoveController>, controller, real };
 }
 
 function touch(id: number, x: number, y: number, type = 'touchmove') {
@@ -174,5 +174,55 @@ describe('Fit room on a phone (F371)', () => {
     const middle = h.cam.getWorldPoint(195, 281);
     expect(middle.x).toBeCloseTo(ROOM_PX_WIDTH / 2, 4);
     expect(middle.y).toBeCloseTo(ROOM_PX_HEIGHT / 2, 4);
+  });
+});
+
+describe('room editor through the shared touch controller (F274)', () => {
+  it('does not paint when a second finger arrives before a brush starts', () => {
+    vi.useFakeTimers(); updateEditorState({ activeTool: 'pencil' });
+    const h = harness();
+    h.fire('input:pointerdown', touch(1, 100, 150, 'touchstart'));
+    h.fire('input:pointerdown', touch(2, 300, 150, 'touchstart'));
+    vi.advanceTimersByTime(300);
+    h.fire('input:pointerup', touch(2, 300, 150, 'touchend'));
+    h.fire('input:pointerup', touch(1, 100, 150, 'touchend'));
+    expect(h.calls.placeTileAt).toBeUndefined();
+    expect(h.calls.commitTileBatch).toBeUndefined();
+    expect(h.controller.hasPendingTouchEdit).toBe(false);
+  });
+
+  it('sprays while a touch holds still, then stops immediately on cancellation', () => {
+    vi.useFakeTimers(); updateEditorState({ activeTool: 'pencil', pencilSprayMode: true,
+      pencilSprayBrushSize: 5, pencilSprayRate: 1 });
+    const h = harness(); const p = { ...touch(1, 100, 150, 'touchstart'), isDown: true };
+    h.scene.input.activePointer = p;
+    h.fire('input:pointerdown', p); vi.advanceTimersByTime(300);
+    h.controller.tickSpray(500);
+    expect(h.calls.placeTileAt).toHaveBeenCalledTimes(22);
+    h.fire('input:pointerup', touch(1, 100, 150, 'touchcancel'));
+    h.controller.tickSpray(500);
+    expect(h.calls.placeTileAt).toHaveBeenCalledTimes(22);
+    expect(h.calls.cancelTileBatch).toHaveBeenCalledTimes(1);
+    expect(h.calls.commitTileBatch).toBeUndefined();
+  });
+
+  it('cancels a deferred brush when editor input becomes locked', () => {
+    vi.useFakeTimers(); updateEditorState({ activeTool: 'pencil' });
+    const h = harness();
+    h.fire('input:pointerdown', touch(1, 100, 150, 'touchstart'));
+    Object.assign(h.scene.game.canvas.ownerDocument.body.dataset, { editorSpriteUiLocked: 'true' });
+    vi.advanceTimersByTime(300);
+    expect(h.calls.placeTileAt).toBeUndefined();
+    expect(h.controller.hasPendingTouchEdit).toBe(false);
+  });
+});
+
+describe('touch start outside the editable room (F274)', () => {
+  it('does not turn a tiny drag into a Fill tap inside the room', () => {
+    updateEditorState({ activeTool: 'fill' });
+    const h = harness();
+    h.fire('input:pointerdown', touch(1, -1, 150, 'touchstart'));
+    h.fire('input:pointerup', touch(1, 1, 150, 'touchend'));
+    expect(h.calls.floodFill).toBeUndefined();
   });
 });

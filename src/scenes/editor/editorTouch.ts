@@ -12,24 +12,26 @@ interface TouchMoveTool {
   stopGesture(): boolean;
 }
 
-interface CourseTouchHost {
+interface EditorTouchHost {
   signature(): string;
+  isEnabled?: () => boolean;
   schedule: TouchEditScheduler;
-  classify(pointer: Phaser.Input.Pointer): TouchAction;
+  classify(pointer: Phaser.Input.Pointer): TouchAction | null;
   begin(pointer: Phaser.Input.Pointer): void;
   beginBrush(worldPoint: { x: number; y: number }): void;
   beginObjects(point: TouchGesturePoint): void;
   move(pointer: Phaser.Input.Pointer): void;
   tap(pointer: Phaser.Input.Pointer): void;
-  finish(pointer: Phaser.Input.Pointer, bend: boolean): void;
+  finish(pointer: Phaser.Input.Pointer, bend: boolean, tap: boolean): void;
   cancel(): void;
   worldPoint(x: number, y: number): { x: number; y: number };
+  pinchThreshold?: number;
   pinch(factor: number, anchor: { x: number; y: number }, x: number, y: number): void;
   moveTool: TouchMoveTool;
 }
 
-/** Keeps multi-finger navigation separate from edits in the multi-cell workspace. */
-export class CourseTouchController {
+/** Shared touch arbitration for single-room and multi-cell editing workspaces. */
+export class EditorTouchController {
   private readonly gesture = new EditorTouchGesture();
   private action: TouchAction | null = null;
   private start: TouchGesturePoint | null = null;
@@ -39,13 +41,15 @@ export class CourseTouchController {
   private readonly candidate: EditorTouchCandidate;
   private anchor = { x: 0, y: 0 };
 
-  constructor(private readonly host: CourseTouchHost) {
+  constructor(private readonly host: EditorTouchHost) {
     this.candidate = new EditorTouchCandidate(host.schedule);
   }
 
   get isEditing(): boolean { return this.action !== null; }
+  get actionKind(): TouchAction | null { return this.action; }
 
   down(pointer: Phaser.Input.Pointer): void {
+    if (this.host.isEnabled?.() === false) return;
     const result = this.gesture.down(pointer);
     if (result === 'pinch') {
       this.cancel();
@@ -90,9 +94,12 @@ export class CourseTouchController {
       const [first, second] = [...this.gesture.points.values()];
       const distance = Math.hypot(first.x - second.x, first.y - second.y);
       if (this.distance > 0 && distance > 0) {
-        this.host.pinch(distance / this.distance, this.anchor, (first.x + second.x) / 2, (first.y + second.y) / 2);
-      }
-      this.distance = distance;
+        const factor = distance / this.distance;
+        const threshold = this.host.pinchThreshold ?? 0;
+        const zooming = Math.abs(factor - 1) > threshold;
+        this.host.pinch(zooming ? factor : 1, this.anchor, (first.x + second.x) / 2, (first.y + second.y) / 2);
+        if (zooming || threshold === 0) this.distance = distance;
+      } else this.distance = distance;
       return;
     }
     if (result !== 'edit' || !this.action) return;
@@ -122,7 +129,7 @@ export class CourseTouchController {
     if (this.action === 'move') this.host.moveTool.up(pointer, outside);
     else if (this.action === 'tap' || (this.action === 'objects' && !this.objectsStarted)) {
       if (result === 'tap') this.host.tap(pointer);
-    } else if (this.action) this.host.finish(pointer, this.action === 'bend');
+    } else if (this.action) this.host.finish(pointer, this.action === 'bend', result === 'tap');
     this.action = null;
     this.start = null;
     this.objectsStarted = false;
@@ -130,7 +137,7 @@ export class CourseTouchController {
   }
 
   validate(): void {
-    if (this.action && this.signature !== this.host.signature()) this.cancel();
+    if (this.action && (this.host.isEnabled?.() === false || this.signature !== this.host.signature())) this.cancel();
   }
 
   cancel(): void {

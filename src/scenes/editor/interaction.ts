@@ -1,7 +1,13 @@
+import { EditorWorkspaceDrawingController } from './workspaceDrawing';
+import { EditorTouchController } from './editorTouch';
+import { drawEditorShapePreview } from './shapeInteraction';
+import { applyEditorMusicCameraFit } from './musicCameraFit';
+import { applyInspectPointerPan, zoomInspectCamera } from '../overworld/inspectCameraGestures';
+import { drawEditorCursor } from './cursorPreview';
 import Phaser from 'phaser';
 import { roomVideoPointerDown, roomVideoPointerMove, roomVideoPointerUp } from '../../roomVideo/frames';
 import { mouseButtonsReleased } from '../pointerRelease';
-import { EditorTouchCandidate, EditorTouchGesture, editorTouchToolKey } from './touchGesture';
+import { EditorTouchGesture, editorTouchToolKey } from './touchGesture';
 import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -9,43 +15,19 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState, updateEditorState,
-  getObjectPreviewRectForTile,
 } from '../../config';
-import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { isTextInputFocused } from '../../ui/keyboardFocus';
-import { RETRO_COLORS } from '../../visuals/starfield';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
 import type { EditorClipboardState, GoalPlacementMode } from './editRuntime';
-import { drawClipboardPastePreview } from './clipboardObjects';
 import type { EditorObjectMoveController } from './objectMoveController';
 import {
   canRepeatSelectedEditorObject,
-  getEditorStampKind,
   isDragStampEditorTool,
-  isEditorLineCurve,
-  resolveEditorLineEnd,
-  isEditorShapeOutline,
-  isPathEditorTool,
-  isPencilBrushPlacement,
-  isPencilSprayPlacement,
-  isPencilStampPlacement,
 } from './editorToolSelection';
-import { clampRandomizeBrushSize } from './randomizeTiles';
-import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, listCircleBrushOffsets } from './sprayTiles';
-import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
-import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
-import {
-  getScreenAnchorWorldPoint,
-  getScrollForScreenAnchor,
-} from '../overworld/camera';
+import type { EditorShapeKind, TilePoint } from './shapeTiles';
 import {
   clearMusicWorkbenchFrame,
-  MUSIC_ROOM_LABEL_GUTTER,
-  MUSIC_ROOM_NEIGHBOR_PEEK,
   MusicRoomFitController,
-  planRoomCameraFit,
-  readMusicRoomViewport,
-  syncMusicWorkbenchFrame,
 } from './musicRoomFit';
 
 function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
@@ -53,17 +35,6 @@ function isPointerShiftDown(pointer: Phaser.Input.Pointer): boolean {
   return Boolean(event && 'shiftKey' in event && event.shiftKey);
 }
 
-function getEditorLayerAccent(): { stroke: number; fillAlpha: number } {
-  switch (editorState.activeLayer) {
-    case 'background':
-      return { stroke: 0x2f6b7f, fillAlpha: 0.16 };
-    case 'foreground':
-      return { stroke: 0xff6f3c, fillAlpha: 0.18 };
-    case 'terrain':
-    default:
-      return { stroke: 0x347433, fillAlpha: 0.18 };
-  }
-}
 
 interface EditorInteractionHost {
   objectMove?: EditorObjectMoveController;
@@ -85,7 +56,6 @@ interface EditorInteractionHost {
   beginObjectBatch(livePreview?: boolean): void;
   commitObjectBatch(): void;
   cancelObjectBatch(): void;
-  handleToolDown(pointer: Phaser.Input.Pointer): void;
   removeGoalMarkerAt(worldX: number, worldY: number): boolean;
   removeObjectAt(worldX: number, worldY: number): void;
   placeGoalMarker(tileX: number, tileY: number): void;
@@ -103,6 +73,7 @@ interface EditorInteractionHost {
     options?: { outline?: boolean; erase?: boolean; mid?: TilePoint },
   ): void;
   floodErase(tileX: number, tileY: number): void;
+  floodFill(tileX: number, tileY: number): void;
   captureCopySelection(x1: number, y1: number, x2: number, y2: number): void;
   getClipboardPreview(): EditorClipboardState | null;
   isClipboardPastePreviewActive(): boolean;
@@ -123,31 +94,16 @@ export class EditorInteractionController {
   private isPanning = false;
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
-  private isDrawing = false;
-  private lastObjectDragCell: TilePoint | null = null;
-  private tileDragStart: { x: number; y: number } | null = null;
-  private lastDraggedStampOrigin: { x: number; y: number } | null = null;
-  private sprayRemainder = 0;
+  private readonly drawing: EditorWorkspaceDrawingController<number>;
+  private get isDrawing(): boolean { return this.drawing.isDrawing; }
   private spaceDown = false;
-  private rectStart: { x: number; y: number } | null = null;
-  private shapeEraseActive = false;
-  private pathBend: { start: TilePoint; end: TilePoint; mid: TilePoint; erase: boolean } | null = null;
   private readonly cursorCoordsEls: HTMLElement[];
-  private readonly touchGesture = new EditorTouchGesture();
-  private readonly touchCandidate = new EditorTouchCandidate((delay, callback) => {
-    const timer = this.scene.time.delayedCall(delay, callback);
-    return () => timer.remove(false);
-  });
-  private touchAction: 'tiles' | 'objects' | 'shape' | 'tap' | 'bend' | 'move' | null = null;
-  private touchStartTile: TilePoint | null = null;
-  private touchToolKey = '';
-  private pinchDistance = 0;
-  private pinchAnchor = { x: 0, y: 0 };
-  private pinchAnchorWorld = { x: 0, y: 0 };
+  private readonly musicTouchGesture = new EditorTouchGesture();
+  private readonly touchController: EditorTouchController;
   // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows key and
   // button releases: finish any stroke or pan and forget a held Space.
   private readonly handleInputBlur = (): void => {
-    if (this.touchAction) this.cancelTouchEdit();
+    if (this.touchController.isEditing) this.cancelTouchEdit();
     this.spaceDown = false;
     const pointer = this.scene.input.activePointer;
     if ((this.isPanning || this.isDrawing) && pointer.isDown && !pointer.wasTouch) this.handleMouseUp(pointer, true);
@@ -164,6 +120,19 @@ export class EditorInteractionController {
       doc.getElementById('cursor-coords'),
       doc.getElementById('mobile-editor-cursor-coords'),
     ].filter((element): element is HTMLElement => Boolean(element));
+    this.drawing = new EditorWorkspaceDrawingController({
+      sliceAt: (x, y) => x >= 0 && x < ROOM_PX_WIDTH && y >= 0 && y < ROOM_PX_HEIGHT ? 0 : null,
+      originOf: () => ({ x: 0, y: 0 }), runtimeOf: () => this.host,
+      clampToSlice: (_slice, world) => ({
+        x: Math.floor(Math.min(ROOM_PX_WIDTH - 1, Math.max(0, world.x)) / TILE_SIZE),
+        y: Math.floor(Math.min(ROOM_PX_HEIGHT - 1, Math.max(0, world.y)) / TILE_SIZE),
+      }),
+      placeObject: (_slice, tile) => this.host.placeObjectAtTile(tile.x, tile.y),
+      copy: (_slice, start, end) => this.host.captureCopySelection(start.x, start.y, end.x, end.y),
+      preview: (_slice, kind, start, end, options) => drawEditorShapePreview(this.rectPreviewGraphics, kind, start, end, options),
+      clearPreview: () => { this.rectPreviewGraphics?.clear(); },
+    });
+    this.touchController = this.createTouchController();
   }
 
   stopMusicRoomFit(): void {
@@ -178,40 +147,18 @@ export class EditorInteractionController {
     return this.rectPreviewGraphics;
   }
 
-  get hasPendingTouchEdit(): boolean { return this.touchAction !== null; }
+  get hasPendingTouchEdit(): boolean { return this.touchController.isEditing; }
 
   validateTouchEdit(): void {
     this.host.objectMove?.validate();
-    if (this.touchAction && (this.touchToolKey !== editorTouchToolKey()
-      || this.scene.game.canvas.ownerDocument.body.dataset.editorSpriteUiLocked === 'true'
-      || this.host.isMusicModeActive() || editorState.isPlaying)) this.cancelTouchEdit();
+    this.touchController.validate();
   }
 
   tickSpray(deltaMs: number): void {
-    if (!this.isDrawing || !isPencilSprayPlacement()) {
-      this.sprayRemainder = 0;
-      return;
-    }
     const pointer = this.scene.input.activePointer;
-    const painting = pointer.leftButtonDown();
-    const erasing = pointer.rightButtonDown();
-    if (!painting && !erasing) {
-      return;
-    }
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const size = clampSprayBrushSize(editorState.pencilSprayBrushSize);
-    const tilesPerSecond = getSprayTilesPerSecond(size, editorState.pencilSprayRate);
-    this.sprayRemainder += tilesPerSecond * Math.max(0, deltaMs) / 1000;
-    const cellCount = Math.max(1, listCircleBrushOffsets(size).length);
-    const burst = Math.min(cellCount, Math.floor(this.sprayRemainder));
-    this.sprayRemainder -= burst;
-    for (let i = 0; i < burst; i += 1) {
-      if (erasing) {
-        this.host.eraseStampAt(worldPoint.x, worldPoint.y);
-      } else {
-        this.host.placeTileAt(worldPoint.x, worldPoint.y);
-      }
-    }
+    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    this.drawing.tickSpray(deltaMs, world, !editorState.isPlaying && !this.host.isMusicModeActive()
+      && (pointer.leftButtonDown() || pointer.rightButtonDown()));
   }
 
   initializeOverlays(): void {
@@ -222,77 +169,14 @@ export class EditorInteractionController {
     this.rectPreviewGraphics.setDepth(98);
   }
 
-  clearShapePreview(): void {
-    this.rectStart = null;
-    this.shapeEraseActive = false;
-    this.pathBend = null;
-    this.rectPreviewGraphics?.clear();
-  }
+  clearShapePreview(): void { this.drawing.clearShapes(); }
 
   cancelPendingShapeOperation(): boolean {
-    const hasPendingShape = Boolean(
-      this.pathBend
-      || (this.rectStart && (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy')),
-    );
-    if (!hasPendingShape) return false;
-
-    const hasOpenEmptyBatch = this.isDrawing
-      && editorState.activeTool !== 'copy'
-      && !(isPathEditorTool(editorState.activeTool) && isEditorLineCurve());
-    if (hasOpenEmptyBatch) this.host.commitTileBatch();
-    this.isDrawing = false;
-    this.clearShapePreview();
-    this.clearTileDrag();
+    if (!this.drawing.hasShape && !this.drawing.hasBend) return false;
+    this.drawing.clearShapes();
     return true;
   }
 
-  private drawOccupiedCellPreview(
-    originX: number,
-    originY: number,
-    width: number,
-    height: number,
-    occupiedMask: readonly (readonly boolean[])[],
-    stroke: number,
-    fillAlpha: number,
-    lineAlpha: number,
-    lineWidth: number,
-  ): void {
-    if (!this.cursorGraphics) {
-      return;
-    }
-
-    let drewAnyCell = false;
-    this.cursorGraphics.fillStyle(stroke, fillAlpha);
-    this.cursorGraphics.lineStyle(lineWidth, stroke, lineAlpha);
-    for (let dy = 0; dy < height; dy += 1) {
-      for (let dx = 0; dx < width; dx += 1) {
-        if (!occupiedMask[dy]?.[dx]) {
-          continue;
-        }
-
-        drewAnyCell = true;
-        this.cursorGraphics.fillRect(
-          (originX + dx) * TILE_SIZE,
-          (originY + dy) * TILE_SIZE,
-          TILE_SIZE,
-          TILE_SIZE,
-        );
-        this.cursorGraphics.strokeRect(
-          (originX + dx) * TILE_SIZE,
-          (originY + dy) * TILE_SIZE,
-          TILE_SIZE,
-          TILE_SIZE,
-        );
-      }
-    }
-
-    if (drewAnyCell) {
-      return;
-    }
-
-    this.cursorGraphics.fillRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
-    this.cursorGraphics.strokeRect(originX * TILE_SIZE, originY * TILE_SIZE, width * TILE_SIZE, height * TILE_SIZE);
-  }
 
   reset(): void {
     this.scene.game.events.off('blur', this.handleInputBlur);
@@ -303,21 +187,10 @@ export class EditorInteractionController {
     this.cursorGraphics = null;
     this.rectPreviewGraphics = null;
     this.isPanning = false;
-    this.isDrawing = false;
-    this.lastObjectDragCell = null;
-    this.tileDragStart = null;
-    this.lastDraggedStampOrigin = null;
-    this.sprayRemainder = 0;
+    this.drawing.reset();
     this.spaceDown = false;
-    this.rectStart = null;
-    this.shapeEraseActive = false;
-    this.touchCandidate.cancel();
-    this.touchGesture.reset();
-    this.touchAction = null;
-    this.touchStartTile = null;
-    this.pinchDistance = 0;
-    this.pinchAnchor = { x: 0, y: 0 };
-    this.pinchAnchorWorld = { x: 0, y: 0 };
+    this.touchController.reset();
+    this.musicTouchGesture.reset();
   }
 
   setupCamera(): void {
@@ -380,34 +253,8 @@ export class EditorInteractionController {
 
     this.musicFitLock = true;
     try {
-      const camera = this.scene.cameras.main;
-      const viewport = readMusicRoomViewport(
-        this.scene.game.canvas,
-        document,
-        camera.width,
-        camera.height,
-      );
-      const plan = planRoomCameraFit({
-        cameraWidth: camera.width,
-        cameraHeight: camera.height,
-        originX: camera.originX,
-        originY: camera.originY,
-        roomX: 0,
-        roomY: 0,
-        roomWidth: ROOM_PX_WIDTH,
-        roomHeight: ROOM_PX_HEIGHT,
-        viewport,
-        worldInset: {
-          left: MUSIC_ROOM_LABEL_GUTTER,
-          top: MUSIC_ROOM_NEIGHBOR_PEEK,
-          right: MUSIC_ROOM_NEIGHBOR_PEEK,
-          bottom: MUSIC_ROOM_NEIGHBOR_PEEK,
-        },
-      });
-      updateEditorState({ zoom: plan.zoom });
-      camera.setZoom(plan.zoom);
-      camera.setScroll(plan.scrollX, plan.scrollY);
-      syncMusicWorkbenchFrame(this.scene.game.canvas, camera.width, camera.height, plan);
+      applyEditorMusicCameraFit(this.scene.cameras.main, this.scene.game.canvas, { x: 0, y: 0 },
+        zoom => updateEditorState({ zoom }));
       this.host.updateBackgroundPreview();
     } finally {
       this.musicFitLock = false;
@@ -473,157 +320,14 @@ export class EditorInteractionController {
       return;
     }
 
-    const goalPlacementMode = this.host.getGoalPlacementMode();
-    if (goalPlacementMode || this.host.isPracticeTestPlacementActive?.()) {
-      this.cursorGraphics.fillStyle(RETRO_COLORS.frontier, 0.16);
-      this.cursorGraphics.fillRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      this.cursorGraphics.lineStyle(2, RETRO_COLORS.frontier, 0.9);
-      this.cursorGraphics.strokeRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      this.updateCursorCoords(tileX, tileY);
-      return;
-    }
-
-    if (editorState.paletteMode === 'objects') {
-      const objectConfig = editorState.selectedObjectId
-        ? getEditorObjectConfigById(editorState.selectedObjectId)
-        : null;
-      const layerAccent = getEditorLayerAccent();
-      if (objectConfig && editorState.activeTool !== 'eraser') {
-        const previewRect = getObjectPreviewRectForTile(objectConfig, tileX, tileY);
-        this.cursorGraphics.fillStyle(layerAccent.stroke, layerAccent.fillAlpha);
-        this.cursorGraphics.fillRect(
-          previewRect.x,
-          previewRect.y,
-          previewRect.width,
-          previewRect.height,
-        );
-        this.cursorGraphics.lineStyle(1, layerAccent.stroke, 0.9);
-        this.cursorGraphics.strokeRect(
-          previewRect.x,
-          previewRect.y,
-          previewRect.width,
-          previewRect.height,
-        );
-      } else {
-        this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
-        this.cursorGraphics.strokeRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
-      this.updateCursorCoords(tileX, tileY);
-      return;
-    }
-
-    if (editorState.paletteMode === 'tiles' && this.host.isClipboardPastePreviewActive()) {
-      const clipboard = this.host.getClipboardPreview();
-      if (clipboard && this.cursorGraphics) {
-        drawClipboardPastePreview(this.cursorGraphics, clipboard, { x: tileX * TILE_SIZE, y: tileY * TILE_SIZE }, getEditorLayerAccent().stroke);
-        this.updateCursorCoords(tileX, tileY);
-        return;
-      }
-    }
-
-    const selection = editorState.paletteMode === 'smart'
-      ? { width: 1, height: 1, occupiedMask: [[true]] }
-      : editorState.selection;
-    const stampOrigin =
-      editorState.activeTool === 'pencil'
-        ? this.getDraggedStampOrigin(tileX, tileY)
-        : { x: tileX, y: tileY };
-    const eraserBrushSize =
-      editorState.activeTool === 'eraser'
-        ? editorState.eraserBrushSize
-        : 1;
-    const sprayPlacement = editorState.activeTool === 'pencil' && isPencilSprayPlacement();
-    const sprayBrushSize = sprayPlacement
-      ? clampSprayBrushSize(editorState.pencilSprayBrushSize)
-      : 1;
-    const pencilBrushSize =
-      editorState.activeTool === 'pencil' && isPencilBrushPlacement()
-        ? clampRandomizeBrushSize(editorState.pencilBrushSize)
-        : 1;
-    const pencilUsesBrushWindow = editorState.activeTool === 'pencil' && isPencilBrushPlacement();
-    const randomizeBrushSize =
-      editorState.activeTool === 'randomize'
-        ? clampRandomizeBrushSize(editorState.randomizeBrushSize)
-        : 1;
-    const cursorOrigin =
-      editorState.activeTool === 'eraser'
-        ? {
-            x: tileX - Math.floor(eraserBrushSize * 0.5),
-            y: tileY - Math.floor(eraserBrushSize * 0.5),
-          }
-        : editorState.activeTool === 'randomize' || pencilUsesBrushWindow || sprayPlacement
-          ? {
-              x: tileX - Math.floor(
-                (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5,
-              ),
-              y: tileY - Math.floor(
-                (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : randomizeBrushSize) * 0.5,
-              ),
-            }
-        : stampOrigin;
-    const cursorW =
-      editorState.activeTool === 'pencil'
-        ? (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : selection.width)
-        : editorState.activeTool === 'eraser'
-          ? eraserBrushSize
-          : editorState.activeTool === 'randomize'
-            ? randomizeBrushSize
-            : 1;
-    const cursorH =
-      editorState.activeTool === 'pencil'
-        ? (sprayPlacement ? sprayBrushSize : pencilUsesBrushWindow ? pencilBrushSize : selection.height)
-        : editorState.activeTool === 'eraser'
-          ? eraserBrushSize
-          : editorState.activeTool === 'randomize'
-            ? randomizeBrushSize
-            : 1;
-    const pencilMask = sprayPlacement
-      ? createCircleBrushMask(sprayBrushSize)
-      : pencilUsesBrushWindow
-        ? Array.from({ length: pencilBrushSize }, () => Array.from({ length: pencilBrushSize }, () => true))
-        : editorState.paletteMode === 'smart'
-          ? [[true]]
-          : editorState.selection.occupiedMask;
-
-    if (editorState.activeTool === 'eraser') {
-      this.cursorGraphics.lineStyle(2, RETRO_COLORS.danger, 0.85);
-      this.cursorGraphics.strokeRect(
-        cursorOrigin.x * TILE_SIZE,
-        cursorOrigin.y * TILE_SIZE,
-        cursorW * TILE_SIZE,
-        cursorH * TILE_SIZE,
-      );
-    } else if (editorState.activeTool === 'pencil' && pointer.rightButtonDown()) {
-      this.drawOccupiedCellPreview(
-        cursorOrigin.x,
-        cursorOrigin.y,
-        cursorW,
-        cursorH,
-        pencilMask,
-        RETRO_COLORS.danger,
-        0.18,
-        0.9,
-        2,
-      );
-    } else {
-      const layerAccent = getEditorLayerAccent();
-      const occupiedMask =
-        editorState.activeTool === 'pencil'
-          ? pencilMask
-          : Array.from({ length: cursorH }, () => Array.from({ length: cursorW }, () => true));
-      this.drawOccupiedCellPreview(
-        cursorOrigin.x,
-        cursorOrigin.y,
-        cursorW,
-        cursorH,
-        occupiedMask,
-        layerAccent.stroke,
-        layerAccent.fillAlpha,
-        0.92,
-        1,
-      );
-    }
-
+    drawEditorCursor(this.cursorGraphics, {
+      tile: { x: tileX, y: tileY },
+      goalPlacement: Boolean(this.host.getGoalPlacementMode()),
+      practicePlacement: this.host.isPracticeTestPlacementActive?.(),
+      clipboard: this.host.isClipboardPastePreviewActive() ? this.host.getClipboardPreview() : null,
+      stampOrigin: this.drawing.pencilOrigin(0, { x: tileX, y: tileY }),
+      erasing: pointer.rightButtonDown(),
+    });
     this.updateCursorCoords(tileX, tileY);
   }
 
@@ -646,51 +350,8 @@ export class EditorInteractionController {
       return;
     }
 
-    if (!this.isDrawing) {
-      return;
-    }
-
-    if (this.lastObjectDragCell) {
-      this.host.commitObjectBatch();
-      this.lastObjectDragCell = null;
-      this.isDrawing = false;
-      return;
-    }
-
-    if (
-      (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
-      this.rectStart &&
-      (pointer.leftButtonReleased() || (this.shapeEraseActive && pointer.rightButtonReleased()))
-    ) {
-      const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const end = this.resolvePointerShapeEnd(pointer, worldPoint);
-      if (editorState.activeTool === 'copy') {
-        this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
-      } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
-        this.beginPathBend(this.rectStart, end, this.shapeEraseActive);
-        this.isDrawing = false;
-        this.shapeEraseActive = false;
-        return;
-      } else {
-        const kind = getEditorStampKind(editorState.activeTool);
-        if (kind) {
-          this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y, {
-            outline: isEditorShapeOutline(editorState.activeTool),
-            erase: this.shapeEraseActive,
-          });
-        }
-      }
-      this.rectStart = null;
-      this.shapeEraseActive = false;
-      this.rectPreviewGraphics?.clear();
-    }
-
-    if (editorState.activeTool !== 'copy') {
-      this.host.commitTileBatch();
-    }
-    this.isDrawing = false;
-    this.clearShapePreview();
-    this.clearTileDrag();
+    if (!this.isDrawing) return;
+    this.drawing.finish(this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y), isPointerShiftDown(pointer));
   };
 
   setupInput(handleCanvasContextMenu: (event: Event) => void): void {
@@ -721,7 +382,7 @@ export class EditorInteractionController {
         return;
       }
 
-      if (this.resolvePathBendPointer(pointer)) {
+      if (this.drawing.resolveBend(pointer.leftButtonDown(), pointer.rightButtonDown())) {
         return;
       }
 
@@ -747,25 +408,7 @@ export class EditorInteractionController {
             return;
           }
           this.host.removeObjectAt(worldPoint.x, worldPoint.y);
-        } else if (editorState.activeTool === 'fill') {
-          this.host.beginTileBatch();
-          this.host.floodErase(Math.floor(worldPoint.x / TILE_SIZE), Math.floor(worldPoint.y / TILE_SIZE));
-          this.host.commitTileBatch();
-        } else if (isDragStampEditorTool(editorState.activeTool)) {
-          this.isDrawing = true;
-          this.shapeEraseActive = true;
-          if (!(isPathEditorTool(editorState.activeTool) && isEditorLineCurve())) {
-            this.host.beginTileBatch();
-          }
-          this.startRectDrawing(
-            Math.floor(worldPoint.x / TILE_SIZE),
-            Math.floor(worldPoint.y / TILE_SIZE),
-          );
-        } else {
-          this.isDrawing = true;
-          this.host.beginTileBatch();
-          this.eraseWithActiveBrush(worldPoint.x, worldPoint.y);
-        }
+        } else this.drawing.begin(worldPoint, editorState.activeTool, { erase: true });
         return;
       }
 
@@ -800,10 +443,7 @@ export class EditorInteractionController {
           if (editorState.activeTool === 'fill') {
             this.host.floodFillObjects(tileX, tileY);
           } else if (editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()) {
-            this.host.beginObjectBatch(true);
-            this.host.placeObjectAtTile(tileX, tileY);
-            this.lastObjectDragCell = { x: tileX, y: tileY };
-            this.isDrawing = true;
+            this.drawing.beginObjects(worldPoint);
           } else {
             this.host.handleObjectPlace(pointer);
           }
@@ -813,11 +453,7 @@ export class EditorInteractionController {
           this.host.pasteClipboardAt(tileX, tileY);
           return;
         }
-        this.host.handleToolDown(pointer);
-        if (editorState.activeTool !== 'fill') {
-          this.isDrawing = true;
-          this.beginTileDrag(tileX, tileY);
-        }
+        this.drawing.begin(worldPoint, editorState.activeTool);
       }
     });
 
@@ -845,60 +481,14 @@ export class EditorInteractionController {
       }
 
       if (this.isPanning) {
-        const dx = (this.panStartPointer.x - pointer.x) / this.scene.cameras.main.zoom;
-        const dy = (this.panStartPointer.y - pointer.y) / this.scene.cameras.main.zoom;
-        this.scene.cameras.main.scrollX = this.panStartScroll.x + dx;
-        this.scene.cameras.main.scrollY = this.panStartScroll.y + dy;
+        applyInspectPointerPan(this.scene.cameras.main, this.panStartPointer, this.panStartScroll, pointer);
         this.constrainEditorCamera();
         this.host.updateBackgroundPreview();
         return;
       }
 
-      if (editorState.paletteMode === 'objects') {
-        if (this.isDrawing && pointer.leftButtonDown() && this.lastObjectDragCell) {
-          const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-          this.placeDraggedObjects(Math.floor(worldPoint.x / TILE_SIZE), Math.floor(worldPoint.y / TILE_SIZE));
-        }
-        return;
-      }
-
-      if (this.isDrawing && pointer.leftButtonDown()) {
-        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        if (editorState.activeTool === 'pencil' && !isPencilSprayPlacement()) {
-          this.placeDraggedTileStamp(worldPoint.x, worldPoint.y);
-        } else if (editorState.activeTool === 'eraser') {
-          this.host.eraseTileAt(worldPoint.x, worldPoint.y);
-        } else if (editorState.activeTool === 'randomize') {
-          this.host.paintRandomizeAt(worldPoint.x, worldPoint.y);
-        }
-      }
-
-      if (this.updatePathBendPreview(pointer)) {
-        return;
-      }
-
-      if (this.isDrawing && pointer.rightButtonDown()) {
-        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        if (this.shapeEraseActive && this.rectStart && isDragStampEditorTool(editorState.activeTool)) {
-          const end = this.resolvePointerShapeEnd(pointer, worldPoint);
-          this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-        } else if (!this.shapeEraseActive && !isPencilSprayPlacement()) {
-          this.eraseWithActiveBrush(worldPoint.x, worldPoint.y);
-        }
-      }
-
-      if (
-        (isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy') &&
-        this.rectStart &&
-        pointer.leftButtonDown()
-      ) {
-        const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-        const end = this.resolvePointerShapeEnd(pointer, worldPoint);
-        if (editorState.activeTool === 'copy') {
-          this.drawRectPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-        } else {
-          this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-        }
+      if (this.drawing.hasBend || (this.isDrawing && (pointer.leftButtonDown() || pointer.rightButtonDown()))) {
+        this.drawing.move(this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y), isPointerShiftDown(pointer));
       }
     });
 
@@ -955,18 +545,10 @@ export class EditorInteractionController {
       return;
     }
 
-    const camera = this.scene.cameras.main;
-    const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
-    if (Math.abs(nextZoom - editorState.zoom) < 0.0001) {
-      return;
-    }
-
-    const anchor = getScreenAnchorWorldPoint(screenX, screenY, camera);
-    updateEditorState({ zoom: nextZoom });
-    camera.setZoom(nextZoom);
-    const nextScroll = getScrollForScreenAnchor(anchor.x, anchor.y, screenX, screenY, camera);
-    camera.setScroll(nextScroll.x, nextScroll.y);
-    this.constrainEditorCamera();
+    if (!zoomInspectCamera({ camera: this.scene.cameras.main, minZoom: 0.25, maxZoom: 6,
+      sourceZoom: editorState.zoom, storeZoom: zoom => updateEditorState({ zoom }),
+      constrain: () => this.constrainEditorCamera(),
+    }, zoomFactor, { x: screenX, y: screenY })) return;
     this.host.updateBackgroundPreview();
     this.host.updateZoomUI();
   }
@@ -987,340 +569,92 @@ export class EditorInteractionController {
     return { x: camera.width * 0.5, y: camera.height * 0.5 };
   }
 
-  private drawRectPreview(x1: number, y1: number, x2: number, y2: number): void {
-    this.drawShapeTilesPreview('rect', x1, y1, x2, y2, false, true);
-  }
-
-  private drawActiveStampPreview(
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    mid?: TilePoint,
-    curveBend = false,
-  ): void {
-    const kind = getEditorStampKind(editorState.activeTool, curveBend);
-    if (!kind) {
-      return;
-    }
-    this.drawShapeTilesPreview(kind, x1, y1, x2, y2, isEditorShapeOutline(editorState.activeTool), false, mid);
-  }
-
-  private beginPathBend(start: TilePoint, end: TilePoint, erase: boolean): void {
-    const mid = {
-      x: Math.round((start.x + end.x) / 2),
-      y: Math.round((start.y + end.y) / 2),
-    };
-    this.pathBend = {
-      start: { x: start.x, y: start.y },
-      end: { x: end.x, y: end.y },
-      mid,
-      erase,
-    };
-    this.rectStart = null;
-    this.drawPathBendPreview();
-  }
-
-  private drawPathBendPreview(): void {
-    if (!this.pathBend) {
-      return;
-    }
-    this.drawShapeTilesPreview(
-      'curve',
-      this.pathBend.start.x,
-      this.pathBend.start.y,
-      this.pathBend.end.x,
-      this.pathBend.end.y,
-      false,
-      false,
-      this.pathBend.mid,
-    );
-  }
-
-  private resolvePathBendPointer(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.pathBend) {
-      return false;
-    }
-
-    if (pointer.rightButtonDown()) {
-      if (this.pathBend.erase) {
-        this.host.beginTileBatch();
-        this.host.stampShape(
-          'curve',
-          this.pathBend.start.x,
-          this.pathBend.start.y,
-          this.pathBend.end.x,
-          this.pathBend.end.y,
-          { erase: true, mid: this.pathBend.mid },
-        );
-        this.host.commitTileBatch();
-      }
-      this.clearShapePreview();
-      return true;
-    }
-
-    if (pointer.leftButtonDown()) {
-      if (!this.pathBend.erase) {
-        this.host.beginTileBatch();
-        this.host.stampShape(
-          'curve',
-          this.pathBend.start.x,
-          this.pathBend.start.y,
-          this.pathBend.end.x,
-          this.pathBend.end.y,
-          { erase: false, mid: this.pathBend.mid },
-        );
-        this.host.commitTileBatch();
-      }
-      this.clearShapePreview();
-      return true;
-    }
-
-    return false;
-  }
-
-  private updatePathBendPreview(pointer: Phaser.Input.Pointer): boolean {
-    if (!this.pathBend) {
-      return false;
-    }
-    const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    this.pathBend.mid = {
-      x: Math.floor(worldPoint.x / TILE_SIZE),
-      y: Math.floor(worldPoint.y / TILE_SIZE),
-    };
-    this.drawPathBendPreview();
-    return true;
-  }
-
-  private drawShapeTilesPreview(
-    kind: EditorShapeKind,
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    outline: boolean,
-    copySelection: boolean,
-    mid?: TilePoint,
-  ): void {
-    this.rectPreviewGraphics?.clear();
-    if (!this.rectPreviewGraphics) {
-      return;
-    }
-
-    const minX = Math.min(x1, x2);
-    const minY = Math.min(y1, y2);
-    const maxX = Math.max(x1, x2);
-    const maxY = Math.max(y1, y2);
-    const pathTool = kind === 'line' || kind === 'curve';
-    this.rectPreviewGraphics.fillStyle(RETRO_COLORS.draft, copySelection || !outline ? 0.15 : 0.22);
-    if (copySelection || (kind === 'rect' && !outline)) {
-      this.rectPreviewGraphics.fillRect(
-        minX * TILE_SIZE,
-        minY * TILE_SIZE,
-        (maxX - minX + 1) * TILE_SIZE,
-        (maxY - minY + 1) * TILE_SIZE,
-      );
-    } else {
-      for (const tile of iterateShapeTiles(kind, x1, y1, x2, y2, outline, mid)) {
-        this.rectPreviewGraphics.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
-    }
-    if (!pathTool) {
-      this.rectPreviewGraphics.lineStyle(1, RETRO_COLORS.draft, 0.65);
-      this.rectPreviewGraphics.strokeRect(
-        minX * TILE_SIZE,
-        minY * TILE_SIZE,
-        (maxX - minX + 1) * TILE_SIZE,
-        (maxY - minY + 1) * TILE_SIZE,
-      );
-    }
-  }
-
-  private resolvePointerShapeEnd(
-    pointer: Phaser.Input.Pointer,
-    worldPoint: Phaser.Math.Vector2,
-  ): { x: number; y: number } {
-    const current = {
-      x: Math.floor(worldPoint.x / TILE_SIZE),
-      y: Math.floor(worldPoint.y / TILE_SIZE),
-    };
-    if (!this.rectStart || editorState.activeTool === 'copy') {
-      return current;
-    }
-    if (isPathEditorTool(editorState.activeTool)) {
-      return resolveEditorLineEnd(this.rectStart, current, isPointerShiftDown(pointer));
-    }
-    return resolveShapeEnd(this.rectStart, current, isPointerShiftDown(pointer));
-  }
-
   private updateCursorCoords(tileX: number, tileY: number): void {
     for (const element of this.cursorCoordsEls) {
       element.textContent = `Tile: ${tileX}, ${tileY}`;
     }
   }
 
-  startRectDrawing(tileX: number, tileY: number): void {
-    this.rectStart = { x: tileX, y: tileY };
+  private createTouchController(): EditorTouchController {
+    return new EditorTouchController({
+      isEnabled: () => !editorState.isPlaying && !this.host.isMusicModeActive()
+        && this.scene.game.canvas.ownerDocument.body.dataset.editorSpriteUiLocked !== 'true',
+      signature: () => `${editorTouchToolKey()}:${this.scene.game.canvas.ownerDocument.body.dataset.editorSpriteUiLocked}:${this.host.isMusicModeActive()}:${editorState.isPlaying}`,
+      schedule: (delay, callback) => {
+        const timer = this.scene.time.delayedCall(delay, callback);
+        return () => timer.remove(false);
+      },
+      classify: pointer => {
+        const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        if (world.x < 0 || world.x >= ROOM_PX_WIDTH || world.y < 0 || world.y >= ROOM_PX_HEIGHT) return null;
+        return this.drawing.hasBend ? 'bend'
+        : this.host.getGoalPlacementMode() || this.host.isPracticeTestPlacementActive?.()
+          || this.host.isClipboardPastePreviewActive() || editorState.activeTool === 'fill' ? 'tap'
+          : editorState.paletteMode === 'objects'
+            ? editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject() ? 'objects' : 'tap'
+            : isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy' ? 'draw' : 'brush';
+      },
+      begin: pointer => this.drawing.begin(this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y),
+        editorState.activeTool, { touch: true }),
+      beginBrush: world => { this.drawing.begin(world, editorState.activeTool, { touch: true }); },
+      beginObjects: point => { this.drawing.beginObjects(this.screenToWorld(point.x, point.y), true); },
+      move: pointer => this.drawing.move(this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y), isPointerShiftDown(pointer)),
+      tap: pointer => this.applyTouchTap(pointer),
+      finish: (pointer, bend, tap) => {
+        const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        if (bend) { this.drawing.move(world); this.drawing.commitBend(); return; }
+        if (tap && this.touchController.actionKind === 'brush' && editorState.activeTool === 'eraser') {
+          this.drawing.cancel();
+          if (this.host.removeGoalMarkerAt(world.x, world.y)) return;
+          this.drawing.begin(world, 'eraser', { touch: true });
+        }
+        this.drawing.finish(world, isPointerShiftDown(pointer));
+      },
+      cancel: () => this.drawing.cancel(),
+      worldPoint: (x, y) => this.screenToWorld(x, y),
+      pinchThreshold: 0.02,
+      pinch: (factor, anchor, x, y) => {
+        const zoom = Phaser.Math.Clamp(editorState.zoom * factor, 0.25, 6);
+        if (Math.abs(zoom - editorState.zoom) >= 0.0001) {
+          updateEditorState({ zoom }); this.scene.cameras.main.setZoom(zoom); this.host.updateZoomUI();
+        }
+        this.scrollWorldPointToScreen(anchor.x, anchor.y, x, y);
+        this.constrainEditorCamera(); this.host.updateBackgroundPreview();
+      },
+      moveTool: {
+        claims: () => Boolean(this.host.objectMove?.claims()),
+        down: (pointer, at) => this.host.objectMove?.down(pointer, at) ?? false,
+        move: pointer => this.host.objectMove?.move(pointer) ?? false,
+        up: (pointer, outside) => this.host.objectMove?.up(pointer, outside) ?? false,
+        stopGesture: () => this.host.objectMove?.stopGesture() ?? false,
+      },
+    });
   }
 
   private handleTouchPointerDown(pointer: Phaser.Input.Pointer): boolean {
     if (!this.isTouchPointer(pointer)) return false;
     if (editorState.isPlaying) return true;
-    const action = this.touchGesture.down(pointer);
     if (this.host.isMusicModeActive()) {
-      if (action === 'edit') this.host.handleMusicPointerDown(pointer);
-      return true;
-    }
-    if (action === 'pinch') {
-      this.cancelTouchEdit();
-      this.beginPinchGesture();
-      return true;
-    }
-    if (action !== 'edit') return true;
-    // Move starts only once the finger drags or holds, like a brush, so a second finger can
-    // still pinch before Move drops the selection or shows a status (F371).
-    if (this.host.objectMove?.claims()) {
-      const start = { x: pointer.x, y: pointer.y };
-      this.touchAction = 'move';
-      this.touchToolKey = editorTouchToolKey();
-      this.touchCandidate.down(pointer, () => {
-        this.validateTouchEdit();
-        if (this.touchAction !== 'move') return;
-        this.host.objectMove?.down(pointer, start);
-        this.touchToolKey = editorTouchToolKey();
-      });
-      return true;
-    }
-
-    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const tile = { x: Math.floor(world.x / TILE_SIZE), y: Math.floor(world.y / TILE_SIZE) };
-    if (tile.x < 0 || tile.x >= ROOM_WIDTH || tile.y < 0 || tile.y >= ROOM_HEIGHT) return true;
-    this.touchStartTile = tile;
-    this.touchToolKey = editorTouchToolKey();
-    if (this.pathBend) {
-      this.touchAction = 'bend';
-      this.updatePathBendPreview(pointer);
-    } else if (this.host.getGoalPlacementMode() || this.host.isPracticeTestPlacementActive?.() || this.host.isClipboardPastePreviewActive()
-      || editorState.activeTool === 'fill') {
-      this.touchAction = 'tap';
-    } else if (editorState.paletteMode === 'objects') {
-      // Object clicks may open inspectors or edit links. Leave those until a real tap;
-      // repeatable brushes start only once the finger actually drags.
-      this.touchAction = editorState.activeTool === 'pencil' && canRepeatSelectedEditorObject()
-        ? 'objects' : 'tap';
-    } else {
-      this.touchAction = isDragStampEditorTool(editorState.activeTool) || editorState.activeTool === 'copy'
-        ? 'shape' : 'tiles';
-      if (this.touchAction === 'shape') {
-        this.host.handleToolDown(pointer);
-        this.isDrawing = true;
-      } else {
-        this.touchCandidate.down(pointer, () => {
-          this.validateTouchEdit();
-          if (this.touchAction !== 'tiles') return;
-          this.host.beginTileBatch();
-          if (editorState.activeTool === 'pencil') this.host.placeTileAt(world.x, world.y);
-          else if (editorState.activeTool === 'eraser') this.host.eraseTileAt(world.x, world.y);
-          else if (editorState.activeTool === 'randomize') this.host.paintRandomizeAt(world.x, world.y);
-          this.isDrawing = true;
-          this.beginTileDrag(tile.x, tile.y);
-        });
-      }
-    }
+      if (this.musicTouchGesture.down(pointer) === 'edit') this.host.handleMusicPointerDown(pointer);
+    } else this.touchController.down(pointer);
     return true;
   }
 
   private handleTouchPointerMove(pointer: Phaser.Input.Pointer): boolean {
     if (!this.isTouchPointer(pointer)) return false;
     this.validateTouchEdit();
-    const action = this.touchGesture.move(pointer);
     if (this.host.isMusicModeActive()) {
-      if (action === 'edit') this.host.handleMusicPointerMove(pointer);
-      return true;
-    }
-    if (action === 'pinch') {
-      this.handlePinchMove();
-      return true;
-    }
-    if (action !== 'edit' || !this.touchAction) return true;
-    if (this.touchAction === 'move') {
-      this.touchCandidate.move(pointer);
-      if (this.touchCandidate.isStarted) this.host.objectMove?.move(pointer);
-      return true;
-    }
-    if (this.touchAction === 'bend') {
-      this.updatePathBendPreview(pointer);
-      return true;
-    }
-    const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    if (this.touchAction === 'objects') {
-      if (!this.isDrawing && this.touchGesture.isDrag && this.touchStartTile) {
-        this.host.beginObjectBatch(true);
-        this.lastObjectDragCell = this.touchStartTile;
-        this.host.placeObjectAtTile(this.touchStartTile.x, this.touchStartTile.y);
-        this.isDrawing = true;
-      }
-      if (this.isDrawing) this.placeDraggedObjects(Math.floor(world.x / TILE_SIZE), Math.floor(world.y / TILE_SIZE));
-    } else if (this.touchAction === 'shape' && this.rectStart) {
-      const end = this.resolvePointerShapeEnd(pointer, world);
-      if (editorState.activeTool === 'copy') this.drawRectPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-      else this.drawActiveStampPreview(this.rectStart.x, this.rectStart.y, end.x, end.y);
-    } else if (this.touchAction === 'tiles') {
-      this.touchCandidate.move(pointer);
-      if (!this.isDrawing) return true;
-      if (editorState.activeTool === 'pencil' && !isPencilSprayPlacement()) this.placeDraggedTileStamp(world.x, world.y);
-      else if (editorState.activeTool === 'eraser') this.host.eraseTileAt(world.x, world.y);
-      else if (editorState.activeTool === 'randomize') this.host.paintRandomizeAt(world.x, world.y);
-    }
+      if (this.musicTouchGesture.move(pointer) === 'edit') this.host.handleMusicPointerMove(pointer);
+    } else this.touchController.move(pointer);
     return true;
   }
 
   private handleTouchPointerUp(pointer: Phaser.Input.Pointer, outside = false): boolean {
     if (!this.isTouchPointer(pointer)) return false;
     this.validateTouchEdit();
-    const result = this.touchGesture.up(pointer);
     if (this.host.isMusicModeActive()) {
-      if (result !== 'ignore') this.host.handleMusicPointerUp(pointer);
-      return true;
-    }
-    if (pointer.event?.type === 'touchcancel') {
-      this.cancelTouchEdit();
-      return true;
-    }
-    if (result === 'ignore') return true;
-    if (this.touchAction === 'tiles' || this.touchAction === 'move') this.touchCandidate.activate();
-    this.touchCandidate.cancel();
-    const action = this.touchAction;
-    this.touchAction = null;
-    this.touchStartTile = null;
-    if (action === 'move') {
-      this.host.objectMove?.up(pointer, outside);
-      return true;
-    }
-    if (action === 'tap' || (action === 'objects' && !this.isDrawing)) {
-      if (result === 'tap') this.applyTouchTap(pointer);
-      return true;
-    }
-    if (action === 'bend' && this.pathBend) {
-      this.updatePathBendPreview(pointer);
-      const bend = this.pathBend;
-      this.host.beginTileBatch();
-      this.host.stampShape('curve', bend.start.x, bend.start.y, bend.end.x, bend.end.y,
-        { erase: bend.erase, mid: bend.mid });
-      this.host.commitTileBatch();
-      this.clearShapePreview();
-      return true;
-    }
-    if (action === 'tiles' && result === 'tap' && editorState.activeTool === 'eraser') {
-      const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      // Marker removal owns its own history. Undo the uncommitted terrain preview first.
-      this.host.cancelTileBatch();
-      if (!this.host.removeGoalMarkerAt(world.x, world.y)) {
-        this.host.beginTileBatch();
-        this.host.eraseTileAt(world.x, world.y);
-      }
-    }
-    this.finishCurrentTouchDraw(pointer);
+      if (this.musicTouchGesture.up(pointer) !== 'ignore') this.host.handleMusicPointerUp(pointer);
+    } else this.touchController.up(pointer, outside);
     return true;
   }
 
@@ -1344,223 +678,13 @@ export class EditorInteractionController {
     } else if (this.host.isClipboardPastePreviewActive()) {
       this.host.pasteClipboardAt(tileX, tileY);
     } else {
-      this.host.handleToolDown(pointer);
+      this.drawing.begin(world, editorState.activeTool, { touch: true });
+      this.drawing.finish(world, isPointerShiftDown(pointer));
     }
   }
 
   /** Pinch and lifecycle cancellation never consume a committed history entry. */
-  cancelTouchEdit(): void {
-    if (this.touchAction === 'move') this.host.objectMove?.stopGesture();
-    this.touchCandidate.cancel();
-    if (this.touchAction === 'tiles' || this.touchAction === 'shape') this.host.cancelTileBatch();
-    if (this.touchAction === 'objects' && this.isDrawing) this.host.cancelObjectBatch();
-    this.touchGesture.suppress();
-    this.touchAction = null;
-    this.touchStartTile = null;
-    this.lastObjectDragCell = null;
-    this.isDrawing = false;
-    this.clearShapePreview();
-    this.clearTileDrag();
-    this.sprayRemainder = 0;
-  }
-
-  private finishCurrentTouchDraw(pointer: Phaser.Input.Pointer): void {
-    if (this.lastObjectDragCell) {
-      this.host.commitObjectBatch();
-      this.lastObjectDragCell = null;
-    } else if (this.rectStart) {
-      const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const end = this.resolvePointerShapeEnd(pointer, world);
-      if (editorState.activeTool === 'copy') {
-        this.host.captureCopySelection(this.rectStart.x, this.rectStart.y, end.x, end.y);
-      } else if (isPathEditorTool(editorState.activeTool) && isEditorLineCurve()) {
-        this.beginPathBend(this.rectStart, end, false);
-        this.isDrawing = false;
-        return;
-      } else {
-        const kind = getEditorStampKind(editorState.activeTool);
-        if (kind) this.host.stampShape(kind, this.rectStart.x, this.rectStart.y, end.x, end.y,
-          { outline: isEditorShapeOutline(editorState.activeTool), erase: false });
-        this.host.commitTileBatch();
-      }
-    } else if (this.isDrawing) this.host.commitTileBatch();
-    this.isDrawing = false;
-    this.clearShapePreview();
-    this.clearTileDrag();
-  }
-
-  private eraseWithActiveBrush(worldX: number, worldY: number): void {
-    if (isPencilSprayPlacement() || (editorState.activeTool === 'pencil' && editorState.paletteMode === 'tiles')) {
-      this.host.eraseStampAt(worldX, worldY);
-      return;
-    }
-    this.host.eraseTileAt(worldX, worldY);
-  }
-
-  private placeDraggedObjects(tileX: number, tileY: number): void {
-    const previous = this.lastObjectDragCell;
-    if (!previous) return;
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
-    forEachDraggedTileCell(previous, { x: tileX, y: tileY }, (x, y) => {
-      if (x >= 0 && x < ROOM_WIDTH && y >= 0 && y < ROOM_HEIGHT) {
-        this.host.placeObjectAtTile(x, y);
-      }
-    });
-    this.lastObjectDragCell = { x: tileX, y: tileY };
-  }
-
-  private beginTileDrag(tileX: number, tileY: number): void {
-    if (
-      editorState.paletteMode === 'objects' ||
-      editorState.activeTool !== 'pencil'
-    ) {
-      this.clearTileDrag();
-      return;
-    }
-
-    this.tileDragStart = { x: tileX, y: tileY };
-    this.lastDraggedStampOrigin = { x: tileX, y: tileY };
-  }
-
-  private clearTileDrag(): void {
-    this.tileDragStart = null;
-    this.lastDraggedStampOrigin = null;
-  }
-
-  private placeDraggedTileStamp(worldX: number, worldY: number): void {
-    const tileX = Math.floor(worldX / TILE_SIZE);
-    const tileY = Math.floor(worldY / TILE_SIZE);
-    const stampOrigin = this.getDraggedStampOrigin(tileX, tileY);
-
-    if (
-      this.lastDraggedStampOrigin &&
-      this.lastDraggedStampOrigin.x === stampOrigin.x &&
-      this.lastDraggedStampOrigin.y === stampOrigin.y
-    ) {
-      return;
-    }
-
-    const previous = this.lastDraggedStampOrigin;
-    this.lastDraggedStampOrigin = { ...stampOrigin };
-    if (editorState.paletteMode !== 'smart' || !previous) {
-      this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
-      return;
-    }
-
-    // Pointer events can skip several grid cells during a quick stroke. Fill
-    // the segment so a vertical wall does not become disconnected grass caps.
-    let x = previous.x;
-    let y = previous.y;
-    const dx = Math.abs(stampOrigin.x - x);
-    const sx = x < stampOrigin.x ? 1 : -1;
-    const dy = -Math.abs(stampOrigin.y - y);
-    const sy = y < stampOrigin.y ? 1 : -1;
-    let error = dx + dy;
-    const points: TilePoint[] = [];
-    while (x !== stampOrigin.x || y !== stampOrigin.y) {
-      const doubled = error * 2;
-      if (doubled >= dy) {
-        error += dy;
-        x += sx;
-      }
-      if (doubled <= dx) {
-        error += dx;
-        y += sy;
-      }
-      points.push({ x: x * TILE_SIZE, y: y * TILE_SIZE });
-    }
-    this.host.placeTileStroke(points);
-  }
-
-  private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {
-    if (
-      !this.isDrawing ||
-      editorState.paletteMode === 'objects' ||
-      editorState.activeTool !== 'pencil' ||
-      !this.tileDragStart
-    ) {
-      return { x: tileX, y: tileY };
-    }
-
-    const stampPlacement = isPencilStampPlacement();
-    const selectionWidth = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.width);
-    const selectionHeight = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.height);
-    return resolvePencilStampOrigin(
-      this.tileDragStart,
-      { x: tileX, y: tileY },
-      selectionWidth,
-      selectionHeight,
-      editorState.pencilContinuousStamping || !stampPlacement,
-    );
-  }
-
-  private beginPinchGesture(): void {
-    const points = Array.from(this.touchGesture.points.values());
-    if (points.length < 2) {
-      return;
-    }
-
-    const [firstPoint, secondPoint] = points;
-    this.pinchDistance = Phaser.Math.Distance.Between(
-      firstPoint.x,
-      firstPoint.y,
-      secondPoint.x,
-      secondPoint.y,
-    );
-    this.pinchAnchor = {
-      x: (firstPoint.x + secondPoint.x) * 0.5,
-      y: (firstPoint.y + secondPoint.y) * 0.5,
-    };
-    const anchorWorld = this.screenToWorld(this.pinchAnchor.x, this.pinchAnchor.y);
-    this.pinchAnchorWorld = {
-      x: anchorWorld.x,
-      y: anchorWorld.y,
-    };
-    this.panStartScroll = {
-      x: this.scene.cameras.main.scrollX,
-      y: this.scene.cameras.main.scrollY,
-    };
-  }
-
-  private handlePinchMove(): void {
-    const points = Array.from(this.touchGesture.points.values());
-    if (points.length < 2) {
-      return;
-    }
-
-    const [firstPoint, secondPoint] = points;
-    const nextDistance = Phaser.Math.Distance.Between(
-      firstPoint.x,
-      firstPoint.y,
-      secondPoint.x,
-      secondPoint.y,
-    );
-    if (this.pinchDistance <= 0) {
-      this.pinchDistance = nextDistance;
-      return;
-    }
-
-    const centerX = (firstPoint.x + secondPoint.x) * 0.5;
-    const centerY = (firstPoint.y + secondPoint.y) * 0.5;
-    const zoomFactor = nextDistance / this.pinchDistance;
-    if (Math.abs(zoomFactor - 1) > 0.02) {
-      const nextZoom = Phaser.Math.Clamp(editorState.zoom * zoomFactor, 0.25, 6);
-      if (Math.abs(nextZoom - editorState.zoom) >= 0.0001) {
-        updateEditorState({ zoom: nextZoom });
-        this.scene.cameras.main.setZoom(editorState.zoom);
-        this.host.updateZoomUI();
-      }
-      this.pinchDistance = nextDistance;
-    }
-
-    this.scrollWorldPointToScreen(this.pinchAnchorWorld.x, this.pinchAnchorWorld.y, centerX, centerY);
-    this.constrainEditorCamera();
-    this.host.updateBackgroundPreview();
-  }
+  cancelTouchEdit(): void { this.touchController.cancel(); }
 
   private screenToWorld(screenX: number, screenY: number): Phaser.Math.Vector2 {
     const camera = this.scene.cameras.main;

@@ -1,0 +1,145 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => ({ default: {
+  Scene: class {},
+  Math: {
+    Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
+    Vector2: class Vector2 { constructor(public x: number, public y: number) {} },
+    Distance: { Between: (x: number, y: number, xx: number, yy: number) => Math.hypot(xx - x, yy - y) },
+  },
+} }));
+vi.mock('../ui/appMode', () => ({ setAppMode: vi.fn() }));
+
+import { TILE_SIZE, editorState, updateEditorState } from '../config';
+import { CourseEditorScene } from './CourseEditorScene';
+import { EditorWorkspaceDrawingController } from './editor/workspaceDrawing';
+
+const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool,
+  pencilSprayMode: editorState.pencilSprayMode, pencilSprayBrushSize: editorState.pencilSprayBrushSize,
+  pencilSprayRate: editorState.pencilSprayRate };
+beforeEach(() => updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil' }));
+afterEach(() => updateEditorState(saved));
+
+function pointer(x = 10, buttons = 2, wasTouch = false) {
+  return { id: 1, x, y: 10, wasTouch, isDown: buttons !== 0, event: { buttons },
+    rightButtonDown: () => buttons === 2, leftButtonDown: () => buttons === 1,
+    middleButtonDown: () => buttons === 4 };
+}
+
+function harness() {
+  const handlers = new Map<string, (p: ReturnType<typeof pointer>) => void>();
+  const register = () => ({ on: vi.fn() });
+  const objectMoveController = { down: vi.fn(() => false), move: vi.fn(() => false), up: vi.fn(() => false), stopGesture: vi.fn(), cancel: vi.fn() };
+  const touchControls = { down: vi.fn(), move: vi.fn(), up: vi.fn() };
+  const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
+    input: { on: (name: string, fn: (p: ReturnType<typeof pointer>) => void) => handlers.set(name, fn) },
+    game: { events: register() }, events: register(),
+    cameras: { main: { zoom: 2, scrollX: 20, scrollY: 30, setScroll: vi.fn() } },
+    modifierKeys: {}, musicWorkflow: { isActive: () => false },
+    pendingRightClickPanPointerId: null, isPanning: false,
+    drawing: { isDrawing: false, hasBend: false },
+    objectMoveController, touchControls, constrainCamera: vi.fn(),
+    handlePrimaryPointerDown: vi.fn(), handleSecondaryPointerClick: vi.fn(),
+    handlePointerDrag: vi.fn(), finishPointerAction: vi.fn(), updateCursorHighlight: vi.fn(),
+  });
+  scene.setupPointerControls();
+  return { scene, objectMoveController, touchControls,
+    fire: (name: string, p = pointer()) => handlers.get(name)!(p) };
+}
+
+describe('Expanded Room pointer compatibility before shared input (F274)', () => {
+  it('keeps a short right click as erase without panning or drawing', () => {
+    const h = harness();
+    h.fire('pointerdown'); h.fire('pointermove', pointer(14)); h.fire('pointerup', pointer(14, 0));
+    expect(h.scene.handleSecondaryPointerClick).toHaveBeenCalledTimes(1);
+    expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+    expect(h.scene.cameras.main.setScroll).not.toHaveBeenCalled();
+  });
+
+  it('pans past the threshold using camera zoom, then never erases on release', () => {
+    const h = harness();
+    h.fire('pointerdown'); h.fire('pointermove', pointer(16)); h.fire('pointerup', pointer(16, 0));
+    expect(h.scene.cameras.main.setScroll).toHaveBeenCalledWith(17, 30);
+    expect(h.scene.handleSecondaryPointerClick).not.toHaveBeenCalled();
+    expect(h.scene.finishPointerAction).not.toHaveBeenCalled();
+    expect(h.scene.isPanning).toBe(false);
+  });
+
+  it('does not erase when a pending right click releases outside', () => {
+    const h = harness(); h.fire('pointerdown'); h.fire('pointerupoutside', pointer(10, 0));
+    expect(h.scene.handleSecondaryPointerClick).not.toHaveBeenCalled();
+    expect(h.scene.pendingRightClickPanPointerId).toBeNull();
+  });
+
+  it('routes touch to its gesture controller before object moves', () => {
+    const h = harness(); const p = pointer(10, 1, true);
+    h.fire('pointerdown', p); h.fire('pointermove', p); h.fire('pointerup', p);
+    expect(h.touchControls.down).toHaveBeenCalledWith(p);
+    expect(h.touchControls.move).toHaveBeenCalledWith(p);
+    expect(h.touchControls.up).toHaveBeenCalledWith(p, false);
+    expect(h.objectMoveController.down).not.toHaveBeenCalled();
+    expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+  });
+
+  it('lets an object move consume left input before drawing', () => {
+    const h = harness(); h.objectMoveController.down.mockReturnValue(true);
+    h.fire('pointerdown', pointer(10, 1));
+    expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+  });
+
+  it('pans with the middle button without painting or starting an object move', () => {
+    const h = harness();
+    h.fire('pointerdown', pointer(10, 4)); h.fire('pointermove', pointer(16, 4));
+    h.fire('pointerup', pointer(16, 0));
+    expect(h.scene.cameras.main.setScroll).toHaveBeenCalledWith(17, 30);
+    expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+    expect(h.objectMoveController.down).not.toHaveBeenCalled();
+    expect(h.scene.handleSecondaryPointerClick).not.toHaveBeenCalled();
+  });
+
+  it('routes fast smart-terrain drags through the shared workspace controller', () => {
+    updateEditorState({ paletteMode: 'smart' });
+    const { drawing, runtime } = drawingFixture();
+    const scene = Object.assign(Object.create(CourseEditorScene.prototype), { drawing });
+    drawing.begin({ x: 640 + 2 * TILE_SIZE, y: 400 + 3 * TILE_SIZE }, 'pencil');
+    const p = { ...pointer(10, 1), worldX: 640 + 5 * TILE_SIZE, worldY: 400 + 3 * TILE_SIZE };
+    scene.handlePointerDrag(p); scene.handlePointerDrag(p);
+    expect(runtime.placeTileStroke).toHaveBeenCalledExactlyOnceWith([3, 4, 5].map(x => ({
+      x: 640 + x * TILE_SIZE, y: 400 + 3 * TILE_SIZE,
+    })));
+  });
+
+  it.each([false, true])('sprays while stationary (touch=%s) and stops on release', wasTouch => {
+    updateEditorState({ paletteMode: 'tiles', activeTool: 'pencil', pencilSprayMode: true,
+      pencilSprayBrushSize: 5, pencilSprayRate: 1 });
+    const p = { ...pointer(10, 1, wasTouch), worldX: 700, worldY: 430 };
+    const { drawing, runtime } = drawingFixture();
+    drawing.begin({ x: p.worldX, y: p.worldY }, 'pencil', { touch: wasTouch });
+    runtime.placeTileAt.mockClear();
+    const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
+      input: { activePointer: p }, drawing, isPanning: false,
+      musicWorkflow: { isActive: () => false },
+    });
+    scene.tickSpray(250); scene.tickSpray(250);
+    expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
+    expect(runtime.placeTileAt).toHaveBeenLastCalledWith(700, 430);
+    scene.finishPointerAction(p); scene.tickSpray(500);
+    expect(runtime.commitTileBatch).toHaveBeenCalledTimes(1);
+    expect(runtime.placeTileAt).toHaveBeenCalledTimes(21);
+  });
+});
+
+function drawingFixture() {
+  const runtime = { beginTileBatch: vi.fn(), commitTileBatch: vi.fn(), cancelTileBatch: vi.fn(),
+    beginObjectBatch: vi.fn(), commitObjectBatch: vi.fn(), cancelObjectBatch: vi.fn(),
+    placeTileAt: vi.fn(), placeTileStroke: vi.fn(), eraseTileAt: vi.fn(), eraseStampAt: vi.fn(),
+    paintRandomizeAt: vi.fn(), floodFill: vi.fn(), floodErase: vi.fn(), stampShape: vi.fn() };
+  const drawing = new EditorWorkspaceDrawingController({
+    sliceAt: (x, y) => x >= 640 && x < 1280 && y >= 400 && y < 800 ? 0 : null,
+    originOf: () => ({ x: 640, y: 400 }), runtimeOf: () => runtime,
+    clampToSlice: (_slice, p) => ({ x: Math.min(39, Math.max(0, Math.floor((p.x - 640) / TILE_SIZE))),
+      y: Math.min(24, Math.max(0, Math.floor((p.y - 400) / TILE_SIZE))) }),
+    placeObject: vi.fn(), copy: vi.fn(), preview: vi.fn(), clearPreview: vi.fn(),
+  });
+  return { drawing, runtime };
+}
