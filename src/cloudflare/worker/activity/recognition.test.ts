@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { activityDescription } from '../../../activity/model';
 import { award, fixture, NOW } from './testDatabase';
 import { loadActivity, loadAllActivity } from './store';
+import { discoveryFixture } from '../runs/discoveryTestDatabase';
 import { refreshPlayableContentIndexForRoom } from '../playableContentIndex/store';
 const opened: ReturnType<typeof fixture>[]=[];
 const setup=(include=true)=>{const f=fixture(include);opened.push(f);return f;};
@@ -24,6 +25,19 @@ describe('builder recognition facts',()=>{
    expect(activityDescription(feed.entries[0])).toBe('Lava Gauntlet was added to Featured');
    expect((await loadAllActivity(f.env.DB)).entries).toEqual([]);
    expect((await loadActivity(f.env.DB,'p1',true)).entries).toEqual([]);
+ });
+ it('resolves native and legacy Expanded recognition to the whole reviewed version',async()=>{
+   const f=discoveryFixture();opened.push(f);
+   for(const [id,room] of [['native','7,0'],['course:legacy','9,0']]){
+     f.sqlite.prepare(`INSERT INTO featured_rooms(room_id,room_version,featured_at,target_key,target_version)
+       VALUES(?,1,?,?,3) ON CONFLICT(room_id) DO UPDATE SET target_key=excluded.target_key,
+       target_version=excluded.target_version,featured_at=excluded.featured_at`).run(room,NOW,`expanded_room:${id}`);
+   }
+   const entries=(await loadActivity(f.env.DB,'builder',true,undefined,'rooms')).entries
+     .filter(entry=>entry.kind==='featured'&&entry.contentVersion===3);
+   expect(entries.map(entry=>[entry.contentTitle,entry.contentPath]).sort()).toEqual([
+     ['course:legacy','/r/9/0'],['native','/r/7/0']]);
+   expect((await loadAllActivity(f.env.DB)).entries.some(entry=>entry.kind==='featured')).toBe(false);
  });
  it('announces Room of the Day independently of email opt-in and avoids a duplicate Featured notice',async()=>{
    const f=setup();await refreshPlayableContentIndexForRoom(f.env,'0,0');daily(f);feature(f);

@@ -16,7 +16,10 @@ recipient-owned room scoping refinement:4 recognition tests pass. Types pass.
 Evidence: `/tmp/wamp-f447-recognition-tests-3.log`,
 `/tmp/wamp-f447-recognition-own-room.log`, `/tmp/wamp-f447-types.log`.
 
-Still required: focused Expanded/legacy target coverage; recognition result links;
+Native and legacy Expanded target coverage also passes (five recognition tests).
+Evidence: `/tmp/wamp-f447-expanded-recognition.log`.
+
+Still required: recognition result links;
 publish warnings for ordinary and Expanded republishing; full check, native browser
 verification, CI, guarded rollout and live evidence. Keep reviewed Featured version
 pins unchanged. No migration applied remotely. F436 draft also reserves0077;
