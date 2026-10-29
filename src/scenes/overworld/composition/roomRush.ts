@@ -45,7 +45,7 @@ export function createRoomRushModeController(
     | 'sessionResetController' | 'clearTouchGestureState' | 'goalRunController'
     | 'clearRoomGoalIntroState' | 'syncScenePauseState' | 'runtimeController'
     | 'syncAppMode' | 'showTransientStatus' | 'renderHud'
-    | 'roomRushResultController' | 'gameFeelController'
+    | 'roomRushResultController' | 'gameFeelController' | 'playerBody' | 'physicsCadence' | 'getRoomOrigin'
   >,
 ): OverworldRoomRushModeController {
   return new OverworldRoomRushModeController({
@@ -97,5 +97,13 @@ export function createRoomRushModeController(
     showTransientStatus: (message) => host.showTransientStatus(message),
     renderHud: () => host.renderHud(),
     isDeathPending: () => host.gameFeelController.isDeathPending(),
+    getTraceFrame: () => {
+      const body=host.playerBody;if(!body)return null;
+      const coordinates=host.currentRoomCoordinates,origin=host.getRoomOrigin(coordinates);
+      const movement=host.physicsCadence?.getMovement();
+      return {roomCoordinates:{...coordinates},x:body.center.x-origin.x,y:body.bottom-origin.y,
+        vx:body.velocity.x,vy:body.velocity.y,grounded:movement?.grounded ?? Boolean(body.blocked.down || body.touching.down),
+        horizontalInput:movement?.horizontalInput ?? 0,verticalInput:movement?.verticalInput ?? 0,jumpPressed:movement?.jumpPressed ?? false};
+    },
   }, host.roomRushResultController);
 }

@@ -506,6 +506,8 @@ export interface RoomRushRunRow {
 }
 
 export interface RoomRushRunStartRow {
+  verification_nonce?: string | null;
+  verification_snapshot_hash?: string | null;
   start_id: string;
   client_run_id: string;
   user_id: string;

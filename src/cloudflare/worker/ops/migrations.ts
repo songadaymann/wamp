@@ -3,4 +3,4 @@
  * deployed before `wrangler d1 migrations apply` reports 503. migrations.test.ts fails
  * when a new migration is added without updating this.
  */
-export const LATEST_D1_MIGRATION = '0078_drop_retired_tables.sql';
+export const LATEST_D1_MIGRATION = '0079_weekly_event_automation.sql';

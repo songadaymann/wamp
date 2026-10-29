@@ -302,6 +302,9 @@ export interface RoomRushRunStartRequestBody {
 }
 
 export interface RoomRushRunStartResponse {
+  verificationSchemaVersion?: number;
+  verificationNonce?: string;
+  snapshotHash?: string;
   startId: string;
   clientRunId: string;
   difficulty: RoomRushDifficulty;
@@ -315,6 +318,7 @@ export interface RoomRushRunStartResponse {
 }
 
 export interface RoomRushRunSubmissionRequestBody {
+  verificationTrace?: RankedRunVerificationTrace | null;
   startId: string;
   clientRunId: string;
   difficulty: RoomRushDifficulty;

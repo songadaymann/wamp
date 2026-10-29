@@ -423,6 +423,7 @@ function buildRoomRushSubmissionBody(
     })),
     startCoordinates: { ...run.startCoordinates },
     finishCoordinates: { ...run.currentCoordinates },
+    ...(run.startRule==='weekly' ? {verificationTrace:run.verificationTrace ?? null} : {}),
     finishedAt: new Date().toISOString(),
   };
 }

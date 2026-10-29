@@ -11,7 +11,7 @@ import { getPlacedBossHitPoints } from '../../../enemies/boss';
 import { isCoopPressurePlate } from '../../../placedObjects/coopPressurePlates';
 import type { BossHitPoints } from '../../../enemies/boss';
 import { isPlausibleBossDefeat } from './bossVerification';
-import type { LeaderboardRankingMode } from '../../../runs/model';
+import type { LeaderboardRankingMode, RoomRushRouteStepRecord } from '../../../runs/model';
 import { compareLeaderboardEntries, getLeaderboardRankingMode } from '../../../runs/scoring';
 import { listPortalHops, type PortalHop, type PortalHopPoint } from '../../../runs/portalHops';
 import {
@@ -293,6 +293,67 @@ export function relaxVerificationTriggerForTrustTier(
     required: false,
     reason: null,
   };
+}
+
+/** Weekly Rush scores are derived from a bound, continuous physical route rather than a client count. */
+export function verifyWeeklyRushTrace(input: {
+  trace: RankedRunVerificationTrace; binding: RunVerificationBinding; startRoom: RoomSnapshot;
+  rooms: RoomSnapshot[]; route: RoomRushRouteStepRecord[]; elapsedMs: number; deaths: number;
+}): RunVerificationResult {
+  const {trace}=input, deadline=Date.now()+VERIFICATION_TIMEOUT_MS;
+  const envelope=validateTraceEnvelope(trace,input.binding,trace.traceDurationMs);
+  if(envelope.status!=='passed')return envelope;
+  if(trace.traceDurationMs>input.elapsedMs+TRACE_ELAPSED_TOLERANCE_MS || trace.traceDurationMs>5*60*1000
+    || (trace.respawnEvents?.length ?? 0)>0 || (trace.deathEvents?.length ?? 0)!==input.deaths) {
+    return createFailedVerification('failed','trace_invalid',{issue:'weekly_trace_clock_or_lives'});
+  }
+  const start=trace.breadcrumbs[0];
+  if(start.roomX!==input.startRoom.coordinates.x || start.roomY!==input.startRoom.coordinates.y) {
+    return createFailedVerification('failed','trace_path',{issue:'weekly_start_room'});
+  }
+  const startCheck=verifyTraceStart(start,getStartCheckpoint(input.startRoom,undefined,new Map(),start));
+  if(startCheck)return startCheck;
+  const route=[input.startRoom.id];
+  for(const transition of trace.roomTransitions) {
+    if(`${transition.fromRoomX},${transition.fromRoomY}`!==route[route.length-1]) {
+      return createFailedVerification('failed','trace_transition',{issue:'weekly_transition_chain'});
+    }
+    route.push(`${transition.toRoomX},${transition.toRoomY}`);
+  }
+  if(route.join('|')!==input.route.map(step=>step.roomId).join('|')) {
+    return createFailedVerification('failed','trace_path',{issue:'weekly_route_evidence'});
+  }
+  const allowed=new Set(input.rooms.map(room=>room.id));
+  const samples:RankedRunTraceBreadcrumb[]=[...trace.breadcrumbs,...trace.roomTransitions.map(t=>({
+    atMs:t.atMs,roomX:t.toRoomX,roomY:t.toRoomY,x:t.x,y:t.y,vx:0,vy:0,grounded:false,
+  }))].sort((a,b)=>a.atMs-b.atMs);
+  const path:RankedRunTraceBreadcrumb[]=[];
+  for(const sample of samples) {
+    if(sample.x < -POSITION_SLACK_PX || sample.x > ROOM_PX_WIDTH+POSITION_SLACK_PX
+      || sample.y < -POSITION_SLACK_PX || sample.y > ROOM_PX_HEIGHT+POSITION_SLACK_PX) {
+      return createFailedVerification('failed','trace_path',{issue:'weekly_local_bounds'});
+    }
+    if(!allowed.has(`${sample.roomX},${sample.roomY}`))return createFailedVerification('failed','trace_path',{issue:'weekly_unknown_room'});
+    const previous=path[path.length-1];
+    if(previous?.atMs===sample.atMs) {
+      const delta=getWorldDelta(previous,sample);
+      if(Math.abs(delta.dx)+Math.abs(delta.dy)>POSITION_SLACK_PX)return createFailedVerification('failed','trace_path',{issue:'weekly_simultaneous_position'});
+      path[path.length-1]=sample;continue;
+    }
+    path.push(sample);
+  }
+  const last=path[path.length-1];
+  if(`${last.roomX},${last.roomY}`!==route[route.length-1] || trace.traceDurationMs-last.atMs>MAX_BREADCRUMB_GAP_MS) {
+    return createFailedVerification('failed','trace_path',{issue:'weekly_trace_end'});
+  }
+  const pathCheck=verifyPath(path,trace.roomTransitions,deadline,undefined,listPortalHops(input.rooms));
+  if(pathCheck)return pathCheck;
+  const death=trace.deathEvents?.[0];
+  if(death && (death.roomX!==last.roomX || death.roomY!==last.roomY || Math.abs(death.atMs-trace.traceDurationMs)>TRACE_ELAPSED_TOLERANCE_MS)) {
+    return createFailedVerification('failed','trace_path',{issue:'weekly_terminal_death'});
+  }
+  return {status:'passed',reason:null,derivedMetrics:{collectiblesCollected:0,enemyCollectiblesCollected:0,enemiesDefeated:0,checkpointsReached:0},
+    summary:{breadcrumbs:trace.breadcrumbs.length,transitions:trace.roomTransitions.length,rooms:new Set(route).size}};
 }
 
 export async function verifyRoomRunTrace(input: {
