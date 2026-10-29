@@ -28,7 +28,7 @@ portrait console, stacked separately from the existing Save/Rate reminder.
 
 ## Verification
 
-- Eleven new unit tests cover lazy requests, signed-in/guest selection, pagination,
+- Thirteen new unit tests cover lazy requests, signed-in/guest selection, pagination,
   difficulty fallback, current/session/local clears, exhausted catalogs, active
   sequences, stale mode results, new-run reset and retryable failures.
 - Existing goal lifecycle, target/type/tick policies, objective, guest playback
@@ -46,7 +46,7 @@ Evidence: `/tmp/wamp-f429-context-tests.log`, `/tmp/wamp-f429-regression.log`,
 `/tmp/wamp-f429-native-browser-2.log`, `/tmp/wamp-f429-phone-chip.log` and ignored
 `output/f429-native/`. Final full check: `/tmp/wamp-f429-final-check.log`.
 
-Final full check passed:724files/6,169tests, one existing expected failure, two
+Final full check passed:725files/6,171tests, one existing expected failure, two
 skips; lint, types, DOM, build, bundle budget and assets pass. Boot666.9KB/670KB.
 Worker-safety and immutable map-asset contract probes also pass.
 
@@ -56,3 +56,13 @@ Both entry modes have regression tests; no discovery/selection behavior changed.
 
 Final check after that correction: `/tmp/wamp-f429-expanded-final-check.log`
 passed all stages; published/draft start regression and flow-control tests pass.
+
+CI keyboard navigation exposed a pre-existing background chat read logging the
+expected AbortError when the outgoing page closes. Initial/poll reads now ignore
+that cancellation while still logging real failures; both paths have regression
+tests. No keyboard assertion or console-error check was relaxed.
+
+Final check with cancellation handling: `/tmp/wamp-f429-chat-final-check.log`
+passes725files/6,171tests and all check stages. The exact CI keyboard workflow
+passes all six desktop/narrow-phone/Safari × ordinary/Expanded scenarios locally
+(`/tmp/wamp-f429-keyboard-local.log`), with no relaxed assertions.

@@ -342,6 +342,7 @@ export class ChatPanelController {
       this.applyChatResponse(response, false);
       this.historyLoaded = true;
     } catch (error) {
+      if(error&&typeof error==='object'&&'name' in error&&error.name==='AbortError')return;
       console.error('Failed to load chat history', error);
       this.setStatus(this.canPost() ? 'Chat failed to load.' : 'Chat is read-only right now.');
     } finally {
@@ -375,6 +376,7 @@ export class ChatPanelController {
           });
       this.applyChatResponse(response, true);
     } catch (error) {
+      if(error&&typeof error==='object'&&'name' in error&&error.name==='AbortError')return;
       console.error('Failed to poll chat messages', error);
     } finally {
       this.loading = false;
