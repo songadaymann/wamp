@@ -1,7 +1,7 @@
 # F447 — builder recognition notices and republish warnings
 
-Implemented in PR #345; not delivered until final CI, migration and live rollout
-are verified. Reviewed Featured version pins remain unchanged.
+Delivered through PR #345, merge `f5ae30a8`. All20 checks passed for tested
+head `808a30b5`. Reviewed Featured version pins remain unchanged.
 
 Builders receive private Activity notices for Featured, Room of the Day and Build
 Prompt results. Winners see their rank; other entrants see the entry count. Results
@@ -65,4 +65,32 @@ Evidence: `/tmp/wamp-f447-release-check.log`. Worker-safety passes. The native
 browser evidence includes the final navigation repair; native D1 repick evidence
 includes the final version-aware deduplication key. CI and live delivery remain.
 F436's pending draft also reserves0077; renumber/rebase it before its later merge.
-Keep F447 open until migration, CI and live delivery are verified.
+The delivery record below verifies the remaining gates.
+
+
+## Live delivery
+
+The clean merged-main artifact passed the exact-tree, migration and strict map
+asset guards. Migration0077 applied to the main DB; all1,748 old Activity rows
+remain, sequence1781 is retained, all7 old triggers/3 indexes remain, the5 new
+triggers exist, and Activity foreign-key violations are0. The jam DB uses its own
+migration folder and remains current at0003; it needed no schema change.
+
+Worker `0bada192-7857-4456-b63b-db044f603fa0` is confirmed at100%. The initial
+manual Pages release was a993f4ca; the custom domain settled on the simultaneous
+automatic build for the same merged commit. Republishing the already-built verified
+frontend artifact selected Pages `c8dc1091`, without rebuilding or redeploying the
+Worker/database. Live entry `main-CWNpcThx.js`, runtime, both editors, Composer,
+warning/feedback module and styles now match release bytes. Final production smoke
+passes all19 boot scripts, migration0077, database/maps and email health.
+
+Signed-out recognition reads return401. Public Activity's30 entries contain no
+private recognition kinds. No production player/room writes or emails were used.
+The pre-migration audit first hit transient D1 error7403; read-only database listing
+and the exact audit retry passed before any schema change.
+
+Evidence: `/tmp/wamp-f447-pre-migration-retry.json`,
+`/tmp/wamp-f447-post-migration.json`, `/tmp/wamp-f447-deploy.log`,
+`/tmp/wamp-f447-deployments.json`, `/tmp/wamp-f447-pages-final.log`,
+`/tmp/wamp-f447-live-assets.json`, `/tmp/wamp-f447-live-api.json`,
+`/tmp/wamp-f447-prod-smoke-final.log`.

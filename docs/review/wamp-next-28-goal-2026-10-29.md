@@ -36,7 +36,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F428 — ghost challenge links carrying the shared run; PR #342, all CI and live rollout verified.
 - [x] F429 — Keep Playing to another unbeaten room; PR #343, all CI and live rollout verified.
 - [x] F435 — cleared-room markers on the world map; PR #344, all CI and live rollout verified.
-- [ ] F447 — builder recognition notifications and republish warnings.
+- [x] F447 — builder recognition notifications and republish warnings; PR #345, migration/CI/live rollout verified.
 - [ ] F451 — preserve equivalent-version insights and compare gameplay changes.
 - [ ] F381 — builder-visible World approval state, results and reasons.
 - [ ] F253 — accessible Clear Layer and retire hidden editor UI.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **10/28 delivered**, and Round 2 is **82/248**.
+This goal is **11/28 delivered**, and Round 2 is **83/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -93,5 +93,9 @@ Production smoke passes. F435 cleared-map markers are delivered through PR344 (2
 full728-file/6186-test check and native account/phone/history flows pass. Worker
 e6f01c31 serves100%, Pages5c0b2569 and live assets match the release. Private
 progress is session-owned; public historical geometry exposes no personal state.
-Production smoke passes. F447 recognition notices and republish warnings are
-in progress. The remaining18 items stay open.
+Production smoke passes. F447 recognition notices and republish warnings are delivered through PR345
+(f5ae30a8): all20 checks, full732-file/6210-test check and native desktop/phone/
+new-tab flows pass. Migration0077 retained all1748 old Activity rows and their
+sequence; Worker0bada192 serves100%, finalPagesc8dc1091 and live assets match.
+Production smoke/private-read/public-feed checks pass. F451 equivalent-version
+insights and layout comparison are next. The remaining17 items stay open.

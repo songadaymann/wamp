@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 82 of 248 done.**
+**Progress: 83 of 248 done.**
 
 ## How to use this file
 
@@ -360,7 +360,7 @@ Each October feature is good on its own. Most of these ideas connect them, so th
 
 The builder tools are broad. What's missing is good news reaching the builder, and stats that survive a republish.
 
-- [ ] **F447** Builders aren't told when their room is Featured, Room of the Day, or a Build Prompt winner, and a quick republish silently un-features it · medium impact · medium effort
+- [x] **F447** Builders aren't told when their room is Featured, Room of the Day, or a Build Prompt winner, and a quick republish silently un-features it · medium impact · medium effort — **done 2026-10-29** ([PR #345](https://github.com/songadaymann/wamp/pull/345), `f5ae30a8`): private recognition/results notices and cancellable republish warnings preserve reviewed pins; migration, all CI and live rollout verified. [Receipt](wamp-f447-builder-recognition-2026-10-29.md).
 - [ ] **F451** Room stats and the death map go blank whenever a builder republishes, even after only a title or music change · medium impact · medium effort
 - [ ] **F450** Offer the weekly 'who played your room' email at first publish, and put the room's numbers in it · medium impact · small effort
 - [ ] **F445** Add 'Remix this room': start a new room from any published room, with credit to the original builder · medium impact · medium effort
