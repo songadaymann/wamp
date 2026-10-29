@@ -1,0 +1,50 @@
+# F429 — Keep playing to another unbeaten room (2026-10-29)
+
+Draft implementation; not delivered until CI, rollout and live verification pass.
+This branch currently builds on F428's candidate, pending that PR's delivery.
+
+Every eligible published ordinary/Expanded Room clear offers a persistent
+Keep playing action, including repeat clears that do not produce another rating
+prompt. The guest result dialog's existing Keep Playing button uses the same
+flow. An active room sequence retains its own controls. New ordinary, Expanded
+and Rush starts reset the prior suggestion; cooperative, assisted and draft
+clears do not offer a new one. Menus/modals hide the chip without discarding it.
+
+Discovery is requested only on tap. Signed-in players use Unbeaten; guests use
+Popular minus local and session clears. Prefer the prior room's known consensus
+difficulty, then fall back to any difficulty. Pagination can move past a page
+of known clears; skip cooperative and goal-less entries. Select the next target
+through the existing room sequence flow, including Expanded target metadata,
+with Keep playing as its own source/kicker label. A missing target or request
+failure is explained without inventing a destination; the action can retry.
+Account, World, run and mode changes cancel stale asynchronous results.
+
+The existing discovery catalog serves Prime. This action stays there rather
+than routing private-World/classroom players into Prime; World-context changes
+clear its state. No discovery request runs at every clear. No Worker API or
+schema change is needed. The phone chip has at least44px targets above the
+portrait console, stacked separately from the existing Save/Rate reminder.
+
+## Verification
+
+- Nine new unit tests cover lazy requests, signed-in/guest selection, pagination,
+  difficulty fallback, current/session/local clears, exhausted catalogs, active
+  sequences, stale mode results, new-run reset and retryable failures.
+- Existing goal lifecycle, target/type/tick policies, objective, guest playback
+  and result-modal regression tests pass.
+- Native workerd/D1 plus actual browser: real guest clears are verified and saved.
+  Desktop chip, phone chip and the phone guest dialog's Keep Playing action each
+  fetch one discovery request on tap, then enter another room with the existing
+  sequence and goal intro. No discovery request occurs before tapping. The chip
+  hides while the sequence is active. Zero browser page errors.
+- Phone chip hit box is at least44x44 and inside the390px viewport; phone chip and
+  destination screenshots visually inspected. The fixture uses production's
+  PLAYABLE_CONTENT_INDEX_READS=1. No production room/player writes or emails.
+
+Evidence: `/tmp/wamp-f429-context-tests.log`, `/tmp/wamp-f429-regression.log`,
+`/tmp/wamp-f429-native-browser-2.log`, `/tmp/wamp-f429-phone-chip.log` and ignored
+`output/f429-native/`. Final full check: `/tmp/wamp-f429-final-check.log`.
+
+Final full check passed:724files/6,167tests, one existing expected failure, two
+skips; lint, types, DOM, build, bundle budget and assets pass. Boot666.6KB/670KB.
+Worker-safety and immutable map-asset contract probes also pass.

@@ -1,3 +1,4 @@
+import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
 import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { COURSE_SERVER_RULES } from '../../courses/goalServerRules';
 import { getAuthDebugState } from '../../auth/client';
@@ -166,6 +167,7 @@ export class OverworldCoursePlaybackController {
       mode: 'draftPreview',
       roomOverrides: draftRoom ? [draftRoom] : [],
     });
+    resetKeepPlayingContext();
     this.host.setActiveCourseRun(this.createCourseRunState(snapshot));
   }
 

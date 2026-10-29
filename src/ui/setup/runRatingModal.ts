@@ -1,3 +1,4 @@
+import { requestKeepPlaying } from '../../progression/keepPlayingEvents';
 import { expandedRoomIdFromLegacyCourseId } from '../../expandedRooms/model';
 import Phaser from 'phaser';
 import { setLiveMessage } from '../friendlyError';
@@ -151,7 +152,9 @@ export class RunRatingModalController {
   };
 
   private readonly handleGuestClaimContinueClick = () => {
+    const queue=this.promptQueue.getSnapshot(),hasNext=queue.currentIndex>=0&&queue.currentIndex<queue.total-1;
     this.advancePrompt('skipped');
+    if(!hasNext)requestKeepPlaying();
   };
 
   private readonly handleShareTwitterClick = () => {

@@ -1,3 +1,4 @@
+import { notifyKeepPlayingClear, resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
 import { supportsGhostRace } from '../../runs/ghostRace';
 import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
@@ -203,6 +204,7 @@ export class OverworldGoalRunController {
       ? 'qualified'
       : 'practice';
 
+    resetKeepPlayingContext();
     this.currentGoalRun = {
       roomId: room.id,
       roomCoordinates: { ...room.coordinates },
@@ -495,6 +497,10 @@ export class OverworldGoalRunController {
     runState.result = 'completed';
     runState.completionMessage = message;
     runState.pendingResult = 'completed';
+    if(runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative)notifyKeepPlayingClear({
+      contentId:runState.roomId,roomCoordinates:{...runState.roomCoordinates},
+      difficulty:this.leaderboardMatchesRun(runState,this.currentRoomLeaderboard)?this.currentRoomLeaderboard!.difficulty?.consensus ?? null:null,
+    });
     if (runState.roomStatus === 'draft' && !runState.assisted) this.options.onDraftGoalCompleted?.(runState);
     this.maybeSubmitGoalRunResult(runState);
     this.maybePromptGuestClaimForLocalClear(runState);

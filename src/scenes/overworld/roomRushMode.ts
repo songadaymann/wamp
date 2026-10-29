@@ -1,3 +1,4 @@
+import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
 import { getAuthDebugState } from '../../auth/client';
 import { expandedRoomIdFromStandaloneRoomId } from '../../expandedRooms/model';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
@@ -300,6 +301,7 @@ export class OverworldRoomRushModeController {
       }),
     );
 
+    resetKeepPlayingContext();
     this.enterPlayModeAt(options.startCoordinates);
     if (options.weekly) this.host.syncModeRuntime();
     await options.afterStart();

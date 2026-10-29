@@ -1,3 +1,4 @@
+import { KeepPlayingController } from './keepPlaying';
 import { BuildPromptsController } from './buildPrompts';
 import { RoomInsightsController } from './roomInsights';
 import { DailyRoomController } from './dailyRoom';
@@ -76,6 +77,7 @@ interface UiControllers {
   roomRushResultModal: LazyModal<RoomRushResultModalController>;
   runRatingModal: LazyRunRatingController;
   postRunReminder: PostRunReminderController;
+  keepPlaying: KeepPlayingController;
   signTextModal: LazyModal<SignTextModalController>;
   wampOGramModal: LazyModal<WampOGramModalController>;
   welcomeModal: WelcomeModalController;
@@ -89,7 +91,7 @@ export function setupUiControllers(game: Phaser.Game): void {
   const controllers = createUiControllers(game);
   const dailyRoom = new DailyRoomController(); dailyRoom.init();
   game.events.once('destroy',()=>dailyRoom.destroy());
-  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); controllers.firstPublishModal.destroy(); });
+  game.events.once('destroy', () => { controllers.activityInbox.destroy(); controllers.roomInsights.destroy(); controllers.postRunReminder.destroy(); controllers.keepPlaying.destroy(); controllers.firstPublishModal.destroy(); });
 
   configureEditorBridge(controllers);
   initUiControllers(controllers);
@@ -173,6 +175,7 @@ function createUiControllers(game: Phaser.Game): UiControllers {
     }, [], explainMenuLoadFailure('Room Rush')),
     roomRushResultModal,
     runRatingModal,
+    keepPlaying: new KeepPlayingController(() => runRatingModal.close()),
     postRunReminder: new PostRunReminderController({
       openUnrated: () => { void exploreModal.open('unrated'); },
       openGuestHistory: () => { void guestProgressClaimModal.invoke(controller => controller.openFromReminder()); },
@@ -205,6 +208,7 @@ function initUiControllers(controllers: UiControllers): void {
   controllers.rewardStingCatchup.init();
   controllers.runRatingModal.init();
   controllers.postRunReminder.init();
+  controllers.keepPlaying.init();
   controllers.welcomeModal.init();
   controllers.chatPanel.init();
   controllers.mobileUi.init();
