@@ -1,7 +1,7 @@
 # F436 — automatic weekly events (draft, 2026-10-29)
 
 Automatic scheduling was approved. The concrete 26-theme Build Prompt bank is
-still awaiting owner content approval; this draft must not activate in production
+still awaiting owner content approval; PR341 is a draft and must not activate in production
 until that approval arrives. F436 remains unchecked.
 
 The existing hourly maintenance handler prefills the current and next UTC week,
@@ -28,9 +28,9 @@ Room Rush verification (F203) remains open and is not checked off here.
 
 ## Verification
 
-- Initial full check: 725 files, 6,174 passing tests, one existing expected
-  failure, two skips; lint, types, DOM, build and asset checks pass. A subsequent
-  browser-discovered start fix requires the final rerun before PR.
+- Final full check (rebased onto main141c9ba2): 725 files, 6,174 passing tests, one existing expected
+  failure, two skips; lint, types, DOM, build and asset checks pass, including
+  the browser-discovered weekly-start fix.
 - Scheduler tests cover repeated/concurrent ticks, next-week prefill, manual
   overrides, persistent deletion, stale automatic repairs, locks, rotation,
   DST/year boundaries and no eligible Rush rooms.
@@ -49,6 +49,6 @@ Room Rush verification (F203) remains open and is not checked off here.
   again after entering Play, matching regular Rush, so the player actually spawns.
   The empty pre-fix run was correctly refused by the new verifier.
 
-Local evidence: `/tmp/wamp-f436-check-2.log`,
+Local evidence: `/tmp/wamp-f436-final-check.log`,
 `/tmp/wamp-f436-browser-8.log`, ignored `output/f436-native/` probe/screenshot.
 No production migration or deployment has occurred.
