@@ -10,7 +10,8 @@ function selectionCte(targets: RoomInsightTarget[]): { sql: string; values: (str
     selected_versions AS (
       SELECT target_key,version_key AS selected_version_key,version_key AS attempt_version_key FROM requested
       UNION SELECT requested.target_key,requested.version_key,sibling.version FROM requested
-      JOIN room_version_facts selected ON requested.target_key='room:'||selected.room_id AND selected.version=requested.version_key
+      JOIN room_version_facts selected ON requested.target_key LIKE 'room:%'
+        AND selected.room_id=substr(requested.target_key,6) AND selected.version=requested.version_key
       JOIN room_version_facts sibling ON sibling.room_id=selected.room_id
       WHERE (${compareInsightFacts('selected','sibling')})=1
     ), owners AS (SELECT selected_versions.*, COALESCE(

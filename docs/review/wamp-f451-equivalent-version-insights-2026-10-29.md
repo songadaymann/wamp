@@ -41,3 +41,24 @@ Evidence: `/tmp/wamp-f451-check.log`, `/tmp/wamp-f451-expanded-tests.log`,
 `/tmp/wamp-f451-map-guard.log`, ignored `output/f451-native/`.
 
 CI, merge and live delivery remain pending; F451 is not yet checked off.
+
+## Initial rollout and query-plan correction
+
+PR346 head0f191440 passed all20 checks in CI40960789523 and merged as e49bc683.
+Worker1e630c2d and Pages4dadb291 were published; entry/main/editor/CSS release bytes
+match wamp.land. Production smoke passes and public API group/comparison data is
+correct. Expanded v5 retains5 exact-version attempts; an Explore card's player
+count matches Insights. No schema migration or production room/player/email writes.
+
+A subsequent warm Insights timing check took15.97seconds, so delivery remains open.
+EXPLAIN shows the initial join scans all selected facts and expands sibling pairs
+before filtering requested target keys. Moving the room-id expression onto the
+small requested side permits the existing room/version primary key lookup first.
+The corrected production D1 summary query reads951rows in7.0137ms, with0rows written.
+A query-plan regression test rejects a global selected-facts scan and requires the
+room/version lookup. Matching stats/maps/publisher exclusions are preserved.
+
+The initial deployment first stopped before publishing on transient D1 error7403;
+read-only listing and migration checks passed, then the guarded retry succeeded.
+The corrective PR's final CI and rollout remain pending. Do not mark F451 delivered
+until the correction and live latency are verified.
