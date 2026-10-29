@@ -56,4 +56,29 @@ Evidence: `/tmp/wamp-f381-check.log`, `/tmp/wamp-f381-baseline-failure-tests.log
 `/tmp/wamp-f381-route-email-tests.log`, `/tmp/wamp-f381-editor-feedback.log`,
 `/tmp/wamp-f381-notifications.log`, `/tmp/wamp-f381-native-5.log`,
 `/tmp/wamp-f381-native-phone-reviewer.log`, ignored `output/f381-native/`.
-CI and live rollout remain; F381 is not delivered yet.
+This was the pre-PR boundary; final delivery is recorded below.
+
+## Final delivery
+
+PR348 testedhead412a7ecc passed all20 checks in CI40966544232 and merged as
+e13d607a. The exact combined-head local check passes738files/6238tests, one
+existing expected failure/two skips, all remaining check stages and669.2KB/670KB
+boot budget. Worker safety and strict map asset checks pass. No schema migration;
+mainDB remains0077 and jam0003.
+
+Guarded release from clean maine13d607a passes migration/map guards and production
+smoke. Worker89464588-20bd-4deb-a7d7-cc55849dac78 is confirmed at100%.
+Pagesbc16366a, entrymain-zlZWf0mw.js, runtime, both editors, the deferred
+editorPublicationFeedback module and all selected styles match release bytes.
+
+Signed-out own-request and review reads return401, including a spoofed user-id
+query. The public World directory exposes no request/rejection metadata. Existing
+matching-version Insights still returns the expected v215 group/comparison in229ms.
+Authenticated decisions and emails were verified only in native fixtures/mocks;
+no production room/player writes or live email tests were used.
+
+Evidence: `/tmp/wamp-f381-final-check.log`, `/tmp/wamp-f381-worker-safety.log`,
+`/tmp/wamp-f381-map-guard.log`, `/tmp/wamp-f381-deploy.log`,
+`/tmp/wamp-f381-live-assets.json`, `/tmp/wamp-f381-live-api.json`,
+`/tmp/wamp-f381-deployments.json`, `/tmp/wamp-f381-pages.json`.
+F381 is delivered; the full28-item goal continues.

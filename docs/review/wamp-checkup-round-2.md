@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 84 of 248 done.**
+**Progress: 85 of 248 done.**
 
 ## How to use this file
 
@@ -286,7 +286,7 @@ Each new system works on its own; the bugs appear where they meet. The stale-tab
 - [x] **F382** Lost Songs start a new server session on every room entry; after about 32 rooms in 30 minutes a player can't collect songs · medium impact · small effort — **done 2026-10-22** ([PR #294](https://github.com/songadaymann/wamp/pull/294), API Worker `073f68a2`): Lost Songs reuses a player's open session for a room instead of opening one per entry, and the sitewide session gate is gone. [Receipt](wamp-round2-security-and-step1-2026-10-22.md).
 - [ ] **F390** The admin 'clear room' tool fails on every claimed room since Worlds launched, and no builder account can be deleted · medium impact · small effort
 - [ ] **F377** Changing your display name leaves the old name on Expanded Room and Course leaderboards, comments and Explore cards · medium impact · small effort — _also covers: Renamed players keep their old name on Expanded Room leaderboards and Explore builder credits_
-- [ ] **F381** In approval-only Worlds, builders never learn whether their room was approved, rejected, or needs resubmitting · medium impact · medium effort
+- [x] **F381** In approval-only Worlds, builders never learn whether their room was approved, rejected, or needs resubmitting · medium impact · medium effort — **done 2026-10-29** ([PR #348](https://github.com/songadaymann/wamp/pull/348), `e13d607a`): private request status/reasons, reviewer reason input, submission-baseline sync and decision/member emails; native desktop/phone, all CI and live rollout verified. [Receipt](wamp-f381-world-publication-feedback-2026-10-29.md).
 - [ ] **F391** Wamp-O-Gram fails with 'Request body is too large' for rooms that use about six custom sprites · medium impact · small effort
 - [x] **F387** Safety preview deploys still send multiplayer to the retired PartyKit server, not the safety Worker · medium impact · small effort — _also covers: Safety previews still run multiplayer on the old PartyKit host, not the Durable Object production uses_ — **done 2026-10-23** ([PR #318](https://github.com/songadaymann/wamp/pull/318)): `deploy_safety_branch.mjs` builds with blank `VITE_PARTYKIT_HOST` and `VITE_PARTYKIT_PARTY`, so a safety deploy's client takes its presence host from the safety Worker, and the PartyKit deploy step and `--skip-presence` are gone. `smoke_prod.mjs` now fails if any startup script contains `partykit.dev`. [Receipt](wamp-round2-cleanup-2026-10-23.md).
 - [ ] **F386** Rooms that share a custom background each download and decode it, and the slower one can fail and restart · medium impact · small effort

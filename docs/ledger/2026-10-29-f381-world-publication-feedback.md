@@ -1,0 +1,1 @@
+| 2026-10-29 | F381 | [#348](https://github.com/songadaymann/wamp/pull/348) | [receipt](docs/review/wamp-f381-world-publication-feedback-2026-10-29.md) | Show World review outcomes and reasons, sync submitted drafts and send decision emails; verified live |
