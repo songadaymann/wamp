@@ -65,6 +65,77 @@ try {
    const linked=await snapshot();await page.evaluate(snap=>window.__inspectorFixture.runtime.applyRoomSnapshot(JSON.parse(JSON.stringify(snap))),linked);assert.equal((await get('floor_trigger')).triggerTargetInstanceId,plate.triggerTargetInstanceId);await page.screenshot({path:`${prefix}-linked.png`});await tap('#btn-pressure-plate-clear');assert.equal((await get('floor_trigger')).triggerTargetInstanceId??null,null);if(expanded)assert.equal(await page.evaluate(id=>window.__inspectorFixture.scene.getActiveCourseDraft().objectLinks?.some(link=>link.triggerInstanceId===id)??false,plate.instanceId),false);await tap('#btn-pressure-plate-connect');await tap('#btn-editor-link-cancel');await open();await done();
    passed.push('existing plate link, clear, reconnect and cancel');
    await place('treasure_chest',168,176);await open();await done();await choose('coin_gold');await objectTap('treasure_chest');await open();assert.equal((await get('treasure_chest')).containedObjectId,'coin_gold');await tap('#btn-container-clear');assert.equal((await get('treasure_chest')).containedObjectId,null);await done();passed.push('native chest contents and Clear');
+   await page.evaluate(async () => {
+    const { registerCustomSprite } = await import('/src/customSprites/registry.ts');
+    const { updateEditorState } = await import('/src/config.ts');
+    registerCustomSprite({ id: 'inspector-guidance-gem', name: 'Guidance Gem', kind: 'collectible',
+     size: 16, status: 'active', pixels: Array(256).fill('#00ff00'),
+     createdAt: '2026-10-29T00:00:00Z', updatedAt: '2026-10-29T00:00:00Z' }, { persist: false });
+    updateEditorState({ paletteMode: 'objects', activeTool: 'pencil', selectedObjectId: 'custom_sprite:inspector-guidance-gem' });
+   });
+   await objectTap('treasure_chest'); await open();
+   assert.equal((await get('treasure_chest')).containedObjectId, null);
+   assert.match(await page.locator('#editor-inspector').innerText(), /Custom sprites cannot go inside containers yet/);
+   await page.screenshot({ path: `${prefix}-custom-contents-guidance.png` }); await done();
+   passed.push('custom collectible selection explains built-in-only container contents');
+   // F275: video-only guidance and replacement of a previous cross-cell target.
+   const beforeVideo = await snapshot();
+   await page.evaluate(async () => {
+    const f = window.__inspectorFixture;
+    const { rememberBuilderTrustTier } = await import('/src/roomVideo/access.ts');
+    const { createDefaultRoomVideo } = await import('/src/roomVideo/model.ts');
+    const { updateEditorState } = await import('/src/config.ts');
+    rememberBuilderTrustTier('T1');
+    const snap = f.runtime.exportRoomSnapshot();
+    snap.placedObjects = snap.placedObjects.filter(p => p.id === 'floor_trigger');
+    snap.video = { ...createDefaultRoomVideo('abcdefghijk', 16 / 9), x: 64, y: 224, width: 112, trigger: true };
+    f.runtime.applyRoomSnapshot(snap);
+    updateEditorState({ paletteMode: 'objects', activeTool: 'pencil', selectedObjectId: null });
+   });
+   await objectTap('floor_trigger'); await open(); await tap('#btn-pressure-plate-connect');
+   assert.match(await page.locator('#editor-phone-link-prompt').innerText(), /(?:video anchor|anchor on the video)/i);
+   const videoPoint = await page.evaluate(() => ({ x: window.__inspectorFixture.origin.x + 120,
+    y: window.__inspectorFixture.origin.y + 255.5 }));
+   await canvasTap(videoPoint.x, videoPoint.y); await open();
+   assert.equal((await get('floor_trigger')).triggerTargetInstanceId, 'room-video');
+   await page.screenshot({ path: `${prefix}-video-only.png` });
+   await tap('#btn-pressure-plate-clear'); await done();
+   passed.push('video-only target guidance and native link/clear');
+   if (expanded) {
+    await objectTap('floor_trigger'); await open(); await tap('#btn-pressure-plate-connect');
+    // A document refresh can supply an old cross-cell target while connecting.
+    await page.evaluate(() => {
+     const f = window.__inspectorFixture;
+     const source = f.scene.getSelectedSlice();
+     const other = [...f.scene.roomSlices.values()].find(s => s.roomId !== source.roomId);
+     window.__inspectorVideoOtherBackup = { roomId: other.roomId, snapshot: other.runtime.exportRoomSnapshot() };
+     const snap = other.runtime.exportRoomSnapshot();
+     snap.placedObjects = [{ id: 'door_metal', instanceId: 'video-old-target', x: 32, y: 32 }];
+     other.runtime.applyRoomSnapshot(snap);
+     const plate = f.runtime.exportRoomSnapshot().placedObjects.find(p => p.id === 'floor_trigger');
+     const link = { triggerRoomId: source.roomId, triggerInstanceId: plate.instanceId,
+      targetRoomId: other.roomId, targetInstanceId: 'video-old-target' };
+     f.scene.setActiveCourseDraft({ ...f.scene.getActiveCourseDraft(), objectLinks: [link], pressurePlateLinks: [link] });
+    });
+    await canvasTap(videoPoint.x, videoPoint.y); await open();
+    assert.equal((await get('floor_trigger')).triggerTargetInstanceId, 'room-video');
+    const links = await page.evaluate(() => {
+     const draft = window.__inspectorFixture.scene.getActiveCourseDraft();
+     return { links: draft.objectLinks, mirror: draft.pressurePlateLinks };
+    });
+    assert.deepEqual(links, { links: [], mirror: [] });
+    await done(); passed.push('source-cell video replaces old cross-cell link and mirror');
+   }
+   await page.evaluate(async snap => {
+    const f = window.__inspectorFixture;
+    f.runtime.applyRoomSnapshot(snap);
+    if (window.__inspectorVideoOtherBackup) {
+     const saved = window.__inspectorVideoOtherBackup;
+     f.scene.roomSlices.get(saved.roomId).runtime.applyRoomSnapshot(saved.snapshot);
+     delete window.__inspectorVideoOtherBackup;
+    }
+    (await import('/src/roomVideo/access.ts')).rememberBuilderTrustTier(null);
+   }, beforeVideo);
    await place('swordsman_ai',376,128,'characters');await open();await page.locator('#swordsman-objective-mode-select').selectOption('collect');await page.locator('#swordsman-defeat-mode-select').selectOption('respawn');assert.equal((await get('swordsman_ai')).swordsmanObjectiveMode,'collect');assert.equal((await get('swordsman_ai')).swordsmanDefeatMode,'respawn');await done();await objectTap('swordsman_ai');await open();assert.equal(await page.locator('#swordsman-objective-mode-select').inputValue(),'collect');await page.screenshot({path:`${prefix}-swordsman.png`});await done();passed.push('Sword Hunter collect/defeat settings and reselection');
    await place('police_patrolman',488,128,'characters');await open();await page.locator('#police-behavior-mode-select').selectOption('patrol');await tap('#police-patrol-shoots-checkbox');assert.equal((await get('police_patrolman')).policeBehaviorMode,'patrol');assert.equal((await get('police_patrolman')).policePatrolShoots,true);await done();passed.push('Police patrol and shooting');
    await place('jimothy',96,128,'characters');await open();await page.locator('#npc-mode-select').selectOption('idle');await tap('#npc-pushable-checkbox');assert.equal((await get('jimothy')).npcPushable,true);await page.locator('#npc-mode-select').selectOption('wander');await tap('#npc-jump-fall-checkbox');assert.equal((await get('jimothy')).npcCanJumpFall,true);

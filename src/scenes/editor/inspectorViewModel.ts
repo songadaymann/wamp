@@ -1,12 +1,13 @@
-import { getObjectById, type GameObjectConfig } from '../../config';
+import { canObjectBeStoredInContainer, getObjectById, type GameObjectConfig } from '../../config';
+import { isCustomSpriteObjectId } from '../../customSprites/model';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
-  statusText: string | null;
+  statusText: string;
   connectMode: boolean;
   targetSummary: string | null;
   eligibleTargetCount: number;
-  connectTitle?: string;
+  connectTitle: string;
   allowReconnectWithTarget?: boolean;
   coopAvailable?: boolean;
   coopPlate?: boolean;
@@ -85,21 +86,13 @@ export function buildPressurePlateInspectorState(
     pressureVisible: true,
     pressureCoopVisible: options.coopAvailable === true,
     pressureCoopChecked: options.coopPlate === true,
-    pressureStatusText:
-      options.statusText ??
-      (options.connectMode
-        ? canConnect
-          ? 'Click a door, barricade, cage, or chest anywhere in this expanded room to link this pressure plate.'
-          : 'No door, barricade, cage, or chest is in this expanded room yet.'
-        : options.targetSummary
-          ? `Linked to ${options.targetSummary}.`
-          : 'This pressure plate is not linked yet.'),
+    pressureStatusText: options.statusText,
     pressureConnectHidden:
       options.connectMode || (targetExists && !options.allowReconnectWithTarget),
     pressureConnectDisabled: options.connectMode || !canConnect,
     pressureConnectTitle: canConnect
       ? ''
-      : options.connectTitle ?? 'Add a door, metal door, cage, or chest to this expanded room first.',
+      : options.connectTitle,
     pressureClearHidden: options.connectMode,
     pressureClearDisabled: !targetExists,
     pressureDoneLaterHidden: !options.connectMode,
@@ -117,35 +110,6 @@ export function buildContainerInspectorState(
     containerClearDisabled: !options.hasContents,
     containerClearTitle: options.hasContents ? '' : 'This container is empty.',
   };
-}
-
-export function getPressurePlateTargetLabel(objectId: string): string {
-  switch (objectId) {
-    case 'door_locked':
-      return 'door';
-    case 'door_metal':
-      return 'metal door';
-    case 'trapdoor_locked':
-      return 'trapdoor';
-    case 'trapdoor_metal':
-      return 'metal trapdoor';
-    case 'treasure_chest':
-      return 'treasure chest';
-    case 'cage':
-      return 'cage';
-    case 'blast_door':
-      return 'blast door';
-    case 'barricade':
-      return 'barricade';
-    case 'door_locked_narrow':
-      return 'narrow door';
-    case 'door_metal_narrow':
-      return 'narrow metal door';
-    case 'wooden_bridge':
-      return 'wooden bridge';
-    default:
-      return getObjectById(objectId)?.name ?? 'object';
-  }
 }
 
 export function getContainerLabel(objectId: string): string {
@@ -178,12 +142,24 @@ export function getContainerAcceptedContentsLabel(objectId: string): string {
   return objectId === 'cage' ? 'enemies or crates' : 'collectibles';
 }
 
+/** Save normalization, command validation and gameplay currently use built-in contents. */
+export function canStoreEditorContainerContents(containerId: string, selected: GameObjectConfig | null): boolean {
+  return canObjectBeStoredInContainer(containerId, selected ? getObjectById(selected.id) : null);
+}
+
+export function unsupportedContainerSelectionText(selected: GameObjectConfig | null): string | null {
+  return selected && isCustomSpriteObjectId(selected.id)
+    ? 'Custom sprites cannot go inside containers yet. Choose built-in contents.' : null;
+}
+
 function getContainerInspectorStatusText(options: ContainerInspectorOptions): string {
   const selectedObject = options.selectedObject;
   const containerLabel = getContainerLabel(options.containerObjectId);
   const containerName = getContainerName(options.containerObjectId);
   const acceptedContentsLabel = getContainerAcceptedContentsLabel(options.containerObjectId);
 
+  const unsupported = unsupportedContainerSelectionText(selectedObject);
+  if (unsupported) return unsupported;
   if (options.canStoreSelected && selectedObject) {
     return `Click this ${containerLabel} to stash ${selectedObject.name} inside.`;
   }
