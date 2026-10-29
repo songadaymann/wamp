@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F435 | [#344](https://github.com/songadaymann/wamp/pull/344) | [receipt](docs/review/wamp-f435-cleared-map-markers-2026-10-29.md) | Mark cleared map cells and show a total with private account progress and persistent guest checks; verified live |
 | 2026-10-29 | F429 | [#343](https://github.com/songadaymann/wamp/pull/343) | [receipt](docs/review/wamp-f429-keep-playing-2026-10-29.md) | Offer another unbeaten goal after a clear, fetch only on tap and preserve phone/keyboard flow; verified live |
 | 2026-10-29 | F428 | [#342](https://github.com/songadaymann/wamp/pull/342) | [receipt](docs/review/wamp-f428-ghost-challenge-links-2026-10-29.md) | Share exact verified room ghosts, retain challengers on Restart and scope invitations to their room; verified live |
 | 2026-10-29 | F269, F389 | [#339](https://github.com/songadaymann/wamp/pull/339) | [receipt](docs/review/wamp-f269-f389-shared-real-art-previews-2026-10-29.md) | Share one real-art painter across API, Pages and Grams; fix geometry and cached fallback versions; verified live |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-15 | — | [#218](https://github.com/songadaymann/wamp/pull/218)–[#219](https://github.com/songadaymann/wamp/pull/219) | [receipt](docs/review/wamp-guest-activity-2026-10-15.md) | Activity tabs, consistent guest names, and guest names that open their activity |
 | 2026-10-15 | — | [#215](https://github.com/songadaymann/wamp/pull/215) | [receipt](docs/review/wamp-spawn-pickups-2026-10-15.md) | Phone smoke covers valid spawn pickups in both browser engines |
 | 2026-10-15 | — | [#208](https://github.com/songadaymann/wamp/pull/208) | [receipt](docs/review/wamp-phone-goal-prompt-2026-10-15.md) | Phone Goal Prompt fields get the full row |
-| 2026-10-15 | — | [#204](https://github.com/songadaymann/wamp/pull/204) | [receipt](docs/review/wamp-background-thumbnails-2026-10-14.md) | Background picker previews fixed, and the picker is reachable on short phones |

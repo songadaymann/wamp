@@ -35,7 +35,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [ ] F436 — automatic weekly event scheduling with overrides.
 - [x] F428 — ghost challenge links carrying the shared run; PR #342, all CI and live rollout verified.
 - [x] F429 — Keep Playing to another unbeaten room; PR #343, all CI and live rollout verified.
-- [ ] F435 — cleared-room markers on the world map.
+- [x] F435 — cleared-room markers on the world map; PR #344, all CI and live rollout verified.
 - [ ] F447 — builder recognition notifications and republish warnings.
 - [ ] F451 — preserve equivalent-version insights and compare gameplay changes.
 - [ ] F381 — builder-visible World approval state, results and reasons.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **9/28 delivered**, and Round 2 is **81/248**.
+This goal is **10/28 delivered**, and Round 2 is **82/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -89,5 +89,9 @@ F436 automatic weekly events remains a draft (PR341) pending prompt-content
 approval. F429 Keep Playing is delivered through PR343 (a4ac21ea): all CI, full725-file/
 6171-test check, six keyboard scenarios and native desktop/phone flows pass.
 Worker c0ad084a serves100%, Pages60aa95e9 and live assets match the release.
-Production smoke passes. F435 cleared-map markers are implemented under final
-verification; the other17 goal items remain pending.
+Production smoke passes. F435 cleared-map markers are delivered through PR344 (2bd76733): all20 checks,
+full728-file/6186-test check and native account/phone/history flows pass. Worker
+e6f01c31 serves100%, Pages5c0b2569 and live assets match the release. Private
+progress is session-owned; public historical geometry exposes no personal state.
+Production smoke passes. F447 recognition notices and republish warnings are
+in progress. The remaining18 items stay open.

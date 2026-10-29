@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 81 of 248 done.**
+**Progress: 82 of 248 done.**
 
 ## How to use this file
 
@@ -341,7 +341,7 @@ Each October feature is good on its own. Most of these ideas connect them, so th
 - [ ] **F436** Weekly Room Rush and Build Prompt sit empty unless Jonathan schedules them by hand every week · medium impact · medium effort
 - [x] **F428** 'Can you do better?' share links don't let your friend race you: send your ghost with the link · medium impact · medium effort — **done 2026-10-29** ([PR #342](https://github.com/songadaymann/wamp/pull/342), `a36493f9`): saved clears share the exact verified ghost, preserve it on Restart and scope it to the invited room; all CI and live rollout verified. [Receipt](wamp-f428-ghost-challenge-links-2026-10-29.md).
 - [x] **F429** After beating a room in free play there's no 'Next room' button: offer the next unbeaten room · medium impact · medium effort — **done 2026-10-29** ([PR #343](https://github.com/songadaymann/wamp/pull/343), `a4ac21ea`): lazy Keep playing selects an eligible unbeaten goal after a clear; all CI, native desktop/phone flows and live release verified. [Receipt](wamp-f429-keep-playing-2026-10-29.md).
-- [ ] **F435** The world map doesn't show which rooms you've already beaten · medium impact · small effort
+- [x] **F435** The world map doesn't show which rooms you've already beaten · medium impact · small effort — **done 2026-10-29** ([PR #344](https://github.com/songadaymann/wamp/pull/344), `2bd76733`): browse checks and total use accepted account clears or local guest progress, including pinned Expanded footprints; all CI and live release verified. [Receipt](wamp-f435-cleared-map-markers-2026-10-29.md).
 - [ ] **F433** Players are never told Lost Songs exist, how many there are, or where to look · medium impact · medium effort
 - [ ] **F434** The person who receives a Wamp-O-Gram never sees the sender's message, and the link preview isn't the postcard · medium impact · medium effort
 - [ ] **F432** No way to follow a builder you like and hear when they publish something new · medium impact · medium effort
