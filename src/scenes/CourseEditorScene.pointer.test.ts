@@ -10,7 +10,7 @@ vi.mock('phaser', () => ({ default: {
 } }));
 vi.mock('../ui/appMode', () => ({ setAppMode: vi.fn() }));
 
-import { editorState, updateEditorState } from '../config';
+import { TILE_SIZE, editorState, updateEditorState } from '../config';
 import { CourseEditorScene } from './CourseEditorScene';
 
 const saved = { paletteMode: editorState.paletteMode, activeTool: editorState.activeTool };
@@ -82,5 +82,30 @@ describe('Expanded Room pointer compatibility before shared input (F274)', () =>
     const h = harness(); h.objectMoveController.down.mockReturnValue(true);
     h.fire('pointerdown', pointer(10, 1));
     expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+  });
+
+  it('pans with the middle button without painting or starting an object move', () => {
+    const h = harness();
+    h.fire('pointerdown', pointer(10, 4)); h.fire('pointermove', pointer(16, 4));
+    h.fire('pointerup', pointer(16, 0));
+    expect(h.scene.cameras.main.setScroll).toHaveBeenCalledWith(17, 30);
+    expect(h.scene.handlePrimaryPointerDown).not.toHaveBeenCalled();
+    expect(h.objectMoveController.down).not.toHaveBeenCalled();
+    expect(h.scene.handleSecondaryPointerClick).not.toHaveBeenCalled();
+  });
+
+  it('fills skipped smart-terrain cells in the selected slice at its world origin', () => {
+    updateEditorState({ paletteMode: 'smart' });
+    const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
+      pencilDragStart: { x: 2, y: 3 }, lastPencilStampOrigin: null,
+    });
+    const slice = { origin: { x: 640, y: 400 }, runtime: { placeTileAt: vi.fn(), placeTileStroke: vi.fn() } };
+    scene.placeCoursePencilStamp(slice, 2, 3);
+    scene.placeCoursePencilStamp(slice, 5, 3);
+    scene.placeCoursePencilStamp(slice, 5, 3);
+    expect(slice.runtime.placeTileAt).toHaveBeenCalledExactlyOnceWith(640 + 2 * TILE_SIZE, 400 + 3 * TILE_SIZE);
+    expect(slice.runtime.placeTileStroke).toHaveBeenCalledExactlyOnceWith([3, 4, 5].map(x => ({
+      x: 640 + x * TILE_SIZE, y: 400 + 3 * TILE_SIZE,
+    })));
   });
 });

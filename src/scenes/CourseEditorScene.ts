@@ -117,7 +117,6 @@ import {
   isEditorShapeOutline,
   isPathEditorTool,
   isPencilBrushPlacement,
-  isPencilStampPlacement,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
@@ -128,7 +127,8 @@ import {
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
 import { clampRandomizeBrushSize } from './editor/randomizeTiles';
-import { forEachDraggedTileCell, resolvePencilStampOrigin } from './editor/stampDrag';
+import { forEachDraggedTileCell } from './editor/stampDrag';
+import { placeEditorPencilStroke, resolveEditorPencilOrigin } from './editor/pencilStroke';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './editor/shapeTiles';
 import type { EditorStatusDetails } from './editor/roomSession';
 import { buildEditorUiViewModel } from './editor/viewModel';
@@ -2996,34 +2996,9 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     tileX: number,
     tileY: number,
   ): void {
-    const stampPlacement = isPencilStampPlacement();
-    const selectionWidth = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.width);
-    const selectionHeight = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.height);
-    const origin = this.pencilDragStart
-      ? resolvePencilStampOrigin(
-          this.pencilDragStart,
-          { x: tileX, y: tileY },
-          selectionWidth,
-          selectionHeight,
-          editorState.pencilContinuousStamping || !stampPlacement,
-        )
-      : { x: tileX, y: tileY };
-    if (
-      this.lastPencilStampOrigin
-      && this.lastPencilStampOrigin.x === origin.x
-      && this.lastPencilStampOrigin.y === origin.y
-    ) {
-      return;
-    }
+    const origin = resolveEditorPencilOrigin(this.pencilDragStart, { x: tileX, y: tileY });
+    placeEditorPencilStroke(slice.runtime, this.lastPencilStampOrigin, origin, slice.origin);
     this.lastPencilStampOrigin = origin;
-    slice.runtime.placeTileAt(
-      slice.origin.x + origin.x * TILE_SIZE,
-      slice.origin.y + origin.y * TILE_SIZE,
-    );
   }
 
   private finishPointerAction(pointer: Phaser.Input.Pointer): void {
@@ -3478,6 +3453,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return false;
     }
     return (
+      pointer.middleButtonDown() ||
       pointer.rightButtonDown() ||
       Boolean(this.modifierKeys.SPACE?.isDown) ||
       Boolean(this.modifierKeys.ALT?.isDown)

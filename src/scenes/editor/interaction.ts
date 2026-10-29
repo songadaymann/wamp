@@ -28,11 +28,11 @@ import {
   isPathEditorTool,
   isPencilBrushPlacement,
   isPencilSprayPlacement,
-  isPencilStampPlacement,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, listCircleBrushOffsets } from './sprayTiles';
-import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
+import { forEachDraggedTileCell } from './stampDrag';
+import { placeEditorPencilStroke, resolveEditorPencilOrigin } from './pencilStroke';
 import { iterateShapeTiles, resolveShapeEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import {
   getScreenAnchorWorldPoint,
@@ -1432,44 +1432,8 @@ export class EditorInteractionController {
     const tileY = Math.floor(worldY / TILE_SIZE);
     const stampOrigin = this.getDraggedStampOrigin(tileX, tileY);
 
-    if (
-      this.lastDraggedStampOrigin &&
-      this.lastDraggedStampOrigin.x === stampOrigin.x &&
-      this.lastDraggedStampOrigin.y === stampOrigin.y
-    ) {
-      return;
-    }
-
-    const previous = this.lastDraggedStampOrigin;
+    placeEditorPencilStroke(this.host, this.lastDraggedStampOrigin, stampOrigin);
     this.lastDraggedStampOrigin = { ...stampOrigin };
-    if (editorState.paletteMode !== 'smart' || !previous) {
-      this.host.placeTileAt(stampOrigin.x * TILE_SIZE, stampOrigin.y * TILE_SIZE);
-      return;
-    }
-
-    // Pointer events can skip several grid cells during a quick stroke. Fill
-    // the segment so a vertical wall does not become disconnected grass caps.
-    let x = previous.x;
-    let y = previous.y;
-    const dx = Math.abs(stampOrigin.x - x);
-    const sx = x < stampOrigin.x ? 1 : -1;
-    const dy = -Math.abs(stampOrigin.y - y);
-    const sy = y < stampOrigin.y ? 1 : -1;
-    let error = dx + dy;
-    const points: TilePoint[] = [];
-    while (x !== stampOrigin.x || y !== stampOrigin.y) {
-      const doubled = error * 2;
-      if (doubled >= dy) {
-        error += dy;
-        x += sx;
-      }
-      if (doubled <= dx) {
-        error += dx;
-        y += sy;
-      }
-      points.push({ x: x * TILE_SIZE, y: y * TILE_SIZE });
-    }
-    this.host.placeTileStroke(points);
   }
 
   private getDraggedStampOrigin(tileX: number, tileY: number): { x: number; y: number } {
@@ -1482,20 +1446,7 @@ export class EditorInteractionController {
       return { x: tileX, y: tileY };
     }
 
-    const stampPlacement = isPencilStampPlacement();
-    const selectionWidth = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.width);
-    const selectionHeight = editorState.paletteMode === 'smart' || !stampPlacement
-      ? 1
-      : Math.max(1, editorState.selection.height);
-    return resolvePencilStampOrigin(
-      this.tileDragStart,
-      { x: tileX, y: tileY },
-      selectionWidth,
-      selectionHeight,
-      editorState.pencilContinuousStamping || !stampPlacement,
-    );
+    return resolveEditorPencilOrigin(this.tileDragStart, { x: tileX, y: tileY });
   }
 
   private beginPinchGesture(): void {
