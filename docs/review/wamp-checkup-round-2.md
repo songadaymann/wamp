@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 73 of 248 done.**
+**Progress: 74 of 248 done.**
 
 ## How to use this file
 
@@ -141,7 +141,7 @@ The Expanded Room work left two copies of several things: server routes, progres
 - [x] **F268** Every Expanded Room rating is written twice, recomputes badges up to 3 times, and can vanish from Explore after a rename-only republish · medium impact · medium effort — **done 2026-10-28** ([PR #333](https://github.com/songadaymann/wamp/pull/333)): consistent rating buckets across writes, discovery, viewer state and quality trophies; one badge pass per distinct person. Migration 0076 and Worker verified live; 181 hidden votes restored across 123 targets. [Receipt](wamp-f268-rating-windows-2026-10-28.md).
 - [ ] **F274** The Expanded Room editor has its own 930-line copy of the room editor's mouse, drawing and camera code, and it has already drifted · medium impact · large effort
 - [ ] **F275** The two object inspectors are still separate 1,250-line copies, and each has picked up half of the recent fixes · medium impact · medium effort
-- [ ] **F273** Room vs Expanded Room progression and rating rules are two hand-synced copies of the anti-cheat-sensitive logic · medium impact · medium effort
+- [x] **F273** Room vs Expanded Room progression and rating rules are two hand-synced copies of the anti-cheat-sensitive logic · medium impact · medium effort
 - [ ] **F283** Five separate copies of 'which version of this room is current' have already drifted apart · low impact · small effort
 - [ ] **F269** Expanded Room and Wamp-O-Gram previews use a separate 838-line 'colored blocks' renderer; fold it into the real-art one · medium impact · medium effort
 - [ ] **F267** Each pop-up re-declares the same paper skin by name (~750 duplicate lines); the default is still the old dark one · medium impact · medium effort

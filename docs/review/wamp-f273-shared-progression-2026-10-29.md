@@ -1,6 +1,7 @@
 # F273: shared progression and rating rules — 2026-10-29
 
-Implementation and local verification complete. PR CI and production delivery pending.
+Delivered in [PR #335](https://github.com/songadaymann/wamp/pull/335), squash
+merge `229df2c66dfbdc2fb91643190dc30796c9e5341e`.
 
 ## Shared behavior
 
@@ -59,5 +60,19 @@ Logs: `/tmp/wamp-f273-check-final.log`, `/tmp/wamp-f273-protect-baseline.log`,
 `/tmp/wamp-f273-protect-shared.log`, `/tmp/wamp-f273-native-room.log`,
 `/tmp/wamp-f273-native-course.log`. Ignored native probes: `output/f273-native/`.
 
-No schema migration is required. Production delivery requires merged-source
-Worker rollout, production smoke and verification before checking F273 off.
+## Production delivery
+
+All 18 jobs passed in [CI run 40881492786](https://github.com/songadaymann/wamp/actions/runs/40881492786).
+The clean merged tree matched tested candidate `0cc3beb2` exactly. Guarded API
+Worker deployment completed successfully; production smoke passed. Version
+`29b0b3e2-41b8-425d-97e6-78f64c875473` is confirmed at 100% traffic. Previous
+version: `a16a0245-582d-4419-a37c-bf27ab8f8fde`. No schema migration: health
+confirmed latest applied/expected migration `0076_rating_window_keys.sql`,
+healthy database and map assets, zero pending tile outbox entries, email
+configured, debug links/test reset disabled. No real-player runs or email tests
+were submitted for this rollout.
+
+The first deployment attempt stopped before any write on a transient Cloudflare
+D1 API 7403 authorization response. Account/D1 listing and a repeated migration
+check succeeded; the guarded retry and smoke exited 0. Deployment evidence:
+`/tmp/wamp-f273-deploy-retry.log`, `/tmp/wamp-f273-deployments.json`.

@@ -26,7 +26,7 @@ source assets outside production rather than discarding them blindly.
 F263 is first because Jonathan specifically requested it now. Then resume the
 suggested order below. No item is checked until its actual delivery is verified.
 
-- [ ] F273 — share progression/rating/verification core, preserving kind-specific rules.
+- [x] F273 — shared progression/rating/verification core; PR #335, all CI and live rollout verified.
 - [ ] F274 — share editor input and camera behavior.
 - [ ] F275 — share object-inspector controllers and correct drift.
 - [ ] F334 — reuse cached map artwork for share previews, with fallback.
@@ -58,5 +58,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 ## Current boundary
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263 delivered in PR #334
-(merged `b27f2ca9`), so this goal is **1/28 delivered** and Round 2 is **73/248**.
-F273 implementation is in progress; all other goal items remain pending.
+(merged `b27f2ca9`), so this goal is **2/28 delivered** and Round 2 is **74/248**.
+F273 delivered in PR #335 (merged `229df2c6`), all 18 CI jobs passed. API Worker
+`29b0b3e2-41b8-425d-97e6-78f64c875473` serves 100%; production smoke passed,
+migration 0076 verified. F274 is in progress; the other 25 goal items remain pending.

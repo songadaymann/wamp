@@ -1,0 +1,1 @@
+| 2026-10-29 | F273 | [#335](https://github.com/songadaymann/wamp/pull/335) | [receipt](docs/review/wamp-f273-shared-progression-2026-10-29.md) | Share room and Expanded Room progression, ratings and verification mapping; preserve reward identities, verified live |
