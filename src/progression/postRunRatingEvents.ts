@@ -20,6 +20,7 @@ interface BasePostRunRatingRequestDetail {
   score: number | null;
   autoSuggestedDifficulty: ProgressionDifficulty;
   guestProgress?: GuestRunSaveResult;
+  clearedRoomIds?: string[];
   bestRun?: PostRunBest | null;
 }
 

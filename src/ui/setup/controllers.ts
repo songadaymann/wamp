@@ -1,3 +1,4 @@
+import { setupClearedRoomProgress } from './clearedRooms';
 import { KeepPlayingController } from './keepPlaying';
 import { BuildPromptsController } from './buildPrompts';
 import { RoomInsightsController } from './roomInsights';
@@ -88,6 +89,7 @@ interface UiControllers {
 
 export function setupUiControllers(game: Phaser.Game): void {
   game.events.once('destroy', setupLostSongProgress());
+  game.events.once('destroy', setupClearedRoomProgress());
   const controllers = createUiControllers(game);
   const dailyRoom = new DailyRoomController(); dailyRoom.init();
   game.events.once('destroy',()=>dailyRoom.destroy());

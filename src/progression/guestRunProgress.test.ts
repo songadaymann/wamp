@@ -16,6 +16,12 @@ function detail(clientRunId = 'client'): RoomPostRunRatingRequestDetail {
     guestProgress: { clientRunId, attemptId: null, status: 'queued', durable: true, reason: null } };
 }
 describe('guest clear history and truthful claim copy', () => {
+  it('retains the exact pinned map footprint and preserves an explicit ineligible empty list',()=>{
+    storage();recordGuestRunClear({...detail(),clearedRoomIds:['0,0','1,0','1,0','invalid','01,0']});
+    expect(loadGuestRunProgress().records[0].clearedRoomIds).toEqual(['0,0','1,0']);
+    recordGuestRunClear({...detail('draft'),clearedRoomIds:[]});
+    expect(loadGuestRunProgress().records[0].clearedRoomIds).toEqual([]);
+  });
   it('updates the right captured clear after a reconnect without duplicating it', () => {
     storage(); recordGuestRunClear(detail('first')); recordGuestRunClear(detail('second'));
     const result = { ...detail('first').guestProgress!, attemptId: 'server-attempt', status: 'saved' as const };

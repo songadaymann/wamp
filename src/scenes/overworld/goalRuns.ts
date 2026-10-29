@@ -852,6 +852,7 @@ export class OverworldGoalRunController {
     const detail: RoomPostRunRatingRequestDetail = {
       contentType: 'room',
       contentId: runState.roomId,
+      clearedRoomIds: runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative?[runState.roomId]:[],
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
       bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates },
@@ -1037,6 +1038,7 @@ export class OverworldGoalRunController {
 
   private guestClearDetail(runState: GoalRunState, body: RunFinishRequestBody): RoomPostRunRatingRequestDetail {
     return { contentType: 'room', contentId: runState.roomId, ghostChallengeEligible: supportsGhostRace(runState.goal),
+      clearedRoomIds:runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative?[runState.roomId]:[],
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
       bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates }, version: runState.roomVersion, previousViewerRank: null,

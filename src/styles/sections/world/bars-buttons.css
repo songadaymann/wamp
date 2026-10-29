@@ -67,13 +67,14 @@
     text-overflow: ellipsis;
   }
 
-  .world-lost-songs {
+  .world-cleared-rooms, .world-lost-songs {
     color: #f4cc55;
     font-size: var(--ui-text-small, 9px);
     white-space: nowrap;
   }
 
-  body:not([data-app-mode='world']) #world-lost-songs {
+  body:not([data-app-mode='world']) #world-lost-songs,
+  body:not([data-app-mode='world']) #world-cleared-rooms {
     display: none;
   }
 

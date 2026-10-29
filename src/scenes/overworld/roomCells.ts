@@ -21,6 +21,8 @@ interface OverworldRoomCellControllerHost {
   getMode(): OverworldMode;
   isRoomInActiveCourse(coordinates: RoomCoordinates): boolean;
   getExpandedRoomIdAt(coordinates: RoomCoordinates): string | null;
+  hasClearedRoom?(coordinates: RoomCoordinates): boolean;
+  subscribeClearedRooms?(listener:()=>void):()=>void;
   hasFoundLostSong?(coordinates: RoomCoordinates): boolean;
 }
 
@@ -29,11 +31,13 @@ export class OverworldRoomCellController {
   private roomFrameGraphics: Phaser.GameObjects.Graphics | null = null;
   private roomFocusGraphics: Phaser.GameObjects.Graphics | null = null;
   private frontierLabelTexts = new Map<string, Phaser.GameObjects.Text>();
+  private unsubscribeCleared:(()=>void)|null=null;
   private lastZoomRenderKey: string | null = null;
 
   constructor(private readonly host: OverworldRoomCellControllerHost) {}
 
   create(): void {
+    this.unsubscribeCleared??=this.host.subscribeClearedRooms?.(()=>this.redraw())??null;
     if (!this.roomFillGraphics) {
       this.roomFillGraphics = this.host.scene.add.graphics();
       this.roomFillGraphics.setDepth(-5);
@@ -51,6 +55,7 @@ export class OverworldRoomCellController {
   }
 
   destroy(): void {
+    this.unsubscribeCleared?.();this.unsubscribeCleared=null;
     this.destroyFrontierLabels();
     this.roomFillGraphics?.destroy();
     this.roomFillGraphics = null;
@@ -101,6 +106,9 @@ export class OverworldRoomCellController {
         this.drawCellFrame(coordinates, cellState, origin.x, origin.y, protectedRoomIds.has(`${coordinates.x},${coordinates.y}`));
         if (cellState === 'published' && this.host.getMode() === 'browse' && this.host.hasFoundLostSong?.(coordinates)) {
           this.drawInsetFrame(this.roomFrameGraphics, origin.x, origin.y, 18, 2, 0xf4cc55, 0.9);
+        }
+        if(cellState==='published'&&this.host.getMode()==='browse'&&this.host.hasClearedRoom?.(coordinates)) {
+          this.drawClearedMarker(origin.x,origin.y);
         }
         if (cellState === 'frontier') {
           this.syncFrontierLabel(coordinates, origin.x, origin.y);
@@ -293,6 +301,16 @@ export class OverworldRoomCellController {
 
   private getFrontierLabelKey(coordinates: RoomCoordinates): string {
     return `${coordinates.x},${coordinates.y}`;
+  }
+
+  private drawClearedMarker(x:number,y:number):void {
+    const graphics=this.roomFrameGraphics;if(!graphics)return;
+    const size=Math.min(96,Math.max(24,20*Math.round(1/Math.max(this.host.getZoom(),0.001))));
+    const left=x+ROOM_PX_WIDTH-20-size,top=y+20;
+    graphics.fillStyle(0x050505,0.92);graphics.fillRect(left,top,size,size);
+    graphics.fillStyle(0xfff3d6,1);
+    for(const [dx,dy] of [[0.14,0.44],[0.28,0.58],[0.42,0.44],[0.56,0.30],[0.70,0.16]])
+      graphics.fillRect(left+dx*size,top+dy*size,size*0.18,size*0.18);
   }
 
   private getZoomRenderKey(): string {

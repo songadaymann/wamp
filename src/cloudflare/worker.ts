@@ -1,3 +1,4 @@
+import { handleClearedRoomProgress } from './worker/runs/clearedRooms';
 import { handleCollectionPrice } from './worker/mint/price';
 import { handleCollectionRead } from './worker/collections/routes';
 export { PresenceDurableObject } from './presence/durableObject';
@@ -56,6 +57,7 @@ import { dispatchWorkerRoute, type WorkerRoute } from './worker/core/router';
 import {
   handleExpandedRoomByCoordinateGet,
   handleExpandedRoomGet,
+  handleExpandedRoomFootprint,
 } from './worker/expandedRooms/routes';
 import {
   handleExpandedRoomCellAdd,
@@ -155,6 +157,8 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  {methods:['GET'],pattern:/^\/api\/expanded-rooms\/([^/]+)\/footprint$/,auth:'public',
+    handler:({request,url,env},match)=>handleExpandedRoomFootprint(request,url,env,decodeURIComponent(match![1]))},
   { methods: ['GET'], pattern: /^\/api\/rooms\/([^/]+)\/ghosts$/, auth: 'optional',
     handler: ({ request, url, env }, match) => handleRoomGhosts(request, url, env, decodeURIComponent(match![1])) },
   { methods: ['GET','POST','DELETE'], pattern: {prefix:'/api/build-prompts'}, auth:'optional',
@@ -352,6 +356,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
     handler: ({ request, env, executionContext }) => handleClaimGuestRequest(request, env, executionContext),
+  },
+  {
+    methods: ['GET'], pattern: '/api/me/cleared-rooms', auth: 'authenticated',
+    handler: ({ request, url, env }) => handleClearedRoomProgress(request, url, env),
   },
   {
     methods: ['GET'], pattern: '/api/me/guest-progress', auth: 'authenticated',
