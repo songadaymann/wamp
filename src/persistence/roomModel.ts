@@ -213,6 +213,8 @@ export interface RoomRecord {
   mintedMetadataHash: string | null;
   permissions: RoomPermissions;
   world?: import('../worlds/model').WorldRoomContext;
+  /** Transient publish outcome: the draft was saved and submitted, not published. */
+  worldPublicationSubmission?: import('../worlds/model').WorldPublicationRequest;
 }
 
 export interface RoomSummary {

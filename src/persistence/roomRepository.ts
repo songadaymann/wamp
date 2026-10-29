@@ -23,6 +23,7 @@ import {
   type RoomVersionsPage,
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
+import { RoomPublicationSubmissionError } from './roomPublicationSubmission';
 import { invalidateSharedRoomPreviewCache } from './sharedRoomPreviewCache';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { buildRoomVersionLineage } from './roomVersionLineage';
@@ -764,7 +765,9 @@ class ApiRoomRepository implements RoomRepository {
             `/api/rooms/${encodeURIComponent(room.id)}/draft?${params.toString()}`,
             { method: 'PUT', body: JSON.stringify(room) },
           );
-          await this.request(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`, {
+          const savedRecord=this.compactMutationRecord(saved);
+          try {
+          const submitted = await this.request<{ request: import('../worlds/model').WorldPublicationRequest }>(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`, {
             method: 'POST',
             body: JSON.stringify({
               roomId: saved.draft.id,
@@ -772,7 +775,8 @@ class ApiRoomRepository implements RoomRepository {
               y: saved.draft.coordinates.y,
             }),
           });
-          throw new RoomApiError('Draft saved and submitted for World approval.', 409);
+          return { ...savedRecord, worldPublicationSubmission: submitted.request };
+          } catch (cause) { throw new RoomPublicationSubmissionError(savedRecord,cause); }
         }
       },
       () => this.fallback?.publish(room)

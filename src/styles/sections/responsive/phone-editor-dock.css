@@ -305,6 +305,8 @@
     background: #0b0b0b;
   }
 
+  #editor-phone-menu [data-world-publication-status] { grid-column: 1 / -1; }
+
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-dock-shell='true'] #editor-phone-menu button {
     min-height: 44px;
     font-size: var(--ui-text-small, 10px);

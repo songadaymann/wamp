@@ -16,6 +16,8 @@ import {
   sendWorldInvitationEmail,
   sendWorldManagerActionEmail,
   sendWorldNameReviewEmail,
+  sendWorldPublicationDecisionEmail,
+  sendWorldMembershipApprovedEmail,
 } from './notifications';
 import {
   listWorldPublicationRequests,
@@ -146,16 +148,17 @@ export async function handleWorldsRequest(
     const auth = await requireAuthenticatedRequestAuth(env, request, 'manage a World member');
     const body = await parseJsonBody<{ action?: unknown }>(request);
     const action = parseMembershipAction(body.action);
-    return jsonResponse(request, {
-      member: await updateWorldMembership(
+    const member = await updateWorldMembership(
         env,
         worldId,
         decodeURIComponent(segments[4]),
         action,
         auth.user,
         auth.isAdmin,
-      ),
-    });
+      );
+    const world = action === 'approve' ? await loadWorldDetailById(env,worldId,auth.user.id,auth.isAdmin) : null;
+    const email = world ? await sendWorldMembershipApprovedEmail(request,env,{userId:member.userId,worldNumber:world.number}) : undefined;
+    return jsonResponse(request, { member, email });
   }
 
   if (segments.length === 4 && segments[3] === 'name-requests' && request.method === 'POST') {
@@ -173,8 +176,10 @@ export async function handleWorldsRequest(
   if (segments.length === 4 && segments[3] === 'publication-requests' && request.method === 'GET') {
     const auth = await requireAuthenticatedRequestAuth(env, request, 'review World publications');
     return jsonResponse(request, {
-      requests: await listWorldPublicationRequests(env, worldId, auth.user.id, auth.isAdmin),
-    });
+      requests: await listWorldPublicationRequests(env, worldId, auth.user.id, auth.isAdmin, {
+        mine: url.searchParams.get('mine') === '1', roomId: url.searchParams.get('roomId') || undefined,
+      }),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (segments.length === 4 && segments[3] === 'publication-requests' && request.method === 'POST') {
@@ -210,7 +215,7 @@ export async function handleWorldsRequest(
     if (body.decision !== 'approve' && body.decision !== 'reject') {
       throw new HttpError(400, 'decision must be approve or reject.');
     }
-    const resolved = await resolveWorldPublicationRequest(
+    const resolution = await resolveWorldPublicationRequest(
       env,
       worldId,
       decodeURIComponent(segments[4]),
@@ -218,6 +223,7 @@ export async function handleWorldsRequest(
       typeof body.rejectionReason === 'string' ? body.rejectionReason : null,
       auth,
     );
+    const resolved=resolution.request;
     if (body.decision === 'approve') {
       const record = await loadRoomRecord(
         env,
@@ -247,7 +253,9 @@ export async function handleWorldsRequest(
       }
       schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, resolved.roomId));
     }
-    return jsonResponse(request, { request: resolved });
+    const world=resolution.changed?await loadWorldDetailById(env,worldId,auth.user.id,auth.isAdmin):null;
+    const email=world?await sendWorldPublicationDecisionEmail(request,env,{worldNumber:world.number,publication:resolved}):undefined;
+    return jsonResponse(request, { request: resolved, email });
   }
 
   throw new HttpError(404, 'World route not found.');

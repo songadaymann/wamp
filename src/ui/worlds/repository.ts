@@ -61,8 +61,10 @@ export class WorldsRepository {
     });
   }
 
-  publications(worldId: string): Promise<{ requests: WorldPublicationRequest[] }> {
-    return this.request(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests`);
+  publications(worldId: string, options: { mine?: boolean; roomId?: string } = {}): Promise<{ requests: WorldPublicationRequest[] }> {
+    const params=new URLSearchParams();
+    if(options.mine)params.set('mine','1');if(options.roomId)params.set('roomId',options.roomId);
+    return this.request(`/api/worlds/${encodeURIComponent(worldId)}/publication-requests${params.size ? `?${params}` : ''}`);
   }
 
   resolvePublication(

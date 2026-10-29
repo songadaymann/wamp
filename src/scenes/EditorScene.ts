@@ -877,9 +877,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.overlayController.setDeathMap(points,this.roomCoordinates);
   }
 
-  clearRoomDeathMap(): void {
-    this.overlayController.clearDeathMap();
-  }
+  getWorldPublicationState() { return { roomId: this.roomId, draftUpdatedAt: this.roomSession.currentServerDraftUpdatedAt, dirty: this.roomDirty }; }
+
+  clearRoomDeathMap(): void { this.overlayController.clearDeathMap(); }
 
   getCourseEditorState(): EditorCourseUiState {
     return this.courseController.getCourseEditorState();
