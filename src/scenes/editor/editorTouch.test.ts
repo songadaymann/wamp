@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { editorState, updateEditorState } from '../../config';
-import { CourseTouchController } from './courseTouch';
+import { EditorTouchController } from './editorTouch';
 import { objectMoveFixture } from './objectMoveController.testSupport';
 
 const savedTool = editorState.activeTool;
@@ -12,7 +12,7 @@ function pointer(id: number, x = 40, y = 40, type = 'touchstart'): Phaser.Input.
 }
 
 function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend', moveSelected = false,
-  moveTool: ConstructorParameters<typeof CourseTouchController>[0]['moveTool'] = {
+  moveTool: ConstructorParameters<typeof EditorTouchController>[0]['moveTool'] = {
     claims: () => moveSelected, down: vi.fn(() => moveSelected), move: vi.fn(() => true), up: vi.fn(() => true), stopGesture: vi.fn(() => true),
   }) {
   let signature = 'initial';
@@ -24,7 +24,7 @@ function harness(action: 'brush' | 'draw' | 'objects' | 'tap' | 'bend', moveSele
     finish: vi.fn(), cancel: vi.fn(), worldPoint: (x: number, y: number) => ({ x: x * 2, y: y * 2 }),
     pinch: vi.fn(),
   };
-  return { controller: new CourseTouchController(host), host, changeTool: () => { signature = 'new'; } };
+  return { controller: new EditorTouchController(host), host, changeTool: () => { signature = 'new'; } };
 }
 
 describe('expanded editor touch ownership', () => {
@@ -103,7 +103,7 @@ describe('expanded editor touch ownership', () => {
     expect(host.begin).not.toHaveBeenCalled();
     controller.move(pointer(1, 80));
     controller.up(pointer(1, 80));
-    expect(host.finish).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), true);
+    expect(host.finish).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), true, false);
   });
 
   it('lets Move drag with one finger and gives a second finger the pinch (F371)', () => {

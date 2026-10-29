@@ -15,7 +15,7 @@ import { CourseDraftBackupController, BACKUP_FAILED_TEXT } from '../courses/draf
 import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
-import { CourseTouchController } from './editor/courseTouch';
+import { EditorTouchController } from './editor/editorTouch';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
@@ -268,7 +268,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private panStartPointer = { x: 0, y: 0 };
   private panStartScroll = { x: 0, y: 0 };
   private tileDragMode: TileDragMode = null;
-  private readonly touchControls: CourseTouchController;
+  private readonly touchControls: EditorTouchController;
   private readonly objectMoveController: EditorObjectMoveController;
   private readonly touchTileRooms = new Set<string>();
   private readonly touchObjectRooms = new Set<string>();
@@ -620,7 +620,8 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         globalRoomMusicController.previewPatternCell(pattern, instrumentId, row),
     });
     this.musicWorkflow.attachPatternController(this.musicPatternController);
-    this.touchControls = new CourseTouchController({
+    this.touchControls = new EditorTouchController({
+      isEnabled: () => !editorState.isPlaying && !this.musicModeActive && document.body.dataset.editorSpriteUiLocked !== 'true',
       schedule: (delay, callback) => {
         const timer = this.time.delayedCall(delay, callback);
         return () => timer.remove(false);
@@ -672,7 +673,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         this.commitTouchBatches();
       },
       finish: (pointer, bend) => {
-        if (bend) this.commitTouchPathBend(pointer);
+        if (bend) { this.updateCoursePathBendPreview(pointer); this.pathController.commit(); }
         else this.finishPointerAction(pointer);
         this.commitTouchBatches();
       },
@@ -2957,11 +2958,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.pencilDragStart = null;
     this.lastPencilStampOrigin = null;
     this.clearRectPreview();
-  }
-
-  private commitTouchPathBend(pointer: Phaser.Input.Pointer): void {
-    this.updateCoursePathBendPreview(pointer);
-    this.pathController.commit();
   }
 
   private tickSpray(deltaMs: number): void {
