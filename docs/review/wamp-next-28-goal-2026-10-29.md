@@ -29,7 +29,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F273 — shared progression/rating/verification core; PR #335, all CI and live rollout verified.
 - [x] F274 — shared workspace input/camera controllers; PR #336, 244 browser scenarios, all CI and live rollout verified.
 - [x] F275 — shared inspector action/overlay core; PR #337, all CI and live rollout verified.
-- [ ] F334 — reuse cached map artwork for share previews, with fallback.
+- [x] F334 — cached map artwork for API/Pages shares and Expanded composites; PR #338, all CI and live rollout verified.
 - [ ] F269 — real-art Expanded Room and Wamp-O-Gram previews.
 - [ ] F389 — correct standalone share-image backgrounds, custom art and geometry.
 - [ ] F436 — automatic weekly event scheduling with overrides.
@@ -57,17 +57,17 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 ## Current boundary
 
-Baseline: main `417f0ca7`, Round 2 72/248. F263 (PR #334), F273 (PR #335),
-F274 (PR #336) and F275 (PR #337, merged `395ac423`) are verified delivered.
-This goal is **4/28 delivered**, and Round 2 is **76/248**.
+Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
+F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
+This goal is **5/28 delivered**, and Round 2 is **77/248**.
 
-F275 passed all 18 CI jobs and all six native phone inspector workflows
-(63 scenario groups, zero errors). Guarded frontend/API deployment and production
-smoke passed. Worker `f0292cdb-b7f8-453a-896b-4594ed81b4d2` serves 100%;
-production entry, both editor bundles and shared inspector bundle match release
-bytes. Migration 0076 remains current. Receipt:
-`docs/review/wamp-f275-shared-inspector-2026-10-29.md`.
+F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
+workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
+`301ccc79-d40d-4fa0-92a6-99bbf9004902` serves 100%; production entry and editor
+bundles match release bytes. Live API/Pages/image checks cover a map leaf,
+two Expanded composites and two exact-version fallbacks. Migration 0076 remains
+current. Receipt: `docs/review/wamp-f334-cached-share-artwork-2026-10-29.md`.
 
-F334 implementation is in PR #338; full check (722 files, 6,154 tests), native
-workerd/D1/R2 probes and API/Pages metadata tests passed locally. CI and rollout
-remain pending, so F334 stays unchecked. The other 23 goal items remain pending.
+F269/F389 are in progress together: one real-art painter and canonical drawing
+math for all share fallbacks and Wamp-O-Grams. They remain unchecked. The other
+21 goal items remain pending.

@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 76 of 248 done.**
+**Progress: 77 of 248 done.**
 
 ## How to use this file
 
@@ -225,7 +225,7 @@ Newer routes brought back slow patterns that round 1 removed, and guest play wri
 - [ ] **F344** Signed-in session check makes 6 database trips in a row and fires twice every time the tab regains focus · low impact · small effort
 - [ ] **F345** Spam limits for guest saves are stored in the main database, adding about 12 writes and 4 extra trips to every guest attempt · low impact · small effort
 - [ ] **F339** Guest activity ping reads then writes the database every 15 seconds per tab, updates an index nothing uses, and is never cleaned up · low impact · small effort
-- [ ] **F334** Use the pre-drawn world-map tiles as share pictures instead of drawing rooms again on the server · medium impact · medium effort
+- [x] **F334** Use the pre-drawn world-map tiles as share pictures instead of drawing rooms again on the server · medium impact · medium effort
 - [ ] **F338** Expanded Room lookups count every cell of every version ever published, on each world-map load and room-comment read · low impact · small effort
 - [ ] **F340** Opening the multiplayer connection waits on an admin-stats ping to one shared server object · low impact · small effort
 - [ ] **F341** Phrase save and publish code is duplicated in the Worker and makes up to five one-at-a-time database trips on every music-room publish · low impact · small effort

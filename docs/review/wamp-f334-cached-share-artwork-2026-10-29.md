@@ -1,7 +1,7 @@
 # F334: reuse cached map artwork for share previews — 2026-10-29
 
-Implementation and local verification complete; PR, CI and delivery pending.
-The checklist item remains open until verified in production.
+Delivered in [PR #338](https://github.com/songadaymann/wamp/pull/338), merged
+`a1470b3532b45675569f6d36faf9ea83ff758a57`.
 
 ## Behavior
 
@@ -48,3 +48,28 @@ is required. Composite objects use a separate prefix from world-tile GC.
 
 Local evidence: /tmp/wamp-f334-final-check.log, /tmp/wamp-f334-native.log;
 ignored native probe sources and bundle: output/f334-native/.
+
+## Production delivery
+
+All 18 GitHub jobs passed in [CI run 40897749531](https://github.com/songadaymann/wamp/actions/runs/40897749531).
+Merged runtime source matches tested candidate `62afd61b`; only the prior F275
+delivery-record documents differ. Guarded full frontend/API deployment and
+production smoke passed. Worker `301ccc79-d40d-4fa0-92a6-99bbf9004902` is confirmed
+at 100%; previous Worker `f0292cdb-b7f8-453a-896b-4594ed81b4d2` remains available
+for rollback. Pages: [d2851806](https://d2851806.wampland.pages.dev).
+Production entry `main-BXrozcfs.js` and both editor bundles match release bytes.
+Migration 0076, database, map and email health checks passed; no migration.
+
+All 25 sampled published standalone rooms advertise ready map leaves. Five live
+end-to-end samples passed public Pages OG URL/dimension checks, PNG dimensions,
+bodyless HEAD and equality between the advertised PNG and the existing API image
+endpoint: one 642×354 leaf, two 1200×630 Expanded composites and two 1200×630
+fallbacks. The four-cell fallback at 0,-3 pins cell 0,-4 version 3 while the map
+shows its current version 7, confirming the exact-version guard on live data.
+Two first composite metadata reads took 654/756 ms in these samples. The composed
+real-art image was visually inspected. No production room/player writes or emails
+were used; normal R2 image-cache writes occurred through the feature's GET path.
+
+Evidence: `/tmp/wamp-f334-deploy.log`, `/tmp/wamp-f334-deployments.json`,
+`/tmp/wamp-f334-live-assets.json`, `/tmp/wamp-f334-live-verification.json`,
+`/tmp/wamp-f334-fallback-evidence.json`. Goal 5/28 delivered; Round 2 77/248.
