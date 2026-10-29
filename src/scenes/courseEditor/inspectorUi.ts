@@ -1,5 +1,6 @@
 export {
   buildContainerInspectorState,
+  canStoreEditorContainerContents,
   buildPressurePlateInspectorState,
   createEmptyEditorInspectorState as createEmptyCourseInspectorState,
   getContainerAcceptedContentsLabel,
