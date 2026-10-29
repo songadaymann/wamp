@@ -285,34 +285,8 @@ async function buildCourseRatingSummary(
 }
 
 export function buildRoomRatingWindow(versions: readonly RoomVersionSource[], targetVersion: number): RatingWindow {
-  const sorted = [...versions].sort((left, right) => left.version - right.version);
-  let currentKey = sorted[0]?.version ?? targetVersion;
-  const bucketByVersion = new Map<number, number>();
-  for (let index = 0; index < sorted.length; index += 1) {
-    const version = sorted[index];
-    if (!version) {
-      continue;
-    }
-
-    const significant =
-      index === 0 || getRoomVersionChange(sorted[index - 1], version) >= ROOM_SIGNIFICANT_CHANGE_THRESHOLD;
-    if (significant) {
-      currentKey = version.version;
-    }
-
-    bucketByVersion.set(version.version, currentKey);
-  }
-
-  const versionKey = bucketByVersion.get(targetVersion) ?? targetVersion;
-  const versionFamily = sorted
-    .filter((version) => (bucketByVersion.get(version.version) ?? version.version) === versionKey)
-    .map((version) => version.version);
-
-  return {
-    versionKey,
-    lineageKey: createLineageKey(sorted[0] ? getRoomVersionFacts(sorted[0]).snapshotId : 'room', versionKey),
-    versionFamily,
-  };
+  return buildRatingWindow(versions,targetVersion,ROOM_SIGNIFICANT_CHANGE_THRESHOLD,getRoomVersionChange,
+    (first,key) => createLineageKey(first ? getRoomVersionFacts(first).snapshotId : 'room',key));
 }
 
 /** The stored change for a described version, or the change computed from both snapshots. */
@@ -322,38 +296,31 @@ function getRoomVersionChange(previous: RoomVersionSource | undefined, version: 
 }
 
 export function buildCourseRatingWindow(
-  versions: CourseRecord['versions'],
-  targetVersion: number,
-  courseId: string,
+  versions: CourseRecord['versions'], targetVersion: number, courseId: string,
 ): RatingWindow {
-  const sorted = [...versions].sort((left, right) => left.version - right.version);
+  return buildRatingWindow(versions,targetVersion,COURSE_SIGNIFICANT_CHANGE_THRESHOLD,
+    (previous,current) => computeCourseWeightedChange(previous?.snapshot ?? null,current.snapshot),
+    (_first,key) => createLineageKey(courseId,key));
+}
+
+function buildRatingWindow<V extends { version: number }>(
+  versions: readonly V[], targetVersion: number, threshold: number,
+  change: (previous: V | undefined,current: V) => number,
+  lineage: (first: V | undefined,key: number) => string,
+): RatingWindow {
+  const sorted = [...versions].sort((left,right) => left.version-right.version);
   let currentKey = sorted[0]?.version ?? targetVersion;
-  const bucketByVersion = new Map<number, number>();
-  for (let index = 0; index < sorted.length; index += 1) {
-    const version = sorted[index];
-    if (!version) {
-      continue;
-    }
-
-    const previous = index > 0 ? sorted[index - 1]?.snapshot ?? null : null;
-    const significant =
-      index === 0 || computeCourseWeightedChange(previous, version.snapshot) >= COURSE_SIGNIFICANT_CHANGE_THRESHOLD;
-    if (significant) {
-      currentKey = version.version;
-    }
-    bucketByVersion.set(version.version, currentKey);
+  const bucketByVersion = new Map<number,number>();
+  for (let index=0;index<sorted.length;index+=1) {
+    const version=sorted[index];
+    if (!version) continue;
+    if (index===0 || change(sorted[index-1],version)>=threshold) currentKey=version.version;
+    bucketByVersion.set(version.version,currentKey);
   }
-
-  const versionKey = bucketByVersion.get(targetVersion) ?? targetVersion;
-  const versionFamily = sorted
-    .filter((version) => (bucketByVersion.get(version.version) ?? version.version) === versionKey)
-    .map((version) => version.version);
-
-  return {
-    versionKey,
-    lineageKey: createLineageKey(courseId, versionKey),
-    versionFamily,
-  };
+  const versionKey=bucketByVersion.get(targetVersion) ?? targetVersion;
+  return {versionKey,lineageKey:lineage(sorted[0],versionKey),versionFamily:sorted
+    .filter(version => (bucketByVersion.get(version.version) ?? version.version)===versionKey)
+    .map(version => version.version)};
 }
 
 export async function hasCompletedRoomRatingWindow(
@@ -609,147 +576,21 @@ export async function submitRoomRating(
     throw new HttpError(409, 'You cannot rate your own room.');
   }
 
-  const qualityStars = normalizeQualityStars(params.body.qualityStars);
-  const difficultyChoice = normalizeDifficulty(params.body.difficultyChoice);
-  const autoSuggestedDifficulty = normalizeDifficulty(params.body.autoSuggestedDifficulty);
-  const ratingWindow = buildRoomRatingWindow(params.roomRecord.versions, params.body.roomVersion);
-  const hasCompleted = await hasCompletedRoomRatingWindow(
-    env,
-    published.id,
-    ratingWindow.versionFamily,
-    params.userId,
-  );
-  if (!hasCompleted) {
-    throw new HttpError(409, 'Complete this room version window once before rating it.');
-  }
-
-  const progress = await loadOrBackfillUserProgress(env, params.userId);
-  const trustWeight = trustWeightFromTier(
-    await loadEffectiveTrustTier(env, params.userId, progress),
-  );
-  const existingRows = await loadRoomRatingsForVersionKey(env, published.id, ratingWindow.versionKey);
-  const existingViewerRow = existingRows.find((row) => row.user_id === params.userId) ?? null;
-
-  await upsertRoomRatingRow(env, {
-    roomId: published.id,
-    publishedVersion: published.version,
-    ratingWindow,
-    userId: params.userId,
-    qualityStars,
-    difficultyChoice,
-    autoSuggestedDifficulty,
-    trustWeight,
-    now,
+  const summary=(window:RatingWindow)=>buildRoomRatingSummary(env,published.id,window,{
+    viewerUserId:params.userId,viewerCanVote:true,viewerNeedsRun:false,
   });
-
-  const delta = createEmptyProgressionDelta();
-  const firstRewardedSubmission =
-    existingViewerRow === null || existingViewerRow.rewarded_at === null;
-  if (firstRewardedSubmission) {
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.userId,
-      'pxp',
-      'room_rating_submit',
-      'room_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `pxp:room_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
-      LANE_BASE_XP.ratingPxp,
-      now,
-    );
-    delta.cxp += await awardLaneDelta(
-      env,
-      params.userId,
-      'cxp',
-      'room_rating_submit',
-      'room_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `cxp:room_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
-      LANE_BASE_XP.roomRatingCxp,
-      now,
-    );
-    delta.cxp += await awardLaneDelta(
-      env,
-      params.userId,
-      'cxp',
-      'weekly_curation',
-      'user_week',
-      getUtcWeekKey(now),
-      `cxp:weekly_curation:${params.userId}:${getUtcWeekKey(now)}`,
-      LANE_BASE_XP.weeklyCuration,
-      now,
-    );
-    delta.trust += await awardLaneDelta(
-      env,
-      params.userId,
-      'trust',
-      'room_rating_submit',
-      'room_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `trust:room_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
-      1,
-      now,
-    );
-    await markRoomRatingRewarded(env, published.id, ratingWindow.versionKey, params.userId, now);
-  }
-
-  if (params.roomRecord.claimerUserId && params.roomRecord.claimerUserId !== params.userId && firstRewardedSubmission) {
-    const creatorDelta: ProgressionDelta = {
-      pxp: 0,
-      bxp: await awardLaneDelta(
-        env,
-        params.roomRecord.claimerUserId,
-        'bxp',
-        'unique_rating_room',
-        'room_rating',
-        `${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        `bxp:room_unique_rating:${params.roomRecord.claimerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        LANE_BASE_XP.uniqueRating,
-        now,
-        { activity: { contentType: 'room', contentId: published.id, version: published.version, actorUserId: params.userId, qualityStars } },
-      ),
-      cxp: 0,
-      trust: await awardLaneDelta(
-        env,
-        params.roomRecord.claimerUserId,
-        'trust',
-        'unique_rating_room',
-        'room_rating',
-        `${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        `trust:room_unique_rating:${params.roomRecord.claimerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        1,
-        now,
-      ),
-    };
-    await persistProgressIncrement(env, params.roomRecord.claimerUserId, creatorDelta, now);
-  }
-
-  await persistProgressIncrement(env, params.userId, delta, now);
-  const summary = await buildRoomRatingSummary(env, published.id, ratingWindow, {
-    viewerUserId: params.userId,
-    viewerCanVote: true,
-    viewerNeedsRun: false,
+  const result=await submitRating(env,{userId:params.userId,body:params.body,now},{
+    kind:'room',id:published.id,version:published.version,ownerUserId:params.roomRecord.claimerUserId,
+    ratingCxp:LANE_BASE_XP.roomRatingCxp,trophyType:'room',trophyId:published.id,
+    window:()=>buildRoomRatingWindow(params.roomRecord.versions,params.body.roomVersion),
+    hasCompleted:window=>hasCompletedRoomRatingWindow(env,published.id,window.versionFamily,params.userId),
+    rows:window=>loadRoomRatingsForVersionKey(env,published.id,window.versionKey),
+    write:(window,values)=>upsertRoomRatingRow(env,{...values,roomId:published.id,publishedVersion:published.version,ratingWindow:window}),
+    markRewarded:(key,at)=>markRoomRatingRewarded(env,published.id,key,params.userId,at),
+    summary,finalSummary:window=>summary(window),
+    publisher:key=>params.roomRecord.versions.find(version=>version.version===key)?.publishedByUserId,
   });
-  await syncContentTrophy(env, 'room', published.id, ratingWindow.versionKey, summary.quality);
-  await refreshContentOwnerProgressCounts(env, 'room', published.id, ratingWindow.versionKey);
-  const trophyOwner = params.roomRecord.versions.find(version => version.version === ratingWindow.versionKey)?.publishedByUserId;
-  if (firstRewardedSubmission && params.roomRecord.claimerUserId && params.roomRecord.claimerUserId !== trophyOwner) {
-    await syncUserBadges(env, params.roomRecord.claimerUserId);
-  }
-  if (trophyOwner !== params.userId) await syncUserBadges(env, params.userId);
-
-  return {
-    ok: true,
-    roomId: published.id,
-    roomVersion: published.version,
-    progressionDelta: delta,
-    summary: await buildRoomRatingSummary(env, published.id, ratingWindow, {
-      viewerUserId: params.userId,
-      viewerCanVote: true,
-      viewerNeedsRun: false,
-    }),
-    progression: await loadPublicProgressionSummary(env, params.userId),
-  };
+  return {ok:true,roomId:published.id,roomVersion:published.version,...result};
 }
 
 export async function submitCourseRating(
@@ -771,42 +612,79 @@ export async function submitCourseRating(
     throw new HttpError(409, 'You cannot rate your own expanded room.');
   }
 
+  const trophyType=params.expandedRoomId ? 'expanded_room' : 'course';
+  const trophyId=params.expandedRoomId ?? published.id;
+  const result=await submitRating(env,{userId:params.userId,body:params.body,now},{
+    kind:'course',id:published.id,version:published.version,ownerUserId:params.courseRecord.ownerUserId,
+    ratingCxp:LANE_BASE_XP.courseRatingCxp,trophyType,trophyId,
+    window:()=>buildCourseRatingWindow(params.courseRecord.versions,params.body.courseVersion,published.id),
+    hasCompleted:window=>hasCompletedCourseRatingWindow(env,published.id,window.versionFamily,params.userId),
+    rows:window=>loadCourseRatingsForVersionKey(env,published.id,window.versionKey),
+    write:(window,values)=>upsertCourseRatingRow(env,{...values,courseId:published.id,publishedVersion:published.version,ratingWindow:window}),
+    markRewarded:(key,at)=>markCourseRatingRewarded(env,published.id,key,params.userId,at),
+    summary:window=>buildCourseRatingSummary(env,published.id,window,{
+      viewerUserId:params.userId,viewerCanVote:true,viewerNeedsRun:false,
+    }),
+    finalSummary:async(window,initial)=>({...initial,trophy:await loadTrophyForContentVersion(env,trophyType,trophyId,window.versionKey)}),
+    publisher:key=>params.courseRecord.versions.find(version=>version.version===key)?.publishedByUserId,
+    syncProjection:async(window)=>{
+      if (params.expandedRoomId) {
+        await mirrorCourseRatingToExpandedRoomRating(env, {
+          expandedRoomId: params.expandedRoomId, legacyCourseId: published.id,
+          versionKey: window.versionKey, userId: params.userId,
+        });
+        // Retire derived duplicate quality trophies for this window, including the old
+        // route's raw-version copies. Keep other trophy types and historical windows.
+        await env.DB.batch([env.DB.prepare(`DELETE FROM content_trophies WHERE trophy_type = 'quality'
+          AND ((content_type = 'course' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)))
+            OR (content_type = 'expanded_room' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)) AND version_key <> ?))`)
+          .bind(published.id, JSON.stringify(window.versionFamily), params.expandedRoomId,
+            JSON.stringify(window.versionFamily), window.versionKey)]);
+      }
+    },
+  });
+  return {ok:true,courseId:published.id,courseVersion:published.version,...result};
+}
+
+type RatingWriteValues=Pick<Parameters<typeof upsertRoomRatingRow>[1],
+  'userId'|'qualityStars'|'difficultyChoice'|'autoSuggestedDifficulty'|'trustWeight'|'now'>;
+interface RatingTarget {
+  kind:'room'|'course'; id:string; version:number; ownerUserId:string|null; ratingCxp:number;
+  trophyType:'room'|'course'|'expanded_room'; trophyId:string;
+  window:()=>RatingWindow;
+  hasCompleted:(window:RatingWindow)=>Promise<boolean>;
+  rows:(window:RatingWindow)=>Promise<Pick<RoomRatingRow,'user_id'|'rewarded_at'>[]>;
+  write:(window:RatingWindow,values:RatingWriteValues)=>Promise<unknown>;
+  markRewarded:(key:number,at:string)=>Promise<void>;
+  summary:(window:RatingWindow)=>Promise<RatingAggregateSummary>;
+  finalSummary:(window:RatingWindow,initial:RatingAggregateSummary)=>Promise<RatingAggregateSummary>;
+  publisher:(key:number)=>string|null|undefined;
+  syncProjection?:(window:RatingWindow)=>Promise<void>;
+}
+
+/** Validation/storage adapters retain identity; voting rewards and bookkeeping run once here. */
+async function submitRating(
+  env:Env,params:{userId:string;body:Pick<RoomRatingRequestBody,'qualityStars'|'difficultyChoice'|'autoSuggestedDifficulty'>;now:string},
+  target:RatingTarget,
+):Promise<Pick<RoomRatingResponse,'progressionDelta'|'summary'|'progression'>> {
+  const now=params.now;
   const qualityStars = normalizeQualityStars(params.body.qualityStars);
   const difficultyChoice = normalizeDifficulty(params.body.difficultyChoice);
   const autoSuggestedDifficulty = normalizeDifficulty(params.body.autoSuggestedDifficulty);
-  const ratingWindow = buildCourseRatingWindow(
-    params.courseRecord.versions,
-    params.body.courseVersion,
-    published.id,
-  );
-  const hasCompleted = await hasCompletedCourseRatingWindow(
-    env,
-    published.id,
-    ratingWindow.versionFamily,
-    params.userId,
-  );
+  const ratingWindow=target.window();
+  const hasCompleted=await target.hasCompleted(ratingWindow);
   if (!hasCompleted) {
-    throw new HttpError(409, 'Complete this expanded room version window once before rating it.');
+    throw new HttpError(409, `Complete this ${target.kind==='room' ? 'room' : 'expanded room'} version window once before rating it.`);
   }
 
   const progress = await loadOrBackfillUserProgress(env, params.userId);
   const trustWeight = trustWeightFromTier(
     await loadEffectiveTrustTier(env, params.userId, progress),
   );
-  const existingRows = await loadCourseRatingsForVersionKey(env, published.id, ratingWindow.versionKey);
+  const existingRows = await target.rows(ratingWindow);
   const existingViewerRow = existingRows.find((row) => row.user_id === params.userId) ?? null;
 
-  await upsertCourseRatingRow(env, {
-    courseId: published.id,
-    publishedVersion: published.version,
-    ratingWindow,
-    userId: params.userId,
-    qualityStars,
-    difficultyChoice,
-    autoSuggestedDifficulty,
-    trustWeight,
-    now,
-  });
+  await target.write(ratingWindow,{userId:params.userId,qualityStars,difficultyChoice,autoSuggestedDifficulty,trustWeight,now});
 
   const delta = createEmptyProgressionDelta();
   const firstRewardedSubmission =
@@ -816,10 +694,10 @@ export async function submitCourseRating(
       env,
       params.userId,
       'pxp',
-      'course_rating_submit',
-      'course_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `pxp:course_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
+      `${target.kind}_rating_submit`,
+      `${target.kind}_rating`,
+      `${target.id}:${ratingWindow.versionKey}`,
+      `pxp:${target.kind}_rating_submit:${params.userId}:${target.id}:${ratingWindow.versionKey}`,
       LANE_BASE_XP.ratingPxp,
       now,
     );
@@ -827,11 +705,11 @@ export async function submitCourseRating(
       env,
       params.userId,
       'cxp',
-      'course_rating_submit',
-      'course_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `cxp:course_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
-      LANE_BASE_XP.courseRatingCxp,
+      `${target.kind}_rating_submit`,
+      `${target.kind}_rating`,
+      `${target.id}:${ratingWindow.versionKey}`,
+      `cxp:${target.kind}_rating_submit:${params.userId}:${target.id}:${ratingWindow.versionKey}`,
+      target.ratingCxp,
       now,
     );
     delta.cxp += await awardLaneDelta(
@@ -849,84 +727,59 @@ export async function submitCourseRating(
       env,
       params.userId,
       'trust',
-      'course_rating_submit',
-      'course_rating',
-      `${published.id}:${ratingWindow.versionKey}`,
-      `trust:course_rating_submit:${params.userId}:${published.id}:${ratingWindow.versionKey}`,
+      `${target.kind}_rating_submit`,
+      `${target.kind}_rating`,
+      `${target.id}:${ratingWindow.versionKey}`,
+      `trust:${target.kind}_rating_submit:${params.userId}:${target.id}:${ratingWindow.versionKey}`,
       1,
       now,
     );
-    await markCourseRatingRewarded(env, published.id, ratingWindow.versionKey, params.userId, now);
+    await target.markRewarded(ratingWindow.versionKey,now);
   }
 
-  if (params.courseRecord.ownerUserId && params.courseRecord.ownerUserId !== params.userId && firstRewardedSubmission) {
+  if (target.ownerUserId && target.ownerUserId !== params.userId && firstRewardedSubmission) {
     const creatorDelta: ProgressionDelta = {
       pxp: 0,
       bxp: await awardLaneDelta(
         env,
-        params.courseRecord.ownerUserId,
+        target.ownerUserId,
         'bxp',
-        'unique_rating_course',
-        'course_rating',
-        `${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        `bxp:course_unique_rating:${params.courseRecord.ownerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
+        `unique_rating_${target.kind}`,
+        `${target.kind}_rating`,
+        `${target.id}:${ratingWindow.versionKey}:${params.userId}`,
+        `bxp:${target.kind}_unique_rating:${target.ownerUserId}:${target.id}:${ratingWindow.versionKey}:${params.userId}`,
         LANE_BASE_XP.uniqueRating,
         now,
-        { activity: { contentType: 'course', contentId: published.id, version: published.version, actorUserId: params.userId, qualityStars } },
+        { activity: { contentType: target.kind, contentId: target.id, version: target.version, actorUserId: params.userId, qualityStars } },
       ),
       cxp: 0,
       trust: await awardLaneDelta(
         env,
-        params.courseRecord.ownerUserId,
+        target.ownerUserId,
         'trust',
-        'unique_rating_course',
-        'course_rating',
-        `${published.id}:${ratingWindow.versionKey}:${params.userId}`,
-        `trust:course_unique_rating:${params.courseRecord.ownerUserId}:${published.id}:${ratingWindow.versionKey}:${params.userId}`,
+        `unique_rating_${target.kind}`,
+        `${target.kind}_rating`,
+        `${target.id}:${ratingWindow.versionKey}:${params.userId}`,
+        `trust:${target.kind}_unique_rating:${target.ownerUserId}:${target.id}:${ratingWindow.versionKey}:${params.userId}`,
         1,
         now,
       ),
     };
-    await persistProgressIncrement(env, params.courseRecord.ownerUserId, creatorDelta, now);
+    await persistProgressIncrement(env, target.ownerUserId, creatorDelta, now);
   }
 
   await persistProgressIncrement(env, params.userId, delta, now);
-  const summary = await buildCourseRatingSummary(env, published.id, ratingWindow, {
-    viewerUserId: params.userId,
-    viewerCanVote: true,
-    viewerNeedsRun: false,
-  });
-  if (params.expandedRoomId) {
-    await mirrorCourseRatingToExpandedRoomRating(env, {
-      expandedRoomId: params.expandedRoomId, legacyCourseId: published.id,
-      versionKey: ratingWindow.versionKey, userId: params.userId,
-    });
-    // Retire derived duplicate quality trophies for this window, including the old
-    // route's raw-version copies. Keep other trophy types and historical windows.
-    await env.DB.batch([env.DB.prepare(`DELETE FROM content_trophies WHERE trophy_type = 'quality'
-      AND ((content_type = 'course' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)))
-        OR (content_type = 'expanded_room' AND content_id = ? AND version_key IN (SELECT value FROM json_each(?)) AND version_key <> ?))`)
-      .bind(published.id, JSON.stringify(ratingWindow.versionFamily), params.expandedRoomId,
-        JSON.stringify(ratingWindow.versionFamily), ratingWindow.versionKey)]);
+  const summary=await target.summary(ratingWindow);
+  await target.syncProjection?.(ratingWindow);
+  await syncContentTrophy(env,target.trophyType,target.trophyId,ratingWindow.versionKey,summary.quality);
+  await refreshContentOwnerProgressCounts(env,target.trophyType,target.trophyId,ratingWindow.versionKey);
+  const trophyOwner=target.publisher(ratingWindow.versionKey);
+  if (firstRewardedSubmission && target.ownerUserId && target.ownerUserId!==trophyOwner) {
+    await syncUserBadges(env,target.ownerUserId);
   }
-  const trophyType = params.expandedRoomId ? 'expanded_room' : 'course';
-  const trophyId = params.expandedRoomId ?? published.id;
-  await syncContentTrophy(env, trophyType, trophyId, ratingWindow.versionKey, summary.quality);
-  await refreshContentOwnerProgressCounts(env, trophyType, trophyId, ratingWindow.versionKey);
-  const trophyOwner = params.courseRecord.versions.find(version => version.version === ratingWindow.versionKey)?.publishedByUserId;
-  if (firstRewardedSubmission && params.courseRecord.ownerUserId && params.courseRecord.ownerUserId !== trophyOwner) {
-    await syncUserBadges(env, params.courseRecord.ownerUserId);
-  }
-  if (trophyOwner !== params.userId) await syncUserBadges(env, params.userId);
-
-  return {
-    ok: true,
-    courseId: published.id,
-    courseVersion: published.version,
-    progressionDelta: delta,
-    summary: { ...summary, trophy: await loadTrophyForContentVersion(env, trophyType, trophyId, ratingWindow.versionKey) },
-    progression: await loadPublicProgressionSummary(env, params.userId),
-  };
+  if (trophyOwner!==params.userId) await syncUserBadges(env,params.userId);
+  return {progressionDelta:delta,summary:await target.finalSummary(ratingWindow,summary),
+    progression:await loadPublicProgressionSummary(env,params.userId)};
 }
 
 /** Recomputes a quality trophy and the owner's counts after ratings were removed (F205). */

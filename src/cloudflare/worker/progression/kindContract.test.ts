@@ -23,7 +23,7 @@ async function scenario(kind: Kind, status = 'passed') {
     VALUES('golden',1,?,?,'builder')`).run(json,NOW);
   const record = (await loadCourseRecord(f.env, 'golden', 'p1'))!;
   const value = run(f, `${kind}-attempt`, 'p1', 9000, status);
-  const courseRun: CourseRunRecord = { ...value, courseId: 'golden', courseVersion: 1, goal: courseGoal };
+  const courseRun: CourseRunRecord = { ...value, courseId: 'golden', courseVersion: 1, goalType:'reach_exit', goal: courseGoal };
   f.sqlite.prepare(`INSERT INTO course_runs(attempt_id,course_id,course_version,goal_type,goal_json,user_id,user_display_name,
     started_at,finished_at,result,elapsed_ms,verification_status,score) VALUES(?,'golden',1,'reach_exit',?,'p1','p1',?,?,'completed',9000,?,100)`)
     .run(courseRun.attemptId,JSON.stringify(courseGoal),NOW,FINISHED,status);
@@ -34,7 +34,7 @@ async function scenario(kind: Kind, status = 'passed') {
     ? awardRoomRunProgression(f.env,{...params(f.record,value),completedAt:FINISHED})
     : awardCourseRunProgression(f.env,{run:courseRun,goal:courseGoal,courseRecord:record,isFirstCompletion:true,isNewPersonalBest:true,creatorUserId:'builder',completedAt:FINISHED});
   const rate = () => kind === 'room'
-    ? submitRoomRating(f.env,{roomRecord:f.record,userId:'p1',body:{roomVersion:1,...votes},now:FINISHED})
+    ? submitRoomRating(f.env,{roomRecord:f.record,userId:'p1',body:{roomCoordinates:{x:0,y:0},roomVersion:1,...votes},now:FINISHED})
     : submitCourseRating(f.env,{courseRecord:record,userId:'p1',body:{courseVersion:1,...votes},now:FINISHED});
   const creator = () => kind === 'room'
     ? awardRoomCreatorCompletionPoints(f.env,{creatorUserId:'builder',roomId:'0,0',roomVersion:1,finisherUserId:'p1',attemptId:value.attemptId,createdAt:FINISHED})
@@ -56,7 +56,7 @@ describe('persisted room/course reward identities before sharing the core (F273)
       expect(point).toMatchSnapshot('creator points');
       await f.award();await f.rate();await f.creator();
       expect(f.events()).toEqual(before);
-      expect(f.sqlite.prepare("SELECT COUNT(*) AS n FROM point_events WHERE event_type LIKE '%creator_completion'").get()?.n).toBe(1);
+      expect((f.sqlite.prepare("SELECT COUNT(*) AS n FROM point_events WHERE event_type LIKE '%creator_completion'").get() as {n:number}).n).toBe(1);
     } finally {f.sqlite.close();}
   });
   it.each(['room','course'] as const)('gives rejected and timed-out %s clears no progression or rating eligibility',async kind=>{
@@ -65,8 +65,28 @@ describe('persisted room/course reward identities before sharing the core (F273)
       try {
         expect(await f.award()).toEqual({pxp:0,bxp:0,cxp:0,trust:0});
         expect(Object.values(f.events()).flat()).toHaveLength(0);
-        await expect(f.rate()).rejects.toMatchObject({status:409});
+        await expect(f.rate()).rejects.toMatchObject({status:409,message:`Complete this ${kind==='room' ? 'room' : 'expanded room'} version window once before rating it.`});
       }finally{f.sqlite.close();}
     }
   });
+  it('keeps accepted failed Protect attempts in room rank selection without giving them clear progression',async()=>{
+    const f=fixture();
+    try {
+      const goal={type:'npc_quest' as const,questType:'protect' as const,npcInstanceId:null,durationMs:30000,
+        requiredCount:1,destination:null,timeLimitMs:null};
+      f.record.published!.goal=goal;
+      const failed={...run(f,'legacy-protect','p2',35000,'not_required'),result:'failed' as const,
+        goal,goalType:'npc_quest' as const,score:300};
+      const completed={...run(f,'new-protect','p1',30000,'passed'),goal,goalType:'npc_quest' as const,score:300};
+      for(const value of [failed,completed]) f.sqlite.prepare('UPDATE room_runs SET goal_type=?,goal_json=?,result=?,score=? WHERE attempt_id=?')
+        .run(value.goalType,JSON.stringify(goal),value.result,value.score,value.attemptId);
+      await awardRoomRunProgression(f.env,{...params(f.record,completed),completedAt:FINISHED});
+      expect((f.sqlite.prepare("SELECT COUNT(*) AS n FROM pxp_events WHERE user_id='p1' AND event_type='top1_take'").get() as {n:number}).n).toBe(0);
+      expect((f.sqlite.prepare("SELECT COUNT(*) AS n FROM pxp_events WHERE user_id='p1' AND event_type='top10_entry'").get() as {n:number}).n).toBe(1);
+      expect(await awardRoomRunProgression(f.env,{...params(f.record,failed),completedAt:FINISHED}))
+        .toEqual({pxp:0,bxp:0,cxp:0,trust:0});
+      expect((f.sqlite.prepare("SELECT COUNT(*) AS n FROM pxp_events WHERE user_id='p2'").get() as {n:number}).n).toBe(0);
+    }finally{f.sqlite.close();}
+  });
+
 });

@@ -74,6 +74,7 @@ import {
 import {
   computeCourseSnapshotVerificationHash,
   createCourseVerificationTrigger,
+  buildVerificationTrigger,
   createRunVerificationNonce,
   recordRunVerificationAudit,
   requireVerificationTrace,
@@ -415,7 +416,7 @@ export async function handleExpandedRoomRunFinish(
       : null;
   const baseVerificationTrigger =
     clampedBody.result === 'completed'
-      ? createCourseVerificationTrigger(snapshot.goal, {
+      ? buildVerificationTrigger(createCourseVerificationTrigger, snapshot.goal, {
           candidate: {
             attemptId,
             userId: auth.user.id,
@@ -424,28 +425,8 @@ export async function handleExpandedRoomRunFinish(
             score: provisionalScore,
             finishedAt,
           },
-          currentTopEntries: currentTopRows.map((row) => ({
-            attemptId: row.attempt_id,
-            userId: row.user_id,
-            elapsedMs: row.elapsed_ms,
-            deaths: row.deaths,
-            score: row.score,
-            finishedAt: row.finished_at,
-            overallRank: row.overall_rank === null ? null : Number(row.overall_rank),
-          })),
-          viewerEntry:
-            viewerBestRow === null
-              ? null
-              : {
-                  attemptId: viewerBestRow.attempt_id,
-                  userId: viewerBestRow.user_id,
-                  elapsedMs: viewerBestRow.elapsed_ms,
-                  deaths: viewerBestRow.deaths,
-                  score: viewerBestRow.score,
-                  finishedAt: viewerBestRow.finished_at,
-                  overallRank:
-                    viewerBestRow.overall_rank === null ? null : Number(viewerBestRow.overall_rank),
-                },
+          currentTopRows,
+          viewerBestRow,
           pointAwardPotential: (provisionalPointAward?.points ?? 0) > 0,
         })
       : null;
