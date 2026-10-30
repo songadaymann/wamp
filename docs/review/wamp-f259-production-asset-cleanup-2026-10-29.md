@@ -1,4 +1,4 @@
-# F259 — production asset and entrypoint cleanup (in progress)
+# F259 — production asset and entrypoint cleanup (delivered)
 
 Move53 unreferenced files (889,234bytes) out of public/assets into art-source,
 retaining every byte for future work. This is deployment hygiene, not a claim that
@@ -33,4 +33,13 @@ unchanged; only source file location changes.
 
 Evidence: /tmp/wamp-f259-check.log, asset-moves.json, browser.log/browser.json,
 atlas-command.json and atlas-path-check.log (same prefix). Native harness is under
-ignored output/f259-native/. Not delivered until PR checks and live rollout pass.
+ignored output/f259-native/. Delivery proof follows.
+
+PR353 passed all20 checks on cc46d419 and merged as f3b8d780. Guarded Pages-only
+rollout c5eed8ea and production smoke passed; exact entry/editor/style asset bytes
+match the release. Live browser reaches appReady with recorded API and blocked
+multiplayer; no page errors. All4 default/red base/combat PNG+JSON pairs match
+release bytes. Archived green/base-source samples return404. Retired preview URL
+uses the ordinary Pages fallback, with no reward-preview HTML. All53 paths absent
+from dist. No API deployment, migration or real player/room/email/transaction test.
+Evidence: /tmp/wamp-f259-release.log, live-assets.log and live-browser.json/log.

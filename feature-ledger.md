@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F259 | [#353](https://github.com/songadaymann/wamp/pull/353) | [receipt](docs/review/wamp-f259-production-asset-cleanup-2026-10-29.md) | Preserve unused art outside production and retain the active atlases and developer preview |
 | 2026-10-29 | F265 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f265-renderer-admin-cleanup-2026-10-29.md) | Bound main API cleanup, retire duplicate renderer admin routes and use bound metrics |
 | 2026-10-29 | F264 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f264-drop-retired-tables-2026-10-29.md) | Drop three retired tables after preserving current room, player and points data |
 | 2026-10-29 | F262 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f262-idle-camera-tuner-2026-10-29.md) | Avoid layout measurements while the developer camera tuner is hidden |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-17 | F025 | [#236](https://github.com/songadaymann/wamp/pull/236) | [receipt](docs/review/wamp-first-paint-2026-10-17.md) | Faster first paint: deferred editor styles, compressed fonts, five rare menus deferred |
 | 2026-10-17 | F091 | [#235](https://github.com/songadaymann/wamp/pull/235) | [receipt](docs/review/wamp-mann-cool-2026-10-17.md) | Plays are reported to mann.cool, and trusted mann.cool controller input is accepted |
 | 2026-10-17 | F015 | [#234](https://github.com/songadaymann/wamp/pull/234) | [receipt](docs/review/wamp-parallel-startup-2026-10-17.md) | Low-priority game downloads start alongside the map check |
-| 2026-10-17 | F090 | [#233](https://github.com/songadaymann/wamp/pull/233) | [receipt](docs/review/wamp-touch-haptics-2026-10-17.md) | Device vibration for local gameplay, with an on-device switch |

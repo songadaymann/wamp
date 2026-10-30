@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 92 of 248 done.**
+**Progress: 93 of 248 done.**
 
 ## How to use this file
 
@@ -124,7 +124,7 @@ There are almost no dead files. But about 3,000 lines of unused functions remain
 - [x] **F264** Three D1 tables are dead weight: two frozen since their features retired, one written on every publish and never read · low impact · small effort — **done 2026-10-29** ([PR #352](https://github.com/songadaymann/wamp/pull/352)); native fixtures, exact-head CI and live rollout verified.
 - [x] **F265** Unused admin endpoints: a second world-tile admin API on the renderer Worker and a 364-line report nobody calls · low impact · small effort — **done 2026-10-29** ([PR #352](https://github.com/songadaymann/wamp/pull/352)); native fixtures, exact-head CI and live rollout verified.
 - [x] **F261** Remove dead render code: an unused NFT 'warm all art' function and the API share page nothing links to · low impact · small effort — _also covers: Remove about 30 lines of unused NFT render and export code left over from the fast PR series_ — **done 2026-10-29** ([PR #352](https://github.com/songadaymann/wamp/pull/352)); native fixtures, exact-head CI and live rollout verified.
-- [ ] **F259** Clutter sweep: an OpenAI sprite prototype, a committed debug log, a dev-only page and 165 KB of unused art in production · low impact · small effort — _also covers: A developer preview page and a redirect stub are still built and deployed as full pages; About 420 KB of art source files are deployed to the live site and listed in the startup asset table_
+- [x] **F259** Clutter sweep: an OpenAI sprite prototype, a committed debug log, a dev-only page and 165 KB of unused art in production · low impact · small effort — _also covers: A developer preview page and a redirect stub are still built and deployed as full pages; About 420 KB of art source files are deployed to the live site and listed in the startup asset table_ — **done 2026-10-29** ([PR #353](https://github.com/songadaymann/wamp/pull/353)): preserve unused source art outside production, retain runtime atlases and developer preview; all20 CI and live assets/browser verified. [Receipt](wamp-f259-production-asset-cleanup-2026-10-29.md).
 - [x] **F263** The old Mac LaunchAgent avatar queue (961 lines) was replaced by a Cloudflare container in April but never removed · low impact · small effort — **done 2026-10-29** ([PR #334](https://github.com/songadaymann/wamp/pull/334)): removed three obsolete Mac queue scripts, five package commands and local-only configuration. Cloudflare avatar generation remains; no Mac LaunchAgent installed or registered. All 18 CI jobs passed. [Receipt](wamp-f263-retire-mac-avatar-queue-2026-10-29.md).
 - [ ] **F257** About 60 small dead helpers and methods scattered through the client (about 475 lines) · low impact · small effort
 - [ ] **F255** About 40% of the Cyber autotile profile (341 lines) is an older resolver that only its own tests still use · low impact · small effort

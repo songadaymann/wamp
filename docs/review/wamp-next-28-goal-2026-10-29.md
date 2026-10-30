@@ -46,7 +46,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F264 — remove retired difficulty-vote, Play.fun sync and attribution tables.
 - [x] F265 — retire unused admin APIs/reporting and avoid server self-fetch.
 - [x] F261 — remove unused render helpers and retire obsolete share page.
-- [ ] F259 — remove production clutter and keep developer/source assets appropriately.
+- [x] F259 — remove production clutter and keep developer/source assets appropriately.
 - [x] F263 — retire obsolete Mac avatar queue; PR #334 merged, all 18 CI jobs passed.
 - [ ] F257 — unused-helper cleanup and complete boot diagnostics correctly.
 - [ ] F255 — retire unused Cyber resolver while preserving live pieces/tests.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **20/28 delivered**, and Round 2 is **92/248**.
+This goal is **21/28 delivered**, and Round 2 is **93/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -152,3 +152,9 @@ Merge8cc89f21; guarded migration0078/API/Pages release and renderer release pass
 Live retired tables absent, health0078, canonical GET/HEAD301 and PNG/meta intact;
 renderer health200/admin404 and renderer-only admin secret removed. Exact frontend
 assets verified after Pages reconciliation. Goal20/28; Round2 92/248.
+
+F259 delivered through PR353, testedcc46d419/all20checks, mergef3b8d780.
+Guarded Pages-only rollout/smoke passed; exact frontend and default/red runtime
+atlas bytes verified live, retired sample assets404, preview no longer deployed.
+Local developer preview and all53 byte-preserving archives verified. Goal21/28,
+Round2 93/248. F257 PR354 awaits CI/live; F255 remains local and uncounted.

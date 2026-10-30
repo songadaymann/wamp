@@ -1,0 +1,1 @@
+| 2026-10-29 | F259 | [#353](https://github.com/songadaymann/wamp/pull/353) | [receipt](docs/review/wamp-f259-production-asset-cleanup-2026-10-29.md) | Preserve unused art outside production and retain the active atlases and developer preview |
