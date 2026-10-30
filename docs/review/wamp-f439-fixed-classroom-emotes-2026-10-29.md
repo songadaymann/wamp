@@ -32,3 +32,33 @@ live moderation rechecks, native workerd WebSockets, actual desktop/phone tray
 and bubble rendering, keyboard/focus/lifecycle and reconnect behavior. Check
 older durable chat smoke expectations without weakening text restrictions.
 No production tests, writes, emails or transactions have been used for F439.
+
+## Native verification and touch corrections
+
+Real SQLite sessions and school membership test token issuance, including spoofed
+request scope and both chat-banned and suspended students. Native workerd/D1 and
+real WebSockets verify school/public isolation both ways, fixed-ID mapping,
+ignored packet text/scope, guest/student raw-text denial, classroom reconnect and
+live suspension recheck on an already-connected sender. No production requests.
+
+All8 native browser cases pass desktop/phone/narrow-phone/landscape, guest and
+student: real signed tokens and shared presence, text input hidden, 44px tray,
+actual transient rendered bubble, Enter/Space/Escape and touch, zero page errors.
+Screenshots inspected. The first phone run exposed Say inside the hidden play
+HUD. The same entry button now lives outside it; old fixed bottom/right rules
+were retired to avoid stretching it across the stage. Bounds checks preserve a
+compact on-screen target. Closing the tray explicitly blurs its buttons so T
+can reopen immediately after Escape.
+
+The maintained `npm run smoke:room-emotes` fresh-builds the real Worker, runs
+native service checks and all8 browser cases with external traffic disabled.
+It runs in the existing chat-identity CI job and retains failure artifacts.
+A reconnect fixture cleanup now skips already-closed sockets, preserving the
+original failure if one occurs. Final fresh native command passes all service and eight browser cases.
+
+Current full check passes745files/6276tests, one existing expected failure/two
+skips, all stages, boot669.5/670KB. Separate new-script lint and native command
+cover the later CI/harness additions; application code matches that full check.
+Evidence: /tmp/wamp-f439-check-head.log, issuance-tests.log, durable-final-2.log
+and ignored output/web-game/room-emotes/ (same log prefix).
+Still not delivered: PR checks and guarded Worker/Pages rollout remain required.

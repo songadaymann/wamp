@@ -470,12 +470,6 @@
     margin-left: 0;
   }
 
-  body[data-device-class='phone'][data-app-mode='play-world'] #btn-world-room-chat {
-    position: fixed;
-    right: calc(204px + var(--safe-right));
-    bottom: calc(48px + var(--safe-bottom));
-    z-index: var(--z-phone-world-chat-button);
-  }
 
   body[data-device-class='phone'][data-app-mode='play-world'] .room-chat-composer-form {
     padding: 8px 10px;

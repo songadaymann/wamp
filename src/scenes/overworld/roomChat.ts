@@ -255,6 +255,7 @@ export class OverworldRoomChatController {
     if (this.composerElements) {
       this.composerElements.form.reset();
       this.composerElements.input.blur();
+      for (const button of this.composerElements.emoteButtons) button.blur();
     }
     this.renderComposer();
 
