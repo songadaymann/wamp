@@ -48,7 +48,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F261 — remove unused render helpers and retire obsolete share page.
 - [x] F259 — remove production clutter and keep developer/source assets appropriately.
 - [x] F263 — retire obsolete Mac avatar queue; PR #334 merged, all 18 CI jobs passed.
-- [ ] F257 — unused-helper cleanup and complete boot diagnostics correctly.
+- [x] F257 — unused-helper cleanup and complete boot diagnostics correctly.
 - [ ] F255 — retire unused Cyber resolver while preserving live pieces/tests.
 - [ ] F260 — unused music-code cleanup, preserving planned/live helpers.
 - [ ] F258 — unused streaming APIs and aliases, with caller updates.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **21/28 delivered**, and Round 2 is **93/248**.
+This goal is **22/28 delivered**, and Round 2 is **94/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -158,3 +158,8 @@ Guarded Pages-only rollout/smoke passed; exact frontend and default/red runtime
 atlas bytes verified live, retired sample assets404, preview no longer deployed.
 Local developer preview and all53 byte-preserving archives verified. Goal21/28,
 Round2 93/248. F257 PR354 awaits CI/live; F255 remains local and uncounted.
+
+F257 delivered through PR354, tested97bf1712/all20checks, merge8fac31e5.
+Guarded Pages-only rollout/smoke passed. Live exact frontend assets and real-browser
+boot diagnostics inactive/one ready entry/stable logs/zero page errors verified.
+Goal22/28; Round2 94/248. Remaining6 F436,F255,F260,F258,F266,F254.

@@ -1,4 +1,4 @@
-# F257 — unused client helpers and completed boot diagnostics (in progress)
+# F257 — unused client helpers and completed boot diagnostics (delivered)
 
 Remove47 uncalled functions/methods/getters after checking source, scripts and
 current tests. This covers badge placement, obsolete editor labels/document
@@ -35,5 +35,11 @@ left by deletions; removed them and reran the full check successfully.
 Evidence: /tmp/wamp-f257-check-final.log, focused.log, planner.log,
 boot-final-test.log, native.log/native.json, reference-audit.json and
 removed-symbols.json (same prefix). Native harness ignored under output/f257-native/.
-No production room/player/email/wallet writes. PR checks and live rollout remain;
-this item is not yet delivered.
+No production room/player/email/wallet writes. Delivery proof follows.
+
+PR354 passed all20 exact-head checks on97bf1712 and merged as8fac31e5. Guarded
+Pages-only rollout cfcda957 and production smoke pass. Live entry/editor/styles
+match release bytes. Real live browser with recorded API and blocked multiplayer
+confirms diagnostics inactive, exactly one app-ready entry, stable logs and zero
+page errors. API unchanged; no migration or real player/room/email/tx writes.
+Evidence: /tmp/wamp-f257-release.log, live-assets.log and live-browser.json/log.
