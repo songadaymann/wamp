@@ -90,7 +90,3 @@ class ApiProfileRepository implements ProfileRepository {
 export function createProfileRepository(): ProfileRepository {
   return new ApiProfileRepository(getApiBaseUrl());
 }
-
-export function isProfileApiError(value: unknown): value is ProfileApiError {
-  return value instanceof ProfileApiError;
-}

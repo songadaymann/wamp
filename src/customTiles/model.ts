@@ -43,10 +43,6 @@ export function getCustomRoomTileIndexForGid(gid: number): number | null {
   return gid - CUSTOM_ROOM_TILE_FIRST_GID;
 }
 
-export function isCustomRoomTileGid(gid: number): boolean {
-  return getCustomRoomTileIndexForGid(gid) !== null;
-}
-
 export function assertCustomRoomTileGidRangeIsSafe(): void {
   const maxCustomGid = CUSTOM_ROOM_TILE_FIRST_GID + CUSTOM_ROOM_TILE_MAX_TILES - 1;
   if (maxCustomGid >= TILE_FLIP_X_FLAG) {

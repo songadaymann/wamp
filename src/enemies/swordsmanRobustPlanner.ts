@@ -60,12 +60,6 @@ export interface SwordsmanRobustTraversalRequest {
   bodyHeight: number;
 }
 
-export interface SwordsmanTraversalEdgeSimulationDebug {
-  edgeId: string;
-  success: boolean;
-  travelMs: number;
-}
-
 interface SearchState {
   nodeId: string;
   edges: SwordsmanTraversalEdge[];
@@ -283,21 +277,6 @@ export function planSwordsmanRobustTraversal(
     simulatedEdges,
     coldSimulatedEdges: coldSimulationCount - coldSimulationCountAtStart,
     planDurationMs: performance.now() - startedAt,
-  };
-}
-
-export function debugSimulateSwordsmanTraversalEdge(
-  room: RoomSnapshot,
-  graph: SwordsmanTraversalGraph,
-  edge: SwordsmanTraversalEdge,
-  bodyWidth: number,
-  bodyHeight: number,
-): SwordsmanTraversalEdgeSimulationDebug {
-  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
-  return {
-    edgeId: edge.id,
-    success: result.success,
-    travelMs: Math.round(result.travelMs),
   };
 }
 

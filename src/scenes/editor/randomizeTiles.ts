@@ -127,34 +127,6 @@ export function scrambleWindow(
   return next;
 }
 
-export function applyRandomizeFlips(
-  encoded: number,
-  flipHorizontal: boolean,
-  flipVertical: boolean,
-  random: RandomizeRng = Math.random,
-): number {
-  if (encoded < 0 || (!flipHorizontal && !flipVertical)) {
-    return encoded;
-  }
-  const decoded = decodeTileDataValue(encoded);
-  return encodeTileDataValue(
-    decoded.gid,
-    flipHorizontal ? random() < 0.5 : decoded.flipX,
-    flipVertical ? random() < 0.5 : decoded.flipY,
-  );
-}
-
-export function applyRandomizeFlipsToWindow(
-  grid: number[][],
-  flipHorizontal: boolean,
-  flipVertical: boolean,
-  random: RandomizeRng = Math.random,
-): number[][] {
-  return grid.map((row) => row.map((value) => (
-    applyRandomizeFlips(value, flipHorizontal, flipVertical, random)
-  )));
-}
-
 function shuffle<T>(items: T[], random: RandomizeRng): T[] {
   const next = items.slice();
   for (let index = next.length - 1; index > 0; index -= 1) {

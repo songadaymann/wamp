@@ -357,13 +357,6 @@ export function commitCustomSpriteLibraryChanges(): void {
   dispatchChanged();
 }
 
-export function registerCommunityCatalogSprite(entry: CustomSpriteCatalogEntry): void {
-  spriteById.set(entry.sprite.id, entry.sprite);
-  dataUrlById.delete(entry.sprite.id);
-  setCatalogMetadata(entry);
-  dispatchChanged();
-}
-
 export function registerCommunityCatalogSprites(entries: readonly CustomSpriteCatalogEntry[]): void {
   if (entries.length === 0) return;
   for (const entry of entries) {
@@ -372,15 +365,6 @@ export function registerCommunityCatalogSprites(entries: readonly CustomSpriteCa
     setCatalogMetadata(entry);
   }
   dispatchChanged();
-}
-
-export function getCustomSpriteCatalogMetadata(id: string | null | undefined): CatalogCustomSpriteMetadata | null {
-  if (!id) return null;
-  const metadata = catalogMetadataById.get(id);
-  return metadata ? {
-    ...metadata,
-    remixedFrom: metadata.remixedFrom ? { ...metadata.remixedFrom } : null,
-  } : null;
 }
 
 function setCatalogMetadata(entry: CustomSpriteCatalogEntry): void {

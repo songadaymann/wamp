@@ -126,14 +126,6 @@ export class RoomCommentsDataController {
     return this.comments;
   }
 
-  getActiveRoomSignature(): string | null {
-    return this.activeRoomSignature;
-  }
-
-  getLoadingRoomSignature(): string | null {
-    return this.loadingRoomSignature;
-  }
-
   getBrowseCacheEntry(signature: string): BrowseCommentCacheEntry | undefined {
     return this.browseCommentCache.get(signature);
   }

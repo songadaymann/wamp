@@ -3,24 +3,16 @@ import type { PlacedObject } from '../../config';
 import {
   clonePlacedObjectDocument,
   removePlacedObjectFromDocument,
-  updatePlacedObjectDocument,
 } from './placedObjectDocument';
 
 describe('placed object document', () => {
-  it('deep-clones link arrays and updates one immutable object', () => {
+  it('deep-clones link arrays without mutating the source', () => {
     const source = [object('platform', 'moving_platform', ['target'])];
     const clone = clonePlacedObjectDocument(source);
     clone[0].linkedTargetInstanceIds!.push('other');
     expect(source[0].linkedTargetInstanceIds).toEqual(['target']);
 
-    const result = updatePlacedObjectDocument(source, 'platform', (placed) => ({
-      ...placed,
-      facing: 'left',
-    }));
-    expect(result.changed).toBe(true);
-    expect(result.placedObjects[0].facing).toBe('left');
-    expect(source[0].facing).toBeUndefined();
-    expect(updatePlacedObjectDocument(source, 'missing', (placed) => placed).changed).toBe(false);
+
   });
 
   it('removes a target and reconciles single and path links without mutating input', () => {

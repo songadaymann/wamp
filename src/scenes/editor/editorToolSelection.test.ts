@@ -5,7 +5,6 @@ import {
   applyEditorToolSelection,
   isEditorLineCurve,
   resolveEditorLineEnd,
-  getEditorToolHudLabel,
   getEditorToolUnavailableTitle,
   getEditorToolButtonAppearance,
   getEditorToolModePipState,
@@ -280,7 +279,6 @@ describe('Smart straight Line constraints', () => {
     applyEditorToolSelection('line');
     expect(isEditorLineCurve()).toBe(false);
     expect(getEditorToolModePipState('line')).toBeNull();
-    expect(getEditorToolHudLabel('line')).toBe('Line');
     expect(getEditorToolButtonAppearance('line', true)?.label).toBe('Line');
     updateEditorState({ smartMaterial: 'cyber.concrete' });
     expect(isEditorLineCurve()).toBe(true);

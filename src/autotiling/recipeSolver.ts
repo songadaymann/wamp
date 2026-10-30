@@ -1,5 +1,4 @@
 import type { LayerName } from '../config/room';
-import type { RoomTileData } from '../persistence/roomModel';
 import {
   cloneRoomSmartTerrainState,
   smartOwnedOutputKey,
@@ -73,14 +72,6 @@ export function getSmartRecipeEngineAdapter(brushId: SmartBrushId): SmartRecipeE
   return SMART_RECIPE_ENGINE_ADAPTERS[brush.engine];
 }
 
-function cloneTileData(tileData: RoomTileData): RoomTileData {
-  return {
-    background: tileData.background.map((row) => [...row]),
-    terrain: tileData.terrain.map((row) => [...row]),
-    foreground: tileData.foreground.map((row) => [...row]),
-  };
-}
-
 function getSemanticOwnerId(brushId: SmartBrushId, semanticKey: string): string {
   const brush = getSmartBrushDefinition(brushId);
   return brush.engine === 'legacy-terrain'
@@ -99,20 +90,6 @@ function addSuppressedPart(
   }
 }
 
-export function applySmartBrushCells(
-  document: SmartRecipeDocument,
-  options: ApplySmartBrushCellsOptions,
-): SmartRecipeDocument {
-  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyCells(document, options));
-}
-
-export function applySmartBrushOutlineCells(
-  document: SmartRecipeDocument,
-  options: ApplySmartBrushOutlineCellsOptions,
-): SmartRecipeDocument {
-  return reconcileSmartRecipeSources(getSmartRecipeEngineAdapter(options.brushId).applyOutlineCells(document, options));
-}
-
 /** Runs every registered recipe-family document pass after legacy terrain resolves. */
 export function resolveSmartRecipeDocument(
   document: SmartRecipeDocument,
@@ -128,22 +105,6 @@ function getSmartRecipeOwnerId(
   instanceId: string,
 ): string {
   return getSmartRecipeEngineAdapter(brushId).recipeOwnerId(instanceId);
-}
-
-/** Locks a manually selected encoded value while retaining its Smart semantics. */
-export function lockSmartSemanticCell(
-  document: SmartRecipeDocument,
-  x: number,
-  y: number,
-  value: number,
-  layer: LayerName,
-): SmartRecipeDocument {
-  const tileData = cloneTileData(document.tileData);
-  const smartTerrain = cloneRoomSmartTerrainState(document.smartTerrain);
-  const semantic = smartTerrain.semanticCells[smartSemanticCellKey(layer, x, y)];
-  if (semantic && !semantic.legacySource) semantic.lockedValue = value;
-  tileData[layer][y][x] = value;
-  return resolveSmartRecipeDocument({ tileData, smartTerrain });
 }
 
 /** Records a manual edit against whichever registered engine owns the output. */

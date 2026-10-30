@@ -1,3 +1,4 @@
+import { applyRegisteredSmartBrushCells } from '../../autotiling/brushEngine';
 import { describe, expect, it } from 'vitest';
 import {
   createRoomSmartTerrainState,
@@ -6,7 +7,7 @@ import {
   smartOwnedOutputPartKey,
   smartSemanticCellKey,
 } from '../../autotiling/model';
-import { applySmartBrushCells, type SmartRecipeDocument } from '../../autotiling/recipeSolver';
+import { type SmartRecipeDocument } from '../../autotiling/recipeSolver';
 import { createEmptyTileData } from '../../persistence/roomModel';
 import {
   buildEditorClipboardState,
@@ -226,7 +227,7 @@ describe('editor clipboard planning', () => {
       tileData: createEmptyTileData(),
       smartTerrain: createRoomSmartTerrainState(),
     };
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       brushId,
       styleId,
       cells,
@@ -292,7 +293,7 @@ describe('editor clipboard planning', () => {
   });
 
   it('copies letter-matched concrete cells as semantic sources', () => {
-    const document = applySmartBrushCells({
+    const document = applyRegisteredSmartBrushCells({
       tileData: createEmptyTileData(),
       smartTerrain: createRoomSmartTerrainState(),
     }, {
@@ -316,7 +317,7 @@ describe('editor clipboard planning', () => {
   });
 
   it('copies an isolated concrete cell from its semantic footprint', () => {
-    const document = applySmartBrushCells({
+    const document = applyRegisteredSmartBrushCells({
       tileData: createEmptyTileData(),
       smartTerrain: createRoomSmartTerrainState(),
     }, {

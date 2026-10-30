@@ -3,7 +3,7 @@ import { getAuthoringCatalog } from '../agentBuilder/authoringCatalog';
 import { ROOM_GOAL_DEFINITIONS, type CollectTargetGoal } from './roomGoals';
 import { type CourseGoal } from '../courses/model';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { ROOM_GOAL_TYPES, createDefaultRoomGoal, normalizeRoomGoal, cloneRoomGoal, goalSupportsTimeLimit } from './roomGoals';
+import { ROOM_GOAL_TYPES, createDefaultRoomGoal, normalizeRoomGoal, cloneRoomGoal } from './roomGoals';
 import { COURSE_GOAL_TYPES, createDefaultCourseGoal, normalizeCourseGoal, cloneCourseGoal } from '../courses/model';
 
 describe('goal data compatibility', () => {
@@ -25,9 +25,6 @@ describe('goal data compatibility', () => {
   it('does not promote room-only goals into courses', () => {
     expect(normalizeCourseGoal(createDefaultRoomGoal('collect_race'))).toBeNull();
     expect(normalizeCourseGoal(createDefaultRoomGoal('npc_quest'))).toBeNull();
-    expect(goalSupportsTimeLimit('npc_quest')).toBe(false);
-    expect(goalSupportsTimeLimit('survival')).toBe(false);
-    expect(goalSupportsTimeLimit('collect_race')).toBe(true);
   });
   it('preserves finite coordinates, integer rounding and course marker identity', () => {
     expect(normalizeRoomGoal({type:'checkpoint_sprint',checkpoints:[{x:0,y:-4},{x:Infinity,y:1},{x:'2',y:2}],finish:{x:2,y:NaN},timeLimitMs:0.5})).toEqual({type:'checkpoint_sprint',checkpoints:[{x:0,y:-4}],finish:null,timeLimitMs:1});

@@ -5,7 +5,6 @@ import { resolveWorldPresenceGuestIdentity } from '../presence/worldPresence';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { resolveGuestRecoveryToken } from './identity';
 import type {
-  GuestRoomDraftGetResponse,
   GuestRoomDraftListResponse,
   GuestRoomDraftSaveRequestBody,
   GuestRoomDraftSaveResponse,
@@ -49,16 +48,6 @@ export function listSubmittedGuestRoomDrafts(limit = 48): Promise<GuestRoomDraft
   return apiRequest<GuestRoomDraftListResponse>(`/api/guest-room-drafts/submitted?${params.toString()}`, {
     credentials: 'omit',
   });
-}
-
-export function loadGuestRoomDraft(draftId: string): Promise<GuestRoomDraftGetResponse> {
-  return apiRequest<GuestRoomDraftGetResponse>(
-    `/api/guest-room-drafts/${encodeURIComponent(draftId)}`,
-    {
-      credentials: 'omit',
-      prepareHeaders: appendGuestRecoveryHeaders,
-    },
-  );
 }
 
 export function submitGuestRoomDraft(draftId: string): Promise<GuestRoomDraftSubmitResponse> {

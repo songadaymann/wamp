@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom, type FakeElement } from './testing/fakeDom';
 
 vi.mock('phaser', () => ({ default: {} }));
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 // The pop-up's real markup, so the test sees its data-autofocus card and button roles.
 const BUSY_MARKUP = /<div id="busy-overlay"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/
@@ -220,4 +220,25 @@ describe('the shared pop-up (F467)', () => {
     expect(f.root.getAttribute('role')).toBeNull();
     expect(f.dom.doc.activeElement).toBe(f.launcher);
   });
+});
+
+
+it('finishes boot diagnostics before app-ready listeners run, only once', async () => {
+  const { feedback } = await setup();
+  vi.useFakeTimers();
+  const events = Object.assign(new EventTarget(), { setTimeout, clearTimeout });
+  vi.stubGlobal('window', events);
+  const diagnostics = await import('../main/bootDiagnostics');
+  const listener = vi.fn(() => {
+    expect(diagnostics.getBootDiagnostics().active).toBe(false);
+  });
+  events.addEventListener('wamp:app-ready', listener);
+  expect(diagnostics.getBootDiagnostics().active).toBe(true);
+  diagnostics.startBootStallWatch('already pending before readiness', 100);
+  feedback.markAppReady();
+  feedback.markAppReady();
+  expect(listener).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(100);
+  const state = diagnostics.getBootDiagnostics();
+  expect((state.entries as { phase: string }[]).map(entry => entry.phase)).toEqual(['app-ready']);
 });

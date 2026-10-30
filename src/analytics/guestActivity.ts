@@ -24,7 +24,6 @@ let volatileSessionId: string | null = null;
 let volatileSessionSeenAt = 0;
 let initialized = false;
 let sessionReady = false;
-let heartbeatTimer: number | null = null;
 let pendingHeartbeat: number | null = null;
 let snapshotReader: (() => GuestActivitySnapshot | null) | null = null;
 
@@ -62,7 +61,7 @@ export function initializeGuestActivityTracking(
     void sendHeartbeat(true);
   });
 
-  heartbeatTimer = window.setInterval(() => {
+  window.setInterval(() => {
     void sendHeartbeat(false);
   }, HEARTBEAT_INTERVAL_MS);
 }
@@ -237,18 +236,4 @@ function createSessionId(): string {
   }
 
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-}
-
-export function stopGuestActivityTracking(): void {
-  if (heartbeatTimer !== null) {
-    window.clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
-  }
-  if (pendingHeartbeat !== null) {
-    window.clearTimeout(pendingHeartbeat);
-    pendingHeartbeat = null;
-  }
-  initialized = false;
-  sessionReady = false;
-  snapshotReader = null;
 }

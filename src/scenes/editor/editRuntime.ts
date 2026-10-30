@@ -11,7 +11,6 @@ import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
-  canPlacedObjectBePressurePlateTarget,
   canPlacedObjectUseObjectLink,
   createPlacedObjectInstanceId,
   decodeTileDataValue,
@@ -2455,12 +2454,6 @@ export class EditorEditRuntime {
     }
 
     return bestMatch;
-  }
-
-  getPressurePlateEligibleTargets(triggerInstanceId: string | null | undefined): PlacedObject[] {
-    return this.getObjectLinkEligibleTargets(triggerInstanceId).filter((placed) =>
-      canPlacedObjectBePressurePlateTarget(placed)
-    );
   }
 
   getObjectLinkEligibleTargets(sourceInstanceId: string | null | undefined): PlacedObject[] {
