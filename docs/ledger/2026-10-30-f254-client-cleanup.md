@@ -1,0 +1,1 @@
+| 2026-10-30 | F254 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f254-retired-css-cleanup-2026-10-30.md) | Remove inert style selectors and guard against their return while preserving current layouts |

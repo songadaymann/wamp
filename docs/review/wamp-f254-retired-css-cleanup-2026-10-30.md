@@ -1,4 +1,4 @@
-# F254 — retire inert styles and guard against regrowth (in progress)
+# F254 — retire inert styles and guard against regrowth (delivered)
 
 Remove49 dead selector entries across14 CSS files, preserving live siblings in
 selector lists (including auth-row and playlist level grids). This includes the
@@ -41,3 +41,16 @@ the initial combined run caught the stale streaming pin before proceeding.
 Evidence: /tmp/wamp-client-final-five-check-final.log. Individual browser/CLI/
 algorithm proofs above remain valid. PR CI and live rollout still required;
 this item remains unchecked. No API/schema change in this batch.
+
+## Delivery verified — 2026-10-30
+
+The pending delivery status above is superseded. PR356 passed all20 checks on
+18446370 and merged as067726eb. Guarded Pages-only rollout559d79e5 and production
+smoke pass. Live entry/editor/style asset bytes match release. Real desktop/phone
+browsers with recorded API and blocked multiplayer reach appReady, open/close
+About, load hot sound assets with zero footstep requests, retain inactive boot
+diagnostics and have zero page errors. Removed selectors have zero DOM matches.
+Public map PNG200/642x354 remains valid; API health expects/applies0078.
+API Worker and renderer unchanged. No production player/room/email/transaction
+tests. Evidence: /tmp/wamp-client-final-five-release.log, live-assets.log,
+live-browser.json/log and live-map.json. Goal27/28; Round2 99/248.

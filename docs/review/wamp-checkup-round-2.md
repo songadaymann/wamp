@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 94 of 248 done.**
+**Progress: 99 of 248 done.**
 
 ## How to use this file
 
@@ -127,11 +127,11 @@ There are almost no dead files. But about 3,000 lines of unused functions remain
 - [x] **F259** Clutter sweep: an OpenAI sprite prototype, a committed debug log, a dev-only page and 165 KB of unused art in production · low impact · small effort — _also covers: A developer preview page and a redirect stub are still built and deployed as full pages; About 420 KB of art source files are deployed to the live site and listed in the startup asset table_ — **done 2026-10-29** ([PR #353](https://github.com/songadaymann/wamp/pull/353)): preserve unused source art outside production, retain runtime atlases and developer preview; all20 CI and live assets/browser verified. [Receipt](wamp-f259-production-asset-cleanup-2026-10-29.md).
 - [x] **F263** The old Mac LaunchAgent avatar queue (961 lines) was replaced by a Cloudflare container in April but never removed · low impact · small effort — **done 2026-10-29** ([PR #334](https://github.com/songadaymann/wamp/pull/334)): removed three obsolete Mac queue scripts, five package commands and local-only configuration. Cloudflare avatar generation remains; no Mac LaunchAgent installed or registered. All 18 CI jobs passed. [Receipt](wamp-f263-retire-mac-avatar-queue-2026-10-29.md).
 - [x] **F257** About 60 small dead helpers and methods scattered through the client (about 475 lines) · low impact · small effort — **done 2026-10-29** ([PR #354](https://github.com/songadaymann/wamp/pull/354)): remove47 unused helpers/methods, finish boot diagnostics at readiness and retain live solver/planner tests; all20 CI/native/live checks pass. [Receipt](wamp-f257-client-helper-cleanup-2026-10-29.md).
-- [ ] **F255** About 40% of the Cyber autotile profile (341 lines) is an older resolver that only its own tests still use · low impact · small effort
-- [ ] **F260** Music engine leftovers from the stems era and the sequencer rewrite: about 260 lines nothing calls · low impact · small effort — _also covers: About 150 lines of unused audio code, plus a 'footstep' sound that is preloaded first but never played_
-- [ ] **F258** About 85 lines of unused streaming methods and leftovers can be deleted · low impact · small effort
-- [ ] **F266** World-map tile 'coverage contract' code from July (about 200 lines) was never wired in, so its tests check code that doesn't run · low impact · small effort
-- [ ] **F254** About 220 lines of CSS can never apply: removed HUD and menu classes, plus the pre-dock editor layout · low impact · small effort — _also covers: 155 lines of styling for 25 class names that no page or code uses any more (old world HUD title, auth header, profile stats rows)_
+- [x] **F255** About 40% of the Cyber autotile profile (341 lines) is an older resolver that only its own tests still use · low impact · small effort — **done 2026-10-30** ([PR #356](https://github.com/songadaymann/wamp/pull/356)); individual native/algorithm/CLI proofs, all20 CI and live frontend/health checks pass. [Receipt](wamp-f255-cyber-resolver-cleanup-2026-10-29.md).
+- [x] **F260** Music engine leftovers from the stems era and the sequencer rewrite: about 260 lines nothing calls · low impact · small effort — _also covers: About 150 lines of unused audio code, plus a 'footstep' sound that is preloaded first but never played_ — **done 2026-10-30** ([PR #356](https://github.com/songadaymann/wamp/pull/356)); individual native/algorithm/CLI proofs, all20 CI and live frontend/health checks pass. [Receipt](wamp-f260-music-helper-cleanup-2026-10-29.md).
+- [x] **F258** About 85 lines of unused streaming methods and leftovers can be deleted · low impact · small effort — **done 2026-10-30** ([PR #356](https://github.com/songadaymann/wamp/pull/356)); individual native/algorithm/CLI proofs, all20 CI and live frontend/health checks pass. [Receipt](wamp-f258-streaming-helper-cleanup-2026-10-29.md).
+- [x] **F266** World-map tile 'coverage contract' code from July (about 200 lines) was never wired in, so its tests check code that doesn't run · low impact · small effort — **done 2026-10-30** ([PR #356](https://github.com/songadaymann/wamp/pull/356)); individual native/algorithm/CLI proofs, all20 CI and live frontend/health checks pass. [Receipt](wamp-f266-map-coverage-cleanup-2026-10-29.md).
+- [x] **F254** About 220 lines of CSS can never apply: removed HUD and menu classes, plus the pre-dock editor layout · low impact · small effort — _also covers: 155 lines of styling for 25 class names that no page or code uses any more (old world HUD title, auth header, profile stats rows)_ — **done 2026-10-30** ([PR #356](https://github.com/songadaymann/wamp/pull/356)); individual native/algorithm/CLI proofs, all20 CI and live frontend/health checks pass. [Receipt](wamp-f254-retired-css-cleanup-2026-10-30.md).
 
 ### Superfluous and duplicated code
 

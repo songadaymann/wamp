@@ -8,6 +8,11 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-30 | F266 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f266-map-coverage-cleanup-2026-10-29.md) | Remove unused map contracts and keep parent retention tested against the live planner |
+| 2026-10-30 | F260 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f260-music-helper-cleanup-2026-10-29.md) | Remove retired music helpers and footstep warming while preserving saved stems playback |
+| 2026-10-30 | F258 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f258-streaming-helper-cleanup-2026-10-29.md) | Retire unused streaming wrappers and update camera, social and model import callers |
+| 2026-10-30 | F255 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f255-cyber-resolver-cleanup-2026-10-29.md) | Retire the superseded Cyber resolver while preserving live solver paths and invariants |
+| 2026-10-30 | F254 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f254-retired-css-cleanup-2026-10-30.md) | Remove inert style selectors and guard against their return while preserving current layouts |
 | 2026-10-29 | F257 | [#354](https://github.com/songadaymann/wamp/pull/354) | [receipt](docs/review/wamp-f257-client-helper-cleanup-2026-10-29.md) | Remove unused client helpers and finish boot diagnostics once the app is ready |
 | 2026-10-29 | F259 | [#353](https://github.com/songadaymann/wamp/pull/353) | [receipt](docs/review/wamp-f259-production-asset-cleanup-2026-10-29.md) | Preserve unused art outside production and retain the active atlases and developer preview |
 | 2026-10-29 | F265 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f265-renderer-admin-cleanup-2026-10-29.md) | Bound main API cleanup, retire duplicate renderer admin routes and use bound metrics |
@@ -83,8 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-19 | F172 | [#247](https://github.com/songadaymann/wamp/pull/247) | [receipt](docs/review/wamp-assist-mode-2026-10-18.md) | Local Assist mode with safe-ground respawns |
 | 2026-10-18 | F171 | [#246](https://github.com/songadaymann/wamp/pull/246) | [receipt](docs/review/wamp-readable-text-2026-10-18.md) | Readable font and larger text settings, synced to the account |
 | 2026-10-18 | F170 | [#245](https://github.com/songadaymann/wamp/pull/245) | [receipt](docs/review/wamp-menu-pause-2026-10-18.md) | Menus and dialogs pause solo play safely; co-op, PvP and Rush keep running |
-| 2026-10-18 | F250 | [#244](https://github.com/songadaymann/wamp/pull/244) | [receipt](docs/review/wamp-expanded-room-leaderboards-2026-10-18.md) | Whole Expanded Room leaderboards: access and refresh fixed |
-| 2026-10-18 | F037 | [#241](https://github.com/songadaymann/wamp/pull/241)–[#243](https://github.com/songadaymann/wamp/pull/243) | [receipt](docs/review/wamp-cloudflare-presence-2026-10-18.md) | Presence interest cuts crowded-area traffic; live presence moves to a hibernating Cloudflare Durable Object |
-| 2026-10-18 | F036 | [#237](https://github.com/songadaymann/wamp/pull/237)–[#240](https://github.com/songadaymann/wamp/pull/240) | [receipt](docs/review/wamp-personal-discovery-cache-2026-10-18.md) | Signed-in browsing shares public caches (lists, standings, discovery); private ranks and history stay fresh |
-| 2026-10-17 | F025 | [#236](https://github.com/songadaymann/wamp/pull/236) | [receipt](docs/review/wamp-first-paint-2026-10-17.md) | Faster first paint: deferred editor styles, compressed fonts, five rare menus deferred |
-| 2026-10-17 | F091 | [#235](https://github.com/songadaymann/wamp/pull/235) | [receipt](docs/review/wamp-mann-cool-2026-10-17.md) | Plays are reported to mann.cool, and trusted mann.cool controller input is accepted |

@@ -1,0 +1,1 @@
+| 2026-10-30 | F266 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f266-map-coverage-cleanup-2026-10-29.md) | Remove unused map contracts and keep parent retention tested against the live planner |

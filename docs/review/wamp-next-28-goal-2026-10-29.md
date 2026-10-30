@@ -49,17 +49,17 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F259 — remove production clutter and keep developer/source assets appropriately.
 - [x] F263 — retire obsolete Mac avatar queue; PR #334 merged, all 18 CI jobs passed.
 - [x] F257 — unused-helper cleanup and complete boot diagnostics correctly.
-- [ ] F255 — retire unused Cyber resolver while preserving live pieces/tests.
-- [ ] F260 — unused music-code cleanup, preserving planned/live helpers.
-- [ ] F258 — unused streaming APIs and aliases, with caller updates.
-- [ ] F266 — remove unused map coverage helpers/tests.
-- [ ] F254 — obsolete CSS cleanup and regression guard.
+- [x] F255 — retire unused Cyber resolver while preserving live pieces/tests.
+- [x] F260 — unused music-code cleanup, preserving planned/live helpers.
+- [x] F258 — unused streaming APIs and aliases, with caller updates.
+- [x] F266 — remove unused map coverage helpers/tests.
+- [x] F254 — obsolete CSS cleanup and regression guard.
 
 ## Current boundary
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **22/28 delivered**, and Round 2 is **94/248**.
+This goal is **27/28 delivered**, and Round 2 is **99/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -163,3 +163,10 @@ F257 delivered through PR354, tested97bf1712/all20checks, merge8fac31e5.
 Guarded Pages-only rollout/smoke passed. Live exact frontend assets and real-browser
 boot diagnostics inactive/one ready entry/stable logs/zero page errors verified.
 Goal22/28; Round2 94/248. Remaining6 F436,F255,F260,F258,F266,F254.
+
+PR356 delivered F255/F260/F258/F266/F254 on2026-10-30. All20 checks passed on
+18446370; merge067726eb. Guarded Pages-only rollout/smoke, exact frontend bytes,
+live desktop/phone menu/About/sound/no-footstep/boot and public map image checks
+pass; API remains healthy at0078. Goal27/28, Round2 99/248. Only F436 remains:
+refreshed draftPR341 cc742769, migration0079 NOT applied, full/native proofs pass,
+fresh CI and the previously pending26-prompt content decision still required.

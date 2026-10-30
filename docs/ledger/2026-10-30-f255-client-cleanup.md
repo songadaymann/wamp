@@ -1,0 +1,1 @@
+| 2026-10-30 | F255 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f255-cyber-resolver-cleanup-2026-10-29.md) | Retire the superseded Cyber resolver while preserving live solver paths and invariants |
