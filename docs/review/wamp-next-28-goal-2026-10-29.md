@@ -40,7 +40,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F451 — matching-version insights, layout comparison and map switching; PRs #346/#347, CI/live latency verified.
 - [x] F381 — World review statuses/reasons, saved-draft synchronization and decision emails; PR #348, CI/live verified.
 - [x] F253 — accessible Clear Layer and retire hidden editor UI; PR #349, CI/native/live frontend verified.
-- [ ] F479 — wallet-only Protected sort and appropriate non-wallet payloads.
+- [x] F479 — wallet-only Protected sort and appropriate non-wallet payloads; PR #350, CI/native/live verified.
 - [ ] F439 — fixed guest emotes and classroom-scoped student emotes.
 - [ ] F262 — idle/gate hidden Camera Tuner while preserving CI coverage.
 - [ ] F264 — remove retired difficulty-vote, Play.fun sync and attribution tables.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **14/28 delivered**, and Round 2 is **86/248**.
+This goal is **15/28 delivered**, and Round 2 is **87/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -125,3 +125,12 @@ Guarded Pages-only release8b269a01, entrymain-C6zlHlcy/editor/runtime/styles byt
 matches and production smoke pass. No Worker/schema/production room/player/email
 writes. F479 wallet-only Protected sort and non-wallet payload hygiene are next.
 The remaining14 items stay open.
+
+F479 delivered through PR350, tested c183e346/all20 CI40983194176 and merged
+08d0e589. Full742files/6262tests/all stages, boot669.2/670KB. Frontend-first guarded
+Pages0e82901e then Worker eb81b606 at100%; production smoke and exact assets pass
+(entry main-R5bSOI_g). Live default/crypto=1 record, summary and current views retain
+protection/permissions and separate cached summaries; desktop/phone Explore has no
+Protected sort while disconnected, zero page errors. Older tabs need a refresh.
+No migration or production player/room/email/transaction tests. Goal15/28 and
+Round2 87/248. F439 classroom emotes are next; F436 content approval remains pending.

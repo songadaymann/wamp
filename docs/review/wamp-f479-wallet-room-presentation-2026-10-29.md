@@ -102,3 +102,30 @@ pass; the normal two-step Collect & Lock/artwork success case also passes.
 Evidence: /tmp/wamp-f479-ci-failures.log, /tmp/wamp-f479-protection-service.log,
 /tmp/wamp-f479-protected-discovery-2.log, /tmp/wamp-f479-protected-discovery-touch.log
 and /tmp/wamp-f479-artwork-success.log. Application source is unchanged.
+
+## Delivered
+
+PR #350 tested head c183e34667ec7ae8357b8e063801fece17452838 passed all20 checks
+(CI40983194176) and merged as08d0e5892a048336a3e37e35172993e41c8ba89d. Final
+application check passes742files/6262tests/all stages, boot669.2KB/670KB.
+Guarded clean-main frontend-first Pages0e82901e then API Worker
+ eb81b606-1f89-4c11-af39-8796b6a457bf at100% both pass production smoke.
+Live entry main-R5bSOI_g.js, editor/runtime and CSS bytes match the release.
+
+Public live record/summary/current checks on an existing protected room verify
+zero minted fields by default, eight on crypto=1, isProtected=true and unchanged
+anonymous edit permissions. Both summary views remain separate on cache hits.
+Current wraps its presentation in summary, as documented; the live probe was
+corrected to inspect that wrapper. Real desktop/phone browsers load Explore,
+confirm disconnected Protected sort hidden with the wallet gate enabled and
+report zero page errors. No production room/player writes, emails or transactions.
+No migration; existing main0077/jam0003 remain current.
+
+Frontend is published before the API view change because new clients consume both
+DTO shapes. Already-open old tabs require refresh to adopt the new presentation;
+server edit permissions remain authoritative throughout. Native desktop/phone
+connected-wallet, walletless-owner, dirty-draft, reload recovery and cache proofs
+above cover the protected/authenticated flows without real wallet transactions.
+Evidence: /tmp/wamp-f479-pages-release.log, worker-release.log, live-api.json,
+live-browser.json, final-assets.log and deployments.json (same prefix).
+Goal15/28; Round2 87/248. Remaining13 items stay open.

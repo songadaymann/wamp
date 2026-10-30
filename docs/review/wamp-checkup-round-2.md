@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 86 of 248 done.**
+**Progress: 87 of 248 done.**
 
 ## How to use this file
 
@@ -404,7 +404,7 @@ The accessibility foundation is real, but two regressions undercut it, and error
 - [ ] **F470** Desktop editor squeezes 'Scramble' and 'Rectangle' to 7px, and shrinks Publish to 8px on tablets and small laptops · low impact · small effort
 - [ ] **F469** About 30 editor instructions tell phone builders to 'Click', 'press Escape' or 'move the mouse' · low impact · small effort
 - [ ] **F468** 'Collect' now means both coin pickups and owning a room; 'My Rooms' opens a tab called 'Levels' · low impact · small effort
-- [ ] **F479** Visitors without a wallet still download NFT owner addresses and token IDs whenever they tap a room · low impact · medium effort
+- [x] **F479** Visitors without a wallet still download NFT owner addresses and token IDs whenever they tap a room · low impact · medium effort — **done 2026-10-29** ([PR #350](https://github.com/songadaymann/wamp/pull/350)): connected-wallet Protected sort, opt-in crypto DTOs, protection/permissions preserved, versioned anonymous caches and pending recovery retained. All20 CI, native ownership/recovery and live desktop/phone/API/asset checks pass. [Receipt](wamp-f479-wallet-room-presentation-2026-10-29.md).
 
 ### Code health, tests and tooling
 
