@@ -15,12 +15,12 @@ export function setupBuildPromptsAdmin(getAdminKey: () => string, doc: Document 
     if (fields[0]) fields[0].disabled = !!prompt || !getAdminKey();
     if (save) save.disabled = locked || busy || !getAdminKey();
     if (remove) remove.disabled = !prompt || locked || busy || !getAdminKey();
-    message(prompt ? `${prompt.entryCount} entries · ${prompt.startsAt.slice(0,10)} to ${prompt.endsAt.slice(0,10)} UTC${locked ? ' · Locked' : ' · Editable until the first entry'}` : getAdminKey() ? 'No new prompt is active until you save a theme for an open or future week.' : 'Use your admin key to manage Build Prompts.');
+    message(prompt ? `${prompt.pickedBy==='automatic' ? 'Automatic theme · ' : ''}${prompt.entryCount} entries · ${prompt.startsAt.slice(0,10)} to ${prompt.endsAt.slice(0,10)} UTC${locked ? ' · Locked' : ' · Editable until the first entry'}` : getAdminKey() ? 'The automatic rotation fills this week and next week. Save a manual theme here to override it.' : 'Use your admin key to manage Build Prompts.');
   };
   const render = (preferredValue?: string) => {
     const value = preferredValue ?? select?.value ?? ''; select?.replaceChildren();
     const empty = doc.createElement('option'); empty.value = ''; empty.textContent = 'Create a prompt'; select?.append(empty);
-    for (const prompt of prompts) { const option = doc.createElement('option'); option.value = prompt.slug; option.textContent = `${prompt.startsAt.slice(0,10)} · ${prompt.title}`; select?.append(option); }
+    for (const prompt of prompts) { const option = doc.createElement('option'); option.value = prompt.slug; option.textContent = `${prompt.startsAt.slice(0,10)} · ${prompt.title}${prompt.pickedBy==='automatic' ? ' · automatic' : ''}`; select?.append(option); }
     if (select) { select.value = prompts.some(prompt => prompt.slug === value) ? value : ''; select.disabled = !getAdminKey() || busy; } fill();
   };
   const refresh = async () => {
@@ -40,7 +40,7 @@ export function setupBuildPromptsAdmin(getAdminKey: () => string, doc: Document 
         method, ...(method === 'PUT' ? { body: JSON.stringify({ slug, title, constraint, startsAt: `${week}T00:00:00.000Z` }) } : {}),
       });
       if (current !== generation || key !== getAdminKey()) return;
-      prompts = response.prompts; busy = false; render(method === 'PUT' ? slug : ''); message(method === 'PUT' ? 'Prompt saved. It opens at the scheduled Monday, 00:00 UTC.' : 'Prompt removed.');
+      prompts = response.prompts; busy = false; render(method === 'PUT' ? slug : ''); message(method === 'PUT' ? 'Prompt saved. It opens at the scheduled Monday, 00:00 UTC.' : 'Prompt removed. That week will remain unscheduled unless you save a new theme.');
     } catch (error) { if (current === generation) message(error instanceof Error ? error.message : 'Prompt was not saved.'); }
     finally { busy = false; if (current === generation) { const text = status?.textContent ?? ''; fill(); if (select) select.disabled = !getAdminKey(); message(text); } }
   };

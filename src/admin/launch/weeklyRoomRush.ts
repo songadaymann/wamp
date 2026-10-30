@@ -15,7 +15,7 @@ export function setupWeeklyRoomRushAdmin(getAdminKey: () => string, doc: Documen
     const selected = snapshot?.weeks.find(entry => entry.startsAt.slice(0, 10) === week?.value);
     if (!selected || !getAdminKey()) { setDisabled(true); return; }
     const pick = selected.pick;
-    if (status) status.textContent = `${week?.value}: ${pick ? `${pick.title} · ${pick.roomId} · v${pick.roomVersion}` : 'no room chosen'}${selected.lockedAt ? ' · locked after ranked play started.' : '.'}${pick?.unavailableReason ? ` ${pick.unavailableReason}` : ''}`;
+    if (status) status.textContent = `${week?.value}: ${pick ? `${pick.title} · ${pick.roomId} · v${pick.roomVersion}` : 'no room chosen'}${selected.pickedBy==='automatic' ? ' · automatic pick' : ''}${selected.lockedAt ? ' · locked after ranked play started.' : '.'}${pick?.unavailableReason ? ` ${pick.unavailableReason}` : ''}`;
     if (input) input.value = pick?.roomId ?? '';
     setDisabled(busy);
     if (input) input.disabled = busy || Boolean(selected.lockedAt);
@@ -28,7 +28,7 @@ export function setupWeeklyRoomRushAdmin(getAdminKey: () => string, doc: Documen
       const previous = week.value;
       week.replaceChildren(...response.weeks.map(entry => {
         const option = doc.createElement('option'); option.value = entry.startsAt.slice(0, 10);
-        option.textContent = `${option.value}${entry.lockedAt ? ' · locked' : entry.pick ? ' · chosen' : ' · not chosen'}`;
+        option.textContent = `${option.value}${entry.lockedAt ? ' · locked' : entry.pick ? entry.pickedBy==='automatic' ? ' · automatic' : ' · chosen' : ' · not chosen'}`;
         return option;
       }));
       if (response.weeks.some(entry => entry.startsAt.slice(0, 10) === previous)) week.value = previous;

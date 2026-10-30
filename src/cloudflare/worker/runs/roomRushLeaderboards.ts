@@ -1,3 +1,6 @@
+import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../../runs/verificationTrace';
+import { computeRoomSnapshotVerificationHash, verifyWeeklyRushTrace } from './verification';
+import type { RoomSnapshot } from '../../../persistence/roomModel';
 import { expandedRoomIdFromStandaloneRoomId } from '../../../expandedRooms/model';
 import {
   DEFAULT_ROOM_COORDINATES,
@@ -53,6 +56,7 @@ interface RankedRoomRushRunRow extends RoomRushRunRow {
 interface ScoredRoomRushRoute {
   uniqueRooms: number;
   route: RoomRushRouteStepRecord[];
+  rooms: RoomSnapshot[];
 }
 
 export async function handleRoomRushRunStart(request: Request, env: Env): Promise<Response> {
@@ -80,6 +84,8 @@ export async function handleRoomRushRunStart(request: Request, env: Env): Promis
     if ((await takeRateLimitSlots(env, checks)).limitedBy) throw new HttpError(429, 'Please wait before restarting the weekly Rush.');
   }
   const startId = crypto.randomUUID(), clientRunId = `room-rush-${startId}`;
+  const verificationNonce = weekly ? crypto.randomUUID() : null;
+  const snapshotHash = weekly ? await computeRoomSnapshotVerificationHash(startRoom) : null;
   const expiresAt = new Date(startedAtDate.getTime() + (weekly ? WEEKLY_ROOM_RUSH_LIMIT_MS : ROOM_RUSH_START_TTL_MS)).toISOString();
   const statements = [];
   if (weekly) statements.push(env.DB.prepare(`UPDATE room_rush_weeks SET locked_at = COALESCE(locked_at, ?)
@@ -88,21 +94,21 @@ export async function handleRoomRushRunStart(request: Request, env: Env): Promis
         AND json_extract(r.published_json, '$.version') = room_rush_weeks.room_version)`)
     .bind(startedAt, weekly.period.weekKey, startRoomId, startRoom.version, startedAt, expiresAt));
   statements.push(env.DB.prepare(`INSERT INTO room_rush_run_starts
-    (start_id,client_run_id,user_id,difficulty,start_rule,start_room_id,start_x,start_y,started_at,expires_at,created_at,event_week)
-    SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+    (start_id,client_run_id,user_id,difficulty,start_rule,start_room_id,start_x,start_y,started_at,expires_at,created_at,event_week,verification_nonce,verification_snapshot_hash)
+    SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
     ${weekly ? `WHERE EXISTS (SELECT 1 FROM room_rush_weeks WHERE week_key = ? AND start_room_id = ?
       AND room_version = ? AND locked_at IS NOT NULL AND starts_at <= ? AND ends_at >= ?
       AND EXISTS (SELECT 1 FROM rooms r WHERE r.id = room_rush_weeks.start_room_id
         AND json_extract(r.published_json, '$.version') = room_rush_weeks.room_version))` : ''}`)
     .bind(startId, clientRunId, auth.user.id, body.difficulty, body.startRule, startRoomId,
-      body.startCoordinates.x, body.startCoordinates.y, startedAt, expiresAt, startedAt, weekly?.period.weekKey ?? null,
+      body.startCoordinates.x, body.startCoordinates.y, startedAt, expiresAt, startedAt, weekly?.period.weekKey ?? null,verificationNonce,snapshotHash,
       ...(weekly ? [weekly.period.weekKey, startRoomId, startRoom.version, startedAt, expiresAt] : [])));
   await env.DB.batch(statements);
   if (weekly && !await loadRoomRushRunStart(env, auth.user.id, startId)) throw new HttpError(409, 'The weekly room choice changed. Reload this week’s Rush.');
   const response: RoomRushRunStartResponse = {
     startId, clientRunId, difficulty: body.difficulty, startRule: body.startRule,
     startCoordinates: { ...body.startCoordinates }, startedAt, expiresAt,
-    ...(weekly ? { eventWeek: weekly.period.weekKey, timeLimitMs: WEEKLY_ROOM_RUSH_LIMIT_MS, serverTime: startedAt } : {}),
+    ...(weekly ? { verificationSchemaVersion:RANKED_RUN_TRACE_SCHEMA_VERSION,verificationNonce:verificationNonce!,snapshotHash:snapshotHash!,eventWeek: weekly.period.weekKey, timeLimitMs: WEEKLY_ROOM_RUSH_LIMIT_MS, serverTime: startedAt } : {}),
   };
   return jsonResponse(request, response, { status: 201, headers: { 'Cache-Control': 'no-store' } });
 }
@@ -159,6 +165,15 @@ export async function handleRoomRushRunSubmit(
   }
   assertRoomRushRouteIsPlausible(body);
   const scoredRoute = await scoreRoomRushRouteByExpandedRoom(env, body.route);
+  if(start.start_rule==='weekly') {
+    if(!body.verificationTrace)throw new HttpError(400,'This weekly Rush needs a complete movement trace. Reload WAMP and try again.');
+    const startRoom=scoredRoute.rooms.find(room=>room.id===start.start_room_id);
+    if(!startRoom)throw new HttpError(400,'The weekly start room is unavailable.');
+    const verification=verifyWeeklyRushTrace({trace:body.verificationTrace,
+      binding:{verificationNonce:start.verification_nonce ?? null,verificationSnapshotHash:start.verification_snapshot_hash ?? null},
+      startRoom,rooms:scoredRoute.rooms,route:body.route,elapsedMs:body.elapsedMs,deaths:body.deaths});
+    if(verification.status!=='passed')throw new HttpError(400,'This weekly Rush could not be verified. Reload WAMP and try again.');
+  }
   const uniqueRooms = scoredRoute.uniqueRooms;
   if (uniqueRooms <= 0) {
     throw new HttpError(400, 'Room Rush runs must include at least one unique room.');
@@ -206,9 +221,9 @@ export async function handleRoomRushRunSubmit(
           route_json,
           finished_at,
           created_at
-          ,event_week
+          ,event_week,verification_status
         )
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         WHERE EXISTS (SELECT 1 FROM room_rush_run_starts WHERE start_id = ? AND user_id = ? AND consumed_attempt_id = ?)
       `
     ).bind(
@@ -234,6 +249,7 @@ export async function handleRoomRushRunSubmit(
       finishedAt,
       finishedAt,
       start.event_week ?? null,
+      start.start_rule==='weekly' ? 'passed' : 'not_required',
       start.start_id,
       auth.user.id,
       attemptId
@@ -254,7 +270,7 @@ async function scoreRoomRushRouteByExpandedRoom(
   route: RoomRushRouteStepRecord[]
 ): Promise<ScoredRoomRushRoute> {
   if (route.length === 0) {
-    return { uniqueRooms: 0, route };
+    return { uniqueRooms: 0, route, rooms: [] };
   }
 
   const bounds = getRouteBounds(route.map((step) => step.coordinates));
@@ -296,6 +312,7 @@ async function scoreRoomRushRouteByExpandedRoom(
   return {
     uniqueRooms: areaVisitIndexById.size,
     route: scoredRoute,
+    rooms: publishedRooms.map(source=>source.snapshot),
   };
 }
 
@@ -324,7 +341,7 @@ function prepareRoomRushRunStartStatement(env: Env, userId: string, startId: str
         expires_at,
         consumed_attempt_id,
         consumed_at,
-        created_at
+        created_at, verification_nonce, verification_snapshot_hash
       FROM room_rush_run_starts
       WHERE start_id = ?
         AND user_id = ?
@@ -636,6 +653,7 @@ function buildRankedRoomRushCte(): string {
       FROM room_rush_runs
       WHERE difficulty = ?
         AND start_rule = ?
+        AND (start_rule<>'weekly' OR verification_status='passed')
         AND event_week IS ?
         AND result IN ('completed', 'failed')
         AND unique_rooms > 0

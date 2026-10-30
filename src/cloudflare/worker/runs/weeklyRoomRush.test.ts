@@ -1,3 +1,4 @@
+import { RankedRunTraceRecorder } from '../../../scenes/overworld/rankedRunTraceRecorder';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixture } from '../activity/testDatabase';
 import { HttpError } from '../core/http';
@@ -31,16 +32,26 @@ async function start(extra: object = {}): Promise<RoomRushRunStartResponse> {
   }), f.env)).json() as RoomRushRunStartResponse;
 }
 function submission(start: RoomRushRunStartResponse, extra: object = {}): RoomRushRunSubmissionRequestBody {
-  return { startId: start.startId, clientRunId: start.clientRunId, difficulty: start.difficulty, startRule: start.startRule,
+  const body:RoomRushRunSubmissionRequestBody={ startId: start.startId, clientRunId: start.clientRunId, difficulty: start.difficulty, startRule: start.startRule,
     result: 'completed', elapsedMs: 1000, deaths: 0, visitedRoomIds: ['0,0'],
     route: [{ routeIndex: 0, roomId: '0,0', coordinates: { x: 0, y: 0 }, uniqueVisitIndex: 1 }],
     startCoordinates: { x: 0, y: 0 }, finishCoordinates: { x: 0, y: 0 }, ...extra };
+  if(start.verificationNonce && start.snapshotHash) {
+    const frame={roomCoordinates:start.startCoordinates,x:320,y:256,vx:0,vy:0,grounded:true,horizontalInput:0,verticalInput:0,jumpPressed:false};
+    const recorder=new RankedRunTraceRecorder();recorder.start('room',{verificationSchemaVersion:start.verificationSchemaVersion!,
+      verificationNonce:start.verificationNonce,snapshotHash:start.snapshotHash},frame);
+    const duration=Math.min(body.elapsedMs,300000);
+    for(let elapsed=0;elapsed<duration;elapsed+=250)recorder.recordFrame(Math.min(250,duration-elapsed),frame);
+    if(body.deaths===1)recorder.recordDeath(frame);
+    body.verificationTrace=recorder.buildTrace(duration);
+  }
+  return body;
 }
 const finish = (body: RoomRushRunSubmissionRequestBody) => handleRoomRushRunSubmit(request('/api/room-rush/runs', body), f.env);
 function ranked(id: string, user: string, week: string | null, rooms: number, elapsed = 10000) {
   f.sqlite.prepare(`INSERT INTO room_rush_runs (attempt_id,client_run_id,user_id,user_display_name,difficulty,start_rule,result,
-    unique_rooms,elapsed_ms,deaths,start_room_id,start_x,start_y,finish_room_id,finish_x,finish_y,route_json,finished_at,created_at,event_week)
-    VALUES (?,?,?,?,?,?, 'completed',?,?,0,'0,0',0,0,'0,0',0,0,'[]',?,?,?)`)
+    unique_rooms,elapsed_ms,deaths,start_room_id,start_x,start_y,finish_room_id,finish_x,finish_y,route_json,finished_at,created_at,event_week,verification_status)
+    VALUES (?,?,?,?,?,?, 'completed',?,?,0,'0,0',0,0,'0,0',0,0,'[]',?,?,?,'passed')`)
     .run(id,id,user,user,'hard',week ? 'weekly' : 'selected',rooms,elapsed,NOW,NOW,week);
 }
 
@@ -126,6 +137,17 @@ describe('weekly ranked starts, timing and idempotent results', () => {
     expect(f.sqlite.prepare('SELECT COUNT(*) n,event_week FROM room_rush_runs').get()).toMatchObject({ n: 1,event_week: WEEK });
     state.user='p2';await expect(finish(submission(s))).rejects.toMatchObject({ status: 400 });
   });
+  it('requires server-bound movement evidence before ranking a weekly result',async()=>{
+    await pick();const s=await start();vi.advanceTimersByTime(1000);
+    const missing=submission(s);delete missing.verificationTrace;
+    await expect(finish(missing)).rejects.toMatchObject({status:400});
+    const other=submission(s);other.verificationTrace!.verificationNonce='other-start';
+    await expect(finish(other)).rejects.toMatchObject({status:400});
+    expect(f.sqlite.prepare('SELECT COUNT(*) n FROM room_rush_runs').get()).toMatchObject({n:0});
+    expect((await finish(submission(s))).status).toBe(201);
+    expect(f.sqlite.prepare('SELECT verification_status FROM room_rush_runs').get()).toMatchObject({verification_status:'passed'});
+  });
+
   it('rejects deaths inconsistent with Hard results, forged elapsed time and nonadjacent/unpublished routes', async () => {
     await pick();const s=await start();
     for (const body of [submission(s,{ deaths: 1 }),submission(s,{ result: 'failed',deaths: 0 }),submission(s,{ elapsedMs: 300001 })]) await expect(finish(body)).rejects.toMatchObject({ status: 400 });
@@ -153,6 +175,12 @@ describe('weekly ranked starts, timing and idempotent results', () => {
 });
 
 describe('separate weekly rankings and previous winners', () => {
+  it('does not promote historical unchecked weekly rows into verified standings',async()=>{
+    ranked('unchecked','p1',WEEK,999);
+    f.sqlite.prepare("UPDATE room_rush_runs SET verification_status='legacy'").run();
+    expect((await buildRoomRushLeaderboardResponse(f.env,'hard','weekly',25,'p1',WEEK)).entries).toEqual([]);
+  });
+
   it('takes one best run per player, isolates ordinary/old weeks and retains an off-list viewer rank', async () => {
     ranked('p1-slow','p1',WEEK,3,10000);ranked('p1-best','p1',WEEK,4,9000);ranked('p2','p2',WEEK,4,5000);ranked('p3','p3',WEEK,1);
     ranked('ordinary','p1',null,999);ranked('old','p3','UTC-2026-40',999);

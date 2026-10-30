@@ -1,3 +1,4 @@
+import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
 import {
   expandedRoomIdFromStandaloneRoomId,
 } from '../../expandedRooms/model';
@@ -24,6 +25,7 @@ export interface RoomRushRouteStep {
 }
 
 export interface ActiveRoomRushRunState {
+  verificationTrace?: RankedRunVerificationTrace | null;
   runId: string;
   serverStartId: string | null;
   serverStartedAt: string | null;

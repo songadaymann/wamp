@@ -29,6 +29,7 @@ export interface WeeklyRoomRushResponse {
 }
 
 export interface WeeklyRoomRushAdminWeek extends WeeklyRoomRushPeriod {
+  pickedBy?: 'admin' | 'automatic' | null;
   pick: WeeklyRoomRushPick | null;
   lockedAt: string | null;
 }
