@@ -62,3 +62,10 @@ cover the later CI/harness additions; application code matches that full check.
 Evidence: /tmp/wamp-f439-check-head.log, issuance-tests.log, durable-final-2.log
 and ignored output/web-game/room-emotes/ (same log prefix).
 Still not delivered: PR checks and guarded Worker/Pages rollout remain required.
+
+Native smoke portability: the fresh Worker dry build explicitly uses public
+fixture assets, matching its Miniflare ASSETS binding, so a clean checkout does
+not need a pre-existing dist directory. Its Vite dependency cache is isolated in
+its output directory. This was exposed while preparing the next clean worktree;
+the corrected command passes service/reconnect and all8 browser cases again.
+Evidence: /tmp/wamp-f439-durable-clean-fixture.log. Application code unchanged.

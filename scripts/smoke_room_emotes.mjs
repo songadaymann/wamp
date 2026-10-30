@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { Miniflare } from "miniflare";
 const output = "output/web-game/room-emotes";
 mkdirSync(output, { recursive: true });
-const bundled = spawnSync(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "deploy", "--dry-run", "--outdir", output + "/worker"], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
+const bundled = spawnSync(process.execPath, ["node_modules/wrangler/bin/wrangler.js", "deploy", "--dry-run", "--assets", "public", "--outdir", output + "/worker"], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
 writeFileSync(output + "/bundle.log", (bundled.stdout ?? "") + (bundled.stderr ?? ""));
 assert.equal(bundled.status, 0, "Fresh native Worker build");
 const loader = await createServer({ configFile: false, server: { middlewareMode: true }, optimizeDeps: { noDiscovery: true, include: [], entries: [] }, appType: "custom", logLevel: "error" });
@@ -94,7 +94,7 @@ try {
   process.env.VITE_ROOM_API_BASE_URL = api;
   process.env.VITE_PARTYKIT_HOST = api;
   process.env.VITE_ENABLE_TEST_RESET = "1";
-  vite = await createServer({ server: { host: "127.0.0.1", port: 3038, strictPort: true } });
+  vite = await createServer({ cacheDir: output + "/vite-cache", server: { host: "127.0.0.1", port: 3038, strictPort: true } });
   await vite.listen();
   browser = await chromium.launch({ headless: true });
   const browserResults = [];
