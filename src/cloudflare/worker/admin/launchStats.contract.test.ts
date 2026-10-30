@@ -185,6 +185,30 @@ describe('T14 launch statistics response contract', () => {
   });
 });
 
+describe('Cloudflare launch metrics without a public self-fetch', () => {
+  it.each([200, 503])('uses the metrics DO with internal authentication, status%s', async (status) => {
+    const publicFetch = vi.fn();
+    vi.stubGlobal('fetch', publicFetch);
+    const stats = { activePlayers: 7 };
+    const directFetch = vi.fn(async () => status === 200 ? Response.json(stats) : new Response('fixture denied', { status }));
+    const idFromName = vi.fn((name: string) => name);
+    const get = vi.fn(() => ({ fetch: directFetch }));
+    const { env } = createEmptyLaunchEnv({ PARTYKIT_HOST: 'api.wamp.land', PARTYKIT_INTERNAL_TOKEN: '  fixture-token  ',
+      PRESENCE_ROOMS: { idFromName, get } as unknown as NonNullable<Env['PRESENCE_ROOMS']>,
+    });
+    const result = await loadLaunchStats(env);
+    expect(publicFetch).not.toHaveBeenCalled();
+    expect(idFromName).toHaveBeenCalledWith('__launch-stats__');
+    expect(get).toHaveBeenCalledWith('__launch-stats__');
+    expect(directFetch).toHaveBeenCalledWith('https://presence.internal/parties/main/__launch-stats__/stats', {
+      headers: { 'x-partykit-internal-token': 'fixture-token' },
+    });
+    expect(result.partykit).toMatchObject(status === 200
+      ? { configured: true, reachable: true, stats }
+      : { configured: true, reachable: false, stats: null, error: 'fixture denied' });
+  });
+});
+
 describe('T14 launch statistics route and SQL source contract', () => {
   const routeSource = readRepoFile('src/cloudflare/worker/admin/routes.ts');
   const launchClosure = readTypeScriptImportClosure('src/cloudflare/worker/admin/launchStats.ts');

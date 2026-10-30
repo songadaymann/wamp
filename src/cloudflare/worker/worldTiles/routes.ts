@@ -322,6 +322,8 @@ interface WorldTileGarbageCollectBody {
   dryRun?: unknown;
   confirm?: unknown;
   olderThanDays?: unknown;
+  maximumDeletes?: unknown;
+  maximumScanned?: unknown;
 }
 
 async function handleWorldTileGarbageCollect(request: Request, env: Env): Promise<Response> {
@@ -339,28 +341,31 @@ async function handleWorldTileGarbageCollect(request: Request, env: Env): Promis
     throw new HttpError(400, `olderThanDays must be a safe integer of at least ${WORLD_TILE_MIN_GC_AGE_DAYS}.`);
   }
 
+  const maximumDeletes = clampGcLimit(body.maximumDeletes, 500, 2_000);
+  const maximumScanned = clampGcLimit(body.maximumScanned, 50_000, 250_000);
   const cutoffMs = Date.now() - olderThanDays * 24 * 60 * 60 * 1_000;
   const referencedKeys = await loadAllReferencedWorldTileObjectKeys(env.DB);
   const candidates: R2ObjectMetadata[] = [];
   let examined = 0;
   let cursor: string | undefined;
   do {
-    const page = await bucket.list({ prefix: WORLD_TILE_R2_PREFIX, cursor, limit: 1_000 });
-    examined += page.objects.length;
+    const page = await bucket.list({ prefix: WORLD_TILE_R2_PREFIX, cursor, limit: Math.min(1_000, maximumScanned - examined) });
     for (const object of page.objects) {
+      examined += 1;
       if (!referencedKeys.has(object.key) && object.uploaded.getTime() < cutoffMs) {
         candidates.push(object);
       }
+      if (examined >= maximumScanned || candidates.length >= maximumDeletes) break;
     }
     cursor = page.truncated ? page.cursor : undefined;
     if (page.truncated && !cursor) {
       throw new Error('R2 returned a truncated object page without a cursor.');
     }
-  } while (cursor);
+  } while (cursor && examined < maximumScanned && candidates.length < maximumDeletes);
 
   if (!dryRun) {
-    for (let index = 0; index < candidates.length; index += 1_000) {
-      await bucket.delete(candidates.slice(index, index + 1_000).map((object) => object.key));
+    for (let index = 0; index < candidates.length; index += 100) {
+      await bucket.delete(candidates.slice(index, index + 100).map((object) => object.key));
     }
   }
 
@@ -368,12 +373,20 @@ async function handleWorldTileGarbageCollect(request: Request, env: Env): Promis
     ok: true,
     dryRun,
     olderThanDays,
+    maximumDeletes,
+    maximumScanned,
+    truncated: Boolean(cursor) || examined >= maximumScanned || candidates.length >= maximumDeletes,
     examined,
     referenced: referencedKeys.size,
     candidates: candidates.length,
     candidateBytes: candidates.reduce((total, object) => total + object.size, 0),
     deleted: dryRun ? 0 : candidates.length,
   });
+}
+
+function clampGcLimit(value: unknown, fallback: number, maximum: number): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(value, maximum) : fallback;
 }
 
 async function verifyWorldTileObjects(env: Env, rendererVersion: string): Promise<{

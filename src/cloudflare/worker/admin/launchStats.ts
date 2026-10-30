@@ -1273,11 +1273,13 @@ async function loadPartykitStatus(env: Env): Promise<LaunchStatsPartykitStatus> 
   }
 
   try {
-    const response = await fetch(statsUrl, {
-      headers: {
-        'x-partykit-internal-token': env.PARTYKIT_INTERNAL_TOKEN!.trim(),
-      },
-    });
+    const headers = { 'x-partykit-internal-token': env.PARTYKIT_INTERNAL_TOKEN!.trim() };
+    // The Cloudflare host owns this namespace; retain the token check inside the DO.
+    const response = env.PRESENCE_ROOMS
+      ? await env.PRESENCE_ROOMS.get(env.PRESENCE_ROOMS.idFromName(METRICS_ROOM_ID)).fetch(
+        `https://presence.internal/parties/main/${encodeURIComponent(METRICS_ROOM_ID)}/stats`, { headers },
+      )
+      : await fetch(statsUrl, { headers });
 
     if (!response.ok) {
       const text = (await response.text()).trim();
