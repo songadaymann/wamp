@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import {chromium} from 'playwright';
+import {installSmokeApiReplay,smokeApiReplayEnabled,smokeDiscoverResponse} from './lib/smokeApiReplay.mjs';
 const base=process.argv[2]||'http://127.0.0.1:3033';
 const output=process.argv[3]||'output/web-game/discovery/native';mkdirSync(output,{recursive:true});
 const devices=[['desktop',1280,800,false],['phone',390,844,true],['tablet',1024,768,true],['landscape',844,390,true],['narrow-phone',320,568,true]];
@@ -16,12 +18,15 @@ try{
  for(const [name,width,height,touch]of devices){if(process.env.CASE&&!name.includes(process.env.CASE))continue;activeName=name;
  const context=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch});
  await context.addInitScript(()=>{localStorage.setItem('wamp_replay_opt_out','1');localStorage.setItem('wamp.devicePerformanceMode.v1',JSON.stringify({version:1,mode:'full-quality'}));});
+ // Recorded rooms and a discover list built from them stand in for the live world (F480).
+ await installSmokeApiReplay(context);
  const page=await context.newPage();activePage=page;
  page.on('pageerror',error=>report.errors.push({name,message:error.message}));
  page.on('console',message=>{if(message.type()==='error'&&!(base.includes('127.0.0.1')&&message.location().url.includes('/api/presence/identity-token')))report.errors.push({name,message:message.text(),url:message.location().url});});
  // The optional boundary case removes only Featured flags from the real local API reply.
  if(process.env.FEWER_FEATURED==='1')await page.route('**/api/leaderboards/rooms/discover?**',async route=>{
-  if(new URL(route.request().url()).searchParams.get('sort')!=='featured')return route.continue();
+  if(new URL(route.request().url()).searchParams.get('sort')!=='featured')return route.fallback();
+  if(smokeApiReplayEnabled()){const body=smokeDiscoverResponse(route.request().url());body.results=body.results.slice(0,7);return route.fulfill({json:body});}
   const response=await route.fetch();const body=await response.json();body.results=body.results.slice(0,7);
   await route.fulfill({response,json:body});
  });
@@ -31,7 +36,7 @@ try{
  if(process.env.EXPECTED_ENTRY)assert.equal(entry,process.env.EXPECTED_ENTRY);
  await page.locator('#welcome-modal').waitFor({state:'visible'});
  const request=discovery(page);await click(page,'#btn-welcome-explore',touch);const initialResponse=await request;const first=await initialResponse.json();
- const serverDiscovery=async(sort,difficulty=null)=>{const url=new URL(initialResponse.url());url.searchParams.set('sort',sort);url.searchParams.delete('difficulty');url.searchParams.delete('includeGoalLessRooms');if(difficulty)url.searchParams.set('difficulty',difficulty);if(sort==='newest'&&!difficulty)url.searchParams.set('includeGoalLessRooms','1');const response=await fetch(url);assert.equal(response.status,200);const body=await response.json();if(process.env.FEWER_FEATURED==='1'&&sort==='featured')body.results=body.results.slice(0,7);return body;};
+ const serverDiscovery=async(sort,difficulty=null)=>{const url=new URL(initialResponse.url());url.searchParams.set('sort',sort);url.searchParams.delete('difficulty');url.searchParams.delete('includeGoalLessRooms');if(difficulty)url.searchParams.set('difficulty',difficulty);if(sort==='newest'&&!difficulty)url.searchParams.set('includeGoalLessRooms','1');let body;if(smokeApiReplayEnabled())body=smokeDiscoverResponse(url.toString());else{const response=await fetch(url);assert.equal(response.status,200);body=await response.json();}if(process.env.FEWER_FEATURED==='1'&&sort==='featured')body.results=body.results.slice(0,7);return body;};
  await page.locator('#explore-modal').waitFor({state:'visible'});
  await page.waitForTimeout(500);
  const defaultSort=process.env.FEWER_FEATURED==='1'||first.results.filter(row=>row.featured).length<8?'popular':'featured';await loaded(page,defaultSort);

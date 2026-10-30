@@ -1,0 +1,1 @@
+| 2026-10-23 | F252, F387 | [#318](https://github.com/songadaymann/wamp/pull/318) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | PartyKit retired: local presence types, no PartyKit runtime, safety previews use the safety Worker |

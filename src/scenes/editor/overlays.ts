@@ -31,7 +31,6 @@ interface EditorOverlayHost {
 export class EditorOverlayController {
   private deathMapGraphics: Phaser.GameObjects.Graphics | null = null;
   private edgeGuideGraphics: Phaser.GameObjects.Graphics | null = null;
-  get edgeGuideOverlay(): Phaser.GameObjects.Graphics | null { return this.edgeGuideGraphics; }
 
   updateRoomEdgeGuides(guides: readonly RoomEdgeGuide[], zoom: number): void {
     this.edgeGuideGraphics ??= this.scene.add.graphics().setDepth(103);
@@ -50,14 +49,6 @@ export class EditorOverlayController {
 
   get gridOverlay(): Phaser.GameObjects.Graphics | null {
     return this.gridGraphics;
-  }
-
-  get borderOverlay(): Phaser.GameObjects.Graphics | null {
-    return this.borderGraphics;
-  }
-
-  get layerGuideOverlay(): Phaser.GameObjects.Graphics | null {
-    return this.layerGuideGraphics;
   }
 
   createOverlays(): void {

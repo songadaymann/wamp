@@ -350,6 +350,39 @@ export interface SuspiciousUserDetailResponse {
   recentInvalidations: SuspiciousInvalidationAuditSummary[];
 }
 
+export interface AdminBuildingModerationResponse {
+  userId: string;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  recentActions: Array<{ action: string; operatorLabel: string; reason: string | null; createdAt: string }>;
+}
+
+export interface AdminRevertEditsRoom {
+  roomId: string;
+  x: number;
+  y: number;
+  title: string | null;
+  editCount: number;
+  latestVersion: number;
+  targetVersion: number | null;
+  action: 'revert' | 'skip';
+  reason: 'own_room' | 'minted' | 'no_earlier_version' | 'changed_since' | 'newer_draft' | null;
+  /** The user claimed the room only by publishing over it while it was unclaimed. */
+  releaseClaim?: boolean;
+  /** Versions of theirs from the window that are still shown and can be hidden (F189). */
+  hideableVersions?: number;
+}
+
+export interface AdminRevertEditsResponse {
+  userId: string;
+  since: string;
+  rooms: AdminRevertEditsRoom[];
+  reverted: Array<{ roomId: string; fromVersion: number; toVersion: number }>;
+  failed: Array<{ roomId: string; error: string }>;
+  remaining: number;
+  truncated: boolean;
+}
+
 export interface SuspiciousInvalidationPreviewRequest {
   roomRunAttemptIds: string[];
   courseRunAttemptIds: string[];
@@ -382,6 +415,15 @@ export interface SuspiciousInvalidationPreviewResponse {
     selectedPointEventsDeleted: number;
     runPointEventsDeleted: number;
     creatorPointEventsDeleted: number;
+  };
+  /** XP, trust and ratings that only the invalidated runs supported; removed with them. */
+  progress?: {
+    eventsRemoved: number;
+    ratingsRemoved: number;
+    pxp: number;
+    bxp: number;
+    cxp: number;
+    trust: number;
   };
 }
 
@@ -451,4 +493,26 @@ export interface AdminProgressionCapsUpdateRequest {
 
 export interface AdminProgressionCapsUpdateResponse extends AdminProgressionUserCapsResponse {
   ok: true;
+}
+
+export interface AdminGuestRoomDraft {
+  id: string;
+  title: string | null;
+  guestDisplayName: string;
+  roomX: number;
+  roomY: number;
+  submittedAt: string | null;
+  hidden: boolean;
+}
+
+export interface LaunchFunnelResponse {
+  days: number;
+  since: string;
+  steps: { visitors: number; played: number; built: number; cleared: number; signedUp: number; published: number };
+  phoneVisitors: number;
+  sources: Array<{ source: string; visitors: number; played: number; built: number; signedUp: number }>;
+  returns: {
+    d1: { eligible: number; returned: number };
+    d7: { eligible: number; returned: number };
+  };
 }

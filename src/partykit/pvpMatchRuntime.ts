@@ -181,10 +181,9 @@ export function applyPvpLifeLoss(
 export function markPvpForfeit(
   match: PvpMatchState,
   participant: PvpParticipantSnapshot,
-  now: number,
 ): boolean {
   if (match.status === 'complete') return false;
-  match.startedAt ??= now;
+  // A match left before it went active keeps no start time, so no result is saved for it.
   match.countdownEndsAt = null;
   participant.hearts = 0;
   participant.losses = Math.max(

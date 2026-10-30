@@ -1,7 +1,15 @@
 import Phaser from 'phaser';
 import type { CourseSnapshot } from '../../courses/model';
 import type { ExpandedRoomMembershipSummary } from '../../expandedRooms/model';
+import { EDGE_WALL_THICKNESS } from './composition/settings';
 import { hasDeadlyBottomEdge } from './pits';
+import {
+  hasOpenDropBelow,
+  isBodySupportedAwayFromVerticalSeam,
+  resolveVerticalApproach,
+  TransitionFloorMemory,
+  type TransitionApproachEnvironment,
+} from './transitionApproach';
 import {
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -16,6 +24,9 @@ interface OverworldRoomTransitionHost {
   getPlayer(): Phaser.GameObjects.Rectangle | null;
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   getPlayerFacing(): -1 | 1;
+  getPlayerGravityEnvironment?(): TransitionApproachEnvironment | null;
+  /** Solid terrain of the current room at a world point. */
+  isSolidTerrainAt?(worldX: number, worldY: number): boolean;
   getCurrentRoomCoordinates(): RoomCoordinates;
   setCurrentRoomCoordinates(coordinates: RoomCoordinates): void;
   setSelectedCoordinates(coordinates: RoomCoordinates): void;
@@ -62,6 +73,8 @@ interface OverworldRoomTransitionHost {
   ): void;
   clearPerformanceTransitionGate?(): void;
   onRoomTransitionCompleted?(): void;
+  /** True while the player is held at a room edge whose room is not ready (F355). */
+  onSeamWaitChanged?(waiting: boolean): void;
 }
 
 type BlockedTransitionReason = 'locked' | 'unreachable' | 'non-cardinal' | 'unprepared';
@@ -86,6 +99,8 @@ const TRANSITION_PREFETCH_DISTANCE_PX = Math.max(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
 const TRANSITION_PREPARE_DISTANCE_PX = 72;
 const MOVEMENT_EPSILON = 1;
 const BLOCKED_TRANSITION_LOG_INTERVAL_MS = 1_000;
+// A body pressed against an edge wall rests within its thickness of the seam.
+const EDGE_WALL_HOLD_TOLERANCE_PX = EDGE_WALL_THICKNESS + 2;
 
 export class OverworldRoomTransitionController {
   private readonly lastSafePlayerTransform: SafePlayerTransform = {
@@ -97,12 +112,14 @@ export class OverworldRoomTransitionController {
   };
   private pendingHorizontalPreparation: RoomCoordinates | null = null;
   private pendingVerticalPreparation: RoomCoordinates | null = null;
+  private seamWaitSignaled = false;
   private authorizedTeleportDestination: RoomCoordinates | null = null;
   private transitionRoomPreparedThisUpdate = false;
   private predictedRoomRequestedThisUpdate = false;
   private lastBlockedLogKey = '';
   private lastBlockedLogAt = 0;
   private activeUnpreparedTransition: ActiveUnpreparedTransition | null = null;
+  private readonly floorMemory = new TransitionFloorMemory();
 
   constructor(private readonly host: OverworldRoomTransitionHost) {}
 
@@ -111,9 +128,15 @@ export class OverworldRoomTransitionController {
   }
 
   maybeAdvancePlayerRoom(): void {
+    this.advancePlayerRoom();
+    this.syncSeamWaitSignal();
+  }
+
+  private advancePlayerRoom(): void {
     this.host.setTransitionPreparationSeamUrgent?.(false);
     if (this.host.getMode() !== 'play') {
       this.lastSafePlayerTransform.valid = false;
+      this.floorMemory.reset();
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
       this.clearActiveUnpreparedTransition();
@@ -124,6 +147,7 @@ export class OverworldRoomTransitionController {
     const player = this.host.getPlayer();
     if (!player) {
       this.lastSafePlayerTransform.valid = false;
+      this.floorMemory.reset();
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
       this.clearActiveUnpreparedTransition();
@@ -151,6 +175,7 @@ export class OverworldRoomTransitionController {
         this.host.getExpandedRoomMembershipAt?.({ x: currentRoomCoordinates.x, y: currentRoomCoordinates.y + 1 }) ?? null,
       ) && this.host.handlePlayerDeath) {
       this.lastSafePlayerTransform.valid = false;
+      this.floorMemory.reset();
       this.clearPendingPreparation();
       this.host.clearPredictedPlayableRoomForTransition();
       this.clearActiveUnpreparedTransition();
@@ -166,13 +191,21 @@ export class OverworldRoomTransitionController {
       this.lastSafePlayerTransform.roomY = currentRoomCoordinates.y;
       this.lastSafePlayerTransform.x = player.x;
       this.lastSafePlayerTransform.y = player.y;
+      if (body) {
+        this.floorMemory.observe(currentRoomCoordinates, body, feetY, bottom);
+      }
       this.discardPendingPreparationsContraryToIntent(
         currentRoomCoordinates,
         player,
         this.host.getPlayerBody(),
       );
       this.pollPendingPreparations(currentRoomCoordinates, player);
-      this.prepareApproachingNeighbors(currentRoomCoordinates, player, this.host.getPlayerBody());
+      this.prepareApproachingNeighbors(
+        currentRoomCoordinates,
+        player,
+        this.host.getPlayerBody(),
+        feetY,
+      );
       if (!this.predictedRoomRequestedThisUpdate) {
         this.host.clearPredictedPlayableRoomForTransition();
       }
@@ -312,12 +345,30 @@ export class OverworldRoomTransitionController {
     currentRoomCoordinates: RoomCoordinates,
     player: Phaser.GameObjects.Rectangle,
     playerBody: Phaser.Physics.Arcade.Body | null,
+    feetY: number,
   ): void {
     if (!playerBody) {
       return;
     }
 
     const origin = this.host.getRoomOrigin(currentRoomCoordinates);
+    // Only a vertical seam the player can actually reach competes with the
+    // room ahead. A floor underfoot, a hop that lands back on it, or a jump
+    // that peaks far short of the top seam keeps the horizontal room (F350).
+    const roomBottom = origin.y + ROOM_PX_HEIGHT;
+    const isSolidTerrainAt = this.host.isSolidTerrainAt?.bind(this.host);
+    const verticalDirection = resolveVerticalApproach({
+      body: playerBody,
+      environment: this.host.getPlayerGravityEnvironment?.() ?? null,
+      playerY: player.y,
+      feetY,
+      roomTop: origin.y,
+      roomBottom,
+      floorMemory: this.floorMemory,
+      hasOpenDropBelow: isSolidTerrainAt
+        ? () => hasOpenDropBelow(isSolidTerrainAt, playerBody.left, playerBody.right, feetY, roomBottom)
+        : undefined,
+    });
     if (playerBody.velocity.x > MOVEMENT_EPSILON) {
       this.prepareApproachingNeighbor(
         currentRoomCoordinates,
@@ -330,7 +381,7 @@ export class OverworldRoomTransitionController {
         { x: currentRoomCoordinates.x - 1, y: currentRoomCoordinates.y },
         player.x - origin.x,
       );
-    } else if (Math.abs(playerBody.velocity.y) <= MOVEMENT_EPSILON) {
+    } else if (verticalDirection === 0) {
       const facing = this.host.getPlayerFacing();
       this.prepareApproachingNeighbor(
         currentRoomCoordinates,
@@ -341,13 +392,13 @@ export class OverworldRoomTransitionController {
       );
     }
 
-    if (playerBody.velocity.y > MOVEMENT_EPSILON) {
+    if (verticalDirection > 0) {
       this.prepareApproachingNeighbor(
         currentRoomCoordinates,
         { x: currentRoomCoordinates.x, y: currentRoomCoordinates.y + 1 },
         origin.y + ROOM_PX_HEIGHT - player.y,
       );
-    } else if (playerBody.velocity.y < -MOVEMENT_EPSILON) {
+    } else if (verticalDirection < 0) {
       this.prepareApproachingNeighbor(
         currentRoomCoordinates,
         { x: currentRoomCoordinates.x, y: currentRoomCoordinates.y - 1 },
@@ -456,6 +507,21 @@ export class OverworldRoomTransitionController {
       ) > TRANSITION_PREPARE_DISTANCE_PX
     ) {
       this.pendingVerticalPreparation = null;
+    }
+    // Landing on a floor short of the seam ends a fall toward the room below.
+    // The seam's own edge wall does not, so a player held on it keeps polling.
+    const pendingVerticalDirection = this.pendingVerticalPreparation
+      ? Math.sign(this.pendingVerticalPreparation.y - currentRoomCoordinates.y)
+      : 0;
+    if (pendingVerticalDirection !== 0) {
+      const origin = this.host.getRoomOrigin(currentRoomCoordinates);
+      if (isBodySupportedAwayFromVerticalSeam(
+        playerBody,
+        pendingVerticalDirection > 0 ? 1 : -1,
+        pendingVerticalDirection > 0 ? origin.y + ROOM_PX_HEIGHT : origin.y,
+      )) {
+        this.pendingVerticalPreparation = null;
+      }
     }
   }
 
@@ -625,6 +691,37 @@ export class OverworldRoomTransitionController {
         && this.pendingVerticalPreparation.y === coordinates.y
       )
     );
+  }
+
+  private syncSeamWaitSignal(): void {
+    const waiting = this.activeUnpreparedTransition !== null || this.isHeldAtPendingEdgeWall();
+    if (waiting === this.seamWaitSignaled) return;
+    this.seamWaitSignaled = waiting;
+    this.host.onSeamWaitChanged?.(waiting);
+  }
+
+  // A reachable room that is not ready yet keeps an edge wall just inside the
+  // seam (runtimeController), so the player usually stops before the gate
+  // above ever runs. Pressing against that wall while its room is pending is
+  // the same wait.
+  private isHeldAtPendingEdgeWall(): boolean {
+    const body = this.host.getPlayerBody();
+    if (this.host.getMode() !== 'play' || !body) return false;
+    const current = this.host.getCurrentRoomCoordinates();
+    const origin = this.host.getRoomOrigin(current);
+    const right = origin.x + ROOM_PX_WIDTH;
+    const bottom = origin.y + ROOM_PX_HEIGHT;
+    const tolerance = EDGE_WALL_HOLD_TOLERANCE_PX;
+    return [this.pendingHorizontalPreparation, this.pendingVerticalPreparation].some((pending) => {
+      if (!pending) return false;
+      const deltaX = pending.x - current.x;
+      const deltaY = pending.y - current.y;
+      if (deltaX === 1) return Boolean(body.blocked?.right || body.touching?.right) && body.right >= right - tolerance;
+      if (deltaX === -1) return Boolean(body.blocked?.left || body.touching?.left) && body.left <= origin.x + tolerance;
+      if (deltaY === 1) return Boolean(body.blocked?.down || body.touching?.down) && body.bottom >= bottom - tolerance;
+      if (deltaY === -1) return Boolean(body.blocked?.up || body.touching?.up) && body.top <= origin.y + tolerance;
+      return false;
+    });
   }
 
   private clearActiveUnpreparedTransition(): void {

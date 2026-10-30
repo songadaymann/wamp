@@ -28,21 +28,17 @@ export interface EditorUiElements {
   saveBtn: HTMLButtonElement | null;
   publishBtn: HTMLButtonElement | null;
   mintBtn: HTMLButtonElement | null;
+  collectibleLink: HTMLAnchorElement | null;
   refreshMetadataBtn: HTMLButtonElement | null;
   historyBtn: HTMLButtonElement | null;
   fitBtns: HTMLButtonElement[];
-  mobileZoomInBtn: HTMLButtonElement | null;
-  mobileZoomOutBtn: HTMLButtonElement | null;
   toolButtons: HTMLButtonElement[];
   featureButtons: HTMLButtonElement[];
   featureStatus: HTMLElement | null;
   goalRoot: HTMLElement | null;
   lightingFeaturePanel: HTMLElement | null;
-  moreToolsButtons: HTMLButtonElement[];
-  moreToolsPanels: HTMLElement[];
   eraseControls: HTMLElement[];
   tileEraseControls: HTMLElement[];
-  eraseBrushSelects: HTMLSelectElement[];
     eraseBrushButtons: HTMLButtonElement[];
   randomizeControls: HTMLElement[];
   randomizeBrushButtons: HTMLButtonElement[];
@@ -248,44 +244,36 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     coursePlayerHeartsSelect: byId<HTMLSelectElement>(doc, 'course-player-hearts'),
     roomCoordsEls: existing([
       byId<HTMLElement>(doc, 'room-coords'),
-      byId<HTMLElement>(doc, 'mobile-editor-room-coords'),
     ]),
     separatorEl: doc.querySelector<HTMLElement>('#bottom-bar .separator'),
     saveStatusEls: existing([
       byId<HTMLElement>(doc, 'editor-top-save-status'),
       byId<HTMLElement>(doc, 'room-save-status'),
-      byId<HTMLElement>(doc, 'mobile-editor-save-status'),
     ]),
     publishNudgeRoot: byId<HTMLElement>(doc, 'editor-publish-nudge'),
     publishNudgeTextEl: byId<HTMLElement>(doc, 'editor-publish-nudge-text'),
     publishNudgeActionBtn: byId<HTMLButtonElement>(doc, 'btn-editor-publish-nudge'),
     zoomEls: existing([
       byId<HTMLElement>(doc, 'zoom-level'),
-      byId<HTMLElement>(doc, 'mobile-editor-zoom-level'),
     ]),
     backBtn: byId<HTMLButtonElement>(doc, 'btn-editor-back'),
     playBtn: byId<HTMLButtonElement>(doc, 'btn-test-play'),
     saveBtn: byId<HTMLButtonElement>(doc, 'btn-save-draft'),
     publishBtn: byId<HTMLButtonElement>(doc, 'btn-publish-room'),
     mintBtn: byId<HTMLButtonElement>(doc, 'btn-mint-room'),
+    collectibleLink: byId<HTMLAnchorElement>(doc, 'editor-collectible-link'),
     refreshMetadataBtn: byId<HTMLButtonElement>(doc, 'btn-refresh-room-metadata'),
     historyBtn: byId<HTMLButtonElement>(doc, 'btn-room-history'),
     fitBtns: existing([
       byId<HTMLButtonElement>(doc, 'btn-fit-screen'),
-      byId<HTMLButtonElement>(doc, 'btn-mobile-editor-fit'),
     ]),
-    mobileZoomInBtn: byId<HTMLButtonElement>(doc, 'btn-mobile-editor-zoom-in'),
-    mobileZoomOutBtn: byId<HTMLButtonElement>(doc, 'btn-mobile-editor-zoom-out'),
     toolButtons: all<HTMLButtonElement>(doc, '.tool-btn[data-tool]'),
     featureButtons: all<HTMLButtonElement>(doc, '[data-editor-feature]'),
     featureStatus: byId<HTMLElement>(doc, 'editor-feature-launcher-status'),
     goalRoot: byId<HTMLElement>(doc, 'goal-section'),
     lightingFeaturePanel: byId<HTMLElement>(doc, 'editor-lighting-feature-panel'),
-    moreToolsButtons: all<HTMLButtonElement>(doc, '.editor-more-tools-toggle'),
-    moreToolsPanels: all<HTMLElement>(doc, '.editor-more-tools-panel'),
     eraseControls: all<HTMLElement>(doc, '.editor-eraser-controls'),
     tileEraseControls: all<HTMLElement>(doc, '.editor-tile-erase-control'),
-    eraseBrushSelects: all<HTMLSelectElement>(doc, '.editor-erase-brush-select'),
     eraseBrushButtons: all<HTMLButtonElement>(doc, '.editor-erase-brush-button'),
     randomizeControls: all<HTMLElement>(doc, '.editor-randomize-controls'),
     randomizeBrushButtons: all<HTMLButtonElement>(doc, '.editor-randomize-brush-button'),

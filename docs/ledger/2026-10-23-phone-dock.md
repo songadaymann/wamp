@@ -1,0 +1,1 @@
+| 2026-10-23 | F368, F369, F367 | [#316](https://github.com/songadaymann/wamp/pull/316) | [receipt](docs/review/wamp-round2-phone-building-2026-10-23.md) | Phone dock: touch-scrolling tile picker, a one-tap Draw/Erase switch, and every dock button in reach |

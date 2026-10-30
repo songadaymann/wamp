@@ -116,7 +116,9 @@ export function createLiveObjectRuntimeState(options: {
           ? getCurrentTime() + 700
           : config.id === 'lightning'
             ? getCurrentTime() + (baseTimeSeed % 500)
-            : getCurrentTime(),
+            : isNpc && normalizedNpcMode === 'wander'
+              ? 0
+              : getCurrentTime(),
     actionStartedAt: getCurrentTime(),
     aiTraversalCooldownUntil: 0,
     cooldownUntil: 0,
@@ -161,6 +163,8 @@ export function createLiveObjectRuntimeState(options: {
     aiCollectRouteScore: null,
     aiCollectRouteValue: 0,
     aiCollectRoutePenalty: 0,
+    aiCollectNoRouteKey: null,
+    aiCollectNoRouteUntil: 0,
     policeBehaviorMode: isPolice
       ? normalizePoliceBehaviorMode(policeBehaviorMode) ?? DEFAULT_POLICE_BEHAVIOR_MODE
       : null,

@@ -27,13 +27,13 @@ import {
 } from '../persistence/worldModel';
 import { createRandomUuid } from '../utils/randomId';
 import { installHiddenTabPause } from './hiddenTabPause';
+import { isIdlePresenceRefreshDue } from './presenceCadence';
 
 export type WorldPresenceMode = 'browse' | 'play' | 'edit';
 export type WorldPresenceAnimationState = DefaultPlayerAnimationState;
 
 const PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 200;
 const PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS = 25;
-const PRESENCE_IDLE_KEEPALIVE_MS = 5_000;
 const REMOTE_PRESENCE_SNAPSHOT_FLUSH_INTERVAL_MS = 140;
 const PRESENCE_GUEST_IDENTITY_STORAGE_KEY = 'ep_presence_guest_identity_v1';
 let volatileGuestIdentity: WorldPresenceIdentity | null = null;
@@ -193,6 +193,7 @@ export class WorldPresenceClient {
   private hiddenTabPaused = false;
   private readonly removeHiddenTabPause: () => void;
   private localPresence: WorldPresencePayload | null = null;
+  private interestRoomKey: string | null = null;
   private localRoomPreview: PresencePreviewPayload | null = null;
   private publishedShardId: string | null = null;
   private previewShardId: string | null = null;
@@ -265,6 +266,7 @@ export class WorldPresenceClient {
   }
 
   updateLocalPresence(nextPresence: WorldPresencePayload | null): void {
+    const previousPresence = this.localPresence;
     const nextShardId = nextPresence
       ? chunkIdFromCoordinates(roomToChunkCoordinates(nextPresence.roomCoordinates))
       : null;
@@ -277,6 +279,11 @@ export class WorldPresenceClient {
     }
 
     this.localPresence = nextPresence;
+    const interestRoomKey = nextPresence ? roomIdFromCoordinates(nextPresence.roomCoordinates) : null;
+    if (this.interestRoomKey !== interestRoomKey) {
+      this.interestRoomKey = interestRoomKey;
+      for (const { socket } of this.socketsByShardId.values()) this.sendInterest(socket);
+    }
     if (!nextPresence || !nextShardId) {
       this.emitSnapshot();
       return;
@@ -293,13 +300,19 @@ export class WorldPresenceClient {
     const presenceSignature = getPresencePublishSignature(nextPresence);
     const changed = presenceSignature !== this.lastPublishedPresenceSignature;
     const isInitialPublish = this.lastPublishedPayloadJson === null;
-    const publishInterval = changed
-      ? nextPresence.pvp?.matchId
-        ? PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS
-        : PRESENCE_MOVING_PUBLISH_INTERVAL_MS
-      : PRESENCE_IDLE_KEEPALIVE_MS;
-    const enoughTimeElapsed = now - this.lastPublishedAt >= publishInterval;
-    if (!isInitialPublish && !enoughTimeElapsed) {
+    const structuralChange = previousPresence?.roomCoordinates.x !== nextPresence.roomCoordinates.x
+      || previousPresence?.roomCoordinates.y !== nextPresence.roomCoordinates.y
+      || previousPresence?.mode !== nextPresence.mode
+      || previousPresence?.pvp?.matchId !== nextPresence.pvp?.matchId
+      || previousPresence?.pvp?.action !== nextPresence.pvp?.action
+      || Math.round((previousPresence?.pvp?.actionUntil ?? 0) / 50) !== Math.round((nextPresence.pvp?.actionUntil ?? 0) / 50);
+    const publishInterval = nextPresence.pvp?.matchId
+      ? PVP_PRESENCE_MOVING_PUBLISH_INTERVAL_MS
+      : PRESENCE_MOVING_PUBLISH_INTERVAL_MS;
+    const enoughTimeElapsed = changed
+      ? now - this.lastPublishedAt >= publishInterval
+      : isIdlePresenceRefreshDue(this.lastPublishedAt, now);
+    if (!isInitialPublish && !structuralChange && !enoughTimeElapsed) {
       return;
     }
 
@@ -474,6 +487,7 @@ export class WorldPresenceClient {
 
     socket.addEventListener('open', () => {
       this.connectedShards.add(shardId);
+      this.sendInterest(socket);
       if (this.localPresence && this.resolveLocalShardId() === shardId) {
         this.lastPublishedPayloadJson = null;
         this.lastPublishedPresenceSignature = null;
@@ -523,11 +537,17 @@ export class WorldPresenceClient {
     });
   }
 
-  private async getSocketQuery(): Promise<{ identityToken: string; previewDeltas: string; roomChat: string }> {
+  private sendInterest(socket: PartySocket): void {
+    if (socket.readyState !== PartySocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'presence:interest', roomCoordinates: this.localPresence?.roomCoordinates ?? null }));
+  }
+
+  private async getSocketQuery(): Promise<Record<string, string>> {
     return {
       identityToken: await this.identityTokenProvider.getToken(),
       previewDeltas: '1',
       roomChat: '1',
+      presenceInterest: '1',
     };
   }
 
@@ -936,7 +956,7 @@ export function resolveWorldPresenceConfig(): {
   party: string;
 } | null {
   const runtimeConfig = getResolvedPartykitConfig();
-  const rawHost = runtimeConfig?.host || (import.meta.env.DEV ? '127.0.0.1:1999' : '');
+  const rawHost = runtimeConfig?.host || (import.meta.env.DEV ? '127.0.0.1:8787' : '');
   if (!rawHost) {
     return null;
   }

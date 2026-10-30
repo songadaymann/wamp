@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { hasBlockingModalOpen } from './modalState';
+import { hasBlockingModalOpen, isInWalletWindow, watchModals } from './modalState';
 
 function isEditableInputType(type: string): boolean {
   const normalized = type.toLowerCase();
@@ -85,7 +85,8 @@ export function isKeyboardFocusedControl(element: Element | null): boolean {
 
 /**
  * The game gives up its keys (and stops cancelling arrows, Space and Enter) while the player
- * is typing, adjusting a form control, has a dialog open, or has tabbed to a button. A button
+ * is typing, adjusting a form control, has a dialog open, has tabbed to a button, or is in the
+ * wallet's window (its fields sit in a shadow root, so the page only sees the window). A button
  * focused by clicking it keeps game keys, so clicking a HUD button does not stop the player
  * moving.
  */
@@ -94,6 +95,7 @@ export function isGameKeyboardYielded(doc: Document = document): boolean {
   return isTextInputElement(focused)
     || isFormControlElement(focused)
     || isKeyboardFocusedControl(focused)
+    || isInWalletWindow(focused)
     || hasBlockingModalOpen(doc);
 }
 
@@ -129,9 +131,5 @@ export function syncGameKeyboardFocus(game: Phaser.Game): void {
  * handled where the game is created; a dialog can open without moving focus.
  */
 export function installDialogKeyboardSync(game: Phaser.Game, doc: Document = document): () => void {
-  const observer = new MutationObserver(() => syncGameKeyboardFocus(game));
-  for (const element of doc.querySelectorAll('.history-modal')) {
-    observer.observe(element, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
-  }
-  return () => observer.disconnect();
+  return watchModals(doc, () => syncGameKeyboardFocus(game));
 }

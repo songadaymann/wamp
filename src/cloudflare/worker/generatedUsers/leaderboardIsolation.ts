@@ -1,5 +1,4 @@
-import { HttpError } from '../core/http';
-import type { Env, RequestAuth } from '../core/types';
+import type { Env } from '../core/types';
 import {
   LEGACY_GENERATED_DISPLAY_NAME_PREFIX,
   LEGACY_GENERATED_USER_LINKS_TABLE,
@@ -32,36 +31,6 @@ export async function isGeneratedLeaderboardExcludedUserId(
     .first<{ found: number | string | null }>();
 
   return Number(row?.found ?? 0) === 1;
-}
-
-export async function assertWampLeaderboardWriteAllowed(
-  env: Env,
-  auth: Pick<RequestAuth, 'user'>,
-  actionLabel: string
-): Promise<void> {
-  if (await isGeneratedLeaderboardExcludedUserId(env, auth.user.id)) {
-    throw new HttpError(
-      403,
-      `Generated-only accounts can still ${actionLabel}, but WAMP leaderboard participation stays local-only.`
-    );
-  }
-}
-
-export async function assertGeneratedOnlyDisplayNameChangeAllowed(
-  env: Env,
-  user: Pick<RequestAuth['user'], 'id' | 'displayName'>,
-  nextDisplayName: string
-): Promise<void> {
-  if (user.displayName === nextDisplayName) {
-    return;
-  }
-
-  if (await isGeneratedLeaderboardExcludedUserId(env, user.id)) {
-    throw new HttpError(
-      403,
-      'Link an email or wallet before changing your display name.'
-    );
-  }
 }
 
 export function sqlUserIdHasLegacyGeneratedLink(userIdExpression: string): string {

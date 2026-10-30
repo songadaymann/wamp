@@ -1,3 +1,4 @@
+import { notifyKeepPlayingClear } from '../../progression/keepPlayingEvents';
 import { updateRoomGoalObjective, type RoomGoalObjectiveContext } from './goalObjectiveRules';
 import Phaser from 'phaser';
 import type { SfxCue } from '../../audio/sfx';
@@ -279,6 +280,10 @@ export class OverworldObjectiveController {
     }
 
     activeCourseRun.result = 'completed';
+    const start=activeCourseRun.course.roomRefs.find(ref=>ref.roomId===activeCourseRun.startRoomId) ?? activeCourseRun.course.roomRefs[0];
+    if(start&&activeCourseRun.course.status==='published'&&!activeCourseRun.assisted&&!activeCourseRun.cooperative)notifyKeepPlayingClear({
+      contentId:activeCourseRun.expandedRoomId ?? activeCourseRun.course.id,roomCoordinates:{...start.coordinates},difficulty:null,
+    });
     activeCourseRun.completionMessage = message;
     this.host.showTransientStatus(message);
     const player = this.host.getPlayer();

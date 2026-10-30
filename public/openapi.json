@@ -12,6 +12,13 @@
     }
   ],
   "components": {
+    "parameters": {
+      "roomCryptoDetails": {
+        "name": "crypto", "in": "query", "required": false,
+        "schema": { "type": "string", "enum": ["1"] },
+        "description": "Explicitly include minted* wallet/token metadata. Omitted by default on room record, summary, current, ownership-refresh and mutation responses. Browser clients opt in only for a connected wallet or a prior authorized pending-transaction recovery; permissions and isProtected are always available."
+      }
+    },
     "securitySchemes": {
       "cookieSession": {
         "type": "apiKey",
@@ -25,6 +32,154 @@
       }
     },
     "schemas": {
+      "CollectionPerson": {
+        "type": "object",
+        "required": [
+          "userId",
+          "displayName"
+        ],
+        "properties": {
+          "userId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "RoomCollector": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CollectionPerson"
+          },
+          {
+            "type": "object",
+            "required": [
+              "walletAddress",
+              "cellCount"
+            ],
+            "properties": {
+              "walletAddress": {
+                "type": "string"
+              },
+              "cellCount": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        ]
+      },
+      "CollectionAttribution": {
+        "type": "object",
+        "required": [
+          "targetId",
+          "cellCount",
+          "collectors",
+          "ownerSyncedAt"
+        ],
+        "properties": {
+          "targetId": {
+            "type": "string"
+          },
+          "cellCount": {
+            "type": "integer"
+          },
+          "collectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomCollector"
+            }
+          },
+          "ownerSyncedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CollectedRoom": {
+        "type": "object",
+        "required": [
+          "roomId",
+          "roomVersion",
+          "roomCoordinates",
+          "roomTitle",
+          "builder",
+          "expandedRoomTitle",
+          "ownerSyncedAt",
+          "viewerUrl"
+        ],
+        "properties": {
+          "roomVersion": { "type": "integer" },
+          "roomId": {
+            "type": "string"
+          },
+          "roomCoordinates": {
+            "type": "object",
+            "required": [
+              "x",
+              "y"
+            ],
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              }
+            }
+          },
+          "roomTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "builder": {
+            "$ref": "#/components/schemas/CollectionPerson"
+          },
+          "expandedRoomTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownerSyncedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "viewerUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CollectionShelfResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectedRoom"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "required": ["error"],
@@ -952,6 +1107,7 @@
       },
       "RoomRecord": {
         "type": "object",
+        "description": "Protection and permissions are always included. minted* crypto details are omitted unless crypto=1 is explicitly requested; this presentation option never changes edit rights.",
         "required": [
           "draft",
           "published",
@@ -965,11 +1121,7 @@
           "lastPublishedByPrincipalKind",
           "lastPublishedByAgentId",
           "lastPublishedByDisplayName",
-          "mintedChainId",
-          "mintedContractAddress",
-          "mintedTokenId",
-          "mintedOwnerWalletAddress",
-          "mintedOwnerSyncedAt",
+          "isProtected",
           "permissions"
         ],
         "properties": {
@@ -999,6 +1151,10 @@
           },
           "lastPublishedByAgentId": { "type": ["string", "null"] },
           "lastPublishedByDisplayName": { "type": ["string", "null"] },
+          "isProtected": { "type": "boolean" },
+          "mintedMetadataRoomVersion": { "type": ["integer", "null"] },
+          "mintedMetadataUpdatedAt": { "type": ["string", "null"], "format": "date-time" },
+          "mintedMetadataHash": { "type": ["string", "null"] },
           "mintedChainId": { "type": ["integer", "null"] },
           "mintedContractAddress": { "type": ["string", "null"] },
           "mintedTokenId": { "type": ["string", "null"] },
@@ -1113,7 +1269,7 @@
       },
       "RoomDiscoverySort": {
         "type": "string",
-        "enum": ["featured", "quality", "newest", "builder"]
+        "enum": ["featured", "popular", "quality", "newest", "protected", "builder", "unbeaten", "unvisited", "unrated"]
       },
       "BuilderDiscoverySort": {
         "type": "string",
@@ -1178,6 +1334,7 @@
           "publishedAt"
         ],
         "properties": {
+          "protectedCellCount": { "type": "integer", "minimum": 1, "description": "Currently protected cells in this playable target; omitted when zero. This cached public metadata does not grant editing permission." },
           "roomId": { "type": "string" },
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
@@ -1207,6 +1364,8 @@
         "type": "object",
         "required": ["difficultyFilter", "sort", "results"],
         "properties": {
+          "collectionAttributionAvailable": { "type": "boolean", "description": "Collection attribution API capability; clients fetch only with an installed wallet." },
+          "protectedDiscoveryAvailable": { "type": "boolean", "description": "Clients offer the Protected view only when this capability is true." },
           "difficultyFilter": {
             "oneOf": [
               { "$ref": "#/components/schemas/RoomDifficulty" },
@@ -1670,6 +1829,7 @@
           "quality"
         ],
         "properties": {
+          "protectedCellCount": { "type": "integer", "minimum": 1, "description": "Currently protected cells in this playable target; omitted when zero. This cached public metadata does not grant editing permission." },
           "roomId": { "type": "string" },
           "roomCoordinates": { "$ref": "#/components/schemas/RoomCoordinates" },
           "roomTitle": { "type": ["string", "null"] },
@@ -1760,6 +1920,7 @@
           "publishedCourseCount"
         ],
         "properties": {
+          "collectionAvailable": { "type": "boolean", "description": "Collection shelf API capability; clients show only with an installed wallet." },
           "userId": { "type": "string" },
           "displayName": { "type": "string" },
           "createdAt": { "type": "string", "format": "date-time" },
@@ -1853,7 +2014,7 @@
         "properties": {
           "chainId": { "type": "integer" },
           "name": { "type": "string" },
-          "rpcUrl": { "type": "string" },
+          "rpcUrl": { "type": "string", "description": "Public Base RPC endpoint for wallet network setup; independent of the backend's private RPC transport." },
           "blockExplorerUrl": { "type": ["string", "null"] },
           "nativeCurrency": {
             "type": "object",
@@ -1924,6 +2085,140 @@
     }
   },
   "paths": {
+    "/api/collections/price": {"get": {"summary": "Read the configured current collection price without creating a mint authorization","description": "Wallet-gated clients only. Public read-only quote cached for 20 seconds. Network verified; final price is read again by explicit prepare. No signer, transaction, account or room mutation.","responses": {"200": {"description": "Current contract price","content": {"application/json": {"schema": {"type": "object","required": ["priceWei","chainId","contractAddress","quotedAt"],"properties": {"priceWei": {"type": "string","pattern": "^(0|[1-9][0-9]{0,77})$"},"chainId": {"type": "integer"},"contractAddress": {"type": "string"},"quotedAt": {"type": "string","format": "date-time"}}}}}},"400": {"description": "Unexpected query parameters"},"503": {"description": "Collection disabled, configuration invalid or chain unavailable"}}}},
+    "/api/collections/attribution": {
+      "get": {
+        "security": [
+          {
+            "cookieSession": []
+          },
+          {}
+        ],
+        "description": "Public published content and last recorded ownership only; never grants edit authorization. Clients request only for installed-wallet visitors. Cached for 20 seconds. No chain requests or background sync.",
+        "summary": "Read recorded collectors for published room targets",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "query",
+            "required": true,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": {
+                "type": "string",
+                "maxLength": 160
+              }
+            },
+            "description": "Repeat for up to 16 IDs: room:x,y, a native Expanded Room ID, or course:legacy-id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recorded collectors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "results"
+                  ],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CollectionAttribution"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or excessive target list"
+          },
+          "404": {
+            "description": "Published target not found"
+          }
+        }
+      }
+    },
+    "/api/profiles/{userId}/collection": {
+      "get": {
+        "security": [
+          {
+            "cookieSession": []
+          },
+          {}
+        ],
+        "description": "Public published content and last recorded ownership only; never grants edit authorization. Clients request only for installed-wallet visitors. Cached for 20 seconds. No chain requests or background sync.",
+        "summary": "Read a profile’s collected room cells",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48,
+              "default": 24
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor bound to this profile."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collected published cells with original builder credit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionShelfResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid limit or cursor"
+          },
+          "404": {
+            "description": "Profile not found"
+          }
+        }
+      }
+    },
+    "/api/chat/moderation/admins": {
+      "get": {
+        "summary": "List delegated chat admins with unique usernames",
+        "description": "Owner session required. Display names may be shared; username identifies each account when available. Older accounts may have a null username.",
+        "security": [{ "cookieSession": [] }],
+        "responses": { "200": { "description": "Admin identities and viewer role" }, "401": { "description": "Sign-in required" }, "403": { "description": "Owner access required" } }
+      },
+      "post": {
+        "summary": "Grant chat admin access to a selected account ID",
+        "description": "Owner session required; mutations enforce the existing trusted-origin policy. Use a stable userId from account search; displayName is never used to resolve the target. Shared display names remain allowed.",
+        "security": [{ "cookieSession": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["userId"], "properties": { "userId": { "type": "string", "minLength": 1 } } } } } },
+        "responses": { "201": { "description": "Selected account granted chat admin access" }, "400": { "description": "A valid account ID is required, or the target is already an owner" }, "401": { "description": "Sign-in required" }, "403": { "description": "Owner/origin/self-access guard denied the request" }, "404": { "description": "Selected account not found" }, "409": { "description": "Target is already an admin or is banned" } }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health check",
@@ -2030,6 +2325,18 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/auth/logout-all": {
+      "post": {
+        "summary": "Log out all of the current user's browser sessions",
+        "description": "Requires a session cookie and an explicit trusted Origin. Revokes only that user's sessions and clears the current cookie. API and agent tokens have separate revocation controls.",
+        "security": [{ "cookieSession": [] }],
+        "responses": {
+          "200": { "description": "All browser sessions logged out", "content": { "application/json": { "schema": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } } } } },
+          "401": { "description": "Missing or expired session" },
+          "403": { "description": "Missing or untrusted browser Origin" }
         }
       }
     },
@@ -2563,6 +2870,7 @@
           {}
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -2628,6 +2936,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -2772,6 +3081,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -2839,6 +3149,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -2903,6 +3214,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -3239,7 +3551,7 @@
     "/api/leaderboards/rooms/discover": {
       "get": {
         "summary": "Discover published rooms",
-        "description": "Public read. By default this returns published challenge rooms. Set sort=newest with includeGoalLessRooms=true and no difficulty to include all newly published rooms. If a bearer token is supplied, it must include leaderboards:read.",
+        "description": "Public read. By default this returns published challenge rooms. Set sort=newest with includeGoalLessRooms=true and no difficulty to include all newly published rooms. The public protected view returns playable targets with at least one protected cell, including goal-less rooms when no difficulty is selected. If a bearer token is supplied, it must include leaderboards:read.",
         "security": [
           { "bearerAuth": [] },
           {}

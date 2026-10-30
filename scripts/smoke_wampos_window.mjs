@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 const target=new URL(process.argv[2] || 'http://127.0.0.1:3000/');
 target.searchParams.set('previewSmoke','1');
@@ -12,7 +13,7 @@ const errors=[]; const requests=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{if(m.type()==='error') errors.push(m.text());});
 // Stub unrelated local telemetry/presence; forbid room writes during the smoke.
-await page.routeWebSocket(/(?:127\.0\.0\.1:1999|partykit\.dev)/, () => {});
+await page.routeWebSocket(/\/parties\//, () => {});
 await page.route('**/api/**', async route => {
   const request = route.request();
   if (new URL(request.url()).pathname === '/api/presence/identity-token') return route.fulfill({json:{token:'smoke-local',expiresAt:new Date(Date.now()+3600000).toISOString()}});
@@ -23,6 +24,15 @@ await page.route('**/api/**', async route => {
 await page.addInitScript(()=>{localStorage.setItem('wamp_replay_opt_out','1');localStorage.setItem('wamp_install_help_dismissed_v1','1');localStorage.setItem('wamp_welcome_modal_seen_v1','1');localStorage.setItem('wamp.settings.builderMode','beginner');});
 const run=async commands=>{const r=await page.evaluate(editorCommands=>window.run_preview_smoke_action('runEditorCommands',{editorCommands}),commands);assert.equal(r.ok,true,JSON.stringify(r));return r.captures??{};};
 const dismiss=async()=>{const b=page.locator('#btn-guest-builder-claim-continue');if(await b.isVisible()) await b.click();};
+// A brush with a single shape tool must select that tool. Record a miss and pick the tool by hand
+// so the remaining checks still run; the smoke fails at the end if any brush missed.
+const toolRegressions=[];
+const expectBrushTool=async(tool,brush)=>{
+  const button=page.locator(`.editor-shell-tools [data-tool="${tool}"]`);
+  if((await button.getAttribute('class')).includes('active')) return;
+  toolRegressions.push(`${brush} did not select ${tool}`);
+  await button.click();await page.waitForTimeout(200);
+};
 try {
 await page.goto(url,{waitUntil:'domcontentloaded'});
 await page.waitForFunction(()=>document.body.dataset.appReady==='true'&&typeof window.run_preview_smoke_action==='function');
@@ -33,9 +43,10 @@ await page.locator('#lighting-mode-select').selectOption('off',{force:true});
 await page.locator('[data-editor-dock="terrain"]').click();
 await page.locator('[data-smart-theme-id="wampos95"]').click();
 assert.equal(await page.locator('#smart-material-select').inputValue(),'wampos95.window');
-assert.ok((await page.locator('.editor-shell-tools [data-tool="rect"]').getAttribute('class')).includes('active'));
+await expectBrushTool('rect','WampOS 95 Window');
 assert.equal(await page.locator('.editor-shell-tools [data-tool="pencil"]').isDisabled(),true);
-await run([{op:'clearAllTiles'}]);
+// The editor opens zoomed in; fit the room so the pointer drags below land on the named cells.
+await run([{op:'clearAllTiles'},{op:'fitToScreen'}]);
 const blank=(await run([{op:'capture',name:'blank'}])).blank;
 assert.equal(await page.locator('#smart-palette-hint').isVisible(),true);
 await page.waitForTimeout(300);
@@ -78,7 +89,7 @@ assert.equal(current.tileData.terrain[17][31],1011);
 assert.equal(current.tileData.background[14][22],965);
 await page.locator('[data-smart-brush-id="wampos95.start-bar"]').click();
 const lineButton=page.locator('.editor-shell-tools [data-tool="line"]');
-assert.ok((await lineButton.getAttribute('class')).includes('active'));
+await expectBrushTool('line','WampOS 95 Start Bar');
 assert.equal(await page.locator('#smart-palette-hint').isVisible(),true);
 // Clicking the active tool again must keep this brush straight, even though
 // ordinary Line toggles into Curve and requires an extra click to finish.
@@ -107,6 +118,8 @@ await page.waitForFunction(()=>document.body.dataset.appMode==='editor');
 const {reopened}=await run([{op:'capture',name:'reopened'}]);assert.deepEqual(reopened.tileData,family.tileData);assert.deepEqual(reopened.smartTerrain,family.smartTerrain);
 await dismiss();if(await page.locator('#menu-toggle').getAttribute('aria-expanded')==='true') await page.locator('#menu-toggle').click();await page.waitForTimeout(350);await page.screenshot({path:'output/wampos95/editor-reloaded.png'});
 assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);
+// Regressed in 39d0e071 (PR #28): ensureEditorToolAvailable falls back to Draw, which these brushes disable.
+assert.deepEqual(toolRegressions,[],'Picking a single-shape brush must select its only tool');
 await fs.writeFile('output/wampos95/browser-result.json',JSON.stringify({checks:['picker','actual pointer drag','rectangle tool selection','three window sizes','outline creates full window','undo/redo','copy/companion fill','paste undo','inactive window pointer drag','alert rectangle','Start Bar reverse diagonal drag','Start Bar straight tool enforcement','Start Bar undo/redo','alert copy/companion fill','local save/reload of all four brushes'],errors,requests},null,2));
 console.log(JSON.stringify({status:'passed',errors,requests}));
 }catch(error){await page.screenshot({path:'output/wampos95/browser-failure.png'});console.log(JSON.stringify({errors,requests}));throw error;}finally{await browser.close();}

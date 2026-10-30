@@ -39,6 +39,14 @@ describe('advisory editor Clear Check', () => {
     expect(hasEditorDraftClear({ ...snapshot, playerHearts: 3 }, store)).toBe(false);
   });
 
+  it('fingerprints a goal room only when it has a receipt to compare', () => {
+    const snapshot = room(); const store = storage(); let tileReads = 0;
+    const counted = Object.defineProperty({ ...snapshot }, 'tileData', { enumerable: true, get: () => { tileReads += 1; return snapshot.tileData; } });
+    expect(hasEditorDraftClear(counted, store)).toBe(false); expect(tileReads).toBe(0);
+    expect(recordEditorDraftClear({ roomId: snapshot.id, fingerprint: getEditorDraftFingerprint(snapshot), eligible: true }, complete, store)).toBe(true);
+    expect(hasEditorDraftClear(counted, store)).toBe(true); expect(tileReads).toBeGreaterThan(0);
+  });
+
   it('excludes cursor practice, failed or unqualified runs, other rooms and published runs', () => {
     const snapshot = room(); const store = storage();
     const data = buildEditorPlayModeData({ roomCoordinates: snapshot.coordinates, roomSnapshot: snapshot, usePublishedCourseRoomVersion: false, coursePreview: null, courseEditedRoom: null, practiceStart: { x: 500, y: 320 } });

@@ -146,6 +146,29 @@ describe('Expanded Room share previews', () => {
     },
   );
 
+  it.each([false, true])('uses cached map artwork in public Pages metadata (expanded=%s)', async expanded => {
+    const imageUrl = `https://tiles.wamp.land/${expanded ? 'share-artwork/v1' : 'world-tiles/renderer-a/objects'}/${'a'.repeat(64)}.png`;
+    stubFetch(async () => Response.json({ title: 'Cached art on WAMP', roomVersion: 7, imageUrl,
+      imageWidth: expanded ? 1200 : 642, imageHeight: expanded ? 630 : 354,
+      expandedRoom: expanded ? { expandedRoomId: 'course:fixture', cellCount: 2 } : null }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result).toMatchObject({ imageUrl, imageWidth: expanded ? 1200 : 642, imageHeight: expanded ? 630 : 354 });
+  });
+
+  it.each([
+    `https://tiles.wamp.land.evil.test/world-tiles/a/objects/${'a'.repeat(64)}.png`,
+    `http://tiles.wamp.land/world-tiles/a/objects/${'a'.repeat(64)}.png`,
+    `https://tiles.wamp.land/unrelated/${'a'.repeat(64)}.png`,
+    `https://tiles.wamp.land/world-tiles/a/objects/${'a'.repeat(64)}.png?redirect=evil`,
+    `https://tiles.wamp.land/share-artwork/v1/${'a'.repeat(64)}.png`,
+  ])('rejects an untrusted or wrong-kind cached artwork URL %s', async imageUrl => {
+    stubFetch(async () => Response.json({ title: 'Title on WAMP', roomVersion: 7, imageUrl }));
+    const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
+      new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v6`);
+  });
+
   it('retains the local ordinary-room image while using public builder credit', async () => {
     stubFetch(async (input) => requestUrl(input).includes('/api/share/')
       ? Response.json({ title: 'Into the fire by Builder on WAMP',
@@ -159,7 +182,7 @@ describe('Expanded Room share previews', () => {
 
     expect(result.title).toBe('Into the fire by Builder on WAMP');
     expect(result.description).toContain('by Builder');
-    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v5`);
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v6`);
   });
 
   it.each([
@@ -175,7 +198,7 @@ describe('Expanded Room share previews', () => {
     const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
       new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
     expect(result).toMatchObject({ title: 'Published fallback - WAMP room 11,-12',
-      imageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=9&renderer=assets-v5` });
+      imageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=9&renderer=assets-v6` });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(requestUrl(fetchMock.mock.calls[1][0])).toContain('/api/rooms/11%2C-12/published?');
   });
@@ -194,7 +217,7 @@ describe('Expanded Room share previews', () => {
     const result = await loadRoomMetadata(createRequest('/r/11/-12'), createEnv(),
       new URL(`${PAGE_ORIGIN}/r/11/-12`), COORDINATES);
     expect(result.title).toBe('Whole Adventure by Builder on WAMP');
-    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v5`);
+    expect(result.imageUrl).toBe(`${PAGE_ORIGIN}/r/11/-12/image.png?v=7&renderer=assets-v6`);
   });
 });
 
@@ -431,22 +454,22 @@ describe('share metadata normalization edge cases', () => {
     {
       label: 'zero',
       payload: '{"title":"  Version\\n Room  ","version":0}',
-      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=0&renderer=assets-v5`,
+      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=0&renderer=assets-v6`,
     },
     {
       label: 'negative finite number',
       payload: '{"title":"Version Room","version":-3}',
-      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=-3&renderer=assets-v5`,
+      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?v=-3&renderer=assets-v6`,
     },
     {
       label: 'numeric string',
       payload: '{"title":"Version Room","version":"7"}',
-      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?renderer=assets-v5`,
+      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?renderer=assets-v6`,
     },
     {
       label: 'non-finite JSON number',
       payload: '{"title":"Version Room","version":1e400}',
-      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?renderer=assets-v5`,
+      expectedImageUrl: `${PAGE_ORIGIN}/r/11/-12/image.png?renderer=assets-v6`,
     },
   ])('preserves the $label published-room version rule', async ({ payload, expectedImageUrl }) => {
     stubFetch(async (input) => requestUrl(input).includes('/api/share/')
@@ -559,6 +582,6 @@ describe('share metadata normalization edge cases', () => {
 
     expect(result.title).toBe('A Wamp-O-Gram for Ada Lovelace');
     expect(result.description).toBe('Fixture Creator made a playable WAMP level postcard.');
-    expect(result.imageUrl).toBe(`${API_ORIGIN}/api/wamp-o-grams/abcdefghijkl/preview.png`);
+    expect(result.imageUrl).toBe(`${API_ORIGIN}/api/wamp-o-grams/abcdefghijkl/preview.png?renderer=2`);
   });
 });

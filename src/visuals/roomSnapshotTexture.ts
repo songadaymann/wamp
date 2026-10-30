@@ -1,4 +1,5 @@
 import { getSceneObjectTexture } from '../assets/sceneArt';
+import { getBlockedCustomSpritesGeneration } from '../customSprites/blocklist';
 import Phaser from 'phaser';
 import {
   decodeTileDataValue,
@@ -35,6 +36,11 @@ import {
 } from '../backgrounds/runtime';
 import type { RoomSnapshot } from '../persistence/roomModel';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from './starfield';
+import {
+  addStaticCanvasTexture,
+  createPooledTextureCanvas,
+  releasePooledTextureCanvas,
+} from './staticCanvasTexture';
 
 export type RoomTextureMode = 'preview' | 'full' | 'editor-preview';
 
@@ -87,6 +93,7 @@ export function buildRoomTextureKey(
     options.includedLayers?.join('_') ?? 'all-layers',
     options.showConstructionOverlay ? `construction-${sanitizeTextureKey(options.constructionLabel ?? 'building')}` : 'clean',
     `ct-${hashStringToSeed(getCustomRoomTileSignature(room.customTiles)).toString(36)}`,
+    `bl-${getBlockedCustomSpritesGeneration()}`,
     room.version,
     sanitizeTextureKey(room.updatedAt),
   ].join('-');
@@ -100,24 +107,28 @@ export function buildRoomSnapshotTexture(
   options: RoomTextureBuildOptions = {},
 ): void {
   registerCustomSpritesFromSnapshot(room);
+  if (scene.textures.exists(textureKey)) {
+    return;
+  }
   const width = ROOM_WIDTH * tilePixelSize;
   const height = ROOM_HEIGHT * tilePixelSize;
-  const canvasTexture = scene.textures.createCanvas(textureKey, width, height);
-  if (!canvasTexture) {
-    return;
+  // Drawn once, then uploaded as a plain texture without a pixel read-back copy (F304).
+  const canvas = createPooledTextureCanvas(width, height);
+  let registered = false;
+  try {
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+
+    context.clearRect(0, 0, width, height);
+    context.imageSmoothingEnabled = false;
+
+    drawRoomSnapshotToContext(scene, context, room, tilePixelSize, options);
+    registered = Boolean(addStaticCanvasTexture(scene.textures, textureKey, canvas));
+  } finally {
+    if (!registered) releasePooledTextureCanvas(canvas);
   }
-
-  const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return;
-  }
-
-  context.clearRect(0, 0, width, height);
-  context.imageSmoothingEnabled = false;
-
-  drawRoomSnapshotToContext(scene, context, room, tilePixelSize, options);
-  canvasTexture.refresh();
 }
 
 export function drawRoomSnapshotToContext(

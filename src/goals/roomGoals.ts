@@ -82,10 +82,6 @@ export function normalizeRoomGoal(value: unknown): RoomGoal | null {
   return normalizeGoal(value, ROOM_GOAL_DEFINITIONS, ROOM_GOAL_TYPES);
 }
 
-export function goalSupportsTimeLimit(goalType: RoomGoalType): boolean {
-  return ROOM_GOAL_DEFINITIONS[goalType].supportsTimeLimit;
-}
-
 export function formatRoomGoalShortText(goal: RoomGoal, options: GoalTextOptions = {}): string {
   return formatGoalShortText(goal, ROOM_GOAL_DEFINITIONS, options);
 }

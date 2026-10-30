@@ -86,6 +86,8 @@ export function installPreviewSmokeActions(
   ) {
     return;
   }
+  // Smokes inspect scenes through the game object; dev builds expose it in main.ts.
+  window.__EVERYBODYS_PLATFORMER_GAME__ = game;
   window.run_preview_smoke_action = async (action: PreviewSmokeAction, payload?: PreviewSmokePayload) => {
     switch (action) {
       case 'selectEditableRoom':
@@ -187,6 +189,30 @@ export function installPreviewSmokeActions(
         return { ok: false, reason: `unsupported-action:${action}` };
     }
   };
+
+  if (new URLSearchParams(window.location.search).get('jimothyWander') === '1') {
+    void launchJimothyWanderPreview(game, getDebugState);
+  }
+}
+
+async function launchJimothyWanderPreview(
+  game: Phaser.Game,
+  getDebugState: () => Record<string, unknown>,
+): Promise<void> {
+  const deadline = performance.now() + 20_000;
+  while (document.body.dataset.appReady !== 'true' && performance.now() < deadline) {
+    await waitForPreviewSmoke(100);
+  }
+  const opened = await openSyntheticEditorForPreviewSmoke(
+    game,
+    getDebugState,
+    createPhysicsPreviewRoom('jimothy-wander'),
+  );
+  if (!opened.ok) {
+    return;
+  }
+  const editor = game.scene.getScene('EditorScene') as { startPlayMode?: () => Promise<void> };
+  await editor.startPlayMode?.();
 }
 
 const PREVIEW_SMOKE_ROOM_ID = '99,99';

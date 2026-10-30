@@ -1,5 +1,5 @@
 import { createReplayPlayer } from '../analytics/replay/player';
-import { bugRecordingAllowed, setBugRecordingAllowed } from './recordingPreference';
+import { bugRecordingAllowed } from './recordingPreference';
 import { BUG_NOTES_LIMIT, BUG_RECORDING_CHANGED, normalizeBugDevice, type BugContext, type BugDiagnostic,
   type BugDevice, type BugEvidence, type BugReportSubmission } from './model';
 import { BugReportSender } from './sender';
@@ -21,14 +21,17 @@ function visitorId(): string {
     const id = crypto.randomUUID(); localStorage.setItem('wamp_bug_report_visitor', id); return id;
   } catch { return crypto.randomUUID(); }
 }
-export function initializeBugReportDialog(host: {
+export interface BugReportDialogHost {
   freeze(): BugEvidence; context(): BugContext; errors(): BugDiagnostic[];
   pause(): () => void; resumeCapture(): void;
-}) {
+}
+/** Downloaded on the first Report click (F319); runtime.ts owns the buttons and the recording toggle. */
+export interface BugReportDialog { init(): void; open(): void; close(): void; isOpen(): boolean; destroy(): void }
+export function initializeBugReportDialog(host: BugReportDialogHost): BugReportDialog {
   const modal = element('bug-report-modal'), form = element<HTMLFormElement>('bug-report-form');
   const notes = element<HTMLTextAreaElement>('bug-report-notes'), status = element('bug-report-status');
   const send = element<HTMLButtonElement>('btn-bug-report-send'), close = element<HTMLButtonElement>('btn-bug-report-close');
-  const attach = element<HTMLInputElement>('bug-report-attach'), recording = element<HTMLInputElement>('bug-recording-enabled');
+  const attach = element<HTMLInputElement>('bug-report-attach');
   const detail = element('bug-report-context'), summary = element('bug-report-evidence-summary');
   const screenshot = element<HTMLImageElement>('bug-report-screenshot');
   const player = createReplayPlayer({ image: element('bug-report-frame'), empty: element('bug-report-empty'),
@@ -50,9 +53,7 @@ export function initializeBugReportDialog(host: {
     element('bug-report-empty').textContent = hasImages ? 'Frame unavailable' : 'No game images attached';
   }
   function syncPreference(): void {
-    recording.checked = bugRecordingAllowed();
-    recording.disabled = navigator.doNotTrack === '1' || Boolean((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl);
-    if (!recording.checked && draft) { draft.evidence = { samples: [], screenshot: null, reason: 'disabled' }; syncEvidence(); }
+    if (!bugRecordingAllowed() && draft) { draft.evidence = { samples: [], screenshot: null, reason: 'disabled' }; syncEvidence(); }
   }
   function open(): void {
     if (opened) return;
@@ -82,8 +83,6 @@ export function initializeBugReportDialog(host: {
     opened = false; player.pause(); modal.classList.add('hidden'); modal.setAttribute('aria-hidden', 'true');
     resume?.(); resume = null; host.resumeCapture(); returnFocus?.focus();
   }
-  const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-bug-report-open]')];
-  buttons.forEach(button => button.addEventListener('click', open));
   const onNotes = () => { send.disabled = sending || notes.value.trim().length < 3 || notes.value.length > BUG_NOTES_LIMIT; };
   const onAttach = () => {
     if (attach.checked) { syncEvidence(); return; }
@@ -120,19 +119,16 @@ export function initializeBugReportDialog(host: {
   };
   const onBackdrop = (event: MouseEvent) => { if (event.target === modal) hide(); };
   const onPreference = () => syncPreference();
-  const onRecording = () => setBugRecordingAllowed(recording.checked);
-  close.addEventListener('click', hide); notes.addEventListener('input', onNotes); form.addEventListener('submit', onSubmit);
-  attach.addEventListener('change', onAttach);
-  modal.addEventListener('click', onBackdrop); document.addEventListener('keydown', onKey, true);
-  recording.addEventListener('change', onRecording); window.addEventListener(BUG_RECORDING_CHANGED, onPreference);
-  window.addEventListener('storage', onPreference);
-  syncPreference();
-  return { isOpen: () => opened, destroy(): void {
-    hide(); player.destroy(); buttons.forEach(button => button.removeEventListener('click', open));
+  return { open, close: hide, isOpen: () => opened, init(): void {
+    close.addEventListener('click', hide); notes.addEventListener('input', onNotes); form.addEventListener('submit', onSubmit);
+    attach.addEventListener('change', onAttach);
+    modal.addEventListener('click', onBackdrop); document.addEventListener('keydown', onKey, true);
+    window.addEventListener(BUG_RECORDING_CHANGED, onPreference); window.addEventListener('storage', onPreference);
+  }, destroy(): void {
+    hide(); player.destroy();
     close.removeEventListener('click', hide); notes.removeEventListener('input', onNotes); form.removeEventListener('submit', onSubmit);
     attach.removeEventListener('change', onAttach);
     modal.removeEventListener('click', onBackdrop); document.removeEventListener('keydown', onKey, true);
-    recording.removeEventListener('change', onRecording); window.removeEventListener(BUG_RECORDING_CHANGED, onPreference);
-    window.removeEventListener('storage', onPreference);
+    window.removeEventListener(BUG_RECORDING_CHANGED, onPreference); window.removeEventListener('storage', onPreference);
   } };
 }

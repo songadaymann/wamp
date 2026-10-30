@@ -12,7 +12,6 @@ import {
   drawDiamond,
   drawHorizonSteps,
   drawTriangle,
-  encodePng,
   fillEllipse,
   fillRect,
   hexToNumber,
@@ -20,7 +19,7 @@ import {
   isPng,
   lighten,
   type RoomImageData,
-} from './roomImagePrimitives';
+} from '../roomImage/roomImagePrimitives';
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -172,7 +171,7 @@ describe('room image blits', () => {
     blitImageNearest(canvas, source, 0, 0, 2, 2, 0, 0, 2, 2, true, false);
 
     expect(Array.from(canvas.pixels)).toEqual([
-      0, 100, 0, 255,
+      0, 200, 0, 128,
       255, 0, 0, 255,
       255, 255, 255, 255,
       0, 0, 0, 0,
@@ -181,6 +180,18 @@ describe('room image blits', () => {
     const before = canvas.pixels.slice();
     blitImageNearest(canvas, source, 0, 0, 2, 2, 0, 0, 0, 2);
     expect(canvas.pixels).toEqual(before);
+  });
+
+  it('preserves transparent intermediate layers before compositing them over an opaque room', () => {
+    const source = image(1, 1, [200, 100, 50, 128]);
+    const layer = createCanvas(1, 1);
+    blitImageNearest(layer, source, 0, 0, 1, 1, 0, 0, 1, 1);
+    expect([...layer.pixels]).toEqual([200, 100, 50, 128]);
+    const direct = createCanvas(1, 1), composed = createCanvas(1, 1);
+    for (const target of [direct, composed]) fillRect(target, 0, 0, 1, 1, 0x203040);
+    blitImageNearest(direct, source, 0, 0, 1, 1, 0, 0, 1, 1);
+    blitImageNearest(composed, layer, 0, 0, 1, 1, 0, 0, 1, 1);
+    expect([...composed.pixels]).toEqual([...direct.pixels]);
   });
 
   it('keeps bilinear sampling centered on target pixels', () => {
@@ -199,43 +210,6 @@ describe('room image blits', () => {
 });
 
 describe('room image PNG codec', () => {
-  it('emits the exact legacy uncompressed PNG byte stream', async () => {
-    const rgba = new Uint8Array([
-      1, 2, 3, 4,
-      5, 6, 7, 8,
-      9, 10, 11, 12,
-      13, 14, 15, 16,
-    ]);
-
-    const encoded = encodePng(2, 2, rgba);
-
-    expect(Buffer.from(encoded).toString('base64')).toBe(
-      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAHUlEQVR4AQESAO3/AAECAwQFBgcIAAkKCwwNDg8QA2YAieJz/CgAAAAASUVORK5CYII=',
-    );
-    await expect(decodePng(encoded)).resolves.toEqual({
-      width: 2,
-      height: 2,
-      pixels: rgba,
-    });
-  });
-
-  it('keeps exact multi-block PNG framing above the 65,535-byte zlib boundary', async () => {
-    const width = 128;
-    const height = 128;
-    const rgba = new Uint8Array(width * height * 4);
-    for (let index = 0; index < rgba.length; index += 1) {
-      rgba[index] = (index * 17 + 31) & 0xff;
-    }
-
-    const encoded = encodePng(width, height, rgba);
-
-    expect(encoded.length).toBe(65_737);
-    expect(sha256(encoded)).toBe(
-      '67d3577af1f02ec445ef99ac3794740511afb92836384708e23e337d9ea2754b',
-    );
-    await expect(decodePng(encoded)).resolves.toEqual({ width, height, pixels: rgba });
-  });
-
   it.each([
     {
       label: '8-bit grayscale',

@@ -31,6 +31,7 @@ beforeEach(() => {
   db.exec('PRAGMA foreign_keys=ON');
   db.exec(readFileSync('migrations/0046_guest_replays.sql','utf8'));
   db.exec(readFileSync('migrations/0047_guest_replay_visit_link.sql','utf8'));
+  db.exec(readFileSync('migrations/0049_rate_limit_events.sql','utf8'));
   let queued: Promise<unknown> = Promise.resolve();
   env = {ADMIN_API_KEY:'test-key', DB:{prepare:statement, batch(statements: D1PreparedStatement[]) {
     // D1 serializes transactions, including simultaneous upload requests.
@@ -204,6 +205,22 @@ describe('guest replay storage', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM guest_replay_samples').get()).toMatchObject({n:0});
     for(let i=0;i<10;i++) await start();
     await expect(start()).rejects.toMatchObject({status:429});
+  });
+  it('caps recordings per network whatever visitor ids it sends (F425)', async () => {
+    const startFrom = (ip: string) => {
+      const url = new URL('https://api.wamp.land/api/guest-replays/start');
+      return handleGuestReplay(new Request(url, { method: 'POST', headers: { Origin: 'https://wamp.land', 'CF-Connecting-IP': ip },
+        body: JSON.stringify({ visitor: crypto.randomUUID() }) }), url, env);
+    };
+    const slots = () => (db.prepare('SELECT COUNT(*) AS n FROM rate_limit_events').get() as { n: number }).n;
+    for (let i = 0; i < 10; i++) expect((await startFrom('2001:db8:1:2::' + i)).status).toBe(200);
+    await expect(startFrom('2001:db8:1:2::ff')).rejects.toMatchObject({ status: 429 });
+    expect((await startFrom('198.51.100.4')).status).toBe(200);
+    // A start refused by the shared daily budget gives back its network slot.
+    for (let i = 0; i < 89; i++) await call('/api/guest-replays/start', { visitor: crypto.randomUUID() });
+    const before = slots();
+    await expect(startFrom('192.0.2.8')).rejects.toMatchObject({ status: 429 });
+    expect(slots()).toBe(before);
   });
   it('strips unknown fields and rejects out-of-bounds or non-image content', () => {
     expect(validateReplaySample({...sample(),email:'secret',player:{x:1,y:2,email:'secret'}})).not.toHaveProperty('email');

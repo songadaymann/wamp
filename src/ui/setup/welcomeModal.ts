@@ -378,8 +378,9 @@ export class WelcomeModalController {
         await this.roomRepository.saveDraft(starter, { baseUpdatedAt: current.draft.updatedAt });
       }
       if (!isCurrent()) return;
-      await overworld.jumpToCoordinates(targetRoom.coordinates);
+      const jumped = await overworld.jumpToCoordinates(targetRoom.coordinates);
       if (!isCurrent()) return;
+      if (jumped === false) throw new Error('Room Rush ended. Press Build again to start building.');
       const opened = await overworld.openGuestDraftRoom(starter, isCurrent, false);
       if (!isCurrent()) return;
       if (opened === false) throw new Error('The editor could not open. Please try again.');

@@ -18,6 +18,8 @@ const requiredIdsByController = {
   'CoopPressurePlates': ['pressure-plate-coop-row', 'pressure-plate-coop-checkbox'],
   'WeeklyRoomRush': ['btn-menu-room-rush', 'btn-room-rush-weekly', 'room-rush-weekly-summary', 'leaderboard-room-rush-winners',
     'room-rush-result-save-status', 'btn-room-rush-result-retry-save'],
+  reportDialog: ['report-modal', 'report-form', 'report-subject', 'report-reasons', 'report-details', 'report-status',
+    'btn-report-send', 'btn-report-close', 'btn-menu-report-room'],
   bugReporter: ['bug-report-modal', 'bug-report-form', 'bug-report-notes', 'bug-report-status', 'btn-bug-report-send',
     'btn-bug-report-close', 'bug-report-attach', 'bug-recording-enabled', 'bug-report-context', 'bug-report-evidence-summary',
     'bug-report-frame', 'bug-report-empty', 'bug-report-play', 'bug-report-scrub', 'bug-report-time', 'bug-report-screenshot'],
@@ -25,6 +27,7 @@ const requiredIdsByController = {
     'btn-daily-close','btn-daily-play','btn-daily-copy','btn-daily-save','btn-daily-retry','daily-room-title','daily-room-builder',
     'daily-room-status','daily-room-progress','daily-room-board','daily-room-date','activity-daily-features'],
   'RoomSharingController': ['btn-world-share', 'btn-mobile-world-share', 'world-share-status'],
+  'OverworldConnectionNoticeController': ['play-connection-notice'],
   'RunRatingModalController': ['run-rating-modal', 'run-rating-share', 'run-share-preview', 'run-share-message',
     'run-share-status', 'btn-run-share-native', 'btn-run-share-copy', 'btn-run-share-twitter', 'btn-run-share-download'],
   'FirstPublishModalController': ['first-publish-modal', 'first-publish-heading', 'first-publish-name-form', 'first-publish-name',
@@ -33,6 +36,8 @@ const requiredIdsByController = {
     'btn-first-publish-x', 'btn-first-publish-wampogram', 'btn-first-publish-play', 'first-publish-status'],
   'EditorDockShellController': [
     'editor-shell-top',
+    'btn-editor-phone-fit',
+    'btn-editor-shell-clear-layer',
     'editor-shell-title-slot',
     'editor-shell-status-slot',
     'editor-share-popover',
@@ -70,6 +75,8 @@ const requiredIdsByController = {
   ],
   'CourseComposerPanelController': [
     'course-editor-shell',
+    'course-workbench-panel',
+    'btn-course-workbench-sheet',
     'course-workbench-title-input',
     'course-workbench-pits-deadly',
     'course-workbench-status',
@@ -192,6 +199,9 @@ const requiredIdsByController = {
     'world-goal-panel-goal',
     'world-goal-panel-timer',
     'world-goal-panel-progress',
+    'world-goal-panel-save',
+    'world-goal-panel-save-text',
+    'btn-world-goal-retry',
     'world-sign-panel',
     'world-sign-panel-label',
     'world-sign-panel-text',
@@ -319,9 +329,39 @@ const danglingLookups = [...lookedUpIds]
   .filter(([id]) => !pageIds.has(id) && !codeCreatedIds.has(id))
   .map(([id, files]) => `#${id} (${[...files].join(', ')})`);
 
+// The browser smokes find elements by ID too, and most of them only run nightly or by hand, so a
+// renamed element breaks them silently. Every ID a smoke clicks, waits on or reads must still exist
+// in a page, the client code, or the smoke's own fixture markup (F480).
+const smokeFiles = [
+  ...readdirSync(resolve(process.cwd(), 'scripts')).map((entry) => join('scripts', entry)),
+  ...readdirSync(resolve(process.cwd(), 'scripts/lib')).map((entry) => join('scripts/lib', entry)),
+].filter((file) => /\.(mjs|ts|js)$/.test(file) && !/\.test\./.test(file));
+const smokeIdLookups = new Map();
+const smokeIdsChecked = new Set();
+for (const file of smokeFiles) {
+  const source = readFileSync(resolve(process.cwd(), file), 'utf8');
+  if (!/from ['"]playwright['"]|mutedBrowsers\.mjs/.test(source)) continue;
+  const ownIds = new Set([...source.matchAll(/\bid\s*=\s*\\?["']([A-Za-z][\w-]*)\\?["']/g)].map((match) => match[1]));
+  const lookups = [
+    ...source.matchAll(/(?:locator|waitForSelector|click|dblclick|tap|fill|check|uncheck|selectOption|inputValue|isVisible|isHidden|isChecked|isDisabled|isEnabled|textContent|innerText|getAttribute|hover|focus|querySelector(?:All)?|closest|\$\$?|\$\$?eval)\(\s*['"`]#([A-Za-z][\w-]*)/g),
+    ...source.matchAll(/getElementById\(\s*['"`]([A-Za-z][\w-]*)['"`]\s*\)/g),
+  ];
+  for (const match of lookups) {
+    smokeIdsChecked.add(match[1]);
+    if (pageIds.has(match[1]) || codeCreatedIds.has(match[1]) || ownIds.has(match[1])) continue;
+    // `locator('#old').count(), 0` checks that a removed element stays gone.
+    if (/^[^\n]*?\.count\(\),\s*0\)/.test(source.slice(match.index, match.index + 120))) continue;
+    const files = smokeIdLookups.get(match[1]) ?? new Set();
+    files.add(file);
+    smokeIdLookups.set(match[1], files);
+  }
+}
+const danglingSmokeLookups = [...smokeIdLookups].map(([id, files]) => `#${id} (${[...files].join(', ')})`);
+
 if (
   duplicateIds.size > 0
   || danglingLookups.length > 0
+  || danglingSmokeLookups.length > 0
   || missing.length > 0
   || stalePresent.length > 0
   || earlyWorldTileBootstrapContractErrors.length > 0
@@ -336,6 +376,12 @@ if (
   if (danglingLookups.length > 0) {
     console.error('Code looks up element IDs that no page has and no code creates:');
     for (const item of danglingLookups.sort()) {
+      console.error(`  ${item}`);
+    }
+  }
+  if (danglingSmokeLookups.length > 0) {
+    console.error('Smoke scripts use element IDs that no page has and no code creates:');
+    for (const item of danglingSmokeLookups.sort()) {
       console.error(`  ${item}`);
     }
   }
@@ -368,4 +414,4 @@ if (
 
 const requiredCount = Object.values(requiredIdsByController)
   .reduce((total, requiredIds) => total + requiredIds.length, 0);
-console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked, ${lookedUpIds.size} looked-up IDs resolved.`);
+console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked, ${lookedUpIds.size} looked-up IDs resolved, ${smokeIdsChecked.size} smoke-script IDs resolved.`);

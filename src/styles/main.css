@@ -1,8 +1,10 @@
+@layer base, components, editor-skin, responsive, overrides;
 @import './tokens.css';
 @import './sections/base.css';
-@import './sections/editor.css';
-@import './sections/course-editor.css';
+@import './sections/editor-placeholders.css';
 @import './sections/world.css';
 @import './sections/modals.css';
 @import './sections/responsive.css';
 @import './sections/button-roles.css';
+@import './sections/text-preferences.css';
+@import './sections/wallet-gate.css';

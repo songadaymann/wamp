@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getSceneWithCapabilities } from './sceneCapabilityRegistry';
 import { sceneCapabilityFixture } from './sceneCapabilityRegistry.testSupport';
-import { getActiveEditorScene, getActiveRoomEditorScene, getActiveCourseWorkspaceScene, withActiveEditorMusic } from './sceneBridge';
+import { getActiveOverworldScene, getActiveEditorScene, getActiveRoomEditorScene, getActiveCourseWorkspaceScene, withActiveEditorMusic } from './sceneBridge';
 import type { EditorMusicCommands } from './sceneBridge';
 
 function game(scenes: Record<string, unknown>, active: string[] = []) {
@@ -58,4 +58,11 @@ describe('required scene capability lookup', () => {
     withActiveEditorMusic(game({ [key]: scene }), coordinator => coordinator.shiftRoomMusicTempo(5));
     expect(music.tempo).toBe(115);
   });
+  it('keeps paused overworld menu commands available while excluding sleeping scenes', () => {
+    const scene = sceneCapabilityFixture('OverworldPlayScene', {});
+    const manager = { scene: { getScene: () => scene, isActive: () => false, isPaused: () => true } } as never;
+    expect(getActiveOverworldScene(manager)).toBe(scene);
+    expect(getActiveOverworldScene(game({ OverworldPlayScene: scene }))).toBeNull();
+  });
+
 });

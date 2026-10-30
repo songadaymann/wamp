@@ -1,0 +1,20 @@
+#report-modal { z-index: 10002; padding: 12px; background: rgba(5,5,5,.8); }
+#report-modal .history-modal-panel { width: min(520px, calc(100vw - 24px)); min-height: 0; background: #fff3db; color: #18161c; border: 2px solid #79ccde; border-radius: 0; }
+#report-modal .history-modal-header { flex-direction: row; align-items: center; flex: 0 0 auto; }
+#report-modal .history-modal-title { color: #18161c; }
+#btn-report-close { width: auto; }
+.report-subject { margin: 0; font-weight: bold; overflow-wrap: anywhere; }
+#report-form { display: grid; gap: 10px; min-width: 0; }
+#report-form[hidden], #report-modal [hidden] { display: none; }
+.report-reasons { display: grid; gap: 6px; margin: 0; padding: 8px 10px; border: 2px solid #18161c; background: #fffaf0; }
+.report-reasons label { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.report-reasons input { accent-color: #006c82; }
+#report-details { box-sizing: border-box; width: 100%; resize: vertical; padding: 10px; border: 2px solid #18161c; border-radius: 0; color: #18161c; background: #fffaf0; font: 16px 'HomeVideo', monospace; }
+.report-note, #report-status { margin: 0; font-size: 12px; line-height: 1.5; }
+#report-status { font-weight: bold; }
+.report-actions { display: flex; justify-content: flex-end; }
+#report-modal button { min-height: 36px; }
+@media (max-width: 540px) {
+  #report-modal .history-modal-panel { padding: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  #report-modal button, .report-reasons label { min-height: 44px; }
+}

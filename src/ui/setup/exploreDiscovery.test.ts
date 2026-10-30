@@ -42,4 +42,11 @@ describe('Explore default and lifecycle', () => {
     await loadExploreDiscovery({ loadRoomDiscovery }, null, 'newest', false, () => true);
     expect(loadRoomDiscovery).toHaveBeenCalledWith(null, 'newest', 48, true);
   });
+  it('keeps a Protected choice even when the automatic-default flag is still set', async () => {
+    const loadRoomDiscovery = vi.fn(async () => ({ ...response(0, 3), sort: 'protected' as const }));
+    const result = await loadExploreDiscovery({ loadRoomDiscovery }, null, 'protected', true, () => true);
+    expect(result?.sort).toBe('protected');
+    expect(loadRoomDiscovery).toHaveBeenCalledExactlyOnceWith(null, 'protected', 48, false);
+  });
+
 });

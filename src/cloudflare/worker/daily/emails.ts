@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import type { Env } from '../core/types';
 import { deliverEmail, escapeEmailHtml } from '../email/delivery';
 import { createActivityUnsubscribeToken } from '../activity/unsubscribe';
@@ -6,7 +7,7 @@ import { dailyPickAvailable, dailyWindow, type DailyRow } from './store';
 
 /** Scheduled only; a public read never sends email. One leased, idempotent notice per pick. */
 export async function sendDailyFeatureEmail(env: Env, now = new Date().toISOString(), fetcher: typeof fetch = fetch): Promise<number> {
-  if (!env.RESEND_API_KEY?.trim()) return 0;
+  if (!emailConfigured(env)) return 0;
   const scoped = { ...env, DB: env.DB.withSession?.('first-primary') ?? env.DB };
   const lease = crypto.randomUUID();
   const row = await scoped.DB.prepare(`UPDATE daily_rooms SET notice_lease_token = ?, notice_lease_until = ?, notice_attempts = notice_attempts + 1

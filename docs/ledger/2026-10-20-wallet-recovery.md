@@ -1,0 +1,1 @@
+| 2026-10-20 | F239 | [#267](https://github.com/songadaymann/wamp/pull/267) | [receipt](docs/review/wamp-wallet-recovery-2026-10-20.md) | Interrupted room approvals recover without duplicate wallet requests |

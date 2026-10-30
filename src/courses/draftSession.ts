@@ -14,6 +14,8 @@ let activeRevision = 0;
 let activeSelectedRoomId: string | null = null;
 let activeUnsavedRoomIds = new Set<string>();
 let activeCourseRoomOverridesByRoomId = new Map<string, RoomSnapshot>();
+// The server draft each override was edited from, so its save can be refused if the cell changed elsewhere (F379).
+let activeCourseRoomOverrideBasesByRoomId = new Map<string, string>();
 
 function cloneRecordOrNull(record: CourseRecord | null): CourseRecord | null {
   return record ? cloneCourseRecord(record) : null;
@@ -22,6 +24,7 @@ function cloneRecordOrNull(record: CourseRecord | null): CourseRecord | null {
 function pruneActiveCourseRoomOverrides(): void {
   if (!activeCourseRecord) {
     activeCourseRoomOverridesByRoomId = new Map();
+    activeCourseRoomOverrideBasesByRoomId = new Map();
     return;
   }
 
@@ -32,6 +35,9 @@ function pruneActiveCourseRoomOverrides(): void {
       activeRoomIds.has(roomId)
     )
   );
+  activeCourseRoomOverrideBasesByRoomId = new Map(
+    Array.from(activeCourseRoomOverrideBasesByRoomId.entries()).filter(([roomId]) => activeCourseRoomOverridesByRoomId.has(roomId))
+  );
 }
 
 export function clearActiveCourseDraftSession(): void {
@@ -40,6 +46,7 @@ export function clearActiveCourseDraftSession(): void {
   activeSelectedRoomId = null;
   activeUnsavedRoomIds.clear();
   activeCourseRoomOverridesByRoomId = new Map();
+  activeCourseRoomOverrideBasesByRoomId = new Map();
 }
 
 export function getActiveCourseDraftSessionRecord(): CourseRecord | null {
@@ -72,6 +79,7 @@ export function setActiveCourseDraftSessionRecord(
   if (previousCourseId !== nextCourseId) {
     activeUnsavedRoomIds.clear();
     activeCourseRoomOverridesByRoomId = new Map();
+    activeCourseRoomOverrideBasesByRoomId = new Map();
   } else {
     pruneActiveCourseRoomOverrides();
   }
@@ -161,16 +169,40 @@ export function getActiveCourseDraftSessionRoomOverrides(): RoomSnapshot[] {
   );
 }
 
-export function setActiveCourseDraftSessionRoomOverride(room: RoomSnapshot): void {
+export function setActiveCourseDraftSessionRoomOverride(room: RoomSnapshot, serverBaseUpdatedAt: string | null = null): void {
   if (!isRoomInActiveCourseDraftSession(room.id)) {
     return;
   }
 
   activeCourseRoomOverridesByRoomId.set(room.id, cloneRoomSnapshot(room));
+  if (serverBaseUpdatedAt) activeCourseRoomOverrideBasesByRoomId.set(room.id, serverBaseUpdatedAt);
+  else activeCourseRoomOverrideBasesByRoomId.delete(room.id);
+}
+
+/** The server draft version an override was edited from, when the editor that made it knew it. */
+export function getActiveCourseDraftSessionRoomOverrideBase(roomId: string): string | null {
+  return activeCourseRoomOverridesByRoomId.has(roomId) ? activeCourseRoomOverrideBasesByRoomId.get(roomId) ?? null : null;
+}
+
+/**
+ * Drops this session's copy of a cell when it holds no unsaved edits and the server copy was saved
+ * after it was taken (another tab or device), so the newer server version loads instead of a stale
+ * copy that every later Publish would send against an out-of-date base (F379). A cell with nothing
+ * stored on the server yet is never dropped: its draft timestamp is new on every load. True when dropped.
+ */
+export function dropStaleActiveCourseDraftSessionRoomOverride(
+  roomId: string,
+  server: { updatedAt: string; stored: boolean },
+): boolean {
+  const base = getActiveCourseDraftSessionRoomOverrideBase(roomId);
+  if (!server.stored || !base || base === server.updatedAt || activeUnsavedRoomIds.has(roomId)) return false;
+  clearActiveCourseDraftSessionRoomOverride(roomId);
+  return true;
 }
 
 export function clearActiveCourseDraftSessionRoomOverride(roomId: string): void {
   activeCourseRoomOverridesByRoomId.delete(roomId);
+  activeCourseRoomOverrideBasesByRoomId.delete(roomId);
   activeUnsavedRoomIds.delete(roomId);
 }
 

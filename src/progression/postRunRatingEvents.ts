@@ -20,11 +20,14 @@ interface BasePostRunRatingRequestDetail {
   score: number | null;
   autoSuggestedDifficulty: ProgressionDifficulty;
   guestProgress?: GuestRunSaveResult;
+  clearedRoomIds?: string[];
   bestRun?: PostRunBest | null;
 }
 
 export interface RoomPostRunRatingRequestDetail extends BasePostRunRatingRequestDetail {
   contentType: 'room';
+  ghostAttemptId?: string;
+  ghostChallengeEligible?: boolean;
   roomCoordinates: RoomCoordinates;
 }
 

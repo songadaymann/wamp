@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:4517/';
@@ -29,6 +30,8 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1100
 await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+  // Smokes don't record guest replays (the local API rate-limits them per address).
+  window.localStorage.setItem('wamp_replay_opt_out', '1');
 });
 const page = await context.newPage();
 
@@ -52,7 +55,14 @@ try {
   assert.equal(fixture?.ok, true, `Jungle editor fixture failed: ${JSON.stringify(fixture)}`);
   await waitForState(page, (state) => state?.activeScene?.scene === 'editor', 'editor');
 
-  await page.selectOption('#background-select', 'jungle_vines');
+  // Backgrounds are cards under Room Setup > Background; raw tilesets are under
+  // Terrain > Advanced > Tilesets.
+  await page.click('[data-editor-shell-action="room"]');
+  await page.click('[data-editor-room-section="background"]');
+  await page.click('#background-card-grid .background-card[data-background-id="jungle_vines"]');
+  await page.click('[data-editor-dock="terrain"]');
+  await page.click('[data-builder-mode-choice="advanced"]');
+  await page.click('.palette-tab[data-mode="tiles"]');
   await page.selectOption('#tileset-select', 'jungle-vines');
   await page.waitForFunction(() => {
     const select = document.querySelector('#tileset-select');
@@ -94,8 +104,8 @@ try {
     path: path.join(outputDir, 'jungle-tile-palette-panel.png'),
   });
 
-  await page.click('.palette-tab[data-mode="objects"]');
-  await page.click('.obj-cat-tab[data-category="decoration"]');
+  // Decorations and their groups live in the Deco dock.
+  await page.click('[data-editor-dock="deco"]');
   const decorationGroupCounts = {};
   for (const group of ['vines', 'trees', 'plants', 'rocks', 'props', 'sky']) {
     await page.click(`[data-decoration-group="${group}"]`);
@@ -214,7 +224,7 @@ try {
   });
   await setCanvasVisibility(page, true);
 
-  await page.click('#btn-test-play');
+  await page.click('[data-editor-shell-action="test"]');
   const runtimeState = await waitForState(
     page,
     (state) => state?.activeScene?.scene === 'overworld-play'

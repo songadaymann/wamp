@@ -19,6 +19,7 @@
   <title>WAMP</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preload" as="image" href="/assets/objects/flag-checkered.png">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="/assets/fonts/Super Mario Bros. NES.woff2">
   <link rel="manifest" href="./app.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="alternate" type="text/markdown" href="https://api.wamp.land/skill.md">
@@ -44,13 +45,13 @@
     </div>
   </div>
   <div id="busy-overlay" class="app-feedback app-busy-overlay hidden" aria-live="polite">
-    <div class="app-feedback-card app-busy-card">
+    <div class="app-feedback-card app-busy-card" tabindex="-1" data-autofocus>
       <div id="busy-overlay-title" class="app-busy-title">Working...</div>
       <div id="busy-overlay-status" class="app-feedback-status">Please wait...</div>
       <div id="busy-overlay-spinner" class="app-busy-spinner" aria-hidden="true"></div>
       <div class="app-busy-actions">
         <button id="btn-busy-retry" class="bar-btn hidden" type="button">Retry</button>
-        <button id="btn-busy-close" class="bar-btn hidden" type="button">Close</button>
+        <button id="btn-busy-close" class="bar-btn hidden" type="button" data-button-variant="neutral">Close</button>
       </div>
     </div>
   </div>
@@ -158,13 +159,14 @@
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5l-2 3Z M10 20h4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
         <span id="activity-unread-count" class="activity-badge hidden">0</span>
       </button>
-      <button id="menu-toggle" type="button" aria-label="Menu">
+      <button id="menu-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu-body">
         <span class="hamburger-line"></span>
         <span class="hamburger-line"></span>
         <span class="hamburger-line"></span>
       </button>
     </div>
       <div id="menu-body">
+        <p id="game-pause-status" class="hidden" role="status"></p>
         <section class="game-menu-account" aria-label="Your account">
           <p id="auth-signin-reason">Sign in to keep your rooms and progress.</p>
           <div id="auth-display-name-row" class="auth-row hidden">
@@ -179,7 +181,7 @@
             <button id="btn-auth-guest-drafts" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guest Drafts</button>
           </div>
           <details id="account-signin-options" open>
-            <summary>Email &amp; wallet</summary>
+            <summary>Email<span data-crypto> &amp; wallet</span></summary>
             <div class="game-menu-account">
               <div id="auth-email-row" class="auth-row">
                 <input id="auth-email-input" aria-label="Email address" type="email" placeholder="you@example.com" spellcheck="false" />
@@ -193,7 +195,7 @@
                 </form>
                 <div id="email-code-status" class="auth-status" role="status">The code expires in 15 minutes.</div>
               </div>
-              <div class="auth-row"><button id="btn-auth-wallet" class="bar-btn auth-menu-action-btn">Sign In With Wallet</button></div>
+              <div class="auth-row" data-crypto><button id="btn-auth-wallet" class="bar-btn auth-menu-action-btn">Sign In With Wallet</button></div>
               <div id="auth-session-summary" class="auth-session-summary hidden">
                 <span class="auth-session-summary-label">Signed In As</span>
                 <span id="auth-session-summary-value" class="auth-session-summary-value"></span>
@@ -201,13 +203,14 @@
               <a id="auth-debug-link" class="auth-debug-link hidden"></a>
             </div>
           </details>
-          <div id="auth-status" class="auth-status">Use email, wallet, or both.</div>
+          <div id="auth-status" class="auth-status">Sign in with email to save your progress.</div>
         </section>
         <nav class="game-menu-actions game-menu-section" aria-label="Game">
           <button id="btn-world-settings" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Settings</button>
           <button id="btn-world-controls" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Controls</button>
           <button id="btn-guestbook-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Guestbook</button>
           <button id="btn-menu-room-rush" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Room Rush</button>
+          <button id="btn-menu-room-leaderboard" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Room Leaderboard</button>
           <button id="btn-auth-daily" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Room of the Day</button>
           <button id="btn-auth-rate-clears" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Rate rooms</button>
           <button id="btn-auth-build-prompt" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Build Prompt</button>
@@ -216,6 +219,7 @@
         <nav class="game-menu-actions game-menu-section" aria-label="Help and community">
           <button id="btn-about-open" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>About WAMP</button>
           <button id="btn-world-report-bug" class="bar-btn auth-menu-action-btn" type="button" data-bug-report-open data-menu-action>Report a bug</button>
+          <button id="btn-menu-report-room" class="bar-btn auth-menu-action-btn" type="button" data-menu-action>Report this room</button>
           <a
           id="auth-discord-link" data-menu-action
           class="auth-discord-link"
@@ -237,7 +241,10 @@
           <summary>Admin</summary>
           <div class="game-menu-actions"><button id="btn-chat-moderation-open" class="bar-btn auth-menu-action-btn hidden" type="button" data-menu-action>Chat Moderation</button> <button id="btn-test-reset" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Reset Test Data</button></div>
         </details>
-        <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+        <div class="game-menu-actions" role="group" aria-label="Log out options">
+          <button id="btn-auth-logout" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" data-menu-action data-button-variant="danger">Log out</button>
+          <button id="btn-auth-logout-all" class="bar-btn auth-menu-action-btn bar-btn-danger hidden" type="button" data-menu-action data-button-variant="danger">Log out everywhere</button>
+        </div>
       </div>
     </div>
   <div id="app">
@@ -256,170 +263,12 @@
         <button class="editor-drawer-tab" type="button" data-editor-room-section="sprite">Sprite Editor</button>
         <button class="editor-drawer-tab" type="button" data-room-insights-open>Insights</button>
         <button class="editor-drawer-tab" type="button" data-editor-room-action="history">Version History</button>
-        <button class="editor-drawer-tab" type="button" data-editor-share-action="collect"><span data-editor-share-label>Collect Room</span></button>
+        <button class="editor-drawer-tab" type="button" data-crypto data-editor-share-action="collect"><span data-editor-share-label>Collect &amp; Lock</span></button>
+        <a id="editor-collectible-link" class="editor-drawer-tab hidden" data-crypto target="_blank" rel="noopener noreferrer">View collectible</a>
         <button id="btn-room-template-replace" class="editor-drawer-tab" type="button">Templates</button>
       </div>
       <!-- Tools -->
-      <div class="sidebar-section" id="tools-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
-        <div class="section-label">Tools</div>
-        <div id="tools" class="tools-primary-row">
-          <button class="tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
-            <span class="tool-icon">&#9998;</span>
-            <span class="tool-label">Draw</span>
-          </button>
-          <button class="tool-btn" data-tool="eraser" type="button" title="Erase (2)">
-            <span class="tool-icon">&#9003;</span>
-            <span class="tool-label">Erase</span>
-          </button>
-          <button class="tool-btn" data-tool="copy" type="button" title="Copy (3)">
-            <span class="tool-icon">&#10697;</span>
-            <span class="tool-label">Copy</span>
-          </button>
-          <button class="tool-btn" data-tool="move" type="button" title="Move (M): drag an object, or drag across an area to select it and drag inside to move it; Escape cancels"><span class="tool-icon">&#8596;</span><span class="tool-label">Move</span></button>
-          <button
-            id="btn-tool-more"
-            class="tool-btn tool-btn-more editor-more-tools-toggle"
-            type="button"
-            title="More Tools"
-          >
-            <span class="tool-icon">&#8942;</span>
-            <span class="tool-label">More</span>
-          </button>
-        </div>
-        <div id="more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
-          <div class="editor-tool-popover-label">More Tools</div>
-          <div class="editor-tool-popover-grid">
-            <button class="tool-btn tool-btn-compact" data-tool="rect" type="button" title="Rectangle Filled / Outlined (R) hold Shift for proportional">
-              <span class="tool-icon">&#9632;</span>
-              <span class="tool-label">Rectangle <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="ellipse" type="button" title="Ellipse Filled / Outlined (E) hold Shift for proportional">
-              <span class="tool-icon">&#9679;</span>
-              <span class="tool-label">Ellipse <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap">
-              <span class="tool-icon">&#9585;</span>
-              <span class="tool-label"><span class="tool-mode-label">Line</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="triangle" type="button" title="Triangle (T); select again to paint existing ramps">
-              <span class="tool-icon tool-icon-right-triangle" aria-hidden="true"></span>
-              <span class="tool-label"><span class="tool-mode-label">Triangle</span></span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="fill" type="button" title="Fill (G)">
-              <span class="tool-icon">&#9687;</span>
-              <span class="tool-label">Fill</span>
-            </button>
-            <button class="tool-btn tool-btn-compact" data-tool="randomize" type="button" title="Scramble (V)">
-              <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-              <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
-            </button>
-          </div>
-        </div>
-        <div id="pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
-          <div class="editor-tool-popover-label">Draw</div>
-          <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
-              <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
-            </div>
-          </div>
-          <div class="erase-controls-row editor-tile-erase-control editor-pencil-spray-size-row hidden">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Spray brush size">
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="5">5x5</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="6">6x6</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="7">7x7</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="8">8x8</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="9">9x9</button>
-              <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="10">10x10</button>
-            </div>
-          </div>
-          <div class="erase-controls-row editor-pencil-spray-rate-row hidden">
-            <span class="erase-controls-label">Rate</span>
-            <span class="editor-pencil-spray-rate-bound">Slow</span>
-            <input class="editor-pencil-spray-rate" type="range" min="0" max="1" step="0.01" value="0.5" aria-label="Spray rate" />
-            <span class="editor-pencil-spray-rate-bound">Fast</span>
-          </div>
-          <div class="erase-controls-row editor-pencil-continuous-row hidden">
-            <label
-              class="erase-controls-label"
-              title="Turn on to remove gap between tile stamping."
-            >
-              <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
-              Continuous Stamping
-            </label>
-          </div>
-        </div>
-        <div id="erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
-          <div class="editor-tool-popover-label">Eraser</div>
-          <div class="erase-controls-row editor-tile-erase-control">
-            <label class="erase-controls-label" for="erase-brush-select">Brush</label>
-            <select id="erase-brush-select" class="editor-erase-brush-select">
-              <option value="1">1x1</option>
-              <option value="3">3x3</option>
-              <option value="5">5x5</option>
-            </select>
-          </div>
-          <div class="erase-action-grid">
-            <button
-              id="btn-erase-clear-layer"
-              class="bar-btn bar-btn-small editor-clear-layer-btn editor-tile-erase-control"
-              type="button"
-            >
-              Clear Layer
-            </button>
-            <button
-              id="btn-erase-clear-all"
-              class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn editor-tile-erase-control"
-              type="button"
-            >
-              Nuke Terrain
-            </button>
-            <button
-              id="btn-erase-clear-objects"
-              class="bar-btn bar-btn-small bar-btn-danger editor-clear-objects-btn"
-              type="button"
-            >
-              Nuke Objects
-            </button>
-          </div>
-        </div>
-        <div id="randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-          <div class="editor-tool-popover-label">Scramble</div>
-          <div class="erase-controls-row editor-tile-erase-control">
-            <span class="erase-controls-label">Brush</span>
-            <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
-              <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
-            </div>
-          </div>
-        </div>
-        <div id="copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
-          <div class="editor-tool-popover-label">Copy</div>
-          <div class="erase-controls-row editor-copy-actions">
-            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
-            <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
-          </div>
-          <div class="editor-tool-popover-label">My Stamps</div>
-          <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
-        </div>
-        <div id="fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
-          <div class="editor-tool-popover-label">Fill</div>
-          <div class="erase-controls-row">
-            <label class="erase-controls-label" title="Fill connected tiles even when they are flipped horizontally or vertically.">
-              <input class="editor-fill-ignore-flip" type="checkbox" />
-              Ignore tile flipping
-            </label>
-          </div>
-        </div>
-      </div>
+
 
       <!-- Layers -->
       <div class="sidebar-section" id="layers-section" data-mobile-panel="tools">
@@ -726,7 +575,7 @@
             <canvas id="palette-canvas"></canvas>
           </div>
           <canvas id="tile-preview" width="64" height="64" hidden aria-hidden="true"></canvas>
-          <div class="palette-hint">Click to Select. Drag to Select a Group.<span class="fine-pointer-hint"> Control+Click to add and remove tiles from selection.</span></div>
+          <div class="palette-hint"><span class="fine-pointer-hint">Click to Select. Drag to Select a Group. Control+Click to add and remove tiles from selection.</span><span class="coarse-pointer-hint">Tap to Select. Hold, Then Drag to Select a Group.</span></div>
         </div>
       </div>
 
@@ -948,30 +797,7 @@
         </div>
         <div class="editor-top-tools desktop-editor-only">
           <div class="editor-top-tools-label">Tools</div>
-          <div class="editor-top-tools-rail">
-            <button class="tool-btn editor-top-tool-btn active" data-tool="pencil" type="button" title="Draw (1)">
-              <span class="tool-icon">&#9998;</span>
-              <span class="tool-label">Draw</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="eraser" type="button" title="Erase (2)">
-              <span class="tool-icon">&#9003;</span>
-              <span class="tool-label">Erase</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="copy" type="button" title="Copy (3)">
-              <span class="tool-icon">&#10697;</span>
-              <span class="tool-label">Copy</span>
-            </button>
-            <button class="tool-btn editor-top-tool-btn" data-tool="move" type="button" title="Move (M): drag an object, or drag across an area to select it and drag inside to move it; Escape cancels"><span class="tool-icon">&#8596;</span><span class="tool-label">Move</span></button>
-            <button
-              id="btn-editor-top-tool-more"
-              class="tool-btn tool-btn-more editor-more-tools-toggle editor-top-tool-btn"
-              type="button"
-              title="More Tools"
-            >
-              <span class="tool-icon">&#8942;</span>
-              <span class="tool-label">More</span>
-            </button>
-          </div>
+
           <div class="editor-feature-launcher" aria-label="Room features">
             <div class="editor-feature-launcher-label">Features</div>
             <div class="editor-feature-launcher-rail">
@@ -1180,162 +1006,9 @@
               </div>
             </div>
           </div>
-          <div id="editor-top-more-tools-panel" class="editor-tool-popover editor-more-tools-panel hidden">
-            <div class="editor-tool-popover-label">More Tools</div>
-            <div class="editor-tool-popover-grid">
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="rect" type="button" title="Rectangle Filled / Outlined (R) hold Shift for proportional">
-                <span class="tool-icon">&#9632;</span>
-                <span class="tool-label">Rectangle <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="ellipse" type="button" title="Ellipse Filled / Outlined (E) hold Shift for proportional">
-                <span class="tool-icon">&#9679;</span>
-                <span class="tool-label">Ellipse <span class="tool-mode" data-part="filled">Filled</span> / <span class="tool-mode" data-part="outlined">Outlined</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap">
-                <span class="tool-icon">&#9585;</span>
-                <span class="tool-label"><span class="tool-mode-label">Line</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="triangle" type="button" title="Triangle (T); select again to paint existing ramps">
-                <span class="tool-icon tool-icon-right-triangle" aria-hidden="true"></span>
-                <span class="tool-label"><span class="tool-mode-label">Triangle</span></span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="fill" type="button" title="Fill (G)">
-                <span class="tool-icon">&#9687;</span>
-                <span class="tool-label">Fill</span>
-              </button>
-              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="randomize" type="button" title="Scramble (V)">
-                <span class="tool-icon tool-icon-mosaic" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-                <span class="tool-label"><span class="tool-mode-label">Scramble</span></span>
-              </button>
-            </div>
-          </div>
-          <div id="editor-top-pencil-controls" class="erase-controls editor-tool-popover editor-pencil-controls hidden">
-            <div class="editor-tool-popover-label">Draw</div>
-            <div class="erase-controls-row editor-tile-erase-control editor-pencil-size-row">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Draw brush size">
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="1">1x1</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="2">2x2</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="3">3x3</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="4">4x4</button>
-                <button class="editor-pencil-brush-button" type="button" data-pencil-brush-size="5">5x5</button>
-              </div>
-            </div>
-            <div class="erase-controls-row editor-tile-erase-control editor-pencil-spray-size-row hidden">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Spray brush size">
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="5">5x5</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="6">6x6</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="7">7x7</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="8">8x8</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="9">9x9</button>
-                <button class="editor-pencil-spray-brush-button" type="button" data-spray-brush-size="10">10x10</button>
-              </div>
-            </div>
-            <div class="erase-controls-row editor-pencil-spray-rate-row hidden">
-              <span class="erase-controls-label">Rate</span>
-              <span class="editor-pencil-spray-rate-bound">Slow</span>
-              <input class="editor-pencil-spray-rate" type="range" min="0" max="1" step="0.01" value="0.5" aria-label="Spray rate" />
-              <span class="editor-pencil-spray-rate-bound">Fast</span>
-            </div>
-            <div class="erase-controls-row editor-pencil-continuous-row hidden">
-              <label
-                class="erase-controls-label"
-                title="Turn on to remove gap between tile stamping."
-              >
-                <input class="editor-pencil-continuous" type="checkbox" title="Turn on to remove gap between tile stamping." />
-                Continuous Stamping
-              </label>
-            </div>
-          </div>
-          <div id="editor-top-erase-controls" class="erase-controls editor-tool-popover editor-eraser-controls hidden">
-            <div class="editor-tool-popover-label">Eraser</div>
-            <div class="erase-controls-row editor-tile-erase-control">
-              <label class="erase-controls-label" for="editor-top-erase-brush-select">Brush</label>
-              <select id="editor-top-erase-brush-select" class="editor-erase-brush-select">
-                <option value="1">1x1</option>
-                <option value="3">3x3</option>
-                <option value="5">5x5</option>
-              </select>
-            </div>
-            <div class="erase-action-grid">
-              <button
-                id="btn-editor-top-erase-clear-layer"
-                class="bar-btn bar-btn-small editor-clear-layer-btn editor-tile-erase-control"
-                type="button"
-              >
-                Clear Layer
-              </button>
-              <button
-                id="btn-editor-top-erase-clear-all"
-                class="bar-btn bar-btn-small bar-btn-danger editor-clear-all-btn editor-tile-erase-control"
-                type="button"
-              >
-                Nuke Terrain
-              </button>
-              <button
-                id="btn-editor-top-erase-clear-objects"
-                class="bar-btn bar-btn-small bar-btn-danger editor-clear-objects-btn"
-                type="button"
-              >
-                Nuke Objects
-              </button>
-            </div>
-          </div>
-          <div id="editor-top-randomize-controls" class="erase-controls editor-tool-popover editor-randomize-controls hidden">
-            <div class="editor-tool-popover-label">Scramble</div>
-            <div class="erase-controls-row editor-tile-erase-control">
-              <span class="erase-controls-label">Brush</span>
-              <div class="editor-randomize-size-actions" role="group" aria-label="Scramble brush size">
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="1">1x1</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="2">2x2</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="3">3x3</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="4">4x4</button>
-                <button class="editor-randomize-brush-button" type="button" data-randomize-brush-size="5">5x5</button>
-              </div>
-            </div>
-          </div>
-          <div id="editor-top-copy-controls" class="erase-controls editor-tool-popover editor-copy-controls hidden">
-            <div class="editor-tool-popover-label">Copy</div>
-            <div class="erase-controls-row editor-copy-actions">
-              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="paste" title="Paste the clipboard (Cmd/Ctrl+V). It stays available in other rooms.">Paste</button>
-              <button class="bar-btn bar-btn-small" type="button" data-editor-clipboard-action="save-stamp" title="Save the clipboard to My Stamps to reuse later.">Save stamp</button>
-            </div>
-            <div class="editor-tool-popover-label">My Stamps</div>
-            <div class="editor-copy-stamps" role="list" aria-label="My stamps"></div>
-          </div>
-          <div id="editor-top-fill-controls" class="erase-controls editor-tool-popover editor-fill-controls hidden">
-            <div class="editor-tool-popover-label">Fill</div>
-            <div class="erase-controls-row">
-              <label class="erase-controls-label" title="Fill connected tiles even when they are flipped horizontally or vertically.">
-                <input class="editor-fill-ignore-flip" type="checkbox" />
-                Ignore tile flipping
-              </label>
-            </div>
-          </div>
+
         </div>
-        <div class="mobile-editor-actions-panel mobile-editor-only">
-          <div class="mobile-editor-status-grid">
-            <div class="mobile-editor-status-card">
-              <div class="mobile-editor-status-label">Room</div>
-              <div id="mobile-editor-room-coords" class="mobile-editor-status-value">Room (0, 0)</div>
-            </div>
-            <div class="mobile-editor-status-card">
-              <div class="mobile-editor-status-label">Cursor</div>
-              <div id="mobile-editor-cursor-coords" class="mobile-editor-status-value">Tile: -, -</div>
-            </div>
-            <div class="mobile-editor-status-card mobile-editor-status-card-wide">
-              <div class="mobile-editor-status-label">Status</div>
-              <div id="mobile-editor-save-status" class="mobile-editor-status-value">Draft ready.</div>
-            </div>
-          </div>
-          <div class="mobile-editor-zoom-row">
-            <button id="btn-mobile-editor-zoom-out" aria-label="Zoom out" class="bar-btn bar-btn-small" type="button">-</button>
-            <span id="mobile-editor-zoom-level" class="mobile-editor-zoom-readout">Zoom: 2x</span>
-            <button id="btn-mobile-editor-zoom-in" aria-label="Zoom in" class="bar-btn bar-btn-small" type="button">+</button>
-            <button id="btn-mobile-editor-fit" class="bar-btn bar-btn-small" type="button">Fit</button>
-          </div>
-        </div>
+
       </div>
 
       <div
@@ -1349,8 +1022,8 @@
           <div class="editor-advanced-block" data-advanced-block="room">
             <div class="editor-advanced-block-label">Room</div>
             <div class="editor-advanced-actions">
-              <button id="btn-mint-room" class="bar-btn">Mint Room</button>
-              <button id="btn-refresh-room-metadata" class="bar-btn hidden">Refresh NFT Metadata</button>
+              <button data-crypto id="btn-mint-room" class="bar-btn">Collect &amp; Lock</button>
+              <button data-crypto id="btn-refresh-room-metadata" class="bar-btn hidden">Add/update artwork</button>
               <button id="btn-room-history" class="bar-btn">History</button>
             </div>
           </div>
@@ -1360,10 +1033,13 @@
 
     <div id="editor-shell-top" class="editor-shell-top" aria-label="Room editor controls">
       <div id="editor-shell-phone-bar" aria-label="Editing actions">
+        <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small" type="button" aria-label="Hide editor panels">Hide</button>
         <button id="btn-editor-phone-menu" class="editor-shell-chunky-button" type="button" aria-controls="editor-phone-menu" aria-expanded="false">More</button>
       </div>
       <div id="editor-phone-menu" class="hidden" role="dialog" aria-label="Room and sharing" aria-hidden="true">
+        <div data-world-publication-status class="goal-context-note hidden" role="status"></div>
         <button id="btn-editor-phone-account" class="editor-shell-chunky-button" type="button">Account &amp; menu</button>
+        <button id="btn-editor-phone-fit" class="editor-shell-chunky-button" type="button" data-editor-shell-action="fit">Fit room</button>
       </div>
       <div class="editor-shell-tools" aria-label="Drawing tools">
         <button class="tool-btn editor-shell-chunky-button active" data-tool="pencil" type="button" title="Draw (B or 1)" aria-controls="editor-shell-pencil-picker" aria-expanded="false"><span class="tool-icon">&#9998;</span><span class="tool-label">Draw</span></button>
@@ -1422,6 +1098,14 @@
             <button class="editor-erase-brush-button" type="button" data-erase-brush-size="5" aria-pressed="false">5x5</button>
           </div>
           <div class="editor-shell-eraser-danger-actions" role="group" aria-label="Clear room contents">
+            <button
+              id="btn-editor-shell-clear-layer"
+              class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-layer-btn editor-tile-erase-control"
+              type="button"
+              aria-label="Clear current tile layer"
+            >
+              Clear Layer
+            </button>
             <button
               id="btn-editor-shell-nuke-terrain"
               class="bar-btn bar-btn-small bar-btn-danger editor-shell-nuke-button editor-clear-all-btn editor-tile-erase-control"
@@ -1485,6 +1169,10 @@
     </div>
 
     <div id="editor-shell-dock" class="editor-shell-dock" aria-label="Editor library">
+      <div id="editor-phone-draw-switch" role="group" aria-label="Draw or erase">
+        <button class="editor-shell-chunky-button active" type="button" data-editor-phone-tool="pencil" aria-pressed="true"><span aria-hidden="true">&#9998;</span><span>Draw</span></button>
+        <button class="editor-shell-chunky-button" type="button" data-editor-phone-tool="eraser" aria-pressed="false"><span aria-hidden="true">&#9003;</span><span>Erase</span></button>
+      </div>
       <div class="editor-shell-dock-grid">
         <button type="button" data-editor-dock="terrain" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-terrain" aria-hidden="true"></span><span>Terrain</span></button>
         <button type="button" data-editor-dock="stuff" aria-controls="sidebar" aria-expanded="false"><span class="editor-game-icon editor-game-icon-key" aria-hidden="true"></span><span>Stuff</span></button>
@@ -1522,13 +1210,20 @@
         <button id="btn-post-run-reminder" class="bar-btn" type="button">Guest clears</button>
         <button id="btn-post-run-reminder-dismiss" class="bar-btn" type="button" aria-label="Hide progress reminder" title="Hide reminder">×</button>
       </div>
+      <div id="keep-playing" class="hidden" aria-label="Play another unbeaten room">
+        <button id="btn-keep-playing" class="bar-btn" type="button">Keep playing →</button>
+        <button id="btn-keep-playing-dismiss" class="bar-btn" type="button" aria-label="Hide next-room suggestion">×</button>
+        <span id="keep-playing-status" role="status"></span>
+      </div>
+      <div id="play-connection-notice" class="hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="room-title-section" class="editor-room-title-overlay" data-mobile-panel="goal">
         <label class="editor-room-title-label" for="room-title-input">Room Name</label>
         <input id="room-title-input" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Name this room" />
       </div>
-      <div id="editor-death-map-key" class="hidden"><span>Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>
+      <div id="editor-death-map-key" class="hidden"><span id="editor-death-map-version">Death map · orange = busiest tiles</span><button id="btn-editor-death-map-clear" class="bar-btn bar-btn-small" type="button">Hide Map</button></div>
       <div id="editor-room-feedback" class="editor-room-feedback-overlay">
         <div id="editor-top-save-status" class="editor-top-save-status">Draft ready.</div>
+        <div data-world-publication-status class="goal-context-note hidden" role="status"></div>
         <div id="editor-publish-nudge" class="editor-publish-nudge hidden">
           <div class="editor-publish-nudge-kicker">Draft Only</div>
           <div id="editor-publish-nudge-text" class="editor-publish-nudge-text">
@@ -1905,7 +1600,8 @@
         </div>
       </div>
       <div id="course-editor-shell" class="course-editor-shell hidden">
-        <div class="course-editor-panel">
+        <div id="course-workbench-panel" class="course-editor-panel" data-sheet="open">
+          <button id="btn-course-workbench-sheet" class="course-editor-sheet-handle" type="button" aria-controls="course-workbench-toolbar course-workbench-sections" aria-expanded="true">Hide setup</button>
           <div class="course-editor-header">
             <div class="course-editor-header-copy">
               <div class="history-modal-kicker">Expanded Rooms</div>
@@ -1915,7 +1611,7 @@
             <button id="btn-course-workbench-back-world" class="bar-btn bar-btn-small" type="button" data-button-variant="neutral">World</button>
           </div>
 
-          <div class="course-editor-toolbar">
+          <div id="course-workbench-toolbar" class="course-editor-toolbar">
             <div class="course-editor-zoom-row">
               <button id="btn-course-workbench-zoom-out" aria-label="Zoom out" class="bar-btn bar-btn-small" type="button">-</button>
               <div id="course-workbench-zoom-text" class="course-editor-zoom-text">Zoom: 0.18x</div>
@@ -1924,7 +1620,7 @@
             </div>
           </div>
 
-          <div class="course-editor-scroll">
+          <div id="course-workbench-sections" class="course-editor-scroll">
             <div class="about-section">
               <div class="about-section-title">Title</div>
               <input id="course-workbench-title-input" aria-label="Expanded room title" class="goal-input room-title-input" type="text" maxlength="40" placeholder="Expanded room title" />
@@ -1935,7 +1631,7 @@
               <div class="goal-context-note">Falling past the outer bottom edge respawns you. Drops between cells stay open.</div>
             </div>
 
-            <div class="about-section">
+            <div class="about-section course-editor-selected-cell">
               <div class="about-section-title">Selected Cell</div>
               <div id="course-workbench-selected-room-summary" class="goal-summary">Room 0,0</div>
               <div id="course-workbench-selected-room-status" class="history-modal-meta">Select a room to begin.</div>
@@ -1990,7 +1686,7 @@
               id="world-selected-state-info"
               class="world-title-lock-button"
               type="button"
-              aria-label="What minted room lock means"
+              aria-label="About room protection"
             >
               <img
                 class="world-title-lock-icon"
@@ -2116,7 +1812,10 @@
           <button id="btn-world-comment" class="bar-btn bar-btn-small world-btn-comment" type="button" data-button-variant="curate">Comments</button>
           <button id="btn-world-rate-room" class="bar-btn bar-btn-small world-btn-leaderboard hidden" type="button" data-button-variant="curate">Rate Room</button>
           <button id="btn-world-chat" class="bar-btn bar-btn-small world-btn-controls hidden" data-button-variant="curate">Chat</button>
-          <button id="btn-world-room-chat" class="bar-btn bar-btn-small world-btn-controls hidden" type="button" data-button-variant="curate">Say</button>
+        </div>
+        <div data-crypto id="owner-collection-reminder" class="owner-collection-reminder hidden">
+          <div id="owner-collection-price" class="world-hud-meta" role="status"></div>
+          <button id="btn-owner-collection" class="bar-btn bar-btn-small" type="button">Collect &amp; Lock in editor</button>
         </div>
         <div id="world-status" class="world-hud-status"></div>
       </div>
@@ -2126,6 +1825,10 @@
         <div class="world-goal-panel-row">
           <div id="world-goal-panel-progress" class="world-goal-panel-progress">Reach the exit</div>
           <div id="world-goal-panel-timer" class="world-goal-panel-timer">0:00.0</div>
+        </div>
+        <div id="world-goal-panel-save" class="world-goal-panel-save hidden" role="status" aria-live="polite">
+          <span id="world-goal-panel-save-text" class="world-goal-panel-save-text"></span>
+          <button id="btn-world-goal-retry" class="bar-btn bar-btn-small world-goal-panel-retry hidden" type="button">Retry</button>
         </div>
       </div>
       <div id="world-share-status" class="world-share-status hidden" role="status" aria-live="polite"></div>
@@ -2154,6 +1857,7 @@
         Restart
       </button>
       <button id="btn-mobile-room-sequence-next" class="bar-btn mobile-room-sequence-next hidden" type="button" data-button-variant="play">Next</button>
+      <button id="btn-world-room-chat" class="bar-btn bar-btn-small mobile-world-emotes hidden" type="button" data-button-variant="curate" aria-label="Open emotes">Emotes</button>
       <button id="btn-mobile-world-share" class="bar-btn bar-btn-small mobile-world-share hidden" type="button" data-button-variant="curate">Share</button>
       <div id="mobile-play-controls" class="mobile-play-controls hidden">
         <div id="mobile-move-zone" class="mobile-move-zone" aria-label="Move">
@@ -2253,6 +1957,7 @@
           <span aria-hidden="true">·</span>
           <span id="world-ghost-race-time"></span>
         </span>
+        <span id="world-cleared-rooms" class="world-cleared-rooms hidden" aria-live="polite"></span>
         <span id="world-lost-songs" class="world-lost-songs hidden" aria-live="polite"></span>
         <button id="btn-chat-toggle" class="bar-btn bar-btn-small world-footer-controls-btn chat-footer-toggle" type="button" data-chat-toggle>
           Chat +
@@ -2267,26 +1972,7 @@
         <span id="zoom-level">Zoom: 2x</span>
       </div>
     </div>
-    <div id="mobile-editor-nav" class="mobile-editor-nav hidden" aria-label="Editor panels">
-      <div class="mobile-editor-tabs">
-      <button
-        class="bar-btn bar-btn-small mobile-editor-tab mobile-editor-world-tab"
-        type="button"
-        data-mobile-editor-sheet="actions"
-        aria-label="World and editor actions"
-      >&#8592; World</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="tools">Tools</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="background">Background</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="palette">Palette</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="objects">Objects</button>
-      <button class="bar-btn bar-btn-small mobile-editor-tab" type="button" data-mobile-editor-sheet="goal">Goal</button>
-      </div>
-      <div class="mobile-editor-utilities" aria-label="Editing actions">
-      <button id="btn-mobile-editor-undo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="undo" type="button" title="Undo (Cmd/Ctrl+Z)" disabled>Undo</button>
-      <button id="btn-mobile-editor-redo" class="bar-btn bar-btn-small mobile-editor-utility" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled>Redo</button>
-      <button id="btn-mobile-editor-toggle" class="bar-btn bar-btn-small mobile-editor-utility" type="button">Hide</button>
-      </div>
-    </div>
+
   </div>
 
   <div id="worlds-modal-root"></div>
@@ -2367,7 +2053,20 @@
       <div class="room-insights-scroll">
         <p id="room-insights-status" class="history-modal-meta" role="status"></p>
         <button id="btn-room-insights-retry" class="bar-btn bar-btn-small hidden" type="button">Try Again</button>
-        <dl id="room-insights-metrics" class="room-insights-metrics"></dl>
+        <div class="room-insights-comparison">
+          <section aria-labelledby="room-insights-selected-title">
+            <h3 id="room-insights-selected-title">Selected version</h3>
+            <p id="room-insights-selected-versions" class="history-modal-meta"></p>
+            <dl id="room-insights-metrics" class="room-insights-metrics"></dl>
+          </section>
+          <section id="room-insights-previous" class="hidden" aria-labelledby="room-insights-previous-title">
+            <h3 id="room-insights-previous-title">Previous different layout</h3>
+            <p id="room-insights-previous-versions" class="history-modal-meta"></p>
+            <dl id="room-insights-previous-metrics" class="room-insights-metrics"></dl>
+          </section>
+        </div>
+        <p class="history-modal-meta">Matching leaderboard versions share statistics. Expanded Rooms use the selected version only.</p>
+        <label id="room-insights-map-version-label" class="room-insights-map-version hidden">Death map version <select id="room-insights-map-version" aria-label="Death map version"></select></label>
         <p class="history-modal-meta">Finished attempts include clears, failures and reported abandonments. Builder tests, invalid clears and unfinished attempts are excluded. New intro-only visits are excluded; older counts use saved server results. Guests are included; a claim does not add another play.</p>
         <label class="room-insights-map-toggle"><input id="room-insights-map" type="checkbox" disabled> Show death map in editor</label>
         <p id="room-insights-coverage" class="history-modal-meta"></p>
@@ -2407,7 +2106,8 @@
       </div>
     </div>
   </div>
-  <div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-room-history-modal">
+<div id="room-history-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="room-history-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2417,7 +2117,7 @@
         </div>
         <div class="history-modal-header-actions">
           <button id="btn-room-history-restore-canonical" class="bar-btn bar-btn-small hidden" type="button">Restore Canonical</button>
-          <button id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Refresh NFT Metadata</button>
+          <button data-crypto id="btn-room-history-refresh-metadata" class="bar-btn bar-btn-small hidden" type="button">Add/update artwork</button>
           <button id="btn-room-history-close" class="bar-btn bar-btn-small">Close</button>
         </div>
       </div>
@@ -2425,6 +2125,7 @@
       <div id="room-history-list" class="history-version-list"></div>
     </div>
   </div>
+  </template>
 
   <div id="wamp-o-gram-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel wamp-o-gram-modal-panel" role="dialog" aria-modal="true" aria-labelledby="wamp-o-gram-modal-title">
@@ -2516,7 +2217,8 @@
     </div>
   </div>
 
-  <div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-leaderboard-modal">
+<div id="leaderboard-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel" role="dialog" aria-modal="true" aria-labelledby="leaderboard-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2560,6 +2262,7 @@
         <div id="leaderboard-room-list" class="history-version-list"></div>
       </div>
       <div id="leaderboard-course-panel" class="leaderboard-panel hidden">
+        <div class="leaderboard-controls"><button id="btn-leaderboard-course-refresh" class="bar-btn bar-btn-small" type="button">Refresh</button></div>
         <div id="leaderboard-course-summary" class="history-modal-meta">No published expanded room selected.</div>
         <div id="leaderboard-course-viewer" class="history-modal-meta hidden"></div>
         <div id="leaderboard-course-list" class="history-version-list"></div>
@@ -2589,6 +2292,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="first-steps-summary-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="first-steps-summary-title">
@@ -2777,7 +2481,7 @@
           Your room is still saved for this browser. Sign in to make it yours and publish it in the world.
         </div>
         <div id="guest-room-recovery-benefits" class="guest-room-recovery-benefits">
-          Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, minting rights, or other account benefits.
+          Guest Rooms are playable, but guest-published rooms do not earn XP, profile credit, or other account benefits.
         </div>
         <div id="guest-room-recovery-status" class="history-modal-meta guest-room-recovery-status hidden"></div>
         <div id="guest-room-recovery-locations" class="guest-room-recovery-actions hidden" aria-label="Choose a new spot"></div>
@@ -2838,7 +2542,8 @@
     <p id="build-prompt-result-status" role="status"></p>
     <div class="build-prompt-actions"><button id="btn-build-prompt-entry-retry" class="bar-btn hidden" type="button">Retry Entry</button><button id="btn-build-prompt-view" class="bar-btn" type="button">View Prompt</button><button id="btn-build-prompt-result-close" class="bar-btn" type="button">Dismiss</button></div>
   </aside>
-  <div id="explore-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-explore-modal">
+<div id="explore-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel explore-modal-panel" role="dialog" aria-modal="true" aria-labelledby="explore-modal-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
@@ -2862,6 +2567,7 @@
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unbeaten">Unbeaten</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unvisited">Never Visited</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="unrated">Unrated By Me</button>
+        <button class="bar-btn bar-btn-small" type="button" data-crypto data-explore-sort="protected">Protected</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="builders">Builders</button>
         <button class="bar-btn bar-btn-small" type="button" data-explore-sort="guestRooms">Guest Rooms</button>
       </div>
@@ -2875,12 +2581,15 @@
       <div id="explore-list" class="history-version-list explore-room-list"></div>
     </div>
   </div>
+  </template>
 
-  <div id="profile-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-profile-modal">
+<div id="profile-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel profile-modal-panel" role="dialog" aria-modal="true" aria-label="Profile">
       <div class="history-modal-header profile-modal-header">
           <button id="btn-profile-activity" class="bar-btn bar-btn-small hidden" type="button">Activity</button>
         <button id="btn-profile-share" class="bar-btn bar-btn-small hidden" type="button">Copy Link</button>
+        <button id="btn-profile-report" class="bar-btn bar-btn-small hidden" type="button">Report</button>
         <button id="btn-profile-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="profile-modal-error" class="history-modal-error hidden"></div>
@@ -2914,11 +2623,18 @@
             <div id="profile-save-status" class="history-modal-meta hidden"></div>
           </div>
         </div>
-        <div class="leaderboard-tabs profile-tabs">
+        <div class="leaderboard-tabs profile-tabs" role="tablist" aria-label="Profile sections">
           <button id="btn-profile-tab-rooms" class="bar-btn bar-btn-small active" type="button" aria-selected="true">Levels</button>
+          <button id="btn-profile-tab-collection" class="bar-btn bar-btn-small hidden" type="button" aria-selected="false" data-crypto>Collection</button>
           <button id="btn-profile-tab-playlists" class="bar-btn bar-btn-small" type="button" aria-selected="false">Playlists</button>
           <button id="btn-profile-tab-progress" class="bar-btn bar-btn-small" type="button" aria-selected="false">Progress</button>
           <button id="btn-profile-tab-stats" class="bar-btn bar-btn-small" type="button" aria-selected="false">Stats</button>
+        </div>
+        <div id="profile-collection-panel" class="leaderboard-panel hidden" data-crypto>
+          <p class="collection-record-note">Last recorded ownership. Transfers appear after ownership is refreshed in WAMP.</p>
+          <div id="profile-collection-status" class="leaderboard-empty" role="status"></div>
+          <div id="profile-collection-list"></div>
+          <button id="btn-profile-collection-more" class="bar-btn bar-btn-small hidden" type="button">Load more</button>
         </div>
         <div id="profile-rooms-panel" class="leaderboard-panel">
           <div id="profile-rooms-empty" class="leaderboard-empty">
@@ -2957,6 +2673,7 @@
       </div>
     </div>
   </div>
+  </template>
 
   <div id="playlist-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel playlist-modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlist-modal-title">
@@ -2992,7 +2709,8 @@
     </div>
   </div>
 
-  <div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
+  <template id="deferred-avatar-picker-modal">
+<div id="avatar-picker-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel leaderboard-modal-panel avatar-picker-modal-panel" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title">
       <div class="history-modal-header avatar-picker-modal-header">
         <div class="history-modal-title-group">
@@ -3022,6 +2740,7 @@
       <div id="avatar-picker-grid" class="profile-avatar-grid"></div>
     </div>
   </div>
+  </template>
 
   <div id="editor-music-phrase-save-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel editor-music-phrase-save-modal-panel" role="dialog" aria-modal="true" aria-labelledby="editor-music-phrase-save-title">
@@ -3272,6 +2991,24 @@
     </div>
   </div>
 
+  <div id="report-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-modal-panel report-modal-panel" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <div class="history-modal-header">
+        <h2 id="report-title" class="history-modal-title">Report</h2>
+        <button id="btn-report-close" class="bar-btn bar-btn-small" type="button">Cancel</button>
+      </div>
+      <p id="report-subject" class="report-subject"></p>
+      <form id="report-form">
+        <fieldset id="report-reasons" class="report-reasons"><legend>What is wrong?</legend></fieldset>
+        <label for="report-details">Anything else? (optional)</label>
+        <textarea id="report-details" rows="3" placeholder="Where to look, or what happened"></textarea>
+        <p class="report-note">Reports are private. The person you report is not told who sent it.</p>
+      </form>
+      <p id="report-status" role="status" aria-live="polite"></p>
+      <div class="report-actions"><button id="btn-report-send" class="bar-btn" type="submit" form="report-form" disabled>Send report</button></div>
+    </div>
+  </div>
+
   <div id="settings-modal" class="history-modal hidden" aria-hidden="true">
     <div class="history-modal-panel settings-modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
       <div class="history-modal-header">
@@ -3283,6 +3020,20 @@
       <div class="settings-modal-body">
         <section class="settings-section settings-comfort-section" aria-labelledby="settings-comfort-title">
           <div id="settings-comfort-title" class="settings-section-title">Comfort</div>
+          <label class="settings-comfort-motion" for="settings-text-style">
+            <span>Text style</span>
+            <select id="settings-text-style" class="settings-comfort-select">
+              <option value="pixel">Retro</option>
+              <option value="readable">Readable</option>
+            </select>
+          </label>
+          <label class="settings-comfort-motion" for="settings-text-size">
+            <span>Text size</span>
+            <select id="settings-text-size" class="settings-comfort-select">
+              <option value="normal">Normal</option>
+              <option value="large">Large</option>
+            </select>
+          </label>
           <label id="settings-haptics-row" class="settings-toggle-row hidden" for="settings-haptics">
             <span class="settings-label-copy"><span class="settings-label-title">Vibration</span><span class="settings-choice-description">On this device.</span></span>
             <input id="settings-haptics" class="settings-checkbox" type="checkbox" />
@@ -3303,6 +3054,22 @@
             </div>
           </fieldset>
           <p class="settings-comfort-note">Some rooms use a fixed camera.</p>
+        </section>
+        <section class="settings-section" aria-labelledby="settings-assist-title">
+          <div id="settings-assist-title" class="settings-section-title">Assist</div>
+          <p class="settings-comfort-note">Practice only: no records, XP or saved clears. Off in co-op, PvP and Room Rush.</p>
+          <label class="settings-comfort-motion" for="settings-assist-speed">
+            <span>Game speed</span>
+            <select id="settings-assist-speed" class="settings-comfort-select">
+              <option value="1">100% (normal)</option>
+              <option value="0.8">80%</option>
+              <option value="0.6">60%</option>
+            </select>
+          </label>
+          <label class="settings-toggle-row" for="settings-assist-respawn">
+            <span class="settings-label-title">Respawn at last safe ground</span>
+            <input id="settings-assist-respawn" class="settings-checkbox" type="checkbox" />
+          </label>
         </section>
         <section class="settings-section">
           <div class="settings-section-title">Performance</div>
@@ -3434,18 +3201,14 @@
           <div class="controls-row"><span class="controls-key">Warp field</span><span>Go to coordinates</span></div>
           <div class="controls-row"><span class="controls-key">0</span><span>Fit loaded world</span></div>
         </div>
-        <div class="controls-section">
-          <div class="controls-section-title">Play</div>
-          <div class="controls-row"><span class="controls-key">WASD / Arrows</span><span>Move</span></div>
-          <div class="controls-row"><span class="controls-key">Space / Up</span><span>Jump</span></div>
-          <div class="controls-row"><span class="controls-key">Down</span><span>Crouch / crawl</span></div>
-          <div class="controls-row"><span class="controls-key">Down + move</span><span>Pull crate</span></div>
-          <div class="controls-row"><span class="controls-key">Q</span><span>Slash</span></div>
-          <div class="controls-row"><span class="controls-key">E</span><span>Shoot</span></div>
-          <div class="controls-row"><span class="controls-key">T</span><span>Chat in room</span></div>
-          <div class="controls-row"><span class="controls-key">R</span><span>Restart run</span></div>
-          <div class="controls-row"><span class="controls-key">9</span><span>Toggle follow cam</span></div>
-          <div class="controls-row"><span class="controls-key">P / Esc</span><span>Return to browse</span></div>
+        <div class="controls-section controls-section-keyboard">
+          <div class="controls-section-title">Keyboard</div>
+          <p class="keyboard-binding-note">Physical key positions · Saved on this device</p>
+          <div id="keyboard-bindings"></div>
+          <div class="controls-row"><span class="controls-key">T / C</span><span>Chat / comment in room</span></div>
+          <div class="controls-row"><span class="controls-key">Esc</span><span>Return to browse / close dialog</span></div>
+          <button id="btn-keyboard-reset" class="pixel-btn" type="button">Restore default keys</button>
+          <div id="keyboard-binding-status" class="keyboard-binding-status" role="status" aria-live="polite"></div>
         </div>
         <div class="controls-section">
           <div class="controls-section-title">Standard gamepad</div>
@@ -3501,9 +3264,9 @@
         </div>
         <div class="about-section">
           <div class="about-section-title">Build And Publish</div>
-          <p>Anyone can edit any published room unless its owner has collected and locked it.</p>
-          <p>Until a room is collected, its original claimer can revert it to any previously published state. Once it is collected, its owner controls editing and reverting.</p>
-          <p>You can &ldquo;lock&rdquo; your room by paying a small fee to &ldquo;collect&rdquo; it. Once you own your room, only you can edit it.</p>
+          <p>Anyone can edit a published room unless it is protected.</p>
+          <p>The original claimer can revert an unprotected room to a previously published version. Only the owner can edit or revert a protected room.</p>
+          <p data-crypto>Choose Collect &amp; Lock for your own room to protect it. Review the cost before approving in your wallet.</p>
           <p>Add music to your room with our simple music editor. You can also create custom sprites in the sprite editor.</p>
           <p>There are two types of rooms:</p>
           <ul class="about-list">
@@ -3576,26 +3339,27 @@
     <div class="history-modal-panel leaderboard-modal-panel chat-moderation-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-moderation-title">
       <div class="history-modal-header">
         <div class="history-modal-title-group">
-          <div class="history-modal-kicker">Moderation</div>
           <h2 id="chat-moderation-title" class="history-modal-title">Chat Moderation</h2>
-          <div class="history-modal-meta">Manage chat admins and banned users.</div>
         </div>
         <button id="btn-chat-moderation-close" class="bar-btn bar-btn-small" type="button">Close</button>
       </div>
       <div id="chat-moderation-status" class="history-modal-error hidden"></div>
       <div id="chat-moderation-admin-section" class="chat-moderation-section hidden">
-        <div class="history-modal-meta">Add or remove delegated chat admins by display name.</div>
+        <div class="history-modal-meta">Chat admins</div>
         <form id="chat-moderation-admin-form" class="chat-moderation-form">
           <input
-            id="chat-moderation-admin-input" aria-label="Chat admin display name"
+            id="chat-moderation-admin-input" aria-label="Search accounts by name or username"
             class="chat-moderation-input"
             type="text"
-            maxlength="24"
-            placeholder="Display name"
+            maxlength="64"
+            placeholder="Name or @username"
+            autocomplete="off"
             spellcheck="false"
           />
           <button id="btn-chat-moderation-admin-add" class="bar-btn bar-btn-small" type="submit">Add Admin</button>
         </form>
+        <div id="chat-moderation-admin-search-status" class="history-modal-meta" role="status" aria-live="polite"></div>
+        <div id="chat-moderation-admin-results" class="chat-moderation-list" role="group" aria-label="Matching accounts"></div>
         <div id="chat-moderation-admin-list" class="chat-moderation-list"></div>
       </div>
       <div id="chat-moderation-ban-section" class="chat-moderation-section">

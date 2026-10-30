@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { award, fixture, guestClear, NOW, params, run, top1 } from './testDatabase';
 import { loadActivity, loadAllActivity, loadGuestActivity, markActivitySeen } from './store';
@@ -212,5 +213,44 @@ describe('private builder activity on the migrated schema', () => {
     expect((await loadAllActivity(f.env.DB)).entries.some(entry => entry.kind==='comment')).toBe(false);
     f.sqlite.exec('UPDATE rooms SET published_json=NULL');
     expect((await loadAllActivity(f.env.DB)).entries).toEqual([]);
+  });
+  it('tells only the claimer when another builder publishes over their room, once per editor and day', async () => {
+    const f = setup();
+    const version = (n: number, by: string, at = NOW) => f.sqlite.prepare(`INSERT INTO room_versions
+      (room_id,version,snapshot_json,title,created_at,published_by_user_id) VALUES ('0,0',?,'{}','Lava Gauntlet',?,?)`).run(n, at, by);
+    version(2, 'builder'); version(3, 'p1'); version(4, 'p1'); version(5, 'p2');
+    version(6, 'p1', '2026-10-05T09:00:00.000Z');
+    const inbox = await loadActivity(f.env.DB, 'builder', true);
+    expect(inbox.entries.map(entry => [entry.kind, entry.actorName, entry.contentVersion])).toEqual([
+      ['edited', 'p1', 6], ['edited', 'p2', 5], ['edited', 'p1', 3],
+    ]);
+    expect(inbox.entries[0].contentPath).toBe('/r/0/0');
+    expect(inbox.unreadCount).toBe(3);
+    expect((await loadActivity(f.env.DB, 'builder', true, undefined, 'rooms')).entries).toEqual([]);
+    expect((await loadActivity(f.env.DB, 'p1', true)).entries).toEqual([]);
+    expect((await loadAllActivity(f.env.DB)).entries.some(entry => entry.kind === 'edited')).toBe(false);
+    f.sqlite.exec("DELETE FROM room_versions WHERE version = 5");
+    expect((await loadActivity(f.env.DB, 'builder', true)).entries).toHaveLength(2);
+    f.sqlite.prepare(`INSERT INTO room_versions (room_id,version,snapshot_json,title,created_at,published_by_user_id,reverted_from_version)
+      VALUES ('0,0',7,'{}','Lava Gauntlet',?,'p3',1)`).run(NOW);
+    expect((await loadActivity(f.env.DB, 'builder', true)).entries).toHaveLength(2);
+    f.sqlite.exec("UPDATE rooms SET minted_token_id = '9'");
+    version(8, 'p3');
+    expect((await loadActivity(f.env.DB, 'builder', true)).entries).toHaveLength(2);
+  });
+
+  it('keeps the activity id sequence across the 0069 rebuild', async () => {
+    const f = setup(false);
+    for (const file of ['0055_builder_activity.sql', '0057_daily_rooms.sql', '0066_guest_activity_index.sql']) {
+      f.sqlite.exec(readFileSync(new URL(`../../../../migrations/${file}`, import.meta.url), 'utf8'));
+    }
+    award(f, 'kept'); award(f, 'removed', 'unique_rating_room');
+    f.sqlite.exec("DELETE FROM builder_activity WHERE dedupe_key = 'bxp:removed'");
+    const highest = (f.sqlite.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'builder_activity'").get() as { seq: number }).seq;
+    f.sqlite.exec(readFileSync(new URL('../../../../migrations/0069_room_edit_activity.sql', import.meta.url), 'utf8'));
+    award(f, 'next', 'unique_completion_room', 'p2');
+    const rows = f.sqlite.prepare('SELECT id, dedupe_key FROM builder_activity ORDER BY id').all() as Array<{ id: number; dedupe_key: string }>;
+    expect(rows.map(row => row.dedupe_key)).toEqual(['bxp:kept', 'bxp:next']);
+    expect(rows[1].id).toBeGreaterThan(highest);
   });
 });

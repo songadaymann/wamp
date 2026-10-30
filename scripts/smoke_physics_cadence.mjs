@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 // Local test-enabled Vite only. No account or published room writes.

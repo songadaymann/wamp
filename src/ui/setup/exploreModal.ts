@@ -1,4 +1,7 @@
+import { CollectionAttributionController, collectionAttributionSlot } from './collectionAttribution';
+import { createRoomProtectionBadge } from '../roomProtection';
 import { friendlyError, renderFriendlyError } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import Phaser from 'phaser';
 import { loadExploreDiscovery } from './exploreDiscovery';
 import {
@@ -38,6 +41,7 @@ import {
   type RoomDiscoveryResponse,
   type RoomDiscoverySort,
 } from '../../runs/model';
+import { requestReport } from '../../reports/requestReport';
 
 type ExploreMode = 'rooms' | 'builders' | 'guestRooms';
 type ExploreSortButtonValue = Exclude<RoomDiscoverySort, 'builder'> | 'builders' | 'guestRooms';
@@ -108,7 +112,15 @@ export class ExploreModalController {
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
     const previousUserId = this.authState.user?.id;
+    const wasProtected = this.discoverSort === 'protected';
     this.authState = detail ?? getAuthDebugState();
+    if (wasProtected && !this.canUseProtectedSort()) {
+      this.discoverSort = 'featured';
+      this.discoveryRequestId++;
+      this.roomDiscovery = null;
+      this.loading = false;
+      if (!this.elements.modal?.classList.contains('hidden')) void this.loadDiscoveryResults(false);
+    }
     if (!this.authState.authenticated) {
       this.myPlaylists = [];
       this.myPlaylistsLoaded = false;
@@ -126,6 +138,10 @@ export class ExploreModalController {
     this.render();
   };
 
+  private readonly handleWalletGateChanged = () => this.handleAuthStateChanged(new Event('wallet-gate'));
+
+  private readonly attribution: CollectionAttributionController;
+
   constructor(
     private readonly game: Phaser.Game,
     private readonly runRepository: RunRepository = createRunRepository(),
@@ -133,6 +149,7 @@ export class ExploreModalController {
     private readonly doc: Document = document,
     private readonly playlistRepository: PlaylistRepository = createPlaylistRepository(),
   ) {
+    this.attribution = new CollectionAttributionController(this.doc, this.doc.getElementById('explore-modal'));
     this.elements = {
       modal: this.doc.getElementById('explore-modal'),
       closeButton: this.doc.getElementById('btn-explore-close') as HTMLButtonElement | null,
@@ -182,6 +199,7 @@ export class ExploreModalController {
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    window.addEventListener('wallet-gate', this.handleWalletGateChanged);
 
     for (const button of this.elements.filterButtons) {
       button.addEventListener('click', () => {
@@ -195,7 +213,7 @@ export class ExploreModalController {
     for (const button of this.elements.sortButtons) {
       button.addEventListener('click', () => {
         const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
-        if (!sort) {
+        if (!sort || (sort === 'protected' && !this.canUseProtectedSort())) {
           return;
         }
         if (sort === 'builders') {
@@ -245,10 +263,12 @@ export class ExploreModalController {
   }
 
   destroy(): void {
+    this.attribution.destroy();
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    window.removeEventListener('wallet-gate', this.handleWalletGateChanged);
     this.previewObserver?.disconnect();
     this.clearPlaylistFeedback();
     this.close();
@@ -295,7 +315,13 @@ export class ExploreModalController {
     this.setError(null);
   }
 
+  private canUseProtectedSort(): boolean {
+    return this.authState.walletConnected === true && Boolean(this.authState.walletAddress)
+      && this.doc.documentElement?.dataset.wallet === 'yes';
+  }
+
   private async loadDiscoveryResults(chooseDefault = false): Promise<void> {
+    if (this.discoverSort === 'protected' && !this.canUseProtectedSort()) this.discoverSort = 'featured';
     const requestId = ++this.discoveryRequestId;
     const isCurrent = () => requestId === this.discoveryRequestId;
     this.loading = true;
@@ -376,14 +402,15 @@ export class ExploreModalController {
 
     for (const button of this.elements.filterButtons) {
       const difficulty = this.parseDifficultyButtonValue(button.dataset.exploreDifficulty);
-      button.classList.toggle('active', difficulty === this.discoverFilter);
+      setToggleState(button, difficulty === this.discoverFilter);
       button.disabled = this.loading || buildersActive || guestRoomsActive;
     }
 
     for (const button of this.elements.sortButtons) {
       const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
-      button.classList.toggle(
-        'active',
+      button.classList.toggle('hidden', sort === 'protected' && (!this.canUseProtectedSort() || this.roomDiscovery?.protectedDiscoveryAvailable !== true));
+      setToggleState(
+        button,
         sort === 'builders'
           ? buildersActive
           : sort === 'guestRooms'
@@ -402,7 +429,7 @@ export class ExploreModalController {
 
     for (const button of this.elements.builderSortButtons) {
       const sort = this.parseBuilderSortButtonValue(button.dataset.exploreBuilderSort);
-      button.classList.toggle('active', buildersActive && sort === this.builderSort);
+      setToggleState(button, buildersActive && sort === this.builderSort);
       button.disabled = this.loading || !buildersActive;
     }
 
@@ -438,7 +465,7 @@ export class ExploreModalController {
     }
 
     const results = (this.roomDiscovery?.results ?? []).filter(
-      (entry) => entry.goalType !== null || (this.discoverSort === 'newest' && this.discoverFilter === null),
+      (entry) => entry.goalType !== null || ((this.discoverSort === 'newest' || this.discoverSort === 'protected') && this.discoverFilter === null),
     );
 
     if (results.length === 0) {
@@ -451,6 +478,7 @@ export class ExploreModalController {
     for (const entry of results) {
       this.elements.list.appendChild(this.renderEntry(entry));
     }
+    this.attribution.refresh();
   }
 
   private renderQueueActions(buildersActive: boolean, activeLoaded: boolean): void {
@@ -488,7 +516,7 @@ export class ExploreModalController {
         mode,
         entries,
         sourceLabel: mode === 'rate' ? 'Unrated rooms'
-          : this.discoverSort === 'unbeaten' ? 'Unbeaten rooms' : 'Community rooms',
+          : this.discoverSort === 'unbeaten' ? 'Unbeaten rooms' : this.discoverSort === 'protected' ? 'Protected rooms' : 'Community rooms',
       });
       this.close();
     });
@@ -639,7 +667,15 @@ export class ExploreModalController {
 
     copy.append(titleRow, builder, meta);
     card.append(preview, copy);
-    item.appendChild(card);
+    const report = this.doc.createElement('button');
+    report.type = 'button';
+    report.className = 'chat-message-report explore-guest-room-report';
+    report.textContent = 'Report';
+    report.setAttribute('aria-label', `Report guest room ${title.textContent}`);
+    report.addEventListener('click', () => requestReport({
+      type: 'guest_room', id: draft.id, label: `${title.textContent} by ${draft.guestDisplayName || 'Guest'}`,
+    }));
+    item.append(card, report);
     void this.loadAndApplyGuestRoomPreview(draft, previewImage, previewFallback);
     return item;
   }
@@ -712,8 +748,11 @@ export class ExploreModalController {
       titleRow.appendChild(badge);
     }
 
+    const protectionBadge = createRoomProtectionBadge(this.doc, entry);
+    if (protectionBadge) titleRow.appendChild(protectionBadge);
     copy.appendChild(titleRow);
     copy.appendChild(this.createBuilderRow(entry));
+    if (entry.protectedCellCount && this.roomDiscovery?.collectionAttributionAvailable) copy.append(collectionAttributionSlot(this.doc, entry));
     const areaMeta = this.createExpandedRoomMeta(entry);
     if (areaMeta) {
       copy.appendChild(areaMeta);
@@ -935,7 +974,7 @@ export class ExploreModalController {
 
     const label = this.doc.createElement('span');
     label.className = 'explore-room-builder-label';
-    label.textContent = 'By';
+    label.textContent = 'Built by';
     row.appendChild(label);
 
     const builderLabel = entry.builderDisplayName?.trim() || 'Unknown builder';
@@ -1186,6 +1225,7 @@ export class ExploreModalController {
       || value === 'popular'
       || value === 'quality'
       || value === 'newest'
+      || value === 'protected'
       || value === 'unbeaten'
       || value === 'unvisited'
       || value === 'unrated'
@@ -1232,6 +1272,7 @@ export class ExploreModalController {
   }
 
   private getRoomDiscoveryEmptyText(): string {
+    if (this.discoverSort === 'protected') return this.discoverFilter ? 'No protected rooms match this difficulty.' : 'No protected rooms found.';
     if (this.discoverSort === 'featured' && this.discoverFilter === null) return 'No Featured rooms yet. Try Popular.';
     if (this.discoverSort === 'newest' && this.discoverFilter === null) {
       return 'No published rooms found yet.';

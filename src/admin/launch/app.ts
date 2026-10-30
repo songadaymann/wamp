@@ -1,4 +1,7 @@
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import { setupBuildPromptsAdmin } from './buildPrompts';
+import { setupLaunchFunnel } from './funnel';
+import { setupMapCaptureAdmin } from './mapCapture';
 import { setupLaunchReplayModal } from './replayModal';
 import { setupDailyAdmin } from './dailyRoom';
 import { setupWeeklyRoomRushAdmin } from './weeklyRoomRush';
@@ -22,6 +25,7 @@ import { setupCustomSpriteAdminController } from '../../custom-sprite-admin';
 import { createAdminResponseClient } from '../adminApiClient';
 import { createPollingController } from '../pollingController';
 import {
+  escapeHtml,
   matchesActivityFilter,
   normalizeActivityFilterKey,
   type LaunchAdminActivityFilterKey,
@@ -129,6 +133,8 @@ const adminResponseClient = createAdminResponseClient(() => adminKey);
 const dailyAdmin = setupDailyAdmin(() => adminKey);
 const weeklyRoomRushAdmin = setupWeeklyRoomRushAdmin(() => adminKey);
 const buildPromptsAdmin = setupBuildPromptsAdmin(() => adminKey);
+const mapCaptureAdmin = setupMapCaptureAdmin(() => adminKey);
+setupLaunchFunnel(() => adminKey);
 const pollingController = createPollingController(POLL_INTERVAL_MS, () => {
   void refreshSnapshot();
 });
@@ -140,6 +146,7 @@ if (adminKeyInput) {
 saveKeyButton?.addEventListener('click', () => {
   const nextKey = adminKeyInput?.value.trim() ?? '';
   adminKey = nextKey;
+  mapCaptureAdmin.refresh();
   if (adminKey) {
     window.sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, adminKey);
     lastError = null;
@@ -171,6 +178,7 @@ refreshButton?.addEventListener('click', () => {
 
 clearKeyButton?.addEventListener('click', () => {
   adminKey = '';
+  mapCaptureAdmin.refresh();
   lastError = null;
   gameJamsSnapshot = null;
   gameJamsError = null;
@@ -574,19 +582,19 @@ async function loadProgressionUser(userId: string): Promise<void> {
 
 function populateProgressionForm(user: AdminProgressionUserCapsResponse | null): void {
   if (progressionClaimInput) {
-    progressionClaimInput.value = user?.override.claimLimitPerDay ? String(user.override.claimLimitPerDay) : '';
+    progressionClaimInput.value = user?.override.claimLimitPerDay != null ? String(user.override.claimLimitPerDay) : '';
   }
   if (progressionPublishInput) {
-    progressionPublishInput.value = user?.override.publishLimitPerDay ? String(user.override.publishLimitPerDay) : '';
+    progressionPublishInput.value = user?.override.publishLimitPerDay != null ? String(user.override.publishLimitPerDay) : '';
   }
   if (progressionObjectInput) {
-    progressionObjectInput.value = user?.override.objectLimit ? String(user.override.objectLimit) : '';
+    progressionObjectInput.value = user?.override.objectLimit != null ? String(user.override.objectLimit) : '';
   }
   if (progressionCollectibleInput) {
-    progressionCollectibleInput.value = user?.override.collectibleLimit ? String(user.override.collectibleLimit) : '';
+    progressionCollectibleInput.value = user?.override.collectibleLimit != null ? String(user.override.collectibleLimit) : '';
   }
   if (progressionExpandedRoomInput) {
-    progressionExpandedRoomInput.value = user?.override.expandedRoomCellLimit ? String(user.override.expandedRoomCellLimit) : '';
+    progressionExpandedRoomInput.value = user?.override.expandedRoomCellLimit != null ? String(user.override.expandedRoomCellLimit) : '';
   }
   if (progressionReasonInput) {
     progressionReasonInput.value = user?.override.reason ?? '';
@@ -816,7 +824,7 @@ function renderRoomCommentCard(comment: AdminRoomCommentRecord): string {
       </div>
       <div class="comment-review-body">${escapeHtml(comment.body)}</div>
       <div class="meta">
-        ${escapeHtml(comment.authorDisplayName)}${comment.authorEmail ? ` (${escapeHtml(comment.authorEmail)})` : ''}
+        ${escapeHtml(formatAccountIdentity(comment.authorDisplayName, comment.authorUsername))}${comment.authorEmail ? ` (${escapeHtml(comment.authorEmail)})` : ''}
         on <a href="${escapeHtml(roomHref)}" target="_blank" rel="noreferrer">${escapeHtml(roomLabel)}</a>
         v${escapeHtml(String(comment.roomVersion))}
         at ${escapeHtml(`${comment.position.x},${comment.position.y}`)}
@@ -1926,8 +1934,8 @@ function readOptionalPositiveInteger(input: HTMLInputElement | null): number | n
     return null;
   }
   const parsed = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {
-    throw new Error(`Invalid positive integer: "${trimmed}".`);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`Invalid limit (use 0 or more): "${trimmed}".`);
   }
   return parsed;
 }
@@ -2009,13 +2017,4 @@ function emphasizeProgressionSelection(): void {
   progressionSelected.classList.remove('selected-flash');
   void progressionSelected.offsetWidth;
   progressionSelected.classList.add('selected-flash');
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

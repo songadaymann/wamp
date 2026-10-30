@@ -3,10 +3,17 @@ export const FRAME_WORK_PRIORITIES = [
   'predicted-destination-collision',
   'predicted-visuals-objects',
   'teardown',
+  // The room being played catching up on a gameplay cache: after preparation and teardown,
+  // ahead of cosmetic previews.
+  'gameplay-catch-up',
   'preview-cosmetic',
+  // Gameplay caches filled ahead of play; runs only once every streaming queue is empty.
+  'gameplay-warmup',
 ] as const;
 
 export type FrameWorkPriority = typeof FRAME_WORK_PRIORITIES[number];
+export type GameplayFrameWorkPriority = 'gameplay-catch-up' | 'gameplay-warmup';
+const GAMEPLAY_FRAME_WORK_PRIORITIES: readonly FrameWorkPriority[] = ['gameplay-catch-up', 'gameplay-warmup'];
 export type FrameWorkPerformanceProfile = 'normal' | 'reduced';
 export type FrameWorkCostKind = 'cpu' | 'gpu-upload';
 export type FrameWorkJobState = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
@@ -28,6 +35,13 @@ export interface FrameWorkJobSpec {
   estimatedCostMs: number;
   generation?: FrameWorkGeneration;
   execute: () => void;
+  /**
+   * Called once if the queued job is cancelled before it runs, so its owner can release what it
+   * held. It runs after the coordinator's own bookkeeping, once every job in that cancellation is
+   * settled, and may enqueue new work. It is not called for a job enqueue() returns already
+   * cancelled (a superseded generation); check the handle's state instead.
+   */
+  onCancelled?: (reason: string) => void;
 }
 
 export interface FrameWorkJobHandle {
@@ -56,10 +70,18 @@ export interface RunFrameWorkInput {
   sharedBudgetConsumedMs?: number;
   /** CPU discretionary work already charged outside this coordinator during this frame. */
   cpuBudgetConsumedMs?: number;
+  /**
+   * CPU time the gameplay queues may be charged this frame, within the profile's caps. Lets the
+   * device's own profile bound them when a seam-critical transition lifts the frame to normal.
+   */
+  gameplayCpuCapMs?: number;
+  /** Run only the gameplay queues: Browse frames, where streaming work waits for Play. */
+  gameplayOnly?: boolean;
 }
 
 export type FrameWorkStopReason =
   | 'queue-empty'
+  | 'gameplay-budget-exhausted'
   | 'critical-headroom-exhausted'
   | 'shared-budget-exhausted'
   | 'cpu-budget-exhausted'
@@ -138,6 +160,28 @@ const COST_EPSILON_MS = 0.000_001;
 
 export function getFrameWorkBudget(profile: FrameWorkPerformanceProfile): FrameWorkBudget {
   return FRAME_WORK_BUDGETS[profile];
+}
+
+/**
+ * Queues one CPU job of at most 1 ms in a gameplay queue. 'gameplay-warmup' runs only once all
+ * streaming work has drained; 'gameplay-catch-up' (the room being played) runs after preparation
+ * and teardown, ahead of previews. Both stay inside the frame's CPU cap and gameplayCpuCapMs.
+ */
+export function enqueueGameplayWarmupWork(
+  scheduler: Pick<FrameWorkCoordinator, 'enqueue'>,
+  label: string,
+  execute: () => void,
+  onCancelled?: (reason: string) => void,
+  priority: GameplayFrameWorkPriority = 'gameplay-warmup',
+): FrameWorkJobHandle {
+  return scheduler.enqueue({
+    label,
+    priority,
+    costKind: 'cpu',
+    estimatedCostMs: MAX_REDUCED_CPU_FRAME_WORK_ESTIMATE_MS,
+    execute,
+    onCancelled,
+  });
 }
 
 export class FrameWorkCoordinator {
@@ -273,23 +317,44 @@ export class FrameWorkCoordinator {
     let chargedSharedWorkMs = 0;
     let chargedCpuWorkMs = 0;
     let stopReason: FrameWorkStopReason = 'queue-empty';
+    const gameplayOnly = input.gameplayOnly === true;
+    const gameplayCpuCapMs = input.gameplayCpuCapMs ?? Number.POSITIVE_INFINITY;
+    let chargedGameplayCpuMs = 0;
+    let gameplayCapped = false;
 
     while (this.queueDepth > 0) {
-      const nextJob = this.peekNextJob();
+      const nextJob = this.peekNextJob(gameplayOnly, gameplayCapped);
       if (!nextJob) break;
 
+      const isGameplayJob = GAMEPLAY_FRAME_WORK_PRIORITIES.includes(nextJob.priority);
+      if (
+        isGameplayJob
+        && nextJob.estimatedCostMs > gameplayCpuCapMs - chargedGameplayCpuMs + COST_EPSILON_MS
+      ) {
+        // Skip the gameplay queues for the rest of the frame; cosmetic work below may still run.
+        gameplayCapped = true;
+        stopReason = 'gameplay-budget-exhausted';
+        continue;
+      }
+
       const sharedRemainingMs = availableSharedWorkMs - chargedSharedWorkMs;
-      if (nextJob.estimatedCostMs > sharedRemainingMs + COST_EPSILON_MS) {
+      const overShared = nextJob.estimatedCostMs > sharedRemainingMs + COST_EPSILON_MS;
+      const overCpu = nextJob.costKind === 'cpu'
+        && nextJob.estimatedCostMs > availableCpuWorkMs - chargedCpuWorkMs + COST_EPSILON_MS;
+      if ((overShared || overCpu) && isGameplayJob) {
+        // A gameplay job that does not fit never holds back the work below it, such as a
+        // preview's GPU upload after the CPU budget is spent.
+        gameplayCapped = true;
+        stopReason = 'gameplay-budget-exhausted';
+        continue;
+      }
+      if (overShared) {
         stopReason = criticalHeadroomMs < budget.sharedCeilingMs - sharedConsumedBeforeMs
           ? 'critical-headroom-exhausted'
           : 'shared-budget-exhausted';
         break;
       }
-
-      if (
-        nextJob.costKind === 'cpu'
-        && nextJob.estimatedCostMs > availableCpuWorkMs - chargedCpuWorkMs + COST_EPSILON_MS
-      ) {
+      if (overCpu) {
         stopReason = 'cpu-budget-exhausted';
         break;
       }
@@ -317,6 +382,9 @@ export class FrameWorkCoordinator {
       const chargedDurationMs = Math.max(nextJob.estimatedCostMs, actualDurationMs);
       actualSharedWorkMs += actualDurationMs;
       chargedSharedWorkMs += chargedDurationMs;
+      if (isGameplayJob) {
+        chargedGameplayCpuMs += chargedDurationMs;
+      }
       if (nextJob.costKind === 'cpu') {
         actualCpuWorkMs += actualDurationMs;
         chargedCpuWorkMs += chargedDurationMs;
@@ -422,8 +490,10 @@ export class FrameWorkCoordinator {
     };
   }
 
-  private peekNextJob(): InternalFrameWorkJobHandle | null {
+  private peekNextJob(gameplayOnly: boolean, skipGameplay: boolean): InternalFrameWorkJobHandle | null {
     for (const priority of FRAME_WORK_PRIORITIES) {
+      const isGameplay = GAMEPLAY_FRAME_WORK_PRIORITIES.includes(priority);
+      if (isGameplay ? skipGameplay : gameplayOnly) continue;
       const job = this.queues[priority][0];
       if (job) return job;
     }
@@ -446,6 +516,7 @@ export class FrameWorkCoordinator {
     queue.splice(index, 1);
     this.queueDepth -= 1;
     this.settleCancelled(job, normalizeReason(reason));
+    this.notifyCancelled([job]);
     return true;
   }
 
@@ -473,7 +544,7 @@ export class FrameWorkCoordinator {
     predicate: (job: InternalFrameWorkJobHandle) => boolean,
     reason: string,
   ): number {
-    let cancelled = 0;
+    const cancelledJobs: InternalFrameWorkJobHandle[] = [];
     for (const priority of FRAME_WORK_PRIORITIES) {
       const queue = this.queues[priority];
       for (let index = queue.length - 1; index >= 0; index -= 1) {
@@ -482,10 +553,11 @@ export class FrameWorkCoordinator {
         queue.splice(index, 1);
         this.queueDepth -= 1;
         this.settleCancelled(job, normalizeReason(reason));
-        cancelled += 1;
+        cancelledJobs.push(job);
       }
     }
-    return cancelled;
+    this.notifyCancelled(cancelledJobs);
+    return cancelledJobs.length;
   }
 
   private hasQueuedJobsForGeneration(generation: FrameWorkGeneration): boolean {
@@ -503,6 +575,17 @@ export class FrameWorkCoordinator {
   private settleCancelled(job: InternalFrameWorkJobHandle, reason: string): void {
     job.markCancelled(this.now(), reason);
     this.cancelledJobs += 1;
+  }
+
+  /** Owners hear about cancellations only after the queues are consistent again. */
+  private notifyCancelled(jobs: readonly InternalFrameWorkJobHandle[]): void {
+    for (const job of jobs) {
+      try {
+        job.notifyCancelled();
+      } catch (error) {
+        this.reportJobError(job, error);
+      }
+    }
   }
 
   private reportJobError(job: InternalFrameWorkJobHandle, error: unknown): void {
@@ -523,6 +606,7 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
   readonly generation: FrameWorkGeneration | null;
   readonly queuedAtMs: number;
   private readonly executeJob: () => unknown;
+  private readonly onCancelled: ((reason: string) => void) | null;
   private readonly requestCancel: (job: InternalFrameWorkJobHandle, reason: string) => boolean;
   private readonly requestReprioritize: (
     job: InternalFrameWorkJobHandle,
@@ -552,6 +636,7 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
     this.estimatedCostMs = spec.estimatedCostMs;
     this.generation = spec.generation ?? null;
     this.executeJob = spec.execute;
+    this.onCancelled = spec.onCancelled ?? null;
     this.queuedAtMs = queuedAtMs;
     this.requestCancel = requestCancel;
     this.requestReprioritize = requestReprioritize;
@@ -607,6 +692,10 @@ class InternalFrameWorkJobHandle implements FrameWorkJobHandle {
     this.currentSettledAtMs = settledAtMs;
   }
 
+  notifyCancelled(): void {
+    this.onCancelled?.(this.currentCancelReason ?? 'cancelled');
+  }
+
   markCancelled(settledAtMs: number, reason: string): void {
     this.currentState = 'cancelled';
     this.currentSettledAtMs = settledAtMs;
@@ -626,7 +715,9 @@ function createPriorityQueues(): Record<FrameWorkPriority, InternalFrameWorkJobH
     'predicted-destination-collision': [],
     'predicted-visuals-objects': [],
     teardown: [],
+    'gameplay-catch-up': [],
     'preview-cosmetic': [],
+    'gameplay-warmup': [],
   };
 }
 
@@ -638,7 +729,9 @@ function countQueuesByPriority(
     'predicted-destination-collision': queues['predicted-destination-collision'].length,
     'predicted-visuals-objects': queues['predicted-visuals-objects'].length,
     teardown: queues.teardown.length,
+    'gameplay-catch-up': queues['gameplay-catch-up'].length,
     'preview-cosmetic': queues['preview-cosmetic'].length,
+    'gameplay-warmup': queues['gameplay-warmup'].length,
   };
 }
 

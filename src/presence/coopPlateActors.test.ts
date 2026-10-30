@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldGhostPresence } from './worldPresence';
 import { getFreshCoopPlatePlayers } from './coopPlateActors';
+import { isIdlePresenceRefreshDue } from './presenceCadence';
 
 describe('co-op presence eligibility', () => {
   const now = 100_000;
@@ -8,6 +9,14 @@ describe('co-op presence eligibility', () => {
     shardId: '0:0', roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, x: 88, y: 306,
     velocityX: 0, velocityY: 0, facing: 1, animationState: 'idle', mode: 'play', timestamp: now };
   const options = { now, localUserId: 'me', instanceOpponentUserId: 'opponent' };
+  it('retains a stationary helper through idle refresh windows and still expires a lost helper', () => {
+    let timestamp = 120_000;
+    for (let at = timestamp; at < 180_000; at += 500) {
+      if (isIdlePresenceRefreshDue(timestamp, at)) timestamp = at;
+      expect(getFreshCoopPlatePlayers([{ ...base, timestamp }], { ...options, now: at })).toHaveLength(1);
+    }
+    expect(getFreshCoopPlatePlayers([{ ...base, timestamp }], { ...options, now: timestamp + 15_001 })).toEqual([]);
+  });
   it('accepts fresh live presence without requiring an avatar or rendered sprite', () => {
     expect(getFreshCoopPlatePlayers([base], options)).toEqual([base]);
     expect(getFreshCoopPlatePlayers([{ ...base, timestamp: now - 15_000 }, { ...base, timestamp: now + 2_000 }], options)).toHaveLength(2);

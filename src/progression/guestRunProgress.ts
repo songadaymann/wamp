@@ -1,3 +1,4 @@
+import { normalizeClearedRoomIds } from './clearedRooms';
 import type { PostRunRatingRequestDetail } from './postRunRatingEvents';
 import type { GuestRunSaveResult } from '../guestRooms/runService';
 import type { RoomCoordinates } from '../persistence/roomModel';
@@ -21,6 +22,7 @@ export interface GuestRunProgressRecord {
   completedAt: string;
   guestProgress?: GuestRunSaveResult;
   roomCoordinates?: RoomCoordinates;
+  clearedRoomIds?: string[];
   expandedRoomId?: string | null;
 }
 
@@ -53,6 +55,7 @@ export function recordGuestRunClear(
     score: typeof detail.score === 'number' ? Math.round(detail.score) : null,
     potentialPxp: getPotentialPxp(detail.contentType),
     completedAt: now.toISOString(),
+    clearedRoomIds: normalizeClearedRoomIds(detail.clearedRoomIds),
     guestProgress: detail.guestProgress ? { ...detail.guestProgress } : undefined,
     roomCoordinates: detail.contentType === 'room' ? { ...detail.roomCoordinates } : undefined,
     expandedRoomId: detail.contentType !== 'room' ? detail.expandedRoomId : undefined,
@@ -202,6 +205,7 @@ function normalizeRecord(value: unknown): GuestRunProgressRecord | null {
     potentialPxp: Math.max(0, Math.round(record.potentialPxp)),
     completedAt: record.completedAt,
     guestProgress: normalizeGuestProgress(record.guestProgress),
+    clearedRoomIds: normalizeClearedRoomIds(record.clearedRoomIds),
     roomCoordinates: record.roomCoordinates && Number.isSafeInteger(record.roomCoordinates.x)
       && Number.isSafeInteger(record.roomCoordinates.y) ? { ...record.roomCoordinates } : undefined,
     expandedRoomId: typeof record.expandedRoomId === 'string' ? record.expandedRoomId : undefined,

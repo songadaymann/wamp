@@ -195,6 +195,7 @@ export type OverworldSelectedRoomContext = {
   roomId: string;
   publishedVersion?: number | null;
   expandedRoomId?: string | null;
+  expandedRoomVersion?: number | null;
   coordinates: RoomCoordinates;
   shareTitle?: string | null;
   state: 'published' | 'claimed_unpublished' | 'draft' | 'frontier' | 'empty';
@@ -249,6 +250,8 @@ export interface CourseComposerSceneBridge {
   zoomIn: () => void;
   zoomOut: () => void;
   fitCourseToView: () => void;
+  /** Runs a setup panel layout change without moving the middle of the visible map. */
+  keepMapCenterWhile: (change: () => void) => void;
   saveCourseDraft: () => Promise<void>;
   publishCourseDraft: () => Promise<void>;
   unpublishCourse: () => Promise<void>;
@@ -270,6 +273,7 @@ export interface OverworldSceneBridge {
   }) => Promise<boolean> | boolean;
   endRoomRushRun: () => void;
   isRoomRushRunActive: () => boolean;
+  stopCurrentPlay: () => void;
   invitePvpDuel: (entry: OverworldOnlineRosterViewEntry) => Promise<void> | void;
   openMultiplayerLauncher: () => Promise<boolean> | boolean;
   inviteMultiplayer: (
@@ -277,12 +281,13 @@ export interface OverworldSceneBridge {
     entry: OverworldOnlineRosterViewEntry,
   ) => Promise<void> | void;
   playSelectedCourse: () => Promise<void> | void;
-  editSelectedRoom: () => void;
+  editSelectedRoom: (roomOnly?: boolean) => void;
   buildSelectedRoom: () => void;
   openGuestDraftRoom: (roomSnapshot: RoomSnapshot, canOpen?: () => boolean, forceRoomSnapshot?: boolean) => void | Promise<boolean>;
   zoomIn: () => void;
   zoomOut: () => void;
-  jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<void> | void;
+  /** False when an active Room Rush ended with its result in place of the jump. */
+  jumpToCoordinates: (coordinates: RoomCoordinates) => Promise<boolean> | boolean;
   fitLoadedWorld: () => void;
   returnToWorld: () => void;
   getSelectedRoomContext: () => OverworldSelectedRoomContext;
@@ -334,7 +339,7 @@ export function getActiveEditorScene(game: Phaser.Game): EditorSceneBridge | nul
 }
 
 export function getActiveOverworldScene(game: Phaser.Game): OverworldSceneBridge | null {
-  if (!game.scene.isActive('OverworldPlayScene')) {
+  if (!game.scene.isActive('OverworldPlayScene') && !game.scene.isPaused?.('OverworldPlayScene')) {
     return null;
   }
 

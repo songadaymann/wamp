@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
 import { getAuthDebugState } from '../../auth/client';
 import {
   buildRoomLeaderboardLineage,
@@ -6,6 +7,7 @@ import {
 } from '../../persistence/roomLeaderboardLineage';
 import { getActiveRoomEditorScene, type EditorHistoryState } from './sceneBridge';
 import { asyncListener } from '../asyncListener';
+import { hasCryptoWallet } from '../../mint/walletGate';
 
 const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -180,18 +182,7 @@ export class RoomHistoryModalController {
   }
 
   private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    if (!message) {
-      this.elements.error.textContent = '';
-      this.elements.error.classList.add('hidden');
-      return;
-    }
-
-    this.elements.error.textContent = message;
-    this.elements.error.classList.remove('hidden');
+    setLiveMessage(this.elements.error, message);
   }
 
   private formatTimestamp(value: string | null): string {
@@ -336,7 +327,7 @@ export class RoomHistoryModalController {
     }
 
     if (state.mintedTokenId && !state.canPublish) {
-      metaParts.push('Minted lock active');
+      metaParts.push(hasCryptoWallet() ? 'Collected & Locked' : 'Room protected');
     }
 
     const latestVersion = state.versions.reduce((max, version) => Math.max(max, version.version), 0);
@@ -347,12 +338,12 @@ export class RoomHistoryModalController {
       );
     }
 
-    if (state.mintedTokenId) {
+    if (hasCryptoWallet() && state.mintedTokenId) {
       metaParts.push(
         `Token #${state.mintedTokenId} · Owner ${state.mintedOwnerWalletAddress ?? 'unknown'}`
       );
       if (state.mintedMetadataRoomVersion === null) {
-        metaParts.push('NFT metadata not set');
+        metaParts.push('Artwork status unknown');
       } else if (state.mintedMetadataCurrent) {
         metaParts.push(`NFT metadata current at v${state.mintedMetadataRoomVersion}`);
       } else {
@@ -361,7 +352,7 @@ export class RoomHistoryModalController {
       if (state.mintedMetadataUpdatedAt) {
         metaParts.push(`Metadata updated ${this.formatTimestamp(state.mintedMetadataUpdatedAt)}`);
       }
-    } else if (state.canMint) {
+    } else if (hasCryptoWallet() && state.canMint) {
       metaParts.push('Eligible to mint');
     }
 
@@ -581,8 +572,8 @@ export class RoomHistoryModalController {
       );
       this.elements.refreshMetadataButton.disabled = this.hasPendingAction();
       this.elements.refreshMetadataButton.textContent = refreshing
-        ? 'Refreshing...'
-        : 'Refresh NFT Metadata';
+        ? 'Updating artwork...'
+        : 'Add/update artwork';
     }
     if (this.elements.restoreCanonicalButton) {
       const canonicalCurrent =

@@ -1,112 +1,131 @@
-/* Discovery belongs to the browse toolbar, separate from the selected room. */
-#world-navigation {
-  display: none;
-  align-items: center;
-  gap: 8px;
-}
-body[data-app-mode='world'] #world-navigation {
-  display: flex;
-}
-body[data-app-mode='play-world'] #bottom-bar :is(.bar-left, .bar-right) {
-  display: none;
-}
+@layer components {
 
-.game-menu-account {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-#auth-signin-reason {
-  margin: 0;
-  font-family: 'HomeVideo', monospace;
-  line-height: 1.4;
-  order: -1;
-}
-.game-menu-section {
-  border-top: 2px solid var(--auth-retro-ink);
-  padding-top: 10px;
-}
-.game-menu-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-#menu-body .game-menu-actions > :is(.bar-btn, .auth-discord-link) {
-  width: 100%;
-  min-height: 44px;
-}
-#menu-body .auth-discord-link {
-  grid-column: 1 / -1;
-  gap: 8px;
-  font-family: var(--font-label);
-  font-size: 8px;
-  text-transform: uppercase;
-}
-.game-menu-admin:not(:has(button:not(.hidden))) {
-  display: none;
-}
-.game-menu-admin summary {
-  cursor: pointer;
-  min-height: 44px;
-  padding: 12px 0;
-  box-sizing: border-box;
-}
+  #world-navigation {
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
 
-/* Two short rows keep every destination visible even on a 320px phone. */
-body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center {
-  flex-wrap: wrap;
-  justify-content: center;
-  overflow: visible;
-  gap: 6px;
-}
-body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center::before,
-body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center::after {
-  content: none;
-}
-body[data-device-class='phone'][data-app-mode='world'] #world-navigation {
-  flex: 0 0 100%;
-  justify-content: center;
-  gap: 6px;
-}
-body[data-device-class='phone'] #world-navigation .bar-btn {
-  flex: 1;
-}
+  body[data-app-mode='world'] #world-navigation {
+    display: flex;
+  }
 
-#menu-body {
-  --editor-button-font: var(--font-label);
-  font-size: 12px;
-}
-#menu-body :is(input, .auth-status, .auth-display-name-status, .auth-email-code-help, .auth-debug-link) {
-  font-size: 12px;
-}
-#account-signin-options > summary {
-  min-height: 44px;
-  padding: 12px 0;
-  box-sizing: border-box;
-  cursor: pointer;
-}
-#auth-panel.auth-panel-guest #account-signin-options {
-  order: 0;
-}
-#auth-panel.auth-panel-guest #account-signin-options > summary {
-  display: none;
-}
-#auth-panel.auth-panel-guest .game-menu-account > .game-menu-actions {
-  order: 1;
-}
+  body[data-app-mode='play-world'] #bottom-bar :is(.bar-left, .bar-right) {
+    display: none;
+  }
 
-/* The header stays visible; long menus scroll within the actual remaining viewport. */
-#auth-panel.menu-open {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  max-height: calc(var(--visible-vh) - var(--auth-panel-top) - var(--auth-panel-bottom-space, calc(12px + var(--safe-bottom))));
-}
-#auth-panel.menu-open .auth-panel-topline {
-  flex: 0 0 auto;
-  align-self: stretch;
-}
-#auth-panel.menu-open #menu-body {
-  flex: 0 1 auto;
-  min-height: 0;
+  .game-menu-account {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #auth-signin-reason {
+    margin: 0;
+    font-family: var(--font-home-short);
+    line-height: 1.4;
+    order: -1;
+  }
+
+  .game-menu-section {
+    border-top: 2px solid var(--auth-retro-ink);
+    padding-top: 10px;
+  }
+
+  .game-menu-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #menu-body .game-menu-actions > :is(.bar-btn, .auth-discord-link) {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  #menu-body .auth-discord-link {
+    grid-column: 1 / -1;
+    gap: 8px;
+    font-family: var(--font-label);
+    font-size: var(--ui-text-small, 8px);
+    text-transform: uppercase;
+  }
+
+  .game-menu-admin:not(:has(button:not(.hidden))) {
+    display: none;
+  }
+
+  .game-menu-admin summary {
+    cursor: pointer;
+    min-height: 44px;
+    padding: 12px 0;
+    box-sizing: border-box;
+  }
+
+  body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow: visible;
+    gap: 6px;
+  }
+
+  body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center::before,
+  body[data-device-class='phone'][data-app-mode='world'] #bottom-bar .bar-center::after {
+    content: none;
+  }
+
+  body[data-device-class='phone'][data-app-mode='world'] #world-navigation {
+    flex: 0 0 100%;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  body[data-device-class='phone'] #world-navigation .bar-btn {
+    flex: 1;
+  }
+
+  #menu-body {
+    --editor-button-font: var(--font-label);
+    font-size: var(--ui-text-body, 12px);
+  }
+
+  #menu-body :is(input, .auth-status, .auth-display-name-status, .auth-email-code-help, .auth-debug-link) {
+    font-size: var(--ui-text-body, 12px);
+  }
+
+  #account-signin-options > summary {
+    min-height: 44px;
+    padding: 12px 0;
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+
+  #auth-panel.auth-panel-guest #account-signin-options {
+    order: 0;
+  }
+
+  #auth-panel.auth-panel-guest #account-signin-options > summary {
+    display: none;
+  }
+
+  #auth-panel.auth-panel-guest .game-menu-account > .game-menu-actions {
+    order: 1;
+  }
+
+  #auth-panel.menu-open {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-height: calc(var(--visible-vh) - var(--auth-panel-top) - var(--auth-panel-bottom-space, calc(12px + var(--safe-bottom))));
+  }
+
+  #auth-panel.menu-open .auth-panel-topline {
+    flex: 0 0 auto;
+    align-self: stretch;
+  }
+
+  #auth-panel.menu-open #menu-body {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
 }

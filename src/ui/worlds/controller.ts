@@ -12,7 +12,9 @@ import type {
   WorldPublicationRequest,
   WorldSummary,
 } from '../../worlds/model';
-import { setActiveWorldContext } from '../../worlds/clientContext';
+import { setActiveWorldContext, getActiveWorldId, WORLD_CONTEXT_CHANGED_EVENT } from '../../worlds/clientContext';
+import { subscribeEditorUi } from '../../scenes/editor/uiEvents';
+import { APP_MODE_CHANGED_EVENT } from '../appMode';
 import { parseWorldSharePath } from '../../worlds/geometry';
 import { beginWorldSeedEditor } from '../../worlds/seedEditorAdapter';
 import { getActiveOverworldScene } from '../setup/sceneBridge';
@@ -28,6 +30,7 @@ export class WorldsController {
   constructor(private readonly game: Phaser.Game) {}
 
   init(): void {
+    this.initEditorFeedback();
     const button = document.getElementById('btn-world-worlds') as HTMLButtonElement | null;
     const root = document.getElementById('worlds-modal-root');
     if (!button || !root) return;
@@ -37,9 +40,24 @@ export class WorldsController {
       tab.addEventListener('click', () => void this.open(tab.dataset.worldTab === 'mine' ? 'mine' : 'browse'));
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') this.close();
+      if (event.key === 'Escape' && this.view?.ownsEscape(event)) this.close();
     });
     void this.probe(button);
+  }
+
+  private initEditorFeedback(): void {
+    let feedback: { init(): void; destroy(): void } | null = null, loading = false, disposed = false;
+    const start=()=>{
+      if(feedback||loading||disposed||!getActiveWorldId()||document.body.dataset.appMode!=='editor')return;
+      loading=true;
+      void import('./editorPublicationFeedback').then(({EditorPublicationFeedback})=>{
+        if(!disposed){feedback=new EditorPublicationFeedback(this.game);feedback.init();}
+      }).catch(()=>undefined).finally(()=>{loading=false;});
+    };
+    const stop=subscribeEditorUi(window,start);
+    window.addEventListener(APP_MODE_CHANGED_EVENT,start);window.addEventListener(WORLD_CONTEXT_CHANGED_EVENT,start);
+    this.game.events?.once('destroy',()=>{disposed=true;stop();feedback?.destroy();window.removeEventListener(APP_MODE_CHANGED_EVENT,start);window.removeEventListener(WORLD_CONTEXT_CHANGED_EVENT,start);});
+    start();
   }
 
   close(): void {
@@ -153,7 +171,7 @@ export class WorldsController {
     this.view.showLoading('Loading community controls…');
     const [members, publications] = await Promise.all([
       world.canManageMembers ? this.repository.members(world.id).then((result) => result.members) : Promise.resolve([]),
-      world.canReviewPublications ? this.repository.publications(world.id).then((result) => result.requests) : Promise.resolve([]),
+      this.repository.publications(world.id,{ mine: !world.canReviewPublications }).then((result) => result.requests),
     ]);
     const content = document.createDocumentFragment();
     const top = this.worldCard(world);
@@ -164,6 +182,7 @@ export class WorldsController {
     content.append(top);
     if (world.canManageMembers) content.append(this.membersSection(world, members));
     if (world.canReviewPublications) content.append(this.publicationsSection(world, publications));
+    else content.append(this.submissionsSection(world, publications));
     if (world.canManageSettings) content.append(this.settingsSection(world));
     if (world.canRequestName) content.append(this.nameSection(world));
     this.view.content.replaceChildren(content);
@@ -266,12 +285,33 @@ export class WorldsController {
       actions.append(this.actionButton('Approve', () => void this.runAndRefresh(
         () => this.repository.resolvePublication(world.id, request.id, 'approve'), world, 'Draft published.',
       )));
+      const reasonLabel=element('label','worlds-form','Changes requested (optional)');
+      const reason=document.createElement('textarea');reason.maxLength=500;reason.rows=2;
+      reason.placeholder='Tell the builder what to change (up to 500 characters).';
+      reasonLabel.append(reason);card.append(reasonLabel);
       actions.append(this.actionButton('Reject', () => void this.runAndRefresh(
-        () => this.repository.resolvePublication(world.id, request.id, 'reject'), world, 'Draft rejected.',
+        () => this.repository.resolvePublication(world.id, request.id, 'reject',reason.value), world, 'Draft rejected.',
       )));
       card.append(actions); list.append(card);
     });
     section.append(list);
+    return section;
+  }
+
+  private submissionsSection(world: WorldDetail, requests: WorldPublicationRequest[]): HTMLElement {
+    const section=element('section','worlds-card');section.append(sectionHeading('Your publication requests'));
+    const latest=new Map<string,WorldPublicationRequest>();
+    for(const request of requests)if(!latest.has(request.roomId))latest.set(request.roomId,request);
+    if(!latest.size)section.append(element('p','worlds-meta','No rooms submitted for review yet.'));
+    for(const request of latest.values()){
+      const card=element('article','worlds-card');
+      card.append(element('strong','',request.roomTitle||`Room ${request.roomCoordinates.x},${request.roomCoordinates.y}`));
+      const status=request.status==='pending'?'Waiting for review':request.status==='approved'?'Approved'
+        :request.status==='rejected'?`Needs changes${request.rejectionReason?`: ${request.rejectionReason}`:''}`:'Out of date: open the room and submit again';
+      card.append(element('p','worlds-meta',status));
+      card.append(this.actionButton('Open room',()=>void this.warp({...world,origin:request.roomCoordinates})));
+      section.append(card);
+    }
     return section;
   }
 
@@ -350,6 +390,11 @@ export class WorldsController {
     const scene = getActiveOverworldScene(this.game);
     if (!scene?.jumpToCoordinates) {
       this.view?.setStatus('Return to the World map before warping.', true);
+      return;
+    }
+    // The world must switch before the jump loads it, and a Rush would end in place of the jump.
+    if (scene.isRoomRushRunActive()) {
+      this.view?.setStatus('End your Room Rush before warping.', true);
       return;
     }
     setActiveWorldContext(world.number === 0 ? null : {

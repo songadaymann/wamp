@@ -4,22 +4,28 @@ import { REPLAY_EDITOR_EVENT } from '../analytics/replay/editorEvents';
 import { captureReplayCanvas } from '../analytics/replay/canvasCapture';
 import { BUG_FRAME_LIMIT, BUG_RECORDING_CHANGED, normalizeBugDiagnostics, type BugDiagnostic } from './model';
 import { RecentBugReplay } from './recentReplay';
-import { bugRecordingAllowed } from './recordingPreference';
+import { bugRecordingAllowed, setBugRecordingAllowed } from './recordingPreference';
 import { canCaptureBugReportImages, pauseForBugReport, readBugGameContext } from './gameContext';
-import { initializeBugReportDialog } from './reporter';
+import { installLazyBugReportDialog } from './lazyDialog';
 import { resetTouchInputState } from '../ui/mobile/touchControls';
+import { explainMenuLoadFailure } from '../ui/setup/lazyModal';
 
 export function initializeBugReporter(game: Phaser.Game) {
   const replay = new RecentBugReplay(() => canCaptureBugReportImages(game) ? captureReplayCanvas(game.canvas, {
     width: document.body.dataset.deviceClass === 'phone' ? 320 : 480, height: 360, limit: BUG_FRAME_LIMIT,
   }) : Promise.resolve(null));
   const errors: BugDiagnostic[] = [], actions: ReplayAction[] = [];
-  replay.setAllowed(bugRecordingAllowed());
-  const dialog = initializeBugReportDialog({
-    freeze: () => replay.freeze(), context: () => readBugGameContext(game), errors: () => [...errors],
-    pause: () => { resetTouchInputState(); return pauseForBugReport(game); },
-    resumeCapture: () => { resetTouchInputState(); replay.setFrozen(false); },
+  const dialog = installLazyBugReportDialog({
+    buttons: document.querySelectorAll('[data-bug-report-open]'),
+    load: async () => (await import('./reporter')).initializeBugReportDialog({
+      freeze: () => replay.freeze(), context: () => readBugGameContext(game), errors: () => [...errors],
+      pause: () => { resetTouchInputState(); return pauseForBugReport(game); },
+      resumeCapture: () => { resetTouchInputState(); replay.setFrozen(false); },
+    }),
+    onLoadError: explainMenuLoadFailure('bug report form'),
   });
+  // The Settings toggle works before the form has ever downloaded.
+  const recording = document.getElementById('bug-recording-enabled') as HTMLInputElement | null;
   const frame = () => {
     if (document.visibilityState !== 'visible' || dialog.isOpen() || !bugRecordingAllowed()) return;
     replay.setPhone(document.body.dataset.deviceClass === 'phone');
@@ -37,16 +43,24 @@ export function initializeBugReporter(game: Phaser.Game) {
     const action = (event as CustomEvent<ReplayAction>).detail;
     if (REPLAY_ACTIONS.includes(action) && actions.length < 12) actions.push(action);
   };
-  const preference = () => replay.setAllowed(bugRecordingAllowed());
+  const preference = () => {
+    replay.setAllowed(bugRecordingAllowed());
+    if (!recording) return;
+    recording.checked = bugRecordingAllowed();
+    recording.disabled = navigator.doNotTrack === '1' || Boolean((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl);
+  };
+  const onRecording = () => { if (recording) setBugRecordingAllowed(recording.checked); };
+  preference();
   game.events.on('postrender', frame);
   window.addEventListener('error', runtimeError); window.addEventListener('unhandledrejection', rejection);
   game.canvas.addEventListener('webglcontextlost', graphicsLost);
   window.addEventListener(REPLAY_EDITOR_EVENT, editorAction); window.addEventListener(BUG_RECORDING_CHANGED, preference);
-  window.addEventListener('storage', preference);
+  window.addEventListener('storage', preference); recording?.addEventListener('change', onRecording);
   return { latestImage: () => replay.latestImage(), debug: () => replay.debug(), destroy(): void {
     dialog.destroy(); replay.destroy(); game.events.off('postrender', frame);
     window.removeEventListener('error', runtimeError); window.removeEventListener('unhandledrejection', rejection);
     game.canvas.removeEventListener('webglcontextlost', graphicsLost); window.removeEventListener(REPLAY_EDITOR_EVENT, editorAction);
     window.removeEventListener(BUG_RECORDING_CHANGED, preference); window.removeEventListener('storage', preference);
+    recording?.removeEventListener('change', onRecording);
   } };
 }

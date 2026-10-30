@@ -1,125 +1,141 @@
-/* F109: keep visual chrome compact while making its actual phone targets usable. */
-body[data-device-class='phone'] {
-  --tap-min: 44px;
+@layer responsive {
+  /* F109: keep visual chrome compact while making its actual phone targets usable. */
+
+  /* The author's target extends into the non-interactive title area, not the Play row. */
+
+  /* Settings and Chat remain in the existing menu; landscape play keeps its sightline. */
+
+  /* Let the currently visible actions share one row, including Share, without a taller HUD. */
+
+  body[data-device-class='phone'] #global-chat.is-open,
+  body[data-device-class='phone'][data-app-mode='play-world'] #global-chat.is-open,
+  body[data-device-class='phone'][data-app-mode='editor'] #global-chat.is-open {
+    position: fixed;
+    bottom: calc(8px + var(--safe-bottom) + var(--keyboard-inset, 0px));
+    max-height: calc(var(--visible-vh) - 16px - var(--safe-top) - var(--safe-bottom));
+  }
+
+  /* Keep the game canvas sized to the layout viewport while a keyboard occludes it. */
+
+  /* Expanded details can use another row; the default card still stays compact. */
+
+  /* Keep signed-in identity and notifications clear of the portrait room controls. */
+
+  /* Keep the focused music panel Close corner clear of Activity. */
+
+  body[data-app-mode='editor'][data-editor-music-mode='true'] #auth-panel:not(.menu-open) #btn-activity-open {
+    display: none;
+  }
+
+  /* Browse keeps Play on its own row, even when More is open. */
 }
 
-body[data-device-class='phone'] :is(button, [role='button']) {
-  min-width: var(--tap-min);
-  min-height: var(--tap-min);
-}
+@layer components {
 
-body[data-device-class='phone'] #menu-toggle {
-  width: var(--tap-min);
-  height: var(--tap-min);
-}
+  body[data-device-class='phone'] :is(button, [role='button']) {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+  }
 
-body[data-device-class='phone'] #room-goal-intro-modal .room-goal-intro-modal-panel {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+  body[data-device-class='phone'] {
+    --tap-min: 44px;
+  }
 
-body[data-device-class='phone'] #world-hud :is(.bar-btn, .world-hud-mobile-actions .bar-btn),
-body[data-device-class='phone'] #bottom-bar :is(.bar-btn, #world-online-count),
-body[data-device-class='phone'] #menu-body .auth-menu-action-btn {
-  min-height: var(--tap-min);
-}
+  body[data-device-class='phone'] #menu-toggle {
+    width: var(--tap-min);
+    height: var(--tap-min);
+  }
 
-body[data-device-class='phone'] #world-hud :is(.world-hud-mobile-actions .bar-btn, .world-hud-row-tertiary-actions .bar-btn, .world-state-pill),
-body[data-device-class='phone'] #bottom-bar :is(.bar-btn, #world-online-count),
-body[data-device-class='phone'] .mini-profile-stat-level-label {
-  font-size: 8px;
-}
+  body[data-device-class='phone'] #room-goal-intro-modal .room-goal-intro-modal-panel {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 
-/* The author's target extends into the non-interactive title area, not the Play row. */
-body[data-device-class='phone'] #world-hud #world-selected-creator-card {
-  min-height: var(--tap-min);
-  margin-top: -30px;
-  padding-top: 30px;
-  background: none; /* Functional hit area over the title must not paint over its text. */
-  box-sizing: border-box;
-}
+  body[data-device-class='phone'] #world-hud :is(.bar-btn, .world-hud-mobile-actions .bar-btn),
+  body[data-device-class='phone'] #bottom-bar :is(.bar-btn, #world-online-count),
+  body[data-device-class='phone'] #menu-body .auth-menu-action-btn {
+    min-height: var(--tap-min);
+  }
 
-/* Settings and Chat remain in the existing menu; landscape play keeps its sightline. */
-body[data-device-class='phone'][data-app-mode='play-world'][data-orientation-state='landscape'] #bottom-bar {
-  display: none;
-}
+  body[data-device-class='phone'] #world-hud :is(.world-hud-mobile-actions .bar-btn, .world-hud-row-tertiary-actions .bar-btn, .world-state-pill),
+  body[data-device-class='phone'] #bottom-bar :is(.bar-btn, #world-online-count),
+  body[data-device-class='phone'] .mini-profile-stat-level-label {
+    font-size: var(--ui-text-small, 8px);
+  }
 
-/* Let the currently visible actions share one row, including Share, without a taller HUD. */
-body[data-device-class='phone'][data-app-mode='play-world'] #world-hud .world-hud-row-primary-actions {
-  grid-template-columns: none;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-}
+  body[data-device-class='phone'] #world-hud #world-selected-creator-card {
+    min-height: var(--tap-min);
+    margin-top: -30px;
+    padding-top: 30px;
+    background: none;
 
-body[data-device-class='phone'] #auth-panel #menu-body .bar-btn {
-  min-height: var(--tap-min);
-}
+    /* Functional hit area over the title must not paint over its text. */
+    box-sizing: border-box;
+  }
 
-body[data-device-class='phone'][data-mobile-touch-play-layout='overlay'] :is(.mobile-world-stop, .mobile-world-restart) {
-  top: calc(60px + var(--safe-top));
-}
+  body[data-device-class='phone'][data-app-mode='play-world'][data-orientation-state='landscape'] #bottom-bar {
+    display: none;
+  }
 
-body[data-device-class='phone'] #global-chat.is-open,
-body[data-device-class='phone'][data-app-mode='play-world'] #global-chat.is-open,
-body[data-device-class='phone'][data-app-mode='editor'] #global-chat.is-open {
-  position: fixed;
-  bottom: calc(8px + var(--safe-bottom) + var(--keyboard-inset, 0px));
-  max-height: calc(var(--visible-vh) - 16px - var(--safe-top) - var(--safe-bottom));
-}
+  body[data-device-class='phone'][data-app-mode='play-world'] #world-hud .world-hud-row-primary-actions {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
 
-/* Keep the game canvas sized to the layout viewport while a keyboard occludes it. */
-body[data-mobile-portrait-play='true'] #game-container {
-  height: calc(var(--visible-vh) + var(--keyboard-inset, 0px) - var(--mobile-portrait-console-height) - var(--safe-bottom));
-}
+  body[data-device-class='phone'] #auth-panel #menu-body .bar-btn {
+    min-height: var(--tap-min);
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] :is(.mobile-world-stop, .mobile-world-restart) {
-  min-height: var(--tap-min);
-  height: var(--tap-min);
-  top: calc(100% - var(--mobile-portrait-console-height) - var(--safe-bottom) + 2px);
-}
+  body[data-device-class='phone'][data-mobile-touch-play-layout='overlay'] :is(.mobile-world-stop, .mobile-world-restart) {
+    top: calc(60px + var(--safe-top));
+  }
 
-body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions .bar-btn {
-  min-height: var(--tap-min);
-  font-size: 8px;
-}
+  body[data-mobile-portrait-play='true'] #game-container {
+    height: calc(var(--visible-vh) + var(--keyboard-inset, 0px) - var(--mobile-portrait-console-height) - var(--safe-bottom));
+  }
 
-/* Expanded details can use another row; the default card still stays compact. */
-body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-primary-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-flow: row;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] :is(.mobile-world-stop, .mobile-world-restart) {
+    min-height: var(--tap-min);
+    height: var(--tap-min);
+    top: calc(100% - var(--mobile-portrait-console-height) - var(--safe-bottom) + 2px);
+  }
 
-body[data-device-class='phone']:has(.room-chat-input:focus) .room-chat-composer {
-  position: fixed;
-  top: auto;
-  bottom: calc(8px + var(--safe-bottom) + max(var(--mobile-portrait-console-height, 0px), var(--keyboard-inset, 0px)));
-}
+  body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-tertiary-actions .bar-btn {
+    min-height: var(--tap-min);
+    font-size: var(--ui-text-small, 8px);
+  }
 
-/* Keep signed-in identity and notifications clear of the portrait room controls. */
-body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #auth-identity {
-  display: none;
-}
+  body[data-device-class='phone'][data-mobile-world-hud-details='true'] #world-hud .world-hud-row-primary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #btn-activity-open {
-  position: absolute;
-  top: 52px;
-  right: 0;
-}
+  body[data-device-class='phone']:has(.room-chat-input:focus) .room-chat-composer {
+    position: fixed;
+    top: auto;
+    bottom: calc(8px + var(--safe-bottom) + max(var(--mobile-portrait-console-height, 0px), var(--keyboard-inset, 0px)));
+  }
 
-/* Keep the focused music panel Close corner clear of Activity. */
-body[data-app-mode='editor'][data-editor-music-mode='true'] #auth-panel:not(.menu-open) #btn-activity-open {
-  display: none;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #auth-identity {
+    display: none;
+  }
 
-/* Browse keeps Play on its own row, even when More is open. */
-body[data-device-class='phone'][data-app-mode='world'] #world-hud .world-hud-row-primary-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-flow: row;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait']:is([data-app-mode='world'], [data-app-mode='play-world']) #auth-panel:not(.menu-open) #btn-activity-open {
+    position: absolute;
+    top: 52px;
+    right: 0;
+  }
 
-body[data-device-class='phone'][data-app-mode='world'] #world-hud {
-  max-height: calc(var(--visible-vh) - 16px - var(--safe-top) - var(--safe-bottom));
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  body[data-device-class='phone'][data-app-mode='world'] #world-hud .world-hud-row-primary-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: row;
+  }
+
+  body[data-device-class='phone'][data-app-mode='world'] #world-hud {
+    max-height: calc(var(--visible-vh) - 16px - var(--safe-top) - var(--safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }

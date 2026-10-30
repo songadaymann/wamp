@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from '../core/http';
 import {
-  createEmptyRoomDifficultyCounts,
   encodeRoomDiscoveryCursor,
-  getRoomDifficultyVoteTotal,
   parseBuilderDiscoverySortOrThrow,
   parseRoomDifficultyOrThrow,
   parseRoomDiscoverySortOrThrow,
-  resolveRoomDifficultyConsensus,
 } from './difficulty';
 import { parseRoomDifficultyVoteBody } from './requestBodies';
 import {
@@ -17,18 +14,6 @@ import {
 } from '../admin/t14ContractTestSupport';
 
 describe('T14 difficulty model contracts', () => {
-  it('keeps the four difficulty buckets, total, consensus, and deterministic tie order', () => {
-    const empty = createEmptyRoomDifficultyCounts();
-    expect(empty).toEqual({ easy: 0, medium: 0, hard: 0, extreme: 0 });
-    expect(getRoomDifficultyVoteTotal(empty)).toBe(0);
-    expect(resolveRoomDifficultyConsensus(empty)).toBeNull();
-
-    const counts = { easy: 2, medium: 2, hard: 1, extreme: 0 };
-    expect(getRoomDifficultyVoteTotal(counts)).toBe(5);
-    expect(resolveRoomDifficultyConsensus(counts)).toBe('easy');
-    expect(resolveRoomDifficultyConsensus({ ...counts, medium: 3 })).toBe('medium');
-  });
-
   it('accepts only the exact public difficulty and discovery sort vocabularies', () => {
     expect(['easy', 'medium', 'hard', 'extreme'].map(parseRoomDifficultyOrThrow)).toEqual([
       'easy',
@@ -37,10 +22,10 @@ describe('T14 difficulty model contracts', () => {
       'extreme',
     ]);
     expect(
-      ['featured', 'quality', 'newest', 'builder', 'unbeaten', 'unvisited', 'unrated'].map(
+      ['featured', 'quality', 'newest', 'protected', 'builder', 'unbeaten', 'unvisited', 'unrated'].map(
         parseRoomDiscoverySortOrThrow,
       ),
-    ).toEqual(['featured', 'quality', 'newest', 'builder', 'unbeaten', 'unvisited', 'unrated']);
+    ).toEqual(['featured', 'quality', 'newest', 'protected', 'builder', 'unbeaten', 'unvisited', 'unrated']);
     expect(['alphabet', 'rooms', 'recent'].map(parseBuilderDiscoverySortOrThrow)).toEqual([
       'alphabet',
       'rooms',
@@ -51,7 +36,7 @@ describe('T14 difficulty model contracts', () => {
       'difficulty must be easy, medium, hard, or extreme.');
     expect(parseRoomDiscoverySortOrThrow('popular')).toBe('popular');
     expectHttpError(() => parseRoomDiscoverySortOrThrow('random'), 400,
-      'sort must be featured, popular, quality, newest, builder, unbeaten, unvisited, or unrated.');
+      'sort must be featured, popular, quality, newest, protected, builder, unbeaten, unvisited, or unrated.');
     expectHttpError(() => parseBuilderDiscoverySortOrThrow('quality'), 400,
       'sort must be alphabet, rooms, or recent.');
   });
@@ -117,8 +102,8 @@ describe('T14 discovery and difficulty route source contracts', () => {
       "parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200)",
       "? parseRoomDiscoverySortOrThrow(rawSort) : 'featured'",
       "? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet'",
-      "headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' }",
-      'loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse)',
+      'new DiscoveryPublicCache(request, env, context, fresh)',
+      "'Cache-Control': auth || fresh ? 'private, no-store' : 'public, max-age=20'",
     ]) {
       expect(runRouteClosure).toContain(sourceContract);
     }
@@ -143,7 +128,7 @@ describe('T14 discovery and difficulty route source contracts', () => {
     for (const sourceContract of [
       'env.PLAYABLE_CONTENT_INDEX_READS?.trim().toLowerCase()',
       "raw === '1' || raw === 'true' || raw === 'on'",
-      "['newest', 'featured', 'quality', 'popular']",
+      "['newest', 'featured', 'quality', 'popular', 'protected']",
       'limit + 1',
       'Discovery index is unavailable; falling back to legacy discovery reads.',
       'throw error;',
@@ -156,7 +141,7 @@ describe('T14 discovery and difficulty route source contracts', () => {
     expect(normalizedDifficulty).toMatch(/\b(?:FROM|JOIN) room_versions\b/i);
   });
 
-  it('pins difficulty vote delegation and index refresh without changing the legacy vote table', () => {
+  it('pins difficulty vote delegation and index refresh without touching the legacy vote table', () => {
     for (const sourceContract of [
       'const body = await parseRoomDifficultyVoteBody(request);',
       'resolveAggregatedRoomLeaderboardSelection(record, body.roomVersion)',
@@ -171,10 +156,9 @@ describe('T14 discovery and difficulty route source contracts', () => {
     ]) {
       expect(runRouteClosure).toContain(sourceContract);
     }
-    expect(normalizedDifficulty).toMatch(/\bINSERT INTO room_difficulty_votes\b/i);
-    expect(difficultyClosure).toContain(
-      'ON CONFLICT(room_id, room_version, user_id) DO UPDATE SET',
-    );
+    // Votes are stored as ratings; nothing reads or writes the retired table any more (F256).
+    expect(normalizedDifficulty).not.toMatch(/\broom_difficulty_votes\b/i);
+    expect(normalizeSql(runRouteClosure)).not.toMatch(/\broom_difficulty_votes\b/i);
   });
 });
 

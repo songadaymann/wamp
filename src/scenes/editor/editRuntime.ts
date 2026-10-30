@@ -11,7 +11,6 @@ import {
   canObjectBeStoredInContainer,
   canPlacedObjectBeContainer,
   canPlacedObjectBeLinkedObjectTarget,
-  canPlacedObjectBePressurePlateTarget,
   canPlacedObjectUseObjectLink,
   createPlacedObjectInstanceId,
   decodeTileDataValue,
@@ -20,7 +19,7 @@ import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
-  editorState,
+  editorState, updateEditorState,
   getObjectById,
   getObjectDisplayOffset,
   getObjectDisplayScale,
@@ -390,6 +389,8 @@ export class EditorEditRuntime {
   }
 
   get documentRevision(): number { return this.revision; }
+  /** A tile, Smart or object gesture has changed the room but not yet bumped the revision. */
+  get hasUncommittedEdits(): boolean { return this.currentBatch.length > 0 || this.currentBatchSmartBefore !== null || this.objectBatchBefore !== null; }
 
   set currentLastDirtyAt(value: number) {
     this.lastDirtyAt = value;
@@ -485,7 +486,7 @@ export class EditorEditRuntime {
     const tileData = room.tileData;
     this.customRoomTiles = normalizeCustomRoomTileDefinitions(room.customTiles);
     this.smartTerrain = normalizeRoomSmartTerrainState(room.smartTerrain);
-    editorState.smartDetailsEnabled = this.smartTerrain.detailsEnabled;
+    updateEditorState({ smartDetailsEnabled: this.smartTerrain.detailsEnabled });
     this.syncCustomRoomTileset();
 
     for (const layerName of LAYER_NAMES) {
@@ -513,10 +514,10 @@ export class EditorEditRuntime {
     }
 
     this.host.setSelectedBackground(normalizeRoomBackground(room.background));
-    editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+    updateEditorState({ selectedSolidBackgroundColor: getSolidColorFromBackgroundValue(
       room.background,
       editorState.selectedSolidBackgroundColor,
-    );
+    ) });
     this.host.updateBackgroundSelectValue(normalizeRoomBackground(room.background));
     this.host.setSelectedLightingSettings(room.lighting);
     this.host.updateLightingControlsValue(room.lighting);
@@ -684,16 +685,16 @@ export class EditorEditRuntime {
     this.beginTileBatch();
     try {
       for (const layer of LAYER_NAMES) {
-        editorState.activeLayer = layer;
+        updateEditorState({ activeLayer: layer });
         this.eraseArea(layer, bounds, inside);
       }
       for (const { layer, clipboard } of clipboards) {
         if (!clipboard) continue;
-        editorState.activeLayer = layer;
+        updateEditorState({ activeLayer: layer });
         this.pasteClipboardTilesAt(clipboard, bounds.minX + dx, bounds.minY + dy);
       }
     } finally {
-      editorState.activeLayer = activeLayer;
+      updateEditorState({ activeLayer: activeLayer });
     }
     this.host.setPlacedObjects([...staying, ...moved]);
     this.rebuildObjectSprites();
@@ -956,20 +957,20 @@ export class EditorEditRuntime {
 
     this.syncCustomRoomTileset();
     const gid = getCustomRoomTileGid(nextIndex);
-    editorState.paletteMode = 'tiles';
-    editorState.selectedObjectId = null;
-    editorState.activeTool = 'pencil';
-    editorState.selectedTileGid = gid;
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
-    editorState.selection = {
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ selectedObjectId: null });
+    updateEditorState({ activeTool: 'pencil' });
+    updateEditorState({ selectedTileGid: gid });
+    updateEditorState({ tileFlipXMode: 'off' });
+    updateEditorState({ tileFlipYMode: 'off' });
+    updateEditorState({ selection: {
       tilesetKey: `${CUSTOM_ROOM_TILESET_KEY_PREFIX}:${nextTile.id}`,
       startCol: 0,
       startRow: 0,
       width: 1,
       height: 1,
       occupiedMask: [[true]],
-    };
+    } });
     this.markRoomDirty();
 
     return { gid, tile: nextTile };
@@ -1182,7 +1183,7 @@ export class EditorEditRuntime {
   setSmartDetailsEnabled(enabled: boolean): void {
     this.beginTileBatch();
     this.applySmartDocument(setSmartTerrainDetailsEnabled(this.getSmartDocument(), enabled));
-    editorState.smartDetailsEnabled = enabled;
+    updateEditorState({ smartDetailsEnabled: enabled });
     this.commitTileBatch();
   }
 
@@ -2501,12 +2502,6 @@ export class EditorEditRuntime {
     }
 
     return bestMatch;
-  }
-
-  getPressurePlateEligibleTargets(triggerInstanceId: string | null | undefined): PlacedObject[] {
-    return this.getObjectLinkEligibleTargets(triggerInstanceId).filter((placed) =>
-      canPlacedObjectBePressurePlateTarget(placed)
-    );
   }
 
   getObjectLinkEligibleTargets(sourceInstanceId: string | null | undefined): PlacedObject[] {

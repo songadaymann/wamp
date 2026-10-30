@@ -6,6 +6,7 @@ import {
   type RoomRevertRequestBody,
   type RoomSnapshotQueryReference,
 } from '../../../persistence/roomModel';
+import { presentRoomCryptoDetails } from './cryptoPresentation';
 import {
   annotateRoomRecordWithTilesetHints,
   annotateRoomSnapshotWithTilesetHint,
@@ -57,6 +58,9 @@ import {
   awardRoomPublishPoints,
   upsertUserStats,
 } from '../runs/points';
+import { releaseRateLimitSlots } from '../core/rateLimit';
+import { isEditOfOthersRoom, takeOthersRoomEditSlot } from './othersRoomEdits';
+import { hiddenVersionSnapshot, isRoomVersionRedacted, presentRoomRecordVersions } from './versionRedaction';
 import {
   handleBrowseRoomCommentSummaries,
   handleRoomCommentCreate,
@@ -145,7 +149,7 @@ export async function handleRoomRequest(
       auth?.user.walletAddress ?? null,
       auth?.isAdmin ?? false,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(record));
+    return jsonResponse(request, presentRoomCryptoDetails(annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, roomId, record)), url));
   }
 
   if (segments.length === 4 && segments[3] === 'summary' && request.method === 'GET') {
@@ -162,11 +166,15 @@ export async function handleRoomRequest(
         auth?.user.walletAddress ?? null,
         auth?.isAdmin ?? false,
       ));
-      return timedJsonResponse(request, summary, timing, {
+      return timedJsonResponse(request, presentRoomCryptoDetails(summary, url), timing, {
         headers: { 'Cache-Control': auth ? 'private, no-store' : 'public, max-age=20' },
       });
     };
-    return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+    // Older summary cache entries contain crypto unconditionally. Do not serve
+    // them through the new default view during or after this rollout.
+    const cacheUrl = new URL(request.url);
+    cacheUrl.searchParams.set('_roomView', 'crypto-opt-in-v1');
+    return loadAnonymousPublicCache(new Request(cacheUrl, request), auth ? undefined : context, loadResponse);
   }
 
   if (segments.length === 4 && segments[3] === 'current' && request.method === 'GET') {
@@ -184,6 +192,7 @@ export async function handleRoomRequest(
     ));
     return timedJsonResponse(request, {
       ...current,
+      summary: presentRoomCryptoDetails(current.summary, url),
       draft: annotateRoomSnapshotWithTilesetHint(current.draft),
       published: current.published ? annotateRoomSnapshotWithTilesetHint(current.published) : null,
     }, timing, { headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' } });
@@ -213,7 +222,7 @@ export async function handleRoomRequest(
       coordinates,
       auth.user,
       auth.isAdmin,
-      'throw',
+      'require-fresh',
     ));
     const summary = await timing.measure('summary', () => loadRoomSummary(
       env,
@@ -223,7 +232,7 @@ export async function handleRoomRequest(
       auth.user.walletAddress,
       auth.isAdmin,
     ));
-    return timedJsonResponse(request, summary, timing, {
+    return timedJsonResponse(request, presentRoomCryptoDetails(summary, url), timing, {
       headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   }
@@ -324,7 +333,7 @@ export async function handleRoomRequest(
       auth.isAdmin,
       { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
     );
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 5 && segments[3] === 'music' && segments[4] === 'phrases' && request.method === 'POST') {
@@ -389,7 +398,7 @@ export async function handleRoomRequest(
       auth.isAdmin,
       { worldId: parseWorldIdContext(url) },
     );
-    return roomMutationResponse(request, url, record, { commandRefs });
+    return roomMutationResponse(request, url, env, record, { commandRefs });
   }
 
   if (segments.length === 4 && segments[3] === 'publish' && request.method === 'POST') {
@@ -414,13 +423,20 @@ export async function handleRoomRequest(
     if (!bypassDailyPublishLimit) {
       await assertUserCanPublishContent(env, auth.user.id, auth.source);
     }
+    const publishOptions = { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) };
+    const othersRoomEditSlot = isEditOfOthersRoom(previousRecord, auth.user.id, auth.isAdmin)
+      ? await takeOthersRoomEditSlot(env, auth.user.id, previousRecord.draft.id, auth.source)
+      : null;
     const record = await publishRoom(
       env,
       snapshot,
       buildRoomMutationActor(auth),
       auth.isAdmin,
-      { worldId: parseWorldIdContext(url), expectedDraftUpdatedAt: parseBaseDraftUpdatedAt(url) },
-    );
+      publishOptions,
+    ).catch(async (error: unknown) => {
+      await releaseRateLimitSlots(env, [othersRoomEditSlot]);
+      throw error;
+    });
     await awardRoomPublishPoints(
       env,
       auth.user.id,
@@ -447,7 +463,7 @@ export async function handleRoomRequest(
     });
     await upsertUserStats(env, auth.user.id);
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'revert' && request.method === 'POST') {
@@ -502,7 +518,7 @@ export async function handleRoomRequest(
     });
     await upsertUserStats(env, auth.user.id);
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, record.draft.id));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'canonical' && request.method === 'POST') {
@@ -524,7 +540,7 @@ export async function handleRoomRequest(
       { worldId: parseWorldIdContext(url) },
     );
     schedulePlayableContentIndexRefresh(context, refreshPlayableContentIndexForRoom(env, roomId));
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'leaderboard-lineage' && request.method === 'POST') {
@@ -545,7 +561,7 @@ export async function handleRoomRequest(
       buildRoomMutationActor(auth),
       auth.isAdmin,
     );
-    return roomMutationResponse(request, url, record);
+    return roomMutationResponse(request, url, env, record);
   }
 
   if (segments.length === 4 && segments[3] === 'versions' && request.method === 'GET') {
@@ -572,8 +588,12 @@ export async function handleRoomRequest(
     const timing = new ServerTiming();
     const exact = await timing.measure('version', () => loadExactRoomVersion(env, roomId, version));
     if (!exact) throw new HttpError(404, 'Room version not found.');
-    return timedJsonResponse(request, annotateRoomVersionRecordsWithTilesetHints([exact])[0], timing, {
-      headers: { 'Cache-Control': 'public, max-age=31536000, immutable', 'X-WAMP-Cache': 'bypass' },
+    // A version can be hidden by moderation later, so browsers may keep it only briefly.
+    const shown = await isRoomVersionRedacted(env, roomId, version)
+      ? { ...exact, snapshot: hiddenVersionSnapshot(exact.snapshot) }
+      : exact;
+    return timedJsonResponse(request, annotateRoomVersionRecordsWithTilesetHints([shown])[0], timing, {
+      headers: { 'Cache-Control': 'public, max-age=300', 'X-WAMP-Cache': 'bypass' },
     });
   }
 
@@ -645,20 +665,21 @@ function parseWorldIdContext(url: URL): string | null {
   return worldId;
 }
 
-function roomMutationResponse(
+async function roomMutationResponse(
   request: Request,
   url: URL,
+  env: Env,
   record: RoomRecord,
   additions: Record<string, unknown> = {},
-): Response {
+): Promise<Response> {
   if (url.searchParams.get('response') !== 'compact') {
     return jsonResponse(request, {
-      ...annotateRoomRecordWithTilesetHints(record),
+      ...presentRoomCryptoDetails(annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, record.draft.id, record)), url),
       ...additions,
     });
   }
   return jsonResponse(request, {
-    summary: createRoomSummaryFromRecord(record),
+    summary: presentRoomCryptoDetails(createRoomSummaryFromRecord(record), url),
     draft: annotateRoomSnapshotWithTilesetHint(record.draft),
     published: record.published ? annotateRoomSnapshotWithTilesetHint(record.published) : null,
     ...additions,

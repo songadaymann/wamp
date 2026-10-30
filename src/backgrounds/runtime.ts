@@ -3,7 +3,9 @@ import Phaser from 'phaser';
 import { BACKGROUND_GROUPS } from '../config/backgrounds';
 import { getBackgroundImageUrl } from './client';
 import type { CustomBackgroundFit } from './model';
-import { animateBackgroundTexture, decodeBackground, isBackgroundAnimation, observeAnimatedBackground, releaseBackgroundImage, type BackgroundDecodedImage } from './animation';
+import { animateBackgroundTexture, decodeBackground, isAnimatedBackgroundTexture, isBackgroundAnimation, observeAnimatedBackground, releaseBackgroundImage, type BackgroundDecodedImage } from './animation';
+import { getCustomBackgroundTextureLeases, holdCustomBackgroundTextureFor } from './textureLeases';
+import { addStaticCanvasTexture } from '../visuals/staticCanvasTexture';
 
 // Cloudflare Images converts backgrounds to WebP or AVIF when the request accepts them. fetch()
 // and Phaser's loader otherwise send */* and get the original upload (one GIF background is
@@ -13,6 +15,15 @@ const BACKGROUND_IMAGE_ACCEPT = 'image/avif,image/webp,*/*';
 const customBackgroundLoadPromises = new Map<string, Promise<string>>();
 const MAX_TILED_PHOTO_WIDTH = 128;
 const MAX_TILED_PHOTO_HEIGHT = 96;
+// A TileSprite copies its whole frame into a power-of-two pattern, so a tiled 1280x768 photo
+// cost a 2048x1024 copy per room to draw a 128x77 tile. Tiles draw from a pre-smoothed copy
+// with 4 texels per world pixel instead: sharp up to 4x camera zoom, since the pattern is
+// sampled nearest under pixelArt (F357).
+const TILED_PHOTO_DETAIL_SCALE = 4;
+const customBackgroundTileFrames = new WeakMap<
+  Phaser.GameObjects.TileSprite,
+  { width: number; height: number }
+>();
 
 export interface CustomBackgroundLayer {
   key: string;
@@ -64,6 +75,22 @@ export function getCustomBackgroundTileScale(
   return Math.min(1, MAX_TILED_PHOTO_WIDTH / width, MAX_TILED_PHOTO_HEIGHT / height);
 }
 
+/** Size of the smaller copy a tiled background draws from, or null when the source is small enough. */
+export function getCustomBackgroundTileTextureSize(
+  size: Pick<CustomBackgroundLayer, 'width' | 'height'>,
+): { width: number; height: number } | null {
+  const scale = getCustomBackgroundTileScale(size) * TILED_PHOTO_DETAIL_SCALE;
+  if (scale >= 1) return null;
+  return {
+    width: Math.max(1, Math.round(Math.max(1, size.width) * scale)),
+    height: Math.max(1, Math.round(Math.max(1, size.height) * scale)),
+  };
+}
+
+export function getCustomBackgroundTileTextureKey(key: string): string {
+  return `${key}@tile`;
+}
+
 export function getCustomBackgroundCenterRect(
   source: Pick<CustomBackgroundLayer, 'width' | 'height'>,
   target: { width: number; height: number },
@@ -109,12 +136,15 @@ export function createCustomBackgroundObject(
   depth: number,
 ): CustomBackgroundObject {
   if (layer.fit === 'tile') {
-    const sprite = scene.add.tileSprite(x, y, width, height, layer.key);
+    const tile = ensureCustomBackgroundTileTexture(scene, layer);
+    const sprite = scene.add.tileSprite(x, y, width, height, tile?.key ?? layer.key);
+    if (tile) customBackgroundTileFrames.set(sprite, tile);
     sprite.setOrigin(0, 0);
     sprite.setDepth(depth);
     sprite.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     syncCustomBackgroundObject(sprite, layer, x, y, width, height, 0);
     observeAnimatedBackground(sprite, scene.textures.get(layer.key));
+    holdCustomBackgroundTextureFor(scene, layer.key, sprite);
     return sprite;
   }
 
@@ -123,6 +153,7 @@ export function createCustomBackgroundObject(
   image.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
   syncCustomBackgroundObject(image, layer, x, y, width, height, 0);
   observeAnimatedBackground(image, scene.textures.get(layer.key));
+  holdCustomBackgroundTextureFor(scene, layer.key, image);
   return image;
 }
 
@@ -203,8 +234,12 @@ export function syncCustomBackgroundObject(
     object.setPosition(x, y);
     object.setSize(width, height);
     const scale = getCustomBackgroundTileScale(layer);
-    object.setTileScale(scale, scale);
-    object.tilePositionX = (cameraScrollX * layer.scrollFactor) / scale;
+    // A sprite on the smaller tile copy scales it to the same on-screen tile size.
+    const tile = customBackgroundTileFrames.get(object);
+    const scaleX = tile ? (layer.width * scale) / tile.width : scale;
+    const scaleY = tile ? (layer.height * scale) / tile.height : scale;
+    object.setTileScale(scaleX, scaleY);
+    object.tilePositionX = (cameraScrollX * layer.scrollFactor) / scaleX;
     object.tilePositionY = 0;
     return;
   }
@@ -224,6 +259,42 @@ export function syncCustomBackgroundObject(
   object.setDisplaySize(rect.width, rect.height);
 }
 
+/**
+ * Returns the smaller, pre-smoothed copy a tiled still is drawn from, creating it once per
+ * background. Animated and already-small backgrounds keep drawing from their own texture.
+ */
+function ensureCustomBackgroundTileTexture(
+  scene: Phaser.Scene,
+  layer: CustomBackgroundLayer,
+): { key: string; width: number; height: number } | null {
+  const size = getCustomBackgroundTileTextureSize(layer);
+  if (!size || typeof document === 'undefined' || !scene.textures.exists(layer.key)) return null;
+  const source = scene.textures.get(layer.key);
+  if (isAnimatedBackgroundTexture(source)) return null;
+  const key = getCustomBackgroundTileTextureKey(layer.key);
+  if (scene.textures.exists(key)) return { key, ...size };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(source.getSourceImage() as CanvasImageSource, 0, 0, size.width, size.height);
+  // Drawn once, so it skips CanvasTexture's pixel read-back copy (F304).
+  if (!addStaticCanvasTexture(scene.textures, key, canvas)) return null;
+  // The copy is only for drawing tiles of this background, so it goes when the original does.
+  scene.textures.once(`removetexture-${layer.key}`, () => {
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+  });
+  return { key, ...size };
+}
+
+/**
+ * Loads a custom background once per key. Hold a texture lease (textureLeases.ts) while
+ * waiting, or the texture may be freed as soon as it lands.
+ */
 export function ensureCustomBackgroundTexture(
   scene: Phaser.Scene,
   id: string,
@@ -304,18 +375,20 @@ export class CustomBackgroundTexturePreparation {
       throw new Error('Could not create a custom background staging canvas.');
     }
     context.imageSmoothingEnabled = true;
-    context.drawImage(isBackgroundAnimation(bitmap) ? bitmap.frames[0] : bitmap, 0, 0);
-    const texture = scene.textures.addCanvas(this.key, canvas);
-    if (!texture || !scene.textures.exists(this.key)) {
-      throw new Error(`Custom background texture ${this.key} was not registered.`);
-    }
     if (isBackgroundAnimation(bitmap)) {
+      context.drawImage(bitmap.frames[0], 0, 0);
+      // Animation frames are drawn into this canvas later, so it stays a CanvasTexture.
+      const texture = this.requireRegistered(scene, scene.textures.addCanvas(this.key, canvas));
       animateBackgroundTexture(scene, texture, bitmap);
       this.bitmap = null; // The texture owns frames until removal or game teardown.
     } else {
+      context.drawImage(bitmap, 0, 0);
+      // A still is never redrawn, so it skips CanvasTexture's pixel read-back copy (F304).
+      this.requireRegistered(scene, addStaticCanvasTexture(scene.textures, this.key, canvas));
       this.releaseBitmap();
     }
     this.committed = true;
+    getCustomBackgroundTextureLeases(scene.textures).noteResident(this.key);
     return this.key;
   }
 
@@ -358,6 +431,13 @@ export class CustomBackgroundTexturePreparation {
       return;
     }
     this.bitmap = bitmap;
+  }
+
+  private requireRegistered<T extends Phaser.Textures.Texture>(scene: Phaser.Scene, texture: T | null): T {
+    if (!texture || !scene.textures.exists(this.key)) {
+      throw new Error(`Custom background texture ${this.key} was not registered.`);
+    }
+    return texture;
   }
 
   private releaseBitmap(): void {

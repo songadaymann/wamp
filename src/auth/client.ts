@@ -1,3 +1,4 @@
+import { classifyWalletRpcRejection, createSingleSendProvider } from './walletSendGuard';
 import type { AppKit } from '@reown/appkit';
 import type {
   AuthSessionResponse,
@@ -5,8 +6,6 @@ import type {
   DisplayNameUpdateResponse,
   AuthUser,
   MagicLinkRequestResponse,
-  WalletChallengeResponse,
-  WalletVerifyResponse,
 } from './model';
 import type { ChatModerationViewer } from '../chat/model';
 import { clearLocalRoomStorage } from '../persistence/browserStorage';
@@ -17,6 +16,7 @@ import { apiRequest as requestApi } from '../api/request';
 import { createProfileRepository } from '../profiles/profileRepository';
 import { rememberBuilderTrustTier } from '../roomVideo/access';
 import { isOpenableProfileUserId, PROFILE_INVALIDATED_EVENT, requestProfileOpen } from '../ui/setup/profileEvents';
+import { installMenuToggle } from '../ui/menuToggle';
 import type {
   PreparedWalletTransaction,
   RoomMintChainInfo,
@@ -28,38 +28,20 @@ import {
   isTestResetEnabled,
   resolvePartykitConfig,
   resolveWalletProjectId,
-  type AuthConfigSource,
-  type RoomStorageBackend,
 } from './runtimeConfig';
+import { createAuthState, transitionAuthState, getAuthStateSnapshot, getAuthQueryStatus,
+  isGenericSignedInStatus, normalizeChatModerationViewer, type AuthDebugState } from './sessionState';
+export type { AuthDebugState } from './sessionState';
 import { dispatchTypedEvent } from '../events/typedEvent';
+import { WalletRequestNotSubmittedError, WalletTransactionRevertedError } from './walletTransaction';
+import { waitForWalletReceipt } from './walletReceiptWait';
+import { applyWalletGate } from '../lib/wallet-gate.js';
+import { hasCryptoWallet } from '../mint/walletGate';
+import { authenticateWallet, walletAuthenticationErrorMessage } from './walletAuthentication';
 
 export const AUTH_STATE_CHANGED_EVENT = 'auth-state-changed';
 export const AUTH_SESSION_REFRESHED_EVENT = 'auth-session-refreshed';
 
-export interface AuthDebugState {
-  loading: boolean;
-  authenticated: boolean;
-  user: AuthUser | null;
-  source: AuthSessionResponse['source'] | null;
-  schoolManaged: boolean;
-  school: AuthSessionResponse['school'] | null;
-  roomDailyClaimLimit: number | null;
-  roomClaimsUsedToday: number;
-  roomClaimsRemainingToday: number | null;
-  status: string;
-  debugMagicLink: string | null;
-  walletConnected: boolean;
-  walletAddress: string | null;
-  walletProjectConfigured: boolean;
-  walletProjectSource: AuthConfigSource;
-  partykitConfigured: boolean;
-  partykitHost: string | null;
-  partykitParty: string | null;
-  partykitSource: AuthConfigSource;
-  storageBackend: RoomStorageBackend;
-  testResetEnabled: boolean;
-  chatModeration: ChatModerationViewer;
-}
 
 interface TestResetResponse {
   ok: true;
@@ -95,33 +77,8 @@ interface AuthIdentityProfileView {
   builderProgressFraction: number | null;
 }
 
-const state: AuthDebugState = {
-  loading: false,
-  authenticated: false,
-  user: null,
-  source: null,
-  schoolManaged: false,
-  school: null,
-  roomDailyClaimLimit: null,
-  roomClaimsUsedToday: 0,
-  roomClaimsRemainingToday: null,
-  status: 'Use email or wallet.',
-  debugMagicLink: null,
-  walletConnected: false,
-  walletAddress: null,
-  walletProjectConfigured: false,
-  walletProjectSource: 'missing',
-  partykitConfigured: false,
-  partykitHost: null,
-  partykitParty: null,
-  partykitSource: 'missing',
-  storageBackend: getStorageBackend(),
-  testResetEnabled: isTestResetEnabled(),
-  chatModeration: {
-    role: 'none',
-    banned: false,
-  },
-};
+let state = createAuthState({ storageBackend: getStorageBackend(), testResetEnabled: isTestResetEnabled() });
+let sessionGeneration = 0;
 
 let authPanel: HTMLElement | null = null;
 let authIdentity: HTMLButtonElement | null = null;
@@ -138,6 +95,7 @@ let authEmailInput: HTMLInputElement | null = null;
 let authEmailButton: HTMLButtonElement | null = null;
 let authWalletButton: HTMLButtonElement | null = null;
 let authLogoutButton: HTMLButtonElement | null = null;
+let authLogoutAllButton: HTMLButtonElement | null = null;
 let authDisplayNameRow: HTMLElement | null = null;
 let authDisplayNameInput: HTMLInputElement | null = null;
 let authDisplayNameButton: HTMLButtonElement | null = null;
@@ -173,11 +131,11 @@ const FEATURED_REOWN_WALLET_IDS = [
   'ecc4036f814562b41a5268adc86270fba1365471402006302e70169465b7ac18', // Zerion
 ] as const;
 
-const DEFAULT_GUEST_STATUS = 'Use email or wallet.';
 const DEFAULT_SIGN_IN_PROMPT_STATUS = 'Sign in to continue.';
 const WALLET_NOT_CONFIGURED_MESSAGE = 'Wallet sign-in is not configured on this deployment.';
 
 export async function setupAuthUi(): Promise<void> {
+  void applyWalletGate().then(() => renderAuthUi());
   authPanel = document.getElementById('auth-panel');
   authIdentity = document.getElementById('auth-identity') as HTMLButtonElement | null;
   authIdentityAvatar = document.getElementById('auth-identity-avatar') as HTMLImageElement | null;
@@ -193,6 +151,7 @@ export async function setupAuthUi(): Promise<void> {
   authEmailButton = document.getElementById('btn-auth-email') as HTMLButtonElement | null;
   authWalletButton = document.getElementById('btn-auth-wallet') as HTMLButtonElement | null;
   authLogoutButton = document.getElementById('btn-auth-logout') as HTMLButtonElement | null;
+  authLogoutAllButton = document.getElementById('btn-auth-logout-all') as HTMLButtonElement | null;
   authDisplayNameRow = document.getElementById('auth-display-name-row');
   authDisplayNameInput = document.getElementById('auth-display-name-input') as HTMLInputElement | null;
   authDisplayNameButton = document.getElementById('btn-auth-display-name') as HTMLButtonElement | null;
@@ -219,15 +178,9 @@ export async function setupAuthUi(): Promise<void> {
 
   // Hamburger menu toggle
   const menuToggle = document.getElementById('menu-toggle');
-  menuToggle?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    authPanel!.classList.toggle('menu-open');
-  });
-  document.addEventListener('click', (e) => {
-    if (authPanel && authPanel.classList.contains('menu-open') && !authPanel.contains(e.target as Node)) {
-      authPanel.classList.remove('menu-open');
-    }
-  });
+  if (menuToggle) {
+    installMenuToggle({ panel: authPanel, toggle: menuToggle, game: document.getElementById('game-container') });
+  }
   authIdentity?.addEventListener('click', () => {
     if (!isOpenableProfileUserId(state.user?.id)) {
       return;
@@ -259,6 +212,9 @@ export async function setupAuthUi(): Promise<void> {
   authLogoutButton?.addEventListener('click', () => {
     void logout();
   });
+  authLogoutAllButton?.addEventListener('click', () => {
+    void logout('all');
+  });
   authDisplayNameButton?.addEventListener('click', () => {
     void updateDisplayName();
   });
@@ -289,11 +245,7 @@ export async function setupAuthUi(): Promise<void> {
 }
 
 export function getAuthDebugState(): AuthDebugState {
-  return {
-    ...state,
-    school: state.school ? { ...state.school } : null,
-    chatModeration: { ...state.chatModeration },
-  };
+  return getAuthStateSnapshot(state);
 }
 
 export async function refreshAuthSession(): Promise<void> {
@@ -309,7 +261,7 @@ export function syncChatModerationState(viewer: ChatModerationViewer): void {
     return;
   }
 
-  state.chatModeration = normalized;
+  state = transitionAuthState(state, { type: 'moderation', viewer: normalized });
   renderAuthUi();
 }
 
@@ -323,8 +275,18 @@ export function promptForSignIn(status: string = DEFAULT_SIGN_IN_PROMPT_STATUS):
 
 export async function sendPreparedWalletTransaction(
   transaction: PreparedWalletTransaction,
-  chain: RoomMintChainInfo
+  chain: RoomMintChainInfo,
+  options: {
+    expectedWalletAddress?: string;
+    isCurrent?: () => boolean;
+    onBeforeSend?: () => void;
+    signal?: AbortSignal;
+    onSubmitted?: (transaction: { hash: string; from: string }) => void;
+  } = {},
 ): Promise<{ hash: string; from: string }> {
+  const current = () => !options.signal?.aborted && options.isCurrent?.() !== false;
+  if (!current()) throw new Error('This room action is no longer current.');
+  if (transaction.chainId !== chain.chainId) throw new Error('The room approval network changed. Prepare this room action again.');
   if (!state.walletProjectConfigured) {
     throw new Error(WALLET_NOT_CONFIGURED_MESSAGE);
   }
@@ -333,27 +295,59 @@ export async function sendPreparedWalletTransaction(
   await ensureWalletConnection();
   const provider = getWalletProvider(walletModal);
 
-  await ensureWalletChain(provider, chain);
+  if (!current()) throw new Error('This room action is no longer current.');
+  try { await ensureWalletChain(provider, chain); }
+  catch (error) {
+    throw new WalletRequestNotSubmittedError('network-switch', `Switch your wallet to ${chain.name} and try again.`, error);
+  }
 
-  const { createPublicClient, createWalletClient, custom } = await import('viem');
-  const walletClient = createWalletClient({ transport: custom(provider) });
+  const { createPublicClient, createWalletClient, custom, TransactionReceiptNotFoundError, BaseError, ChainMismatchError, InsufficientFundsError, UserRejectedRequestError } = await import('viem');
+  const sendProvider = createSingleSendProvider(provider, chain.chainId, current, options.onBeforeSend);
+  const walletClient = createWalletClient({ transport: custom(sendProvider, { retryCount: 0 }) });
   const [signerAddress] = await walletClient.getAddresses();
   if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
 
   if (linkedWallet && linkedWallet !== signerAddress.toLowerCase()) {
-    throw new Error('Connected wallet does not match the linked account wallet.');
+    throw new WalletRequestNotSubmittedError('wallet-mismatch', `Switch to your linked wallet ${linkedWallet.slice(0, 6)}…${linkedWallet.slice(-4)} and try again.`);
+  }
+
+  if (!current()) throw new Error('This room action is no longer current.');
+  if (options.expectedWalletAddress && options.expectedWalletAddress.trim().toLowerCase() !== signerAddress.toLowerCase()) {
+    throw new WalletRequestNotSubmittedError('wallet-mismatch', 'The connected wallet changed while preparing this room action.');
   }
 
   const hash = await walletClient.sendTransaction({
     account: signerAddress,
-    chain: null,
+    chain: { id: chain.chainId, name: chain.name, nativeCurrency: chain.nativeCurrency,
+      rpcUrls: { default: { http: [chain.rpcUrl] } } },
     to: requireHexValue(transaction.to, 'transaction destination'),
     data: requireHexValue(transaction.data, 'transaction data'),
     value: BigInt(transaction.value),
+  }).catch(error => {
+    const stopped = error instanceof BaseError ? error.walk(cause => cause instanceof WalletRequestNotSubmittedError) : error;
+    if (stopped instanceof WalletRequestNotSubmittedError) throw stopped;
+    if (error instanceof BaseError && error.walk(cause => cause instanceof ChainMismatchError) instanceof ChainMismatchError) {
+      throw new WalletRequestNotSubmittedError('network-switch', `Wallet network changed. Switch back to ${chain.name} and try again.`, error);
+    }
+    if (error instanceof BaseError && error.walk(cause => cause instanceof InsufficientFundsError) instanceof InsufficientFundsError) {
+      throw new WalletRequestNotSubmittedError('insufficient-funds', 'Your wallet needs ETH for this action and its network fee.', error);
+    }
+    if (error instanceof BaseError && error.walk(cause => cause instanceof UserRejectedRequestError) instanceof UserRejectedRequestError) {
+      throw new WalletRequestNotSubmittedError('cancelled', 'You cancelled in your wallet.', error);
+    }
+    if (error instanceof BaseError) {
+      const rejection = classifyWalletRpcRejection(error, InsufficientFundsError.nodeMessage);
+      if (rejection) throw rejection;
+    }
+    throw error;
   });
-  const publicClient = createPublicClient({ transport: custom(provider) });
-  await publicClient.waitForTransactionReceipt({ hash });
+  options.onSubmitted?.({ hash, from: signerAddress });
+  const publicClient = createPublicClient({ transport: custom(provider, { retryCount: 0 }) });
+  const receipt = options.signal
+    ? await waitForWalletReceipt(() => publicClient.getTransactionReceipt({ hash }), error => error instanceof TransactionReceiptNotFoundError, options.signal)
+    : await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status === 'reverted') throw new WalletTransactionRevertedError(hash);
 
   return {
     hash,
@@ -367,27 +361,18 @@ async function initializeWalletConnect(): Promise<void> {
 }
 
 async function refreshSession(): Promise<void> {
+  const generation = sessionGeneration;
   try {
     const session = await apiRequest<AuthSessionResponse>('/api/auth/session');
+    if (generation !== sessionGeneration) return;
     setRuntimeWalletProjectId(session.walletProjectId);
     setRuntimePartykitConfig(session.partykitHost, session.partykitParty);
-    state.authenticated = session.authenticated;
-    state.user = session.user;
-    state.source = session.source ?? null;
-    state.schoolManaged = session.schoolManaged === true;
-    state.school = session.school ?? null;
-    state.roomDailyClaimLimit = session.roomDailyClaimLimit ?? null;
-    state.roomClaimsUsedToday = session.roomClaimsUsedToday ?? 0;
-    state.roomClaimsRemainingToday = session.roomClaimsRemainingToday ?? null;
-    state.chatModeration = normalizeChatModerationViewer(session.chatModeration);
+    state = transitionAuthState(state, { type: 'session', session, preserveGuestStatus: window.location.search.includes('auth=') });
 
     if (session.authenticated) {
       setStoredPlayerAvatarId(session.user?.selectedAvatarId ?? null);
       syncAuthIdentityProfileFromSession(session.user);
       void ensureAuthIdentityProfileLoaded();
-      if (state.status.length === 0 || state.status === DEFAULT_GUEST_STATUS || isGenericSignedInStatus(state.status)) {
-        state.status = '';
-      }
       lastCheckedDisplayName = session.user?.displayName ?? '';
       lastDisplayNameAvailability = session.user
         ? {
@@ -395,21 +380,7 @@ async function refreshSession(): Promise<void> {
             claimedByCurrentUser: true,
           }
         : null;
-    } else if (window.location.search.includes('auth=')) {
-      // Preserve status set from query params.
-      state.source = null;
-      state.schoolManaged = false;
-      state.school = null;
-      authIdentityProfile = null;
-      authIdentityProfileLoadingUserId = null;
-      rememberBuilderTrustTier(null);
-      lastCheckedDisplayName = '';
-      lastDisplayNameAvailability = null;
     } else {
-      state.source = null;
-      state.schoolManaged = false;
-      state.school = null;
-      state.status = DEFAULT_GUEST_STATUS;
       authIdentityProfile = null;
       authIdentityProfileLoadingUserId = null;
       rememberBuilderTrustTier(null);
@@ -417,18 +388,9 @@ async function refreshSession(): Promise<void> {
       lastDisplayNameAvailability = null;
     }
   } catch (error) {
+    if (generation !== sessionGeneration) return;
     console.error('Failed to load auth session', error);
-    state.status = 'Failed to load account session.';
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.roomDailyClaimLimit = null;
-    state.roomClaimsUsedToday = 0;
-    state.roomClaimsRemainingToday = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
+    state = transitionAuthState(state, { type: 'session-failed' });
     authIdentityProfile = null;
     authIdentityProfileLoadingUserId = null;
     rememberBuilderTrustTier(null);
@@ -469,7 +431,7 @@ function syncAuthIdentityProfileFromSession(user: AuthUser | null): void {
   const fallbackName =
     user.displayName?.trim()
     || user.email?.trim()
-    || (user.walletAddress ? shortenAddress(user.walletAddress) : 'Player');
+    || (hasCryptoWallet() && user.walletAddress ? shortenAddress(user.walletAddress) : 'Player');
 
   if (authIdentityProfile?.userId !== user.id) {
     authIdentityProfile = {
@@ -585,14 +547,8 @@ async function requestMagicLink(): Promise<void> {
       body: JSON.stringify({ email }),
     });
 
-    state.debugMagicLink = normalizeDebugMagicLink(response.debugMagicLink);
+    state = transitionAuthState(state, { type: 'email-requested', response, debugMagicLink: normalizeDebugMagicLink(response.debugMagicLink) });
     showEmailCodeEntry(email, response.debugCode);
-    state.status =
-      response.delivery === 'email'
-        ? ''
-        : response.purpose === 'link_email'
-          ? 'Debug email verification link generated below.'
-          : 'Debug sign-in link generated below.';
   } catch (error) {
     console.error('Failed to request magic link', error);
     state.status = getErrorMessage(error, 'Failed to send sign-in link.');
@@ -633,8 +589,7 @@ async function verifyEmailCode(): Promise<void> {
       body: JSON.stringify({ email: pendingEmailCodeAddress, code }),
     });
     hideEmailCodeEntry();
-    state.debugMagicLink = null;
-    state.status = 'Signed in with email.';
+    state = transitionAuthState(state, { type: 'email-verified' });
     await refreshSession();
   } catch (error) {
     if (emailCodeStatus) emailCodeStatus.textContent = getErrorMessage(error, 'Could not verify code.');
@@ -645,12 +600,15 @@ async function verifyEmailCode(): Promise<void> {
   }
 }
 
-async function logout(): Promise<void> {
+async function logout(scope: 'current' | 'all' = 'current'): Promise<void> {
+  if (scope === 'all' && !window.confirm('Log out on all devices? You will need to sign in again.')) return;
+  // A response started before or during revocation must not restore old identity.
+  sessionGeneration += 1;
   setLoading(true, 'Signing out...');
 
   try {
     const classroomSlug = state.schoolManaged ? state.school?.classroomSlug ?? null : null;
-    await apiRequest<{ ok: true }>('/api/auth/logout', {
+    await apiRequest<{ ok: true }>(scope === 'all' ? '/api/auth/logout-all' : '/api/auth/logout', {
       method: 'POST',
     });
     if (classroomSlug) {
@@ -659,21 +617,14 @@ async function logout(): Promise<void> {
       return;
     }
 
-    state.authenticated = false;
-    state.user = null;
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.debugMagicLink = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
-    state.status = 'Signed out.';
+    state = transitionAuthState(state, { type: 'signed-out',
+      ...(scope === 'all' ? { status: 'Signed out on all devices.' } : {}),
+    });
   } catch (error) {
     console.error('Failed to sign out', error);
     state.status = getErrorMessage(error, 'Failed to sign out.');
   } finally {
+    sessionGeneration += 1;
     setLoading(false);
   }
 }
@@ -708,17 +659,7 @@ async function resetTestData(): Promise<void> {
     });
 
     const clearedLocalRooms = clearLocalRoomStorage();
-    state.authenticated = false;
-    state.user = null;
-    state.source = null;
-    state.schoolManaged = false;
-    state.school = null;
-    state.debugMagicLink = null;
-    state.chatModeration = {
-      role: 'none',
-      banned: false,
-    };
-    state.status = `Reset complete. Cleared ${response.deleted.rooms} rooms and ${clearedLocalRooms} local cached room entries. Reloading...`;
+    state = transitionAuthState(state, { type: 'signed-out', status: `Reset complete. Cleared ${response.deleted.rooms} rooms and ${clearedLocalRooms} local cached room entries. Reloading...` });
     renderAuthUi();
 
     window.setTimeout(() => {
@@ -762,8 +703,7 @@ async function updateDisplayName(): Promise<void> {
       method: 'POST',
       body: JSON.stringify({ displayName }),
     });
-    state.user = response.user;
-    state.status = 'Display name saved.';
+    state = transitionAuthState(state, { type: 'display-name', user: response.user });
     lastCheckedDisplayName = response.user.displayName;
     lastDisplayNameAvailability = {
       available: true,
@@ -828,19 +768,25 @@ async function checkDisplayNameAvailability(displayName: string): Promise<void> 
 }
 
 async function handleWalletButton(): Promise<void> {
+  if (state.loading) return;
+  if (!hasCryptoWallet()) return;
   if (!state.walletProjectConfigured) {
     state.status = WALLET_NOT_CONFIGURED_MESSAGE;
     renderAuthUi();
     return;
   }
 
-  const walletModal = await ensureWalletModal();
-
   const linkedWallet = state.user?.walletAddress?.toLowerCase();
   const connectedWallet = state.walletAddress?.toLowerCase();
 
   if (linkedWallet && linkedWallet === connectedWallet) {
-    await walletModal.open({ view: 'Account', namespace: 'eip155' });
+    try {
+      const walletModal = await ensureWalletModal();
+      await walletModal.open({ view: 'Account', namespace: 'eip155' });
+    } catch (error) {
+      state.status = walletAuthenticationErrorMessage(error);
+      renderAuthUi();
+    }
     return;
   }
 
@@ -848,49 +794,41 @@ async function handleWalletButton(): Promise<void> {
 }
 
 async function authenticateWithWallet(): Promise<void> {
+  const userId = state.user?.id ?? null, generation = sessionGeneration;
+  const controller = new AbortController();
+  let connectedAddress: string | null = null;
+  const current = () => hasCryptoWallet() && generation === sessionGeneration
+    && (state.user?.id ?? null) === userId
+    && (!connectedAddress || state.walletAddress?.toLowerCase() === connectedAddress);
+  const changed = () => { if (!current()) controller.abort(); };
+  const leaving = () => controller.abort();
+  window.addEventListener(AUTH_STATE_CHANGED_EVENT, changed);
+  window.addEventListener('wallet-gate', changed);
+  window.addEventListener('pagehide', leaving);
+  let failure = '';
   setLoading(true, state.authenticated ? 'Linking wallet...' : 'Signing in with wallet...');
 
   try {
-    const walletModal = await ensureWalletModal();
-    const address = await ensureWalletConnection();
-    const challenge = await apiRequest<WalletChallengeResponse>('/api/auth/wallet/challenge', {
-      method: 'POST',
-      body: JSON.stringify({ address }),
+    const response = await authenticateWallet({
+      signal: controller.signal, isCurrent: current, expectedUserId: userId,
+      connect: async () => {
+        const walletModal = await ensureWalletModal(), address = await ensureWalletConnection();
+        connectedAddress = address.toLowerCase();
+        return { address, provider: getWalletProvider(walletModal) };
+      },
     });
-
-    const provider = getWalletProvider(walletModal);
-
-    const { createWalletClient, custom } = await import('viem');
-    const walletClient = createWalletClient({ transport: custom(provider) });
-    const [signerAddress] = await walletClient.getAddresses();
-    if (!signerAddress) throw new Error('The connected wallet did not expose an account.');
-    const signature = await walletClient.signMessage({
-      account: signerAddress,
-      message: challenge.message,
-    });
-
-    const response = await apiRequest<WalletVerifyResponse>('/api/auth/wallet/verify', {
-      method: 'POST',
-      body: JSON.stringify({
-        address: signerAddress,
-        message: challenge.message,
-        signature,
-      }),
-    });
-
-    state.authenticated = true;
-    state.user = response.user;
-    state.source = 'session';
-    state.status = response.linkedWallet
-      ? 'Wallet linked.'
-      : 'Wallet sign-in complete.';
-    state.debugMagicLink = null;
+    if (controller.signal.aborted || !current()) return;
+    state = transitionAuthState(state, { type: 'wallet-verified', response });
   } catch (error) {
-    console.error('Wallet authentication failed', error);
-    state.status = getErrorMessage(error, 'Wallet sign-in failed.');
+    failure = walletAuthenticationErrorMessage(error);
   } finally {
-    setLoading(false);
+    window.removeEventListener(AUTH_STATE_CHANGED_EVENT, changed);
+    window.removeEventListener('wallet-gate', changed);
+    window.removeEventListener('pagehide', leaving);
+    controller.abort();
     await refreshSession();
+    if (failure) state.status = failure;
+    setLoading(false);
   }
 }
 
@@ -956,6 +894,7 @@ async function waitForWalletConnection(timeoutMs: number = 60_000): Promise<stri
 }
 
 async function ensureWalletModal(): Promise<AppKit> {
+  if (!hasCryptoWallet()) throw new Error('Room collection is unavailable in this browser.');
   if (appKit) {
     return appKit;
   }
@@ -1113,6 +1052,10 @@ function renderAuthUi(): void {
     authLogoutButton.classList.toggle('hidden', !state.authenticated);
     authLogoutButton.disabled = state.loading;
   }
+  if (authLogoutAllButton) {
+    authLogoutAllButton.classList.toggle('hidden', !state.authenticated);
+    authLogoutAllButton.disabled = state.loading;
+  }
 
   if (authDisplayNameRow) {
     authDisplayNameRow.classList.toggle('hidden', !showDisplayNameRow);
@@ -1177,6 +1120,7 @@ function renderAuthUi(): void {
     }
   }
 
+  document.documentElement.dataset.walletConnected = String(state.walletConnected && Boolean(state.walletAddress));
   dispatchTypedEvent<AuthDebugState>(window, AUTH_STATE_CHANGED_EVENT, getAuthDebugState());
 }
 
@@ -1289,6 +1233,7 @@ function formatProgressFraction(fraction: number | null): string {
 }
 
 function getAuthStatusText(): string {
+  if (!hasCryptoWallet() && /wallet/i.test(state.status)) return 'Sign in with email to save your progress.';
   if (!state.authenticated) {
     return state.status;
   }
@@ -1302,22 +1247,13 @@ function getAuthStatusText(): string {
   return state.status;
 }
 
-function isGenericSignedInStatus(status: string): boolean {
-  return (
-    status.length === 0
-    || status.startsWith('Signed in as ')
-    || status.startsWith('Signed in with wallet ')
-    || status.startsWith('Wallet linked to ')
-  );
-}
-
 function buildSessionSummaryValue(user: AuthUser | null): string {
   if (!user) {
     return '';
   }
 
   const primary = user.displayName?.trim() || user.email?.trim() || 'player';
-  if (user.walletAddress) {
+  if (hasCryptoWallet() && user.walletAddress) {
     return `${primary} and ${shortenAddress(user.walletAddress)}`;
   }
 
@@ -1345,27 +1281,8 @@ function getWalletButtonLabel(): string {
 }
 
 function setLoading(loading: boolean, status?: string): void {
-  state.loading = loading;
-  if (status) {
-    state.status = status;
-  }
+  state = transitionAuthState(state, { type: 'loading', loading, status });
   renderAuthUi();
-}
-
-function normalizeChatModerationViewer(
-  viewer: ChatModerationViewer | null | undefined
-): ChatModerationViewer {
-  if (!viewer || (viewer.role !== 'none' && viewer.role !== 'admin' && viewer.role !== 'owner')) {
-    return {
-      role: 'none',
-      banned: false,
-    };
-  }
-
-  return {
-    role: viewer.role,
-    banned: viewer.banned === true,
-  };
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1400,17 +1317,8 @@ function initializeStatusFromQuery(): void {
   const url = new URL(window.location.href);
   const authResult = url.searchParams.get('auth');
 
-  if (authResult === 'email') {
-    state.status = 'Email sign-in complete.';
-  } else if (authResult === 'email-linked') {
-    state.status = 'Email added to your account.';
-  } else if (authResult === 'school') {
-    state.status = 'Classroom sign-in complete.';
-  } else if (authResult === 'invalid') {
-    state.status = 'That sign-in link is invalid or expired.';
-  } else {
-    return;
-  }
+  if (getAuthQueryStatus(authResult) === null) return;
+  state = transitionAuthState(state, { type: 'query', result: authResult });
 
   url.searchParams.delete('auth');
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);

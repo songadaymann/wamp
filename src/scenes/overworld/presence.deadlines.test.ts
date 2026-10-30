@@ -47,7 +47,8 @@ describe('overworld presence deadlines', () => {
     expect(controller.isLocalPresenceDue(idle, false, 1_000)).toBe(true);
     controller.updateLocalPresence(idle, 1_000);
     expect(controller.isLocalPresenceDue(idle, false, 5_999)).toBe(false);
-    expect(controller.isLocalPresenceDue(idle, false, 6_000)).toBe(true);
+    expect(controller.isLocalPresenceDue(idle, false, 11_999)).toBe(false);
+    expect(controller.isLocalPresenceDue(idle, false, 12_000)).toBe(true);
 
     const moving = createInput({ x: 101, velocityX: 80, animationState: 'run' });
     expect(controller.isLocalPresenceDue(moving, false, 1_199)).toBe(false);

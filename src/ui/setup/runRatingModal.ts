@@ -1,4 +1,8 @@
+import { requestKeepPlaying } from '../../progression/keepPlayingEvents';
+import { expandedRoomIdFromLegacyCourseId } from '../../expandedRooms/model';
 import Phaser from 'phaser';
+import { setLiveMessage } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState, promptForSignIn } from '../../auth/client';
 import {
   createCourseRepository,
@@ -148,13 +152,15 @@ export class RunRatingModalController {
   };
 
   private readonly handleGuestClaimContinueClick = () => {
+    const queue=this.promptQueue.getSnapshot(),hasNext=queue.currentIndex>=0&&queue.currentIndex<queue.total-1;
     this.advancePrompt('skipped');
+    if(!hasNext)requestKeepPlaying();
   };
 
   private readonly handleShareTwitterClick = () => {
     const request = this.activeRequest;
     if (!request || this.ratingOnly) return;
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     openTwitterShareIntent(this.windowObj, buildRunShareText(request, this.getShareContentTitle(request)), url);
     this.setShareStatus('Opened X.', 'default');
@@ -395,7 +401,7 @@ export class RunRatingModalController {
   recordGuestSave(result: GuestRunSaveResult): void {
     this.guestSaveResults.set(result.clientRunId, result);
     if (this.guestSaveResults.size > 50) this.guestSaveResults.delete(this.guestSaveResults.keys().next().value!);
-    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) this.renderGuestClaim();
+    if (this.activeRequest?.guestProgress?.clientRunId === result.clientRunId) { this.renderGuestClaim(); this.renderShare(this.activeRequest); }
   }
 
   private enqueuePrompt(prompt: { mode: RunRatingModalMode; detail: PostRunRatingRequestDetail }): void {
@@ -692,7 +698,7 @@ export class RunRatingModalController {
     }
     const loadToken = this.loadToken;
     const text = buildRunShareText(request, this.getShareContentTitle(request));
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     try {
       const file = this.shareImage ? createRunShareImageFile(this.shareImage) : null;
@@ -719,7 +725,7 @@ export class RunRatingModalController {
     const request = this.activeRequest;
     if (!request || this.ratingOnly) return;
     const loadToken = this.loadToken;
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     if (!url) return;
     try {
       await copyShareLink(this.doc, this.windowObj.navigator, url);
@@ -834,19 +840,14 @@ export class RunRatingModalController {
         requestProfileInvalidation(authUserId);
         this.emitProgressionFeedback(request, response.progression, response.progressionDelta);
       } else {
-        const response = request.contentType === 'expanded_room' || request.expandedRoomId
-          ? await this.expandedRoomRepository.submitExpandedRoomRating(request.expandedRoomId ?? request.contentId, {
-              expandedRoomVersion: request.version,
-              qualityStars: this.currentQualityStars,
-              difficultyChoice: this.currentDifficultyChoice,
-              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
-            })
-          : await this.courseRepository.submitCourseRating(request.contentId, {
-              courseVersion: request.version,
-              qualityStars: this.currentQualityStars,
-              difficultyChoice: this.currentDifficultyChoice,
-              autoSuggestedDifficulty: request.autoSuggestedDifficulty,
-            });
+        const expandedRoomId = request.expandedRoomId ?? (request.contentType === 'expanded_room'
+          ? request.contentId : expandedRoomIdFromLegacyCourseId(request.contentId));
+        const response = await this.expandedRoomRepository.submitExpandedRoomRating(expandedRoomId, {
+          expandedRoomVersion: request.version,
+          qualityStars: this.currentQualityStars,
+          difficultyChoice: this.currentDifficultyChoice,
+          autoSuggestedDifficulty: request.autoSuggestedDifficulty,
+        });
         if (!isCurrent()) return;
         this.courseSummary = this.mergeCourseSummary(response);
         this.savedProgression = response.progression;
@@ -989,12 +990,12 @@ export class RunRatingModalController {
 
     for (const button of this.elements.qualityButtons) {
       const value = Number.parseInt(button.dataset.qualityStars ?? '', 10);
-      button.classList.toggle('active', value === this.currentQualityStars);
+      setToggleState(button, value === this.currentQualityStars);
       button.disabled = this.submitting;
     }
     for (const button of this.elements.difficultyButtons) {
       const value = button.dataset.progressionDifficulty as ProgressionDifficulty | undefined;
-      button.classList.toggle('active', value === this.currentDifficultyChoice);
+      setToggleState(button, value === this.currentDifficultyChoice);
       button.disabled = this.submitting;
     }
 
@@ -1095,7 +1096,7 @@ export class RunRatingModalController {
     const hasRoomImage = request.contentType === 'room';
     this.elements.sharePreview?.classList.toggle('hidden', !hasRoomImage);
     this.elements.shareSection?.classList.toggle('run-share-text-only', !hasRoomImage);
-    const url = buildRunShareUrl(request, this.windowObj.location.href);
+    const url = buildRunShareUrl(request, this.windowObj.location.href, this.getCurrentGuestSaveResult());
     const shareText = buildRunShareText(request, this.getShareContentTitle(request));
     if (this.elements.shareMessage) {
       this.elements.shareMessage.textContent = shareText;
@@ -1140,13 +1141,7 @@ export class RunRatingModalController {
   }
 
   private setError(message: string | null): void {
-    if (!this.elements.error) {
-      return;
-    }
-
-    const normalized = message?.trim() ?? '';
-    this.elements.error.textContent = normalized;
-    this.elements.error.classList.toggle('hidden', normalized.length === 0);
+    setLiveMessage(this.elements.error, message?.trim());
   }
 
   private async loadBaselineProgression(loadToken: number): Promise<void> {

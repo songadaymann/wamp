@@ -42,3 +42,18 @@ it('retains an identical proof on an uncertain reply retry, but unghosts a rejec
   expect(g.controller.isGhosted('0,0')).toBe(false); expect(g.service.snapshot().total).toBe(0);
   g.controller.collect('0,0'); await settle(); expect(g.repository.play).toHaveBeenCalledTimes(2);
 });
+it('keeps a room\'s proof across leaving, respawning and coming back instead of starting new sessions', async () => {
+  vi.useFakeTimers();
+  const f = fixture(); const songRoom = { target: { roomId: '0,0', roomVersion: 1 }, practice: false, position: { x: 100, y: 100 } };
+  const otherRoom = { target: { roomId: '1,0', roomVersion: 1 }, practice: false, position: { x: 100, y: 100 } };
+  f.controller.update(); await settle();
+  for (const next of [null, songRoom, otherRoom, songRoom, otherRoom, songRoom]) {
+    vi.advanceTimersByTime(100); f.setContext(next); f.controller.update(); await settle();
+  }
+  expect(f.repository.play).toHaveBeenCalledTimes(2);
+  f.controller.collect('0,0'); await settle();
+  expect(f.repository.find).toHaveBeenCalledTimes(1); expect(f.service.snapshot().total).toBe(1);
+  vi.advanceTimersByTime(20 * 60_000); f.setContext(otherRoom); f.controller.update(); await settle();
+  expect(f.repository.play).toHaveBeenCalledTimes(3);
+  f.controller.destroy();
+});

@@ -20,6 +20,7 @@ export const ROOM_DISCOVERY_SORTS = [
   'popular',
   'quality',
   'newest',
+  'protected',
   'builder',
   'unbeaten',
   'unvisited',
@@ -170,6 +171,8 @@ export interface RoomDifficultyVoteRequestBody {
 }
 
 export interface RoomDiscoveryEntry {
+  /** Number of currently protected cells in this playable target; omitted when zero. */
+  protectedCellCount?: number;
   insights?: RoomInsightSummary;
   cooperative?: boolean;
   roomId: string;
@@ -217,6 +220,9 @@ export interface RoomDiscoveryExpandedRoomTarget {
 }
 
 export interface RoomDiscoveryResponse {
+  /** Explicit server capability so newer clients do not offer an unsupported view during rollout. */
+  protectedDiscoveryAvailable?: boolean;
+  collectionAttributionAvailable?: boolean;
   difficultyFilter: RoomDifficulty | null;
   sort: RoomDiscoverySort;
   results: RoomDiscoveryEntry[];

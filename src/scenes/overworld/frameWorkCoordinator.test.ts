@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  enqueueGameplayWarmupWork,
   FRAME_WORK_LONG_JOB_THRESHOLD_MS,
   FrameWorkCoordinator,
   getFrameWorkBudget,
@@ -41,6 +42,104 @@ describe('FrameWorkCoordinator', () => {
       'preview',
     ]);
   });
+
+  it('runs gameplay warm-up after every streaming queue and catch-up between teardown and previews (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'));
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    enqueueGameplayWarmupWork(coordinator, 'catch-up', () => executionOrder.push('catch-up'), undefined, 'gameplay-catch-up');
+    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'gpu-upload', 0.5);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 4 });
+    expect(executionOrder).toEqual(['teardown', 'catch-up', 'preview', 'warmup']);
+  });
+
+  it('caps the gameplay queues by gameplayCpuCapMs while lower streaming work still runs (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    for (const label of ['catch-up-1', 'catch-up-2']) {
+      enqueueGameplayWarmupWork(coordinator, label, () => {
+        executionOrder.push(label);
+        clock.advance(0.9);
+      }, undefined, 'gameplay-catch-up');
+    }
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    // A seam-critical frame runs on the normal profile (2 ms CPU); a phone's own cap is 1 ms.
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['catch-up-1', 'preview']);
+    coordinator.runFrame({ profile: 'normal', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['catch-up-1', 'preview', 'catch-up-2']);
+  });
+
+  it('lets a preview upload below a catch-up job run when the catch-up no longer fits (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    enqueue(coordinator, clock, executionOrder, 'teardown', 'teardown', 'cpu', 0.75);
+    enqueueGameplayWarmupWork(coordinator, 'catch-up', () => executionOrder.push('catch-up'), undefined, 'gameplay-catch-up');
+    enqueue(coordinator, clock, executionOrder, 'preview-upload', 'preview-cosmetic', 'gpu-upload', 0.5);
+    // A phone frame: 1 ms of CPU, which the teardown has mostly spent.
+    const frame = coordinator.runFrame({ profile: 'reduced', criticalHeadroomMs: 8, gameplayCpuCapMs: 1 });
+    expect(executionOrder).toEqual(['teardown', 'preview-upload']);
+    expect(coordinator.hasQueuedWorkAtPriority('gameplay-catch-up')).toBe(true);
+    expect(frame.stopReason).toBe('gameplay-budget-exhausted');
+
+    // After 0.5 ms of tile streaming the catch-up cannot fit either; the upload still runs.
+    enqueue(coordinator, clock, executionOrder, 'next-upload', 'preview-cosmetic', 'gpu-upload', 0.5);
+    coordinator.runFrame({
+      profile: 'reduced', criticalHeadroomMs: 8, sharedBudgetConsumedMs: 0.5, cpuBudgetConsumedMs: 0.5, gameplayCpuCapMs: 1,
+    });
+    expect(executionOrder).toEqual(['teardown', 'preview-upload', 'next-upload']);
+  });
+
+  it('runs only the gameplay queues in a gameplay-only (Browse) frame (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const executionOrder: string[] = [];
+    enqueue(coordinator, clock, executionOrder, 'portal', 'portal-current-destination', 'cpu', 0.5);
+    enqueueGameplayWarmupWork(coordinator, 'warmup', () => executionOrder.push('warmup'));
+    enqueue(coordinator, clock, executionOrder, 'preview', 'preview-cosmetic', 'gpu-upload', 0.5);
+    coordinator.runFrame({ profile: 'reduced', criticalHeadroomMs: 8, gameplayOnly: true });
+    expect(executionOrder).toEqual(['warmup']);
+    expect(coordinator.getDiagnostics().queueDepth).toBe(2);
+  });
+
+  it('tells cancelled jobs why only after the whole cancellation has settled (F302)', () => {
+    const clock = new TestClock();
+    const coordinator = createCoordinator(clock);
+    const seen: Array<{ reason: string; queueDepth: number; otherState: string }> = [];
+    const handles: { other: FrameWorkJobHandle | null } = { other: null };
+    const first = coordinator.enqueue({
+      label: 'first', priority: 'gameplay-warmup', costKind: 'cpu', estimatedCostMs: 1, execute: () => {},
+      onCancelled: (reason) => {
+        seen.push({ reason, queueDepth: coordinator.getDiagnostics().queueDepth, otherState: handles.other!.state });
+        coordinator.enqueue({ label: 'requeued', priority: 'gameplay-warmup', costKind: 'cpu', estimatedCostMs: 1, execute: () => {} });
+      },
+    });
+    handles.other = coordinator.enqueue({ label: 'other', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {} });
+    expect(coordinator.cancelAll('stream-reset')).toBe(2);
+    expect(first.state).toBe('cancelled');
+    expect(seen).toEqual([{ reason: 'stream-reset', queueDepth: 0, otherState: 'cancelled' }]);
+    expect(coordinator.getDiagnostics().queueDepth).toBe(1);
+
+    const onCancelled = vi.fn();
+    const scope = coordinator.beginGeneration('room');
+    coordinator.beginGeneration('room');
+    const superseded = coordinator.enqueue({
+      label: 'superseded', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {},
+      generation: scope, onCancelled,
+    });
+    expect(superseded.state).toBe('cancelled');
+    expect(onCancelled).not.toHaveBeenCalled();
+    const queued = coordinator.enqueue({
+      label: 'queued', priority: 'teardown', costKind: 'cpu', estimatedCostMs: 1, execute: () => {}, onCancelled,
+    });
+    queued.cancel('caller');
+    expect(onCancelled).toHaveBeenCalledWith('caller');
+  });
+
 
   it('reprioritizes queued work without jumping jobs already waiting at the new priority', () => {
     const clock = new TestClock();

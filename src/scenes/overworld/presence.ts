@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getFreshCoopPlatePlayers } from '../../presence/coopPlateActors';
+import { isIdlePresenceRefreshDue } from '../../presence/presenceCadence';
 import {
   type DefaultPlayerAnimationState,
 } from '../../player/defaultPlayer';
@@ -104,12 +105,6 @@ interface LocalPresenceDeadlineSnapshot {
   pvpMatchId: string;
   pvpAction: WorldPresencePvpAction | null;
   pvpActionUntilBucket: number;
-}
-
-interface PresenceSummaryInput {
-  mode: OverworldMode;
-  currentRoomCoordinates: RoomCoordinates;
-  selectedCoordinates: RoomCoordinates;
 }
 
 interface OverworldPresenceControllerOptions {
@@ -298,14 +293,6 @@ export class OverworldPresenceController {
     return this.snapshot;
   }
 
-  getRoomPopulationsById(): Map<string, number> {
-    return this.roomPopulationsById;
-  }
-
-  getRoomEditorsById(): Map<string, number> {
-    return this.roomEditorsById;
-  }
-
   getRoomPreviewsById(): Map<string, WorldPresenceRoomPreview> {
     return this.roomPreviewsById;
   }
@@ -429,8 +416,9 @@ export class OverworldPresenceController {
       || Math.round(input.velocityY) !== previous.velocityY
       || input.facing !== previous.facing
       || input.animationState !== previous.animationState;
-    const interval = changed ? (pvpMatchId ? 25 : 200) : 5_000;
-    return now - this.lastLocalPresenceForwardedAt >= interval;
+    return changed
+      ? now - this.lastLocalPresenceForwardedAt >= (pvpMatchId ? 25 : 200)
+      : isIdlePresenceRefreshDue(this.lastLocalPresenceForwardedAt, now);
   }
 
   updateLocalPresence(input: LocalPresenceInput | null, now = Date.now()): void {
@@ -631,43 +619,6 @@ export class OverworldPresenceController {
 
       return left.displayName.localeCompare(right.displayName);
     });
-  }
-
-  getPresenceSummaryText(input: PresenceSummaryInput): string | null {
-    if (!this.snapshot?.enabled) {
-      return null;
-    }
-
-    const focusCoordinates =
-      input.mode === 'play' ? input.currentRoomCoordinates : input.selectedCoordinates;
-    const population = this.getRoomPopulation(focusCoordinates);
-    const editorCount = this.getRoomEditorCount(focusCoordinates);
-    const visibleGhosts = Array.from(this.renderedGhostsByConnectionId.values()).filter(
-      (renderedGhost) => renderedGhost.sprite.visible
-    ).length;
-    const parts: string[] = [];
-
-    if (population > 0) {
-      parts.push(`${population} active ${population === 1 ? 'player' : 'players'} here`);
-    }
-
-    if (visibleGhosts > 0) {
-      parts.push(`${visibleGhosts} ${visibleGhosts === 1 ? 'ghost' : 'ghosts'} nearby`);
-    }
-
-    if (editorCount > 0) {
-      parts.push(`${editorCount} ${editorCount === 1 ? 'builder' : 'builders'} editing here`);
-    }
-
-    if (this.snapshot.status === 'connecting') {
-      parts.push('presence syncing');
-    }
-
-    if (parts.length === 0) {
-      return this.snapshot.status === 'connected' ? 'presence live' : null;
-    }
-
-    return parts.join(' · ');
   }
 
   getDebugSnapshot(): {

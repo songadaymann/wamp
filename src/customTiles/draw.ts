@@ -1,5 +1,6 @@
 import { TILE_SIZE } from '../config/room';
 import type { CustomRoomTileDefinition } from './model';
+import { BLOCKED_ART_COLOR, isCustomSpriteBlocked } from '../customSprites/blocklist';
 
 export function drawCustomRoomTileToContext(
   context: CanvasRenderingContext2D,
@@ -9,6 +10,11 @@ export function drawCustomRoomTileToContext(
   size: number,
 ): void {
   const cellSize = size / TILE_SIZE;
+  if (isCustomSpriteBlocked(tile.sourceSpriteId)) {
+    context.fillStyle = BLOCKED_ART_COLOR;
+    context.fillRect(dx, dy, Math.ceil(size), Math.ceil(size));
+    return;
+  }
   for (let index = 0; index < tile.pixels.length; index += 1) {
     const color = tile.pixels[index];
     if (!color) {

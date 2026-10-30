@@ -20,19 +20,19 @@ function harness(gravityDirection: PlayerGravityDirection = 'down') {
     activeCrateInteractionMode: null, activeCrateInteractionFacing: null,
     weaponKnockbackUntil: 0, isClimbingLadder: false, isWallSliding: false,
     wallContactSide: 0 as const, wallJumpActive: false };
+  const runtime = { player: player as never, playerBody: body as never, playerSprite: sprite as never,
+    playerPickupSensor: null, playerPickupSensorBody: null };
   const input = { horizontalInput: 1, verticalInput: 0 };
   const state = { animationState: 'run' as 'run' | 'idle', facing: 1 as -1 | 1, wasGrounded: true, landAnimationUntil: 0 };
   const controller = new OverworldPlayerPresentationController({
     state,
-    getCurrentTime: () => 1000, getPlayer: () => player as never,
-    getPlayerBody: () => body as never, getPlayerSprite: () => sprite as never,
-    getPlayerPickupSensor: () => null, getPlayerPickupSensorBody: () => null,
+    getCurrentTime: () => 1000, runtime,
     getSpecialTileEnvironment: () => environment, getLastMovementInput: () => input,
     getQuicksandVisualSink: () => 0, getMovementPresentationState: () => movement,
     getGroundedOverride: () => true, getCurrentAttackAnimation: () => null, playLandingDustFx: vi.fn(),
   }, { playerPickupSensorExtraHeight: 4, playerVisualFeetOffset: 1, landingAnimationMs: 100,
     facingVelocityThreshold: 1, jumpRiseVelocityThreshold: -1, crouchMoveVelocityThreshold: 1, runVelocityThreshold: 1 });
-  return { controller, player, body, sprite, input, state };
+  return { controller, player, body, sprite, runtime, input, state };
 }
 
 describe('player presentation during the Arcade update handoff', () => {
@@ -61,6 +61,18 @@ describe('player presentation during the Arcade update handoff', () => {
     expect(body.velocity.x).toBe(0);
   });
 
+  it('renders the replacement actor after a destroyed interval without touching the old avatar', () => {
+    const f = harness(); f.controller.syncPlayerVisual(false);
+    const oldPosition = [f.sprite.x, f.sprite.y];
+    f.runtime.player = null as never; f.runtime.playerBody = null as never; f.runtime.playerSprite = null as never;
+    f.controller.syncPlayerVisual(false); expect([f.sprite.x, f.sprite.y]).toEqual(oldPosition);
+    const nextBody = { ...f.body, center: { x: 420, y: 500 }, bottom: 507 };
+    const nextSprite = { ...f.sprite, x: 0, y: 0 };
+    f.runtime.player = { x: -100, y: -100 } as never; f.runtime.playerBody = nextBody as never; f.runtime.playerSprite = nextSprite as never;
+    f.controller.syncPlayerVisual(false);
+    expect([nextSprite.x, nextSprite.y]).toEqual([420, 508]);
+    expect([f.sprite.x, f.sprite.y]).toEqual(oldPosition);
+  });
   it.each(['up', 'left', 'right'] as const)('preserves feet placement for %s gravity', gravity => {
     const { controller, body, sprite } = harness(gravity);
     controller.syncPlayerVisual(false);

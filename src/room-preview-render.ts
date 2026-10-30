@@ -1,4 +1,6 @@
 import { renderRoomSnapshotToPngDataUrl } from './mint/roomMetadataRender';
+import { maskBlockedCustomArt } from './customSprites/blockedArt';
+import { fetchBlockedCustomSpriteIds } from './customSprites/blocklistSync';
 import type { RoomSnapshot } from './persistence/roomModel';
 
 declare global {
@@ -36,14 +38,19 @@ async function bootstrap(): Promise<void> {
     updateTitle(`Room ${roomId}`);
     updateStatus(`Fetching published room from ${new URL(apiBase).host}.`);
 
-    const response = await fetch(
-      `${apiBase}/api/rooms/${encodeURIComponent(roomId)}/published?x=${coordinates.x}&y=${coordinates.y}`
-    );
+    const [response, blocked] = await Promise.all([
+      fetch(`${apiBase}/api/rooms/${encodeURIComponent(roomId)}/published?x=${coordinates.x}&y=${coordinates.y}`),
+      fetchBlockedCustomSpriteIds(apiBase),
+    ]);
     if (!response.ok) {
       throw new Error(`Failed to load published room ${roomId}: ${response.status}`);
     }
+    if (!blocked) {
+      throw new Error('Could not load the blocked sprite list.');
+    }
 
-    const snapshot = (await response.json()) as RoomSnapshot;
+    // Art an admin blocked never goes into a token image (F189).
+    const snapshot = maskBlockedCustomArt((await response.json()) as RoomSnapshot, blocked);
     updateTitle(snapshot.title?.trim() || `Room ${roomId}`);
     updateStatus('Rendering WAMP room preview.');
     const dataUrl = await renderRoomSnapshotToPngDataUrl(snapshot, {

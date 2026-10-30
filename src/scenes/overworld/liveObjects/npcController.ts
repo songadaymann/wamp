@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import {
   JIMOTHY_ANIMATION_KEYS,
+  getJimothyActionAnimationKey,
   type NpcMode,
 } from '../../../npcs/model';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
 import { isAnimationSafelyPlayable } from './animationReadiness';
-import { getArcadeBodyBounds } from './bodies';
+import { getArcadeBodyBounds, isDynamicArcadeBody, type ArcadeObjectBody } from './bodies';
+import { carryPlayerOnMovingPlatform } from './movingPlatforms';
 import {
   resolveNpcHorizontalVelocity,
   resolveNpcRoomBoundaryCorrection,
@@ -17,6 +19,7 @@ import { syncNpcNameLabelResolution } from './npcNameLabel';
 
 const NPC_WALK_SPEED = 70;
 const NPC_JUMP_VELOCITY = -210;
+export const NPC_STEP_JUMP_VELOCITY_X = 52;
 const NPC_FOLLOW_STOP_DISTANCE = 7;
 const NPC_WANDER_WALK_MIN_MS = 1800;
 const NPC_WANDER_WALK_MAX_MS = 4500;
@@ -60,6 +63,7 @@ export interface NpcRuntimeStateSnapshot {
 
 export class LiveObjectNpcController<TEdgeWall = unknown> {
   private readonly roomBottomedNpcY = new WeakMap<LoadedRoomObject, number>();
+  private readonly stepJumpDirectionX = new WeakMap<LoadedRoomObject, -1 | 1>();
 
   constructor(private readonly options: NpcControllerOptions) {}
 
@@ -78,6 +82,8 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       this.syncNameLabel(liveObject);
       return;
     }
+
+    this.carryRidingPlayer(liveObject, body);
 
     const mode = liveObject.runtime.npcMode ?? 'idle';
     const terrainActor = liveObject.layer === 'terrain';
@@ -99,7 +105,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
     body.setAllowGravity(terrainActor && movable && !restingOnRoomBottom);
     body.setImmovable(!movable);
-    body.pushable = movable;
+    body.pushable = false;
     body.setDragX(
       movable
         ? liveObject.runtime.specialTileOnIce
@@ -116,7 +122,7 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
 
     if (liveObject.runtime.npcVictorious) {
       body.setVelocityX(0);
-      this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.victory);
+      this.playActionAnimation(liveObject, 'victory');
       this.syncNameLabel(liveObject);
       return;
     }
@@ -147,6 +153,55 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     this.syncNameLabel(liveObject);
   }
 
+  pushFromPlayer(rooms: Iterable<LoadedFullRoom<LoadedRoomObject, TEdgeWall>>): void {
+    const playerBody = this.options.getPlayerBody();
+    if (!playerBody) return;
+    for (const loadedRoom of rooms) {
+      if (loadedRoom.runtimeSuspended === true) continue;
+      for (const liveObject of loadedRoom.liveObjects) {
+        if (liveObject.config.category !== 'npc' || !liveObject.sprite.active) continue;
+        const body = liveObject.sprite.body as ArcadeObjectBody | null;
+        if (!isDynamicArcadeBody(body) || !body.enable) continue;
+        this.applyPlayerPush(liveObject, body, playerBody);
+      }
+    }
+  }
+
+  applyPlayerPush(
+    liveObject: LoadedRoomObject,
+    npcBody: Phaser.Physics.Arcade.Body,
+    playerBody: Phaser.Physics.Arcade.Body,
+  ): void {
+    const mode = liveObject.runtime.npcMode ?? 'idle';
+    const movable = mode !== 'idle' || liveObject.runtime.npcPushable;
+    if (!movable) {
+      return;
+    }
+
+    const verticalOverlap =
+      Math.min(npcBody.bottom, playerBody.bottom) -
+      Math.max(npcBody.top, playerBody.top);
+    if (verticalOverlap < 8 || playerBody.bottom <= npcBody.top + 10) {
+      return;
+    }
+
+    const npcCenterX = (npcBody.left + npcBody.right) * 0.5;
+    const playerCenterX = (playerBody.left + playerBody.right) * 0.5;
+    const pushingRight =
+      playerCenterX < npcCenterX &&
+      playerBody.velocity.x > 20 &&
+      playerBody.right > npcBody.left - 4;
+    const pushingLeft =
+      playerCenterX > npcCenterX &&
+      playerBody.velocity.x < -20 &&
+      playerBody.left < npcBody.right + 4;
+    if (pushingRight && !npcBody.blocked.right && !npcBody.touching.right) {
+      npcBody.setVelocityX(Math.max(npcBody.velocity.x, playerBody.velocity.x));
+    } else if (pushingLeft && !npcBody.blocked.left && !npcBody.touching.left) {
+      npcBody.setVelocityX(Math.min(npcBody.velocity.x, playerBody.velocity.x));
+    }
+  }
+
   touchQuicksand(liveObject: LoadedRoomObject): void {
     liveObject.runtime.npcQuicksandUntil = Math.max(
       liveObject.runtime.npcQuicksandUntil,
@@ -169,6 +224,11 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         }
         liveObject.runtime.npcVictorious = victorious;
         if (!victorious) {
+          this.options.applyDirectionalFacing(
+            liveObject.sprite,
+            liveObject.config,
+            liveObject.runtime.directionX,
+          );
           this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
         }
       }
@@ -246,13 +306,13 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
           now + Phaser.Math.Between(NPC_WANDER_PAUSE_MIN_MS, NPC_WANDER_PAUSE_MAX_MS);
       } else {
         liveObject.runtime.npcWalking = true;
-        liveObject.runtime.directionX *= -1;
+        liveObject.runtime.directionX = this.chooseWanderDirection();
         liveObject.runtime.nextActionAt =
           now + Phaser.Math.Between(NPC_WANDER_WALK_MIN_MS, NPC_WANDER_WALK_MAX_MS);
       }
     }
 
-    if (!liveObject.runtime.npcWalking) {
+    if (!liveObject.runtime.npcWalking && this.getStepJumpDirection(liveObject, body) === null) {
       this.applyHorizontalMovement(liveObject, body, delta, false);
       this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
       return;
@@ -307,6 +367,13 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
     terrainActor: boolean,
     mode: NpcMode,
   ): boolean {
+    const stepJumpDirectionX = this.getStepJumpDirection(liveObject, body);
+    if (stepJumpDirectionX !== null) {
+      liveObject.runtime.directionX = stepJumpDirectionX;
+      body.setVelocityX(stepJumpDirectionX * NPC_STEP_JUMP_VELOCITY_X);
+      return false;
+    }
+
     const directionX = liveObject.runtime.directionX;
     const grounded = body.blocked.down || body.touching.down;
     const blocked =
@@ -322,7 +389,10 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       blocked &&
       this.hasOneTileJumpSpace(room, body, directionX)
     ) {
-      body.setVelocityY(NPC_JUMP_VELOCITY);
+      const jumpDirectionX: -1 | 1 = directionX < 0 ? -1 : 1;
+      this.stepJumpDirectionX.set(liveObject, jumpDirectionX);
+      liveObject.runtime.directionX = jumpDirectionX;
+      body.setVelocity(jumpDirectionX * NPC_STEP_JUMP_VELOCITY_X, NPC_JUMP_VELOCITY);
       return false;
     }
 
@@ -343,10 +413,19 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         this.options.getCurrentTime() +
         Phaser.Math.Between(NPC_WANDER_PAUSE_MIN_MS, NPC_WANDER_PAUSE_MAX_MS);
       body.setVelocityX(0);
+      this.options.applyDirectionalFacing(
+        liveObject.sprite,
+        liveObject.config,
+        liveObject.runtime.directionX,
+      );
       this.playAnimation(liveObject, JIMOTHY_ANIMATION_KEYS.idle);
       return true;
     }
     return false;
+  }
+
+  private chooseWanderDirection(): -1 | 1 {
+    return Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
   }
 
   private hasOneTileJumpSpace(
@@ -389,10 +468,14 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
       this.options.getCurrentTime() < liveObject.runtime.npcBounceCooldownUntil &&
       !body.blocked.down &&
       !body.touching.down;
+    const stepJumpDirectionX = this.stepJumpDirectionX.get(liveObject);
+    if (stepJumpDirectionX !== undefined) {
+      liveObject.runtime.directionX = stepJumpDirectionX;
+    }
     body.setVelocityX(resolveNpcHorizontalVelocity({
       currentVelocityX: body.velocity.x,
       directionX: liveObject.runtime.directionX,
-      baseSpeed: NPC_WALK_SPEED,
+      baseSpeed: stepJumpDirectionX !== undefined ? NPC_STEP_JUMP_VELOCITY_X : NPC_WALK_SPEED,
       deltaMs: delta,
       walking,
       externallyLaunched,
@@ -488,6 +571,46 @@ export class LiveObjectNpcController<TEdgeWall = unknown> {
         return;
       }
     }
+  }
+
+  private carryRidingPlayer(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): void {
+    const deltaX = liveObject.sprite.x - liveObject.runtime.previousX;
+    const deltaY = liveObject.sprite.y - liveObject.runtime.previousY;
+    if (!liveObject.runtime.npcFriendlyFire) {
+      carryPlayerOnMovingPlatform(this.options.getPlayerBody(), body, deltaX, deltaY);
+    }
+    liveObject.runtime.previousX = liveObject.sprite.x;
+    liveObject.runtime.previousY = liveObject.sprite.y;
+  }
+
+  private getStepJumpDirection(
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+  ): -1 | 1 | null {
+    const directionX = this.stepJumpDirectionX.get(liveObject);
+    if (directionX === undefined) {
+      return null;
+    }
+
+    const grounded = body.blocked.down || body.touching.down;
+    const velocityY = body.velocity?.y ?? 0;
+    if (grounded && velocityY >= -1) {
+      this.stepJumpDirectionX.delete(liveObject);
+      return null;
+    }
+
+    return directionX;
+  }
+
+  private playActionAnimation(liveObject: LoadedRoomObject, action: 'victory'): void {
+    liveObject.sprite.setFlipX(false);
+    this.playAnimation(
+      liveObject,
+      getJimothyActionAnimationKey(action, liveObject.runtime.directionX),
+    );
   }
 
   private playAnimation(liveObject: LoadedRoomObject, key: string): void {

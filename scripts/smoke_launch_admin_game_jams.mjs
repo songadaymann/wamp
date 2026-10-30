@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const requestedBaseUrl = process.env.WAMP_SMOKE_URL;
@@ -126,8 +127,15 @@ await expectContains(page, '#game-jam-participants-body', 'Awaiting level');
 
 await expectContains(page, '#activity-feed', 'account@example.com');
 await expectContains(page, '#activity-feed', '0x1234567890abcdef1234567890abcdef12345678');
-const secondSection = await page.locator('.admin-content > section').nth(1).getAttribute('id');
-if (secondSection !== 'activity') throw new Error('Activity must be second');
+// Activity follows the overview (System Overview, then Where Players Come From) in the page and
+// is the second link in the sidebar. The daily, weekly, prompt and capture tools sit above them.
+const sectionIds = await page.locator('.admin-content > section').evaluateAll((sections) => sections.map((section) => section.id));
+const overviewIndex = sectionIds.indexOf('overview');
+if (sectionIds.slice(overviewIndex, overviewIndex + 3).join() !== 'overview,launch-funnel,activity') {
+  throw new Error(`Activity must follow the overview, got ${sectionIds.join(', ')}`);
+}
+const secondLink = await page.locator('.admin-nav a[href^="#"]').nth(1).getAttribute('href');
+if (secondLink !== '#activity') throw new Error(`Activity must be the second sidebar link, got ${secondLink}`);
 await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
 await page.locator('a[href="#activity"]').click();
 await page.locator('#activity').scrollIntoViewIfNeeded();

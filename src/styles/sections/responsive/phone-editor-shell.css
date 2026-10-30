@@ -1,173 +1,118 @@
-body[data-device-class='phone'][data-app-mode='editor'] {
-  --phone-editor-sheet-height: min(46vh, 344px);
-  --phone-editor-nav-height: 43px;
-}
+@layer responsive {
+  body[data-device-class='phone'][data-app-mode='editor'] {
+    --phone-editor-sheet-height: min(46vh, 344px);
+    --phone-editor-nav-height: 43px;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'] {
-  --phone-editor-sheet-height: min(58vh, 464px);
-}
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'] {
+    --phone-editor-sheet-height: min(58vh, 464px);
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'][data-editor-custom-object-filter='true'] {
-  --phone-editor-sheet-height: min(66vh, 540px);
-}
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-palette-mode='objects'][data-editor-custom-object-filter='true'] {
+    --phone-editor-sheet-height: min(66vh, 540px);
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] {
-  --phone-editor-stage-height: min(
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] {
+    --phone-editor-stage-height: min(
     52dvh,
     calc(min(100dvh, var(--app-viewport-height)) - var(--phone-editor-sheet-height) - var(--phone-editor-nav-height))
   );
-}
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] {
-  --phone-editor-stage-height: calc(
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] {
+    --phone-editor-stage-height: calc(
     min(100dvh, var(--app-viewport-height)) - var(--phone-editor-nav-height) - var(--safe-bottom)
   );
-}
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #app {
-  grid-template-rows: var(--phone-editor-stage-height) minmax(0, 1fr);
-  align-content: start;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #app {
+    grid-template-rows: var(--phone-editor-stage-height) minmax(0, 1fr);
+    align-content: start;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #game-container {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  align-self: start;
-  width: 100%;
-  height: var(--phone-editor-stage-height);
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='editor'] #game-container {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    width: 100%;
+    height: var(--phone-editor-stage-height);
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: auto;
-  z-index: 17;
-  width: auto;
-  height: var(--phone-editor-sheet-height);
-  max-height: calc(min(100dvh, var(--app-viewport-height)) - 108px - var(--safe-top));
-  padding-bottom: var(--safe-bottom);
-  border-right: none;
-  border-top: 1px solid var(--border);
-  background: rgba(11, 11, 11, 0.96);
-  backdrop-filter: blur(6px);
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -20px 48px rgba(var(--wamp-black-rgb), 0.34);
-  transition: transform 0.16s ease, opacity 0.16s ease;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] #sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: var(--z-phone-editor-sidebar-legacy);
+    width: auto;
+    height: var(--phone-editor-sheet-height);
+    max-height: calc(min(100dvh, var(--app-viewport-height)) - 108px - var(--safe-top));
+    padding-bottom: var(--safe-bottom);
+    border-right: none;
+    border-top: 1px solid var(--border);
+    background: rgba(11, 11, 11, 0.96);
+    backdrop-filter: blur(6px);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -20px 48px rgba(var(--wamp-black-rgb), 0.34);
+    transition: transform 0.16s ease, opacity 0.16s ease;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #sidebar {
-  transform: translateY(calc(100% + 10px));
-  opacity: 0;
-  pointer-events: none;
-}
+  body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #sidebar {
+    transform: translateY(calc(100% + 10px));
+    opacity: 0;
+    pointer-events: none;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] #bottom-bar {
-  display: none;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] #bottom-bar {
+    display: none;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] .mobile-editor-only {
-  display: block;
-}
+  body[data-device-class='phone'] .desktop-editor-only {
+    display: none !important;
+  }
 
-body[data-device-class='phone'] .desktop-editor-only {
-  display: none !important;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] #room-title-section.editor-room-title-overlay {
+    display: none;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] #room-title-section.editor-room-title-overlay {
-  display: none;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
+    display: grid;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] .background-card-grid {
-  display: grid;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
+    padding: 10px 12px;
+    overflow: visible;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
-  display: none;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] #sidebar .section-label {
+    margin-bottom: 6px;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='tools'] #sidebar .sidebar-section[data-mobile-panel='tools'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='background'] #sidebar .sidebar-section[data-mobile-panel='background'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='palette'] #sidebar .sidebar-section[data-mobile-panel='palette'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel='objects'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='objects'] #sidebar .sidebar-section[data-mobile-panel-alt='objects'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #sidebar .sidebar-section[data-mobile-panel='goal'],
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='actions'] #sidebar .sidebar-section[data-mobile-panel='actions'] {
-  display: block;
-}
+  body[data-device-class='phone'][data-app-mode='editor'] .sidebar-section-toggle {
+    display: none;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'] #editor-actions .editor-feature-panels {
-  display: none;
-}
+  body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions {
-  display: block;
-}
+  body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section {
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions > :not(.editor-top-tools) {
-  display: none;
-}
+  body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {
+    overflow: hidden;
+  }
 
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools.desktop-editor-only {
-  display: block !important;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-top-tools > :not(.editor-feature-panels) {
-  display: none;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #editor-actions .editor-feature-panels,
-body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-sheet='goal'] #goal-section {
-  display: grid;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section {
-  padding: 10px 12px;
-  overflow: visible;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'] #sidebar .section-label {
-  margin-bottom: 6px;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'] .sidebar-section-toggle {
-  display: none;
-}
-
-body[data-device-class='phone'][data-app-mode='editor'] #sidebar .sidebar-section.is-collapsed .sidebar-section-body {
-  display: block;
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
-  flex: 1 1 auto;
-  overflow: hidden;
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section {
-  flex: 0 0 auto;
-  min-height: 0;
-  max-height: none;
-  overflow: visible;
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section {
-  min-height: clamp(420px, 58vh, 520px);
-  max-height: min(620px, calc(100dvh - 120px));
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section.has-custom-subcategories {
-  min-height: clamp(500px, 68vh, 600px);
-  max-height: min(720px, calc(100dvh - 72px));
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {
-  overflow: hidden;
-}
-
-body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section .sidebar-section-body,
-body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section #palette-container {
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: visible;
+  body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section .sidebar-section-body,
+  body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section #palette-container {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: visible;
+  }
 }

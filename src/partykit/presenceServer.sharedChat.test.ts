@@ -92,8 +92,11 @@ describe('shared presence and room chat', () => {
     say(alice, 'not while editing');expect(bubbles(bob)).toHaveLength(0);
     sendPresence(harness, alice, presencePayload({ mode: 'play' }));await harness.advance(250);
     expect(bob.messages().some((m) => (m as { type: string }).type === 'preview:remove')).toBe(true);
+    // Challenges reach players between runs, not during one.
+    sendPresence(harness, bob, presencePayload({ mode: 'browse' }));
     harness.server.onMessage(JSON.stringify({ type: 'pvp:invite', invite: { inviteId: 'invite', matchId: 'match', mode: 'arena', roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, targetConnectionId: bob.id, target: testIdentity('bob'), expiresAt: Date.now() + 5000 } }), alice.asPartyConnection());
     expect(bob.messages().some((m) => (m as { type: string }).type === 'pvp:invite:offer')).toBe(true);
+    sendPresence(harness, bob, presencePayload({ mode: 'play' }));
     say(alice, 'after editing');expect(bubbles(bob)).toHaveLength(1);
   });
 

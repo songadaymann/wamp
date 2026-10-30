@@ -1,0 +1,1 @@
+| 2026-10-29 | F479 | [#350](https://github.com/songadaymann/wamp/pull/350) | [receipt](docs/review/wamp-f479-wallet-room-presentation-2026-10-29.md) | Require wallet connection for Protected sorting and crypto details; preserve permissions and recovery |

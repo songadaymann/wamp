@@ -509,13 +509,6 @@ export async function recoverExpiredLeases(
   return Number(leaseResult?.meta?.changes ?? 0);
 }
 
-export async function listReferencedR2Keys(db: D1Database): Promise<Set<string>> {
-  const response = await db.prepare(
-    `SELECT DISTINCT r2_key FROM world_render_tiles WHERE r2_key IS NOT NULL ORDER BY r2_key`
-  ).all<{ r2_key: string }>();
-  return new Set(response.results.map((row) => row.r2_key));
-}
-
 interface PublishReadyBase {
   address: WorldTileAddress;
   generation: number;
@@ -526,3 +519,13 @@ interface PublishReadyBase {
 function changed(value: number | undefined): boolean {
   return typeof value === 'number' && value > 0;
 }
+
+/** Which of these community sprite ids an admin blocked (F189). */
+export async function loadBlockedCustomSpriteIdsAmong(db: D1Database, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.prepare(
+    `SELECT id FROM custom_sprites WHERE status = 'blocked' AND id IN (SELECT value FROM json_each(?))`,
+  ).bind(JSON.stringify(ids)).all<{ id: string }>();
+  return new Set(rows.results.map((row) => row.id));
+}
+

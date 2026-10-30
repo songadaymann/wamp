@@ -20,11 +20,7 @@ export function resolveRoomClearRewardScope(
   userId: string,
 ): ClearRewardScope {
   const window = buildRoomRatingWindow(record.versions, roomVersion);
-  const publisherUserId = record.versions.find((entry) => entry.version === roomVersion)?.publishedByUserId ?? null;
-  return {
-    versions: window.versionFamily.includes(roomVersion) ? window.versionFamily : [roomVersion],
-    ownContent: userId === record.claimerUserId || userId === publisherUserId,
-  };
+  return resolveClearRewardScope(record.versions,window.versionFamily,roomVersion,userId,record.claimerUserId);
 }
 
 export function resolveCourseClearRewardScope(
@@ -35,11 +31,15 @@ export function resolveCourseClearRewardScope(
   ownerUserId: string | null,
 ): ClearRewardScope {
   const window = buildCourseRatingWindow(record.versions, courseVersion, courseId);
-  const publisherUserId = record.versions.find((entry) => entry.version === courseVersion)?.publishedByUserId ?? null;
-  return {
-    versions: window.versionFamily.includes(courseVersion) ? window.versionFamily : [courseVersion],
-    ownContent: userId === ownerUserId || userId === publisherUserId,
-  };
+  return resolveClearRewardScope(record.versions,window.versionFamily,courseVersion,userId,ownerUserId);
+}
+
+function resolveClearRewardScope(
+  versions: readonly { version: number; publishedByUserId: string | null }[], family: number[],
+  version: number, userId: string, ownerUserId: string | null,
+): ClearRewardScope {
+  const publisherUserId=versions.find(entry => entry.version===version)?.publishedByUserId ?? null;
+  return {versions:family.includes(version) ? family : [version],ownContent:userId===ownerUserId || userId===publisherUserId};
 }
 
 /** Clear rewards a run may earn once its scope is known; ownership withholds them. */

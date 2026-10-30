@@ -31,8 +31,8 @@ export interface TileSelection {
   startRow: number;
   width: number;   // in tiles
   height: number;  // in tiles
-  occupiedMask: boolean[][];
-  patternOrder?: Array<{ col: number; row: number }>;
+  occupiedMask: readonly (readonly boolean[])[];
+  patternOrder?: readonly Readonly<{ col: number; row: number }>[];
 }
 
 export const TILE_FLIP_X_FLAG = 1 << 20;

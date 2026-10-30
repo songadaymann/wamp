@@ -9,7 +9,6 @@ vi.mock('../auth/request', async actual => ({ ...await actual<object>(),
   loadOptionalRequestAuth: async () => auth.id ? { user: { id: auth.id }, source: 'session' } : null,
   requireAuthenticatedRequestAuth: async () => { if (!auth.id) throw new Error('Sign in'); return { user: { id: auth.id }, source: 'session' }; },
 }));
-vi.mock('../generatedUsers/leaderboardIsolation', async actual => ({ ...await actual<object>(), assertWampLeaderboardWriteAllowed: async () => {} }));
 vi.mock('../expandedRooms/store', async actual => ({ ...await actual<object>(), loadExpandedRoomTarget: async () => expanded.value }));
 vi.mock('../progression/progressRows', async actual => ({ ...await actual<object>(),
   loadOrBackfillUserProgress: async (env: Env, id: string) => {
@@ -105,8 +104,36 @@ it('atomically caps XP at ten daily finds while retaining every find and prevent
   expect((await loadLostSongProgress(env,'other')).total).toBe(0);
   expect((await saveUserLostSong(env,'other',find(1))).xp).toBe(5);
 });
+function addSongRoom(roomId: string) {
+  const [x, y] = roomId.split(',').map(Number);
+  const room = { ...createDefaultRoomSnapshot(roomId,{ x,y }), status: 'published', version: 1,
+    placedObjects: [{ id: 'lost_song', instanceId: 'song', x: 100, y: 100, layer: 'terrain' }] };
+  db.prepare('INSERT INTO rooms VALUES (?,?,?,NULL)').run(roomId,JSON.stringify(room),'owner');
+}
+it('resumes the open session when a player enters the same room again, with a fresh token', async () => {
+  // More entries than the 32 open sessions a player may hold, within the per-minute play limit.
+  const sessions = [];
+  for (let i=0;i<35;i++) sessions.push(await play());
+  expect(db.prepare('SELECT COUNT(*) n FROM lost_song_play_sessions').get()).toMatchObject({ n: 1 });
+  expect(new Set(sessions.map(session => session.id)).size).toBe(1);
+  expect(new Set(sessions.map(session => session.token)).size).toBe(35);
+  await expect(call('/api/lost-songs/find',findBody(sessions[0]))).rejects.toMatchObject({ status: 409 });
+  expect(await (await call('/api/lost-songs/find',findBody(sessions[34]))).json()).toMatchObject({ roomId: '0,0' });
+  // A found session is closed, so a later entry opens a new one.
+  expect((await play()).id).not.toBe(sessions[0].id);
+});
+it('does not let other players\' open sessions block a new one', async () => {
+  const insert = db.prepare(`INSERT INTO lost_song_play_sessions
+    (id,identity_type,identity_id,recovery_hash,token_hash,room_id,room_version,expanded_room_id,owner_user_id,song_x,song_y,started_at,expires_at)
+    VALUES (?,'guest',?,'',?,'0,0',1,NULL,'owner',100,100,?,?)`);
+  const now = new Date().toISOString(), later = new Date(Date.now() + 600_000).toISOString();
+  for (let i=0;i<5000;i++) insert.run(`busy-${i}`,`guest-${i}`,`hash-${i}`,now,later);
+  expect((await play()).id).toMatch(/^[a-f0-9-]{36}$/);
+});
 it('bounds active proof storage and expires guest receipts without erasing account finds', async () => {
-  for (let i=0;i<32;i++) await play();await expect(play()).rejects.toMatchObject({ status: 429 });
+  for (let i=1;i<=32;i++) addSongRoom(`${i},0`);
+  for (let i=0;i<32;i++) await play({ roomId: `${i},0` });await expect(play({ roomId: '32,0' })).rejects.toMatchObject({ status: 429 });
+  expect((await play({ roomId: '5,0' })).id).toBeTruthy();
   await saveUserLostSong(env,'player',{ roomId: '0,0',roomVersion: 1,sessionId: 'saved',foundAt: new Date().toISOString() });
   db.exec("UPDATE lost_song_play_sessions SET expires_at='2000-01-01'");await purgeLostSongSessions(env);
   expect(db.prepare('SELECT COUNT(*) n FROM lost_song_play_sessions').get()).toMatchObject({ n: 0 });

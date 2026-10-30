@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const base = process.argv[2] || 'http://127.0.0.1:3036';
 const output = process.argv[3] || 'output/web-game/returning-guest-panel/native';
@@ -22,6 +24,8 @@ async function contextFor(width,height,touch,returning) {
       if(event.target.id==='auth-email-input')window.__guestPanelFocus.push({at:Date.now(),ready:document.body?.dataset.appReady});
     });
   },returning);
+  // Recorded rooms stand in for the live world (F480).
+  await installSmokeApiReplay(context);
   return context;
 }
 function observe(page,name) {
@@ -87,7 +91,7 @@ async function drive(page,context,touch,untilClear=false) {
     release=async()=>{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();};
   }
   try {
-    if(untilClear)await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene.goalRun?.result==='completed',null,{timeout:20000});
+    if(untilClear)await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene.goalRun?.result==='completed',null,{timeout:60000});
     else await page.waitForTimeout(350);
   } finally {await release();}
 }

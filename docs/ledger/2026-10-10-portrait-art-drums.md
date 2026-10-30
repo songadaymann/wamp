@@ -1,0 +1,1 @@
+| 2026-10-10 | F080, F017, F023 | [#136](https://github.com/songadaymann/wamp/pull/136)–[#138](https://github.com/songadaymann/wamp/pull/138) | [receipt](docs/review/wamp-portrait-art-drums-2026-10-10.md) | Portrait canvas ends at the controls, lossless PNG recompression, drum kit loads in parallel (F023 part) |

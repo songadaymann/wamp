@@ -55,6 +55,8 @@ interface OverworldRuntimeControllerHost<TLiveObject> {
   getPlayerBody(): Phaser.Physics.Arcade.Body | null;
   shouldCollidePlayerWithTerrainTile(tile: Phaser.Tilemaps.Tile): boolean;
   createPlayer(room: RoomSnapshot): void;
+  /** Readies the room the player is about to spawn in, before its enemies first act (F302). */
+  prepareRoomArrival?: (roomId: string) => void;
   afterCoursePlayerSpawn?: () => void;
   destroyPlayer(): void;
   syncAppMode(): void;
@@ -161,6 +163,7 @@ export class OverworldRuntimeController<TLiveObject = unknown> {
 
     if (needsPlayerSpawn) {
       this.host.destroyPlayer();
+      this.host.prepareRoomArrival?.(currentRoom.id);
       this.host.createPlayer(currentRoom);
       this.host.setShouldRespawnPlayer(false);
     }

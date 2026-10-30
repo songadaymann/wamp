@@ -33,8 +33,10 @@ import type { CoursePlaybackRoomSourceMode } from './coursePlayback';
 import type { ActiveExpandedRoomRunState } from './expandedRoomRuns';
 import type { ActiveRoomRushRunState } from './roomRushRuns';
 import type { SelectedCellState } from './hudViewModel';
+import type { RoomOwnershipEditPermit } from './roomOwnershipEdit';
 
 interface OverworldSceneFlowHost {
+  prepareRoomEdit(roomId: string, coordinates: RoomCoordinates): Promise<RoomOwnershipEditPermit | null>;
   getMode(): OverworldMode;
   setMode(mode: OverworldMode): void;
   setCameraMode(mode: CameraMode): void;
@@ -94,6 +96,7 @@ interface OverworldSceneFlowHost {
 }
 
 export class OverworldSceneFlowController {
+  private openingSelectedEditor = false;
   private readonly courseRepository = createCourseRepository();
   private readonly expandedRoomRepository = createExpandedRoomRepository();
 
@@ -263,10 +266,7 @@ export class OverworldSceneFlowController {
       ?? this.host.getCurrentRoomCoordinates();
     const courseEditorReturnTarget = this.host.getCourseEditorReturnTarget();
     const editorPlaytestReturnTarget = this.host.getEditorPlaytestReturnTarget();
-    this.host.setCourseEditorReturnTarget(null);
-    this.host.setEditorPlaytestReturnTarget(null);
-    this.host.resetPlaySession();
-    this.host.clearTouchGestureState();
+    this.endPlaySession();
     this.host.setMode('browse');
     this.host.setCameraMode('inspect');
     this.host.setInspectZoom(this.host.getBrowseInspectZoom());
@@ -319,6 +319,14 @@ export class OverworldSceneFlowController {
     this.host.refreshAroundIfNeededOrFromCache(returnCoordinates);
   }
 
+  /** Ends the run like Stop, minus the trip back: a jump forgets an editor test's return (F383). */
+  endPlaySession(): void {
+    this.host.setCourseEditorReturnTarget(null);
+    this.host.setEditorPlaytestReturnTarget(null);
+    this.host.resetPlaySession();
+    this.host.clearTouchGestureState();
+  }
+
   buildSelectedRoom(): void {
     const selectedCoordinates = this.host.getSelectedCoordinates();
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
@@ -332,38 +340,49 @@ export class OverworldSceneFlowController {
     });
   }
 
-  editSelectedRoom(): void {
-    const selectedCoordinates = this.host.getSelectedCoordinates();
+  editSelectedRoom(roomOnly = false): void {
+    if (this.openingSelectedEditor) return;
+    void this.openSelectedEditorAfterOwnershipCheck(roomOnly);
+  }
+
+  private async openSelectedEditorAfterOwnershipCheck(roomOnly = false): Promise<void> {
+    const selectedCoordinates = { ...this.host.getSelectedCoordinates() };
     const selectedState = this.host.getCellStateAt(selectedCoordinates);
-    if (
-      selectedState !== 'published'
-      && selectedState !== 'draft'
-      && selectedState !== 'claimed_unpublished'
-    ) {
-      return;
-    }
-
+    if (!['published', 'draft', 'claimed_unpublished'].includes(selectedState)) return;
     const selectedRoomId = roomIdFromCoordinates(selectedCoordinates);
-    const selectedCourseId = selectedState === 'published'
-      ? this.host.getSelectedPublishedCourseId()
-      : null;
-    if (selectedCourseId) {
-      void this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates);
-      return;
+    const selectedCourseId = selectedState === 'published' ? this.host.getSelectedPublishedCourseId() : null;
+    this.openingSelectedEditor = true;
+    showBusyOverlay('Opening editor...', 'Checking room ownership...');
+    let permit: RoomOwnershipEditPermit | null = null;
+    try {
+      permit = await this.host.prepareRoomEdit(selectedRoomId, selectedCoordinates);
+      const canOpen = () => permit?.isCurrent() ?? false;
+      if (!canOpen()) { hideBusyOverlay(); return; }
+      if (selectedCourseId && !permit?.roomOnly && !roomOnly) {
+        await this.openSelectedExpandedRoomEditor(selectedCourseId, selectedRoomId, selectedCoordinates, canOpen);
+      } else {
+        await this.openEditor({
+          roomCoordinates: selectedCoordinates,
+          source: 'world',
+          roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
+          courseEdit: roomOnly || permit?.roomOnly ? null : this.host.getActiveCourseEditContext(selectedRoomId),
+        }, canOpen);
+      }
+    } catch (error) {
+      showBusyError(error instanceof Error ? error.message : 'Could not check room ownership. Please try again.', {
+        title: 'Room ownership', retryLabel: 'Try again', retryHandler: () => this.editSelectedRoom(roomOnly),
+      });
+    } finally {
+      permit?.dispose();
+      this.openingSelectedEditor = false;
     }
-
-    void this.openEditor({
-      roomCoordinates: { ...selectedCoordinates },
-      source: 'world',
-      roomSnapshot: this.host.getSelectedRoomSnapshot(selectedCoordinates),
-      courseEdit: this.host.getActiveCourseEditContext(selectedRoomId),
-    });
   }
 
   private async openSelectedExpandedRoomEditor(
     courseId: string,
     selectedRoomId: string,
     selectedCoordinates: RoomCoordinates,
+    canOpen: () => boolean = () => true,
   ): Promise<void> {
     showBusyOverlay('Opening expanded room editor...', 'Loading expanded room...');
     try {
@@ -372,6 +391,8 @@ export class OverworldSceneFlowController {
       showBusyError(error instanceof Error ? error.message : 'Failed to load the expanded room editor.');
       return;
     }
+
+    if (!canOpen()) { hideBusyOverlay(); return; }
 
     const sceneData: CourseEditorSceneData = {
       courseId,

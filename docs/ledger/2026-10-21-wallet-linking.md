@@ -1,0 +1,1 @@
+| 2026-10-21 | F247 | [#271](https://github.com/songadaymann/wamp/pull/271)–[#272](https://github.com/songadaymann/wamp/pull/272) | [receipt](docs/review/wamp-wallet-linking-2026-10-20.md) | Wallet approvals are bound to account intent, stale sessions recover, link conflicts read clearly (part) |

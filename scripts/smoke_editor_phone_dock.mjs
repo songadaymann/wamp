@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const base = process.argv[2] || 'http://127.0.0.1:3031';
@@ -59,15 +60,36 @@ try {
         assert.ok(box.height >= minimum, `${selector} target too short`);
       }
       async function selection() {
-        return page.evaluate(async () => {
-          const { editorState } = await import('/src/config.ts');
-          return { paletteMode: editorState.paletteMode, selectedObjectId: editorState.selectedObjectId, activeTool: editorState.activeTool };
-        });
+        // What the editor shows: palette mode, the pressed object tile, and the active drawing tool.
+        return page.evaluate(() => ({
+          paletteMode: document.body.dataset.editorPaletteMode,
+          selectedObjectId: document.querySelector('#object-grid .object-item[aria-pressed="true"]')?.dataset.objectId ?? null,
+          activeTool: document.querySelector('.editor-shell-tools [data-tool].active')?.dataset.tool ?? null,
+        }));
       }
       for (const selector of ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar']) await bounds(selector);
       for (const selector of ['[data-editor-shell-action="test"]', '[data-editor-shell-action="publish"]', '#btn-editor-phone-menu', '#btn-mobile-editor-toggle']) await bounds(selector, 44);
-      assert.equal(await page.locator('#mobile-editor-nav').isVisible(), false);
+      assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
       passed.push('persistent actions and 44px targets fit');
+
+      if (device === 'portrait') {
+        // F367: every library button, Markers and Room Setup included, is on screen without scrolling.
+        for (const width of [390, 375, 360]) {
+          await page.setViewportSize({ width, height: viewport.height });
+          await page.waitForTimeout(300);
+          const dock = await page.evaluate(() => {
+            const row = document.querySelector('#editor-shell-dock .editor-shell-dock-grid');
+            const off = [...row.children].filter(b => b.getClientRects().length).map(b => ({ label: b.textContent.trim(), box: b.getBoundingClientRect() }))
+              .filter(({ box }) => box.left < -1 || box.right > innerWidth + 1).map(({ label }) => label);
+            return { off, scrollWidth: row.scrollWidth, clientWidth: row.clientWidth };
+          });
+          assert.deepEqual(dock.off, [], `${width}px: dock buttons off screen`);
+          assert.ok(dock.scrollWidth <= dock.clientWidth, `${width}px: dock row scrolls ${JSON.stringify(dock)}`);
+        }
+        await page.setViewportSize(viewport);
+        await page.waitForTimeout(300);
+        passed.push('all dock buttons fit at 390, 375 and 360px');
+      }
 
       await tap('[data-editor-dock="stuff"]');
       await tap('.obj-cat-tab[data-category="collectible"]');
@@ -170,6 +192,9 @@ try {
         await page.keyboard.press('Escape');
       } else await tap('#btn-editor-phone-menu');
       await tap('#btn-editor-phone-menu');
+      await tap('#btn-editor-phone-fit');
+      passed.push('More Fit room uses the live editor control');
+      await tap('#btn-editor-phone-menu');
       await tap('#btn-editor-phone-account');
       assert.equal(await page.locator('#auth-panel').evaluate(el => el.classList.contains('menu-open')), true);
       await bounds('#menu-toggle');
@@ -194,6 +219,103 @@ try {
       await tap('[data-editor-dock="terrain"]');
       await tap('#editor-phone-tools [data-tool="copy"]');
       passed.push('Draw and Erase options fit outside scrolling toolbar');
+
+      // F368: swipes scroll the tile picker by touch, and the last row of WampOS 95 can be tapped.
+      await tap('[data-editor-dock="terrain"]');
+      assert.equal(await page.locator('#editor-phone-draw-switch').isVisible(), false);
+      await page.locator('#tileset-select').selectOption('wampos95');
+      await page.waitForTimeout(250);
+      const cdp = await context.newCDPSession(page);
+      const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+      const picker = () => page.evaluate(() => {
+        const canvas = document.getElementById('palette-canvas').getBoundingClientRect();
+        const sheet = document.getElementById('editor-sidebar-scroll').getBoundingClientRect();
+        return { x: canvas.x, y: canvas.y, width: canvas.width, bottom: canvas.bottom, top: sheet.top, sheetBottom: sheet.bottom };
+      });
+      // The picker canvas draws the selected tiles' highlight, so its pixels show what is selected.
+      const readPicker = () => page.evaluate(() => ({
+        tilesetKey: document.getElementById('tileset-select').value,
+        image: document.getElementById('palette-canvas').toDataURL(),
+      }));
+      // Wait for the picker to finish drawing (the tileset image loads after the select changes).
+      const tileSelection = async () => {
+        let previous = await readPicker();
+        for (let attempt = 0; attempt < 40; attempt++) {
+          await page.waitForTimeout(150);
+          const current = await readPicker();
+          if (current.image === previous.image && current.tilesetKey === previous.tilesetKey) return current;
+          previous = current;
+        }
+        return previous;
+      };
+      // Picker cells whose pixels differ from an earlier picker image (12 columns for WampOS 95).
+      const changedCells = (earlier) => page.evaluate(async (earlierImage) => {
+        const canvas = document.getElementById('palette-canvas');
+        const image = new Image();
+        image.src = earlierImage;
+        await image.decode();
+        const scratch = document.createElement('canvas');
+        scratch.width = canvas.width; scratch.height = canvas.height;
+        const scratchContext = scratch.getContext('2d');
+        scratchContext.drawImage(image, 0, 0);
+        const before = scratchContext.getImageData(0, 0, canvas.width, canvas.height).data;
+        const after = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        const tile = canvas.width / 12, cells = new Set();
+        for (let index = 0; index < after.length; index += 4) {
+          if (after[index] === before[index] && after[index + 1] === before[index + 1] && after[index + 2] === before[index + 2]) continue;
+          const pixel = index / 4, x = pixel % canvas.width, y = Math.floor(pixel / canvas.width);
+          // The highlight's 2px outline bleeds a pixel into neighbouring cells; count cell interiors only.
+          if (x % tile < 3 || x % tile > tile - 3 || y % tile < 3 || y % tile > tile - 3) continue;
+          cells.add(`${Math.floor(x / tile)},${Math.floor(y / tile)}`);
+        }
+        return [...cells].sort();
+      }, earlier.image);
+      const beforeSwipes = await tileSelection();
+      let box = await picker();
+      for (let swipes = 0; box.bottom > box.sheetBottom - 2; swipes++) {
+        assert.ok(swipes < 30, `WampOS 95 picker never scrolled to its end: ${JSON.stringify(box)}`);
+        const x = box.x + Math.min(box.width, 300) / 2;
+        const from = Math.min(box.sheetBottom - 20, box.bottom - 10);
+        const to = Math.max(box.top + 20, from - 160, from - Math.max(40, box.bottom - box.sheetBottom + 10));
+        await touch('touchStart', x, from);
+        // Every step travels past the 10px tap slop, so a slow machine can't turn the swipe into a
+        // 400ms hold-to-select before the finger has visibly moved.
+        const steps = Math.max(1, Math.min(8, Math.floor(Math.abs(to - from) / 12)));
+        for (let step = 1; step <= steps; step++) { await touch('touchMove', x, from + (to - from) * step / steps); await page.waitForTimeout(16); }
+        // Finish still, so the swipe does not fling past the end.
+        await page.waitForTimeout(150);
+        await touch('touchEnd');
+        await page.waitForTimeout(250);
+        box = await picker();
+      }
+      assert.deepEqual(await changedCells(beforeSwipes), [], 'swiping the picker must not select tiles');
+      // Let any momentum scroll settle so the tap lands on one cell.
+      for (let settle = 0; settle < 40; settle++) {
+        await page.waitForTimeout(150);
+        const settled = await picker();
+        if (settled.y === box.y) break;
+        box = settled;
+      }
+      const tile = box.width / 12;
+      await page.touchscreen.tap(box.x + tile * 11.5, box.y + tile * 26.5);
+      await page.waitForTimeout(200);
+      const tapped = await tileSelection();
+      assert.equal(tapped.tilesetKey, 'wampos95');
+      // The earlier one-tile highlight clears and only the tapped last-row tile (11,26) lights up.
+      const tapChanges = await changedCells(beforeSwipes);
+      assert.ok(tapChanges.includes('11,26') && tapChanges.length <= 2,
+        `the tap must select only the last-row tile it touched: ${JSON.stringify(tapChanges)}`);
+      assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'true');
+      passed.push('swipe scrolls the WampOS 95 picker and its last row can be tapped');
+
+      // F369: with the sheet hidden, one tap switches between Draw and Erase and keeps the tile.
+      for (const tool of ['eraser', 'pencil']) {
+        await tap(`[data-editor-phone-tool="${tool}"]`);
+        assert.equal((await selection()).activeTool, tool);
+        assert.equal(await page.locator(`[data-editor-phone-tool="${tool}"]`).getAttribute('aria-pressed'), 'true');
+        assert.deepEqual(await tileSelection(), tapped);
+      }
+      passed.push('Draw/Erase switch changes the tool in one tap and keeps the tile');
 
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.waitForFunction(() => document.body.dataset.deviceClass !== 'phone');

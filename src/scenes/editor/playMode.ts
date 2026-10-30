@@ -37,6 +37,8 @@ export interface BuildEditorPlayModeDataOptions {
   coursePreview: CourseSnapshot | null;
   courseEditedRoom: CourseEditedRoomData | null;
   practiceStart?: { x: number; y: number };
+  /** The server draft version the room was loaded or last saved at. */
+  draftBaseUpdatedAt?: string | null;
 }
 
 export function buildEditorPlayModeData(
@@ -58,6 +60,7 @@ export function buildEditorPlayModeData(
     centerCoordinates: { ...playCoordinates },
     roomCoordinates: { ...playCoordinates },
     draftRoom: usePublished ? null : testedRoom,
+    draftRoomBaseUpdatedAt: usePublished ? null : options.draftBaseUpdatedAt ?? null,
     publishedRoom: usePublished ? roomSnapshot : null,
     invalidateRoomId: roomSnapshot.id,
     forceRefreshAround: usePublished,

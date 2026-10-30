@@ -136,6 +136,8 @@ export class PortraitPlayControlsController {
           MOBILE_MOVE_VERTICAL_DEADZONE_PX,
           MOBILE_MOVE_VERTICAL_FULL_TILT_PX,
         ),
+        deltaX,
+        deltaY,
       );
     });
 

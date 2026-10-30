@@ -20,11 +20,11 @@ import type { Env, WorkerExecutionContextLike } from '../core/types';
 import { loadAnonymousPublicCache } from '../core/publicCache';
 import { findUserByDisplayName, findUserById, findUserByUsername, updateUserProfile } from '../auth/store';
 import { loadOptionalRequestAuth, requireAuthenticatedRequestAuth } from '../auth/request';
-import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertNotSchoolRestricted } from '../school/restrictions';
 import { loadPublicProgressionSummary } from '../progression/store';
 import { loadCryptopunkAvatarPackRow } from '../avatars/store';
 import { hasUserAvatarEntitlement } from '../avatars/entitlements';
+import { cleanDisplayText } from '../core/displayText';
 import {
   loadUserProfile,
   loadUserProfilePlaylists,
@@ -68,28 +68,30 @@ export async function handleProfileRoomsGet(
   request: Request, url: URL, env: Env, userId: string, context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const timing = new ServerTiming();
-  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  // Validate credentials before a shared hit; these lists contain only public content.
+  await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   const limit = parseBoundedInteger(url.searchParams.get('limit'), 24, 1, 100);
   const loadResponse = async () => {
     const response = await loadUserProfileRoomsPage(env, userId, limit, url.searchParams.get('cursor'), timing);
-    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(false));
   };
-  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 export async function handleProfilePlaylistsGet(
   request: Request, env: Env, userId: string, context?: WorkerExecutionContextLike,
 ): Promise<Response> {
   const timing = new ServerTiming();
-  const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
+  // Validate credentials before a shared hit; these lists contain only public content.
+  await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   const loadResponse = async () => {
     if (!await findUserById(env, userId)) throw new HttpError(404, 'Profile not found.');
     const response = await loadUserProfilePlaylists(env, userId, timing);
-    timing.setDiagnostic('cache', auth ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, profileCacheInit(auth !== null));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, response, timing, profileCacheInit(false));
   };
-  return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function profileCacheInit(authenticated: boolean): ResponseInit {
@@ -129,9 +131,7 @@ export async function handleProfileUpdateMe(request: Request, env: Env): Promise
   assertNotSchoolRestricted(auth, 'edit profile text');
   const body = await parseProfileUpdateBody(request);
 
-  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, body.displayName);
-
-  const existingUser = await findUserByDisplayName(env, body.displayName);
+  const existingUser = await findUserByDisplayName(env, body.displayName, auth.user.id);
   if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
   }
@@ -214,7 +214,7 @@ function normalizeDisplayName(value: unknown): string {
     return '';
   }
 
-  return value.replace(/\s+/g, ' ').trim();
+  return cleanDisplayText(value);
 }
 
 function normalizeAvatarUrl(value: unknown): string | null {

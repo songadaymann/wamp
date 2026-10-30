@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import { award, fixture, guestClear, NOW, top1 } from '../src/cloudflare/worker/activity/testDatabase';
 import { handleAllActivity, handleMyActivity } from '../src/cloudflare/worker/activity/routes';
@@ -61,6 +62,7 @@ try {
         if (path.startsWith('/api/profiles/builder')) return route.fulfill({ json: profile });
         if (path === '/api/settings/me') return route.fulfill({ json: { settings: null, updatedAt: null } });
         if (path === '/api/me/guest-progress') return route.fulfill({ json: { clears: [], claims: [] } });
+        if (path === '/api/me/cleared-rooms') return route.fulfill({ json: { userId: session.user?.id, roomIds: [], nextCursor: null } });
         if (path === '/api/lost-songs/progress') return route.fulfill({ json: { roomIds: [], total: 0, nextCursor: null } });
         if (path === '/api/leaderboards/rooms/discover' && url.searchParams.get('sort') === 'unrated') {
           return route.fulfill({ json: { sort: 'unrated', results: [], nextCursor: null } });

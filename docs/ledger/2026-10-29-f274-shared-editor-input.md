@@ -1,0 +1,1 @@
+| 2026-10-29 | F274 | [#336](https://github.com/songadaymann/wamp/pull/336) | [receipt](docs/review/wamp-f274-shared-editor-input-2026-10-29.md) | Share editor workspace drawing and camera controls; fix Spray, Smart gaps and middle-button edits; verified live |

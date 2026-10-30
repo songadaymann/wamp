@@ -3,10 +3,13 @@ import { createDefaultRoomSnapshot, type RoomSnapshot } from '../persistence/roo
 import { JIMOTHY_OBJECT_ID } from '../npcs/model';
 
 export type PreviewPhysicsFixture = 'normal' | 'ice' | 'conveyor' | 'water' | 'wind' | 'moving-platform'
-  | 'gravity-up' | 'gravity-left' | 'gravity-right';
+  | 'gravity-up' | 'gravity-left' | 'gravity-right' | 'jimothy-wander';
 
 /** Authored local-only rooms for the existing preview smoke surface. */
 export function createPhysicsPreviewRoom(fixture: PreviewPhysicsFixture = 'normal'): RoomSnapshot {
+  if (fixture === 'jimothy-wander') {
+    return createJimothyWanderPreviewRoom();
+  }
   const room = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
   const floorY = 16;
   const solid = 492;
@@ -42,5 +45,55 @@ export function createPhysicsPreviewRoom(fixture: PreviewPhysicsFixture = 'norma
         x: 416, y: 192 },
     );
   }
+  return room;
+}
+
+function createJimothyWanderPreviewRoom(): RoomSnapshot {
+  const room = createDefaultRoomSnapshot('99,99', { x: 99, y: 99 });
+  const floorY = 16;
+  const solid = 492;
+  const pitColumns = new Set([18, 19, 20, 21]);
+  room.title = 'Jimothy Wander';
+  room.background = 'cave';
+  room.spawnPoint = { x: 12 * TILE_SIZE + 8, y: floorY * TILE_SIZE - 16 };
+  for (let tileX = 2; tileX <= 37; tileX += 1) {
+    room.tileData.terrain[pitColumns.has(tileX) ? floorY + 1 : floorY][tileX] = solid;
+  }
+  for (const tileY of [floorY - 3, floorY - 2, floorY - 1]) {
+    room.tileData.terrain[tileY][2] = solid;
+    room.tileData.terrain[tileY][37] = solid;
+  }
+  for (const tileX of [10, 11, 12, 27, 28, 29]) {
+    room.tileData.terrain[floorY - 1][tileX] = solid;
+  }
+  const feetY = floorY * TILE_SIZE - 16;
+  room.placedObjects = [
+    {
+      id: JIMOTHY_OBJECT_ID,
+      instanceId: 'jimothy-wander-left',
+      layer: 'terrain',
+      x: 8 * TILE_SIZE,
+      y: feetY,
+      facing: 'right',
+      npcMode: 'wander',
+      npcCanJumpFall: true,
+      npcPlayerCollision: true,
+      npcFriendlyFire: false,
+      npcName: 'Left',
+    },
+    {
+      id: JIMOTHY_OBJECT_ID,
+      instanceId: 'jimothy-wander-right',
+      layer: 'terrain',
+      x: 32 * TILE_SIZE,
+      y: feetY,
+      facing: 'left',
+      npcMode: 'wander',
+      npcCanJumpFall: true,
+      npcPlayerCollision: true,
+      npcFriendlyFire: false,
+      npcName: 'Right',
+    },
+  ];
   return room;
 }

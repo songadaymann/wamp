@@ -1,0 +1,1 @@
+| 2026-10-19 | F048 | [#259](https://github.com/songadaymann/wamp/pull/259) | [receipt](docs/review/wamp-session-controls-2026-10-19.md) | Log out on all devices, and stale sign-in refreshes are rejected |

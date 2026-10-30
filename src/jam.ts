@@ -1,4 +1,6 @@
 import { getApiBaseUrl } from './api/baseUrl';
+import { applyWalletGate } from './lib/wallet-gate.js';
+import './styles/sections/wallet-gate.css';
 import type { AuthSessionResponse, MagicLinkRequestResponse } from './auth/model';
 import { openEmailCodeDialog } from './auth/emailCodeDialog';
 import {
@@ -7,6 +9,8 @@ import {
   type JamRegistrationResponse,
   type JamSubmissionResponse,
 } from './jam/model';
+
+void applyWalletGate();
 
 interface JamTurnstileApi {
   render(

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import {
+  decodeTileDataValue,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
@@ -9,8 +10,23 @@ import {
 } from '../../config';
 import type { RoomSnapshot } from '../../persistence/roomModel';
 import { drawRoomTileLayerRowsToContext } from '../../visuals/roomSnapshotTexture';
+import { addStaticCanvasTexture } from '../../visuals/staticCanvasTexture';
 
-const PREPARED_LAYERS: readonly LayerName[] = ['background', 'terrain', 'foreground'];
+const TERRAIN_TEXTURE_LAYERS: readonly LayerName[] = ['background', 'terrain'];
+const ALL_TEXTURE_LAYERS: readonly LayerName[] = ['background', 'terrain', 'foreground'];
+
+/**
+ * True when the layer has a tile to draw. A room without foreground tiles gets no foreground
+ * texture or image (F307).
+ */
+export function roomLayerHasTiles(
+  room: Pick<RoomSnapshot, 'tileData'>,
+  layer: LayerName,
+): boolean {
+  return room.tileData[layer]?.some((row) =>
+    row.some((value) => decodeTileDataValue(value).gid > 0),
+  ) ?? false;
+}
 
 interface PreparedCanvas {
   canvas: HTMLCanvasElement;
@@ -35,20 +51,28 @@ export class RoomTexturePreparation {
   private cancelled = false;
   private terrainCommitted = false;
   private foregroundCommitted = false;
+  private readonly layers: readonly LayerName[];
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly room: RoomSnapshot,
     private readonly createCanvas: () => HTMLCanvasElement = createDetachedCanvas,
-  ) {}
+  ) {
+    this.layers = roomLayerHasTiles(room, 'foreground') ? ALL_TEXTURE_LAYERS : TERRAIN_TEXTURE_LAYERS;
+  }
+
+  /** False when the room has no foreground tiles, so no foreground texture is drawn or committed. */
+  includesForeground(): boolean {
+    return this.layers.includes('foreground');
+  }
 
   runNextBatch(maxRows: number): boolean {
     if (this.cancelled || this.isCommitted() || this.isComplete()) {
       return this.isComplete();
     }
     let remainingRows = Math.max(1, Math.floor(maxRows));
-    while (remainingRows > 0 && this.layerIndex < PREPARED_LAYERS.length) {
-      const layer = PREPARED_LAYERS[this.layerIndex];
+    while (remainingRows > 0 && this.layerIndex < this.layers.length) {
+      const layer = this.layers[this.layerIndex];
       const batchRows = Math.min(remainingRows, ROOM_HEIGHT - this.nextRow);
       const target = this.getPreparedCanvas(layer);
       drawRoomTileLayerRowsToContext(
@@ -70,19 +94,21 @@ export class RoomTexturePreparation {
     return this.isComplete();
   }
 
-  commit(terrainTextureKey: string, foregroundTextureKey: string): readonly string[] {
+  commit(terrainTextureKey: string, foregroundTextureKey: string | null): readonly string[] {
     if (this.cancelled || !this.isComplete()) {
       throw new Error('Room textures cannot be committed before preparation completes.');
     }
     while (!this.isCommitted()) {
       this.commitNext(terrainTextureKey, foregroundTextureKey);
     }
-    return [terrainTextureKey, foregroundTextureKey];
+    return this.includesForeground() && foregroundTextureKey
+      ? [terrainTextureKey, foregroundTextureKey]
+      : [terrainTextureKey];
   }
 
   commitNext(
     terrainTextureKey: string,
-    foregroundTextureKey: string,
+    foregroundTextureKey: string | null,
   ): { resourceKey: string | null; complete: boolean } {
     if (this.cancelled || !this.isComplete()) {
       throw new Error('Room textures cannot be committed before preparation completes.');
@@ -90,15 +116,18 @@ export class RoomTexturePreparation {
     if (!this.terrainCommitted) {
       const terrain = this.requirePreparedCanvas(this.terrain, 'terrain');
       if (!this.scene.textures.exists(terrainTextureKey)) {
-        this.scene.textures.addCanvas(terrainTextureKey, terrain.canvas);
+        addStaticCanvasTexture(this.scene.textures, terrainTextureKey, terrain.canvas);
       }
       this.terrainCommitted = true;
       return { resourceKey: terrainTextureKey, complete: this.isCommitted() };
     }
     if (!this.foregroundCommitted) {
+      if (!foregroundTextureKey) {
+        throw new Error('Prepared foreground texture needs a texture key.');
+      }
       const foreground = this.requirePreparedCanvas(this.foreground, 'foreground');
       if (!this.scene.textures.exists(foregroundTextureKey)) {
-        this.scene.textures.addCanvas(foregroundTextureKey, foreground.canvas);
+        addStaticCanvasTexture(this.scene.textures, foregroundTextureKey, foreground.canvas);
       }
       this.foregroundCommitted = true;
       return { resourceKey: foregroundTextureKey, complete: true };
@@ -122,22 +151,22 @@ export class RoomTexturePreparation {
   }
 
   isComplete(): boolean {
-    return this.layerIndex >= PREPARED_LAYERS.length;
+    return this.layerIndex >= this.layers.length;
   }
 
   getSnapshot(): RoomTexturePreparationSnapshot {
     return {
-      layer: PREPARED_LAYERS[this.layerIndex] ?? null,
+      layer: this.layers[this.layerIndex] ?? null,
       nextRow: this.nextRow,
       complete: this.isComplete(),
       cancelled: this.cancelled,
       committedTextureCount: Number(this.terrainCommitted) + Number(this.foregroundCommitted),
-      byteSize: ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4 * 2,
+      byteSize: ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4 * (this.includesForeground() ? 2 : 1),
     };
   }
 
   private isCommitted(): boolean {
-    return this.terrainCommitted && this.foregroundCommitted;
+    return this.terrainCommitted && (this.foregroundCommitted || !this.includesForeground());
   }
 
   private getPreparedCanvas(layer: LayerName): PreparedCanvas {

@@ -1,3 +1,4 @@
+import { OwnerCollectionReminder, type OwnerCollectionContext } from '../../ui/setup/ownerCollectionReminder';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import {
   MULTIPLAYER_MODE_LIST,
@@ -6,16 +7,18 @@ import {
 } from '../../multiplayer/model';
 import { isOpenableProfileUserId, requestProfileOpen } from '../../ui/setup/profileEvents';
 import type { GhostRaceInfo } from './ghostRace';
+import { retryPendingRankedFinishes } from '../../runs/rankedFinishDelivery';
 
 interface OverworldHudRuntimeConfig {
   onShareRoom: () => void | Promise<void>;
   onPlayRoom: () => void | Promise<void>;
   onRestartRun: () => void | Promise<void>;
   onPlayCourse: () => void | Promise<void>;
-  onEditRoom: () => void | Promise<void>;
+  onEditRoom: (roomOnly?: boolean) => void | Promise<void>;
   onBuildRoom: () => void | Promise<void>;
   onOpenCourseBuilder: () => void | Promise<void>;
-  onJumpToCoordinates: (coordinates: RoomCoordinates) => void | Promise<void>;
+  /** Resolves false when the jump did not happen (an active Room Rush ended instead). */
+  onJumpToCoordinates: (coordinates: RoomCoordinates) => boolean | void | Promise<boolean | void>;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onOpenExplore: () => void | Promise<void>;
@@ -112,6 +115,7 @@ export function configureOverworldHudBridgeRuntime(
 export interface OverworldHudViewModel {
   saveStatusTone: 'default' | 'play-score' | 'challenge-active' | 'challenge-complete' | 'challenge-failed';
   jumpInputValue: string;
+  collectionReminder?: OwnerCollectionContext | null;
   selectedTitleText: string;
   selectedSubtitleText: string;
   selectedTitleSize: 'normal' | 'compact' | 'tiny';
@@ -192,6 +196,8 @@ export interface OverworldHudViewModel {
   goalPanelGoalText: string;
   goalPanelTimerText: string;
   goalPanelProgressText: string;
+  goalPanelSaveText: string;
+  goalPanelRetryVisible: boolean;
   signPanelVisible: boolean;
   signPanelLabelText: string;
   signPanelText: string;
@@ -209,6 +215,7 @@ export interface OverworldOnlineRosterViewEntry {
 }
 
 export class OverworldHudBridge {
+  private readonly collectionReminder: OwnerCollectionReminder;
   private readonly hudRoot: HTMLElement | null;
   private readonly selectedTitleEl: HTMLElement | null;
   private readonly selectedSubtitleEl: HTMLElement | null;
@@ -268,6 +275,9 @@ export class OverworldHudBridge {
   private readonly goalPanelGoalEl: HTMLElement | null;
   private readonly goalPanelTimerEl: HTMLElement | null;
   private readonly goalPanelProgressEl: HTMLElement | null;
+  private readonly goalPanelSaveEl: HTMLElement | null;
+  private readonly goalPanelSaveTextEl: HTMLElement | null;
+  private readonly goalRetryButton: HTMLButtonElement | null;
   private readonly signPanelEl: HTMLElement | null;
   private readonly signPanelLabelEl: HTMLElement | null;
   private readonly signPanelTextEl: HTMLElement | null;
@@ -382,6 +392,8 @@ export class OverworldHudBridge {
     void runtimeConfig.onRestartRun();
   };
 
+  private readonly handleGoalRetryClick = (): void => { retryPendingRankedFinishes(); };
+
   private readonly handlePlayCourseClick = (): void => {
     void runtimeConfig.onPlayCourse();
   };
@@ -455,6 +467,7 @@ export class OverworldHudBridge {
   };
 
   constructor(private readonly doc: Document = document) {
+    this.collectionReminder = new OwnerCollectionReminder(doc, () => { void runtimeConfig.onEditRoom(true); });
     this.hudRoot = this.doc.getElementById('world-hud');
     this.selectedTitleEl = this.doc.getElementById('world-selected-title');
     this.selectedSubtitleEl = this.doc.getElementById('world-selected-subtitle');
@@ -514,6 +527,9 @@ export class OverworldHudBridge {
     this.goalPanelGoalEl = this.doc.getElementById('world-goal-panel-goal');
     this.goalPanelTimerEl = this.doc.getElementById('world-goal-panel-timer');
     this.goalPanelProgressEl = this.doc.getElementById('world-goal-panel-progress');
+    this.goalPanelSaveEl = this.doc.getElementById('world-goal-panel-save');
+    this.goalPanelSaveTextEl = this.doc.getElementById('world-goal-panel-save-text');
+    this.goalRetryButton = this.doc.getElementById('btn-world-goal-retry') as HTMLButtonElement | null;
     this.signPanelEl = this.doc.getElementById('world-sign-panel');
     this.signPanelLabelEl = this.doc.getElementById('world-sign-panel-label');
     this.signPanelTextEl = this.doc.getElementById('world-sign-panel-text');
@@ -533,6 +549,7 @@ export class OverworldHudBridge {
     this.shareButton?.addEventListener('click', this.handleShareRoomClick);
     this.mobileShareButton?.addEventListener('click', this.handleShareRoomClick);
     this.restartButton?.addEventListener('click', this.handleRestartRunClick);
+    this.goalRetryButton?.addEventListener('click', this.handleGoalRetryClick);
     this.playCourseButton?.addEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.addEventListener('click', this.handleRoomRushClick);
     this.roomCommentButton?.addEventListener('click', this.handleRoomCommentClick);
@@ -567,6 +584,7 @@ export class OverworldHudBridge {
     this.setText(this.selectedTitleEl, viewModel.selectedTitleText);
     this.setText(this.selectedSubtitleEl, viewModel.selectedSubtitleText);
     this.setTitleSize(this.selectedTitleEl, viewModel.selectedTitleSize);
+    this.collectionReminder.update(viewModel.collectionReminder ?? null);
     this.setTitleTone(viewModel.selectedTitleTone);
     this.renderSelectedCreator(
       viewModel.selectedCreatorCardVisible,
@@ -680,6 +698,7 @@ export class OverworldHudBridge {
   }
 
   destroy(): void {
+    this.collectionReminder.destroy();
     this.setGhostRaceInfo(null);
     this.destroyed = true;
     this.playersOnlineWrapEl?.removeEventListener('pointerenter', this.handlePlayersOnlinePointerEnter);
@@ -693,6 +712,7 @@ export class OverworldHudBridge {
     this.shareButton?.removeEventListener('click', this.handleShareRoomClick);
     this.mobileShareButton?.removeEventListener('click', this.handleShareRoomClick);
     this.restartButton?.removeEventListener('click', this.handleRestartRunClick);
+    this.goalRetryButton?.removeEventListener('click', this.handleGoalRetryClick);
     this.playCourseButton?.removeEventListener('click', this.handlePlayCourseClick);
     this.roomRushButton?.removeEventListener('click', this.handleRoomRushClick);
     this.roomCommentButton?.removeEventListener('click', this.handleRoomCommentClick);
@@ -921,8 +941,8 @@ export class OverworldHudBridge {
       this.playersOnlinePinned = false;
       this.setPlayersOnlinePopoverOpen(false);
       void (async () => {
-        await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
-        if (entry.mode === 'play') {
+        const jumped = await runtimeConfig.onJumpToCoordinates(entry.roomCoordinates);
+        if (entry.mode === 'play' && jumped !== false) {
           await runtimeConfig.onPlayRoom();
         }
       })();
@@ -1236,6 +1256,9 @@ export class OverworldHudBridge {
     this.setText(this.goalPanelGoalEl, viewModel.goalPanelGoalText);
     this.setText(this.goalPanelTimerEl, viewModel.goalPanelTimerText);
     this.setText(this.goalPanelProgressEl, viewModel.goalPanelProgressText);
+    this.goalPanelSaveEl?.classList.toggle('hidden', !viewModel.goalPanelSaveText);
+    this.setText(this.goalPanelSaveTextEl, viewModel.goalPanelSaveText);
+    this.goalRetryButton?.classList.toggle('hidden', !viewModel.goalPanelRetryVisible);
     this.renderMobileGoalFooter(viewModel);
   }
 

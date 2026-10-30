@@ -1,5 +1,8 @@
+import { createProfileCollectionController, renderProfileTabs, type ProfileCollectionController, type ProfileTabId } from './profileCollection';
+import { CollectionAttributionController } from './collectionAttribution';
 import { renderProfileEmptyActions, setupProfileEmptyStates } from './profileEmptyStates';
-import { friendlyError, renderFriendlyError, setFeedbackText } from '../friendlyError';
+import { setProfileTabStops, setupProfileTabs } from './profileTabs';
+import { friendlyError, renderFriendlyError, setLiveMessage } from '../friendlyError';
 import Phaser from 'phaser';
 import {
   getEffectiveCryptopunkViewerLevel,
@@ -51,8 +54,7 @@ import {
 import { requestPlaylistOpen } from './playlistEvents';
 import { renderProfileProgress, renderProfileStats } from './profileModalProgressRenderer';
 import { getProfileRoomTitle, renderProfileRooms } from './profileModalRoomRenderer';
-
-type ProfileTabId = 'rooms' | 'playlists' | 'progress' | 'stats';
+import { requestReport } from '../../reports/requestReport';
 
 type ProfileModalElements = {
   modal: HTMLElement | null;
@@ -103,6 +105,8 @@ type ProfileModalElements = {
 
 export class ProfileModalController {
   private readonly elements: ProfileModalElements;
+  private readonly collection: ProfileCollectionController;
+  private readonly attribution: CollectionAttributionController;
   private readonly profileCache = new Map<string, UserProfileResponse>();
   private readonly roomPreviewTargets = new Map<
     Element,
@@ -263,12 +267,14 @@ export class ProfileModalController {
       saveButton: this.doc.getElementById('btn-profile-save') as HTMLButtonElement | null,
       saveStatus: this.doc.getElementById('profile-save-status'),
       tabButtons: {
+        collection: this.doc.getElementById('btn-profile-tab-collection') as HTMLButtonElement | null,
         rooms: this.doc.getElementById('btn-profile-tab-rooms') as HTMLButtonElement | null,
         playlists: this.doc.getElementById('btn-profile-tab-playlists') as HTMLButtonElement | null,
         progress: this.doc.getElementById('btn-profile-tab-progress') as HTMLButtonElement | null,
         stats: this.doc.getElementById('btn-profile-tab-stats') as HTMLButtonElement | null,
       },
       panels: {
+        collection: this.doc.getElementById('profile-collection-panel'),
         rooms: this.doc.getElementById('profile-rooms-panel'),
         playlists: this.doc.getElementById('profile-playlists-panel'),
         progress: this.doc.getElementById('profile-progress-panel'),
@@ -288,9 +294,12 @@ export class ProfileModalController {
       progressList: this.doc.getElementById('profile-progress-list'),
       statsList: this.doc.getElementById('profile-stats-list'),
     };
+    this.collection = createProfileCollectionController(this.doc, this.game, () => this.close());
+    this.attribution = new CollectionAttributionController(this.doc, this.elements.modal);
   }
 
   init(): void {
+    this.windowObj.addEventListener('wallet-gate', () => { this.renderTabs(); });
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.doc.getElementById('btn-profile-activity')?.addEventListener('click', () => {
       if (!this.authState.authenticated || this.currentProfile?.userId !== this.authState.user?.id) return;
@@ -298,8 +307,9 @@ export class ProfileModalController {
     });
     setupProfileEmptyStates(this.doc, { canEdit: () => Boolean(this.currentProfile?.canEdit),
       canCreatePlaylist: () => Boolean(this.currentProfile?.canEdit && !this.isSchoolAvatarOnlyEdit(this.currentProfile)),
-      findBuildSpot: () => { this.close(); void (getActiveOverworldScene(this.game) ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
+      findBuildSpot: () => { this.close(); const world = getActiveOverworldScene(this.game); if (world?.isRoomRushRunActive()) world.stopCurrentPlay(); else void (world ?? getActiveEditorScene(this.game))?.returnToWorld(); } });
     this.elements.shareButton?.addEventListener('click', this.handleShareClick);
+    this.doc.getElementById('btn-profile-report')?.addEventListener('click', () => { const shown = this.currentProfile; if (shown && !shown.isSelf) requestReport({ type: 'user', id: shown.userId, label: shown.displayName }); });
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.elements.avatarPickerModal?.addEventListener('click', this.handleAvatarPickerBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -339,23 +349,17 @@ export class ProfileModalController {
     this.elements.usernameInput?.addEventListener('input', () => {
       this.renderShareControls();
     });
-    for (const [tabId, button] of Object.entries(this.elements.tabButtons) as Array<
-      [ProfileTabId, HTMLButtonElement | null]
-    >) {
-      button?.addEventListener('click', () => {
-        this.activeTab = tabId;
-        this.activeTabAutoSelected = true;
-        this.renderTabs();
-      });
-    }
+    setupProfileTabs(this.elements.tabButtons, this.elements.panels, (tabId) => {
+      this.activeTab = tabId;
+      this.activeTabAutoSelected = true;
+      this.renderTabs();
+    });
     this.openProfileFromCurrentPath();
   }
 
   private openProfileFromCurrentPath(): void {
     const username = parseProfileSharePath(this.windowObj.location.pathname);
-    if (!username) {
-      return;
-    }
+    if (!username) return;
 
     void this.openByUsername(username);
   }
@@ -406,14 +410,14 @@ export class ProfileModalController {
     }
   }
 
-  async open(userId: string, initialTab?: 'rooms'): Promise<void> {
+  async open(userId: string, initialTab?: 'rooms' | 'collection'): Promise<void> {
     if (!this.elements.modal) {
       return;
     }
 
     this.currentProfileUserId = userId;
-    this.activeTab = 'rooms';
-    this.activeTabAutoSelected = initialTab === 'rooms';
+    this.activeTab = initialTab ?? 'rooms';
+    this.activeTabAutoSelected = Boolean(initialTab);
     this.loading = true;
     this.avatarPreviewBroken = false;
     this.selectedAvatarIdDraft = DEFAULT_PLAYER_AVATAR_ID;
@@ -464,6 +468,7 @@ export class ProfileModalController {
       return;
     }
 
+    this.collection.sync(null, false);
     this.elements.modal.classList.add('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'true');
     this.currentProfileUserId = null;
@@ -649,10 +654,8 @@ export class ProfileModalController {
   }
 
   private renderShareControls(): void {
-    if (!this.elements.shareButton) {
-      return;
-    }
-
+    this.doc.getElementById('btn-profile-report')?.classList.toggle('hidden', !this.currentProfile || this.currentProfile.isSelf);
+    if (!this.elements.shareButton) return;
     const profile = this.currentProfile;
     const username = profile?.canEdit && !this.isSchoolAvatarOnlyEdit(profile)
       ? this.elements.usernameInput?.value.trim() || profile.username
@@ -1282,6 +1285,7 @@ export class ProfileModalController {
     const playlists = this.currentProfile?.playlists ?? [];
     const selectedPlaylist = this.getSelectedPlaylist();
     renderProfileRooms(this.doc, this.elements, rooms, {
+      showAttribution: this.currentProfile?.collectionAvailable === true,
       canEdit: Boolean(this.currentProfile?.canEdit),
       playlistBusy: this.playlistBusy,
       hasPlaylists: playlists.length > 0,
@@ -1670,18 +1674,8 @@ export class ProfileModalController {
   }
 
   private renderTabs(): void {
-    for (const [tabId, button] of Object.entries(this.elements.tabButtons) as Array<
-      [ProfileTabId, HTMLButtonElement | null]
-    >) {
-      button?.classList.toggle('active', tabId === this.activeTab);
-      button?.setAttribute('aria-selected', tabId === this.activeTab ? 'true' : 'false');
-    }
-
-    for (const [tabId, panel] of Object.entries(this.elements.panels) as Array<
-      [ProfileTabId, HTMLElement | null]
-    >) {
-      panel?.classList.toggle('hidden', tabId !== this.activeTab);
-    }
+    this.activeTab = renderProfileTabs(this.elements, this.activeTab, this.currentProfile, this.loading, this.collection, this.attribution);
+    setProfileTabStops(this.elements.tabButtons, this.activeTab);
   }
 
   private setError(message: string | null, retry?: () => void | Promise<void>): void {
@@ -1689,7 +1683,7 @@ export class ProfileModalController {
   }
 
   private setSaveStatus(message: string): void {
-    setFeedbackText(this.elements.saveStatus, message);
+    setLiveMessage(this.elements.saveStatus, message, 'status');
   }
 
   private setPlaylistStatus(message: string): void {

@@ -1,13 +1,14 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { Wallet } from 'ethers';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 const BASE_URL =
   process.env.ROLL_OUT_BASE_URL ??
   'http://127.0.0.1:8787';
+// Presence runs in the API Worker (/parties/*), so it defaults to the same host.
 const PARTYKIT_HOST =
   process.env.ROLL_OUT_PARTYKIT_HOST ??
-  '127.0.0.1:1999';
+  new URL(BASE_URL).host;
 const OUTPUT_DIR = 'output/remote-rollout-check';
 const ROOM_IDS = ['0,0', '1,0', '0,1'];
 const ROOM_WIDTH = 40;
@@ -17,9 +18,8 @@ const BLOCKED_BASE_URL_HOSTS = new Set([
   'api.wamp.land',
   'everybodys-platformer.novox-robot.workers.dev',
 ]);
-const BLOCKED_PARTYKIT_HOSTS = new Set([
-  'everybodys-platformer-presence.songadaymann.partykit.dev',
-]);
+// The production Workers serve presence too.
+const BLOCKED_PARTYKIT_HOSTS = BLOCKED_BASE_URL_HOSTS;
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -119,7 +119,7 @@ class SessionClient {
 }
 
 async function authenticateWallet(label) {
-  const wallet = Wallet.createRandom();
+  const wallet = privateKeyToAccount(generatePrivateKey());
   const client = new SessionClient(label);
   const challenge = await client.request('/api/auth/wallet/challenge', {
     method: 'POST',
@@ -129,7 +129,7 @@ async function authenticateWallet(label) {
     throw new Error(`${label} wallet challenge failed: ${challenge.status} ${challenge.text}`);
   }
 
-  const signature = await wallet.signMessage(challenge.json.message);
+  const signature = await wallet.signMessage({ message: challenge.json.message });
   const verify = await client.request('/api/auth/wallet/verify', {
     method: 'POST',
     body: JSON.stringify({
@@ -185,8 +185,10 @@ async function testPartyKit(accountA, accountB) {
   const tokenB = await issuePresenceToken(accountB);
 
   await new Promise((resolve, reject) => {
-    const urlA = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&identityToken=${encodeURIComponent(tokenA)}`;
-    const urlB = `wss://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&identityToken=${encodeURIComponent(tokenB)}`;
+    // wrangler dev serves plain ws://; deployed Workers need wss://.
+    const scheme = classifyTargetHost(presenceHostname()) === 'local' ? 'ws' : 'wss';
+    const urlA = `${scheme}://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-a&identityToken=${encodeURIComponent(tokenA)}`;
+    const urlB = `${scheme}://${PARTYKIT_HOST}/parties/main/0,0?_pk=rollout-b&identityToken=${encodeURIComponent(tokenB)}`;
     const clientA = new WebSocket(urlA);
     const clientB = new WebSocket(urlB);
     let opened = 0;
@@ -309,6 +311,10 @@ async function issuePresenceToken(account) {
 }
 
 function d1Exec(sql) {
+  // A local target cleans up its own local D1, never the remote safety database.
+  const target = classifyTargetHost(new URL(BASE_URL).hostname) === 'local'
+    ? ['--local', ...(process.env.ROLL_OUT_PERSIST_TO ? ['--persist-to', process.env.ROLL_OUT_PERSIST_TO] : [])]
+    : ['--remote', '--env', process.env.ROLL_OUT_WRANGLER_ENV?.trim() || 'safety'];
   return execFileSync(
     'npx',
     [
@@ -316,9 +322,7 @@ function d1Exec(sql) {
       'd1',
       'execute',
       'DB',
-      '--remote',
-      '--env',
-      process.env.ROLL_OUT_WRANGLER_ENV?.trim() || 'safety',
+      ...target,
       '--command',
       sql,
     ],
@@ -328,6 +332,13 @@ function d1Exec(sql) {
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   );
+}
+
+function presenceHostname() {
+  return PARTYKIT_HOST.replace(/^(https?:\/\/|wss?:\/\/)/, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .toLowerCase();
 }
 
 function classifyTargetHost(hostname) {
@@ -359,9 +370,7 @@ function assertMutationTargetSafety() {
   }
 
   const baseHost = new URL(BASE_URL).hostname.toLowerCase();
-  const partykitHost = PARTYKIT_HOST.replace(/^(https?:\/\/|wss?:\/\/)/, '')
-    .replace(/\/.*$/, '')
-    .toLowerCase();
+  const partykitHost = presenceHostname();
 
   summary.targetChecks = {
     baseHost,
@@ -378,7 +387,7 @@ function assertMutationTargetSafety() {
 
   if (BLOCKED_PARTYKIT_HOSTS.has(partykitHost)) {
     throw new Error(
-      `Refusing to mutate the known production PartyKit target ${partykitHost}. Use a local or safety PartyKit project instead.`
+      `Refusing to mutate the known production presence target ${partykitHost}. Use a local or safety Worker instead.`
     );
   }
 

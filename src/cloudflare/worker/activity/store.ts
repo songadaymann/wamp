@@ -11,17 +11,21 @@ export interface PreferenceRow {
 }
 interface ActivityRow {
   id: number; kind: BuilderActivity['kind']; actor_name: string; actor_user_id: string; source_kind: string; content_title: string | null;
-  content_version: number; x: number | null; y: number | null; quality_stars: number | null; created_at: string;
+  recognition_json: string | null; content_version: number; x: number | null; y: number | null; quality_stars: number | null; created_at: string;
 }
 // Both feeds exclude removed awards, moderated comments and unpublished targets.
-const PUBLIC_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
+const CONTENT_VISIBLE = `${sqlUserIdIsNotLegacyGeneratedOnly('a.actor_user_id')}
   AND (e.id IS NULL OR e.archived_at IS NULL)
-  AND (r.published_json IS NOT NULL OR c.published_json IS NOT NULL OR e.published_json IS NOT NULL)
-  AND (a.source_kind = 'bxp' AND EXISTS (SELECT 1 FROM bxp_events WHERE id = a.source_id)
+  AND (r.published_json IS NOT NULL OR c.published_json IS NOT NULL OR e.published_json IS NOT NULL)`;
+const PUBLIC_SOURCE = `(a.source_kind = 'bxp' AND EXISTS (SELECT 1 FROM bxp_events WHERE id = a.source_id)
     OR a.source_kind = 'pxp' AND EXISTS (SELECT 1 FROM pxp_events WHERE id = a.source_id)
     OR a.source_kind = 'comment' AND EXISTS (SELECT 1 FROM room_comments WHERE id = a.source_id AND status = 'approved')
     OR a.source_kind = 'guest')`;
-const VISIBLE = `a.recipient_user_id = ? AND ${PUBLIC_VISIBLE}`;
+const PUBLIC_VISIBLE = `${CONTENT_VISIBLE} AND ${PUBLIC_SOURCE}`;
+// Edits by other builders are a private notice for the room's claimer, never public activity.
+const VISIBLE = `a.recipient_user_id = ? AND ${CONTENT_VISIBLE} AND (${PUBLIC_SOURCE}
+    OR a.source_kind = 'feature' AND a.actor_user_id = 'wamp:recognition'
+    OR a.source_kind = 'edit' AND EXISTS (SELECT 1 FROM room_versions WHERE room_id = a.content_id AND version = a.content_version))`;
 const ROOM_VISIBLE = `${VISIBLE} AND COALESCE(rv.published_by_user_id, ev.published_by_user_id,
   cv.published_by_user_id, r.last_published_by_user_id, r.claimer_user_id, e.owner_user_id, c.owner_user_id) = a.recipient_user_id`;
 const JOINS = `FROM builder_activity a
@@ -38,7 +42,7 @@ const SELECT = `SELECT a.id, a.kind, a.actor_user_id, a.source_kind, COALESCE(ac
   COALESCE(rv.title, ev.title, cv.title, r.published_title, e.published_title, c.published_title) AS content_title,
   a.content_version, COALESCE(r.x, e.anchor_x, (SELECT room_x FROM course_room_refs WHERE course_id = c.id AND course_version = a.content_version ORDER BY room_order LIMIT 1)) AS x,
   COALESCE(r.y, e.anchor_y, (SELECT room_y FROM course_room_refs WHERE course_id = c.id AND course_version = a.content_version ORDER BY room_order LIMIT 1)) AS y,
-  a.quality_stars, a.created_at ${JOINS}`;
+  a.quality_stars, a.created_at, a.recognition_json ${JOINS}`;
 
 export function emailActivityExistsSql(kind?: 'dethroned'): string {
   return `EXISTS (SELECT 1 ${JOINS} WHERE ${VISIBLE.replace('a.recipient_user_id = ?', 'a.recipient_user_id = p.user_id')}
@@ -47,11 +51,26 @@ export function emailActivityExistsSql(kind?: 'dethroned'): string {
 }
 
 async function mapEntry(row: ActivityRow, seenId: number): Promise<BuilderActivity> {
-  return { id: row.id, kind: row.kind, actorName: row.source_kind === 'guest' ? await activityGuestName(row.actor_user_id) : row.actor_name,
+  const recognition = readRecognition(row.recognition_json);
+  return { id: row.id, kind: row.kind, ...(recognition ? { recognition } : {}), actorName: row.source_kind === 'feature' ? 'WAMP' : row.source_kind === 'guest' ? await activityGuestName(row.actor_user_id) : row.actor_name,
     ...(row.source_kind === 'guest' ? { guestActivityRef: row.id } : {}),
     contentTitle: row.content_title?.trim() || 'Untitled Room',
     contentVersion: row.content_version, contentPath: row.x === null || row.y === null ? '/?activity=1' : `/r/${row.x}/${row.y}`,
     qualityStars: row.quality_stars, createdAt: row.created_at, unread: row.id > seenId };
+}
+function readRecognition(raw: string | null): BuilderActivity['recognition'] {
+  if (!raw) return undefined;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return undefined;
+    return {
+      ...(typeof value.promptSlug === 'string' ? { promptSlug: value.promptSlug } : {}),
+      ...(typeof value.promptTitle === 'string' ? { promptTitle: value.promptTitle } : {}),
+      ...(Number.isInteger(value.rank) && value.rank >= 1 && value.rank <= 3 ? { rank: value.rank } : {}),
+      ...(Number.isSafeInteger(value.entryCount) && value.entryCount >= 0 ? { entryCount: value.entryCount } : {}),
+      ...(typeof value.date === 'string' ? { date: value.date } : {}),
+    };
+  } catch { return undefined; }
 }
 export async function loadActivityPreferences(db: D1DatabaseSession, userId: string): Promise<PreferenceRow> {
   await db.prepare(`INSERT OR IGNORE INTO builder_activity_preferences (user_id, unsubscribe_secret, updated_at) VALUES (?, ?, ?)`)

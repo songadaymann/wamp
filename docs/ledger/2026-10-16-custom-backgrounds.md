@@ -1,0 +1,1 @@
+| 2026-10-16 | F094 | [#225](https://github.com/songadaymann/wamp/pull/225) | [receipt](docs/review/wamp-custom-backgrounds-2026-10-16.md) | Animated custom backgrounds with bounded uploads and original-byte checks |

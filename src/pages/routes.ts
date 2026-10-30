@@ -15,10 +15,10 @@ function isCapturePath(pathname: string): boolean {
 }
 
 async function proxyMapScreenshotGallery(request: Request, url: URL): Promise<Response> {
-  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'POST') {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', {
       status: 405,
-      headers: { Allow: 'GET, HEAD, POST' },
+      headers: { Allow: 'GET, HEAD' },
     });
   }
 

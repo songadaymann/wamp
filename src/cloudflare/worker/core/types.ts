@@ -1,5 +1,6 @@
 /// <reference path="../../../../generated-bindings/api-worker-configuration.d.ts" />
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { DurableObjectNamespace, R2Bucket, Service } from '@cloudflare/workers-types';
+import type { MapScreenshotAdmin } from '../../../mapScreenshot/worker';
 import type { ApiTokenRecord, ApiTokenScope, AuthUser } from '../../../auth/model';
 import type { AgentAccount, AgentTokenRecord, RequestAuthSource, RequestPrincipal } from '../../../agents/model';
 import type { CourseSnapshot } from '../../../courses/model';
@@ -50,6 +51,8 @@ export interface R2ObjectMetadata {
 }
 
 export interface R2BucketBinding {
+  get?(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  put?(key: string, value: Uint8Array, options?: { httpMetadata: { contentType: string; cacheControl?: string } }): Promise<unknown>;
   head(key: string): Promise<R2ObjectMetadata | null>;
   list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
     objects: R2ObjectMetadata[];
@@ -65,6 +68,8 @@ export interface RunGhostBucketBinding {
 }
 
 export interface Env {
+  MAP_SCREENSHOTS?: Service<MapScreenshotAdmin>;
+  PRESENCE_ROOMS?: DurableObjectNamespace;
   ASSETS: AssetsBinding;
   DB: D1Database;
   JAM_DB: D1Database;
@@ -77,6 +82,12 @@ export interface Env {
   PARTYKIT_PARTY?: string;
   PARTYKIT_INTERNAL_TOKEN?: string;
   PARTYKIT_IDENTITY_TOKEN_SECRET?: string;
+  /** Cloudflare Email Service; Resend remains an optional rollback until cutover is verified. */
+  EMAIL?: {
+    send(message: { from: string | { email: string; name?: string }; to: string | string[];
+      subject: string; text?: string; html?: string; headers?: Record<string, string> }): Promise<{ messageId: string }>;
+  };
+  EMAIL_FROM?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   AUTH_DEBUG_MAGIC_LINKS?: string;
@@ -90,6 +101,8 @@ export interface Env {
   ENABLE_SNAPSHOT_ADMIN?: string;
   ROOM_DAILY_CLAIM_LIMIT?: string;
   ROOM_DAILY_PUBLISH_LIMIT?: string;
+  /** '1' pauses drafts and publishes over rooms claimed by other builders (raid switch). */
+  OTHERS_ROOM_EDITS_PAUSED?: string;
   EXPANDED_ROOMS_ENABLED?: string;
   PLAYABLE_CONTENT_INDEX_READS?: string;
   COMPACT_WORLD_READS?: string;
@@ -226,6 +239,8 @@ export interface GuestbookEntryRow {
   created_at: string;
   hidden_at?: string | null;
   hidden_by_user_id?: string | null;
+  /** The signed-in account's current display name, joined in when entries are listed. */
+  account_display_name?: string | null;
 }
 
 export interface RoomCommentRow {
@@ -390,6 +405,8 @@ export interface PersistCourseVersionInput {
 }
 
 export interface CourseRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   course_id: string;
   course_version: number;
@@ -413,6 +430,8 @@ export interface CourseRunRow {
 }
 
 export interface ExpandedRoomRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   expanded_room_id: string;
   expanded_room_version: number;
@@ -437,6 +456,8 @@ export interface ExpandedRoomRunRow {
 }
 
 export interface RoomRunRow {
+  /** Commit order of the finalize (F351); null for runs finalized before numbering. */
+  finalize_seq?: number | null;
   attempt_id: string;
   room_id: string;
   room_x: number;
@@ -527,16 +548,6 @@ export interface PvpMatchPlayerRow {
   hits: number;
   xp_awarded: number;
   created_at: string;
-}
-
-export interface RoomDifficultyVoteRow {
-  room_id: string;
-  room_version: number;
-  user_id: string;
-  difficulty: string;
-  created_at: string;
-  updated_at: string;
-  carried_from_version: number | null;
 }
 
 export interface UserProgressRow {
@@ -659,15 +670,6 @@ export interface BadgeAwardRow {
   source_id: string;
   metadata_json: string | null;
   awarded_at: string;
-}
-
-export interface RoomVersionAttributionRow {
-  room_id: string;
-  version_key: number;
-  prior_version_key: number | null;
-  percent_change: number;
-  contributor_weight_breakdown: string;
-  created_at: string;
 }
 
 export interface UserStatsRow {
@@ -799,6 +801,9 @@ export interface WalletChallengeRow {
   expires_at: string;
   consumed_at: string | null;
   created_at: string;
+  purpose: 'sign_in' | 'link_wallet';
+  target_user_id: string | null;
+  target_session_id: string | null;
 }
 
 export interface ApiTokenRow {

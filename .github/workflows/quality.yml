@@ -13,10 +13,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run lint
+      # Fails on dead code knip finds that scripts/dead_code_baseline.txt doesn't list (F497).
+      - run: npm run dead-code:check
       - run: npm run styles:check
       - run: npm run test
       - run: npm run typecheck
@@ -33,19 +35,381 @@ jobs:
   mobile-smoke:
     # Phone and tablet layouts against a production build, with recorded API responses (F089).
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps --only-shell chromium webkit
+      - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: mobile-smoke
           path: output/web-game/mobile-smoke-ci
+          retention-days: 7
+
+  expanded-leaderboards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --expanded-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expanded-leaderboards
+          path: output/web-game/mobile-smoke-ci/expanded-leaderboards
+          retention-days: 7
+
+  gameplay-pause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --pause-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-pause
+          path: output/web-game/mobile-smoke-ci/gameplay-pause
+          retention-days: 7
+
+  assist-mode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --assist-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assist-mode
+          path: output/web-game/mobile-smoke-ci/assist
+          retention-days: 7
+
+  keyboard-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --keyboard-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-controls
+          path: output/web-game/mobile-smoke-ci/keyboard
+          retention-days: 7
+
+  auth-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --auth-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-state
+          path: output/web-game/mobile-smoke-ci/auth
+          retention-days: 7
+
+  chat-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --identity-only
+      - run: npm run smoke:room-emotes
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-identity
+          path: |
+            output/web-game/mobile-smoke-ci/chat-identity
+            output/web-game/room-emotes
+          retention-days: 7
+
+  map-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:map-capture:service
+      - run: npm run smoke:mobile:ci -- --map-capture-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-capture
+          path: |
+            output/web-game/map-capture-service
+            output/web-game/mobile-smoke-ci/map-capture
+          retention-days: 7
+
+  wallet-recovery:
+    name: wallet-recovery-${{ matrix.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [desktop, narrow-phone, safari-phone, tablet]
+    env:
+      ARTWORK_PROFILES: ${{ matrix.profile }}
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --wallet-recovery-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallet-recovery-${{ matrix.profile }}
+          path: output/web-game/mobile-smoke-ci/room-wallet-recovery
+          retention-days: 7
+
+  collection-costs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mobile:ci -- --costs-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-costs
+          path: output/web-game/mobile-smoke-ci/room-wallet-costs
+          retention-days: 7
+
+  wallet-authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:wallet-auth:service
+      - run: npm run smoke:mobile:ci -- --wallet-auth-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallet-authentication
+          path: |
+            output/web-game/wallet-auth-service
+            output/web-game/mobile-smoke-ci/wallet-auth
+          retention-days: 7
+
+  mint-network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:mint-network:service
+      - run: npm run smoke:mobile:ci -- --mint-network-only
+      - run: npm run smoke:mobile:ci -- --ownership-only --skip-build
+      - run: npm run smoke:mobile:ci -- --artwork-only --skip-build
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mint-network
+          path: |
+            output/web-game/mint-network-service
+            output/web-game/mobile-smoke-ci/mint-network
+            output/web-game/mobile-smoke-ci/room-ownership
+            output/web-game/mobile-smoke-ci/room-artwork
+          retention-days: 7
+
+  room-protection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:room-protection:service
+      - run: npm run smoke:mobile:ci -- --protection-only
+      - run: npm run smoke:mobile:ci -- --protected-discovery-only --skip-build
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-protection
+          path: |
+            output/web-game/room-protection-service
+            output/web-game/mobile-smoke-ci/room-protection
+            output/web-game/mobile-smoke-ci/protected-discovery
+          retention-days: 7
+
+  collections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Browsers and their system packages come preinstalled, so no apt mirror is involved.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      # The container runs as root over a workspace the runner owns; the build reads git.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --only-shell chromium webkit
+      - run: npm run smoke:collections:service
+      - run: npm run smoke:mobile:ci -- --collections-only
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collections
+          path: |
+            output/web-game/collections-service
+            output/web-game/mobile-smoke-ci/collections
           retention-days: 7

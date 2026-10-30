@@ -1,49 +1,51 @@
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] {
-  --mobile-portrait-console-height: clamp(294px, 36vh, 318px);
-  --mobile-portrait-console-header-height: 48px;
-  --mobile-portrait-console-controls-height: calc(
+@layer components {
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] {
+    --mobile-portrait-console-height: clamp(294px, 36vh, 318px);
+    --mobile-portrait-console-header-height: 48px;
+    --mobile-portrait-console-controls-height: calc(
     var(--mobile-portrait-console-height) - var(--mobile-portrait-console-header-height)
   );
-  --mobile-portrait-console-ink: var(--wamp-ink);
-  --mobile-portrait-console-line: #7a5a20;
-  --mobile-portrait-console-paper: var(--wamp-paper);
-  height: 100dvh;
-  overflow: hidden;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
+    --mobile-portrait-console-ink: var(--wamp-ink);
+    --mobile-portrait-console-line: #7a5a20;
+    --mobile-portrait-console-paper: var(--wamp-paper);
+    height: 100dvh;
+    overflow: hidden;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] #app {
-  grid-template-rows: minmax(0, 1fr) auto;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] #app {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar {
-  display: none;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar {
+    display: none;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar:has(#world-ghost-race:not(.hidden)) {
-  display: flex;
-  position: fixed;
-  bottom: 0;
-  z-index: 16;
-  background: var(--mobile-portrait-console-paper);
-  pointer-events: none;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar:has(#world-ghost-race:not(.hidden)) {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    z-index: var(--z-world-focus-controls);
+    background: var(--mobile-portrait-console-paper);
+    pointer-events: none;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar :is(.bar-right, .bar-center > :not(#world-ghost-race)) {
-  display: none;
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] #bottom-bar :is(.bar-right, .bar-center > :not(#world-ghost-race)) {
+    display: none;
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] .world-ghost-race {
-  color: var(--mobile-portrait-console-ink);
-}
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'][data-app-mode='play-world'] .world-ghost-race {
+    color: var(--mobile-portrait-console-ink);
+  }
 
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] input,
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] textarea,
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] [contenteditable=''],
-body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] [contenteditable='true'] {
-  -webkit-touch-callout: default;
-  -webkit-user-select: text;
-  user-select: text;
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] input,
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] textarea,
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] [contenteditable=''],
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-mobile-portrait-focused-room='true'] [contenteditable='true'] {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }

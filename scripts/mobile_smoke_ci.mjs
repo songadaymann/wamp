@@ -3,6 +3,7 @@
 //   npm run smoke:mobile:ci                 build, serve and replay
 //   npm run smoke:mobile:ci -- --skip-build reuse dist-mobile-smoke/
 //   npm run smoke:mobile:ci -- --record     refresh the fixture from production (reads only)
+//   npm run smoke:mobile:ci -- --wallet-recovery-only   interrupted approvals, four device profiles
 import { spawn, spawnSync } from 'node:child_process';
 
 const port = Number(process.env.MOBILE_SMOKE_PORT ?? 4173);
@@ -30,7 +31,7 @@ let exitCode = 1;
 try {
   await waitForServer(`http://127.0.0.1:${port}/`, 30_000);
   exitCode = 0;
-  for (const browserEngine of engines) {
+  for (const browserEngine of args.has('--expanded-only') || args.has('--pause-only') || args.has('--assist-only') || args.has('--keyboard-only') || args.has('--auth-only') || args.has('--identity-only') || args.has('--map-capture-only') || args.has('--mint-network-only') || args.has('--ownership-only') || args.has('--artwork-only') || args.has('--wallet-recovery-only') || args.has('--costs-only') || args.has('--wallet-auth-only') || args.has('--protection-only') || args.has('--protected-discovery-only') || args.has('--collections-only') ? [] : engines) {
     const smoke = spawnSync(process.execPath, ['scripts/mobile_smoke.mjs', '--url', `http://127.0.0.1:${port}`, '--engine', browserEngine], {
       stdio: 'inherit',
       env: { ...process.env, MOBILE_SMOKE_API_FIXTURES: mode,
@@ -39,6 +40,113 @@ try {
     if (smoke.status !== 0) exitCode = smoke.status ?? 1;
   }
 
+  if (mode === 'replay' && args.has('--expanded-only') && exitCode === 0) {
+    const leaderboards = spawnSync(process.execPath, ['scripts/smoke_expanded_leaderboards.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/expanded-leaderboards`],
+    { stdio: 'inherit', env: process.env });
+    if (leaderboards.status !== 0) exitCode = leaderboards.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--assist-only') && exitCode === 0) {
+    const assist = spawnSync(process.execPath, ['scripts/smoke_assist.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/assist`],
+    { stdio: 'inherit', env: process.env });
+    if (assist.status !== 0) exitCode = assist.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--keyboard-only') && exitCode === 0) {
+    const keyboard = spawnSync(process.execPath, ['scripts/smoke_keyboard_bindings.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/keyboard`],
+    { stdio: 'inherit', env: process.env });
+    if (keyboard.status !== 0) exitCode = keyboard.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--auth-only') && exitCode === 0) {
+    const auth = spawnSync(process.execPath, ['scripts/smoke_auth_state.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/auth`],
+    { stdio: 'inherit', env: process.env });
+    if (auth.status !== 0) exitCode = auth.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--collections-only') && exitCode === 0) {
+    const collections = spawnSync(process.execPath, ['scripts/smoke_collections.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/collections`],
+    { stdio: 'inherit', env: process.env });
+    if (collections.status !== 0) exitCode = collections.status ?? 1;
+  }
+
+  if (mode === 'replay' && (args.has('--protection-only') || args.has('--protected-discovery-only')) && exitCode === 0) {
+    const protection = spawnSync(process.execPath, ['scripts/smoke_room_protection.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/${args.has('--protected-discovery-only') ? 'protected-discovery' : 'room-protection'}`,
+      process.env.ROOM_PROTECTION_DATA_FILE ?? 'output/web-game/room-protection-service/browser-data-indexed.json',
+      ...(args.has('--protected-discovery-only') ? ['--discovery'] : [])],
+    { stdio: 'inherit', env: process.env });
+    if (protection.status !== 0) exitCode = protection.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--wallet-auth-only') && exitCode === 0) {
+    const auth = spawnSync(process.execPath, ['scripts/smoke_wallet_auth.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/wallet-auth`,
+      process.env.WALLET_AUTH_API_BUNDLE ?? 'output/web-game/wallet-auth-service/api/worker.js'],
+    { stdio: 'inherit', env: process.env });
+    if (auth.status !== 0) exitCode = auth.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--ownership-only') && exitCode === 0) {
+    const ownership = spawnSync(process.execPath, ['scripts/smoke_room_ownership.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-ownership`],
+    { stdio: 'inherit', env: process.env });
+    if (ownership.status !== 0) exitCode = ownership.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--artwork-only') && exitCode === 0) {
+    const artwork = spawnSync(process.execPath, ['scripts/smoke_room_artwork.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-artwork`],
+    { stdio: 'inherit', env: process.env });
+    if (artwork.status !== 0) exitCode = artwork.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--costs-only') && exitCode === 0) {
+    const costs = spawnSync(process.execPath, ['scripts/smoke_room_artwork.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-wallet-costs`, '--costs'],
+    { stdio: 'inherit', env: process.env });
+    if (costs.status !== 0) exitCode = costs.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--wallet-recovery-only') && exitCode === 0) {
+    const recovery = spawnSync(process.execPath, ['scripts/smoke_room_artwork.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/room-wallet-recovery`, '--recovery'],
+    { stdio: 'inherit', env: process.env });
+    if (recovery.status !== 0) exitCode = recovery.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--mint-network-only') && exitCode === 0) {
+    const mint = spawnSync(process.execPath, ['scripts/smoke_mint_network.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/mint-network`],
+    { stdio: 'inherit', env: process.env });
+    if (mint.status !== 0) exitCode = mint.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--map-capture-only') && exitCode === 0) {
+    const capture = spawnSync(process.execPath, ['scripts/smoke_map_capture.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/map-capture`],
+    { stdio: 'inherit', env: process.env });
+    if (capture.status !== 0) exitCode = capture.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--identity-only') && exitCode === 0) {
+    const identity = spawnSync(process.execPath, ['scripts/smoke_chat_identity.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/chat-identity`],
+    { stdio: 'inherit', env: process.env });
+    if (identity.status !== 0) exitCode = identity.status ?? 1;
+  }
+
+  if (mode === 'replay' && args.has('--pause-only') && exitCode === 0) {
+    const pause = spawnSync(process.execPath, ['scripts/smoke_gameplay_pause.mjs',
+      `http://127.0.0.1:${port}`, `${process.env.MOBILE_SMOKE_OUTPUT_DIR ?? 'output/web-game/mobile-smoke-ci'}/gameplay-pause`],
+    { stdio: 'inherit', env: process.env });
+    if (pause.status !== 0) exitCode = pause.status ?? 1;
+  }
 } finally {
   preview.kill();
 }

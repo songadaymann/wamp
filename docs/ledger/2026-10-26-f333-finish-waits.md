@@ -1,0 +1,1 @@
+| 2026-10-26 | F333 | [#329](https://github.com/songadaymann/wamp/pull/329) | [receipt](docs/review/wamp-f333-finish-waits-2026-10-24.md) | Cut dependent database waits for run finishes while preserving concurrent retries and rewards |

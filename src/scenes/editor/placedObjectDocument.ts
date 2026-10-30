@@ -12,34 +12,6 @@ export function clonePlacedObjectDocument(
   }));
 }
 
-export function updatePlacedObjectDocument(
-  placedObjects: readonly PlacedObject[],
-  instanceId: string,
-  update: (placed: PlacedObject) => PlacedObject,
-): { changed: boolean; placedObjects: PlacedObject[] } {
-  const index = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
-  if (index < 0) {
-    return { changed: false, placedObjects: clonePlacedObjectDocument(placedObjects) };
-  }
-
-  const previous = placedObjects[index];
-  const next = update({
-    ...previous,
-    linkedTargetInstanceIds: previous.linkedTargetInstanceIds
-      ? [...previous.linkedTargetInstanceIds]
-      : previous.linkedTargetInstanceIds,
-  });
-  if (JSON.stringify(previous) === JSON.stringify(next)) {
-    return { changed: false, placedObjects: clonePlacedObjectDocument(placedObjects) };
-  }
-  return {
-    changed: true,
-    placedObjects: placedObjects.map((placed, candidateIndex) =>
-      candidateIndex === index ? next : clonePlacedObjectDocument([placed])[0],
-    ),
-  };
-}
-
 export function removePlacedObjectFromDocument(
   placedObjects: readonly PlacedObject[],
   instanceId: string,

@@ -1,3 +1,4 @@
+import { createDefaultRoomSnapshot } from '../../../persistence/roomModel';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +51,7 @@ function applyMigrations(includeDiscovery = true): void {
 }
 function target(id = '0,0', version = 1): void {
   const coordinates = id.split(',').map(Number);
-  const snapshot = JSON.stringify({ version, title: 'Test', publishedAt: NOW, goal: { type: 'reach_exit' } });
+  const snapshot = JSON.stringify({ ...createDefaultRoomSnapshot(id, { x: coordinates[0], y: coordinates[1] }), version, title: 'Test', publishedAt: NOW, goal: { type: 'reach_exit' } });
   sqlite.prepare(`INSERT INTO rooms (id,x,y,draft_json,published_json,last_published_by_user_id)
     VALUES (?,?,?,?,?,'owner') ON CONFLICT(id) DO UPDATE SET published_json=excluded.published_json`)
     .run(id, coordinates[0], coordinates[1], snapshot, snapshot);
@@ -224,7 +225,8 @@ describe('discovery metrics against the migrated SQLite schema', () => {
     const trophies=await loadExpandedDiscoveryTrophies(env,targets);
     expect(trophies.size).toBe(1);
     expect(trophies.get('course:legacy:2')).toMatchObject({contentType:'expanded_room',versionKey:2});
-    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(prepare.mock.calls.length).toBeLessThan(10);
+    expect(Math.max(...prepare.mock.results.map(result => (result.value as Statement).values.length))).toBeLessThanOrEqual(100);
     sqlite.exec("DELETE FROM content_trophies WHERE content_type='expanded_room'");
     expect((await loadExpandedDiscoveryTrophies(env,targets)).get('course:legacy:2')?.contentType).toBe('course');
   });

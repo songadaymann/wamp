@@ -53,10 +53,3 @@ export function compareCourseLeaderboardEntries(
 
   return (left.finishedAt ?? '').localeCompare(right.finishedAt ?? '');
 }
-
-export function sortCompletedCourseRunsForLeaderboard(
-  runs: CourseRunRecord[],
-  goal: CourseGoal
-): CourseRunRecord[] {
-  return [...runs].sort((left, right) => compareCourseLeaderboardEntries(left, right, goal));
-}

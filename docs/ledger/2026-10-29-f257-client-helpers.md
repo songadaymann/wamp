@@ -1,0 +1,1 @@
+| 2026-10-29 | F257 | [#354](https://github.com/songadaymann/wamp/pull/354) | [receipt](docs/review/wamp-f257-client-helper-cleanup-2026-10-29.md) | Remove unused client helpers and finish boot diagnostics once the app is ready |

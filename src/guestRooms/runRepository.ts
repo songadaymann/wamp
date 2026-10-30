@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from '../api/baseUrl';
+import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
 import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import { resolveWorldPresenceGuestIdentity } from '../presence/worldPresence';
 import type { RunFinishRequestBody } from '../runs/model';
@@ -33,7 +34,7 @@ export function createGuestRunRepository(baseUrl = getApiBaseUrl()): GuestRunRep
       headers.set('X-Guest-Recovery-Token', identity.recoveryToken);
     }
     if (body !== undefined) headers.set('Content-Type', 'application/json');
-    const response = await fetch(`${baseUrl}${path}`, {
+    const response = await fetchWithPageReadLifetime(`${baseUrl}${path}`, {
       method: body === undefined ? 'GET' : 'POST', headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: authenticated ? 'include' : 'omit', signal: AbortSignal.timeout(15_000),

@@ -1,6 +1,5 @@
 import type { RoomGoalType } from '../../../goals/roomGoals';
 import {
-  WORLD_TILE_MAX_LEVEL,
   type WorldTileAddress,
   type WorldTileCoordinate,
   type WorldTileLevel,
@@ -401,39 +400,6 @@ export async function loadWorldRenderTiles(
   ));
   const results = await env.DB.batch<{ results: WorldRenderTileRow[] }>(statements);
   return results.flatMap((result) => result?.results ?? []);
-}
-
-export async function loadWorldRenderTileLeafChanges(
-  env: Pick<Env, 'DB'>,
-  rendererVersion: string,
-  bounds: WorldTileRoomBounds,
-): Promise<WorldRenderTileLeafChangeRow[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        tile_x,
-        tile_y,
-        desired_generation,
-        desired_empty,
-        ready_generation,
-        ready_empty,
-        desired_at,
-        ready_at
-      FROM world_render_tiles
-      WHERE renderer_version = ?
-        AND level = 4
-        AND tile_x BETWEEN ? AND ?
-        AND tile_y BETWEEN ? AND ?
-      ORDER BY tile_y ASC, tile_x ASC
-    `,
-  ).bind(
-    rendererVersion,
-    bounds.minRoomX,
-    bounds.maxRoomX,
-    bounds.minRoomY,
-    bounds.maxRoomY,
-  ).all<WorldRenderTileLeafChangeRow>();
-  return result.results;
 }
 
 export async function loadPublishedWorldTileRoomSummaries(
@@ -1189,14 +1155,6 @@ export async function loadAllReferencedWorldTileObjectKeys(
     `,
   ).all<{ r2_key: string }>();
   return new Set(result.results.map((row) => row.r2_key));
-}
-
-export function isWorldRenderTileCurrent(row: WorldRenderTileRow): boolean {
-  return row.ready_generation !== null && row.ready_generation === row.desired_generation;
-}
-
-export function isWorldRenderLeaf(row: Pick<WorldRenderTileRow, 'level'>): boolean {
-  return row.level === WORLD_TILE_MAX_LEVEL;
 }
 
 function chunkArray<T>(values: T[], size: number): T[][] {

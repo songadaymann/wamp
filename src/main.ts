@@ -1,26 +1,30 @@
 import { initializeGuestReplay } from './analytics/replay/recorder';
+import { startBlockedCustomSpriteSync } from './customSprites/blocklistSync';
 import { initializeBugReporter } from './bugReports/runtime';
 import Phaser from 'phaser';
 import { getAuthDebugState, setupAuthUi } from './auth/client';
+import { installPendingRoomWalletRecovery } from './main/roomWalletRecovery';
+import { installPageReadLifecycle } from './api/pageReadLifetime';
 import {
   initializeGuestActivityTracking,
   type GuestActivityMode,
 } from './analytics/guestActivity';
 import { installDialogEscapeGuard, installModalFocusManagement, installModalStackBackdrops } from './ui/modalState';
+import { installStaleBuildRecovery } from './main/staleBuildRecovery';
 import { initSfx, globalSfxController } from './audio/sfx';
 import { sharedAudioEngine } from './audio/engine';
-import { runOverworldLodStress } from './debug/overworldLodStress';
 import { globalRoomMusicController, initRoomMusic } from './music/controller';
 import { BootScene } from './scenes/BootScene';
 import { OverworldPlayScene } from './scenes/OverworldPlayScene';
 import { ensureEditorScenesRegistered } from './scenes/editorSceneLoader';
 import {
+  canReplaceBusyCard,
   getAppFeedbackDebugState,
   hideBusyOverlay,
   initializeAppFeedback,
   isAppReady,
-  showBusyError,
   showBootSplash,
+  showBusyError,
 } from './ui/appFeedback';
 import { getDeviceLayoutState } from './ui/deviceLayout';
 import { installDialogKeyboardSync, syncGameKeyboardFocus } from './ui/keyboardFocus';
@@ -37,15 +41,13 @@ import { getRuntimeTransitionProbe } from './main/runtimeTransitionProbe';
 import { installEarlyWorldTileBootstrapHandoff } from './main/earlyWorldTileBootstrapHandoff';
 import { installPreviewSmokeActions } from './main/previewSmoke';
 import { normalizeRendererQuery, parseBooleanQuery, resolveRendererType } from './main/query';
-import {
-  getRuntimeResourceDebugState,
-  installRuntimeResourceDebugLogger,
-} from './main/resourceDebug';
+import { installResourceDebugTools, preloadMobilePerformanceProfiler } from './main/debugTools';
 import {
   type GraphicsDebugState,
   installWebglRecoveryMonitor,
 } from './main/webglRecovery';
 import { installRenderLoopRecoveryMonitor } from './main/renderLoopRecovery';
+import { applyTextPreferences } from './settings/textPreferences';
 import { getGameSettings, subscribeGameSettings, type GameSettings } from './settings/userSettings';
 import { getComfortSettings } from './settings/comfortSettings';
 import {
@@ -64,6 +66,7 @@ import { getMannCoolDebugState, installMannCoolIntegration } from './integration
 
 const gameContainer = document.getElementById('game-container')!;
 const query = new URLSearchParams(window.location.search);
+installPageReadLifecycle();
 
 const debug_options = {
   renderer: normalizeRendererQuery(query.get('renderer')),
@@ -80,6 +83,7 @@ logBootPhase('main:start', {
 
 void resolveWorldLinkBeforeBoot();
 startArrivalWorldPrefetch();
+preloadMobilePerformanceProfiler();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: resolveRendererType(debug_options.renderer),
@@ -202,6 +206,7 @@ if (new URLSearchParams(window.location.search).has('audiodebug')) {
 installDialogEscapeGuard();
 installModalStackBackdrops();
 const applyRuntimeSettings = (settings: GameSettings) => {
+  applyTextPreferences(settings, document);
   globalSfxController.setVolume(settings.sfxVolume);
   globalRoomMusicController.setVolume(settings.musicVolume);
 };
@@ -213,17 +218,18 @@ const applyDevicePerformanceMode = () => {
 applyDevicePerformanceMode();
 subscribeDevicePerformanceMode(applyDevicePerformanceMode);
 initializeGameSettingsSync();
-window.get_wamp_resource_debug = () => ({ ...getRuntimeResourceDebugState(game), frameCadence: getFrameCadenceDebugState() });
-installRuntimeResourceDebugLogger(game, query);
+installResourceDebugTools(game, query, getFrameCadenceDebugState);
 
 if (import.meta.env.DEV) {
   (window as Window & { __EVERYBODYS_PLATFORMER_GAME__?: Phaser.Game }).__EVERYBODYS_PLATFORMER_GAME__ = game;
-  window.run_overworld_lod_stress = () => runOverworldLodStress(game);
+  window.run_overworld_lod_stress = async () => (await import('./debug/overworldLodStress')).runOverworldLodStress(game);
 }
 
 // Set up HTML UI event handlers
 setupUI(game);
 logBootPhase('main:ui-ready');
+const stopRoomWalletRecovery = installPendingRoomWalletRecovery();
+game.events.once('destroy', stopRoomWalletRecovery);
 void setupAuthUi();
 syncGameKeyboardFocus(game);
 installDialogKeyboardSync(game);
@@ -308,6 +314,7 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
     'The browser paused the game graphics. Your current room is still here; reload to restore the picture.',
     {
       title: 'Graphics paused',
+      tone: 'choice',
       closeLabel: 'Keep waiting',
       retryHandler: () => window.location.reload(),
     },
@@ -320,6 +327,13 @@ const webglRecoveryMonitor = installWebglRecoveryMonitor({
       level: phase === 'restored' ? 'info' : 'warn',
       force: true,
     },
+  ),
+});
+installStaleBuildRecovery({
+  canShowOffer: canReplaceBusyCard,
+  showReloadOffer: () => showBusyError(
+    'A new version of WAMP came out while this tab was open, so this part can\'t load. Save anything you are working on, then reload.',
+    { title: 'WAMP was updated', tone: 'choice', retryLabel: 'Reload', closeLabel: 'Not now', retryHandler: () => window.location.reload() },
   ),
 });
 const getGraphicsDebugState = (): GraphicsDebugState => {
@@ -416,6 +430,7 @@ window.render_game_to_text = () =>
 window.get_room_music_debug_state = () => globalRoomMusicController.getDebugState();
 window.get_sword_hunter_debug = () => getSwordHunterDebugState(game);
 initializeGuestActivityTracking(getGuestActivitySnapshot);
+startBlockedCustomSpriteSync();
 const bugReporter = initializeBugReporter(game);
 initializeGuestReplay({
   canvas: game.canvas,

@@ -1,15 +1,12 @@
 import Phaser from 'phaser';
 import { getDeviceLayoutState, initializeDeviceLayout, DEVICE_LAYOUT_CHANGED_EVENT } from '../deviceLayout';
+import { watchModals } from '../modalState';
 import { getActiveOverworldScene } from '../setup/sceneBridge';
 import { hasFocusedRoomCoordinateLink } from './focusedRoomLink';
 import { PortraitPlayControlsController } from './portraitPlayControls';
 import { keepHtmlPointerOutsideGame } from './gamePointerBoundary';
 
-type EditorSheetId = 'tools' | 'background' | 'palette' | 'objects' | 'goal' | 'actions';
-
 type Elements = {
-  mobileEditorNav: HTMLElement | null;
-  mobileEditorToggleButton: HTMLButtonElement | null;
   mobileWorldStopButton: HTMLButtonElement | null;
   mobileWorldRestartButton: HTMLButtonElement | null;
   mobileCameraTuner: HTMLElement | null;
@@ -33,9 +30,8 @@ type Elements = {
 export class MobileUiController {
   private readonly elements: Elements;
   private readonly mutationObserver: MutationObserver;
+  private stopWatchingModals: () => void = () => {};
   private readonly portraitPlayControls: PortraitPlayControlsController;
-  private activeEditorSheet: EditorSheetId = 'tools';
-  private editorSheetCollapsed = false;
   private worldHudCollapsed = false;
   private worldHudDetailsExpanded = false;
   private previousAppMode: string | null = null;
@@ -47,8 +43,6 @@ export class MobileUiController {
     private readonly windowObj: Window = window,
   ) {
     this.elements = {
-      mobileEditorNav: doc.getElementById('mobile-editor-nav'),
-      mobileEditorToggleButton: doc.getElementById('btn-mobile-editor-toggle') as HTMLButtonElement | null,
       mobileWorldStopButton: doc.getElementById('btn-mobile-world-stop') as HTMLButtonElement | null,
       mobileWorldRestartButton: doc.getElementById('btn-mobile-world-restart') as HTMLButtonElement | null,
       mobileCameraTuner: doc.getElementById('mobile-camera-tuner'),
@@ -76,12 +70,8 @@ export class MobileUiController {
 
   init(): void {
     initializeDeviceLayout();
-    this.doc.body.dataset.mobileEditorSheet = this.activeEditorSheet;
-    this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
     this.bindDeviceLayout();
     this.bindAppMode();
-    this.bindMobileEditorNav();
-    this.bindMobileEditorActions();
     this.bindMobileWorldHud();
     this.bindWorldShortcuts();
     this.portraitPlayControls.init();
@@ -90,37 +80,20 @@ export class MobileUiController {
     // Keep native defaults; allow releases through so canvas drags can finish outside it.
     this.doc.addEventListener('touchstart', this.handleHtmlPointerStart, { passive: true });
     this.doc.addEventListener('mousedown', this.handleHtmlPointerStart, { passive: true });
-    this.windowObj.addEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.render();
   }
 
   destroy(): void {
     this.mutationObserver.disconnect();
+    this.stopWatchingModals();
     this.portraitPlayControls.destroy();
     this.windowObj.removeEventListener(DEVICE_LAYOUT_CHANGED_EVENT, this.handleDeviceLayoutChanged as EventListener);
-    this.windowObj.removeEventListener('mobile-editor-auto-collapse', this.handleAutoCollapse as EventListener);
     this.doc.removeEventListener('touchend', this.handleTouchEndSuppressDoubleTapZoom, true);
     this.doc.removeEventListener('touchstart', this.handleHtmlPointerStart);
     this.doc.removeEventListener('mousedown', this.handleHtmlPointerStart);
   }
 
   private readonly handleDeviceLayoutChanged = () => {
-    this.render();
-  };
-
-  private readonly handleAutoCollapse = () => {
-    if (this.doc.body.dataset.editorPhoneDock === 'true') return;
-    const layout = getDeviceLayoutState();
-    if (layout.deviceClass !== 'phone' || !layout.coarsePointer) {
-      return;
-    }
-
-    if (this.doc.body.dataset.appMode !== 'editor') {
-      return;
-    }
-
-    this.editorSheetCollapsed = true;
-    this.doc.body.dataset.mobileEditorCollapsed = 'true';
     this.render();
   };
 
@@ -136,9 +109,7 @@ export class MobileUiController {
     this.observeClassChanges(this.doc.getElementById('auth-panel'));
     this.observeClassChanges(this.doc.getElementById('global-chat'));
     this.observeClassChanges(this.doc.getElementById('busy-overlay'));
-    this.doc.querySelectorAll('.history-modal').forEach((element) => {
-      this.observeClassChanges(element);
-    });
+    this.stopWatchingModals = watchModals(this.doc, () => this.render());
   }
 
   private observeClassChanges(target: Element | null): void {
@@ -150,58 +121,6 @@ export class MobileUiController {
       attributes: true,
       attributeFilter: ['class'],
     });
-  }
-
-  private bindMobileEditorNav(): void {
-    this.elements.mobileEditorNav?.querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const nextSheet = button.dataset.mobileEditorSheet as EditorSheetId | undefined;
-        if (!nextSheet) {
-          return;
-        }
-
-        if (this.doc.body.dataset.editorMusicMode === 'true' && nextSheet !== 'actions') {
-          return;
-        }
-
-        this.syncEditorPaletteMode(nextSheet);
-
-        if (this.activeEditorSheet !== nextSheet || this.editorSheetCollapsed) {
-          this.editorSheetCollapsed = false;
-        }
-        this.activeEditorSheet = nextSheet;
-        this.doc.body.dataset.mobileEditorSheet = nextSheet;
-        this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
-        this.render();
-      });
-    });
-  }
-
-  private bindMobileEditorActions(): void {
-    this.elements.mobileEditorToggleButton?.addEventListener('click', () => {
-      if (this.doc.body.dataset.editorPhoneDock === 'true') return;
-      if (this.doc.body.dataset.editorMusicMode === 'true') {
-        return;
-      }
-
-      if (!this.editorSheetCollapsed) {
-        this.editorSheetCollapsed = true;
-        this.doc.body.dataset.mobileEditorCollapsed = 'true';
-        this.render();
-      }
-    });
-  }
-
-  private syncEditorPaletteMode(sheet: EditorSheetId): void {
-    if (sheet !== 'palette' && sheet !== 'objects') {
-      return;
-    }
-
-    const targetMode = sheet === 'objects' ? 'objects' : 'tiles';
-    const targetButton = this.doc.querySelector<HTMLButtonElement>(`.palette-tab[data-mode="${targetMode}"]`);
-    if (targetButton && !targetButton.classList.contains('active')) {
-      targetButton.click();
-    }
   }
 
   private bindMobileWorldHud(): void {
@@ -305,7 +224,7 @@ export class MobileUiController {
       target.closest(
         // CSS disables browser double-tap zoom on the canvas and native controls.
         // Preventing touchend strands Phaser gestures and swallows button clicks.
-        '#game-container > canvas, button, a[href], [data-editor-history], .object-item, input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
+        '#game-container > canvas, button, summary, a[href], [data-editor-history], .object-item, input, textarea, select, option, label, [contenteditable=""], [contenteditable="true"]'
       )
     );
   }
@@ -403,8 +322,6 @@ export class MobileUiController {
     const layout = getDeviceLayoutState();
     const appMode = this.doc.body.dataset.appMode ?? 'world';
     const isPhone = layout.deviceClass === 'phone';
-    const isEditor = appMode === 'editor';
-    const musicModeActive = this.doc.body.dataset.editorMusicMode === 'true';
     const isWorld = appMode === 'world' || appMode === 'play-world';
     const isPlay = appMode === 'play-world';
     const hasFocusedRoomLink = hasFocusedRoomCoordinateLink(
@@ -438,17 +355,6 @@ export class MobileUiController {
       this.windowObj.scrollTo(0, 0);
     }
 
-    if (!isEditor && this.editorSheetCollapsed) {
-      this.editorSheetCollapsed = false;
-    }
-
-    const phoneDockActive = this.doc.body.dataset.editorPhoneDock === 'true';
-    if (isEditor && musicModeActive && !phoneDockActive) {
-      this.activeEditorSheet = 'actions';
-      this.editorSheetCollapsed = false;
-      this.doc.body.dataset.mobileEditorSheet = 'actions';
-    }
-
     if (this.previousAppMode !== appMode) {
       if (layout.coarsePointer && layout.deviceClass !== 'desktop') {
         if (appMode === 'play-world' && isTouchPlay) {
@@ -472,24 +378,6 @@ export class MobileUiController {
     this.doc.body.dataset.mobileTouchPlayLayout = touchPlayLayout;
     this.doc.body.dataset.mobilePortraitPlay = isPortraitPlay ? 'true' : 'false';
     this.doc.body.dataset.mobilePortraitFocusedRoom = isPortraitFocusedRoom ? 'true' : 'false';
-
-    if (this.elements.mobileEditorNav) {
-      this.elements.mobileEditorNav.classList.toggle(
-        'hidden',
-        !(isPhone && layout.coarsePointer && isEditor) || phoneDockActive,
-      );
-      this.elements.mobileEditorNav
-        .querySelectorAll<HTMLButtonElement>('[data-mobile-editor-sheet]')
-        .forEach((button) => {
-          button.classList.toggle('active', button.dataset.mobileEditorSheet === this.activeEditorSheet);
-          button.disabled = musicModeActive && button.dataset.mobileEditorSheet !== 'actions';
-        });
-    }
-
-    if (!phoneDockActive) this.doc.body.dataset.mobileEditorCollapsed = this.editorSheetCollapsed ? 'true' : 'false';
-    if (this.elements.mobileEditorToggleButton && !phoneDockActive) {
-      this.elements.mobileEditorToggleButton.disabled = musicModeActive;
-    }
 
     this.portraitPlayControls.render(isTouchPlay, `${touchPlayLayout}:${layout.orientationState}`);
     this.elements.mobileWorldStopButton?.classList.toggle(
@@ -562,6 +450,7 @@ export class MobileUiController {
   }
 
   private syncMobileCameraTunerValue(): void {
+    if (this.elements.mobileCameraTuner?.classList.contains('hidden') !== false) return;
     const valueElement = this.elements.mobileCameraTunerValue;
     if (!valueElement) {
       return;

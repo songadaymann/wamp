@@ -1,3 +1,4 @@
+import type { PlacedObject } from '../config/objects';
 import type { EditorMusicCommands } from '../ui/setup/sceneBridge';
 import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
@@ -15,7 +16,7 @@ import {
   ROOM_PX_HEIGHT,
   LAYER_NAMES,
   TILESETS,
-  editorState,
+  editorState, updateEditorState,
   resetEditorLayerVisibility,
 } from '../config';
 import { globalRoomMusicController } from '../music/controller';
@@ -87,7 +88,7 @@ import {
 import { EditorPresenceController } from './editor/presence';
 import { EditorPersistenceController } from './editor/persistence';
 import { EditorToolController } from './editor/tools';
-import { EditorCourseController } from './editor/courseController';
+import { EditorCourseController, type CourseRoomSessionSyncOptions } from './editor/courseController';
 import { EditorOverlayController } from './editor/overlays';
 import { EditorChromeController } from './editor/chrome';
 import { RoomLightingController } from '../lighting/controller';
@@ -114,7 +115,7 @@ import { saveEditorClipboard } from './editor/clipboardStorage';
 import type { EditorCourseUiState, RoomEditorSceneBridge } from '../ui/setup/sceneBridge';
 import type { EditorShapeKind } from './editor/shapeTiles';
 import {
-  EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
+  requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
@@ -158,6 +159,7 @@ export interface EditorPreviewSmokeResult extends Record<string, unknown> {
 }
 
 export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
+  private placedObjects: PlacedObject[] = [];
   private draftLifecycle: EditorDraftLifecycle | null = null;
   private uiBridge: EditorUiBridge | null = null;
   private roomEditCount = 0;
@@ -204,9 +206,11 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private forceInitialRoomSnapshot = false;
   private readonly handleWake = (): void => {
     this.testFromHerePlacement = false;
+    // Like the course editor, own the music again: a test run's room loop must not follow us back (F375).
+    this.stopRoomMusicPreview();
     setAppMode('editor');
     delete document.body.dataset.editorCourseMode;
-    editorState.isPlaying = false;
+    updateEditorState({ isPlaying: false });
     this.presenceController.sync();
     this.updateBottomBar();
     this.updateGoalUi();
@@ -326,9 +330,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       }
 
       const shellEscapeDetail: EditorShellEscapeRequestedDetail = { handled: false };
-      window.dispatchEvent(new CustomEvent(EDITOR_SHELL_ESCAPE_REQUESTED_EVENT, {
-        detail: shellEscapeDetail,
-      }));
+      requestEditorShellEscape(window, shellEscapeDetail);
       if (shellEscapeDetail.handled) {
         return;
       }
@@ -427,6 +429,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private readonly handleShutdown = (): void => {
     this.roomSession.backupDraftForPageExit();
     this.draftLifecycle?.destroy();
+    this.persistenceController.destroy();
     this.draftLifecycle = null;
     this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
@@ -442,8 +445,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       mode: 'idle',
       resetTransport: true,
     });
-    this.uiBridge?.destroy();
-    this.uiBridge = null;
+    this.uiBridge?.destroy(); this.uiBridge = null;
     this.musicPatternController.destroy();
     this.presenceController.destroy();
     this.resetRuntimeState();
@@ -487,11 +489,11 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       getRoomOrigin: () => ({ x: 0, y: 0 }),
       getSelectedBackground: () => editorState.selectedBackground,
       setSelectedBackground: (backgroundId) => {
-        editorState.selectedBackground = backgroundId;
-        editorState.selectedSolidBackgroundColor = getSolidColorFromBackgroundValue(
+        updateEditorState({ selectedBackground: backgroundId });
+        updateEditorState({ selectedSolidBackgroundColor: getSolidColorFromBackgroundValue(
           backgroundId,
           editorState.selectedSolidBackgroundColor,
-        );
+        ) });
       },
       getSelectedLightingSettings: () => this.getSelectedLightingSettings(),
       setSelectedLightingSettings: (lighting) => {
@@ -501,9 +503,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       setSelectedWeatherSettings: (weather) => {
         this.setSelectedWeatherSettings(weather);
       },
-      getPlacedObjects: () => editorState.placedObjects,
+      getPlacedObjects: () => this.placedObjects,
       setPlacedObjects: (placedObjects) => {
-        editorState.placedObjects = placedObjects;
+        this.placedObjects = placedObjects;
       },
       updateBackgroundSelectValue: () => {},
       updateLightingControlsValue: (lighting) => {
@@ -518,7 +520,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       canSaveDraft: () => this.roomPermissions.canSaveDraft,
       recordBuildPlacement: (count) => this.guestBuilderActivityTracker.recordPlacedBuildContent(count),
     });
-    this.roomSession = new EditorRoomSession(createRoomRepository(), {
+    this.roomSession = new EditorRoomSession(createRoomRepository(), { isActive: () => this.scene.isActive(), events: this.events,
       applyRoomSnapshot: (room) => {
         this.applyRoomSnapshot(room);
       },
@@ -535,9 +537,12 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       refreshSurroundingRoomPreviews: () => {
         void this.refreshSurroundingRoomPreviews();
       },
+      onDraftSaved: (record) => this.syncActiveCourseRoomSessionSnapshot(record.draft, {
+        published: false, baseUpdatedAt: record.draft.updatedAt, unsaved: false,
+      }),
     });
     this.persistenceController = new EditorPersistenceController(this.roomSession, {
-      getRoomPermissions: () => this.roomPermissions,
+      getRoomPermissions: () => this.roomPermissions, isActive: () => this.scene.isActive(), events: this.events, refreshUi: () => this.renderEditorUi(),
       getRoomTitle: () => this.roomTitle,
       setRoomTitle: (title) => {
         this.roomTitle = title;
@@ -566,11 +571,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       },
     });
     this.toolController = new EditorToolController(
-      this,
       this.editRuntime,
       this.persistenceController,
       {
-        startRectDrawing: (tileX, tileY) => this.interactionController.startRectDrawing(tileX, tileY),
         clearShapePreview: () => this.interactionController.clearShapePreview(),
         clearCoursePlacementMode: () => this.courseController.clearPlacementMode(),
         renderUi: () => this.renderEditorUi(),
@@ -618,7 +621,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
       updateGoalUi: () => this.updateGoalUi(),
       getPersistenceStatusText: () => this.persistenceController.statusText,
-      getMintedTokenId: () => this.mintedTokenId,
+      getIsProtected: () => this.roomSession.currentIsProtected,
       getRoomEditCount: () => this.roomEditCount,
       publishRoom: () => this.publishRoom(),
     });
@@ -640,7 +643,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         getRoomCoordinates: () => ({ ...this.roomCoordinates }),
         getRoomGoal: () => this.roomGoal,
         getRoomPermissions: () => this.roomPermissions,
-        getMintedTokenId: () => this.mintedTokenId,
+        getIsProtected: () => this.roomSession.currentIsProtected,
         getPublishedVersion: () => this.publishedVersion,
         getRoomVersionHistory: () => this.roomVersionHistory,
         getEntrySource: () => this.entrySource,
@@ -694,7 +697,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       beginObjectBatch: (livePreview) => this.editRuntime.beginObjectBatch(livePreview),
       commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
       cancelObjectBatch: () => this.editRuntime.cancelObjectBatch(),
-      handleToolDown: (pointer) => this.toolController.handleToolDown(pointer),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
       removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
@@ -705,6 +707,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       eraseStampAt: (worldX, worldY) => this.editRuntime.eraseStampAt(worldX, worldY),
       stampShape: (kind, x1, y1, x2, y2, options) => this.editRuntime.stampShape(kind, x1, y1, x2, y2, options),
       floodErase: (tileX, tileY) => this.editRuntime.floodErase(tileX, tileY),
+      floodFill: (tileX, tileY) => this.editRuntime.floodFill(tileX, tileY),
       captureCopySelection: (x1, y1, x2, y2) => this.toolController.captureCopySelection(x1, y1, x2, y2),
       getClipboardPreview: () => this.toolController.getClipboardPreview(),
       isClipboardPastePreviewActive: () => this.toolController.isClipboardPastePreviewActive(),
@@ -732,7 +735,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.overlayController = new EditorOverlayController(this, {
       hasDeadlyPits: () => !this.courseController.hasActiveCourseEdit() && this.editRuntime.roomPitsAreDeadly,
       getLayers: () => this.layers,
-      getPlacedObjects: () => editorState.placedObjects,
+      getPlacedObjects: () => this.placedObjects,
     });
     this.backgroundController = new EditorBackgroundController(this, this.worldRepository, {
       getRoomId: () => this.roomId,
@@ -809,28 +812,8 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return this.roomSession.currentClaimerDisplayName;
   }
 
-  private get mintedChainId(): number | null {
-    return this.roomSession.currentMintedChainId;
-  }
-
-  private get mintedContractAddress(): string | null {
-    return this.roomSession.currentMintedContractAddress;
-  }
-
-  private get mintedTokenId(): string | null {
-    return this.roomSession.currentMintedTokenId;
-  }
-
-  private get mintedOwnerWalletAddress(): string | null {
-    return this.roomSession.currentMintedOwnerWalletAddress;
-  }
-
-  private get mintedOwnerSyncedAt(): string | null {
-    return this.roomSession.currentMintedOwnerSyncedAt;
-  }
-
   private get saveInFlight(): boolean {
-    return this.roomSession.isSaveInFlight;
+    return this.roomSession.isSaveInFlight || this.persistenceController.isCollecting;
   }
 
   private get roomGoal(): RoomGoal | null {
@@ -869,10 +852,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return this.courseController.buildCourseEditedRoomData();
   }
 
-  private syncActiveCourseRoomSessionSnapshot(
-    room: RoomSnapshot,
-    options: { published: boolean }
-  ): void {
+  private syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void {
     this.courseController.syncActiveCourseRoomSessionSnapshot(room, options);
   }
 
@@ -889,9 +869,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.overlayController.setDeathMap(points,this.roomCoordinates);
   }
 
-  clearRoomDeathMap(): void {
-    this.overlayController.clearDeathMap();
-  }
+  getWorldPublicationState() { return { roomId: this.roomId, draftUpdatedAt: this.roomSession.currentServerDraftUpdatedAt, dirty: this.roomDirty }; }
+
+  clearRoomDeathMap(): void { this.overlayController.clearDeathMap(); }
 
   getCourseEditorState(): EditorCourseUiState {
     return this.courseController.getCourseEditorState();
@@ -901,9 +881,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     resetEditorLayerVisibility();
     this.objectMoveController.activate();
     const builderSettings = getGameSettings();
-    editorState.smartTheme = builderSettings.lastSmartTheme;
+    updateEditorState({ smartTheme: builderSettings.lastSmartTheme });
     if (builderSettings.builderMode !== 'advanced' && editorState.paletteMode === 'tiles') {
-      editorState.paletteMode = 'smart';
+      updateEditorState({ paletteMode: 'smart' });
     }
     this.resetRuntimeState();
 
@@ -950,6 +930,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
         this.presenceController.refreshIdentity();
+        void this.roomSession.refreshOwnershipPresentation();
         this.renderEditorUi();
       },
       onBack: () => this.handleEditorBackAction(),
@@ -968,8 +949,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         await this.persistenceController.refreshMintMetadata();
       },
       onFitToScreen: () => this.fitToScreen(),
-      onZoomIn: () => this.zoomIn(),
-      onZoomOut: () => this.zoomOut(),
       onSetRoomTitle: (title) => this.persistenceController.setRoomTitle(title),
       onSetRoomCameraCentered: (centered) => this.editRuntime.setRoomCameraMode(centered),
       onSetRoomPitsAreDeadly: (enabled) => this.editRuntime.setRoomPitsAreDeadly(enabled),
@@ -978,9 +957,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       onClearCurrentLayer: () => this.toolController.clearCurrentLayer(),
       onClearAllTiles: () => this.toolController.clearAllTiles(),
       onClearAllObjects: () => this.toolController.clearAllObjects(),
-      onSetSmartTheme: (theme) => { editorState.smartTheme = theme; },
-      onSetSmartMaterial: (material) => { editorState.smartMaterial = material; },
-      onSetSmartStyle: (style) => { editorState.smartStyle = style; },
+      onSetSmartTheme: (theme) => { updateEditorState({ smartTheme: theme }); },
+      onSetSmartMaterial: (material) => { updateEditorState({ smartMaterial: material }); },
+      onSetSmartStyle: (style) => { updateEditorState({ smartStyle: style }); },
       onSetSmartDetailsEnabled: (enabled) => this.editRuntime.setSmartDetailsEnabled(enabled),
       onFillCaveTerrain: () => this.editRuntime.fillCaveTerrain(),
       onSelectBackground: () => this.applySelectedBackground(),
@@ -1144,15 +1123,15 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.flowController.reset();
     this.inspectorController.reset();
     this.courseController.reset();
-    this.roomSession.reset();
+    this.roomSession.reset(); this.persistenceController.start();
     this.toolController.reset();
     this.guestBuilderActivityTracker.reset();
     this.roomEditCount = 0;
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'off' });
+    updateEditorState({ tileFlipYMode: 'off' });
     this.setSelectedLightingSettings(null);
     this.setSelectedWeatherSettings(null);
-    editorState.isPlaying = false;
+    updateEditorState({ isPlaying: false });
     this.musicWorkflow.resetForRuntimeClear();
     globalRoomMusicController.stopPreviewClip();
     document.body.dataset.editorMusicMode = 'false';
@@ -1180,9 +1159,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
 
   private setSelectedLightingSettings(lighting: RoomLightingSettings | null | undefined): void {
     const normalized = cloneRoomLightingSettings(lighting);
-    editorState.selectedLightingMode = normalized.mode;
-    editorState.selectedLightingDarkness = normalized.darkness;
-    editorState.selectedLightingRadius = normalized.radius;
+    updateEditorState({ selectedLightingMode: normalized.mode });
+    updateEditorState({ selectedLightingDarkness: normalized.darkness });
+    updateEditorState({ selectedLightingRadius: normalized.radius });
   }
 
   private syncLightingControls(lighting: RoomLightingSettings | null | undefined): void {
@@ -1216,8 +1195,8 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
 
   private setSelectedWeatherSettings(weather: RoomWeatherSettings | null | undefined): void {
     const normalized = cloneRoomWeatherSettings(weather);
-    editorState.selectedWeatherMode = normalized.mode;
-    editorState.selectedWeatherIntensity = normalized.intensity;
+    updateEditorState({ selectedWeatherMode: normalized.mode });
+    updateEditorState({ selectedWeatherIntensity: normalized.intensity });
   }
 
   private syncWeatherControls(weather: RoomWeatherSettings | null | undefined): void {
@@ -1237,35 +1216,35 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private applySelectedLightingMode(mode: RoomSnapshot['lighting']['mode']): void {
-    editorState.selectedLightingMode = mode;
+    updateEditorState({ selectedLightingMode: mode });
     this.updateLightingPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
 
   private applySelectedLightingDarkness(darkness: number): void {
-    editorState.selectedLightingDarkness = darkness;
+    updateEditorState({ selectedLightingDarkness: darkness });
     this.updateLightingPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
 
   private applySelectedLightingRadius(radius: number): void {
-    editorState.selectedLightingRadius = radius;
+    updateEditorState({ selectedLightingRadius: radius });
     this.updateLightingPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
 
   private applySelectedWeatherMode(mode: RoomSnapshot['weather']['mode']): void {
-    editorState.selectedWeatherMode = mode;
+    updateEditorState({ selectedWeatherMode: mode });
     this.updateWeatherPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
   }
 
   private applySelectedWeatherIntensity(intensity: number): void {
-    editorState.selectedWeatherIntensity = intensity;
+    updateEditorState({ selectedWeatherIntensity: intensity });
     this.updateWeatherPreview();
     this.persistenceController.markRoomDirty();
     this.renderEditorUi();
@@ -1403,7 +1382,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       return;
     }
 
-    if (this.entrySource === 'world' && this.mintedTokenId && !this.roomPermissions.canSaveDraft) {
+    if (this.entrySource === 'world' && this.roomSession.currentIsProtected && !this.roomPermissions.canSaveDraft) {
       this.returnToWorldReadOnly();
       return;
     }
@@ -1584,6 +1563,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     force: boolean = false,
     options?: { promptForSignInOnUnauthorized?: boolean }
   ): Promise<RoomRecord | null> {
+    if (this.previewSmokePersistenceIsolated) {
+      return null;
+    }
     if (this.interactionController.hasPendingTouchEdit) this.interactionController.cancelTouchEdit();
     return this.persistenceController.saveDraft(force, options);
   }
@@ -1675,7 +1657,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private updateZoomUI(): void {
-    this.renderEditorUi();
+    this.renderEditorUi(true);
   }
 
   fitToScreen(): void {
@@ -1929,9 +1911,9 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.chromeController.refreshBottomBar();
   }
 
-  private renderEditorUi(): void {
+  private renderEditorUi(zoomOnly = false): void {
     this.objectMoveController.validate();
-    this.chromeController.render();
+    this.chromeController.render(zoomOnly);
     const practice = document.getElementById('btn-clear-check-test-here');
     if (practice) { practice.textContent = this.testFromHerePlacement ? 'Cancel practice start' : 'Test from Here'; practice.setAttribute('aria-pressed', String(this.testFromHerePlacement)); }
     this.renderMusicUi();
@@ -2094,11 +2076,11 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       versionHistoryCount: this.roomVersionHistory.length,
       roomDirty: this.roomDirty,
       claimerDisplayName: this.claimerDisplayName,
-      mintedChainId: this.mintedChainId,
-      mintedContractAddress: this.mintedContractAddress,
-      mintedTokenId: this.mintedTokenId,
-      mintedOwnerWalletAddress: this.mintedOwnerWalletAddress,
-      mintedOwnerSyncedAt: this.mintedOwnerSyncedAt,
+      mintedChainId: this.roomSession.currentMintedChainId,
+      mintedContractAddress: this.roomSession.currentMintedContractAddress,
+      mintedTokenId: this.roomSession.currentMintedTokenId,
+      mintedOwnerWalletAddress: this.roomSession.currentMintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: this.roomSession.currentMintedOwnerSyncedAt,
       canSaveDraft: this.roomPermissions.canSaveDraft,
       canPublish: this.roomPermissions.canPublish,
       canRevert: this.roomPermissions.canRevert,
@@ -2118,7 +2100,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         scrollX: Math.round(this.cameras.main.scrollX),
         scrollY: Math.round(this.cameras.main.scrollY),
       },
-      placedObjects: editorState.placedObjects.length,
+      placedObjects: this.placedObjects.length,
       canUndo: this.editRuntime.hasUndoHistory(),
       canRedo: this.editRuntime.hasRedoHistory(),
       isPlaying: editorState.isPlaying,

@@ -44,3 +44,11 @@ function summary(
     ...overrides,
   };
 }
+
+describe('moderation identity HTML', () => {
+  it('escapes author names and identity labels before inserting admin markup', async () => {
+    const { escapeHtml } = await import('./viewModel');
+    expect(escapeHtml(`<img src=x onerror="bad()"> & 'name' (@account)`))
+      .toBe('&lt;img src=x onerror=&quot;bad()&quot;&gt; &amp; &#39;name&#39; (@account)');
+  });
+});

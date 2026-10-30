@@ -32,6 +32,7 @@ import {
   getClientIp,
   hashRateLimitKey,
   networkKeyForIp,
+  releaseRateLimitSlots,
   takeRateLimitSlots,
   type RateLimitRule,
 } from '../core/rateLimit';
@@ -45,6 +46,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 const NEW_GUEST_DRAFTS_PER_NETWORK: RateLimitRule = { bucket: 'guest-draft-create:network', limit: 20, windowMs: DAY_MS };
 const NEW_GUEST_DRAFTS_IN_ALL: RateLimitRule = { bucket: 'guest-draft-create:all', limit: 2000, windowMs: DAY_MS };
+/** Submitting puts a guest room in public Explore; real use is at most one a day in all (F049). */
+const GUEST_SUBMITS_PER_NETWORK: RateLimitRule = { bucket: 'guest-draft-submit:network', limit: 5, windowMs: DAY_MS };
+const GUEST_SUBMITS_IN_ALL: RateLimitRule = { bucket: 'guest-draft-submit:all', limit: 100, windowMs: DAY_MS };
 
 interface GuestRecoveryIdentity {
   guestUserId: string;
@@ -86,12 +90,23 @@ export async function handleGuestRoomDraftRequest(
   const submitMatch = /^\/api\/guest-room-drafts\/([^/]+)\/submit$/.exec(url.pathname);
   if (submitMatch && request.method === 'POST') {
     const identity = await resolveGuestRecoveryIdentityFromHeaders(request);
+    const draftId = normalizeDraftId(decodeURIComponent(submitMatch[1]));
+    const owned = await loadOwnedGuestRoomDraft(env, { draftId, ...identity });
+    if (!owned) {
+      throw new HttpError(404, 'Guest room draft not found.');
+    }
+    const slots = owned.status === 'active' ? await takeGuestSubmitSlots(request, env) : [];
+    const nowIso = new Date().toISOString();
     const draft = await submitOwnedGuestRoomDraft(env, {
-      draftId: normalizeDraftId(decodeURIComponent(submitMatch[1])),
+      draftId,
       guestUserId: identity.guestUserId,
       recoveryTokenHash: identity.recoveryTokenHash,
-      nowIso: new Date().toISOString(),
+      nowIso,
     });
+    // Only the request that actually shared the room keeps its slot (a double click shares once).
+    if (!draft || draft.status !== 'submitted' || draft.submittedAt !== nowIso) {
+      await releaseRateLimitSlots(env, slots);
+    }
     if (!draft) {
       throw new HttpError(404, 'Guest room draft not found.');
     }
@@ -161,6 +176,18 @@ async function takeNewGuestDraftSlot(request: Request, env: Env): Promise<void> 
   }
 }
 
+async function takeGuestSubmitSlots(request: Request, env: Env): Promise<number[]> {
+  const ip = getClientIp(request);
+  const { ids, limitedBy } = await takeRateLimitSlots(env, [
+    ...(ip ? [{ rule: GUEST_SUBMITS_PER_NETWORK, keyHash: await hashRateLimitKey(env, networkKeyForIp(ip)) }] : []),
+    { rule: GUEST_SUBMITS_IN_ALL, keyHash: 'all' },
+  ]);
+  if (limitedBy) {
+    throw new HttpError(429, 'Too many guest rooms were shared today. Sign in to publish your room, or try again tomorrow.');
+  }
+  return ids;
+}
+
 async function resolveGuestRecoveryIdentityFromHeaders(request: Request): Promise<GuestRecoveryIdentity> {
   const guestUserId = normalizeGuestUserId(request.headers.get('X-Guest-User-Id'));
   const recoveryToken = normalizeRecoveryToken(request.headers.get('X-Guest-Recovery-Token'));
@@ -183,6 +210,8 @@ function normalizeSnapshot(roomId: string, value: unknown): RoomSnapshot {
   const snapshot = cloneRoomSnapshot(value);
   snapshot.status = 'draft';
   snapshot.publishedAt = null;
+  // A room video needs builder trust level 1, so guest drafts are saved without one.
+  delete snapshot.video;
   return snapshot;
 }
 

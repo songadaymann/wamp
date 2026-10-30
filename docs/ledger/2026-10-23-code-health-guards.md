@@ -1,0 +1,1 @@
+| 2026-10-23 | F497, F498 | [#321](https://github.com/songadaymann/wamp/pull/321) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | CI fails on new dead code (knip baseline), and file-size pins match each file with 25 lines of slack |

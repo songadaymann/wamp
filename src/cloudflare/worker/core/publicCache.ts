@@ -13,6 +13,10 @@ interface WorkerCacheStorage extends CacheStorage {
  */
 const STORED_CACHE_CONTROL_HEADER = 'X-WAMP-Stored-Cache-Control';
 
+export function hasPublicCache(context: WorkerExecutionContextLike | undefined): boolean {
+  return Boolean(context && (globalThis.caches as WorkerCacheStorage | undefined)?.default);
+}
+
 export async function loadAnonymousPublicCache(
   request: Request,
   context: WorkerExecutionContextLike | undefined,
@@ -32,6 +36,17 @@ export async function loadAnonymousPublicCache(
     context.waitUntil(cache.put(cacheKey, stripRequestCors(response.clone())));
   }
   return response;
+}
+
+/** The stored copy of a GET for this URL, as a hit returns it, or null; never loads anything. */
+export async function matchAnonymousPublicCache(
+  request: Request,
+  context: WorkerExecutionContextLike | undefined,
+): Promise<Response | null> {
+  const cache = (globalThis.caches as WorkerCacheStorage | undefined)?.default;
+  if (!cache || !context) return null;
+  const cached = await cache.match(new Request(request.url, { method: 'GET' }));
+  return cached ? withCacheDiagnostic(applyRequestCors(cached, request), 'hit') : null;
 }
 
 function stripRequestCors(response: Response): Response {

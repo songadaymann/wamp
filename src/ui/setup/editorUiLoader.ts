@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { ensureEditorStylesReady } from './editorStyles';
 
 /** What the editor UI needs from the always-loaded UI. */
 export interface EditorUiHost {
@@ -20,12 +21,12 @@ export function configureEditorUiHost(nextHost: EditorUiHost): void {
  * download can be retried; setup itself runs once.
  */
 export function ensureEditorUiReady(game: Phaser.Game): Promise<void> {
-  ready ??= import('./editorUi')
+  ready ??= Promise.all([import('./editorUi'), ensureEditorStylesReady()])
     .catch((error: unknown) => {
       ready = null;
       throw error;
     })
-    .then(({ setupEditorUi }) => {
+    .then(([{ setupEditorUi }]) => {
       if (!host) throw new Error('The editor UI host is not configured.');
       setupEditorUi(game, host);
     });

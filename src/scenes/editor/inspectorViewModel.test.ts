@@ -19,9 +19,10 @@ describe('shared editor inspector view models', () => {
     });
   });
 
-  it('derives pressure connection controls from mode, targets, and reconnect policy', () => {
+  it('derives pressure controls while using caller-provided guidance', () => {
     const base = {
-      statusText: null,
+      statusText: 'Linked to door in Cell 2.',
+      connectTitle: '',
       connectMode: false,
       targetSummary: 'door in Cell 2',
       eligibleTargetCount: 2,

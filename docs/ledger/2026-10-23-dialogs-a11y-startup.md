@@ -1,0 +1,1 @@
+| 2026-10-23 | F319, F464, F471, F477, F478, F380, F467, F406 | [#311](https://github.com/songadaymann/wamp/pull/311)–[#313](https://github.com/songadaymann/wamp/pull/313) | [receipt](docs/review/wamp-round2-where-features-meet-2026-10-23.md) | Lazy developer tools, selected states and announcements, one modal watcher, Worlds and PvP as shared dialogs |

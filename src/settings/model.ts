@@ -2,7 +2,12 @@ export type OverworldPanningStyle = 'option-drag' | 'two-finger-drag';
 export type BuilderMode = 'unselected' | 'beginner' | 'advanced';
 export type SmartThemeSetting = 'forest' | 'desert' | 'cave' | 'gothic' | 'cyber' | 'wampos95';
 
+export type TextStyle = 'pixel' | 'readable';
+export type TextSize = 'normal' | 'large';
+
 export interface GameSettings {
+  textStyle: TextStyle;
+  textSize: TextSize;
   roomCommentsVisible: boolean;
   musicVolume: number;
   sfxVolume: number;
@@ -27,6 +32,8 @@ export interface UserSettingsUpdateResponse {
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  textStyle: 'pixel',
+  textSize: 'normal',
   roomCommentsVisible: true,
   musicVolume: 1,
   sfxVolume: 1,
@@ -38,6 +45,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
 export function normalizeGameSettings(value: Partial<GameSettings> | null | undefined): GameSettings {
   const source = value ?? {};
   return {
+    textStyle: source.textStyle === 'readable' ? 'readable' : 'pixel',
+    textSize: source.textSize === 'large' ? 'large' : 'normal',
     roomCommentsVisible:
       typeof source.roomCommentsVisible === 'boolean'
         ? source.roomCommentsVisible

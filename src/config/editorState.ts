@@ -25,7 +25,7 @@ import {
   type TileSelection,
   type ToolName,
 } from './room';
-import type { PlacedObject } from './objects';
+import { createEditorStateStore } from './editorStateStore';
 import type { SmartBrushId, SmartStyleId } from '../autotiling/model';
 import type { SmartThemeId } from '../autotiling/registry';
 
@@ -74,7 +74,6 @@ export interface EditorState {
   selectedLightingRadius: number;
   selectedWeatherMode: RoomWeatherMode;
   selectedWeatherIntensity: number;
-  placedObjects: PlacedObject[];
 }
 
 const DEFAULT_EDITOR_TILESET_KEY = 'essentials';
@@ -101,7 +100,7 @@ export function createDefaultEditorTileSelection(): TileSelection {
   };
 }
 
-export const editorState: EditorState = {
+export function createDefaultEditorState(): EditorState { return {
   activeTool: 'pencil',
   rectOutline: false,
   ellipseOutline: false,
@@ -145,8 +144,13 @@ export const editorState: EditorState = {
   selectedLightingRadius: DEFAULT_ROOM_LIGHTING_RADIUS,
   selectedWeatherMode: 'off',
   selectedWeatherIntensity: DEFAULT_ROOM_WEATHER_INTENSITY,
-  placedObjects: [],
-};
+}; }
+
+const editorStateStore = createEditorStateStore(createDefaultEditorState());
+export const editorState = editorStateStore.state;
+export const updateEditorState = editorStateStore.update;
+export const subscribeEditorState = editorStateStore.subscribe;
+export type { EditorStateChange, EditorStateKey } from './editorStateStore';
 
 export function createDefaultEditorLayerVisibility(): Record<LayerName, boolean> {
   return {
@@ -161,13 +165,13 @@ export function isEditorLayerVisible(layerName: LayerName): boolean {
 }
 
 export function resetEditorLayerVisibility(): void {
-  editorState.layerVisibility = createDefaultEditorLayerVisibility();
+  updateEditorState({ layerVisibility: createDefaultEditorLayerVisibility() });
 }
 
 export function resetEditorPaletteSelection(): void {
-  editorState.selectedTilesetKey = DEFAULT_EDITOR_TILESET_KEY;
-  editorState.selectedTileGid = DEFAULT_EDITOR_SELECTED_TILE_GID;
-  editorState.selection = createDefaultEditorTileSelection();
+  updateEditorState({ selectedTilesetKey: DEFAULT_EDITOR_TILESET_KEY });
+  updateEditorState({ selectedTileGid: DEFAULT_EDITOR_SELECTED_TILE_GID });
+  updateEditorState({ selection: createDefaultEditorTileSelection() });
 }
 
 export function selectionCellIsOccupied(dx: number, dy: number): boolean {

@@ -1,0 +1,1 @@
+| 2026-10-23 | F487 | [#323](https://github.com/songadaymann/wamp/pull/323) | [receipt](docs/review/wamp-round2-tests-2026-10-23.md) | Route tests for room save and publish, Expanded Room editing, tokens and Worlds; ownership check on create |

@@ -1,5 +1,9 @@
+// Touch gesture ownership in both editors (tablet, phone, phone landscape). It sets editor tools
+// and modes by importing /src/config.ts, which only the Vite dev server serves, so run it against
+// a test-enabled dev server (npm run dev -- --port 3031), not a production or test-hook build.
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const base = process.argv[2] || 'http://127.0.0.1:3031';
@@ -57,17 +61,18 @@ try {
           if (document.body.dataset.deviceClass === 'phone' && document.body.dataset.mobileEditorCollapsed !== 'true') {
             document.getElementById('btn-mobile-editor-toggle')?.click();
           }
-          const { editorState, resetEditorPaletteSelection } = await import('/src/config.ts');
+          // Vite dev only: production bundles can't import /src (see the header note).
+          const { editorState, updateEditorState, resetEditorPaletteSelection } = await import('/src/config.ts');
           resetEditorPaletteSelection();
-          editorState.paletteMode = extra.objects ? 'objects' : extra.smart ? 'smart' : 'tiles';
-          editorState.activeTool = tool;
-          editorState.selectedObjectId = extra.spawn ? 'spawn_point' : 'coin_gold';
-          editorState.lineCurve = Boolean(extra.curve);
-          editorState.pencilSprayMode = Boolean(extra.spray);
-          editorState.selectedLightingMode = 'off';
-          editorState.activeLayer = 'terrain';
-          editorState.rectOutline = false;
-          editorState.ellipseOutline = false;
+          updateEditorState({ paletteMode: extra.objects ? 'objects' : extra.smart ? 'smart' : 'tiles' });
+          updateEditorState({ activeTool: tool });
+          updateEditorState({ selectedObjectId: extra.spawn ? 'spawn_point' : 'coin_gold' });
+          updateEditorState({ lineCurve: Boolean(extra.curve) });
+          updateEditorState({ pencilSprayMode: Boolean(extra.spray) });
+          updateEditorState({ selectedLightingMode: 'off' });
+          updateEditorState({ activeLayer: 'terrain' });
+          updateEditorState({ rectOutline: false });
+          updateEditorState({ ellipseOutline: false });
           const scene = game.scene.keys[expanded ? 'CourseEditorScene' : 'EditorScene'];
           const runtime = expanded ? scene.getSelectedSlice().runtime : scene.editRuntime;
           if (expanded) {
@@ -97,19 +102,19 @@ try {
           }
           // A pre-existing Redo branch must survive every cancelled gesture.
           const savedTool = editorState.activeTool;
-          editorState.activeTool = 'pencil';
+          updateEditorState({ activeTool: 'pencil' });
           runtime.beginTileBatch();
           runtime.placeTileAt((expanded ? scene.getSelectedSlice().origin.x : 0) + 30 * 16,
             (expanded ? scene.getSelectedSlice().origin.y : 0) + 15 * 16);
           runtime.commitTileBatch();
           runtime.undo();
-          editorState.activeTool = savedTool;
+          updateEditorState({ activeTool: savedTool });
           if (extra.marker && !expanded && runtime.currentGoalPlacementMode !== 'exit') runtime.startGoalMarkerPlacement('exit');
           const camera = scene.cameras.main;
           const origin = expanded ? scene.getSelectedSlice().origin : { x: 0, y: 0 };
           camera.setZoom(Math.min(camera.width / 640, camera.height / 352) * 0.85);
           if (expanded) { scene.inspectZoom = camera.zoom; scene.syncCameraBounds(); }
-          else editorState.zoom = camera.zoom;
+          else updateEditorState({ zoom: camera.zoom });
           camera.centerOn(origin.x + 320, origin.y + 176);
           window.__touchScene = scene;
           window.__touchRuntime = runtime;
@@ -164,6 +169,51 @@ try {
       }
 
       if (!process.env.TOUCH_LIFECYCLE_ONLY) {
+      // F274: the same workspace pipeline must handle actual mouse samples too.
+      {
+        const [start, end] = await fixture('pencil', { smart: true });
+        await page.evaluate(async () => {
+          const { updateEditorState } = await import('/src/config.ts');
+          updateEditorState({ smartTheme: 'forest', smartStyle: 'forest', smartMaterial: 'forest.ground' });
+        });
+        await hitCanvas(start); await hitCanvas(end);
+        await page.mouse.move(start.x, start.y); await page.mouse.down();
+        await page.mouse.move(end.x, end.y, { steps: 1 }); await page.mouse.up();
+        const smart = (await inspect()).rooms[0].snapshot.smartTerrain;
+        for (let cell = 8; cell <= 13; cell++) assert.ok(smart.semanticCells[`terrain:${cell},${cell}`],
+          `${device} ${mode}: fast Smart stroke skipped ${cell},${cell}`);
+        record('fast mouse Smart stroke fills skipped cells');
+      }
+      {
+        const [, , at] = await fixture('pencil', { spray: true });
+        await page.evaluate(async () => {
+          const { updateEditorState } = await import('/src/config.ts');
+          updateEditorState({ pencilSprayBrushSize: 5, pencilSprayRate: 1 });
+        });
+        await hitCanvas(at);
+        const before = (await inspect()).rooms[0].snapshot.tileData;
+        await page.mouse.move(at.x, at.y); await page.mouse.down();
+        const initial = (await inspect()).rooms[0].snapshot.tileData;
+        await page.waitForTimeout(900);
+        const held = (await inspect()).rooms[0].snapshot.tileData;
+        assert.notDeepEqual(held, initial, 'Spray must keep drawing while held stationary.');
+        await page.screenshot({ path: `${output}/${device}-${mode}-spray-preview.png` });
+        await page.mouse.up();
+        const released = (await inspect()).rooms[0].snapshot.tileData;
+        await page.waitForTimeout(150);
+        assert.deepEqual((await inspect()).rooms[0].snapshot.tileData, released, 'Released Spray must stop.');
+        await page.evaluate(() => window.__touchRuntime.undo());
+        assert.deepEqual((await inspect()).rooms[0].snapshot.tileData, before, 'One Undo removes the entire Spray stroke.');
+        record('held mouse Spray, release and one-step Undo');
+      }
+      {
+        const [, , at] = await fixture('pencil');
+        const before = await inspect();
+        await hitCanvas(at); await page.mouse.move(at.x, at.y); await page.mouse.down({ button: 'middle' });
+        await page.mouse.move(at.x + 30, at.y + 15); await page.mouse.up({ button: 'middle' });
+        assert.deepEqual(await inspect(), before, 'Middle-button pan cannot paint or alter history.');
+        record('middle mouse pans without editing');
+      }
       for (const tool of ['rect', 'ellipse', 'line', 'curve', 'copy']) {
         const [start, end] = await fixture(tool === 'curve' ? 'line' : tool, { curve: tool === 'curve' });
         await hitCanvas(start);
@@ -171,7 +221,7 @@ try {
         const before = await inspect();
         await touch('touchStart', [start]);
         await touch('touchMove', [end]);
-        assert.equal(await page.evaluate((expanded) => expanded ? Boolean(window.__touchScene.rectStart)
+        assert.equal(await page.evaluate((expanded) => expanded ? window.__touchScene.drawing.hasShape
           : window.__touchScene.interactionController.isDrawing, expanded), true);
         await page.screenshot({ path: `${output}/${device}-${mode}-${tool}-preview.png` });
         await touch('touchEnd', []);
@@ -296,11 +346,11 @@ try {
       assert.deepEqual(await inspect(), before);
       record('focus loss cancels preview');
       await touch('touchStart', [start]);
-      await page.evaluate(async () => { (await import('/src/config.ts')).editorState.activeTool = 'fill'; });
+      await page.evaluate(async () => { (await import('/src/config.ts')).updateEditorState({ activeTool: 'fill' }); });
       await touch('touchEnd', []);
       assert.deepEqual(await inspect(), before);
       record('tool change cancels preview');
-      await page.evaluate(async () => { (await import('/src/config.ts')).editorState.activeTool = 'pencil'; });
+      await page.evaluate(async () => { (await import('/src/config.ts')).updateEditorState({ activeTool: 'pencil' }); });
       await touch('touchStart', [start]);
       await touch('touchEnd', []);
       assert.notDeepEqual((await inspect()).rooms[0].snapshot.tileData, before.rooms[0].snapshot.tileData);

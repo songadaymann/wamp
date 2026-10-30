@@ -30,6 +30,7 @@ function fixture(candidates: CollectNodeCandidate[] = []): CollectSelectionInput
     directionX: 1, aiActiveTraversalNextNodeId: null, aiTraversalBlockedEdges: [],
     aiCollectState: null, aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0,
     aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0,
+    aiCollectNoRouteKey: null, aiCollectNoRouteUntil: 0,
   } as unknown as LoadedRoomObjectRuntimeState;
   return {
     groupedCandidates: new Map(candidates.map(c => [c.collectible.key, c])),
@@ -47,7 +48,7 @@ function route(input: CollectSelectionInput, target: CollectNodeCandidate, cost 
   const edge: SwordsmanTraversalEdge = { id: `to-${target.targetNodeId}`, type: 'jump-up', fromId: 'current', toId: target.targetNodeId!, directionX: 1, setupX: 100, targetX: target.targetSnapshot.centerX, allowEdgeDrop: false };
   input.graph.nodesById.set(target.targetNodeId!, { ...input.currentContext.currentSurface!, id: target.targetNodeId! });
   input.graph.edgesById.set(edge.id, edge);
-  return { edges: [edge], currentNodeId: 'current', targetNodeId: target.targetNodeId, targetNodeIds: [target.targetNodeId!], exactRoute: true, routeCost: cost, expandedStates: 1, simulatedEdges: 1, planDurationMs: 0 };
+  return { edges: [edge], currentNodeId: 'current', targetNodeId: target.targetNodeId, targetNodeIds: [target.targetNodeId!], exactRoute: true, routeCost: cost, expandedStates: 1, simulatedEdges: 1, coldSimulatedEdges: 0, planDurationMs: 0 };
 }
 
 beforeEach(() => { vi.mocked(planSwordsmanRobustTraversal).mockReset(); });
@@ -65,7 +66,7 @@ describe('collect objective priority and route scoring', () => {
     Object.assign(input.runtime, { aiCollectState: 'route', aiCollectRouteTargetNodeId: 'old', aiCollectRouteExpiresAt: 5000, aiCollectRouteScore: 8, aiCollectRouteValue: 20, aiCollectRoutePenalty: 7 });
     const result = selectSwordsmanCollectTarget(input);
     expect(result.target?.collectible.key).toBe('overhead');
-    expect(result.state).toEqual({ aiCollectState: 'jump', aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0, aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0 });
+    expect(result.state).toEqual({ aiCollectState: 'jump', aiCollectRouteTargetNodeId: null, aiCollectRouteExpiresAt: 0, aiCollectRouteScore: null, aiCollectRouteValue: 0, aiCollectRoutePenalty: 0, aiCollectNoRouteKey: null, aiCollectNoRouteUntil: 0 });
     new SwordsmanRuntimeStateController().applyCollectSelection(input.runtime, result.state);
     expect(input.runtime.directionX).toBe(1); expect(input.runtime.aiCollectState).toBe('jump');
   });
@@ -119,6 +120,33 @@ describe('collect objective priority and route scoring', () => {
     input.now = 1001;
     const expiredFailure = selectSwordsmanCollectTarget(input);
     expect(expiredFailure.target?.collectible.key).toBe('remote'); expect(expiredFailure.state.aiCollectRoutePenalty).toBe(1680);
+  });
+
+  it('keeps a no-route answer for a second only while every input to it is unchanged (F302)', () => {
+    const unreachable = candidate('unreachable', 300, 'remote'); const input = fixture([unreachable]);
+    vi.mocked(planSwordsmanRobustTraversal).mockReturnValue(null);
+    let plans = 0;
+    const expectPlanned = (planned: boolean) => {
+      const result = selectSwordsmanCollectTarget(input); Object.assign(input.runtime, result.state);
+      if (planned) plans += 1;
+      expect(planSwordsmanRobustTraversal).toHaveBeenCalledTimes(plans);
+      return result;
+    };
+    expect(expectPlanned(true)).toMatchObject({ target: null, state: { aiCollectNoRouteUntil: 2000 } });
+    input.now = 1999; expectPlanned(false);
+    input.enemySnapshot = snapshot(100); expectPlanned(false);
+    input.enemySnapshot = snapshot(100.25); expectPlanned(true);
+    input.enemySnapshot = snapshot(100.25, 159.5); expectPlanned(true);
+    unreachable.targetSnapshot = snapshot(300.5); expectPlanned(true);
+    input.collectNodeStats.set('remote', { count: 3 }); expectPlanned(true);
+    input.blockedEdgeIds = new Set(['blocked']); expectPlanned(true);
+    input.currentContext = { ...input.currentContext, startNodeIds: ['current', 'wall'] }; expectPlanned(true);
+    unreachable.collectibleCount = 2; expectPlanned(true);
+    unreachable.collectible = { key: 'nearer-coin' } as CollectNodeCandidate['collectible']; expectPlanned(true);
+    input.graph = { ...input.graph, cacheKey: 'collect-selection-fixture:v2' }; expectPlanned(true);
+    input.groupedCandidates.set('other', candidate('other', 400, 'other')); plans += 1; expectPlanned(true);
+    input.now = 2998; expectPlanned(false);
+    input.now = 2999; plans += 1; expectPlanned(true);
   });
 
   it('rejects partial routes ending on depleted nodes', () => {

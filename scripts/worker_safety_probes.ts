@@ -53,10 +53,14 @@ class MockD1Database {
   }
 
   async batch(statements: MockStatement[]): Promise<unknown[]> {
-    for (const statement of statements) {
+    return statements.map((statement) => {
+      if (/^\s*SELECT\b/i.test(statement.query)) {
+        const row = this.first(statement.query, statement.values);
+        return { results: row ? [structuredClone(row)] : [] };
+      }
       this.execute(statement.query, statement.values);
-    }
-    return [];
+      return { results: [] };
+    });
   }
 
   first<T>(query: string, values: BoundValue[]): T | null {
@@ -351,6 +355,13 @@ async function probeRoomRush(): Promise<void> {
     env as never,
   );
   assert.equal(finishResponse.status, 201);
+  const saved = await finishResponse.json() as { saved: boolean; attemptId: string };
+  assert.equal(saved.saved, true);
+  const duplicate = await handleRoomRushRunSubmit(
+    jsonRequest('/api/room-rush/runs', baseSubmission), env as never,
+  );
+  assert.equal(duplicate.status, 200);
+  assert.deepEqual(await duplicate.json(), { saved: false, attemptId: saved.attemptId });
   assert.equal(db.runs.length, 1);
 }
 

@@ -50,6 +50,61 @@ function setup(chunks = [{ x: 0, y: 0 }]) {
 function openShared(): void { for (const socket of [...fixtures.sockets]) { socket.open();socket.message(baseline(true)); } }
 
 describe('chat leases the presence transport', () => {
+  it.each(['guest', 'student', 'signed-in'])('sends fixed emotes as %s, sharing the text cooldown', (kind) => {
+    const { world, chat } = setup(); openShared();
+    world.updateLocalPresence(presence()); chat.updateLocalPresence(presence());
+    fixtures.auth.authenticated = kind !== 'guest';
+    fixtures.auth.schoolManaged = kind === 'student';
+    expect(chat.sendEmote('wave')).toEqual({ ok: true });
+    expect(JSON.parse(fixtures.sockets[0]!.sent.at(-1)!)).toEqual({ type: 'room-chat:emote', emote: 'wave' });
+    expect(chat.sendEmote('heart')).toEqual({ ok: false, reason: 'rate-limited' });
+    expect(chat.send('text')).toEqual({ ok: false,
+      reason: kind === 'guest' ? 'unauthenticated' : kind === 'student' ? 'restricted' : 'rate-limited' });
+    vi.advanceTimersByTime(1000);
+    fixtures.auth.chatModeration.banned = true;
+    expect(chat.sendEmote('gg')).toEqual({ ok: false, reason: 'restricted' });
+  });
+
+  it('publishes room, mode and PvP action changes immediately during an idle window', async () => {
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    const updates = () => socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:update');
+    world.updateLocalPresence(presence()); await vi.advanceTimersByTimeAsync(1);
+    world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 2, y: 2 } }); expect(updates()).toHaveLength(2);
+    world.updateLocalPresence({ ...presence(), mode: 'edit' }); expect(updates()).toHaveLength(3);
+    world.updateLocalPresence({ ...presence(), pvp: { matchId: 'arena', action: 'sword', actionUntil: Date.now() + 200 } });
+    expect(updates()).toHaveLength(4);
+  });
+
+  it.each([false, true])('keeps movement throttling with PvP=%s while suppressing timestamp-only updates', async (pvp) => {
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    const payload = { ...presence(), ...(pvp ? { pvp: { matchId: 'arena', action: null, actionUntil: 0 } } : {}) };
+    const updates = () => socket.sent.filter(raw => JSON.parse(raw).type === 'presence:update');
+    world.updateLocalPresence(payload); await vi.advanceTimersByTimeAsync(25);
+    world.updateLocalPresence({ ...payload, x: 1101 }); expect(updates()).toHaveLength(pvp ? 2 : 1);
+    await vi.advanceTimersByTimeAsync(175);
+    world.updateLocalPresence({ ...payload, x: 1102 }); expect(updates()).toHaveLength(pvp ? 3 : 2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    world.updateLocalPresence({ ...payload, x: 1102, timestamp: Date.now() }); expect(updates()).toHaveLength(pvp ? 3 : 2);
+  });
+
+  it('coalesces idle refreshes while retaining movement and reconnect baselines', async () => {
+    vi.setSystemTime(120_000);
+    const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
+    world.updateLocalPresence(presence());
+    const updates = () => socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:update');
+    for (let i = 0; i < 23; i++) {
+      await vi.advanceTimersByTimeAsync(500); world.updateLocalPresence(presence());
+    }
+    expect(updates()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(500); world.updateLocalPresence(presence()); expect(updates()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(200);
+    world.updateLocalPresence({ ...presence(), x: 1101 }); expect(updates()).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(200);
+    world.updateLocalPresence({ ...presence(), facing: -1 }); expect(updates()).toHaveLength(4);
+    socket.disconnect(); socket.open(); expect(updates()).toHaveLength(5);
+    expect(updates().at(-1).presence).toMatchObject({ facing: -1, x: 1100 });
+  });
+
   it('uses nine physical connections and one token request with no speculative chat sockets', async () => {
     const chunks = Array.from({ length: 9 }, (_, i) => ({ x: i % 3 - 1, y: Math.floor(i / 3) - 1 }));
     const { snapshots } = setup(chunks);
@@ -59,6 +114,30 @@ describe('chat leases the presence transport', () => {
     expect(queries.every((q) => q.roomChat === '1' && q.previewDeltas === '1' && q.identityToken === 'signed-token')).toBe(true);
     openShared();expect(fixtures.sockets).toHaveLength(9);
     expect(snapshots.at(-1)?.connectedShards).toHaveLength(9);
+  });
+
+  it('sends focus to every shard only on room changes and restores it on reconnect', async () => {
+    const { world } = setup([{ x: 0, y: 0 }, { x: 1, y: 0 }]);openShared();
+    expect((await Promise.all(fixtures.sockets.map(s => s.options.query()))).every(q => q.presenceInterest === '1')).toBe(true);
+    world.updateLocalPresence(presence());
+    for (const socket of fixtures.sockets) {
+      expect(socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:interest').at(-1))
+        .toEqual({ type: 'presence:interest', roomCoordinates: { x: 1, y: 2 } });
+    }
+    const before = fixtures.sockets.map(s => s.sent.filter(raw => JSON.parse(raw).type === 'presence:interest').length);
+    for (let i = 0; i < 30; i++) world.updateLocalPresence({ ...presence(), x: 1100 + i });
+    expect(fixtures.sockets.map(s => s.sent.filter(raw => JSON.parse(raw).type === 'presence:interest').length)).toEqual(before);
+    world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 8, y: 2 } });
+    const socket = fixtures.sockets[0]!;socket.disconnect();socket.open();
+    expect(socket.sent.map(raw => JSON.parse(raw)).at(-1)).toEqual({ type: 'presence:interest', roomCoordinates: { x: 8, y: 2 } });
+    world.pauseForHiddenTab();world.updateLocalPresence({ ...presence(), roomCoordinates: { x: 9, y: 2 } });world.resumeAfterHiddenTab();
+    for (const fresh of fixtures.sockets.filter(s => !s.closed)) {
+      fresh.open();expect(fresh.sent.map(raw => JSON.parse(raw)).find(m => m.type === 'presence:interest'))
+        .toEqual({ type: 'presence:interest', roomCoordinates: { x: 9, y: 2 } });
+    }
+    world.updateLocalPresence(null);
+    for (const fresh of fixtures.sockets.filter(s => !s.closed)) expect(fresh.sent.map(raw => JSON.parse(raw)).at(-1))
+      .toEqual({ type: 'presence:interest', roomCoordinates: null });
   });
 
   it('publishes one presence context, receives bubbles, and chat teardown leaves presence alive', () => {

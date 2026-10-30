@@ -12,6 +12,12 @@ const load = (signal = new AbortController().signal) => loadRoomGhosts('1,2', 1,
 beforeEach(() => notifyGhostBestUpdated('1,2'));
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('recent public records and saved-best refresh', () => {
+  it('requests exactly the shared attempt and rejects a different challenger before returning it',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>Response.json({...response(),challenge:{ghost:{...ghost,attemptId:'shared'}}})));
+    expect((await loadRoomGhosts('1,2',1,{x:1,y:2},new AbortController().signal,'shared')).challenge.ghost?.attemptId).toBe('shared');
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('vs=shared');
+    await expect(loadRoomGhosts('1,2',1,{x:1,y:2},new AbortController().signal,'other')).rejects.toThrow('challenge changed');
+  });
   it('reuses only the public top recording, and fetches personal bests for each session', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(Response.json(response({ ...ghost, attemptId: 'account-a' })))
       .mockResolvedValueOnce(Response.json(response({ ...ghost, attemptId: 'account-b' }))); vi.stubGlobal('fetch', fetch);

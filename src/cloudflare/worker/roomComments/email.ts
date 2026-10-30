@@ -1,7 +1,8 @@
-import { Resend } from 'resend';
+import { formatAccountIdentity } from '../../../auth/displayIdentity';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { escapeEmailHtml as escapeHtml } from '../email/delivery';
 import type { AdminRoomCommentRecord } from '../../../roomComments/model';
-import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
+import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import type { Env } from '../core/types';
 
 export interface RoomCommentEmailResult {
@@ -16,11 +17,11 @@ export async function sendRoomCommentApprovedEmail(
   env: Env,
   comment: AdminRoomCommentRecord,
 ): Promise<RoomCommentEmailResult> {
-  if (!env.RESEND_API_KEY?.trim()) {
+  if (!emailConfigured(env)) {
     return {
       attempted: false,
       sent: false,
-      skippedReason: 'RESEND_API_KEY is not configured.',
+      skippedReason: 'Email delivery is not configured.',
       error: null,
     };
   }
@@ -47,17 +48,17 @@ export async function sendRoomCommentApprovedEmail(
     comment.roomTitle?.trim()
       ? `"${comment.roomTitle.trim()}"`
       : `Room ${comment.roomCoordinates.x},${comment.roomCoordinates.y}`;
-  const baseUrl = resolvePublicBaseUrl(request, env).replace(/\/+$/, '');
+  const baseUrl = resolveEmailBaseUrl(request, env).replace(/\/+$/, '');
   const roomUrl = `${baseUrl}/r/${comment.roomCoordinates.x}/${comment.roomCoordinates.y}`;
-  const resend = new Resend(env.RESEND_API_KEY);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
 
-  const response = await resend.emails.send({
+  const response = await mailer.emails.send({
     from,
     to: comment.builderEmail,
     subject: `New approved comment on ${roomLabel}`,
     text: [
-      `${comment.authorDisplayName} left a comment on ${roomLabel}:`,
+      `${formatAccountIdentity(comment.authorDisplayName, comment.authorUsername)} left a comment on ${roomLabel}:`,
       '',
       comment.body,
       '',
@@ -66,7 +67,7 @@ export async function sendRoomCommentApprovedEmail(
     html: [
       '<div style="font-family: monospace; background: #050505; color: #f3eee2; padding: 24px;">',
       `<h2 style="margin: 0 0 16px;">New comment on ${escapeHtml(roomLabel)}</h2>`,
-      `<p style="margin: 0 0 12px;"><strong>${escapeHtml(comment.authorDisplayName)}</strong> said:</p>`,
+      `<p style="margin: 0 0 12px;"><strong>${escapeHtml(formatAccountIdentity(comment.authorDisplayName, comment.authorUsername))}</strong> said:</p>`,
       `<blockquote style="margin: 0 0 20px; padding: 12px 14px; border-left: 4px solid #f2c84b; background: #141414;">${escapeHtml(comment.body)}</blockquote>`,
       `<p style="margin: 0;"><a href="${escapeHtml(roomUrl)}" style="color: #7de5ff;">Open the room</a></p>`,
       '</div>',

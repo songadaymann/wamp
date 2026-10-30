@@ -1,22 +1,20 @@
 import {
-  MAX_MANUAL_SHOTS_PER_DAY,
   SCREENSHOT_KEY_PREFIX,
   STARFIELD_OBJECT_KEY,
   STATE_OBJECT_KEY,
 } from './config';
 import {
-  dailyScreenshotFileName,
-  formatEasternDate,
-  manualScreenshotFileName,
-  parseManualIndex,
   screenshotObjectKey,
 } from './naming';
 import type { ScreenshotZoomState } from './zoom';
+import { ArchiveLimitError } from './zip';
 
 export interface ScreenshotR2Object {
   key: string;
+  etag?: string;
   size: number;
   uploaded?: Date;
+  body: ReadableStream<Uint8Array>;
   customMetadata?: Record<string, string>;
   text(): Promise<string>;
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -39,6 +37,7 @@ export interface ScreenshotR2Bucket {
   }): Promise<{
     objects: Array<{
       key: string;
+      etag?: string;
       size: number;
       uploaded?: Date;
       customMetadata?: Record<string, string>;
@@ -50,6 +49,7 @@ export interface ScreenshotR2Bucket {
 
 export interface StoredScreenshot {
   key: string;
+  etag?: string;
   fileName: string;
   size: number;
   uploaded: Date | null;
@@ -71,23 +71,6 @@ export async function loadZoomState(bucket: ScreenshotR2Bucket): Promise<Screens
   }
 }
 
-export async function saveZoomState(
-  bucket: ScreenshotR2Bucket,
-  state: ScreenshotZoomState,
-): Promise<void> {
-  await bucket.put(STATE_OBJECT_KEY, JSON.stringify(state, null, 2), {
-    httpMetadata: { contentType: 'application/json' },
-  });
-}
-
-export async function screenshotExists(
-  bucket: ScreenshotR2Bucket,
-  fileName: string,
-): Promise<boolean> {
-  const object = await bucket.get(screenshotObjectKey(fileName));
-  return object !== null;
-}
-
 export async function saveScreenshotPng(
   bucket: ScreenshotR2Bucket,
   fileName: string,
@@ -106,28 +89,37 @@ export async function saveScreenshotPng(
 }
 
 /**
- * Prefer state.json; if missing, recover zoom from the latest screenshot's
- * customMetadata so a wiped state file cannot snap straight to ideal fit.
+ * Recover the daily baseline before legacy shared state, which old manual
+ * captures could advance. Legacy state/manual metadata remain last-resort
+ * recovery when no daily artifact has usable zoom metadata.
  */
 export async function loadPreviousZoom(
   bucket: ScreenshotR2Bucket,
+  signal?: AbortSignal,
 ): Promise<number | null> {
+  const listed = await listScreenshots(bucket, undefined, undefined, signal);
+  // listScreenshots sorts newest fileName first within either category.
+  const recover = async (daily: boolean): Promise<number | null> => {
+    for (const item of listed) {
+      signal?.throwIfAborted();
+      if (item.fileName.endsWith('_0.png') !== daily) continue;
+      const object = await bucket.get(item.key);
+      if (!object) continue;
+      const raw = object.customMetadata?.zoom;
+      await object.body.cancel().catch(() => undefined);
+      signal?.throwIfAborted();
+      if (typeof raw !== 'string' || !raw.trim()) continue;
+      const zoom = Number(raw);
+      if (Number.isFinite(zoom) && zoom > 0) return zoom;
+    }
+    return null;
+  };
+  const dailyZoom = await recover(true);
+  if (dailyZoom !== null) return dailyZoom;
+  signal?.throwIfAborted();
   const state = await loadZoomState(bucket);
-  if (state) return state.zoom;
-
-  const listed = await listScreenshots(bucket);
-  if (listed.length === 0) return null;
-
-  // listScreenshots sorts newest fileName first.
-  for (const item of listed) {
-    const object = await bucket.get(item.key);
-    if (!object) continue;
-    const raw = object.customMetadata?.zoom;
-    if (typeof raw !== 'string') continue;
-    const zoom = Number(raw);
-    if (Number.isFinite(zoom)) return zoom;
-  }
-  return null;
+  signal?.throwIfAborted();
+  return state?.zoom ?? await recover(false);
 }
 
 /** Load the cached composite starfield as a PNG data URL, or null if missing. */
@@ -151,59 +143,32 @@ export async function saveStarfieldPng(
   return STARFIELD_OBJECT_KEY;
 }
 
-export async function loadScreenshotPng(
-  bucket: ScreenshotR2Bucket,
-  fileName: string,
-): Promise<ArrayBuffer | null> {
-  const object = await bucket.get(screenshotObjectKey(fileName));
-  if (!object) return null;
-  return object.arrayBuffer();
-}
-
-export async function listScreenshots(bucket: ScreenshotR2Bucket): Promise<StoredScreenshot[]> {
+export async function listScreenshots(bucket: ScreenshotR2Bucket, prefix = SCREENSHOT_KEY_PREFIX, maxFiles = Number.MAX_SAFE_INTEGER, signal?: AbortSignal): Promise<StoredScreenshot[]> {
   const results: StoredScreenshot[] = [];
   let cursor: string | undefined;
   do {
+    signal?.throwIfAborted();
     const page = await bucket.list({
-      prefix: SCREENSHOT_KEY_PREFIX,
+      prefix,
       cursor,
       limit: 1000,
     });
+    signal?.throwIfAborted();
     for (const object of page.objects) {
       if (!object.key.endsWith('.png')) continue;
       const fileName = object.key.slice(SCREENSHOT_KEY_PREFIX.length);
       if (!fileName || fileName.includes('/')) continue;
       results.push({
         key: object.key,
+        etag: object.etag,
         fileName,
         size: object.size,
         uploaded: object.uploaded ?? null,
       });
+      if (results.length > maxFiles) throw new ArchiveLimitError('Archive has too many files. Choose a month.');
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
   results.sort((a, b) => b.fileName.localeCompare(a.fileName));
   return results;
-}
-
-export async function nextManualFileName(
-  bucket: ScreenshotR2Bucket,
-  easternDate: string = formatEasternDate(),
-): Promise<string | null> {
-  const listed = await listScreenshots(bucket);
-  const used = new Set<number>();
-  for (const item of listed) {
-    const index = parseManualIndex(item.fileName, easternDate);
-    if (index !== null) used.add(index);
-  }
-  for (let index = 1; index <= MAX_MANUAL_SHOTS_PER_DAY; index += 1) {
-    if (!used.has(index)) {
-      return manualScreenshotFileName(easternDate, index);
-    }
-  }
-  return null;
-}
-
-export function dailyFileNameForToday(date: Date = new Date()): string {
-  return dailyScreenshotFileName(formatEasternDate(date));
 }

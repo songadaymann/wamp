@@ -1,3 +1,4 @@
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import {
   type ChatMessageListResponse,
   CHAT_MESSAGE_MAX_LENGTH,
@@ -14,7 +15,9 @@ import {
 import { playSfx } from '../../audio/sfx';
 import { APP_READY_EVENT, isAppReady } from '../appFeedback';
 import { isKeyboardFocusedControl, isTextInputFocused } from '../keyboardFocus';
+import { dialogOnTopFor } from '../modalState';
 import { createProfileTriggerElement } from '../setup/profileEvents';
+import { requestReport } from '../../reports/requestReport';
 import {
   banChatUser,
   deleteChatMessage,
@@ -136,7 +139,8 @@ export class ChatPanelController {
       return;
     }
 
-    if (event.key === 'Escape' && this.open) {
+    // A dialog above the chat takes Escape for itself.
+    if (event.key === 'Escape' && this.open && !dialogOnTopFor(event, this.doc)) {
       event.preventDefault();
       this.closePanel();
     }
@@ -338,6 +342,7 @@ export class ChatPanelController {
       this.applyChatResponse(response, false);
       this.historyLoaded = true;
     } catch (error) {
+      if(error&&typeof error==='object'&&'name' in error&&error.name==='AbortError')return;
       console.error('Failed to load chat history', error);
       this.setStatus(this.canPost() ? 'Chat failed to load.' : 'Chat is read-only right now.');
     } finally {
@@ -371,6 +376,7 @@ export class ChatPanelController {
           });
       this.applyChatResponse(response, true);
     } catch (error) {
+      if(error&&typeof error==='object'&&'name' in error&&error.name==='AbortError')return;
       console.error('Failed to poll chat messages', error);
     } finally {
       this.loading = false;
@@ -511,12 +517,13 @@ export class ChatPanelController {
     if (
       !this.canModerateMessages()
       || this.moderationActionMessageId
-      || !this.windowObj.confirm(`Delete ${message.userDisplayName}'s chat message?`)
+      || !this.windowObj.confirm(`Delete ${formatAccountIdentity(message.userDisplayName, message.userUsername)}'s chat message?`)
     ) {
       return;
     }
 
     this.moderationActionMessageId = message.id;
+    this.renderMessages();
     this.setStatus('Deleting message...');
     this.render();
 
@@ -535,6 +542,7 @@ export class ChatPanelController {
     } finally {
       this.moderationActionMessageId = null;
       this.render();
+      this.renderMessages();
     }
   }
 
@@ -542,13 +550,14 @@ export class ChatPanelController {
     if (
       !this.canModerateMessages()
       || this.moderationActionMessageId
-      || !this.windowObj.confirm(`Ban ${message.userDisplayName} from chat?`)
+      || !this.windowObj.confirm(`Ban ${formatAccountIdentity(message.userDisplayName, message.userUsername)} from chat?`)
     ) {
       return;
     }
 
     this.moderationActionMessageId = message.id;
-    this.setStatus(`Banning ${message.userDisplayName}...`);
+    this.renderMessages();
+    this.setStatus(`Banning ${formatAccountIdentity(message.userDisplayName, message.userUsername)}...`);
     this.render();
 
     try {
@@ -559,13 +568,14 @@ export class ChatPanelController {
       };
       syncChatModerationState(response.viewer);
       await this.reloadMessages();
-      this.setStatus(`${message.userDisplayName} was banned from chat.`);
+      this.setStatus(`${formatAccountIdentity(message.userDisplayName, message.userUsername)} was banned from chat.`);
     } catch (error) {
       console.error('Failed to ban chat user', error);
       this.setStatus(getErrorMessage(error, 'Failed to ban chat user.'));
     } finally {
       this.moderationActionMessageId = null;
       this.render();
+      this.renderMessages();
     }
   }
 
@@ -825,7 +835,7 @@ export class ChatPanelController {
       const author = createProfileTriggerElement(
         this.doc,
         message.userId,
-        message.userDisplayName,
+        formatAccountIdentity(message.userDisplayName, message.userUsername),
         'chat-message-author'
       );
 
@@ -837,9 +847,20 @@ export class ChatPanelController {
       body.className = 'chat-message-body';
       appendMentionHighlightedText(this.doc, body, message.body);
 
-      const canModerateThisMessage =
-        this.canModerateMessages()
-        && message.userId !== (this.authState.user?.id ?? null);
+      const ownMessage = message.userId === (this.authState.user?.id ?? null);
+      const canModerateThisMessage = this.canModerateMessages() && !ownMessage;
+      const headerItems: HTMLElement[] = [author, timestamp];
+      if (!ownMessage) {
+        const reportButton = this.doc.createElement('button');
+        reportButton.className = 'chat-message-report';
+        reportButton.type = 'button';
+        reportButton.textContent = 'Report';
+        reportButton.setAttribute('aria-label', `Report message from ${message.userDisplayName}`);
+        reportButton.addEventListener('click', () => requestReport({
+          type: 'chat_message', id: message.id, label: `${message.userDisplayName}: ${message.body}`,
+        }));
+        headerItems.push(reportButton);
+      }
 
       if (canModerateThisMessage) {
         const actions = this.doc.createElement('div');
@@ -865,14 +886,14 @@ export class ChatPanelController {
           void this.handleBanUser(message);
         });
 
-        header.append(author, timestamp);
+        header.append(...headerItems);
         actions.append(deleteButton, banButton);
         row.append(header, body, actions);
         this.elements.messages.appendChild(row);
         continue;
       }
 
-      header.append(author, timestamp);
+      header.append(...headerItems);
       row.append(header, body);
       this.elements.messages.appendChild(row);
     }

@@ -98,7 +98,7 @@ describe('direct world map alerts with durable delivery', () => {
   });
   it('retries rejected email without marking it delivered or creating another outage', async () => {
     config.available = false; mailStatus = 503;
-    await expect(check()).rejects.toThrow('email provider returned HTTP 503');
+    await expect(check()).rejects.toThrow('Email provider returned HTTP 503');
     expect(events()[0].sent_at).toBeNull();
     mailStatus = 200; await check(later(15));
     expect(events()).toHaveLength(1); expect(deliveries.size).toBe(1);
@@ -137,6 +137,6 @@ describe('direct world map alerts with durable delivery', () => {
   it('fails visibly if the email delivery configuration is missing', async () => {
     env.RESEND_API_KEY = undefined;
     expect(worldMapAlertsConfigured(env)).toBe(false);
-    await expect(check()).rejects.toThrow('valid recipient and RESEND_API_KEY');
+    await expect(check()).rejects.toThrow('valid recipient and email delivery');
   });
 });

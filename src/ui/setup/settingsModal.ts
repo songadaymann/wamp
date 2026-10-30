@@ -1,3 +1,4 @@
+import { getAssistSettings, subscribeAssistSettings, updateAssistSettings, type AssistSettings } from '../../settings/assistSettings';
 import { getComfortSettings, subscribeComfortSettings, updateComfortSettings, type ComfortSettings } from '../../settings/comfortSettings';
 import { isHapticsAvailable } from '../../feedback/haptics';
 import { getFrameRateMode, setFrameRateMode, subscribeFrameRateMode, type FrameRateMode } from '../../performance/frameRateMode';
@@ -28,6 +29,10 @@ type SettingsModalElements = {
   performanceModeInputs: HTMLInputElement[];
   frameRateInputs: HTMLInputElement[];
   builderModeInputs: HTMLInputElement[];
+  assistSpeedSelect: HTMLSelectElement | null;
+  safeRespawnCheckbox: HTMLInputElement | null;
+  textStyleSelect: HTMLSelectElement | null;
+  textSizeSelect: HTMLSelectElement | null;
   motionSelect: HTMLSelectElement | null;
   cameraStyleInputs: HTMLInputElement[];
   hapticsRow: HTMLElement | null;
@@ -37,6 +42,7 @@ type SettingsModalElements = {
 
 export class SettingsModalController {
   private readonly elements: SettingsModalElements;
+  private unsubscribeAssist: (() => void) | null = null;
   private unsubscribeComfort: (() => void) | null = null;
   private unsubscribeSettings: (() => void) | null = null;
   private unsubscribeFrameRate: (() => void) | null = null;
@@ -113,6 +119,19 @@ export class SettingsModalController {
     updateGameSettings({ builderMode: target.value === 'advanced' ? 'advanced' : 'beginner' });
   };
 
+  private readonly handleTextStyleChange = () => {
+    updateGameSettings({ textStyle: this.elements.textStyleSelect?.value === 'readable' ? 'readable' : 'pixel' });
+  };
+  private readonly handleTextSizeChange = () => {
+    updateGameSettings({ textSize: this.elements.textSizeSelect?.value === 'large' ? 'large' : 'normal' });
+  };
+
+  private readonly handleAssistSpeed = () => {
+    const speed = Number(this.elements.assistSpeedSelect?.value);
+    updateAssistSettings({ speed: speed === 0.8 || speed === 0.6 ? speed : 1 });
+  };
+  private readonly handleSafeRespawn = () => { updateAssistSettings({ safeRespawn: this.elements.safeRespawnCheckbox?.checked === true }); };
+
   private readonly handleMotionChange = () => {
     const value = this.elements.motionSelect?.value;
     updateComfortSettings({ reduceMotion: value === 'on' || value === 'off' ? value : 'system' });
@@ -135,6 +154,10 @@ export class SettingsModalController {
   ) {
     this.elements = {
       modal: this.doc.getElementById('settings-modal'),
+      assistSpeedSelect: this.doc.getElementById('settings-assist-speed') as HTMLSelectElement | null,
+      safeRespawnCheckbox: this.doc.getElementById('settings-assist-respawn') as HTMLInputElement | null,
+      textStyleSelect: this.doc.getElementById('settings-text-style') as HTMLSelectElement | null,
+      textSizeSelect: this.doc.getElementById('settings-text-size') as HTMLSelectElement | null,
       motionSelect: this.doc.getElementById('settings-reduce-motion') as HTMLSelectElement | null,
       hapticsRow: this.doc.getElementById('settings-haptics-row'),
       hapticsCheckbox: this.doc.getElementById('settings-haptics') as HTMLInputElement | null,
@@ -160,6 +183,12 @@ export class SettingsModalController {
   }
 
   init(): void {
+    this.elements.assistSpeedSelect?.addEventListener('change', this.handleAssistSpeed);
+    this.elements.safeRespawnCheckbox?.addEventListener('change', this.handleSafeRespawn);
+    this.unsubscribeAssist = subscribeAssistSettings(settings => this.renderAssist(settings));
+    this.renderAssist(getAssistSettings());
+    this.elements.textStyleSelect?.addEventListener('change', this.handleTextStyleChange);
+    this.elements.textSizeSelect?.addEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.addEventListener('change', this.handleMotionChange);
     this.elements.hapticsCheckbox?.addEventListener('change', this.handleHapticsChange);
@@ -193,6 +222,11 @@ export class SettingsModalController {
   }
 
   destroy(): void {
+    this.elements.assistSpeedSelect?.removeEventListener('change', this.handleAssistSpeed);
+    this.elements.safeRespawnCheckbox?.removeEventListener('change', this.handleSafeRespawn);
+    this.unsubscribeAssist?.(); this.unsubscribeAssist = null;
+    this.elements.textStyleSelect?.removeEventListener('change', this.handleTextStyleChange);
+    this.elements.textSizeSelect?.removeEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.removeEventListener('change', this.handleMotionChange);
     this.elements.hapticsCheckbox?.removeEventListener('change', this.handleHapticsChange);
@@ -231,6 +265,7 @@ export class SettingsModalController {
     this.renderPerformanceMode(getDevicePerformanceMode());
     this.renderFrameRate(getFrameRateMode());
     this.renderComfort(getComfortSettings());
+    this.renderAssist(getAssistSettings());
     this.elements.modal.classList.remove('hidden');
     this.elements.modal.setAttribute('aria-hidden', 'false');
   }
@@ -245,6 +280,8 @@ export class SettingsModalController {
   }
 
   private render(settings: GameSettings): void {
+    if (this.elements.textStyleSelect) this.elements.textStyleSelect.value = settings.textStyle;
+    if (this.elements.textSizeSelect) this.elements.textSizeSelect.value = settings.textSize;
     this.doc.body.dataset.builderMode = settings.builderMode === 'advanced' ? 'advanced' : 'beginner';
     if (this.elements.commentsCheckbox) {
       this.elements.commentsCheckbox.checked = settings.roomCommentsVisible;
@@ -267,6 +304,11 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.checked = input.value === (settings.builderMode === 'advanced' ? 'advanced' : 'beginner');
     }
+  }
+
+  private renderAssist(settings: AssistSettings): void {
+    if (this.elements.assistSpeedSelect) this.elements.assistSpeedSelect.value = String(settings.speed);
+    if (this.elements.safeRespawnCheckbox) this.elements.safeRespawnCheckbox.checked = settings.safeRespawn;
   }
 
   private renderComfort(settings: ComfortSettings): void {

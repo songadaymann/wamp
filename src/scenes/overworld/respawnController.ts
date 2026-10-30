@@ -12,6 +12,8 @@ interface OverworldRespawnHost {
   clearTransientPlayerState(): void;
   focusRoom(coordinates: RoomCoordinates): void;
   respawnPlayerToRoom(room: RoomSnapshot, entities: OverworldPlayerEntities): void;
+  /** Readies the room the player is about to respawn in, before its enemies first act (F302). */
+  prepareRoomArrival?(roomId: string): void;
   presentRespawn(): void;
   recordRespawn(reference: RespawnCheckpointReference): void;
   refreshAroundFromCache(coordinates: RoomCoordinates): void;
@@ -44,6 +46,7 @@ export class OverworldRespawnController {
       : { kind: 'start', instanceId: null, checkpointIndex: null };
     if (room && entities) {
       this.pendingReference = null;
+      this.host.prepareRoomArrival?.(room.id);
       this.host.respawnPlayerToRoom(room, entities);
       this.host.presentRespawn();
       this.host.recordRespawn(reference);

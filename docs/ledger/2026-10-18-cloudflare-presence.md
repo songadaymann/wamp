@@ -1,0 +1,1 @@
+| 2026-10-18 | F037 | [#241](https://github.com/songadaymann/wamp/pull/241)–[#243](https://github.com/songadaymann/wamp/pull/243) | [receipt](docs/review/wamp-cloudflare-presence-2026-10-18.md) | Presence interest cuts crowded-area traffic; live presence moves to a hibernating Cloudflare Durable Object |

@@ -1,3 +1,5 @@
+import { formatCommentTime, formatCommentCount, truncateCommentBody, getCommentsSignature } from '../../roomComments/presentation';
+import { formatAccountIdentity } from '../../auth/displayIdentity';
 import Phaser from 'phaser';
 import { hasBlockingModalOpen } from '../../ui/modalState';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
@@ -90,7 +92,7 @@ interface OverworldRoomCommentsControllerOptions {
   getPlayerCommentPosition: () => { x: number; y: number } | null;
   getZoom?: () => number;
   selectRoomCoordinates?: (coordinates: RoomCoordinates) => void;
-  jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => void | Promise<void>;
+  jumpToRoomCoordinates?: (coordinates: RoomCoordinates) => boolean | void | Promise<boolean | void>;
   showTransientStatus?: (message: string) => void;
   waitForBrowseDiscoveryReady?: (signal: AbortSignal) => Promise<boolean>;
   document?: Document;
@@ -377,6 +379,7 @@ export class OverworldRoomCommentsController {
     loadingRoomSignature: string | null;
     commentCount: number;
     renderedCommentCount: number;
+    authors: ReturnType<RoomCommentsPlayPresentationController['getAuthorLayoutSnapshot']>;
     commentsVisible: boolean;
     currentRoomPublished: boolean;
     currentRoomSnapshot: {
@@ -416,6 +419,7 @@ export class OverworldRoomCommentsController {
       loadingRoomSignature: dataDebug.loadingRoomSignature,
       commentCount: dataDebug.commentCount,
       renderedCommentCount: this.playPresentationController.getRenderedCount(),
+      authors: this.playPresentationController.getAuthorLayoutSnapshot(),
       commentsVisible: this.commentsVisible,
       currentRoomPublished: this.options.isCurrentRoomPublished(),
       currentRoomSnapshot: currentRoom
@@ -829,6 +833,7 @@ export class OverworldRoomCommentsController {
       fontFamily: 'IBM Plex Mono, Courier New, monospace',
       fontSize: '9px',
       color: BROWSE_COMMENT_MUTED,
+      wordWrap: { width: BROWSE_COMMENT_PANEL_WIDTH - 24, useAdvancedWrap: true },
     });
     const container = this.options.scene.add.container(0, 0, [
       panel,
@@ -855,9 +860,12 @@ export class OverworldRoomCommentsController {
     marker.textHeaderText.setText(formatCommentCount(count));
     marker.textBodyText.setText(truncateCommentBody(latestComment.body, 82));
     marker.textMetaText.setText(
-      `${truncateCommentBody(latestComment.authorDisplayName, 18)} - ${formatCommentTime(latestComment.createdAt)}`,
+      latestComment.authorUsername
+        ? `${formatAccountIdentity(latestComment.authorDisplayName, latestComment.authorUsername)}\n${formatCommentTime(latestComment.createdAt)}`
+        : `${truncateCommentBody(latestComment.authorDisplayName, 18)} - ${formatCommentTime(latestComment.createdAt)}`,
     );
-    drawBrowseTextPanel(marker.textPanel, marker.accentColor);
+    drawBrowseTextPanel(marker.textPanel, marker.accentColor,
+      Math.max(BROWSE_COMMENT_PANEL_HEIGHT, 56 + marker.textMetaText.height + 8));
   }
 
   private syncBrowseCommentMarkerPresentation(): void {
@@ -1068,7 +1076,8 @@ export class OverworldRoomCommentsController {
       ? Math.min(48, BROWSE_DANMAKU_MAX_COMMENT_LENGTH)
       : BROWSE_DANMAKU_MAX_COMMENT_LENGTH;
     const body = truncateCommentBody(candidate.comment.body, maxBodyLength);
-    const author = truncateCommentBody(candidate.comment.authorDisplayName || 'Player', 18);
+    const author = formatAccountIdentity(
+      truncateCommentBody(candidate.comment.authorDisplayName || 'Player', 18), candidate.comment.authorUsername);
     const title = candidate.target.title
       ? truncateCommentBody(candidate.target.title, 24)
       : `${candidate.target.displayCoordinates.x},${candidate.target.displayCoordinates.y}`;
@@ -1544,35 +1553,6 @@ export class OverworldRoomCommentsController {
   }
 }
 
-function formatCommentTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
-}
-
-function formatCommentCount(count: number): string {
-  return count === 1 ? '1 comment' : `${count} comments`;
-}
-
-function truncateCommentBody(value: string, maxLength: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
-}
-
-function getCommentsSignature(
-  comments: readonly BrowseRoomCommentPreview[],
-  commentCount = comments.length,
-): string {
-  return `${commentCount}|${comments.map((comment) => `${comment.id}:${comment.createdAt}`).join('|')}`;
-}
-
 function coordinatesEqual(left: RoomCoordinates, right: RoomCoordinates): boolean {
   return left.x === right.x && left.y === right.y;
 }
@@ -1611,14 +1591,14 @@ function drawBrowseCompactPanel(panel: Phaser.GameObjects.Graphics, accentColor:
   panel.fillRoundedRect(2, 2, 7, BROWSE_COMMENT_COMPACT_HEIGHT - 4, 3);
 }
 
-function drawBrowseTextPanel(panel: Phaser.GameObjects.Graphics, accentColor: number): void {
+function drawBrowseTextPanel(panel: Phaser.GameObjects.Graphics, accentColor: number, height = BROWSE_COMMENT_PANEL_HEIGHT): void {
   panel.clear();
   panel.fillStyle(BROWSE_COMMENT_INK, 0.88);
   panel.fillRoundedRect(
     4,
     4,
     BROWSE_COMMENT_PANEL_WIDTH,
-    BROWSE_COMMENT_PANEL_HEIGHT,
+    height,
     6,
   );
   panel.fillStyle(BROWSE_COMMENT_PANEL_FILL, 0.99);
@@ -1627,18 +1607,18 @@ function drawBrowseTextPanel(panel: Phaser.GameObjects.Graphics, accentColor: nu
     0,
     0,
     BROWSE_COMMENT_PANEL_WIDTH,
-    BROWSE_COMMENT_PANEL_HEIGHT,
+    height,
     6,
   );
   panel.strokeRoundedRect(
     0,
     0,
     BROWSE_COMMENT_PANEL_WIDTH,
-    BROWSE_COMMENT_PANEL_HEIGHT,
+    height,
     6,
   );
   panel.fillStyle(accentColor, 1);
-  panel.fillRoundedRect(3, 3, 5, BROWSE_COMMENT_PANEL_HEIGHT - 6, 3);
+  panel.fillRoundedRect(3, 3, 5, height - 6, 3);
   panel.fillStyle(BROWSE_COMMENT_PANEL_LIGHT, 0.92);
   panel.fillRoundedRect(10, 20, BROWSE_COMMENT_PANEL_WIDTH - 18, 28, 4);
 }

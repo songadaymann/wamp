@@ -4,6 +4,7 @@ import { getCustomSpriteRegistryDebugState } from '../customSprites/registry';
 import { globalRoomMusicController } from '../music/controller';
 import { getDynamicAvatarDebugState } from '../player/avatar/dynamic';
 import { getRoomSnapshotTextureDebugState } from '../visuals/roomSnapshotTexture';
+import { RESOURCE_DEBUG_STORAGE_KEY } from './debugTools';
 import { parseBooleanQuery } from './query';
 
 const SCENE_KEYS = [
@@ -13,7 +14,6 @@ const SCENE_KEYS = [
   'CourseComposerScene',
   'CourseEditorScene',
 ] as const;
-const RESOURCE_DEBUG_STORAGE_KEY = 'wamp_resource_debug_enabled_v1';
 const RESOURCE_DEBUG_LOG_STORAGE_KEY = 'wamp_resource_debug_log_v1';
 const DEFAULT_CAPTURE_INTERVAL_MS = 15_000;
 const MIN_CAPTURE_INTERVAL_MS = 5_000;

@@ -44,12 +44,11 @@ import {
 } from '../../../enemies/swordsmanTraversalSkills';
 import {
   buildSwordsmanTraversalDecisionFromEdge,
-  buildSwordsmanTraversalGraph,
   getSwordsmanTraversalContext,
   decideSwordsmanTraversal,
   getSwordsmanTraversalEdgeById,
   getSwordsmanTraversalCurrentNodeId,
-  getSwordsmanTraversalGraphCacheKey,
+  getSwordsmanTraversalGraphForRoom,
   getSwordsmanTraversalTargetContext,
   isSwordsmanLadderTraversalEdge,
   type SwordsmanBodySnapshot,
@@ -155,7 +154,6 @@ interface LiveObjectSwordsmanControllerOptions<TEdgeWall> {
 }
 
 export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
-  private readonly swordsmanTraversalGraphs = new Map<string, SwordsmanTraversalGraph>();
   private readonly runtimeState = new SwordsmanRuntimeStateController();
 
   constructor(private readonly options: LiveObjectSwordsmanControllerOptions<TEdgeWall>) {}
@@ -1391,18 +1389,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   private getSwordsmanTraversalGraph(room: RoomSnapshot): SwordsmanTraversalGraph {
-    const cacheKey = getSwordsmanTraversalGraphCacheKey(room);
-    const cached = this.swordsmanTraversalGraphs.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    if (this.swordsmanTraversalGraphs.size > 64) {
-      this.swordsmanTraversalGraphs.clear();
-    }
-    const graph = buildSwordsmanTraversalGraph(room);
-    this.swordsmanTraversalGraphs.set(cacheKey, graph);
-    return graph;
+    return getSwordsmanTraversalGraphForRoom(room);
   }
 
   private buildSwordsmanCollectTraversalSnapshot(

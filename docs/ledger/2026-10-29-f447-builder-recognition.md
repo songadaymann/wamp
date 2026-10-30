@@ -1,0 +1,1 @@
+| 2026-10-29 | F447 | [#345](https://github.com/songadaymann/wamp/pull/345) | [receipt](docs/review/wamp-f447-builder-recognition-2026-10-29.md) | Notify builders of recognition and prompt results, warn before republishing and retain reviewed pins; verified live |

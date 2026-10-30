@@ -116,8 +116,6 @@ export class TouchMusicEditor {
     this.state = null;
   }
 
-  cancelGesture(): void { this.gesture?.cancel(); }
-
   private mount(): void {
     this.viewport = document.getElementById('editor-music-touch-viewport');
     this.grid = document.getElementById('editor-music-touch-grid');

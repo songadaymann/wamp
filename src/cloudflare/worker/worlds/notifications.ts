@@ -1,7 +1,8 @@
-import { Resend } from 'resend';
-import { DEFAULT_AUTH_EMAIL_FROM, resolvePublicBaseUrl } from '../auth/store';
+import { createEmailClient, emailConfigured } from '../email/provider';
+import { DEFAULT_AUTH_EMAIL_FROM, resolveEmailBaseUrl } from '../auth/store';
 import { sendAdminReviewNotificationEmail } from '../admin/reviewNotifications';
 import type { Env } from '../core/types';
+import type { WorldPublicationRequest } from '../../../worlds/model';
 
 export interface WorldEmailResult {
   attempted: boolean;
@@ -28,7 +29,7 @@ export async function sendWorldGrantEmail(
     subject: 'Your WAMP World is ready to build',
     heading: 'You have a WAMP World grant',
     body: 'Sign in with this email, open Worlds, and start the seed room. Your World number is assigned when you publish it.',
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/?worlds=mine`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/?worlds=mine`,
     actionLabel: 'Start your World',
   });
 }
@@ -44,7 +45,7 @@ export async function sendWorldInvitationEmail(
     subject: `You're invited to build in ${label}`,
     heading: 'Build together in WAMP',
     body: `You have been invited to build in ${label}. Sign in with this email to accept the invitation.`,
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/w/${params.worldNumber}?worlds=mine`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/w/${params.worldNumber}?worlds=mine`,
     actionLabel: 'Open the World',
   });
 }
@@ -69,9 +70,43 @@ export async function sendWorldManagerActionEmail(
     subject: `${label} has a new ${action}`,
     heading: `New ${action}`,
     body: `${params.requester} needs a decision in ${label}.`,
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/w/${params.worldNumber}?worlds=manage`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/w/${params.worldNumber}?worlds=manage`,
     actionLabel: 'Review in Worlds',
   });
+}
+
+export async function sendWorldPublicationDecisionEmail(
+  request: Request, env: Env,
+  params: { worldNumber: number; publication: WorldPublicationRequest },
+): Promise<WorldEmailResult> {
+  const email=await worldBuilderEmail(env,params.publication.submittedByUserId);
+  if(!email)return {attempted:false,sent:false,error:null};
+  const publication=params.publication,approved=publication.status==='approved';
+  const room=publication.roomTitle||`Room ${publication.roomCoordinates.x},${publication.roomCoordinates.y}`;
+  return sendWorldEmail(env,{
+    to:email,subject:`${room}: ${approved?'approved':'changes requested'} in WAMP ${params.worldNumber}`,
+    heading:approved?'Your room was approved':'Your room needs changes',
+    body:approved?`${room} is now published in WAMP ${params.worldNumber}.`:
+      `${room} was not approved.${publication.rejectionReason?` Reviewer: ${publication.rejectionReason}`:''} Open the room, make your changes, and submit it again.`,
+    actionUrl:`${resolveEmailBaseUrl(request,env)}/w/${params.worldNumber}?worlds=manage`,actionLabel:'View your request',
+  });
+}
+
+export async function sendWorldMembershipApprovedEmail(
+  request:Request,env:Env,params:{userId:string|null;worldNumber:number},
+):Promise<WorldEmailResult>{
+  const email=params.userId?await worldBuilderEmail(env,params.userId):null;
+  if(!email)return {attempted:false,sent:false,error:null};
+  return sendWorldEmail(env,{to:email,subject:`You can now build in WAMP ${params.worldNumber}`,
+    heading:'Your builder request was approved',body:`You can now claim and edit rooms in WAMP ${params.worldNumber}.`,
+    actionUrl:`${resolveEmailBaseUrl(request,env)}/w/${params.worldNumber}?worlds=mine`,actionLabel:'Open your World'});
+}
+
+async function worldBuilderEmail(env:Env,userId:string):Promise<string|null>{
+  if(!emailConfigured(env))return null;
+  const row=await env.DB.prepare(`SELECT email FROM users WHERE id=? AND email IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM school_students WHERE user_id=users.id)`).bind(userId).first<{email:string}>();
+  return row?.email?.trim()||null;
 }
 
 export async function sendWorldNameReviewEmail(
@@ -84,7 +119,7 @@ export async function sendWorldNameReviewEmail(
     heading: 'World name review',
     intro: `WAMP ${params.worldNumber} requested a new public name.`,
     details: [`Proposed name: ${params.proposedName}`],
-    actionUrl: `${resolvePublicBaseUrl(request, env)}/worlds-admin.html`,
+    actionUrl: `${resolveEmailBaseUrl(request, env)}/worlds-admin.html`,
     actionLabel: 'Review World names',
   });
   return { attempted: result.attempted, sent: result.sent, error: result.error };
@@ -108,11 +143,10 @@ async function loadWorldManagerEmails(env: Env, worldId: string): Promise<string
 }
 
 async function sendWorldEmail(env: Env, email: WorldEmail): Promise<WorldEmailResult> {
-  const apiKey = env.RESEND_API_KEY?.trim();
-  if (!apiKey) return { attempted: false, sent: false, error: null };
-  const resend = new Resend(apiKey);
+  if (!emailConfigured(env)) return { attempted: false, sent: false, error: null };
+  const mailer = createEmailClient(env);
   try {
-    const response = await resend.emails.send({
+    const response = await mailer.emails.send({
       from: env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM,
       to: email.to,
       subject: email.subject,

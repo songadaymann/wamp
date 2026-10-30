@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const url = process.argv[2] || 'http://127.0.0.1:3174/?previewSmoke=1';
 const outputDir = path.resolve('output/web-game/guest-claim-modal');
@@ -10,6 +12,12 @@ fs.mkdirSync(outputDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1080 } });
 const errors = [];
+// Recorded rooms stand in for the live world (F480), so the page can enter real Play below.
+await installSmokeApiReplay(page.context());
+await page.addInitScript(() => {
+  localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
+  localStorage.setItem('wamp_replay_opt_out', '1');
+});
 
 page.on('console', (message) => {
   if (message.type() === 'error') {
@@ -24,13 +32,15 @@ await page.goto(url, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
 
 // This fixture exercises deferred UI only. The real-clear smoke covers durable saving and verification.
-await page.evaluate(() => {
-  document.body.dataset.appReady = 'true';
-  document.body.dataset.appMode = 'play-world';
-  document.getElementById('boot-splash')?.classList.add('hidden');
-  document.getElementById('busy-overlay')?.classList.add('hidden');
-  document.getElementById('welcome-modal')?.classList.add('hidden');
-});
+// The overworld owns body.dataset.appMode and resets a hand-set value, so enter real Play.
+await page.waitForFunction(() => typeof window.run_preview_smoke_action === 'function', null, { timeout: 60000 });
+const selected = await page.evaluate(() => window.run_preview_smoke_action('selectEditableRoom', { roomId: '0,0' }));
+if (!selected?.ok) throw new Error(`Could not select the home room: ${JSON.stringify(selected)}`);
+await page.evaluate(() => window.run_preview_smoke_action('playSelectedRoom'));
+await page.waitForFunction(() => document.body.dataset.appMode === 'play-world', null, { timeout: 30000 });
+// A time-ranked room opens its intro (ghost race) on Play; start the run so only the claim is pending.
+await page.waitForTimeout(1500);
+if (await page.locator('#btn-room-goal-intro-start').isVisible()) await page.locator('#btn-room-goal-intro-start').click();
 
 await page.evaluate(() => {
   window.dispatchEvent(
@@ -60,9 +70,8 @@ if (deferredState.appMode !== 'play-world' || !deferredState.modalHidden) {
   throw new Error(`Expected guest claim prompt to remain hidden during Play: ${JSON.stringify(deferredState)}`);
 }
 
-await page.evaluate(() => {
-  document.body.dataset.appMode = 'world';
-});
+await page.evaluate(() => window.run_preview_smoke_action('returnToWorld'));
+await page.waitForFunction(() => document.body.dataset.appMode === 'world');
 
 await page.waitForSelector('#run-guest-claim:not(.hidden)');
 

@@ -1,3 +1,4 @@
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { expandedRoomGoalTargets, tickExpandedRoomGoal, expandedRoomGoalMarkersReady } from './expandedRoomGoalRules';
 import { NOOP_MUTATION_RESULT, createTerminalMutation, recordExpandedRoomTargetEvent } from './expandedRoomRunMutations';
 import type { ExpandedRoomRunMutationResult } from './expandedRoomRunMutations';
@@ -13,12 +14,13 @@ import { formatGoalBadgeText, formatCourseGoalProgressText, formatGoalTimerText 
 import type { GoalMarkerPoint } from '../../goals/roomGoals';
 import type { RoomCoordinates } from '../../persistence/roomModel';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
+import type { RankedFinishRetryState } from '../../runs/rankedFinishDelivery';
 
 export interface ActiveExpandedRoomRunState {
   course: CourseSnapshot;
   expandedRoomId: string | null;
   expandedRoomVersion: number | null;
-  submissionTarget: 'course' | 'expanded_room' | null;
+  submissionTarget: 'expanded_room' | null;
   returnCoordinates: RoomCoordinates;
   startRoomId: string | null;
   elapsedMs: number;
@@ -39,12 +41,14 @@ export interface ActiveExpandedRoomRunState {
   submittedScore: number | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   hadPreviousCompletion: boolean;
   previousViewerRank: number | null;
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
   guestProgress?: GuestRunSaveResult;
+  finishRetry?: RankedFinishRetryState | null;
 }
 
 export interface CreateActiveExpandedRoomRunStateOptions {
@@ -55,6 +59,7 @@ export interface CreateActiveExpandedRoomRunStateOptions {
   startRoomId?: string | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   hadPreviousCompletion?: boolean;
   previousViewerRank?: number | null;
   enemyTarget: number | null;
@@ -77,13 +82,15 @@ export function createActiveExpandedRoomRunState(
     expandedRoomVersion = null,
     returnCoordinates,
     startRoomId = null,
-    leaderboardEligible,
+    leaderboardEligible: requestedLeaderboardEligible,
     cooperative = false,
+    assisted = false,
     hadPreviousCompletion = false,
     previousViewerRank = null,
     enemyTarget,
     localOnlyMessage,
   } = options;
+  const leaderboardEligible = requestedLeaderboardEligible && !assisted;
   const targets = expandedRoomGoalTargets(course.goal);
   return {
     course,
@@ -107,11 +114,12 @@ export function createActiveExpandedRoomRunState(
     submissionState: leaderboardEligible ? 'starting' : 'local-only',
     submissionMessage: leaderboardEligible
       ? 'Starting ranked expanded room run...'
-      : localOnlyMessage ?? 'Expanded room run stays local.',
+      : assisted ? ASSIST_RUN_MESSAGE : localOnlyMessage ?? 'Expanded room run stays local.',
     pendingResult: null,
     submittedScore: null,
     leaderboardEligible,
     cooperative,
+    assisted,
     hadPreviousCompletion,
     previousViewerRank,
     verificationSchemaVersion: null,

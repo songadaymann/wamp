@@ -1,49 +1,60 @@
-#post-run-reminder {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  z-index: 17;
-  display: flex;
-  max-width: calc(100% - 16px);
-  transform: translateX(-50%);
-  border: 2px solid #222;
-  background: var(--wamp-cream);
-}
+@layer components {
+  #post-run-reminder, #keep-playing {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    z-index: var(--z-world-prompt);
+    display: flex;
+    max-width: calc(100% - 16px);
+    transform: translateX(-50%);
+    border: 2px solid #222;
+    background: var(--wamp-cream);
+    color: #222;
+  }
 
-#post-run-reminder.hidden {
-  display: none;
-}
+  #post-run-reminder.hidden, #keep-playing.hidden {
+    display: none;
+  }
 
-#post-run-reminder .bar-btn {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 0;
-  background: var(--wamp-cream);
-  color: #222;
-  font-size: 12px;
-}
+  #post-run-reminder .bar-btn, #keep-playing .bar-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 0;
+    background: var(--wamp-cream);
+    color: #222;
+    font-size: var(--ui-text-body, 12px);
+  }
 
-#post-run-reminder .bar-btn:hover,
-#post-run-reminder .bar-btn:focus-visible {
-  background: var(--wamp-sky);
-}
+  #keep-playing .bar-btn:hover,
+  #keep-playing .bar-btn:focus-visible,
+  #post-run-reminder .bar-btn:hover,
+  #post-run-reminder .bar-btn:focus-visible {
+    background: var(--wamp-sky);
+  }
 
-#post-run-reminder .bar-btn:focus-visible {
-  outline: 3px solid #222;
-  outline-offset: -3px;
-}
+  #post-run-reminder .bar-btn:focus-visible, #keep-playing .bar-btn:focus-visible {
+    outline: 3px solid #222;
+    outline-offset: -3px;
+  }
 
-#btn-post-run-reminder {
-  min-width: 0;
-}
+  #btn-post-run-reminder {
+    min-width: 0;
+  }
 
-#post-run-reminder #btn-post-run-reminder-dismiss {
-  min-width: 44px;
-  border-left: 2px solid #222;
-}
-
-body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #post-run-reminder {
-  position: fixed;
-  bottom: calc(var(--mobile-portrait-console-height) + var(--safe-bottom) + 12px);
+  #post-run-reminder #btn-post-run-reminder-dismiss, #btn-keep-playing-dismiss {
+    min-width: 44px;
+    border-left: 2px solid #222;
+  }
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #post-run-reminder {
+    position: fixed;
+    bottom: calc(var(--mobile-portrait-console-height) + var(--safe-bottom) + 12px);
+  }
+  #keep-playing { bottom: 68px; flex-wrap: wrap; }
+  #keep-playing-status { flex-basis: 100%; max-width: 300px; padding: 0 8px; }
+  #keep-playing-status:empty { display: none; }
+  body[data-device-class='phone'][data-orientation-state='portrait'][data-app-mode='play-world'] #keep-playing {
+    position: fixed;
+    bottom: calc(var(--mobile-portrait-console-height) + var(--safe-bottom) + 68px);
+  }
 }

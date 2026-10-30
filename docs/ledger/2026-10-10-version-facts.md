@@ -1,0 +1,1 @@
+| 2026-10-10 | F026 | [#115](https://github.com/songadaymann/wamp/pull/115) | [receipt](docs/review/wamp-version-facts-2026-10-10.md) | Leaderboards rank rooms from stored version facts instead of every version snapshot |

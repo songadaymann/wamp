@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:3034';
 const output = process.argv[3] || 'output/web-game/welcome-destinations/native';
+// Exercise onboarding/input against Canvas, avoiding software WebGL frame starvation in CI.
+// RENDERER can explicitly opt into a GPU-backed renderer for manual coverage.
 const devices = [['desktop',1280,800,false],['phone',390,844,true],['tablet',1024,768,true],['landscape',844,390,true],['narrow-phone',320,568,true]];
 mkdirSync(output,{recursive:true});
 const report={at:new Date().toISOString(),base,scenarios:[],documents:[],errors:[]};
@@ -19,7 +23,7 @@ async function startGoal(page,touch,allowPlaying=false) {
  await page.waitForTimeout(300);
 }
 async function holdRight(page,context,touch,ms) {
- const wait=()=>ms===null?page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',null,{timeout:20000}):page.waitForTimeout(ms);
+ const wait=()=>ms===null?page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',null,{timeout:60000}):page.waitForTimeout(ms);
  if(!touch) {await page.keyboard.down('ArrowRight');try {await wait();}finally {await page.keyboard.up('ArrowRight');}return;}
  const box=await page.locator('#mobile-move-stick').boundingBox();assert.ok(box);
  const cdp=await context.newCDPSession(page),x=box.x+box.width/2,y=box.y+box.height/2;
@@ -32,10 +36,12 @@ try {
   const scenario=`${name}-${lane}`;if(process.env.CASE&&!scenario.includes(process.env.CASE))continue;
   activeName=scenario;const context=await browser.newContext({viewport:{width,height},hasTouch:touch,isMobile:touch});
   await context.addInitScript(()=>{localStorage.setItem('wamp_replay_opt_out','1');localStorage.setItem('wamp.devicePerformanceMode.v1',JSON.stringify({version:1,mode:'full-quality'}));});
+  // Recorded rooms stand in for the live world (F480).
+  await installSmokeApiReplay(context);
   const page=await context.newPage();activePage=page;
   page.on('pageerror',error=>report.errors.push({scenario,message:error.message}));
   page.on('console',message=>{if(message.type()==='error'&&!(base.includes('127.0.0.1')&&message.location().url.includes('/api/presence/identity-token')))report.errors.push({scenario,message:message.text(),url:message.location().url});});
-  await page.goto(`${base}/?welcome=1${process.env.RENDERER?'&renderer='+process.env.RENDERER:''}`,{waitUntil:'domcontentloaded'});
+  await page.goto(`${base}/?welcome=1&renderer=${process.env.RENDERER || 'canvas'}`,{waitUntil:'domcontentloaded'});
   await page.waitForFunction(()=>document.body.dataset.appReady==='true',null,{timeout:120000});
   const entry=await page.locator('script[type="module"]').first().getAttribute('src');report.documents.push({scenario,url:page.url(),entry});
   if(process.env.EXPECTED_ENTRY)assert.equal(entry,process.env.EXPECTED_ENTRY);
@@ -62,7 +68,7 @@ try {
    await page.screenshot({path:`${output}/${scenario}-run.png`});
    if(name==='desktop'||name==='phone') {
     await holdRight(page,context,touch,null);
-    await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',{},{timeout:20000});
+    await page.waitForFunction(()=>JSON.parse(window.render_game_to_text()).activeScene?.goalRun?.result==='completed',{},{timeout:60000});
     await page.waitForTimeout(1200);
    }
    for(let index=1;index<6;index++) {
@@ -101,7 +107,7 @@ try {
  }
  assert.equal(report.errors.length,0,JSON.stringify(report.errors));
 } catch(error) {
- report.failure={scenario:activeName,message:error.message};
+ report.failure={scenario:activeName,message:error.message,state:activePage?await state(activePage).catch(()=>null):null};
  if(activePage)await activePage.screenshot({path:`${output}/failure.png`}).catch(()=>{});
  throw error;
 } finally {writeFileSync(`${output}/report.json`,JSON.stringify(report,null,2));await browser.close();}

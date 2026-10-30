@@ -1,0 +1,1 @@
+| 2026-10-23 | F301, F306, F363, F305, F329, F331, F330 | [#302](https://github.com/songadaymann/wamp/pull/302)–[#308](https://github.com/songadaymann/wamp/pull/308) | [receipt](docs/review/wamp-round2-speed-2026-10-23.md) | Speed: custom tile lookups, idle map plans, publish checklist reuse, chase routes, ghost reads, daily cache |

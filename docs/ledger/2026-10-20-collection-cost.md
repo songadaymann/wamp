@@ -1,0 +1,1 @@
+| 2026-10-20 | F240 | [#270](https://github.com/songadaymann/wamp/pull/270) | [receipt](docs/review/wamp-collection-cost-2026-10-20.md) | Collection costs show before the wallet opens, and known rejections can be retried |

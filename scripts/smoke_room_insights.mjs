@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync,readFileSync,writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 const base=process.argv[2]||'http://127.0.0.1:3033', output=process.argv[3]||'output/web-game/room-insights/native';
 const local=new URL(base).hostname==='127.0.0.1', isolated=process.env.INSIGHTS_FIXTURE==='1';
@@ -108,7 +109,7 @@ try {
   await page.goto(isolated?`${base}/r/-11/-6?welcome=0`:`${base}/?welcome=0`,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.body.dataset.appReady==='true',null,{timeout:120000});
   await page.evaluate(()=>window.__wampEarlyWorldTiles?.release('insights-smoke'));
   const entry=await page.locator('script[type="module"]').first().getAttribute('src');report.documents.push({name,entry});if(process.env.EXPECTED_ENTRY)assert.equal(entry,process.env.EXPECTED_ENTRY);
-  await page.evaluate(()=>{document.getElementById('btn-room-goal-intro-close')?.click();document.querySelector('#auth-panel.menu-open')&&document.getElementById('menu-toggle')?.click();});
+  await page.evaluate(()=>{document.querySelector('#auth-panel.menu-open')&&document.getElementById('menu-toggle')?.click();});
   for(const expanded of [false,true]) {
    if(isolated)await nativeEditor(page,expanded?'99,99':'98,99',expanded,touch);
    else if(expanded) {

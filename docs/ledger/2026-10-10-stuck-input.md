@@ -1,0 +1,1 @@
+| 2026-10-10 | F054, F059 | [#126](https://github.com/songadaymann/wamp/pull/126) | [receipt](docs/review/wamp-stuck-input-2026-10-10.md) | Strokes and pans finish even when the canvas never saw the release |

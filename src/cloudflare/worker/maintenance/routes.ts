@@ -1,10 +1,7 @@
 import { clearSessionCookie } from '../auth/request';
 import { HttpError, jsonResponse } from '../core/http';
 import type { Env } from '../core/types';
-import {
-  LEGACY_GENERATED_POINT_SYNC_TABLE,
-  LEGACY_GENERATED_USER_LINKS_TABLE,
-} from '../generatedUsers/legacySource';
+import { LEGACY_GENERATED_USER_LINKS_TABLE } from '../generatedUsers/legacySource';
 
 export async function handleTestReset(request: Request, env: Env): Promise<Response> {
   if (env.ENABLE_TEST_RESET !== '1') {
@@ -17,7 +14,6 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     roomRuns: await countRows(env, 'room_runs'),
     roomRushRuns: await countRows(env, 'room_rush_runs'),
     pvpMatches: await countRows(env, 'pvp_matches'),
-    roomDifficultyVotes: await countRows(env, 'room_difficulty_votes'),
     guestRoomDrafts: await countRows(env, 'guest_room_drafts'),
     courses: await countRows(env, 'courses'),
     courseVersions: await countRows(env, 'course_versions'),
@@ -29,7 +25,6 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     expandedRoomRuns: await countRows(env, 'expanded_room_runs'),
     expandedRoomRatings: await countRows(env, 'expanded_room_ratings'),
     userStats: await countRows(env, 'user_stats'),
-    legacyGeneratedPointSync: await countRows(env, LEGACY_GENERATED_POINT_SYNC_TABLE),
     legacyGeneratedUserLinks: await countRows(env, LEGACY_GENERATED_USER_LINKS_TABLE),
     chatMessages: await countRows(env, 'chat_messages'),
     agents: await countRows(env, 'agents'),
@@ -46,7 +41,6 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     env.DB.prepare('DELETE FROM magic_link_tokens'),
     env.DB.prepare('DELETE FROM sessions'),
     env.DB.prepare('DELETE FROM wallet_challenges'),
-    env.DB.prepare(`DELETE FROM ${LEGACY_GENERATED_POINT_SYNC_TABLE}`),
     env.DB.prepare(`DELETE FROM ${LEGACY_GENERATED_USER_LINKS_TABLE}`),
     env.DB.prepare('DELETE FROM user_stats'),
     env.DB.prepare('DELETE FROM expanded_room_ratings'),
@@ -62,7 +56,6 @@ export async function handleTestReset(request: Request, env: Env): Promise<Respo
     env.DB.prepare('DELETE FROM pvp_matches'),
     env.DB.prepare('DELETE FROM room_rush_runs'),
     env.DB.prepare('DELETE FROM room_runs'),
-    env.DB.prepare('DELETE FROM room_difficulty_votes'),
     env.DB.prepare('DELETE FROM guest_room_drafts'),
     env.DB.prepare('DELETE FROM chat_messages'),
     env.DB.prepare('DELETE FROM agent_tokens'),

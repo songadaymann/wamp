@@ -6,18 +6,6 @@ export function buildRoomSharePath(coordinates: RoomCoordinates): string {
   return `/r/${coordinates.x}/${coordinates.y}`;
 }
 
-export function buildRoomShareUrl(
-  coordinates: RoomCoordinates,
-  href: string,
-): string {
-  const url = new URL(href);
-  url.pathname = buildRoomSharePath(coordinates);
-  url.searchParams.delete('x');
-  url.searchParams.delete('y');
-  url.hash = '';
-  return url.toString();
-}
-
 export function buildAttributedRoomShareUrl(coordinates: RoomCoordinates, href: string): string {
   // Editor, QA and navigation parameters must not travel with a public invitation.
   const url = new URL(buildRoomSharePath(coordinates), new URL(href).origin);

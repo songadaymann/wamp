@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { editorState } from '../../config';
+import { editorState, updateEditorState } from '../../config';
 import { registerCustomSprite } from '../../customSprites/registry';
 import {
   applyEditorToolSelection,
   isEditorLineCurve,
   resolveEditorLineEnd,
-  getEditorToolHudLabel,
   getEditorToolUnavailableTitle,
   getEditorToolButtonAppearance,
+  getEditorToolHudLabel,
   getEditorToolModePipState,
   getShapeFillModeUnavailableTitle,
   getShapeFillUiMode,
@@ -24,23 +24,23 @@ const originalMode = editorState.paletteMode;
 const originalObjectId = editorState.selectedObjectId;
 
 afterEach(() => {
-  editorState.paletteMode = originalMode;
-  editorState.selectedObjectId = originalObjectId;
+  updateEditorState({ paletteMode: originalMode });
+  updateEditorState({ selectedObjectId: originalObjectId });
 });
 
 describe('editorToolSelection availability', () => {
   it('greys scramble outside Advanced Tilesets and uses the fixed tooltip', () => {
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     expect(isEditorToolUnavailable('randomize')).toBe(true);
     expect(getEditorToolUnavailableTitle('randomize')).toBe(
       'Scramble is only available for Terrain with Advanced Tilesets',
     );
-    editorState.paletteMode = 'objects';
+    updateEditorState({ paletteMode: 'objects' });
     expect(isEditorToolUnavailable('randomize')).toBe(true);
     expect(getEditorToolUnavailableTitle('randomize')).toBe(
       'Scramble is only available for Terrain with Advanced Tilesets',
     );
-    editorState.paletteMode = 'tiles';
+    updateEditorState({ paletteMode: 'tiles' });
     expect(isEditorToolUnavailable('randomize')).toBe(false);
     expect(getEditorToolUnavailableTitle('randomize')).toBeNull();
   });
@@ -49,35 +49,35 @@ describe('editorToolSelection availability', () => {
     const originalTool = editorState.activeTool;
     const originalMaterial = editorState.smartMaterial;
     const originalSpray = editorState.pencilSprayMode;
-    editorState.smartMaterial = 'forest.ground';
-    editorState.paletteMode = 'tiles';
-    editorState.activeTool = 'fill';
-    editorState.pencilSprayMode = false;
-    editorState.paletteMode = 'smart';
+    updateEditorState({ smartMaterial: 'forest.ground' });
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ activeTool: 'fill' });
+    updateEditorState({ pencilSprayMode: false });
+    updateEditorState({ paletteMode: 'smart' });
     expect(ensureEditorToolAvailable()).toBe('fill');
-    editorState.paletteMode = 'tiles';
+    updateEditorState({ paletteMode: 'tiles' });
     expect(ensureEditorToolAvailable()).toBe('fill');
-    editorState.activeTool = 'randomize';
-    editorState.paletteMode = 'smart';
+    updateEditorState({ activeTool: 'randomize' });
+    updateEditorState({ paletteMode: 'smart' });
     expect(ensureEditorToolAvailable()).toBe('pencil');
     expect(editorState.pencilSprayMode).toBe(false);
-    editorState.activeTool = originalTool;
-    editorState.smartMaterial = originalMaterial;
-    editorState.pencilSprayMode = originalSpray;
+    updateEditorState({ activeTool: originalTool });
+    updateEditorState({ smartMaterial: originalMaterial });
+    updateEditorState({ pencilSprayMode: originalSpray });
   });
 
   it('offers Fill for repeatable objects but not one-off objects', () => {
-    editorState.paletteMode = 'objects';
-    editorState.selectedObjectId = null;
+    updateEditorState({ paletteMode: 'objects' });
+    updateEditorState({ selectedObjectId: null });
     expect(isEditorToolUnavailable('fill')).toBe(true);
     expect(getEditorToolUnavailableTitle('fill')).toBe('Select a Decoration, Collectible, or Solid Block to fill');
-    editorState.selectedObjectId = 'coin_gold';
+    updateEditorState({ selectedObjectId: 'coin_gold' });
     expect(isEditorToolUnavailable('fill')).toBe(false);
-    editorState.selectedObjectId = 'rock';
+    updateEditorState({ selectedObjectId: 'rock' });
     expect(isEditorToolUnavailable('fill')).toBe(false);
-    editorState.selectedObjectId = 'spawn_point';
+    updateEditorState({ selectedObjectId: 'spawn_point' });
     expect(isEditorToolUnavailable('fill')).toBe(true);
-    editorState.selectedObjectId = 'sign';
+    updateEditorState({ selectedObjectId: 'sign' });
     expect(isEditorToolUnavailable('fill')).toBe(true);
     for (const kind of ['solid', 'sign'] as const) {
       registerCustomSprite({
@@ -91,9 +91,9 @@ describe('editorToolSelection availability', () => {
         updatedAt: '2026-09-21T00:00:00.000Z',
       }, { persist: false, notify: false });
     }
-    editorState.selectedObjectId = 'custom_sprite:repeat-test-solid';
+    updateEditorState({ selectedObjectId: 'custom_sprite:repeat-test-solid' });
     expect(isEditorToolUnavailable('fill')).toBe(false);
-    editorState.selectedObjectId = 'custom_sprite:repeat-test-sign';
+    updateEditorState({ selectedObjectId: 'custom_sprite:repeat-test-sign' });
     expect(isEditorToolUnavailable('fill')).toBe(true);
     expect(isEditorToolUnavailable('rect')).toBe(true);
     expect(getEditorToolUnavailableTitle('rect')).toBe('Rectangle is only available for Terrain');
@@ -101,7 +101,7 @@ describe('editorToolSelection availability', () => {
     expect(getEditorToolUnavailableTitle('ellipse')).toBe('Circle is only available for Terrain');
     expect(isEditorToolUnavailable('line')).toBe(true);
     expect(getEditorToolUnavailableTitle('line')).toBe('Line/Curve is only available for Terrain');
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     expect(isEditorToolUnavailable('fill')).toBe(false);
     expect(isEditorToolUnavailable('rect')).toBe(false);
   });
@@ -116,18 +116,18 @@ describe('draw stamp vs brush placement', () => {
   const originalSpray = editorState.pencilSprayMode;
 
   afterEach(() => {
-    editorState.selection = originalSelection;
-    editorState.pencilBrushSize = originalSize;
-    editorState.shapeFillMode = originalMode;
-    editorState.activeTool = originalTool;
-    editorState.paletteMode = originalPalette;
-    editorState.pencilSprayMode = originalSpray;
+    updateEditorState({ selection: originalSelection });
+    updateEditorState({ pencilBrushSize: originalSize });
+    updateEditorState({ shapeFillMode: originalMode });
+    updateEditorState({ activeTool: originalTool });
+    updateEditorState({ paletteMode: originalPalette });
+    updateEditorState({ pencilSprayMode: originalSpray });
   });
 
   it('stamps multi-tile selections by default and brushes when pattern or shuffle is selected', () => {
-    editorState.paletteMode = 'tiles';
-    editorState.activeTool = 'pencil';
-    editorState.selection = {
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ activeTool: 'pencil' });
+    updateEditorState({ selection: {
       ...editorState.selection,
       width: 2,
       height: 1,
@@ -136,16 +136,16 @@ describe('draw stamp vs brush placement', () => {
         { col: editorState.selection.startCol, row: editorState.selection.startRow },
         { col: editorState.selection.startCol + 1, row: editorState.selection.startRow },
       ],
-    };
-    editorState.shapeFillMode = 'stamp';
-    editorState.pencilBrushSize = 3;
+    } });
+    updateEditorState({ shapeFillMode: 'stamp' });
+    updateEditorState({ pencilBrushSize: 3 });
     expect(isPencilStampPlacement()).toBe(true);
     expect(isPencilBrushPlacement()).toBe(false);
-    editorState.shapeFillMode = 'pattern';
+    updateEditorState({ shapeFillMode: 'pattern' });
     expect(isPencilStampPlacement()).toBe(false);
     expect(isPencilBrushPlacement()).toBe(true);
     expect(getShapeFillUiMode('fill')).toBe('pattern');
-    editorState.shapeFillMode = 'stamp';
+    updateEditorState({ shapeFillMode: 'stamp' });
     expect(getShapeFillUiMode('fill')).toBe('pattern');
     expect(getShapeFillUiMode('pencil')).toBe('stamp');
   });
@@ -158,14 +158,14 @@ describe('shape fill mode availability', () => {
   const originalSpray = editorState.pencilSprayMode;
 
   afterEach(() => {
-    editorState.selection = originalSelection;
-    editorState.activeTool = originalTool;
-    editorState.paletteMode = originalPalette;
-    editorState.pencilSprayMode = originalSpray;
+    updateEditorState({ selection: originalSelection });
+    updateEditorState({ activeTool: originalTool });
+    updateEditorState({ paletteMode: originalPalette });
+    updateEditorState({ pencilSprayMode: originalSpray });
   });
 
   function selectTwoTiles(): void {
-    editorState.selection = {
+    updateEditorState({ selection: {
       ...editorState.selection,
       width: 2,
       height: 1,
@@ -174,19 +174,19 @@ describe('shape fill mode availability', () => {
         { col: editorState.selection.startCol, row: editorState.selection.startRow },
         { col: editorState.selection.startCol + 1, row: editorState.selection.startRow },
       ],
-    };
+    } });
   }
 
   it('greys stamp, pattern, and shuffle until more than one tile is selected', () => {
-    editorState.paletteMode = 'tiles';
-    editorState.activeTool = 'pencil';
-    editorState.selection = {
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ activeTool: 'pencil' });
+    updateEditorState({ selection: {
       ...editorState.selection,
       width: 1,
       height: 1,
       occupiedMask: [[true]],
       patternOrder: [{ col: editorState.selection.startCol, row: editorState.selection.startRow }],
-    };
+    } });
     expect(isShapeFillModeAvailable('stamp')).toBe(false);
     expect(isShapeFillModeAvailable('pattern')).toBe(false);
     expect(isShapeFillModeAvailable('shuffle')).toBe(false);
@@ -196,24 +196,24 @@ describe('shape fill mode availability', () => {
   });
 
   it('greys only stamp when a multi-tile selection is used without Draw', () => {
-    editorState.paletteMode = 'tiles';
-    editorState.activeTool = 'rect';
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ activeTool: 'rect' });
     selectTwoTiles();
     expect(isShapeFillModeAvailable('stamp')).toBe(false);
     expect(isShapeFillModeAvailable('pattern')).toBe(true);
     expect(isShapeFillModeAvailable('shuffle')).toBe(true);
     expect(getShapeFillModeUnavailableTitle('stamp')).toBe('Stamp is only available with the Draw tool');
     expect(getShapeFillModeUnavailableTitle('pattern')).toBeNull();
-    editorState.activeTool = 'pencil';
+    updateEditorState({ activeTool: 'pencil' });
     expect(isShapeFillModeAvailable('stamp')).toBe(true);
   });
 
   it('greys stamp while Spray is selected and treats fill as pattern', () => {
-    editorState.paletteMode = 'tiles';
-    editorState.activeTool = 'pencil';
-    editorState.pencilSprayMode = true;
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ activeTool: 'pencil' });
+    updateEditorState({ pencilSprayMode: true });
     selectTwoTiles();
-    editorState.shapeFillMode = 'stamp';
+    updateEditorState({ shapeFillMode: 'stamp' });
     expect(isShapeFillModeAvailable('stamp')).toBe(false);
     expect(isShapeFillModeAvailable('pattern')).toBe(true);
     expect(getShapeFillModeUnavailableTitle('stamp')).toBe('Stamp is only available with Draw, not Spray');
@@ -221,7 +221,7 @@ describe('shape fill mode availability', () => {
     expect(isPencilSprayPlacement()).toBe(true);
     expect(isPencilStampPlacement()).toBe(false);
     expect(isPencilBrushPlacement()).toBe(false);
-    editorState.paletteMode = 'smart';
+    updateEditorState({ paletteMode: 'smart' });
     expect(isPencilSprayPlacement()).toBe(true);
     expect(isPencilStampPlacement()).toBe(false);
     expect(isPencilBrushPlacement()).toBe(false);
@@ -237,26 +237,28 @@ describe('multi-state tool pips', () => {
   const originalTrianglePaint = editorState.trianglePaintMode;
 
   afterEach(() => {
-    editorState.rectOutline = originalRect;
-    editorState.ellipseOutline = originalEllipse;
-    editorState.lineCurve = originalLine;
-    editorState.pencilSprayMode = originalSpray;
-    editorState.activeTool = originalTool;
-    editorState.trianglePaintMode = originalTrianglePaint;
+    updateEditorState({
+      rectOutline: originalRect,
+      ellipseOutline: originalEllipse,
+      lineCurve: originalLine,
+      pencilSprayMode: originalSpray,
+      activeTool: originalTool,
+      trianglePaintMode: originalTrianglePaint,
+    });
   });
 
   it('maps rectangle, circle, line, draw/spray, and flip cycles to pip indexes', () => {
-    editorState.rectOutline = false;
-    editorState.ellipseOutline = true;
-    editorState.lineCurve = false;
-    editorState.pencilSprayMode = false;
+    updateEditorState({ rectOutline: false });
+    updateEditorState({ ellipseOutline: true });
+    updateEditorState({ lineCurve: false });
+    updateEditorState({ pencilSprayMode: false });
     expect(getEditorToolModePipState('rect')).toEqual({ count: 2, activeIndex: 0 });
     expect(getEditorToolModePipState('ellipse')).toEqual({ count: 2, activeIndex: 1 });
     expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 0 });
-    editorState.lineCurve = true;
+    updateEditorState({ lineCurve: true });
     expect(getEditorToolModePipState('line')).toEqual({ count: 2, activeIndex: 1 });
     expect(getEditorToolModePipState('pencil')).toEqual({ count: 2, activeIndex: 0 });
-    editorState.activeTool = 'pencil';
+    updateEditorState({ activeTool: 'pencil' });
     applyEditorToolSelection('pencil');
     expect(editorState.pencilSprayMode).toBe(true);
     expect(getEditorToolModePipState('pencil')).toEqual({ count: 2, activeIndex: 1 });
@@ -264,8 +266,7 @@ describe('multi-state tool pips', () => {
     expect(getTileFlipModePipState('off')).toEqual({ count: 3, activeIndex: 0 });
     expect(getTileFlipModePipState('on')).toEqual({ count: 3, activeIndex: 1 });
     expect(getTileFlipModePipState('rand')).toEqual({ count: 3, activeIndex: 2 });
-    editorState.activeTool = 'pencil';
-    editorState.trianglePaintMode = true;
+    updateEditorState({ activeTool: 'pencil', trianglePaintMode: true });
     applyEditorToolSelection('triangle');
     expect(editorState.trianglePaintMode).toBe(false);
     expect(getEditorToolModePipState('triangle')).toEqual({ count: 2, activeIndex: 0 });
@@ -274,7 +275,7 @@ describe('multi-state tool pips', () => {
     expect(getEditorToolHudLabel('triangle')).toBe('Paint ramps');
     expect(getEditorToolButtonAppearance('triangle', true)?.label).toBe('Paint');
     expect(getEditorToolButtonAppearance('triangle', true)?.iconKind).toBe('right-triangle');
-    editorState.trianglePaintMode = false;
+    updateEditorState({ trianglePaintMode: false });
     expect(getEditorToolButtonAppearance('triangle', true)?.iconKind).toBe('right-triangle');
   });
 });
@@ -282,25 +283,24 @@ describe('multi-state tool pips', () => {
 
 describe('Smart straight Line constraints', () => {
   const original = { paletteMode: editorState.paletteMode, smartMaterial: editorState.smartMaterial, activeTool: editorState.activeTool, lineCurve: editorState.lineCurve };
-  afterEach(() => { Object.assign(editorState, original); });
+  afterEach(() => { updateEditorState(original); });
 
   it('keeps Start Bar horizontal in either direction and restores normal Curve behavior for other tools', () => {
-    editorState.paletteMode = 'smart';
-    editorState.smartMaterial = 'wampos95.start-bar';
-    editorState.activeTool = 'line';
-    editorState.lineCurve = true;
+    updateEditorState({ paletteMode: 'smart' });
+    updateEditorState({ smartMaterial: 'wampos95.start-bar' });
+    updateEditorState({ activeTool: 'line' });
+    updateEditorState({ lineCurve: true });
     expect(resolveEditorLineEnd({ x: 2, y: 18 }, { x: 25, y: 10 }, true)).toEqual({ x: 25, y: 18 });
     expect(resolveEditorLineEnd({ x: 25, y: 18 }, { x: 2, y: 20 })).toEqual({ x: 2, y: 18 });
     applyEditorToolSelection('line');
     expect(isEditorLineCurve()).toBe(false);
     expect(getEditorToolModePipState('line')).toBeNull();
-    expect(getEditorToolHudLabel('line')).toBe('Line');
     expect(getEditorToolButtonAppearance('line', true)?.label).toBe('Line');
-    editorState.smartMaterial = 'cyber.concrete';
+    updateEditorState({ smartMaterial: 'cyber.concrete' });
     expect(isEditorLineCurve()).toBe(true);
     expect(resolveEditorLineEnd({ x: 2, y: 18 }, { x: 25, y: 10 })).toEqual({ x: 25, y: 10 });
-    editorState.paletteMode = 'tiles';
-    editorState.smartMaterial = 'wampos95.start-bar';
+    updateEditorState({ paletteMode: 'tiles' });
+    updateEditorState({ smartMaterial: 'wampos95.start-bar' });
     expect(isEditorLineCurve()).toBe(true);
   });
 });

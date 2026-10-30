@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyGradualZoom, computeIdealFitZoom } from './zoom';
+import { applyGradualZoom, computeIdealFitZoom, resolveCaptureZoom } from './zoom';
 import {
   dailyScreenshotFileName,
   dateKeyFromFileName,
@@ -14,10 +14,15 @@ import {
 } from './naming';
 import { fillInfoOverlayTemplate } from './infoOverlay';
 import { padPublishedBounds, roomBoundsToWorldPixels, chooseTileLevelForZoom } from './bounds';
-import { buildZipArchive } from './zip';
 import { pngDataUrlToArrayBuffer } from './stitch';
 
 describe('map screenshot zoom', () => {
+  it('holds manual preview zoom while daily capture advances and first capture can fit', () => {
+    expect(resolveCaptureZoom('manual', 0.1, 0.5)).toBe(0.5);
+    expect(resolveCaptureZoom('manual', 0.8, 0.5)).toBe(0.5);
+    expect(resolveCaptureZoom('daily', 0.1, 0.5)).toBeCloseTo(0.499);
+    expect(resolveCaptureZoom('manual', 0.1, null)).toBe(0.1);
+  });
   it('fits the padded world into 4K', () => {
     const world = roomBoundsToWorldPixels({ minX: 0, maxX: 1, minY: 0, maxY: 0 });
     const zoom = computeIdealFitZoom(world);
@@ -108,16 +113,6 @@ describe('map screenshot bounds', () => {
 });
 
 describe('map screenshot zip + png helpers', () => {
-  it('builds a zip with local file headers', () => {
-    const zip = buildZipArchive([
-      { name: 'a.png', bytes: new Uint8Array([1, 2, 3]) },
-      { name: 'b.png', bytes: new Uint8Array([4, 5]) },
-    ]);
-    expect(zip[0]).toBe(0x50); // P
-    expect(zip[1]).toBe(0x4b); // K
-    expect(zip.byteLength).toBeGreaterThan(50);
-  });
-
   it('decodes png data urls', () => {
     const buffer = pngDataUrlToArrayBuffer('data:image/png;base64,AQID');
     expect(new Uint8Array(buffer)).toEqual(new Uint8Array([1, 2, 3]));

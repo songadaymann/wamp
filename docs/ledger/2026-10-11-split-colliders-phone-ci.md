@@ -1,0 +1,1 @@
+| 2026-10-11 | F019, F008, F089 | [#177](https://github.com/songadaymann/wamp/pull/177)–[#180](https://github.com/songadaymann/wamp/pull/180) | [receipt](docs/review/wamp-split-colliders-phone-ci-2026-10-11.md) | Builder UI loads with the editor, lazy pop-ups, nearby-room colliders, phone smoke in CI (all parts) |

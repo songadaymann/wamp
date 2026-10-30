@@ -24,6 +24,13 @@ import type {
 import { isExpandedRoomSchemaMissingError } from '../expandedRooms/schemaErrors';
 import { LEGACY_GENERATED_AUDIT_SYNC_COLUMN } from '../generatedUsers/legacySource';
 import { upsertUserStats } from '../runs/points';
+import {
+  finishProgressRollback,
+  planProgressRollback,
+  prepareProgressRollbackStatements,
+  summarizeProgressRollback,
+} from './invalidationProgress';
+import { planStatsRollback, prepareStatsRollbackStatements } from './invalidationStats';
 
 const RECENT_INVALIDATION_LIMIT = 10;
 
@@ -90,7 +97,8 @@ export async function handleAdminSuspiciousInvalidatePreview(
   requireAdminRequest(env, request, `preview suspicious invalidation for ${userId}`);
   const body = await parseSuspiciousInvalidationPreviewBody(request);
   const preview = await buildInvalidationPreview(env, userId, body);
-  return jsonResponse(request, preview);
+  const rollback = await planProgressRollback(env, [...preview.roomRuns, ...preview.courseRuns]);
+  return jsonResponse(request, { ...preview, progress: summarizeProgressRollback(rollback) });
 }
 
 export async function handleAdminSuspiciousInvalidate(
@@ -101,6 +109,9 @@ export async function handleAdminSuspiciousInvalidate(
   requireAdminRequest(env, request, `invalidate suspicious activity for ${userId}`);
   const body = await parseSuspiciousInvalidationBody(request);
   const preview = await buildInvalidationPreview(env, userId, body);
+  // Planned before the runs go, since it asks which accepted clears remain without them.
+  const rollback = await planProgressRollback(env, [...preview.roomRuns, ...preview.courseRuns]);
+  const statsRollback = await planStatsRollback(env, preview.roomRuns, preview.courseRuns);
   const auditId = crypto.randomUUID();
   const createdAt = new Date().toISOString();
   const snapshot = {
@@ -110,6 +121,7 @@ export async function handleAdminSuspiciousInvalidate(
     runPointEvents: preview.runPointEvents,
     creatorPointEvents: preview.creatorPointEvents,
     affectedUsers: preview.affectedUsers,
+    progressRollback: rollback,
   };
 
   const statements = [
@@ -166,6 +178,20 @@ export async function handleAdminSuspiciousInvalidate(
   ]) {
     statements.push(env.DB.prepare('DELETE FROM point_events WHERE id = ?').bind(event.id));
   }
+  // The removed runs' "rewards finished" markers go in the same batch (F351). A course run may be
+  // an Expanded Room run's copy, which shares its attempt id.
+  if (preview.roomRuns.length > 0) {
+    statements.push(env.DB.prepare(`DELETE FROM run_settlements
+      WHERE attempt_kind = 'room' AND attempt_id IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(preview.roomRuns.map((run) => run.attemptId))));
+  }
+  if (preview.courseRuns.length > 0) {
+    statements.push(env.DB.prepare(`DELETE FROM run_settlements
+      WHERE attempt_kind IN ('course', 'expanded_room') AND attempt_id IN (SELECT value FROM json_each(?))`)
+      .bind(JSON.stringify(preview.courseRuns.map((run) => run.attemptId))));
+  }
+  statements.push(...prepareProgressRollbackStatements(env, rollback, createdAt));
+  statements.push(...prepareStatsRollbackStatements(env, statsRollback));
 
   await env.DB.batch(statements);
   await deleteExpandedRoomRunsByAttemptIds(env, preview.courseRuns.map((run) => run.attemptId));
@@ -173,12 +199,15 @@ export async function handleAdminSuspiciousInvalidate(
   for (const affectedUser of preview.affectedUsers) {
     await upsertUserStats(env, affectedUser.userId);
   }
+  // Last, once runs and stats are current; it logs rather than fails, since all of it can be recomputed.
+  await finishProgressRollback(env, rollback);
 
   const response: SuspiciousInvalidationResult = {
     ok: true,
     auditId,
     operatorLabel: body.operatorLabel,
     ...preview,
+    progress: summarizeProgressRollback(rollback),
   };
   return jsonResponse(request, response);
 }

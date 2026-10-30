@@ -1,3 +1,4 @@
+import { emailConfigured } from '../email/provider';
 import { activityDescription, type BuilderActivity } from '../../../activity/model';
 import type { D1DatabaseSession, Env, WorkerExecutionContextLike } from '../core/types';
 import { deliverEmail, escapeEmailHtml, type EmailMessage } from '../email/delivery';
@@ -111,7 +112,7 @@ async function sendPending(db: D1DatabaseSession, env: Env, now: string, fetcher
   return sent;
 }
 export async function runActivityEmails(env: Env, options: { now?: string; fetcher?: typeof fetch; attemptId?: string } = {}): Promise<{ sent: number }> {
-  if (!env.RESEND_API_KEY?.trim()) return { sent: 0 };
+  if (!emailConfigured(env)) return { sent: 0 };
   const now = options.now ?? new Date().toISOString();
   const db = env.DB.withSession?.('first-primary') ?? env.DB;
   await queueDethrones(db, now, options.attemptId);
@@ -127,7 +128,7 @@ export async function runActivityEmails(env: Env, options: { now?: string; fetch
   return { sent: await sendPending(db, env, now, options.fetcher ?? fetch) };
 }
 export function scheduleActivityEmails(env: Env, context: WorkerExecutionContextLike | undefined, attemptId: string): void {
-  if (!context || !env.RESEND_API_KEY?.trim()) return;
+  if (!context || !emailConfigured(env)) return;
   context.waitUntil(runActivityEmails(env, { attemptId }).catch(() => {
     console.error(JSON.stringify({ event: 'activity-email-dispatch-failed' }));
   }));

@@ -1,10 +1,11 @@
-import { Resend } from 'resend';
+import { storedRoomProtectionSql } from '../rooms/protection';
+import { createEmailClient, emailConfigured } from '../email/provider';
 import { API_TOKEN_SCOPES, type ApiTokenRecord, type ApiTokenScope, type AuthUser } from '../../../auth/model';
 import {
   deriveProfileUsernameBase,
   PROFILE_USERNAME_MAX_LENGTH,
 } from '../../../profiles/username';
-import { HttpError } from '../core/http';
+import { HttpError, isLocalOrPrivateHostname, isTrustedOrigin } from '../core/http';
 import { isTrustedAppHostname } from '../../../config';
 import type {
   ApiTokenRow,
@@ -20,11 +21,13 @@ import type {
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { mapSchoolAuthContextRow } from '../school/authContext';
 import { ensureFounderIdentityQualification } from '../progression/store';
+import { displayNameKey } from '../core/displayText';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const MAGIC_LINK_TTL_MS = 1000 * 60 * 15;
 export const WALLET_CHALLENGE_TTL_MS = 1000 * 60 * 10;
 export const DEFAULT_AUTH_EMAIL_FROM = "Everybody's Platformer <onboarding@resend.dev>";
+const DEFAULT_PUBLIC_BASE_URL = 'https://wamp.land';
 export const API_TOKEN_PREFIX = 'epat_';
 const API_TOKEN_SCOPE_SET = new Set<string>(API_TOKEN_SCOPES);
 
@@ -103,8 +106,21 @@ export async function findUserById(env: Env, userId: string): Promise<AuthUser |
   return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
 
-export async function findUserByDisplayName(env: Env, displayName: string): Promise<AuthUser | null> {
-  const row = await env.DB.prepare(
+/**
+ * The account whose display name reads the same as `displayName` (see displayNameKey), preferring
+ * one other than `viewerUserId` so a clash with someone else is always found. Names that are plain
+ * ASCII without extra spaces match by lower(); every other name is loaded and compared in full.
+ */
+export async function findUserByDisplayName(
+  env: Env,
+  displayName: string,
+  viewerUserId: string | null = null,
+): Promise<AuthUser | null> {
+  const key = displayNameKey(displayName);
+  if (!key) {
+    return null;
+  }
+  const result = await env.DB.prepare(
     `
       SELECT
         id,
@@ -118,12 +134,17 @@ export async function findUserByDisplayName(env: Env, displayName: string): Prom
         created_at,
         updated_at
       FROM users
-      WHERE lower(display_name) = lower(?)
-      LIMIT 1
+      WHERE lower(display_name) = ?
+        OR display_name GLOB '*[^ -~]*'
+        OR display_name GLOB ' *'
+        OR display_name GLOB '* '
+        OR display_name GLOB '*  *'
     `
   )
-    .bind(displayName)
-    .first<UserRow>();
+    .bind(key)
+    .all<UserRow>();
+  const matches = result.results.filter((row) => displayNameKey(row.display_name ?? '') === key);
+  const row = matches.find((candidate) => candidate.id !== viewerUserId) ?? matches[0] ?? null;
 
   return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
 }
@@ -273,13 +294,14 @@ async function hasUsernameColumn(env: Env): Promise<boolean> {
 export async function attachWalletToUser(
   env: Env,
   user: AuthUser,
-  walletAddress: string
+  walletAddress: string,
+  sessionId: string,
 ): Promise<AuthUser> {
   const normalizedWallet = normalizeAddress(walletAddress);
   const existingWalletUser = await findUserByWallet(env, normalizedWallet);
 
   if (existingWalletUser && existingWalletUser.id !== user.id) {
-    throw new HttpError(409, 'That wallet is already linked to another account.');
+    throw new HttpError(409, 'That wallet belongs to another WAMP account. Log out of WAMP and choose Sign in with wallet to use that account. Your current rooms stay with this account; account recovery is not available yet.');
   }
 
   if (user.walletAddress === normalizedWallet) {
@@ -287,19 +309,27 @@ export async function attachWalletToUser(
   }
 
   if (user.walletAddress && user.walletAddress !== normalizedWallet) {
-    throw new HttpError(409, 'This account is already linked to a different wallet.');
+    throw new HttpError(409, 'This WAMP account already has a different wallet. Switch your wallet app to the linked address. Changing the linked wallet is not available yet.');
   }
 
   const updatedAt = new Date().toISOString();
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE users
-        SET wallet_address = ?, updated_at = ?
-        WHERE id = ?
-      `
-    ).bind(normalizedWallet, updatedAt, user.id),
-  ]);
+  let linked: { id: string } | null;
+  try {
+    linked = await env.DB.prepare(`
+      UPDATE users SET wallet_address = ?, updated_at = ?
+      WHERE id = ? AND wallet_address IS NULL
+        AND EXISTS (SELECT 1 FROM sessions WHERE id = ? AND user_id = users.id AND expires_at > ?)
+      RETURNING id
+    `).bind(normalizedWallet, updatedAt, user.id, sessionId, updatedAt).first<{ id: string }>();
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('UNIQUE constraint failed: users.wallet_address')) throw error;
+    throw new HttpError(409, 'That wallet was just linked to another WAMP account. Refresh WAMP and try again.');
+  }
+  if (!linked) {
+    const current = await findUserById(env, user.id);
+    if (current?.walletAddress === normalizedWallet) return current;
+    throw new HttpError(409, 'Your account or wallet changed. Refresh WAMP, then try linking your wallet again.');
+  }
 
   await ensureFounderIdentityQualification(env, user.id, updatedAt);
 
@@ -554,36 +584,6 @@ export async function loadUserStatsRow(env: Env, userId: string) {
     .first<UserStatsRow>();
 }
 
-export async function loadAllUserStatsRows(env: Env) {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        pvp_wins,
-        pvp_losses,
-        pvp_draws,
-        best_score,
-        fastest_clear_ms,
-        updated_at
-      FROM user_stats
-      WHERE ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
-    `
-  ).all<UserStatsRow>();
-
-  return result.results;
-}
-
 export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
   const result = await env.DB.prepare(
     `
@@ -592,7 +592,8 @@ export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
         x,
         y,
         published_title,
-        published_json
+        published_json,
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted
       FROM rooms
       WHERE published_json IS NOT NULL
         AND claimer_user_id = ?
@@ -605,6 +606,7 @@ export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
       y: number;
       published_title: string | null;
       published_json: string;
+      is_minted?: number;
     }>();
 
   return result.results;
@@ -715,7 +717,8 @@ export async function loadWalletChallengeByNonceHash(
 ): Promise<WalletChallengeRow | null> {
   return env.DB.prepare(
     `
-      SELECT id, address, nonce_hash, message_text, expires_at, consumed_at, created_at
+      SELECT id, address, nonce_hash, message_text, expires_at, consumed_at, created_at,
+        purpose, target_user_id, target_session_id
       FROM wallet_challenges
       WHERE nonce_hash = ?
       LIMIT 1
@@ -731,15 +734,18 @@ export async function createWalletChallenge(
   nonceHash: string,
   messageText: string,
   expiresAt: string,
-  createdAt: string
+  createdAt: string,
+  target?: { userId: string; sessionId: string },
 ): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       `
-        INSERT INTO wallet_challenges (id, address, nonce_hash, message_text, expires_at, consumed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        INSERT INTO wallet_challenges (id, address, nonce_hash, message_text, expires_at, consumed_at, created_at,
+          purpose, target_user_id, target_session_id)
+        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
       `
-    ).bind(crypto.randomUUID(), address, nonceHash, messageText, expiresAt, createdAt),
+    ).bind(crypto.randomUUID(), address, nonceHash, messageText, expiresAt, createdAt,
+      target ? 'link_wallet' : 'sign_in', target?.userId ?? null, target?.sessionId ?? null),
   ]);
 }
 
@@ -747,16 +753,17 @@ export async function consumeWalletChallenge(
   env: Env,
   challengeId: string,
   consumedAt: string
-): Promise<void> {
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        UPDATE wallet_challenges
-        SET consumed_at = ?
-        WHERE id = ?
-      `
-    ).bind(consumedAt, challengeId),
-  ]);
+): Promise<boolean> {
+  const result = await env.DB.prepare(`
+    UPDATE wallet_challenges SET consumed_at = ?
+    WHERE id = ? AND consumed_at IS NULL AND expires_at > ?
+      AND (purpose = 'sign_in' OR EXISTS (
+        SELECT 1 FROM sessions WHERE id = wallet_challenges.target_session_id
+          AND user_id = wallet_challenges.target_user_id AND expires_at > ?
+      ))
+    RETURNING id
+  `).bind(consumedAt, challengeId, consumedAt, consumedAt).first<{ id: string }>();
+  return Boolean(result);
 }
 
 export async function findApiTokenIdForUser(
@@ -1243,17 +1250,40 @@ async function loadLegacyOptionalUserProfileFields(
 }
 
 export function resolvePublicBaseUrl(request: Request, env: Env): string {
+  return (
+    resolveConfiguredPublicBaseUrl(request, env)
+    ?? resolveTrustedRequestOrigin(request)
+    ?? new URL(request.url).origin
+  );
+}
+
+// Base for links in outgoing email. A token request sets its own headers, so only a browser
+// request's trusted Origin is used, and only an https one on a public host unless the worker
+// itself runs locally; anything else links to APP_BASE_URL or wamp.land.
+export function resolveEmailBaseUrl(request: Request, env: Env): string {
   const configured = resolveConfiguredPublicBaseUrl(request, env);
   if (configured) {
     return configured;
   }
 
-  const origin = request.headers.get('Origin')?.trim();
-  if (origin) {
-    return origin.replace(/\/+$/, '');
+  const hasBearerToken = /^\s*Bearer\s+\S/i.test(request.headers.get('Authorization') ?? '');
+  const origin = hasBearerToken ? null : resolveTrustedRequestOrigin(request);
+  if (!origin) {
+    return DEFAULT_PUBLIC_BASE_URL;
   }
 
-  return new URL(request.url).origin;
+  const parsed = new URL(origin);
+  const publicHttps = parsed.protocol === 'https:' && !isLocalOrPrivateHostname(parsed.hostname);
+  return publicHttps || isLocalOrPrivateHostname(new URL(request.url).hostname) ? origin : DEFAULT_PUBLIC_BASE_URL;
+}
+
+function resolveTrustedRequestOrigin(request: Request): string | null {
+  const origin = request.headers.get('Origin')?.trim();
+  if (!origin || !isTrustedOrigin(origin, request.url)) {
+    return null;
+  }
+
+  return new URL(origin).origin;
 }
 
 export function resolveMagicLinkReturnBase(request: Request, env: Env): string {
@@ -1383,14 +1413,14 @@ export async function sendMagicLinkEmail(
   magicLink: string,
   code: string
 ): Promise<void> {
-  if (!env.RESEND_API_KEY) {
-    throw new HttpError(500, 'RESEND_API_KEY is missing.');
+  if (!emailConfigured(env)) {
+    throw new HttpError(500, 'Email delivery is not configured.');
   }
 
-  const resend = new Resend(env.RESEND_API_KEY);
+  const mailer = createEmailClient(env);
   const from = env.AUTH_EMAIL_FROM?.trim() || DEFAULT_AUTH_EMAIL_FROM;
 
-  const response = await resend.emails.send({
+  const response = await mailer.emails.send({
     from,
     to: email,
     subject: "Your sign-in code for Everybody's Platformer",
@@ -1433,13 +1463,15 @@ export function createWalletChallengeMessage(
   env: Env,
   address: string,
   nonce: string,
-  issuedAt: string
+  issuedAt: string,
+  target?: AuthUser,
 ): string {
   const host = new URL(resolvePublicBaseUrl(request, env)).host;
 
   return [
-    "Everybody's Platformer wants you to sign in with your wallet.",
+    target ? "Link this wallet to your current WAMP account." : "Everybody's Platformer wants you to sign in with your wallet.",
     '',
+    ...(target ? [`WAMP account: ${target.displayName.replace(/[\r\n]/g, ' ')} (${target.id})`, 'Your rooms and profile stay with this WAMP account.', ''] : []),
     `Address: ${address}`,
     `Nonce: ${nonce}`,
     `Domain: ${host}`,

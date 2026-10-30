@@ -1,76 +1,66 @@
-/* Landscape phones and tablets: a joystick in the bottom-left corner and Jump/Sword/Shoot in the
-   bottom-right, drawn over the room. Phones held upright use the portrait console instead. */
+@layer components {
 
-body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone {
-  --mobile-move-stick-x: 0px;
-  --mobile-move-stick-y: 0px;
-  left: calc(12px + var(--safe-left));
-  bottom: calc(10px + var(--safe-bottom));
-  width: 170px;
-  height: 170px;
-  pointer-events: auto;
-  touch-action: none;
-}
+  body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone {
+    --mobile-move-stick-x: 0px;
+    --mobile-move-stick-y: 0px;
+    left: calc(12px + var(--safe-left));
+    bottom: calc(10px + var(--safe-bottom));
+    width: 170px;
+    height: 170px;
+    pointer-events: auto;
+    touch-action: none;
+  }
 
-body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick {
-  position: absolute;
-  display: block;
-  left: 50%;
-  top: 50%;
-  width: 150px;
-  height: 150px;
-  transform: translate(-50%, -50%);
-  border: 2px solid rgba(243, 238, 226, 0.3);
-  border-radius: 999px;
-  background: rgba(11, 11, 11, 0.42);
-  box-shadow: 0 10px 24px rgba(var(--wamp-black-rgb), 0.25);
-  pointer-events: none;
-}
+  body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick {
+    position: absolute;
+    display: block;
+    left: 50%;
+    top: 50%;
+    width: 150px;
+    height: 150px;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(243, 238, 226, 0.3);
+    border-radius: 999px;
+    background: rgba(11, 11, 11, 0.42);
+    box-shadow: 0 10px 24px rgba(var(--wamp-black-rgb), 0.25);
+    pointer-events: none;
+  }
 
-body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 62px;
-  height: 62px;
-  transform: translate(
+  body[data-mobile-touch-play-layout='overlay'] .mobile-move-stick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 62px;
+    height: 62px;
+    transform: translate(
     calc(-50% + var(--mobile-move-stick-x)),
     calc(-50% + var(--mobile-move-stick-y))
   );
-  border: 2px solid rgba(var(--wamp-ink-rgb), 0.6);
-  border-radius: 999px;
-  background: rgba(243, 238, 226, 0.78);
-}
+    border: 2px solid rgba(var(--wamp-ink-rgb), 0.6);
+    border-radius: 999px;
+    background: rgba(243, 238, 226, 0.78);
+  }
 
-body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone[data-mobile-move-active='true'] .mobile-move-stick {
-  border-color: rgba(243, 238, 226, 0.55);
-}
+  body[data-mobile-touch-play-layout='overlay'] #mobile-move-zone[data-mobile-move-active='true'] .mobile-move-stick {
+    border-color: rgba(243, 238, 226, 0.55);
+  }
 
-body[data-mobile-touch-play-layout='overlay'] .mobile-play-actions {
-  right: calc(12px + var(--safe-right));
-  bottom: calc(10px + var(--safe-bottom));
-}
+  body[data-mobile-touch-play-layout='overlay'] .mobile-play-actions {
+    right: calc(12px + var(--safe-right));
+    bottom: calc(10px + var(--safe-bottom));
+  }
 
-/* Phones keep the Say button along the bottom; leave a clear gap from the action buttons. */
-body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #btn-world-room-chat {
-  right: calc(224px + var(--safe-right));
-}
 
-/* Tablet buttons are at least 44px tall, so Room + reaches 52px; keep Stop/Restart clear of it
-   so a tap on Room + cannot end the run. */
-body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-stop,
-body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-restart {
-  top: calc(60px + var(--safe-top));
-}
+  body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-stop,
+  body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-restart {
+    top: calc(60px + var(--safe-top));
+  }
 
-/* When the room panel is opened mid-run on a short screen it reaches down to the joystick;
-   keep its buttons on top so they stay tappable. */
-body[data-mobile-touch-play-layout='overlay'][data-mobile-world-hud-collapsed='false'] #world-hud {
-  z-index: 15;
-}
+  body[data-mobile-touch-play-layout='overlay'][data-mobile-world-hud-collapsed='false'] #world-hud {
+    z-index: var(--z-touch-hud);
+  }
 
-/* Signs are centred high on landscape phones; draw them above Stop/Restart (they ignore taps,
-   so the buttons still work) but below the joystick and action buttons. */
-body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] .world-sign-panel {
-  z-index: 13;
+  body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] .world-sign-panel {
+    z-index: var(--z-touch-sign);
+  }
 }

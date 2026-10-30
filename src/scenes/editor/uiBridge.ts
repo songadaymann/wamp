@@ -20,7 +20,7 @@ import {
   RANDOMIZE_BRUSH_SIZES,
   SHAPE_FILL_MODES,
   cycleTileFlipMode,
-  editorState,
+  editorState, updateEditorState,
   getTilesetByKey,
   isEditorLayerVisible,
   type EraserBrushSize,
@@ -40,10 +40,10 @@ import {
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
-    isMoreEditorTool,
-    isPencilSprayPlacement,
-    isPencilStampPlacement,
-    ensureEditorToolAvailable,
+  isMoreEditorTool,
+  isPencilSprayPlacement,
+  isPencilStampPlacement,
+  ensureEditorToolAvailable,
   type EditorModePipState,
   type EditorToolButtonAppearance,
 } from './editorToolSelection';
@@ -83,7 +83,7 @@ import {
   type RoomWeatherMode,
 } from '../../weather/model';
 import { AUTH_STATE_CHANGED_EVENT } from '../../auth/client';
-import { EDITOR_UI_STATE_CHANGED_EVENT } from './uiEvents';
+import { refreshEditorUi, subscribeEditorUi, EDITOR_AUTO_COLLAPSE_EVENT, EDITOR_CONTROL_STATE_KEYS } from './uiEvents';
 import type {
   EditorInspectorState,
   EditorUiBridgeActions,
@@ -330,7 +330,6 @@ export class EditorUiBridge {
   private readonly elements: EditorUiElements;
   private readonly toolButtonDefaultTitles = new Map<HTMLButtonElement, string>();
   private destroyed = false;
-  private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
   private currentObjectCategory = 'all';
   private readonly historyControls: EditorHistoryControls;
@@ -429,25 +428,25 @@ export class EditorUiBridge {
       ?? styles[0];
     if (!style) throw new Error(`Smart brush ${brush.id} has no styles for ${themeId}.`);
 
-    editorState.smartMaterial = brush.id;
-    editorState.smartStyle = style.id;
+    updateEditorState({ smartMaterial: brush.id });
+    updateEditorState({ smartStyle: style.id });
     if (
       editorState.paletteMode === 'smart'
       && getGameSettings().builderMode !== 'advanced'
       && editorState.activeLayer !== brush.defaultLayer
     ) {
-      editorState.activeLayer = brush.defaultLayer;
+      updateEditorState({ activeLayer: brush.defaultLayer });
     }
     ensureEditorToolAvailable();
     return { themeId, brush, styles, style };
   }
 
   private applySmartSelection(selection: SmartUiSelection, persistTheme: boolean): void {
-    editorState.smartTheme = selection.themeId;
-    editorState.smartMaterial = selection.brush.id;
-    editorState.smartStyle = selection.style.id;
+    updateEditorState({ smartTheme: selection.themeId });
+    updateEditorState({ smartMaterial: selection.brush.id });
+    updateEditorState({ smartStyle: selection.style.id });
     if (getGameSettings().builderMode !== 'advanced') {
-      editorState.activeLayer = selection.brush.defaultLayer;
+      updateEditorState({ activeLayer: selection.brush.defaultLayer });
     }
     if (persistTheme && selection.themeId !== 'water') {
       updateGameSettings({ lastSmartTheme: selection.themeId });
@@ -515,7 +514,7 @@ export class EditorUiBridge {
     const selection = this.normalizeSmartSelection();
     const style = selection.styles.find((candidate) => candidate.id === styleId);
     if (!style) return;
-    editorState.smartStyle = style.id;
+    updateEditorState({ smartStyle: style.id });
     this.actions.onSetSmartStyle(style.id);
     this.syncEditorChromeState();
   }
@@ -575,7 +574,7 @@ export class EditorUiBridge {
   }
 
   notifyEditorStateChanged(): void {
-    this.windowObj.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    refreshEditorUi(this.windowObj);
   }
 
   destroy(): void {
@@ -613,8 +612,7 @@ export class EditorUiBridge {
       this.actions.onAuthStateChanged();
       void this.refreshBackgroundImages();
     });
-    bindDomEvent(this.cleanupCallbacks, this.windowObj, EDITOR_UI_STATE_CHANGED_EVENT, (event) => {
-      const detail = (event as CustomEvent<{ objectCategory?: string }>).detail;
+    this.cleanupCallbacks.push(subscribeEditorUi(this.windowObj, (detail) => {
       if (detail?.objectCategory) {
         this.currentObjectCategory = detail.objectCategory;
       }
@@ -622,7 +620,7 @@ export class EditorUiBridge {
         this.syncEditorChromeState();
       }
       this.actions.onRequestRender();
-    });
+    }, EDITOR_CONTROL_STATE_KEYS));
 
     for (const [input, setEnabled] of [
       [this.elements.roomPitsDeadlyInput, this.actions.onSetRoomPitsAreDeadly],
@@ -670,9 +668,6 @@ export class EditorUiBridge {
           return;
         }
         this.actions.onSelectTool(tool);
-        if (!isMoreEditorTool(tool)) {
-          this.moreToolsOpen = false;
-        }
       };
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
@@ -690,58 +685,11 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    for (const button of this.elements.moreToolsButtons) {
-      const toggleMoreTools = (event: Event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        this.moreToolsOpen = !this.moreToolsOpen;
-        this.syncEditorChromeState();
-      };
-      button.addEventListener('click', toggleMoreTools);
-      this.cleanupCallbacks.push(() => button.removeEventListener('click', toggleMoreTools));
-    }
-
-    const closeMoreToolsOnOutsideClick = (event: Event) => {
-      if (this.elements.moreToolsPanels.length === 0 || !this.moreToolsOpen) {
-        return;
-      }
-      const target = event.target as Node | null;
-      if (
-        target &&
-        (this.elements.moreToolsPanels.some((panel) => panel.contains(target)) ||
-          this.elements.moreToolsButtons.some((button) => button.contains(target)))
-      ) {
-        return;
-      }
-      this.moreToolsOpen = false;
-      this.syncEditorChromeState();
-    };
-    this.doc.addEventListener('click', closeMoreToolsOnOutsideClick);
-    this.cleanupCallbacks.push(() =>
-      this.doc.removeEventListener('click', closeMoreToolsOnOutsideClick)
-    );
-
-    const handleEraserBrushChange = () => {
-      const target = this.doc.activeElement;
-      const selectedInput =
-        this.elements.eraseBrushSelects.find((input) => input === target) ?? this.elements.eraseBrushSelects[0];
-      const nextSize = Number.parseInt(selectedInput?.value ?? '', 10);
-      if (ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) {
-        editorState.eraserBrushSize = nextSize as EraserBrushSize;
-        this.syncEditorChromeState();
-      }
-    };
-    for (const input of this.elements.eraseBrushSelects) {
-      input.addEventListener('change', handleEraserBrushChange);
-      this.cleanupCallbacks.push(() =>
-        input.removeEventListener('change', handleEraserBrushChange)
-      );
-    }
     for (const button of this.elements.eraseBrushButtons) {
       const handleEraserBrushButton = () => {
         const nextSize = Number.parseInt(button.dataset.eraseBrushSize ?? '', 10);
         if (!ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) return;
-        editorState.eraserBrushSize = nextSize as EraserBrushSize;
+        updateEditorState({ eraserBrushSize: nextSize as EraserBrushSize });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleEraserBrushButton);
@@ -755,8 +703,8 @@ export class EditorUiBridge {
         const nextSize = Number.parseInt(button.dataset.randomizeBrushSize ?? '', 10);
         if (!RANDOMIZE_BRUSH_SIZES.includes(nextSize as RandomizeBrushSize)) return;
         const size = clampRandomizeBrushSize(nextSize);
-        editorState.randomizeBrushSize = size;
-        editorState.scrambleBrushSize = size;
+        updateEditorState({ randomizeBrushSize: size });
+        updateEditorState({ scrambleBrushSize: size });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleRandomizeBrushButton);
@@ -768,7 +716,7 @@ export class EditorUiBridge {
       const handlePencilBrushButton = () => {
         const nextSize = Number.parseInt(button.dataset.pencilBrushSize ?? '', 10);
         if (!RANDOMIZE_BRUSH_SIZES.includes(nextSize as RandomizeBrushSize)) return;
-        editorState.pencilBrushSize = clampRandomizeBrushSize(nextSize);
+        updateEditorState({ pencilBrushSize: clampRandomizeBrushSize(nextSize) });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handlePencilBrushButton);
@@ -780,7 +728,7 @@ export class EditorUiBridge {
       const handleSprayBrushButton = () => {
         const nextSize = Number.parseInt(button.dataset.sprayBrushSize ?? '', 10);
         if (!SPRAY_BRUSH_SIZES.includes(nextSize as (typeof SPRAY_BRUSH_SIZES)[number])) return;
-        editorState.pencilSprayBrushSize = clampSprayBrushSize(nextSize);
+        updateEditorState({ pencilSprayBrushSize: clampSprayBrushSize(nextSize) });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleSprayBrushButton);
@@ -790,7 +738,7 @@ export class EditorUiBridge {
     }
     for (const input of this.elements.pencilSprayRateInputs) {
       const handleSprayRate = () => {
-        editorState.pencilSprayRate = clampSprayRate(Number.parseFloat(input.value));
+        updateEditorState({ pencilSprayRate: clampSprayRate(Number.parseFloat(input.value)) });
         for (const other of this.elements.pencilSprayRateInputs) {
           other.value = String(editorState.pencilSprayRate);
         }
@@ -800,7 +748,7 @@ export class EditorUiBridge {
     }
     for (const input of this.elements.pencilContinuousInputs) {
       const handleContinuous = () => {
-        editorState.pencilContinuousStamping = input.checked;
+        updateEditorState({ pencilContinuousStamping: input.checked });
         for (const other of this.elements.pencilContinuousInputs) {
           other.checked = input.checked;
         }
@@ -810,7 +758,7 @@ export class EditorUiBridge {
     }
     for (const input of this.elements.fillIgnoreFlipInputs) {
       const handleIgnoreFlip = () => {
-        editorState.fillIgnoreTileFlipping = input.checked;
+        updateEditorState({ fillIgnoreTileFlipping: input.checked });
         for (const other of this.elements.fillIgnoreFlipInputs) {
           other.checked = input.checked;
         }
@@ -827,7 +775,7 @@ export class EditorUiBridge {
         if (!SHAPE_FILL_MODES.includes(nextMode as ShapeFillMode)) {
           return;
         }
-        editorState.shapeFillMode = nextMode as ShapeFillMode;
+        updateEditorState({ shapeFillMode: nextMode as ShapeFillMode });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handleShapeFill);
@@ -835,8 +783,19 @@ export class EditorUiBridge {
     }
 
     for (const button of this.elements.clearLayerButtons) {
+      // Keep native button activation from reaching the editor's play/pan shortcuts.
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.code === 'Space') event.stopPropagation();
+      };
+      button.addEventListener('keydown', onKey);
+      button.addEventListener('keyup', onKey);
+      this.cleanupCallbacks.push(() => {
+        button.removeEventListener('keydown', onKey);
+        button.removeEventListener('keyup', onKey);
+      });
       bindButton(this.cleanupCallbacks, button, () => {
-        if (!this.windowObj.confirm('Clear every tile on the current layer?')) {
+        const cell = this.doc.body.dataset.editorCourseMode === 'true' ? ' in the selected Expanded Room cell' : '';
+        if (!this.windowObj.confirm(`Clear every tile on the current layer${cell}?`)) {
           return;
         }
         this.actions.onClearCurrentLayer();
@@ -873,7 +832,7 @@ export class EditorUiBridge {
       ) {
         return;
       }
-      editorState.activeLayer = layer;
+      updateEditorState({ activeLayer: layer });
       this.syncEditorChromeState();
     };
     for (const button of this.elements.layerButtons) {
@@ -888,7 +847,7 @@ export class EditorUiBridge {
         if (!layer) {
           return;
         }
-        editorState.layerVisibility[layer] = !isEditorLayerVisible(layer);
+        updateEditorState({ layerVisibility: { ...editorState.layerVisibility, [layer]: !isEditorLayerVisible(layer) } });
         this.syncEditorChromeState();
       };
       button.addEventListener('click', handler);
@@ -898,7 +857,7 @@ export class EditorUiBridge {
     const layerGuideCheckbox = this.elements.layerGuideCheckbox;
     if (layerGuideCheckbox) {
       const onLayerGuidesChange = () => {
-        editorState.showLayerGuides = layerGuideCheckbox.checked;
+        updateEditorState({ showLayerGuides: layerGuideCheckbox.checked });
         this.syncEditorChromeState();
       };
       layerGuideCheckbox.addEventListener('change', onLayerGuidesChange);
@@ -909,7 +868,7 @@ export class EditorUiBridge {
       if (!this.elements.tilesetSelect) {
         return;
       }
-      editorState.selectedTilesetKey = this.elements.tilesetSelect.value;
+      updateEditorState({ selectedTilesetKey: this.elements.tilesetSelect.value });
       const tileset = getTilesetByKey(this.elements.tilesetSelect.value);
       if (tileset) {
         runtimeConfig.paletteController?.updateSelection(tileset.key, 0, 0, 0, 0);
@@ -926,12 +885,12 @@ export class EditorUiBridge {
     }
 
     bindButton(this.cleanupCallbacks, this.elements.flipXButton, () => {
-      editorState.tileFlipXMode = cycleTileFlipMode(editorState.tileFlipXMode);
+      updateEditorState({ tileFlipXMode: cycleTileFlipMode(editorState.tileFlipXMode) });
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
     bindButton(this.cleanupCallbacks, this.elements.flipYButton, () => {
-      editorState.tileFlipYMode = cycleTileFlipMode(editorState.tileFlipYMode);
+      updateEditorState({ tileFlipYMode: cycleTileFlipMode(editorState.tileFlipYMode) });
       runtimeConfig.paletteController?.renderTilePreview();
       this.syncEditorChromeState();
     });
@@ -939,9 +898,9 @@ export class EditorUiBridge {
     for (const tab of this.elements.paletteTabs) {
       const handler = () => {
         const mode = (tab.dataset.mode as PaletteMode | undefined) ?? 'tiles';
-        editorState.paletteMode = mode;
+        updateEditorState({ paletteMode: mode });
         if (mode === 'tiles') {
-          editorState.selectedObjectId = null;
+          updateEditorState({ selectedObjectId: null });
         }
         ensureEditorToolAvailable();
         runtimeConfig.paletteController?.renderTilePreview();
@@ -956,7 +915,7 @@ export class EditorUiBridge {
         const builderMode = button.dataset.builderModeChoice === 'advanced' ? 'advanced' : 'beginner';
         updateGameSettings({ builderMode });
         this.doc.body.dataset.builderMode = builderMode;
-        editorState.paletteMode = builderMode === 'advanced' ? 'tiles' : 'smart';
+        updateEditorState({ paletteMode: builderMode === 'advanced' ? 'tiles' : 'smart' });
         ensureEditorToolAvailable();
         this.syncEditorChromeState();
       };
@@ -987,7 +946,7 @@ export class EditorUiBridge {
 
     const handleSmartDetailsChange = () => {
       const enabled = this.elements.smartDetailsCheckbox?.checked ?? true;
-      editorState.smartDetailsEnabled = enabled;
+      updateEditorState({ smartDetailsEnabled: enabled });
       this.actions.onSetSmartDetailsEnabled(enabled);
       this.syncEditorChromeState();
     };
@@ -1029,11 +988,11 @@ export class EditorUiBridge {
         this.elements.backgroundSolidColorInput.value,
         editorState.selectedSolidBackgroundColor,
       );
-      editorState.selectedSolidBackgroundColor = nextColor;
+      updateEditorState({ selectedSolidBackgroundColor: nextColor });
       if (getBackgroundSelectionValue(editorState.selectedBackground) === SOLID_COLOR_BACKGROUND_ID) {
         const nextBackground = buildSolidColorBackgroundValue(nextColor);
         if (editorState.selectedBackground !== nextBackground) {
-          editorState.selectedBackground = nextBackground;
+          updateEditorState({ selectedBackground: nextBackground });
           this.actions.onSelectBackground(nextBackground);
         }
       }
@@ -1576,12 +1535,7 @@ export class EditorUiBridge {
         this.actions.onFitToScreen();
       });
     }
-    bindButton(this.cleanupCallbacks, this.elements.mobileZoomInBtn, () => {
-      this.actions.onZoomIn();
-    });
-    bindButton(this.cleanupCallbacks, this.elements.mobileZoomOutBtn, () => {
-      this.actions.onZoomOut();
-    });
+
   }
 
   private applyBackgroundSelection(nextBackgroundId: string): void {
@@ -1617,7 +1571,7 @@ export class EditorUiBridge {
       this.syncEditorChromeState();
       return;
     }
-    editorState.selectedBackground = nextBackground;
+    updateEditorState({ selectedBackground: nextBackground });
     this.actions.onSelectBackground(nextBackground);
     this.syncEditorChromeState();
     if (normalizedSelection !== SOLID_COLOR_BACKGROUND_ID) {
@@ -1939,7 +1893,7 @@ export class EditorUiBridge {
     if (!nextLightingMode || editorState.selectedLightingMode === nextLightingMode) {
       return;
     }
-    editorState.selectedLightingMode = nextLightingMode;
+    updateEditorState({ selectedLightingMode: nextLightingMode });
     this.actions.onSelectLighting(nextLightingMode);
     this.syncEditorChromeState();
     this.requestPhoneEditorAutoCollapse();
@@ -1949,7 +1903,7 @@ export class EditorUiBridge {
     if (editorState.selectedLightingDarkness === nextDarkness) {
       return;
     }
-    editorState.selectedLightingDarkness = nextDarkness;
+    updateEditorState({ selectedLightingDarkness: nextDarkness });
     this.actions.onSetLightingDarkness(nextDarkness);
     this.syncEditorChromeState();
   }
@@ -1958,7 +1912,7 @@ export class EditorUiBridge {
     if (editorState.selectedLightingRadius === nextRadius) {
       return;
     }
-    editorState.selectedLightingRadius = nextRadius;
+    updateEditorState({ selectedLightingRadius: nextRadius });
     this.actions.onSetLightingRadius(nextRadius);
     this.syncEditorChromeState();
   }
@@ -1967,7 +1921,7 @@ export class EditorUiBridge {
     if (!nextWeatherMode || editorState.selectedWeatherMode === nextWeatherMode) {
       return;
     }
-    editorState.selectedWeatherMode = nextWeatherMode;
+    updateEditorState({ selectedWeatherMode: nextWeatherMode });
     this.actions.onSelectWeather(nextWeatherMode);
     this.syncEditorChromeState();
     this.requestPhoneEditorAutoCollapse();
@@ -1977,13 +1931,12 @@ export class EditorUiBridge {
     if (editorState.selectedWeatherIntensity === nextIntensity) {
       return;
     }
-    editorState.selectedWeatherIntensity = nextIntensity;
+    updateEditorState({ selectedWeatherIntensity: nextIntensity });
     this.actions.onSetWeatherIntensity(nextIntensity);
     this.syncEditorChromeState();
   }
 
   private handleFeatureLauncher(feature: EditorFeatureLauncher): void {
-    this.moreToolsOpen = false;
 
     if (feature === 'music' || feature === 'sprite') {
       this.activeFeatureLauncher = null;
@@ -2004,12 +1957,11 @@ export class EditorUiBridge {
   }
 
   private usesDesktopFeaturePanels(): boolean {
-    return this.doc.body.dataset.appMode === 'editor'
-      && (this.doc.body.dataset.deviceClass !== 'phone' || this.doc.body.dataset.editorDockShell === 'true');
+    return this.doc.body.dataset.appMode === 'editor';
   }
 
   private requestPhoneEditorAutoCollapse(): void {
-    this.windowObj.dispatchEvent(new Event('mobile-editor-auto-collapse'));
+    this.windowObj.dispatchEvent(new Event(EDITOR_AUTO_COLLAPSE_EVENT));
   }
 
   private revealActiveFeaturePanel(feature: EditorFeatureLauncher): void {
@@ -2070,17 +2022,12 @@ export class EditorUiBridge {
             modeLabel.textContent = appearance.label;
           } else {
             const label = button.querySelector<HTMLElement>('.tool-label');
-            if (label && !label.querySelector('.tool-mode')) {
+            if (label) {
               label.textContent = appearance.label;
             }
           }
         }
-        for (const part of button.querySelectorAll<HTMLElement>('.tool-mode')) {
-          part.classList.toggle(
-            'is-dim',
-            Boolean(appearance.dimPart && part.dataset.part === appearance.dimPart),
-          );
-        }
+
       }
       const supportedTitle = appearance?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
       button.title = getEditorToolUnavailableTitle(tool)
@@ -2127,20 +2074,6 @@ export class EditorUiBridge {
       useFeaturePanels ? this.activeFeatureLauncher !== 'lighting' : true,
     );
 
-      const showMoreTools =
-        this.moreToolsOpen ||
-      (editorState.paletteMode !== 'objects' &&
-        isMoreEditorTool(editorState.activeTool));
-    const moreToolsActive =
-      showMoreTools || isMoreEditorTool(editorState.activeTool);
-    for (const button of this.elements.moreToolsButtons) {
-      button.classList.toggle('active', moreToolsActive);
-    }
-    for (const panel of this.elements.moreToolsPanels) {
-      panel.classList.toggle('hidden', !showMoreTools);
-      panel.dataset.open = showMoreTools ? 'true' : 'false';
-    }
-
     const showEraseControls = editorState.activeTool === 'eraser';
     for (const controls of this.elements.eraseControls) {
       controls.classList.toggle('hidden', !showEraseControls);
@@ -2155,11 +2088,6 @@ export class EditorUiBridge {
       'aria-expanded',
       showShellEraseControls ? 'true' : 'false',
     );
-    for (const input of this.elements.eraseBrushSelects) {
-      if (input.value !== String(editorState.eraserBrushSize)) {
-        input.value = String(editorState.eraserBrushSize);
-      }
-    }
     for (const button of this.elements.eraseBrushButtons) {
       const active = button.dataset.eraseBrushSize === String(editorState.eraserBrushSize);
       button.classList.toggle('active', active);
@@ -2169,10 +2097,7 @@ export class EditorUiBridge {
     const showRandomizeControls = editorState.activeTool === 'randomize';
     for (const controls of this.elements.randomizeControls) {
       controls.classList.toggle('hidden', !showRandomizeControls);
-      const popoverLabel = controls.querySelector('.editor-tool-popover-label');
-      if (popoverLabel) {
-        popoverLabel.textContent = 'Scramble';
-      }
+
     }
     this.doc.getElementById('editor-shell-randomize-picker')?.classList.toggle(
       'hidden',
@@ -2200,9 +2125,6 @@ export class EditorUiBridge {
     );
     this.doc.querySelector('[data-tool="pencil"][aria-controls="editor-shell-pencil-picker"]')
       ?.setAttribute('aria-expanded', showPencilControls ? 'true' : 'false');
-    for (const label of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-controls .editor-tool-popover-label')) {
-      label.textContent = sprayPlacement ? 'Spray' : 'Draw';
-    }
     for (const button of this.elements.pencilBrushButtons) {
       const active = button.dataset.pencilBrushSize === String(editorState.pencilBrushSize);
       button.classList.toggle('active', active);

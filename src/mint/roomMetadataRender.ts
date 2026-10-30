@@ -1,12 +1,9 @@
 import { assetUrl } from '../assets/assetUrl';
 import {
-  BACKGROUND_GROUPS,
-  GAME_OBJECTS,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   ROOM_WIDTH,
-  TILESETS,
   TILE_SIZE,
   decodeTileDataValue,
   getObjectById,
@@ -33,6 +30,7 @@ import {
   getRoomMetadataObjectDrawRect,
 } from './roomMetadataRenderLayout';
 import { RETRO_COLORS, drawStarfieldToContext, hashStringToSeed } from '../visuals/starfieldCanvas';
+import { isCustomSpriteBlocked } from '../customSprites/blocklist';
 
 export interface MintedRoomRenderOptions {
   tilePixelSize?: number;
@@ -81,14 +79,6 @@ export async function renderRoomSnapshotToCanvas(
 
   await drawRoomSnapshotToContext(context, snapshot, options);
   return canvas;
-}
-
-export async function renderWampMintedRoomToPngDataUrl(
-  payload: WampMintedRoomPayload,
-  options: MintedRoomRenderOptions = {}
-): Promise<string> {
-  const canvas = await renderWampMintedRoomToCanvas(payload, options);
-  return canvas.toDataURL('image/png');
 }
 
 export async function renderRoomSnapshotToPngDataUrl(
@@ -367,7 +357,7 @@ async function drawObjectsForLayer(
       const customSprite = getCustomSpriteForObject(snapshot, placedObject.id);
       if (customSprite) {
         drawCustomSpriteObject(context, customSprite, placedObject, tilePixelSize);
-      } else if (strictAssets) {
+      } else if (strictAssets && !isBlockedCustomSpriteObject(snapshot, placedObject.id)) {
         throw new Error(`Room ${snapshot.id} references unknown object ${placedObject.id}.`);
       }
       continue;
@@ -414,8 +404,20 @@ function getCustomSpriteForObject(
   }
 
   return snapshot.customSprites.find(
-    (sprite) => sprite.id === spriteId && sprite.status !== 'blocked'
+    (sprite) => sprite.id === spriteId && sprite.status !== 'blocked' && !isCustomSpriteBlocked(sprite.id)
   ) ?? null;
+}
+
+/**
+ * A sprite the room embeds but an admin blocked is left out, not an unknown object: the map-tile
+ * Worker marks blocked sprites before drawing in strict mode (F189), so throwing kept those tiles
+ * from ever being redrawn.
+ */
+function isBlockedCustomSpriteObject(snapshot: Pick<RoomSnapshot, 'customSprites'>, objectId: string): boolean {
+  const spriteId = parseCustomSpriteObjectId(objectId);
+  return Boolean(spriteId) && (snapshot.customSprites ?? []).some(
+    (sprite) => sprite.id === spriteId && (sprite.status === 'blocked' || isCustomSpriteBlocked(sprite.id)),
+  );
 }
 
 function drawCustomSpriteObject(
@@ -475,27 +477,12 @@ function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
     image.crossOrigin = 'anonymous';
     image.decoding = 'async';
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error(`Failed to load asset ${normalizedPath}.`));
+    image.onerror = () => {
+      imageCache.delete(normalizedPath);
+      reject(new Error(`Failed to load asset ${normalizedPath}.`));
+    };
     image.src = assetUrl(normalizedPath);
   });
   imageCache.set(normalizedPath, pending);
   return pending;
-}
-
-export function warmRoomMetadataRenderAssetCache(): Promise<void> {
-  const paths = new Set<string>();
-
-  for (const tileset of TILESETS) {
-    paths.add(tileset.path);
-  }
-  for (const backgroundGroup of BACKGROUND_GROUPS) {
-    for (const layer of backgroundGroup.layers) {
-      paths.add(layer.path);
-    }
-  }
-  for (const objectConfig of GAME_OBJECTS) {
-    paths.add(objectConfig.path);
-  }
-
-  return Promise.all([...paths].map((path) => loadAssetImage(path))).then(() => undefined);
 }

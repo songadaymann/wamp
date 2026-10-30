@@ -9,6 +9,44 @@ afterEach(() => {
 });
 
 describe('shard heartbeats (F035)', () => {
+  it('keeps multiplayer available if the initial metrics request fails', async () => {
+    harness = new PresenceServerHarness({ env: { PARTYKIT_INTERNAL_TOKEN: 'internal' } });
+    // The existing room facade references this collector; a failing collector simulates metrics I/O.
+    const push = vi.spyOn(harness.room.metricsRequests, 'push').mockImplementationOnce(() => { throw new Error('metrics offline'); });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const peer = await harness.connect('alice');
+      expect(peer.closes).toEqual([]); expect(peer.messages().some(m => m.type === 'snapshot')).toBe(true);
+      expect(harness.room.storage.alarmAt).toBe(Date.now() + 60_000);
+      await harness.advance(60_000); expect(harness.room.metricsRequests).toHaveLength(1);
+    } finally { push.mockRestore(); warn.mockRestore(); }
+  });
+
+  it('refreshes online counts after hibernation and clears the final connection without a recurring timer', async () => {
+    harness = new PresenceServerHarness({ env: { PARTYKIT_INTERNAL_TOKEN: 'internal' } });
+    const peer = await harness.connect('alice');
+    sendPresence(harness, peer, presencePayload({ mode: 'play' }));
+    await harness.advance(3_100); expect(vi.getTimerCount()).toBe(0);
+    await harness.reactivate(); await harness.advance(180_000);
+    const last = JSON.parse(String(harness.room.metricsRequests.at(-1)?.init?.body));
+    expect(last).toMatchObject({ totalConnections: 1, playConnections: 1 });
+    expect(Date.now() - Date.parse(last.updatedAt)).toBeLessThan(60_000);
+    expect(vi.getTimerCount()).toBe(0);
+    harness.close(peer); await harness.advance(3_100);
+    expect(harness.room.storage.alarmAt).toBeNull(); expect(vi.getTimerCount()).toBe(0);
+    expect(JSON.parse(String(harness.room.metricsRequests.at(-1)?.init?.body))).toMatchObject({ totalConnections: 0 });
+  });
+
+  it('removes the metrics row when a shard reports its final disconnect', async () => {
+    harness = new PresenceServerHarness({ roomId: METRICS_ROOM_ID, env: { PARTYKIT_INTERNAL_TOKEN: 'internal' } });
+    const post = (totalConnections: number) => harness!.server.onRequest(new Request(`https://presence.example.test/parties/main/${METRICS_ROOM_ID}/heartbeat`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-partykit-internal-token': 'internal' },
+      body: JSON.stringify({ shardId: '0,0', totalConnections, playConnections: 0, editConnections: 0, updatedAt: new Date().toISOString() }),
+    }) as never);
+    await post(1); expect(harness.room.storage.peek('shard:0,0')).toBeDefined();
+    await post(0); expect(harness.room.storage.peek('shard:0,0')).toBeUndefined();
+  });
+
   it('sends at most one forced heartbeat per shard every 3 s, then reports the latest state', async () => {
     harness = new PresenceServerHarness({ env: { PARTYKIT_INTERNAL_TOKEN: 'internal' } });
     const alice = await harness.connect('alice');

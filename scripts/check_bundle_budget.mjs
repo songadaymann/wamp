@@ -11,6 +11,8 @@ import { brotliCompressSync, constants } from 'node:zlib';
 // 2026-10-10 baseline: 745.7 KB across 14 files. Ratchet down as boot code moves out.
 // 2026-10-11: 658 KB after the builder UI moved out of boot, 638 KB after four rarely
 // opened pop-ups did (F019).
+// 2026-10-23: 663.5 KB (from 668.4) after the developer tools and the bug report form moved
+// out (F319). The budget stays at 670 so the waiting dialog work has room.
 const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 670);
 const report = JSON.parse(readFileSync(resolve('output/build/boot-bundle.json'), 'utf8'));
 const rows = report.files.map((file) => {
@@ -39,9 +41,16 @@ const bootModules = new Set(graph.filter(chunk => report.files.includes(chunk.fi
 for (const name of deferredControllers) {
   if (bootModules.has(`src/ui/setup/${name}.ts`)) throw new Error(`${name} has returned to the startup bundle.`);
 }
+// Developer tools load only when their web-address switch is on, and the bug report form on
+// its first Report click (F319). Their switches and window hooks live in src/main/debugTools.ts.
+const deferredTools = [/^src\/debug\//, /^src\/main\/resourceDebug\.ts$/, /^src\/bugReports\/(reporter|sender)\./,
+  /^src\/analytics\/replay\/player\.ts$/];
+for (const module of bootModules) {
+  if (deferredTools.some(pattern => pattern.test(module))) throw new Error(`${module} has returned to the startup bundle.`);
+}
 const roomData = graph.find(chunk => chunk.file.includes('/room-data-'));
 if (!roomData || roomData.imports.length || roomData.dynamicImports.length
   || roomData.modules.some(module => /^src\/(ui|scenes)\//.test(module))) {
   throw new Error('Stable room data must stay independent of UI and scene runtime chunks.');
 }
-console.log(`Deferred menu boundary: ${deferredControllers.length} controllers; stable room data has no runtime chunk imports.`);
+console.log(`Deferred menu boundary: ${deferredControllers.length} controllers and the developer tools; stable room data has no runtime chunk imports.`);

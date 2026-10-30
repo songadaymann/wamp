@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneRoomSnapshot, createDefaultRoomRecord, createRoomSummaryFromRecord, RoomApiError, type RoomRecord, type RoomRepository, type RoomSnapshot } from '../../persistence/roomRepository';
 import { ROOM_STORAGE_PREFIX } from '../../persistence/browserStorage';
+import { RoomPublicationSubmissionError } from '../../persistence/roomPublicationSubmission';
 import { EditorRoomSession } from './roomSession';
 import { showBusyError } from '../../ui/appFeedback';
 import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
@@ -403,6 +404,24 @@ describe('edits made while a room save or publish is pending', () => {
     expectLaterBackup(session);
   });
 
+  it('syncs a submitted draft baseline without reporting publication or raising a false conflict on the next save', async () => {
+    const { session, response, saved, saveDraft, isDirty, editLater } = await openedEditor();
+    const error=vi.spyOn(console,'error').mockImplementation(()=>{});
+    saved.worldPublicationSubmission={id:'review',worldId:'world-one',roomId,roomCoordinates:coordinates,roomTitle:'Review me',submittedByUserId:'builder',submittedByDisplayName:'Builder',submittedDraftUpdatedAt:responseAt,status:'pending',rejectionReason:null,submittedAt:responseAt,resolvedAt:null};
+    const pending=session.publishRoom();await Promise.resolve();response.resolve(saved);
+    expect(await pending).toBeNull();expect(isDirty()).toBe(false);expect(session.statusText).toContain('submitted for World approval');expect(error).not.toHaveBeenCalled();
+    editLater();await session.saveDraft();expect(saveDraft).toHaveBeenLastCalledWith(expect.anything(),{baseUpdatedAt:responseAt});expect(session.hasPendingEditConflict).toBe(false);
+    error.mockRestore();
+  });
+
+  it.each([false,true])('keeps the saved baseline after a failed submission, preserving later edits=%s',async(later)=>{
+    const f=await openedEditor();
+    f.publish.mockImplementationOnce(async()=>{if(later)f.editLater();throw new RoomPublicationSubmissionError(f.saved,new TypeError('offline'));});
+    expect(await f.session.publishRoom()).toBeNull();expect(f.session.statusText).toContain('submission failed');expect(f.isDirty()).toBe(later);
+    if(!later)f.editLater();f.response.resolve(f.saved);await f.session.saveDraft();
+    expect(f.saveDraft).toHaveBeenLastCalledWith(expect.anything(),{baseUpdatedAt:responseAt});expect(f.session.hasPendingEditConflict).toBe(false);
+  });
+
   it('leaving while an autosave is uploading waits for it instead of reporting a failure (F056)', async () => {
     const { session, response, saved, publish } = await openedEditor();
     const autosave = session.saveDraft();
@@ -615,7 +634,7 @@ describe('the same room saved from another tab or device', () => {
     return record;
   }
 
-  async function openedEditor(saveDraft: RoomRepository['saveDraft'], latest: RoomRecord) {
+  async function openedEditor(saveDraft: RoomRepository['saveDraft'], latest: RoomRecord, onDraftSaved?: (record: RoomRecord) => void) {
     let dirty = false;
     const mine = serverRecord(loadedAt, 1);
     mine.draft.tileData.terrain[9][9] = 77;
@@ -628,7 +647,7 @@ describe('the same room saved from another tab or device', () => {
       applyRoomSnapshot, exportRoomSnapshot: () => mine.draft,
       getPublishValidationError: () => null, getRoomDirty: () => dirty,
       setRoomDirty: (value: boolean) => { dirty = value; }, getLastDirtyAt: () => 100, refreshUi: vi.fn(),
-      refreshSurroundingRoomPreviews: vi.fn(),
+      refreshSurroundingRoomPreviews: vi.fn(), onDraftSaved,
     });
     session.currentRoomId = roomId;
     session.currentRoomCoordinates = coordinates;
@@ -647,6 +666,18 @@ describe('the same room saved from another tab or device', () => {
     expect(repository.saveDraft).toHaveBeenCalledWith(expect.anything(), { baseUpdatedAt: loadedAt });
     await session.saveDraft(true);
     expect(repository.saveDraft).toHaveBeenLastCalledWith(expect.anything(), { baseUpdatedAt: theirsAt });
+  });
+
+  it('reports every draft the server accepts, autosave included, and none it refuses (F379)', async () => {
+    const saved = serverRecord(theirsAt, 77);
+    const onDraftSaved = vi.fn();
+    const { session } = await openedEditor(async () => saved, serverRecord(theirsAt, 5), onDraftSaved);
+    await session.saveDraft(true);
+    expect(onDraftSaved).toHaveBeenCalledWith(saved);
+    const refused = await openedEditor(async () => { throw conflict(); }, serverRecord(theirsAt, 5), onDraftSaved);
+    onDraftSaved.mockClear();
+    await refused.session.saveDraft(true);
+    expect(onDraftSaved).not.toHaveBeenCalled();
   });
 
   it('stops autosave, keeps a copy here, and asks which version to keep', async () => {

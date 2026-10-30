@@ -118,18 +118,18 @@ describe('Pages standalone renderer routes', () => {
     }
   });
 
-  it('rejects unsupported /capture proxy methods without an upstream request', async () => {
+  it.each(['POST', 'PUT', 'DELETE'])('rejects %s /capture proxy requests without an upstream request', async method => {
     const upstreamFetch = vi.fn();
     vi.stubGlobal('fetch', upstreamFetch);
 
     try {
       const response = await worker.fetch(
-        new Request('https://wamp.land/capture/api/health', { method: 'PUT' }),
+        new Request('https://wamp.land/capture/api/capture', { method }),
         { ASSETS: { fetch: vi.fn() } } satisfies PagesWorkerEnv,
       );
 
       expect(response.status).toBe(405);
-      expect(response.headers.get('Allow')).toBe('GET, HEAD, POST');
+      expect(response.headers.get('Allow')).toBe('GET, HEAD');
       expect(upstreamFetch).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();

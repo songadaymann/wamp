@@ -1,3 +1,5 @@
+import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
+import { isClearedRoomId } from '../progression/clearedRooms';
 import { getApiBaseUrl } from '../api/baseUrl';
 import {
   invalidateStaleWhileRevalidateCache,
@@ -14,6 +16,7 @@ import type {
   ExpandedRoomRunStartResponse,
 } from './runModel';
 import { filterCourseLeaderboardForCurrentSurface } from '../generatedUsers/leaderboards';
+import { rankedFinishRequestInit } from '../runs/rankedFinishDelivery';
 
 export interface ExpandedRoomRepository {
   loadExpandedRoom(expandedRoomId: string): Promise<ResolvedExpandedRoomTarget>;
@@ -27,6 +30,7 @@ export interface ExpandedRoomRepository {
     expandedRoomId: string,
     version?: number | null,
     limit?: number,
+    fresh?: boolean,
   ): Promise<ExpandedRoomLeaderboardResponse>;
   submitExpandedRoomRating(
     expandedRoomId: string,
@@ -75,10 +79,7 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     attemptId: string,
     body: ExpandedRoomRunFinishRequestBody,
   ): Promise<void> {
-    await this.request(`/api/expanded-room-runs/${encodeURIComponent(attemptId)}/finish`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    await this.request(`/api/expanded-room-runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
     this.invalidateLeaderboards();
   }
 
@@ -86,6 +87,7 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     expandedRoomId: string,
     version: number | null = null,
     limit: number = 10,
+    fresh: boolean = false,
   ): Promise<ExpandedRoomLeaderboardResponse> {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -96,9 +98,10 @@ class ApiExpandedRoomRepository implements ExpandedRoomRepository {
     }
 
     const path = `/api/leaderboards/expanded-rooms/${encodeURIComponent(expandedRoomId)}?${params.toString()}`;
-    const response = await loadWithStaleWhileRevalidate(
-      `leaderboard:${this.baseUrl}${path}`,
-      () => this.request<ExpandedRoomLeaderboardResponse>(path),
+    const load = () => this.request<ExpandedRoomLeaderboardResponse>(path, fresh ? { cache: 'no-store' } : undefined);
+    if (fresh) this.invalidateLeaderboards();
+    const response = fresh ? await load() : await loadWithStaleWhileRevalidate(
+      `leaderboard:${this.baseUrl}${path}`, load,
     );
     return filterCourseLeaderboardForCurrentSurface(response) as ExpandedRoomLeaderboardResponse;
   }
@@ -165,4 +168,14 @@ export function createExpandedRoomRepository(): ExpandedRoomRepository {
 
 export function isExpandedRoomApiError(error: unknown): error is ExpandedRoomApiError {
   return error instanceof ExpandedRoomApiError;
+}
+
+export async function loadPublishedExpandedFootprint(id:string,version:number):Promise<string[]> {
+  const response=await fetchWithPageReadLifetime(`${getApiBaseUrl()}/api/expanded-rooms/${encodeURIComponent(id)}/footprint?${new URLSearchParams({version:String(version)})}`,
+    {credentials:'include',cache:'no-store'});
+  if(!response.ok)throw new ExpandedRoomApiError('Published footprint unavailable.',response.status);
+  const value=await response.json();
+  if(value.expandedRoomId!==id||value.version!==version||!Array.isArray(value.roomIds)||value.roomIds.length>16
+    ||!value.roomIds.every(isClearedRoomId))throw new Error('Published footprint changed.');
+  return value.roomIds;
 }

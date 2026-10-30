@@ -1,0 +1,20 @@
+@layer overrides {
+  /* The editor owns its button typography; state/layout selectors do not need
+   forced font overrides. Keep the visibility glyphs in their emoji face. */
+
+  body[data-app-mode='editor'] #sidebar .layer-visibility-button {
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  }
+
+  body[data-editor-dock-shell='true'] button {
+    font-family: var(--editor-button-font);
+  }
+
+  body[data-editor-dock-shell='true'] #bottom-bar :is(.world-online-pill, .world-footer-controls-btn) {
+    font-family: var(--font-label);
+  }
+
+  body[data-editor-dock-shell='true'] #layers-section .layer-info-button {
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  }
+}

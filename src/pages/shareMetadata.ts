@@ -1,15 +1,14 @@
+import { resolveApiBaseUrl } from '../roomImage/environment';
+export { resolveApiBaseUrl } from '../roomImage/environment';
 import { buildPlaylistSharePath } from '../playlists/model';
 import { buildProfileSharePath } from '../profiles/username';
-import { buildWampOGramSharePath } from '../wampOGram/links';
+import { buildWampOGramPreviewPath, buildWampOGramSharePath } from '../wampOGram/links';
 import type { PagesWorkerEnv } from './model';
 
-const DEFAULT_API_BASE_URL = 'https://api.wamp.land';
 const ROOM_META_TIMEOUT_MS = 1200;
 const PROFILE_META_TIMEOUT_MS = 1200;
 const WAMP_O_GRAM_META_TIMEOUT_MS = 1200;
-const ROOM_IMAGE_RENDERER_VERSION = 'assets-v5';
-export const ROOM_SHARE_IMAGE_WIDTH = 1200;
-export const ROOM_SHARE_IMAGE_HEIGHT = 630;
+import { ROOM_SHARE_RENDERER_VERSION as ROOM_IMAGE_RENDERER_VERSION, ROOM_SHARE_IMAGE_WIDTH, ROOM_SHARE_IMAGE_HEIGHT } from '../roomImage/types';
 
 export interface RoomCoordinates {
   x: number;
@@ -179,20 +178,6 @@ export async function loadPlaylistMetadata(
   }
 }
 
-export function resolveApiBaseUrl(env: PagesWorkerEnv, url: URL): string {
-  const configured = typeof env.ROOM_SHARE_API_BASE_URL === 'string'
-    ? env.ROOM_SHARE_API_BASE_URL.trim()
-    : '';
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-    return `${url.protocol}//${url.hostname}:8787`;
-  }
-
-  return DEFAULT_API_BASE_URL;
-}
 
 function buildFallbackMetadata(
   coordinates: RoomCoordinates,
@@ -245,7 +230,7 @@ function buildFallbackWampOGramMetadata(
     title: 'Wamp-O-Gram',
     description: 'Open this playable WAMP level postcard.',
     url: publicUrl,
-    imageUrl: new URL(`/api/wamp-o-grams/${encodeURIComponent(slug)}/preview.png`, apiBaseUrl).toString(),
+    imageUrl: new URL(buildWampOGramPreviewPath(slug), apiBaseUrl).toString(),
     imageWidth: ROOM_SHARE_IMAGE_WIDTH,
     imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
   };
@@ -403,6 +388,32 @@ export async function loadPublishedRoomSnapshot(
   }
 }
 
+/** Community sprites an admin blocked (F189), from the edge-cached world tile config; null if it can't load. */
+export async function loadBlockedCustomSpriteIds(
+  request: Request,
+  env: PagesWorkerEnv,
+  url: URL,
+  timeoutMs: number,
+): Promise<Set<string> | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL('/api/world/tiles/config', resolveApiBaseUrl(env, url)).toString(), {
+      headers: { Accept: 'application/json', 'User-Agent': request.headers.get('User-Agent') || 'WAMP room share renderer' },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const config = await response.json() as { blockedCustomSpriteIds?: unknown };
+    return new Set(Array.isArray(config.blockedCustomSpriteIds)
+      ? config.blockedCustomSpriteIds.filter((id): id is string => typeof id === 'string')
+      : []);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeMetadata(
   value: unknown,
   fallback: RoomShareMetadata,
@@ -421,9 +432,9 @@ function normalizeMetadata(
     title: cleanText(value.title) || fallback.title,
     description: cleanText(value.description) || fallback.description,
     url: cleanUrl(value.url) || fallback.url,
-    imageUrl: expanded
+    imageUrl: cachedArtworkUrl(value.imageUrl, expanded) || (expanded
       ? expandedRoomImageUrl(value.imageUrl, apiBaseUrl, roomId, expandedRoom.expandedRoomId) || roomImageUrl
-      : roomImageUrl,
+      : roomImageUrl),
     imageWidth: finiteNumberOr(value.imageWidth, fallback.imageWidth),
     imageHeight: finiteNumberOr(value.imageHeight, fallback.imageHeight),
   };
@@ -447,6 +458,17 @@ function expandedRoomImageUrl(value: unknown, apiBaseUrl: string, roomId: string
   const expected = new URL(`/api/share/rooms/${encodeURIComponent(roomId)}/image`, apiBaseUrl);
   return image.origin === expected.origin && [expected.pathname, `${expected.pathname}.png`].includes(image.pathname)
     && image.searchParams.get('area') === expandedRoomId ? image.toString() : null;
+}
+
+function cachedArtworkUrl(value: unknown, expanded: boolean): string | null {
+  const candidate = cleanUrl(value);
+  if (!candidate) return null;
+  const url = new URL(candidate);
+  if (url.protocol !== 'https:' || !['tiles.wamp.land', 'tiles-safety.wamp.land'].includes(url.host)
+    || url.username || url.password || url.search || url.hash) return null;
+  const path = expanded ? /^\/share-artwork\/v1\/[a-f0-9]{64}\.png$/
+    : /^\/world-tiles\/[a-zA-Z0-9._-]+\/objects\/[a-f0-9]{64}\.png$/;
+  return path.test(url.pathname) ? url.toString() : null;
 }
 
 function finiteNumberOr(value: unknown, fallback: number): number {

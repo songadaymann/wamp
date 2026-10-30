@@ -103,12 +103,3 @@ export function syncStarfieldTileSprite(
     ? 0
     : (camera.scrollY * config.parallax) / tileScale;
 }
-
-export function updateStarfieldTileSprite(
-  sprite: Phaser.GameObjects.TileSprite,
-  camera: Phaser.Cameras.Scene2D.Camera,
-  parallax: number,
-  tileScale: number
-): void {
-  syncStarfieldTileSprite(sprite, camera, { parallax, tileScale });
-}

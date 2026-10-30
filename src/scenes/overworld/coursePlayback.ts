@@ -1,8 +1,8 @@
+import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
 import { COURSE_SERVER_RULES } from '../../courses/goalServerRules';
 import { getAuthDebugState } from '../../auth/client';
 import { COOP_ROOM_PRACTICE_MESSAGE, hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
-import { createCourseRepository } from '../../courses/courseRepository';
-import { isCourseApiError } from '../../courses/courseRepository';
 import { getActiveCourseDraftSessionRoomOverrides } from '../../courses/draftSession';
 import {
   cloneCourseSnapshot,
@@ -52,6 +52,7 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import { deliverRankedFinish } from '../../runs/rankedFinishDelivery';
 import type { GuestRunPlaybackController } from './guestRunPlayback';
 import type { RunFinishRequestBody } from '../../runs/model';
 import type { PostRunRatingRequestDetail } from '../../progression/postRunRatingEvents';
@@ -87,11 +88,11 @@ interface OverworldCoursePlaybackHost {
   ) => RankedRunVerificationTrace | null;
   clearVerificationTrace?: () => void;
   guestRuns?: GuestRunPlaybackController;
+  isAssistActive?: () => boolean;
 }
 
 export class OverworldCoursePlaybackController {
   private readonly roomRepository = createRoomRepository();
-  private readonly courseRepository = createCourseRepository();
   private readonly expandedRoomRepository = createExpandedRoomRepository();
   private readonly activeCourseRoomOverrideIds = new Set<string>();
   private readonly pinnedCourseRoomSnapshotCache = new Map<string, RoomSnapshot>();
@@ -107,7 +108,7 @@ export class OverworldCoursePlaybackController {
       elapsedMs: Math.round(run.elapsedMs), deaths: run.deaths, checkpointsReached: run.checkpointsReached,
       nextCheckpointIndex: run.nextCheckpointIndex, result: run.result, attemptId: run.attemptId,
       submissionState: run.submissionState, submissionMessage: run.submissionMessage,
-      cooperative: run.cooperative ?? false, leaderboardEligible: run.leaderboardEligible,
+      assisted: run.assisted ?? false, cooperative: run.cooperative ?? false, leaderboardEligible: run.leaderboardEligible,
       guestProgress: run.guestProgress ?? null } : null;
   }
 
@@ -184,12 +185,14 @@ export class OverworldCoursePlaybackController {
     course: CourseSnapshot,
     options?: { hadPreviousCompletion?: boolean; previousViewerRank?: number | null },
   ): ActiveExpandedRoomRunState {
+    resetKeepPlayingContext();
     const authState = getAuthDebugState();
     const startRoomRef = this.getCourseStartRoomRef(course);
     const cooperative = course.roomRefs.some(ref =>
       hasCoopPressurePlates(this.host.getRoomSnapshotForCoordinates(ref.coordinates)?.placedObjects ?? []));
+    const assisted = !cooperative && Boolean(this.host.isAssistActive?.());
     const leaderboardEligible =
-      !cooperative &&
+      !assisted && !cooperative &&
       course.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         authState.authenticated,
@@ -197,7 +200,7 @@ export class OverworldCoursePlaybackController {
         authState.user?.displayName ?? null
       );
     const localOnlyMessage =
-      cooperative ? COOP_ROOM_PRACTICE_MESSAGE : course.status !== 'published'
+      assisted ? ASSIST_RUN_MESSAGE : cooperative ? COOP_ROOM_PRACTICE_MESSAGE : course.status !== 'published'
         ? 'Draft expanded room run stays local.'
         : authState.authenticated
           ? 'Ranked expanded room submission unavailable.'
@@ -215,6 +218,7 @@ export class OverworldCoursePlaybackController {
           : null,
       leaderboardEligible,
       cooperative,
+      assisted,
       hadPreviousCompletion: options?.hadPreviousCompletion ?? false,
       previousViewerRank: options?.previousViewerRank ?? null,
       localOnlyMessage,
@@ -226,11 +230,12 @@ export class OverworldCoursePlaybackController {
   }
 
   async startRemoteCourseRun(runState: ActiveExpandedRoomRunState): Promise<void> {
+    if (runState.assisted) return;
     this.host.onRankedRunPreparing?.('course');
     try {
       const { response, submissionTarget } = await this.startRankedCourseRun(runState);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun !== runState) {
+      if (activeCourseRun !== runState || runState.assisted) {
         return;
       }
 
@@ -252,14 +257,15 @@ export class OverworldCoursePlaybackController {
         await this.finalizeActiveCourseRun(pendingResult);
       }
     } catch (error) {
+      if (runState.assisted) return;
       console.error('Failed to start ranked expanded room run', error);
       const activeCourseRun = this.host.getActiveCourseRun();
-      if (activeCourseRun !== runState) {
+      if (activeCourseRun !== runState || runState.assisted) {
         return;
       }
 
       if (
-        (isCourseApiError(error) || isExpandedRoomApiError(error)) &&
+        isExpandedRoomApiError(error) &&
         error.status === 403
       ) {
         activeCourseRun.submissionState = 'local-only';
@@ -281,6 +287,10 @@ export class OverworldCoursePlaybackController {
       return;
     }
 
+    if (activeCourseRun.assisted) {
+      activeCourseRun.submissionState = 'local-only'; activeCourseRun.submissionMessage = ASSIST_RUN_MESSAGE;
+      this.host.clearVerificationTrace?.(); this.host.renderHud(); return;
+    }
     activeCourseRun.pendingResult = result;
     if (this.host.guestRuns?.has(activeCourseRun)) {
       const body: RunFinishRequestBody = { result, elapsedMs: Math.round(activeCourseRun.elapsedMs), deaths: activeCourseRun.deaths,
@@ -312,6 +322,7 @@ export class OverworldCoursePlaybackController {
           contentId: activeCourseRun.course.id,
           contentTitle: activeCourseRun.course.title,
           expandedRoomId: activeCourseRun.expandedRoomId,
+          clearedRoomIds:activeCourseRun.course.status==='published'&&!activeCourseRun.assisted&&!activeCourseRun.cooperative?activeCourseRun.course.roomRefs.map(ref=>ref.roomId):[],
           shareCoordinates: this.getRunShareCoordinates(activeCourseRun),
           version: activeCourseRun.course.version,
           previousViewerRank: null,
@@ -371,11 +382,14 @@ export class OverworldCoursePlaybackController {
     };
 
     try {
-      if (activeCourseRun.submissionTarget === 'expanded_room') {
-        await this.expandedRoomRepository.finishRun(attemptId, body);
-      } else {
-        await this.courseRepository.finishRun(attemptId, body);
-      }
+      // The body holds its own trace copy, so the recorder is released once a send fails.
+      await deliverRankedFinish(activeCourseRun, result, () => this.expandedRoomRepository.finishRun(attemptId, body), {
+        onChange: () => {
+          if (this.host.getActiveCourseRun() !== activeCourseRun) return;
+          this.host.clearVerificationTrace?.();
+          this.host.renderHud();
+        },
+      });
       const currentActiveCourseRun = this.host.getActiveCourseRun();
       if (!currentActiveCourseRun || currentActiveCourseRun.attemptId !== attemptId) {
         return;
@@ -472,7 +486,7 @@ export class OverworldCoursePlaybackController {
   }
 
   private shouldPromptGuestClaimForLocalCourseClear(runState: ActiveExpandedRoomRunState): boolean {
-    if (runState.cooperative) return false;
+    if (runState.cooperative || runState.assisted) return false;
     const authState = getAuthDebugState();
     return (
       runState.course.status === 'published' &&
@@ -496,7 +510,7 @@ export class OverworldCoursePlaybackController {
 
   startGuestRunAfterSpawn(): void {
     const run = this.host.getActiveCourseRun();
-    if (!run || run.cooperative || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published' || run.leaderboardEligible || getAuthDebugState().authenticated
+    if (!run || run.assisted || run.cooperative || this.playbackRoomSourceMode !== 'published' || run.course.status !== 'published' || run.leaderboardEligible || getAuthDebugState().authenticated
       || run.result !== 'active' || run.pendingResult || this.host.guestRuns?.has(run)) return;
     this.host.guestRuns?.begin(run, 'course', run.expandedRoomId
       ? { contentType: 'expanded_room', contentId: run.expandedRoomId, version: run.expandedRoomVersion ?? run.course.version }
@@ -505,6 +519,7 @@ export class OverworldCoursePlaybackController {
 
   private guestClearDetail(run: ActiveExpandedRoomRunState, body: RunFinishRequestBody): PostRunRatingRequestDetail {
     const base = { contentTitle: run.course.title, version: run.expandedRoomVersion ?? run.course.version,
+      clearedRoomIds:run.course.status==='published'&&!run.assisted&&!run.cooperative?run.course.roomRefs.map(ref=>ref.roomId):[],
       shareCoordinates: this.getRunShareCoordinates(run),
       previousViewerRank: null, elapsedMs: body.elapsedMs, deaths: body.deaths, score: null,
       autoSuggestedDifficulty: suggestProgressionDifficulty(body) };
@@ -526,60 +541,26 @@ export class OverworldCoursePlaybackController {
     response: RankedCourseRunStartBinding;
     submissionTarget: ActiveExpandedRoomRunState['submissionTarget'];
   }> {
-    if (runState.expandedRoomId && runState.expandedRoomVersion) {
-      try {
-        return {
-          response: await this.expandedRoomRepository.startRun(runState.expandedRoomId, {
-            expandedRoomId: runState.expandedRoomId,
-            expandedRoomVersion: runState.expandedRoomVersion,
-            goal: runState.course.goal as CourseGoal,
-            startedAt: new Date().toISOString(),
-          }),
-          submissionTarget: 'expanded_room',
-        };
-      } catch (error) {
-        if (!this.shouldFallBackToLegacyCourseRunStart(error)) {
-          throw error;
-        }
-        console.warn('Falling back to legacy course run start after expanded-room start failed', error);
-      }
-    }
-
+    const expandedRoomId = runState.expandedRoomId ?? expandedRoomIdFromLegacyCourseId(runState.course.id);
     return {
-      response: await this.courseRepository.startRun(runState.course.id, {
-        courseId: runState.course.id,
-        courseVersion: runState.course.version,
+      response: await this.expandedRoomRepository.startRun(expandedRoomId, {
+        expandedRoomId,
+        expandedRoomVersion: runState.expandedRoomVersion ?? runState.course.version,
         goal: runState.course.goal as CourseGoal,
         startedAt: new Date().toISOString(),
       }),
-      submissionTarget: 'course',
+      submissionTarget: 'expanded_room',
     };
   }
 
-  private shouldFallBackToLegacyCourseRunStart(error: unknown): boolean {
-    return isExpandedRoomApiError(error) && (error.status === 404 || error.status >= 500);
-  }
-
-  private async loadFreshCourseLeaderboard(
-    runState: ActiveExpandedRoomRunState,
-  ): Promise<CourseLeaderboardResponse | null> {
-    const course = runState.course;
-    if (runState.expandedRoomId) {
-      try {
-        return await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
-          runState.expandedRoomId,
-          runState.expandedRoomVersion ?? course.version,
-          5,
-        );
-      } catch (error) {
-        console.warn('Failed to refresh expanded-room leaderboard after clear', error);
-      }
-    }
-
+  private async loadFreshCourseLeaderboard(runState: ActiveExpandedRoomRunState): Promise<CourseLeaderboardResponse | null> {
     try {
-      return await this.courseRepository.loadCourseLeaderboard(course.id, course.version, 5);
+      return await this.expandedRoomRepository.loadExpandedRoomLeaderboard(
+        runState.expandedRoomId ?? expandedRoomIdFromLegacyCourseId(runState.course.id),
+        runState.expandedRoomVersion ?? runState.course.version, 5, true,
+      );
     } catch (error) {
-      console.warn('Failed to refresh leaderboard after expanded room clear', error);
+      console.warn('Failed to refresh expanded-room leaderboard after clear', error);
       return null;
     }
   }

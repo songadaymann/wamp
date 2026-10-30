@@ -11,7 +11,7 @@ function harness() {
   const host = { getCheckpoint: () => checkpoint, getCourseStartRoom: () => courseStart,
     getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }), getRoomSnapshot: vi.fn(() => room),
     getPlayerEntities: vi.fn(() => ({})), clearTransientPlayerState: vi.fn(), focusRoom: vi.fn(),
-    respawnPlayerToRoom: vi.fn(), presentRespawn: vi.fn(), recordRespawn: vi.fn(), refreshAroundFromCache: vi.fn(),
+    respawnPlayerToRoom: vi.fn(), prepareRoomArrival: vi.fn(), presentRespawn: vi.fn(), recordRespawn: vi.fn(), refreshAroundFromCache: vi.fn(),
     destroyPlayer: vi.fn(), requestPlayerCreation: vi.fn(), refreshAround: vi.fn().mockResolvedValue(true), playRespawnSound: vi.fn() };
   const controller = new OverworldRespawnController(host as unknown as ConstructorParameters<typeof OverworldRespawnController>[0]);
   return { host, controller, room, setCheckpoint: (next: typeof checkpoint) => { checkpoint = next; },
@@ -27,6 +27,14 @@ describe('checkpoint respawn orchestration', () => {
     expect(h.host.respawnPlayerToRoom.mock.invocationCallOrder[0]).toBeLessThan(h.host.recordRespawn.mock.invocationCallOrder[0]);
     expect(h.host.refreshAroundFromCache).toHaveBeenCalledWith({ x: 2, y: 0 });
     expect(h.host.destroyPlayer).not.toHaveBeenCalled();
+  });
+  it('readies a loaded checkpoint room before moving the player into it (F302)', () => {
+    const h = harness(); h.controller.respawnPlayer();
+    expect(h.host.prepareRoomArrival).toHaveBeenCalledWith(h.room.id);
+    expect(h.host.prepareRoomArrival.mock.invocationCallOrder[0]).toBeLessThan(h.host.respawnPlayerToRoom.mock.invocationCallOrder[0]);
+    const unloaded = harness(); unloaded.host.getRoomSnapshot.mockReturnValue(null as never); unloaded.controller.respawnPlayer();
+    // A room still loading readies when the player is created there, like a run start.
+    expect(unloaded.host.prepareRoomArrival).not.toHaveBeenCalled();
   });
   it('falls back to the locked course start before the current room', () => {
     const h = harness(); h.setCheckpoint(null);

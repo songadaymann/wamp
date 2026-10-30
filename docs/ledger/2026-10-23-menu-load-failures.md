@@ -1,0 +1,1 @@
+| 2026-10-23 | — | [#320](https://github.com/songadaymann/wamp/pull/320), [#322](https://github.com/songadaymann/wamp/pull/322) | [receipt](docs/review/wamp-round2-cleanup-2026-10-23.md) | A menu whose code fails to download explains itself and offers a reload instead of doing nothing |

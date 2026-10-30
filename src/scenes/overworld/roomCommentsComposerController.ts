@@ -181,14 +181,14 @@ export class RoomCommentsComposerController {
     this.submitting = true;
     this.render();
     try {
-      await (this.options.submitComment ?? submitRoomComment)(room.id, room.coordinates, {
+      const response = await (this.options.submitComment ?? submitRoomComment)(room.id, room.coordinates, {
         roomVersion: room.version,
         position,
         body,
       });
       (this.options.playSubmitSound ?? (() => playSfx('chat-send')))();
       this.close(false);
-      this.options.showTransientStatus?.('Comment submitted for review.');
+      this.options.showTransientStatus?.(response.message);
     } catch (error) {
       this.options.showTransientStatus?.(getErrorMessage(error, 'Comment failed to submit.'));
     } finally {

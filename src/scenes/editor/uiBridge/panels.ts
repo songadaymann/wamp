@@ -36,6 +36,11 @@ export function renderEditorUiViewModel(
   setText(elements.roomCoordsEls, viewModel.roomCoordinatesText);
   elements.separatorEl?.classList.toggle('hidden', false);
   renderSaveStatus(doc, elements.saveStatusEls, viewModel);
+  const collectibleHref = viewModel.saveStatusLinkText === 'View collectible'
+    && viewModel.saveStatusLinkHref?.startsWith('/minted-room.html?') ? viewModel.saveStatusLinkHref : null;
+  setHidden(elements.collectibleLink, !collectibleHref);
+  if (collectibleHref) elements.collectibleLink?.setAttribute('href', collectibleHref);
+  else elements.collectibleLink?.removeAttribute('href');
   setHidden(elements.publishNudgeRoot, !viewModel.publishNudgeVisible);
   setText(elements.publishNudgeTextEl, viewModel.publishNudgeText);
   setButtonText(elements.publishNudgeActionBtn, viewModel.publishNudgeActionText);

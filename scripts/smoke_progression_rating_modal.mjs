@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'http://127.0.0.1:4175/?previewSmoke=1';
@@ -28,7 +29,7 @@ page.on('response', (response) => {
     });
   }
 });
-await page.routeWebSocket('ws://127.0.0.1:1999/**', (webSocket) => {
+await page.routeWebSocket(/\/parties\//, (webSocket) => {
   webSocket.onMessage(() => {
     // Presence transport is unrelated to this modal smoke; keep the socket local and quiet.
   });
@@ -239,9 +240,13 @@ await page.route('**/api/rooms/smoke-room-*/ratings', async (route) => {
 });
 
 await page.goto(url, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(1500);
+// The modal uses a synthetic app mode. Wait for real boot, then pause scene updates
+// so the world cannot overwrite that fixture state while the DOM queue is exercised.
+await page.waitForFunction(() => document.body.dataset.appReady === 'true'
+  && document.body.dataset.appMode === 'world'
+  && typeof window.run_preview_smoke_action === 'function', null, { timeout: 120000 });
 await page.evaluate(() => {
-  document.body.dataset.appReady = 'true';
+  window.__EVERYBODYS_PLATFORMER_GAME__.loop.sleep();
   document.body.dataset.appMode = 'play-world';
   document.getElementById('boot-splash')?.classList.add('hidden');
   document.getElementById('busy-overlay')?.classList.add('hidden');
@@ -286,8 +291,10 @@ if (deferredState.appMode !== 'play-world' || !deferredState.modalHidden) {
   throw new Error(`Expected rating prompts to remain hidden during Play: ${JSON.stringify(deferredState)}`);
 }
 
+// Mirror setAppMode in src/ui/appMode.ts: the queue listens for its change event.
 await page.evaluate(() => {
   document.body.dataset.appMode = 'world';
+  window.dispatchEvent(new Event('wamp:app-mode-changed'));
 });
 await page.waitForSelector('#run-rating-modal:not(.hidden)');
 await page.waitForSelector('#run-rating-batch:not(.hidden)');
@@ -316,6 +323,9 @@ await page.screenshot({
 await page.click('[data-quality-stars="4"]');
 await page.click('#btn-run-rating-submit');
 await page.waitForFunction(() => document.getElementById('btn-run-rating-skip')?.textContent === 'Next Room');
+// The status line updates before the save finishes and marks the queue entry; wait for the mark.
+await page.waitForFunction(() => document.querySelector('#run-rating-batch-list li')?.textContent?.includes('Rated'), null, { timeout: 15000 })
+  .catch(() => {});
 const ratedState = await page.evaluate(() => ({
   status: document.getElementById('run-rating-status')?.textContent ?? '',
   nextButton: document.getElementById('btn-run-rating-skip')?.textContent ?? '',
@@ -373,8 +383,10 @@ const singleDeferred = await page.evaluate(() => (
 if (!singleDeferred) {
   throw new Error('Expected the single-room prompt to remain hidden during Play.');
 }
+// Mirror setAppMode in src/ui/appMode.ts: the queue listens for its change event.
 await page.evaluate(() => {
   document.body.dataset.appMode = 'world';
+  window.dispatchEvent(new Event('wamp:app-mode-changed'));
 });
 await page.waitForFunction(() => document.getElementById('run-rating-title')?.textContent === 'Solo Summit');
 const singleState = await page.evaluate(() => ({

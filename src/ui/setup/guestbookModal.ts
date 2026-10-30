@@ -1,5 +1,6 @@
 import { getGuestVisitSessionId } from '../../analytics/guestActivity';
 import { getAuthDebugState } from '../../auth/client';
+import { setLiveMessage } from '../friendlyError';
 import { fetchGuestbookEntries, signGuestbook } from '../../guestbook/client';
 import {
   DEFAULT_GUESTBOOK_LIMIT,
@@ -388,8 +389,7 @@ export class GuestbookModalController {
       return;
     }
 
-    this.elements.status.textContent = message;
-    this.elements.status.classList.toggle('hidden', !message);
+    setLiveMessage(this.elements.status, message, isError ? 'error' : 'status');
     this.elements.status.classList.toggle('guestbook-status-error', isError);
   }
 }

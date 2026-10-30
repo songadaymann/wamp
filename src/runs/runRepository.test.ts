@@ -18,6 +18,28 @@ describe('personal discovery session isolation', () => {
 });
 
 describe('fresh global windows', () => {
+  it('bypasses public lifetime caching on Refresh and after a saved run, then restores ordinary reads', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-17T18:00:00Z'));
+    try {
+      const board = { window: 'all', entries: [], viewerEntry: null, viewerNext: null };
+      const fetch = vi.fn(async (_path: string, options?: RequestInit) => options?.method === 'POST'
+        ? new Response(null, { status: 204 }) : Response.json(board));
+      vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      const abort = new AbortController();
+      await repo.loadGlobalLeaderboard(25, 'all', abort.signal, true);
+      expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({ cache: 'no-store', credentials: 'include', signal: abort.signal });
+      await repo.finishRun('clear', { result: 'completed', elapsedMs: 1000, deaths: 0, collectiblesCollected: 0,
+        enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: '2026-10-17T18:00:00Z', enemyCollectiblesCollected: 0 });
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      vi.advanceTimersByTime(20_001);
+      await repo.loadGlobalLeaderboard(25, 'all');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+    } finally { vi.useRealTimers(); }
+  });
   it('keeps accounts and Monday rollovers out of the shared cache and preserves period metadata', async () => {
     const week = { window: 'week', period: { startsAt: '2026-10-05T00:00:00.000Z', endsAt: '2026-10-12T00:00:00.000Z' }, serverTime: '2026-10-05T18:00:00.000Z', entries: [], viewerEntry: null, viewerNext: null };
     const fetch = vi.fn().mockResolvedValueOnce(Response.json(week)).mockResolvedValueOnce(Response.json({ ...week, serverTime: '2026-10-05T19:00:00.000Z' }));
@@ -47,5 +69,37 @@ describe('post-clear room leaderboard freshness', () => {
     expect((await repo.loadRoomLeaderboard('1,2', { x: 1, y: 2 }, 1)).roomTitle).toBe('Fresh clear');
     expect(fetch.mock.calls[2][0]).toContain('fresh=1');
     expect(fetch.mock.calls[2][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+  });
+});
+
+
+describe('private discovery history and public-base freshness', () => {
+  it.each(['newest', 'unrated'] as const)('reads the current account on each %s lookup', async sort => {
+    let account = 'first';
+    const fetch = vi.fn(async (_url: string, _options?: RequestInit) => Response.json({ sort, results: [{ viewerState: { account } }] }));
+    vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+    expect((await repo.loadRoomDiscovery(null, sort)).results[0].viewerState).toEqual({ account: 'first' });
+    account = 'second';
+    expect((await repo.loadRoomDiscovery(null, sort)).results[0].viewerState).toEqual({ account: 'second' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+  });
+  it('bypasses the public discovery base immediately after a saved run or rating, then restores sharing', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(async (_url: string, options?: RequestInit) => options?.method === 'POST'
+        ? Response.json({}) : Response.json({ sort: 'newest', results: [] }));
+      vi.stubGlobal('fetch', fetch); const repo = createRunRepository();
+      await repo.loadRoomDiscovery(null, 'newest'); expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      await repo.finishRun('clear', { result: 'completed', elapsedMs: 1000, deaths: 0, collectiblesCollected: 0,
+        enemiesDefeated: 0, checkpointsReached: 0, score: null, finishedAt: '2026-10-18T12:00:00Z', enemyCollectiblesCollected: 0 });
+      await repo.loadRoomDiscovery(null, 'newest'); expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      vi.advanceTimersByTime(20_001); await repo.loadRoomDiscovery(null, 'unrated');
+      expect(fetch.mock.calls.at(-1)?.[0]).not.toContain('fresh=1');
+      await repo.submitRoomRating('0,0', { roomCoordinates: { x: 0, y: 0 }, roomVersion: 1, qualityStars: 4,
+        difficultyChoice: 'easy', autoSuggestedDifficulty: 'easy' });
+      await repo.loadRoomDiscovery(null, 'unrated'); expect(fetch.mock.calls.at(-1)?.[0]).toContain('fresh=1');
+      expect(fetch.mock.calls.at(-1)?.[1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+    } finally { vi.useRealTimers(); }
   });
 });

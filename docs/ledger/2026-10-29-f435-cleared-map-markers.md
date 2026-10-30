@@ -1,0 +1,1 @@
+| 2026-10-29 | F435 | [#344](https://github.com/songadaymann/wamp/pull/344) | [receipt](docs/review/wamp-f435-cleared-map-markers-2026-10-29.md) | Mark cleared map cells and show a total with private account progress and persistent guest checks; verified live |

@@ -13,12 +13,14 @@ import {
   createCustomBackgroundObject,
   ensureCustomBackgroundTexture,
   getBuiltInBackgroundTileScale,
+  getCustomBackgroundTextureKey,
   syncBuiltInBackgroundObject,
   syncCustomBackgroundObject,
   type BuiltInBackgroundObject,
   type CustomBackgroundLayer,
   type CustomBackgroundObject,
 } from '../../backgrounds/runtime';
+import { holdCustomBackgroundTextureFor } from '../../backgrounds/textureLeases';
 import type { RoomCoordinates } from '../../persistence/roomRepository';
 import type { WorldRepository } from '../../persistence/worldRepository';
 import type { RoomSnapshot } from '../../persistence/roomModel';
@@ -148,6 +150,7 @@ export class EditorBackgroundController {
       this.bgColorRect = this.scene.add.rectangle(0, 0, w, h, RETRO_COLORS.backgroundNumber);
       this.bgColorRect.setOrigin(0, 0);
       this.bgColorRect.setDepth(-20);
+      holdCustomBackgroundTextureFor(this.scene, getCustomBackgroundTextureKey(resolved.id), this.bgColorRect);
       this.updateBackgroundPreview();
 
       void ensureCustomBackgroundTexture(this.scene, resolved.id)

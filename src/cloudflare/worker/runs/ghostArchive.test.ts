@@ -1,3 +1,5 @@
+import { handleRoomGhosts } from './ghosts';
+import { loadChallengeGhost } from './challengeGhost';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,6 +96,36 @@ describe('completed ghost archive on the real schema', () => {
     await handleRunFinish(makeRequest(body, headers), env, start.attemptId);
     return start.attemptId;
   }
+  it('shares a slower verified run but denies wrong rooms, layouts and invalidated recordings before R2', async () => {
+    await accountRun(500); const slower=await accountRun(1000);
+    expect((await loadChallengeGhost(env,room.id,[1],slower)).ghost?.attemptId).toBe(slower);
+    const invite=new Request(`https://api.wamp.land/api/rooms/0%2C0/ghosts?version=1&vs=${slower}`);
+    const response=await handleRoomGhosts(invite,new URL(invite.url),env,room.id);
+    expect(await response.json()).toMatchObject({challenge:{ghost:{attemptId:slower,elapsedMs:1000}},personal:{ghost:null,reason:'sign_in'}});
+    const get=env.RUN_GHOST_BUCKET!.get as ReturnType<typeof vi.fn>;get.mockClear();
+    expect((await loadChallengeGhost(env,'1,0',[1],slower)).ghost).toBeNull();
+    expect((await loadChallengeGhost(env,room.id,[2],slower)).reason).toBe('layout_changed');
+    expect(get).not.toHaveBeenCalled();
+    sqlite.prepare("UPDATE room_runs SET verification_status='failed' WHERE attempt_id=?").run(slower);
+    expect((await loadChallengeGhost(env,room.id,[1],slower)).ghost).toBeNull();expect(get).not.toHaveBeenCalled();
+    sqlite.prepare("UPDATE room_runs SET verification_status='passed' WHERE attempt_id=?").run(slower);
+    sqlite.prepare("UPDATE room_versions SET redacted_at=? WHERE room_id=?").run(NOW.toISOString(),room.id);
+    expect((await loadChallengeGhost(env,room.id,[1],slower)).ghost).toBeNull();expect(get).not.toHaveBeenCalled();
+    sqlite.prepare('UPDATE room_versions SET redacted_at=NULL WHERE room_id=?').run(room.id);
+    sqlite.prepare(`INSERT INTO school_classrooms(id,slug,display_name,teacher_email,created_at,updated_at)
+      VALUES('class','class','Class','teacher@example.test',?,?)`).run(NOW.toISOString(),NOW.toISOString());
+    sqlite.prepare(`INSERT INTO school_students(id,classroom_id,user_id,username,password_hash,password_updated_at,created_at,updated_at)
+      VALUES('student','class','user','student','local-fixture',?,?,?)`).run(NOW.toISOString(),NOW.toISOString(),NOW.toISOString());
+    expect((await loadChallengeGhost(env,room.id,[1],slower)).ghost).toBeNull();expect(get).not.toHaveBeenCalled();
+  });
+  it('keeps an anonymous guest invitation working after its temporary progress is pruned',async()=>{
+    const identity=await guestRunIdentity(makeRequest({}));
+    const start=await startGuestRun(env,identity,{contentType:'room',contentId:room.id,version:1,clientRunId:crypto.randomUUID()});
+    vi.setSystemTime(Date.now()+1000);await finishGuestRun(env,identity,start.attemptId,makeRequest(finishBody(start,1000)));
+    expect((await loadChallengeGhost(env,room.id,[1],start.attemptId)).ghost?.displayName).toBe('Guest');
+    vi.setSystemTime(Date.now()+15*86400000);await pruneGuestRuns(env);
+    expect((await loadChallengeGhost(env,room.id,[1],start.attemptId)).ghost?.attemptId).toBe(start.attemptId);
+  });
   it('retains slower and faster account completions while racing still selects the personal best', async () => {
     const first = await accountRun(1000);
     const slower = await accountRun(2000);

@@ -1,3 +1,4 @@
+import { GUEST_RUN_PROGRESS_CHANGED_EVENT } from '../../guestRooms/runService';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ default: {} }));
 vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthDebugState: () => ({ authenticated: false }), promptForSignIn: vi.fn() }));
@@ -12,7 +13,7 @@ function fixture() {
   const elements = new Map<string, ReturnType<typeof element>>();
   function element() {
     const classes = new Set(['hidden']);
-    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
+    return Object.assign(new EventTarget(), { textContent: '', disabled: false, dataset: {} as Record<string, string>, focus: vi.fn(), getAttribute: vi.fn(() => null), setAttribute: vi.fn(), removeAttribute: vi.fn(), replaceChildren: vi.fn(), append: vi.fn(),
       classList: { contains: (name: string) => classes.has(name), add: (...names: string[]) => names.forEach(name => classes.add(name)),
         remove: (...names: string[]) => names.forEach(name => classes.delete(name)), toggle: (name: string, force: boolean) => force ? classes.add(name) : classes.delete(name) } });
   }
@@ -39,6 +40,14 @@ const leaderboard = { roomId: '0,0', roomVersion: 1, rankingMode: 'time', entrie
 async function settle() { for (let i = 0; i < 4; i++) await Promise.resolve(); }
 afterEach(() => vi.clearAllMocks());
 describe('deferred guest result', () => {
+  it('updates every share action when a queued guest clear becomes saved',async()=>{
+    const f=fixture();f.request({...detail,ghostChallengeEligible:true,guestProgress:{...detail.guestProgress!,status:'queued'}});f.stop();await settle();
+    f.elements.get('btn-run-share-copy')!.dispatchEvent(new Event('click'));await settle();
+    expect(f.navigator.clipboard.writeText).toHaveBeenLastCalledWith('https://wamp.land/r/0/0?from=share');
+    f.win.dispatchEvent(new CustomEvent(GUEST_RUN_PROGRESS_CHANGED_EVENT,{detail:{...detail.guestProgress!,status:'saved',attemptId:'saved-guest'}}));
+    f.elements.get('btn-run-share-copy')!.dispatchEvent(new Event('click'));await settle();
+    expect(f.navigator.clipboard.writeText).toHaveBeenLastCalledWith('https://wamp.land/r/0/0?from=share&vs=saved-guest');f.controller.destroy();
+  });
   it.each(['room', 'expanded_room'])('keeps a new %s summary when an earlier save finishes loading after close', async kind => {
     const f = fixture(), late = deferred<typeof leaderboard & { viewerRank: number }>();
     const load = kind === 'room' ? f.roomRepo.loadRoomLeaderboard : f.expandedRepo.loadExpandedRoomLeaderboard;
@@ -147,5 +156,17 @@ describe('guest clear sharing', () => {
     f.elements.get('btn-run-share-native')?.dispatchEvent(new Event('click')); f.elements.get('btn-run-guest-claim-continue')?.dispatchEvent(new Event('click'));
     await settle(); late.resolve(); await settle();
     expect(f.elements.get('run-share-status')?.textContent).not.toBe('Shared.'); f.controller.destroy();
+  });
+});
+describe('post-run rating choices (F464)', () => {
+  it('marks the chosen stars and difficulty for screen readers as well as by look', async () => {
+    const f = fixture();
+    f.roomRepo.loadRoomLeaderboard.mockResolvedValue({ ...leaderboard, viewerRank: 1 });
+    await f.controller.openForSequence({ roomId: '0,0', roomCoordinates: { x: 0, y: 0 }, roomVersion: 1 });
+    f.quality.dispatchEvent(new Event('click')); f.difficulty.dispatchEvent(new Event('click'));
+    for (const button of [f.quality, f.difficulty]) {
+      expect(vi.mocked(button.setAttribute).mock.calls.filter(([name]) => name === 'aria-pressed').at(-1)).toEqual(['aria-pressed', 'true']);
+      expect(button.classList.contains('active')).toBe(true);
+    }
   });
 });

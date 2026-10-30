@@ -1,3 +1,5 @@
+import { deliverEmail } from '../email/delivery';
+import { emailConfigured } from '../email/provider';
 import { WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH } from '../../../worldTiles/assetContract';
 import type { WorldTileConfig } from '../../../worldTiles/model';
 import { DEFAULT_ADMIN_REVIEW_EMAIL } from '../admin/reviewNotifications';
@@ -30,7 +32,7 @@ export function worldMapAlertRecipient(env: Env): string {
   return env.WORLD_MAP_ALERT_EMAIL?.trim() || env.ADMIN_REVIEW_EMAIL?.trim() || DEFAULT_ADMIN_REVIEW_EMAIL;
 }
 export function worldMapAlertsConfigured(env: Env): boolean {
-  return env.WORLD_MAP_HEALTH_ALERTS_ENABLED === '1' && Boolean(env.RESEND_API_KEY?.trim())
+  return env.WORLD_MAP_HEALTH_ALERTS_ENABLED === '1' && emailConfigured(env)
     && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(worldMapAlertRecipient(env));
 }
 
@@ -119,16 +121,9 @@ async function sendPendingAlerts(db: D1DatabaseSession, env: Env, now: string, f
         ORDER BY created_at, rowid LIMIT 1) RETURNING id, message_json`).bind(token, leaseUntil, now).first<PendingAlert>();
     if (!alert) break;
     try {
-      const response = await fetcher('https://api.resend.com/emails', {
-        method: 'POST', signal: AbortSignal.timeout(20_000),
-        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json',
-          'Idempotency-Key': `wamp-world-map/${alert.id}` }, body: alert.message_json,
-      });
-      if (!response.ok) throw new Error(`Fast-map email provider returned HTTP ${response.status}.`);
-      const result = await response.json() as { id?: string };
-      if (!result.id) throw new Error('Fast-map email provider did not return a message id.');
+      const id = await deliverEmail(env, JSON.parse(alert.message_json), `wamp-world-map/${alert.id}`, fetcher);
       await db.batch([db.prepare(`UPDATE world_map_health_alerts SET sent_at = ?, provider_id = ?,
-        lease_token = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_token = ?`).bind(now, result.id, alert.id, token)]);
+        lease_token = NULL, lease_until = NULL, last_error = NULL WHERE id = ? AND lease_token = ?`).bind(now, id, alert.id, token)]);
       sent += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Fast-map email delivery failed.';
@@ -144,7 +139,7 @@ async function sendPendingAlerts(db: D1DatabaseSession, env: Env, now: string, f
 
 export async function checkAndAlertWorldMap(env: Env, options: { testId?: string; now?: string; fetcher?: Fetcher } = {}) {
   if (env.WORLD_MAP_HEALTH_ALERTS_ENABLED !== '1') return { enabled: false, status: 'disabled', sent: 0 };
-  if (!worldMapAlertsConfigured(env)) throw new Error('Fast-map alerts require a valid recipient and RESEND_API_KEY.');
+  if (!worldMapAlertsConfigured(env)) throw new Error('Fast-map alerts require a valid recipient and email delivery.');
   const now = options.now ?? new Date().toISOString();
   const fetcher = options.fetcher ?? fetch;
   const observation = await observeWorldMap(fetcher);

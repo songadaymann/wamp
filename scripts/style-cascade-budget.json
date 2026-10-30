@@ -1,0 +1,17 @@
+{
+  "important": {
+    "src/styles/sections/base.css": 1,
+    "src/styles/sections/course-editor.css": 3,
+    "src/styles/sections/editor/music.css": 1,
+    "src/styles/sections/modals/leaderboard-profile-explore/explore-queues.css": 1,
+    "src/styles/sections/modals/rewards-xp.css": 4,
+    "src/styles/sections/modals/room-course.css": 6,
+    "src/styles/sections/responsive/phone-chrome.css": 1,
+    "src/styles/sections/responsive/phone-editor-dock.css": 9,
+    "src/styles/sections/responsive/phone-editor-music.css": 4,
+    "src/styles/sections/responsive/phone-editor-shell.css": 1,
+    "src/styles/sections/responsive/utility-tablet.css": 1,
+    "src/styles/sections/text-preferences.css": 2,
+    "src/styles/sections/world/chat-and-jump.css": 12
+  }
+}

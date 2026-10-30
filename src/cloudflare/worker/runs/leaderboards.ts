@@ -19,7 +19,7 @@ import type { AggregatedRoomLeaderboardSelection } from './roomLeaderboardAggreg
 import { sqlIsVerificationAccepted } from './verificationSql';
 export { sqlIsVerificationAccepted } from './verificationSql';
 
-interface RankedRoomLeaderboardRow {
+export interface RankedRoomLeaderboardRow {
   attempt_id: string;
   room_version: number;
   user_id: string;
@@ -31,21 +31,26 @@ interface RankedRoomLeaderboardRow {
   overall_rank: number | string | null;
 }
 
-function getRoomLeaderboardSqlOrderClause(goal: RoomGoal): string {
+export function getRoomLeaderboardOrder(goal: RoomGoal): Array<[string, 'ASC' | 'DESC']> {
   if (roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect') {
-    return 'elapsed_ms DESC, deaths ASC, finished_at ASC, attempt_id ASC';
+    return [['elapsed_ms', 'DESC'], ['deaths', 'ASC'], ['finished_at', 'ASC'], ['attempt_id', 'ASC']];
   }
   return getLeaderboardRankingMode(goal) === 'time'
-    ? 'elapsed_ms ASC, deaths ASC, score DESC, finished_at ASC, attempt_id ASC'
-    : 'score DESC, deaths ASC, elapsed_ms ASC, finished_at ASC, attempt_id ASC';
+    ? [['elapsed_ms', 'ASC'], ['deaths', 'ASC'], ['score', 'DESC'], ['finished_at', 'ASC'], ['attempt_id', 'ASC']]
+    : [['score', 'DESC'], ['deaths', 'ASC'], ['elapsed_ms', 'ASC'], ['finished_at', 'ASC'], ['attempt_id', 'ASC']];
+}
+
+export function sqlRoomLeaderboardEligible(goal: RoomGoal, alias: string): string {
+  const results = roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect'
+    ? "('completed', 'failed')" : "('completed')";
+  return `${alias}.result IN ${results}
+    AND ${alias}.elapsed_ms IS NOT NULL AND ${alias}.finished_at IS NOT NULL
+    AND ${sqlIsVerificationAccepted(alias)}
+    AND ${sqlUserIdIsNotLegacyGeneratedOnly(`${alias}.user_id`)}`;
 }
 
 function buildRankedRoomLeaderboardCte(goal: RoomGoal): string {
-  const orderClause = getRoomLeaderboardSqlOrderClause(goal);
-  const resultPredicate =
-    roomGoalRankingPolicy(goal, ROOM_GOAL_DEFINITIONS) === 'protect'
-      ? "result IN ('completed', 'failed')"
-      : "result = 'completed'";
+  const orderClause = getRoomLeaderboardOrder(goal).map(([column, direction]) => `${column} ${direction}`).join(', ');
   return `
     WITH candidate_runs AS (
       SELECT
@@ -69,11 +74,7 @@ function buildRankedRoomLeaderboardCte(goal: RoomGoal): string {
           SELECT CAST(value AS INTEGER)
           FROM json_each(?)
         )
-        AND ${resultPredicate}
-        AND elapsed_ms IS NOT NULL
-        AND finished_at IS NOT NULL
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
+        AND ${sqlRoomLeaderboardEligible(goal, 'room_runs')}
     ),
     best_runs AS (
       SELECT
@@ -178,7 +179,7 @@ export async function loadViewerRankedRoomLeaderboardRow(
   return row ?? null;
 }
 
-function mapRankedRoomLeaderboardEntry(
+export function mapRankedRoomLeaderboardEntry(
   row: RankedRoomLeaderboardRow,
   snapshot: RoomSnapshot
 ): RoomLeaderboardEntry {
@@ -197,20 +198,26 @@ function mapRankedRoomLeaderboardEntry(
   };
 }
 
+export interface RoomLeaderboardStandings {
+  entries: RoomLeaderboardEntry[];
+  viewerBest: RoomLeaderboardEntry | null;
+}
+
 export async function buildRoomLeaderboardResponse(
   env: Env,
   record: RoomRecordView,
   selection: AggregatedRoomLeaderboardSelection,
   limit: number,
-  viewerUserId: string | null = null
+  viewerUserId: string | null = null,
+  standings?: RoomLeaderboardStandings | Promise<RoomLeaderboardStandings>,
 ): Promise<RoomLeaderboardResponse> {
   const snapshot = selection.snapshot;
   if (!snapshot.goal) {
     throw new HttpError(404, 'This room version does not have a leaderboard goal.');
   }
 
-  const [entriesRows, ratings] = await Promise.all([
-    loadRankedRoomLeaderboardRows(
+  const [entriesRows, ratings, shared] = await Promise.all([
+    standings ? Promise.resolve([]) : loadRankedRoomLeaderboardRows(
       env,
       snapshot.id,
       selection.leaderboardFamilyVersions,
@@ -224,12 +231,13 @@ export async function buildRoomLeaderboardResponse(
       viewerUserId,
       selection.currentPublishedVersion,
     ),
+    standings,
   ]);
   const listedViewerRow = viewerUserId === null
     ? null
     : entriesRows.find((row) => row.user_id === viewerUserId) ?? null;
   const viewerBestRow =
-    viewerUserId === null || listedViewerRow !== null
+    shared || viewerUserId === null || listedViewerRow !== null
       ? listedViewerRow
       : await loadViewerRankedRoomLeaderboardRow(
           env,
@@ -238,9 +246,9 @@ export async function buildRoomLeaderboardResponse(
           snapshot.goal,
           viewerUserId,
         );
-  const entries = entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
-  const viewerBest =
-    viewerBestRow === null ? null : mapRankedRoomLeaderboardEntry(viewerBestRow, snapshot);
+  const entries = shared?.entries ?? entriesRows.map((row) => mapRankedRoomLeaderboardEntry(row, snapshot));
+  const viewerBest = shared ? shared.viewerBest
+    : viewerBestRow === null ? null : mapRankedRoomLeaderboardEntry(viewerBestRow, snapshot);
 
   const versionSelection = buildRoomLeaderboardVersionSelectionState(record);
   return {

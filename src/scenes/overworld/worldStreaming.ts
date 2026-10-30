@@ -1,37 +1,52 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
+import { resolveRoomBackground } from '../../backgrounds/model';
+import {
+  CustomBackgroundTexturePreparation,
+  getCustomBackgroundTextureKey,
+} from '../../backgrounds/runtime';
+import {
+  acquireCustomBackgroundTexture,
+  type ReleaseCustomBackgroundTexture,
+} from '../../backgrounds/textureLeases';
 import {
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  ROOM_WIDTH,
-  TILESETS,
   TILE_SIZE,
 } from '../../config';
-import { resolveRoomBackground } from '../../backgrounds/model';
+import { registerCustomSpritesFromSnapshot } from '../../customSprites/registry';
 import {
-  CustomBackgroundTexturePreparation,
-  createBuiltInBackgroundObject,
-  createCustomBackgroundLayer,
-  createCustomBackgroundObject,
-  ensureCustomBackgroundTexture,
-  getCustomBackgroundTextureKey,
-  getBuiltInBackgroundTileScale,
-  syncBuiltInBackgroundObject,
-  syncCustomBackgroundObject,
-  type BuiltInBackgroundObject,
-  type CustomBackgroundLayer,
-  type CustomBackgroundObject,
-} from '../../backgrounds/runtime';
+  CUSTOM_ROOM_TILE_ATLAS_COLUMNS,
+  CUSTOM_ROOM_TILE_ATLAS_ROWS,
+} from '../../customTiles/model';
+import {
+  CustomRoomTileTexturePreparation,
+  buildCustomRoomTileTextureKey,
+} from '../../customTiles/runtime';
+import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
+import {
+  clearWorldReplacementCoverage,
+  publishWorldReplacementCoverageReady,
+  type WorldReplacementCoverageSource,
+} from '../../main/worldReplacementCoverage';
+import {
+  getDevicePerformanceMode,
+  type DevicePerformanceMode,
+} from '../../performance/devicePerformanceMode';
+import type { PerformanceAdvisorExactSnapshotEvent } from '../../performance/performanceAdvisor';
+import {
+  resolvePerformancePolicy,
+  type ResolvedPerformancePolicy,
+} from '../../performance/performancePolicy';
 import {
   cloneRoomSnapshot,
   getRoomSnapshotCloneCount as getGlobalRoomSnapshotCloneCount,
   roomIdFromCoordinates,
   type RoomCoordinates,
   type RoomSnapshot,
-  type RoomSnapshotView,
   type RoomSnapshotQueryDetail,
+  type RoomSnapshotView,
 } from '../../persistence/roomModel';
-import type { WorldRepository } from '../../persistence/worldRepository';
 import {
   computeWorldChunkPreviewHash,
   computeWorldSummariesFromOccupancySummariesInBounds,
@@ -40,41 +55,61 @@ import {
   createWorldWindowFromRoomBounds,
   isWithinRoomBounds,
   roomToChunkCoordinates,
-  type WorldChunkBounds,
   type CompactWorldChunkWindow,
+  type WorldChunkBounds,
   type WorldChunkWindow,
   type WorldRoomBounds,
   type WorldRoomSummary,
   type WorldWindow,
 } from '../../persistence/worldModel';
-import {
-  RETRO_COLORS,
-  createStarfieldTileSprite,
-  getStarfieldLayerConfig,
-  syncStarfieldTileSprite,
-} from '../../visuals/starfield';
-import { buildRoomSnapshotTexture, buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
-import { registerCustomSpritesFromSnapshot } from '../../customSprites/registry';
-import {
-  buildCustomRoomTileTextureKey,
-  CustomRoomTileTexturePreparation,
-  ensureCustomRoomTileTexture,
-  ensureCustomRoomTilesetForMap,
-} from '../../customTiles/runtime';
-import {
-  CUSTOM_ROOM_TILE_ATLAS_COLUMNS,
-  CUSTOM_ROOM_TILE_ATLAS_ROWS,
-} from '../../customTiles/model';
-import {
-  extractRoomStaticLightingEmitters,
-  type RoomStaticLightingEmitters,
-} from '../../lighting/emissiveSources';
+import type { WorldRepository } from '../../persistence/worldRepository';
+import type { PerformanceProfile } from '../../ui/deviceLayout';
+import { buildRoomTextureKey } from '../../visuals/roomSnapshotTexture';
 import type { OverworldMode } from '../sceneData';
 import { OverworldChunkPreviewRenderer } from './chunkPreviewRenderer';
+import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
+import {
+  FRAME_WORK_PRIORITIES,
+  enqueueGameplayWarmupWork,
+  FrameWorkCoordinator,
+  getFrameWorkBudget,
+  type FrameWorkGeneration,
+  type GameplayFrameWorkPriority,
+  type FrameWorkJobHandle,
+  type FrameWorkPriority,
+  type RunFrameWorkResult,
+} from './frameWorkCoordinator';
+import {
+  FullRoomPreparationLifecycleCoordinator,
+  FullRoomTeardownLifecycleCoordinator,
+  type FullRoomPreparationPhase,
+  type FullRoomTeardownPhase,
+} from './fullRoomLifecycles';
+import { OverworldFullRoomPresenter } from './fullRoomPresenter';
+import type { LoadedFullRoom } from './fullRoomTypes';
+import {
+  computeLocalPlayPressureMetrics,
+  createDefaultLocalPlayPressureMetrics,
+  type LocalPlayPressureMetrics,
+} from './playPressure';
 import {
   OverworldPreviewCache,
   isRoomSnapshotReferenceChangedError,
 } from './previewCache';
+import {
+  computeOverworldPreviewSelection,
+  getChunkPreviewTileSize,
+  getDesiredChunkBounds,
+  type OverworldPreviewSelection,
+  type PreviewSelectionCandidate,
+} from './previewStreaming';
+import { RoomArtifactCache } from './roomArtifactCache';
+import { RoomTexturePreparation, roomLayerHasTiles } from './roomTexturePreparation';
+import {
+  SelectedExactPrefetchLifecycle,
+  type SelectedExactPrefetchRequest,
+} from './selectedExactPrefetch';
+import { isBodySupportedAwayFromVerticalSeam } from './transitionApproach';
 import {
   isStreamingRoomCandidateRenderable,
   type PlayableRoomSource,
@@ -86,72 +121,17 @@ import {
   planFullRoomRetention,
   selectNearestPreviewRoomIds,
 } from './worldStreamingPolicy';
-import {
-  computeOverworldPreviewSelection,
-  getChunkPreviewTileSize,
-  getDesiredChunkBounds,
-  type OverworldPreviewSelection,
-  type PreviewSelectionCandidate,
-} from './previewStreaming';
-import type { PerformanceProfile } from '../../ui/deviceLayout';
-import {
-  getTerrainCollisionTileValue,
-  getTerrainTileCollisionProfile,
-  terrainTileDisablesTilemapCollision,
-  terrainTileNeedsInsetBody,
-} from './terrainCollision';
-import {
-  computeLocalPlayPressureMetrics,
-  createDefaultLocalPlayPressureMetrics,
-  type LocalPlayPressureMetrics,
-} from './playPressure';
-import { logBootPhase, startBootStallWatch } from '../../main/bootDiagnostics';
-import {
-  clearWorldReplacementCoverage,
-  publishWorldReplacementCoverageReady,
-  type WorldReplacementCoverageSource,
-} from '../../main/worldReplacementCoverage';
 import { WorldTileClientController } from './worldTiles/controller';
-import {
-  SelectedExactPrefetchLifecycle,
-  type SelectedExactPrefetchRequest,
-} from './selectedExactPrefetch';
 import { shouldRenderLegacyWorldTileOverlay } from './worldTiles/dynamicOverlays';
-import { selectWorldTileLevel } from './worldTiles/lod';
-import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
-import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
 import {
   loadStartupDynamicOverlaySnapshots,
   stopStartupDynamicOverlayGeneration,
 } from './worldTiles/dynamicOverlayStartup';
-import {
-  FRAME_WORK_PRIORITIES,
-  FrameWorkCoordinator,
-  type FrameWorkGeneration,
-  type FrameWorkJobHandle,
-  type FrameWorkPriority,
-  type RunFrameWorkResult,
-} from './frameWorkCoordinator';
-import { RoomArtifactCache } from './roomArtifactCache';
-import { RoomTexturePreparation } from './roomTexturePreparation';
-import { DynamicOverlayReadinessCoordinator } from './dynamicOverlayReadinessCoordinator';
-import {
-  FullRoomPreparationLifecycleCoordinator,
-  FullRoomTeardownLifecycleCoordinator,
-  type FullRoomPreparationPhase,
-  type FullRoomTeardownPhase,
-} from './fullRoomLifecycles';
-import {
-  getDevicePerformanceMode,
-  type DevicePerformanceMode,
-} from '../../performance/devicePerformanceMode';
-import {
-  resolvePerformancePolicy,
-  type ResolvedPerformancePolicy,
-} from '../../performance/performancePolicy';
-import type { PerformanceAdvisorExactSnapshotEvent } from '../../performance/performanceAdvisor';
+import { selectWorldTileLevel } from './worldTiles/lod';
+import { processProgressivePreviewBatch } from './worldTiles/progressivePreviewBatch';
+import { resolveWorldTileInitialCoverage } from './worldTiles/startup';
+export type { LoadedFullRoom } from './fullRoomTypes';
 
-const PLAY_ROOM_PARALLAX_MULTIPLIER = 0.2;
 const FULL_ROOM_RELEASE_GRACE_MS = 300;
 const TRANSITION_PREPARED_FULL_ROOM_RETAIN_MS = 1_500;
 const PREDICTED_DESTINATION_INTENT_TTL_MS = 1_500;
@@ -171,31 +151,9 @@ const PREDICTED_SEAM_LOCK_DISTANCE_PX = 72;
 const PREDICTED_VELOCITY_EPSILON = 1;
 const PREDICTED_FALLBACK_SPEED_PX_PER_SEC = 150;
 const PREDICTED_DESTINATION_SWITCH_HYSTERESIS_MS = 8;
-const fullRoomPreparationLifecycle = new FullRoomPreparationLifecycleCoordinator();
+const fullRoomPreparationLifecycle =
+  new FullRoomPreparationLifecycleCoordinator();
 const fullRoomTeardownLifecycle = new FullRoomTeardownLifecycleCoordinator();
-
-export interface LoadedFullRoom<TLiveObject = unknown, TEdgeWall = unknown> {
-  room: RoomSnapshot;
-  source: PlayableRoomSource;
-  staticLighting: RoomStaticLightingEmitters;
-  backgroundColorRect: Phaser.GameObjects.Rectangle | null;
-  backgroundSprites: LoadedRoomBackgroundSprite[];
-  image: Phaser.GameObjects.Image;
-  textureKey: string;
-  foregroundImage: Phaser.GameObjects.Image | null;
-  foregroundTextureKey: string | null;
-  map: Phaser.Tilemaps.Tilemap;
-  terrainLayer: Phaser.Tilemaps.TilemapLayer;
-  terrainCollider: Phaser.Physics.Arcade.Collider | null;
-  terrainInsetBodies: Phaser.Physics.Arcade.StaticGroup | null;
-  terrainInsetCollider: Phaser.Physics.Arcade.Collider | null;
-  edgeWalls: TEdgeWall[];
-  liveObjects: TLiveObject[];
-  artifactKey?: string;
-  customRoomTileTextureKey?: string | null;
-  collisionReady?: boolean;
-  runtimeSuspended?: boolean;
-}
 
 interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   identity: string;
@@ -213,7 +171,7 @@ interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   texturePreparation: RoomTexturePreparation | null;
   customTilePreparation: CustomRoomTileTexturePreparation | null;
   textureKey: string;
-  foregroundTextureKey: string;
+  foregroundTextureKey: string | null;
   committedTextureKeys: string[];
   loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> | null;
   replacementRoom: LoadedFullRoom<TLiveObject, TEdgeWall> | null;
@@ -224,6 +182,8 @@ interface PendingFullRoomPreparation<TLiveObject, TEdgeWall> {
   nextLiveObjectIndex: number;
   customBackgroundReady: boolean;
   customBackgroundPreparation: CustomBackgroundTexturePreparation | null;
+  // Keeps the background resident between its upload and the room's own background objects.
+  releaseCustomBackground: ReleaseCustomBackgroundTexture | null;
   backgroundPrepared: boolean;
 }
 
@@ -236,7 +196,10 @@ interface PendingFullRoomTeardown<TLiveObject, TEdgeWall> {
   destructionStarted: boolean;
   liveObjectRoomStateCleared: boolean;
   retainedAfterDestruction: boolean;
-  commitAfterTeardown: PendingFullRoomPreparation<TLiveObject, TEdgeWall> | null;
+  commitAfterTeardown: PendingFullRoomPreparation<
+    TLiveObject,
+    TEdgeWall
+  > | null;
   job: FrameWorkJobHandle | null;
 }
 
@@ -268,15 +231,6 @@ interface PlayableRoomSummaryRecovery {
   retryAt: number;
 }
 
-interface LoadedRoomBackgroundSprite {
-  sprite: BuiltInBackgroundObject | CustomBackgroundObject;
-  parallax: number;
-  tileScale: number;
-  useVerticalParallax: boolean;
-  builtInLayer?: { height: number; repeat?: boolean };
-  customLayer?: CustomBackgroundLayer;
-}
-
 interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   scene: Phaser.Scene;
   worldRepository: WorldRepository;
@@ -285,11 +239,15 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   getDevicePerformanceMode?: () => DevicePerformanceMode;
   getSelectedCoordinates: () => RoomCoordinates;
   getCurrentRoomCoordinates: () => RoomCoordinates;
-  refreshRoomSummariesForTransition?: (centerCoordinates: RoomCoordinates) => Promise<boolean>;
+  refreshRoomSummariesForTransition?: (
+    centerCoordinates: RoomCoordinates,
+  ) => Promise<boolean>;
   getRoomOrigin: (coordinates: RoomCoordinates) => { x: number; y: number };
   getPlayer: () => Phaser.GameObjects.GameObject | null;
   shouldCollidePlayerWithTerrainTile?: (tile: Phaser.Tilemaps.Tile) => boolean;
-  createLiveObjects: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
+  createLiveObjects: (
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ) => void;
   createLiveObjectsBatch?: (
     loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
     startIndex: number,
@@ -319,7 +277,9 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
       clearRoomTriggerState?: boolean;
     },
   ) => boolean;
-  destroyEdgeWalls: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
+  destroyEdgeWalls: (
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ) => void;
   syncLiveObjectWorldColliders?: (
     loadedRooms: Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>,
   ) => void;
@@ -331,12 +291,20 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
   syncLiveObjectInteractions?: (
     loadedRooms: Iterable<LoadedFullRoom<TLiveObject, TEdgeWall>>,
   ) => void;
-  getProtectedFullRoomIds?: (targetFullRoomIds: ReadonlySet<string>) => Iterable<string>;
+  getProtectedFullRoomIds?: (
+    targetFullRoomIds: ReadonlySet<string>,
+  ) => Iterable<string>;
   onFullRoomVisibilityChanged?: () => void;
   onFullRoomSetChanged?: (coordinates: readonly RoomCoordinates[]) => void;
-  onFullRoomCollisionReady?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
-  onFullRoomDestroyed?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
-  onFullRoomReplaced?: (loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>) => void;
+  onFullRoomCollisionReady?: (
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ) => void;
+  onFullRoomDestroyed?: (
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ) => void;
+  onFullRoomReplaced?: (
+    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
+  ) => void;
   onSelectedExactRoomSnapshotReady?: (room: RoomSnapshot) => void;
   onPerformanceAdvisorExactSnapshotEvent?: (
     event: PerformanceAdvisorExactSnapshotEvent,
@@ -351,7 +319,11 @@ interface OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall> {
 }
 
 export type WorldRefreshResult = 'success' | 'cancelled' | 'error';
-export type ChunkWindowRefreshResult = 'updated' | 'unchanged' | 'cancelled' | 'error';
+export type ChunkWindowRefreshResult =
+  | 'updated'
+  | 'unchanged'
+  | 'cancelled'
+  | 'error';
 
 interface OptimisticWorldMutation {
   draftRoom?: RoomSnapshot | null;
@@ -361,6 +333,7 @@ interface OptimisticWorldMutation {
 }
 
 export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall = unknown> {
+  private readonly fullRoomPresenter: OverworldFullRoomPresenter<TLiveObject, TEdgeWall>;
   private destroyed = false;
   private loadGeneration = 0;
   private worldWindow: WorldWindow | null = null;
@@ -443,9 +416,27 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private fullRoomTeardownReconciliationGeneration: number | null = null;
   private retainedFullRoomIds = new Set<string>();
   private transitionPreparationSeamUrgent = false;
+  private frameWorkRunning = false;
+  private afterFrameWorkCallbacks: Array<() => void> | null = null;
 
   constructor(private readonly options: OverworldWorldStreamingControllerOptions<TLiveObject, TEdgeWall>) {
     this.textureNamespace = sanitizeTextureNamespace(options.scene.sys.settings.key);
+    this.fullRoomPresenter = new OverworldFullRoomPresenter({
+      get scene() { return options.scene; },
+      getRoomOrigin: (...args) => this.options.getRoomOrigin(...args),
+      getPlayer: () => this.options.getPlayer(),
+      shouldCollidePlayerWithTerrainTile: tile => this.options.shouldCollidePlayerWithTerrainTile?.(tile) ?? true,
+      destroyEdgeWalls: room => this.options.destroyEdgeWalls(room),
+      createLiveObjects: room => this.options.createLiveObjects(room),
+      destroyLiveObjects: (...args) => this.options.destroyLiveObjects(...args),
+      setLiveObjectsDormant: (...args) => this.options.setLiveObjectsDormant?.(...args),
+      setLiveObjectWorldCollisionTargetDormant: (...args) => this.options.setLiveObjectWorldCollisionTargetDormant?.(...args),
+      buildScopedRoomTextureKey: (...args) => this.buildScopedRoomTextureKey(...args),
+      buildFullRoomArtifactKey: (...args) => this.buildFullRoomArtifactKey(...args),
+      getCustomRoomTileTextureKey: room => this.getCustomRoomTileTextureKey(room),
+      isDestroyed: () => this.destroyed,
+      measure: <T>(label: string, callback: () => T): T => this.measure(label, callback),
+    });
     this.previewCache = new OverworldPreviewCache(options.worldRepository);
     this.frameWorkCoordinator = new FrameWorkCoordinator({
       onJobError: (job, error) => {
@@ -651,10 +642,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   setDraftRoom(room: RoomSnapshot): void {
     this.draftRoomsById.set(room.id, cloneRoomSnapshot(room));
-  }
-
-  clearDraftRoom(roomId: string): void {
-    this.draftRoomsById.delete(roomId);
   }
 
   setTransientRoomOverride(room: RoomSnapshot): void {
@@ -1196,6 +1183,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return true;
   }
 
+  /**
+   * Queues one atomic CPU job of at most about 1 ms in a gameplay queue, for caches worth filling
+   * before a room is played (Sword Hunter jump physics, F302); see enqueueGameplayWarmupWork. It
+   * also runs in Browse frames (for the room kept from the last run), always within the device
+   * profile's CPU cap.
+   */
+  enqueueBackgroundCpuWork(
+    label: string,
+    execute: () => void,
+    onCancelled?: () => void,
+    priority?: GameplayFrameWorkPriority,
+  ): FrameWorkJobHandle | null {
+    return this.destroyed
+      ? null
+      : enqueueGameplayWarmupWork(this.frameWorkCoordinator, label, execute, onCancelled, priority);
+  }
+
   private hasUrgentDestinationFrameWork(): boolean {
     return this.frameWorkCoordinator.hasQueuedWorkAtPriority('portal-current-destination')
       || this.frameWorkCoordinator.hasQueuedWorkAtPriority('predicted-destination-collision');
@@ -1205,29 +1209,61 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     criticalFrameElapsedMs: number,
     sharedBudgetConsumedMs = 0,
   ): RunFrameWorkResult | null {
-    if (this.destroyed || this.options.getMode() !== 'play') {
+    const browsing = this.options.getMode() !== 'play';
+    if (
+      this.destroyed
+      || (browsing
+        && !this.frameWorkCoordinator.hasQueuedWorkAtPriority('gameplay-catch-up')
+        && !this.frameWorkCoordinator.hasQueuedWorkAtPriority('gameplay-warmup'))
+    ) {
       this.lastDiscretionaryFrameWorkResult = null;
       return null;
     }
     const policy = this.getResolvedPerformancePolicy();
-    const frameWorkProfile = policy.transitionUrgency === 'seam-critical'
-      ? 'normal'
-      : policy.activeRuntimeProfile === 'reduced'
-        ? 'reduced'
-        : 'normal';
+    // Gameplay warm-up stays within the device's own profile even when a seam-critical
+    // transition lifts the rest of the frame's work to normal (F302).
+    const deviceProfile = policy.activeRuntimeProfile === 'reduced' ? 'reduced' : 'normal';
+    const gameplayCpuCapMs = getFrameWorkBudget(deviceProfile).cpuSubCapMs;
+    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
+    if (browsing) {
+      // Browse loads no full rooms, so this only finishes warming the room retained from the
+      // last run, ready for the next; streaming work waits for Play.
+      this.frameWorkRunning = true;
+      try {
+        this.frameWorkCoordinator.runFrame({
+          profile: deviceProfile,
+          criticalHeadroomMs,
+          sharedBudgetConsumedMs,
+          cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+          gameplayCpuCapMs,
+          gameplayOnly: true,
+        });
+      } finally {
+        this.finishFrameWork();
+      }
+      this.lastDiscretionaryFrameWorkResult = null;
+      return null;
+    }
+    const frameWorkProfile = policy.transitionUrgency === 'seam-critical' ? 'normal' : deviceProfile;
     const memoryProfile = policy.memoryProfile === 'reduced' ? 'reduced' : 'normal';
     if (memoryProfile !== this.roomArtifactCacheProfile) {
       this.syncRoomArtifactCachePolicy();
     }
-    const criticalHeadroomMs = Math.max(0, FRAME_TARGET_MS - criticalFrameElapsedMs);
-    const result = this.measure('stream.frameWorkCoordinator', () =>
-      this.frameWorkCoordinator.runFrame({
-        profile: frameWorkProfile,
-        criticalHeadroomMs,
-        sharedBudgetConsumedMs,
-        cpuBudgetConsumedMs: sharedBudgetConsumedMs,
-      }),
-    );
+    let result: RunFrameWorkResult | null | undefined;
+    this.frameWorkRunning = true;
+    try {
+      result = this.measure('stream.frameWorkCoordinator', () =>
+        this.frameWorkCoordinator.runFrame({
+          profile: frameWorkProfile,
+          criticalHeadroomMs,
+          sharedBudgetConsumedMs,
+          cpuBudgetConsumedMs: sharedBudgetConsumedMs,
+          gameplayCpuCapMs,
+        }),
+      );
+    } finally {
+      this.finishFrameWork();
+    }
     if (!result) {
       this.lastDiscretionaryFrameWorkResult = null;
       return null;
@@ -1237,6 +1273,32 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     this.lastDiscretionaryFrameWorkResult = result;
     return result;
+  }
+
+  /**
+   * Runs `callback` now, or, while a frame-work job runs (a prepared room's commit can spawn the
+   * player), right after the coordinator's frame, so its time is not charged to that job. Either
+   * way it runs before the next frame's live-object update.
+   */
+  runOutsideFrameWork(callback: () => void): void {
+    if (this.frameWorkRunning !== true) {
+      callback();
+      return;
+    }
+    (this.afterFrameWorkCallbacks ??= []).push(callback);
+  }
+
+  private finishFrameWork(): void {
+    this.frameWorkRunning = false;
+    const callbacks = this.afterFrameWorkCallbacks;
+    this.afterFrameWorkCallbacks = null;
+    for (const callback of callbacks ?? []) {
+      try {
+        callback();
+      } catch (error) {
+        console.error('Deferred overworld work failed after the frame-work frame.', error);
+      }
+    }
   }
 
   isWithinLoadedRoomBounds(coordinates: RoomCoordinates): boolean {
@@ -1315,13 +1377,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.getCurrentCachedFullRoomSnapshot(roomSummary);
   }
 
-  /** @deprecated Runtime readers should use `getPlayableRoomSnapshotViewForCoordinates`. */
-  getPlayableRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
-    const room = this.getPlayableRoomSnapshotViewForCoordinates(coordinates);
-    if (!room) return null;
-    return cloneRoomSnapshot(room);
-  }
-
   getRoomSnapshotCloneCountSinceReset(): number {
     return Math.max(
       0,
@@ -1334,24 +1389,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     if (!loadedRoom || loadedRoom.collisionReady !== true) {
       return false;
     }
-    return this.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
+    return this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
   }
 
-  private isLoadedRoomCollisionInfrastructureReady(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-  ): boolean {
-    const player = this.options.getPlayer?.();
-    if (!player) {
-      return true;
-    }
 
-    return Boolean(
-      loadedRoom.terrainCollider?.active
-      && (
-        !loadedRoom.terrainInsetBodies
-        || loadedRoom.terrainInsetCollider?.active
-      )
-    );
+
+  /** Drop the 1 s transition retry wait, e.g. once the browser is back online. */
+  retryPlayableRoomSnapshotsNow(): void {
+    this.playableRoomSnapshotRetryAtById.clear();
   }
 
   prefetchPlayableRoomForTransition(coordinates: RoomCoordinates): void {
@@ -1902,10 +1947,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.chunkWindow;
   }
 
-  getLoadedRoomBounds(): WorldRoomBounds | null {
-    return this.loadedRoomBounds;
-  }
-
   getLoadedChunkBounds(): WorldChunkBounds | null {
     return this.loadedChunkBounds;
   }
@@ -1935,10 +1976,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   hasPreviewForRoom(roomId: string): boolean {
     return this.previewRenderer.hasPreviewForRoom(roomId);
-  }
-
-  getPendingPreviewTextureBuildCount(): number {
-    return this.previewRenderer.getPendingTextureBuildCount();
   }
 
   flushPendingPreviewTextureBuilds(): number {
@@ -2078,18 +2115,24 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       const currentRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
       const currentLoadedRoom = this.loadedFullRoomsById.get(currentRoomId);
       if (currentLoadedRoom) {
-        this.updateFullRoomBackground(currentLoadedRoom, camera);
+        this.fullRoomPresenter.updateFullRoomBackground(currentLoadedRoom, camera);
       }
       return;
     }
 
     for (const loadedRoom of this.loadedFullRoomsById.values()) {
-      this.updateFullRoomBackground(loadedRoom, camera);
+      this.fullRoomPresenter.updateFullRoomBackground(loadedRoom, camera);
     }
   }
 
   private clearDisplayState(): void {
-    for (const roomId of Array.from(this.loadedFullRoomsById.keys())) {
+    // Previews give up their backgrounds first and the current room goes last, so the idle
+    // background kept on a phone (one slot) is the current room's (F352).
+    this.previewRenderer.releaseCustomBackgroundLeases();
+    const currentRoomId = roomIdFromCoordinates(this.options.getCurrentRoomCoordinates());
+    const roomIds = Array.from(this.loadedFullRoomsById.keys())
+      .sort((left, right) => Number(left === currentRoomId) - Number(right === currentRoomId));
+    for (const roomId of roomIds) {
       this.destroyFullRoom(roomId);
     }
 
@@ -3381,160 +3424,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.destroyFullRoom(room.id, false);
     this.cancelFullRoomPreparation(room.id, 'synchronous-room-load');
 
-    const textureKey = this.buildScopedRoomTextureKey(room, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['background', 'terrain'],
-    });
-    const foregroundTextureKey = this.buildScopedRoomTextureKey(room, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['foreground'],
-    });
-    if (!this.options.scene.textures.exists(textureKey)) {
-      this.measure('stream.buildFullRoomTexture.terrain', () => {
-        buildRoomSnapshotTexture(this.options.scene, room, textureKey, TILE_SIZE, {
-          includeBackground: false,
-          includeObjects: false,
-          includedLayers: ['background', 'terrain'],
-        });
-      });
-    }
-    if (!this.options.scene.textures.exists(foregroundTextureKey)) {
-      this.measure('stream.buildFullRoomTexture.foreground', () => {
-        buildRoomSnapshotTexture(this.options.scene, room, foregroundTextureKey, TILE_SIZE, {
-          includeBackground: false,
-          includeObjects: false,
-          includedLayers: ['foreground'],
-        });
-      });
-    }
-
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    const roomBackground = this.measure('stream.createRoomBackground', () =>
-      this.createRoomBackground(room, origin)
-    );
-    const image = this.options.scene.add.image(
-      origin.x + ROOM_PX_WIDTH / 2,
-      origin.y + ROOM_PX_HEIGHT / 2,
-      textureKey
-    );
-    image.setOrigin(0.5);
-    image.setDepth(10);
-    image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    const foregroundImage = this.options.scene.add.image(
-      origin.x + ROOM_PX_WIDTH / 2,
-      origin.y + ROOM_PX_HEIGHT / 2,
-      foregroundTextureKey
-    );
-    foregroundImage.setOrigin(0.5);
-    foregroundImage.setDepth(27.25);
-    foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-
-    const map = this.measure('stream.createTilemap', () => this.options.scene.make.tilemap({
-      tileWidth: TILE_SIZE,
-      tileHeight: TILE_SIZE,
-      width: ROOM_WIDTH,
-      height: ROOM_HEIGHT,
-    }));
-    const customRoomTileTextureKey = this.getCustomRoomTileTextureKey(room);
-    if (customRoomTileTextureKey) {
-      this.measure('stream.ensureCustomRoomTileTexture', () => {
-        if (!this.options.scene.textures.exists(customRoomTileTextureKey)) {
-          ensureCustomRoomTileTexture(this.options.scene, customRoomTileTextureKey, room.customTiles);
-        }
-      });
-    }
-    const tilesets: Phaser.Tilemaps.Tileset[] = [];
-    for (const tilesetConfig of TILESETS) {
-      const tileset = map.addTilesetImage(
-        tilesetConfig.key,
-        tilesetConfig.key,
-        TILE_SIZE,
-        TILE_SIZE,
-        0,
-        0,
-        tilesetConfig.firstGid
-      );
-      if (tileset) {
-        tilesets.push(tileset);
-      }
-    }
-    if (customRoomTileTextureKey) {
-      const customTileset = ensureCustomRoomTilesetForMap(map, customRoomTileTextureKey);
-      if (customTileset) {
-        tilesets.push(customTileset);
-      }
-    }
-
-    const terrainLayer = this.measure('stream.createTerrainLayer', () =>
-      map.createBlankLayer(`terrain-${room.id}`, tilesets, origin.x, origin.y)
-    );
-    if (!terrainLayer) {
-      roomBackground.colorRect?.destroy();
-      for (const backgroundSprite of roomBackground.sprites) {
-        backgroundSprite.sprite.destroy();
-      }
-      image.destroy();
-      foregroundImage.destroy();
-      map.destroy();
-      return;
-    }
-
-    this.measure('stream.populateTerrainLayer', () => {
-      this.populateTerrainLayerRows(room, terrainLayer, 0, ROOM_HEIGHT);
-    });
-
-    this.measure('stream.setTerrainCollision', () => {
-      terrainLayer.setCollisionByExclusion([-1]);
-    });
-    terrainLayer.setVisible(false);
-    const terrainInsetBodies = this.measure('stream.createTerrainInsetBodies', () =>
-      this.createTerrainInsetBodies(room, origin, terrainLayer)
-    );
-    const staticLighting = this.measure('stream.extractStaticLighting', () =>
-      extractRoomStaticLightingEmitters(room, origin)
-    );
-
-    const player = this.options.getPlayer();
-    const loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall> = {
-      room,
-      source,
-      staticLighting,
-      backgroundColorRect: roomBackground.colorRect,
-      backgroundSprites: roomBackground.sprites,
-      image,
-      textureKey,
-      foregroundImage,
-      foregroundTextureKey,
-      map,
-      terrainLayer,
-      terrainCollider: player
-        ? this.options.scene.physics.add.collider(
-            player,
-            terrainLayer,
-            undefined,
-            (_player, tile) =>
-              this.options.shouldCollidePlayerWithTerrainTile?.(tile as Phaser.Tilemaps.Tile) ?? true,
-          )
-        : null,
-      terrainInsetBodies,
-      terrainInsetCollider:
-        player && terrainInsetBodies
-          ? this.options.scene.physics.add.collider(player, terrainInsetBodies)
-          : null,
-      edgeWalls: [],
-      liveObjects: [],
-      artifactKey: this.buildFullRoomArtifactKey(room, source),
-      customRoomTileTextureKey,
-      collisionReady: false,
-    };
-    this.measure('stream.updateFullRoomBackground', () => {
-      this.updateFullRoomBackground(loadedRoom, this.options.scene.cameras.main);
-    });
-    this.measure('stream.createLiveObjects', () => {
-      this.options.createLiveObjects(loadedRoom);
-    });
+    const presentation = this.fullRoomPresenter.createImmediate(room, source);
+    if (!presentation) return;
+    const { loadedRoom, textureKey, foregroundTextureKey, customRoomTileTextureKey } = presentation;
     this.loadedFullRoomsById.set(room.id, loadedRoom);
     this.syncRoomArtifactCachePolicy();
     this.roomArtifactCache.record({
@@ -3552,7 +3444,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     });
     this.syncLiveObjectWorldColliders();
     this.options.syncLiveObjectInteractions?.(this.loadedFullRoomsById.values());
-    loadedRoom.collisionReady = this.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
+    loadedRoom.collisionReady = this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
     this.previewRenderer.syncPreviewVisibility();
     this.options.onFullRoomSetChanged?.([room.coordinates]);
     if (replacingExistingRoom) {
@@ -3573,26 +3465,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     ) {
       return;
     }
-    const player = this.options.getPlayer();
-    if (!player) {
-      return;
-    }
-
-    if (!loadedRoom.terrainCollider) {
-      loadedRoom.terrainCollider = this.options.scene.physics.add.collider(
-        player,
-        loadedRoom.terrainLayer,
-        undefined,
-        (_player, tile) =>
-          this.options.shouldCollidePlayerWithTerrainTile?.(tile as Phaser.Tilemaps.Tile) ?? true,
-      );
-    }
-    if (loadedRoom.terrainInsetBodies && !loadedRoom.terrainInsetCollider) {
-      loadedRoom.terrainInsetCollider = this.options.scene.physics.add.collider(
-        player,
-        loadedRoom.terrainInsetBodies,
-      );
-    }
+    this.fullRoomPresenter.ensurePlayerTerrainColliders(loadedRoom);
   }
 
   private isLoadedFullRoomCurrent(
@@ -3638,7 +3511,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   }
 
   private getFullRoomArtifactByteSize(room: RoomSnapshot): number {
-    const roomTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4 * 2;
+    const roomTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4
+      * (roomLayerHasTiles(room, 'foreground') ? 2 : 1);
     if ((room.customTiles?.length ?? 0) === 0) return roomTextureBytes;
     const customTileTextureBytes =
       CUSTOM_ROOM_TILE_ATLAS_COLUMNS
@@ -3652,14 +3526,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
   private getFullRoomArtifactResourceByteSizes(
     room: RoomSnapshot,
     textureKey: string,
-    foregroundTextureKey: string,
+    foregroundTextureKey: string | null,
     customRoomTileTextureKey: string | null,
   ): Readonly<Record<string, number>> {
     const roomLayerTextureBytes = ROOM_PX_WIDTH * ROOM_PX_HEIGHT * 4;
     const resourceByteSizes: Record<string, number> = {
       [textureKey]: roomLayerTextureBytes,
-      [foregroundTextureKey]: roomLayerTextureBytes,
     };
+    if (foregroundTextureKey) resourceByteSizes[foregroundTextureKey] = roomLayerTextureBytes;
     if (customRoomTileTextureKey && (room.customTiles?.length ?? 0) > 0) {
       resourceByteSizes[customRoomTileTextureKey] =
         CUSTOM_ROOM_TILE_ATLAS_COLUMNS
@@ -3730,7 +3604,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       const distance = deltaY > 0
         ? Math.max(0, origin.y + ROOM_PX_HEIGHT - player.y)
         : Math.max(0, player.y - origin.y);
-      if (distance <= PREDICTED_SEAM_LOCK_DISTANCE_PX) {
+      // A floor or ceiling short of the seam is not a hold at the seam; only
+      // the seam's own edge wall or clamp keeps the vertical room locked (F350).
+      if (
+        distance <= PREDICTED_SEAM_LOCK_DISTANCE_PX
+        && !isBodySupportedAwayFromVerticalSeam(
+          player.body,
+          deltaY > 0 ? 1 : -1,
+          deltaY > 0 ? origin.y + ROOM_PX_HEIGHT : origin.y,
+        )
+      ) {
         return distance / PREDICTED_FALLBACK_SPEED_PX_PER_SEC * 1_000;
       }
     }
@@ -3878,7 +3761,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         ) {
           this.ensurePlayerTerrainColliders(restoredLoadedRoom);
           restoredLoadedRoom.collisionReady =
-            this.isLoadedRoomCollisionInfrastructureReady(restoredLoadedRoom);
+            this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(restoredLoadedRoom);
           if (restoredLoadedRoom.artifactKey) {
             this.roomArtifactCache.touch(restoredLoadedRoom.artifactKey);
           }
@@ -3924,13 +3807,16 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       includeObjects: false,
       includedLayers: ['background', 'terrain'],
     });
-    const foregroundTextureKey = this.buildScopedRoomTextureKey(renderableRoom.room, {
-      includeBackground: false,
-      includeObjects: false,
-      includedLayers: ['foreground'],
-    });
+    // Rooms without foreground tiles get no foreground texture or image (F307).
+    const foregroundTextureKey = roomLayerHasTiles(renderableRoom.room, 'foreground')
+      ? this.buildScopedRoomTextureKey(renderableRoom.room, {
+          includeBackground: false,
+          includeObjects: false,
+          includedLayers: ['foreground'],
+        })
+      : null;
     const texturesReady = this.options.scene.textures.exists(textureKey)
-      && this.options.scene.textures.exists(foregroundTextureKey);
+      && (!foregroundTextureKey || this.options.scene.textures.exists(foregroundTextureKey));
     const resolvedBackground = resolveRoomBackground(renderableRoom.room.background);
     const customRoomTileTextureKey = this.getCustomRoomTileTextureKey(renderableRoom.room);
     const customTilePreparation = customRoomTileTextureKey
@@ -3979,6 +3865,12 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       nextLiveObjectIndex: 0,
       customBackgroundReady,
       customBackgroundPreparation,
+      releaseCustomBackground: resolvedBackground.kind === 'custom'
+        ? acquireCustomBackgroundTexture(
+            this.options.scene,
+            getCustomBackgroundTextureKey(resolvedBackground.id),
+          )
+        : null,
       backgroundPrepared: false,
     };
     this.pendingFullRoomPreparationsById.set(renderableRoom.id, preparation);
@@ -4278,88 +4170,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       'cpu',
       1,
       () => {
-        registerCustomSpritesFromSnapshot(preparation.room);
-        const origin = this.options.getRoomOrigin(preparation.room.coordinates);
-        const image = this.options.scene.add.image(
-          origin.x + ROOM_PX_WIDTH / 2,
-          origin.y + ROOM_PX_HEIGHT / 2,
-          preparation.textureKey,
-        );
-        image.setOrigin(0.5);
-        image.setDepth(10);
-        image.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-        image.setActive(false);
-        image.setVisible(false);
-        const foregroundImage = this.options.scene.add.image(
-          origin.x + ROOM_PX_WIDTH / 2,
-          origin.y + ROOM_PX_HEIGHT / 2,
-          preparation.foregroundTextureKey,
-        );
-        foregroundImage.setOrigin(0.5);
-        foregroundImage.setDepth(27.25);
-        foregroundImage.setDisplaySize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-        foregroundImage.setActive(false);
-        foregroundImage.setVisible(false);
-
-        const map = this.options.scene.make.tilemap({
-          tileWidth: TILE_SIZE,
-          tileHeight: TILE_SIZE,
-          width: ROOM_WIDTH,
-          height: ROOM_HEIGHT,
-        });
-        const tilesets: Phaser.Tilemaps.Tileset[] = [];
-        for (const tilesetConfig of TILESETS) {
-          const tileset = map.addTilesetImage(
-            tilesetConfig.key,
-            tilesetConfig.key,
-            TILE_SIZE,
-            TILE_SIZE,
-            0,
-            0,
-            tilesetConfig.firstGid,
-          );
-          if (tileset) tilesets.push(tileset);
-        }
-        const customRoomTileTextureKey = this.getCustomRoomTileTextureKey(preparation.room);
-        if (customRoomTileTextureKey) {
-          const customTileset = ensureCustomRoomTilesetForMap(map, customRoomTileTextureKey);
-          if (customTileset) tilesets.push(customTileset);
-        }
-        const terrainLayer = map.createBlankLayer(
-          `terrain-${preparation.room.id}`,
-          tilesets,
-          origin.x,
-          origin.y,
-        );
-        if (!terrainLayer) {
-          image.destroy();
-          foregroundImage.destroy();
-          map.destroy();
-          throw new Error(`Could not create terrain layer for ${preparation.room.id}.`);
-        }
-        terrainLayer.setVisible(false);
-        terrainLayer.setActive(false);
-        preparation.loadedRoom = {
-          room: preparation.room,
-          source: preparation.source,
-          staticLighting: { emitters: [], objectCount: 0, tileCount: 0 },
-          backgroundColorRect: null,
-          backgroundSprites: [],
-          image,
-          textureKey: preparation.textureKey,
-          foregroundImage,
-          foregroundTextureKey: preparation.foregroundTextureKey,
-          map,
-          terrainLayer,
-          terrainCollider: null,
-          terrainInsetBodies: null,
-          terrainInsetCollider: null,
-          edgeWalls: [],
-          liveObjects: [],
-          artifactKey: preparation.artifactKey,
-          customRoomTileTextureKey,
-          collisionReady: false,
-        };
+        preparation.loadedRoom = this.fullRoomPresenter.createDormantShell(preparation);
         this.queuePreparedBackground(preparation);
       },
     );
@@ -4376,13 +4187,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       0.75,
       () => {
         const loadedRoom = this.requirePreparedLoadedRoom(preparation);
-        const origin = this.options.getRoomOrigin(preparation.room.coordinates);
-        const roomBackground = this.createRoomBackground(preparation.room, origin, {
-          dormant: true,
-          requireCustomTextureReady: true,
-        });
-        loadedRoom.backgroundColorRect = roomBackground.colorRect;
-        loadedRoom.backgroundSprites = roomBackground.sprites;
+        this.fullRoomPresenter.prepareBackground(loadedRoom, preparation);
         preparation.backgroundPrepared = true;
         this.queuePreparedTerrainBatch(preparation);
       },
@@ -4404,7 +4209,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           ROOM_HEIGHT,
           preparation.nextTerrainRow + PREPARED_TERRAIN_ROWS_PER_JOB,
         );
-        this.populateTerrainLayerRows(
+        this.fullRoomPresenter.populateTerrainLayerRows(
           preparation.room,
           loadedRoom.terrainLayer,
           preparation.nextTerrainRow,
@@ -4431,8 +4236,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       0.75,
       () => {
         const loadedRoom = this.requirePreparedLoadedRoom(preparation);
-        loadedRoom.terrainLayer.setCollisionByExclusion([-1]);
-        loadedRoom.terrainInsetBodies = this.options.scene.physics.add.staticGroup();
+        this.fullRoomPresenter.prepareTerrainCollision(loadedRoom);
         this.queuePreparedTerrainInsets(preparation);
       },
     );
@@ -4453,7 +4257,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           ROOM_HEIGHT,
           preparation.nextInsetRow + PREPARED_TERRAIN_ROWS_PER_JOB,
         );
-        preparation.insetBodyCount += this.createTerrainInsetBodiesRows(
+        preparation.insetBodyCount += this.fullRoomPresenter.createTerrainInsetBodiesRows(
           preparation.room,
           this.options.getRoomOrigin(preparation.room.coordinates),
           loadedRoom.terrainLayer,
@@ -4467,12 +4271,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
           this.queuePreparedTerrainInsets(preparation);
           return;
         }
-        if (preparation.insetBodyCount === 0) {
-          loadedRoom.terrainInsetBodies?.destroy();
-          loadedRoom.terrainInsetBodies = null;
-        } else {
-          loadedRoom.terrainLayer.calculateFacesWithin(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
-        }
+        this.fullRoomPresenter.finishTerrainInsets(loadedRoom, preparation.insetBodyCount);
         this.queuePreparedLighting(preparation);
       },
     );
@@ -4489,10 +4288,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       0.75,
       () => {
         const loadedRoom = this.requirePreparedLoadedRoom(preparation);
-        loadedRoom.staticLighting = extractRoomStaticLightingEmitters(
-          preparation.room,
-          this.options.getRoomOrigin(preparation.room.coordinates),
-        );
+        this.fullRoomPresenter.prepareLighting(loadedRoom, preparation.room);
         this.queuePreparedLiveObjects(preparation);
       },
     );
@@ -4626,14 +4422,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       if (!preparation.backgroundPrepared) {
         throw new Error(`Prepared background is incomplete for ${preparation.room.id}.`);
       }
-      this.setPreparedRoomBackgroundActive(loadedRoom, true);
-      loadedRoom.image.setActive(true);
-      loadedRoom.image.setVisible(true);
-      loadedRoom.foregroundImage?.setActive(true);
-      loadedRoom.foregroundImage?.setVisible(true);
-      loadedRoom.terrainLayer.setActive(true);
-      this.setPreparedInsetBodiesActive(loadedRoom, true);
-      this.options.setLiveObjectsDormant?.(loadedRoom, false);
+      this.fullRoomPresenter.activatePrepared(loadedRoom);
 
       // Publish the prepared runtime only after its local activation succeeds.
       // A replaced runtime remains intact off-map until every observer accepts
@@ -4642,17 +4431,18 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.ensurePlayerTerrainColliders(loadedRoom);
       this.syncLiveObjectWorldColliders();
       this.options.syncLiveObjectInteractions?.(this.loadedFullRoomsById.values());
-      if (!this.isLoadedRoomCollisionInfrastructureReady(loadedRoom)) {
+      if (!this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(loadedRoom)) {
         throw new Error(`Prepared runtime collision is incomplete for ${preparation.room.id}.`);
       }
       loadedRoom.collisionReady = true;
-      this.updateFullRoomBackground(loadedRoom, this.options.scene.cameras.main);
+      this.fullRoomPresenter.updateFullRoomBackground(loadedRoom, this.options.scene.cameras.main);
       this.previewRenderer.syncPreviewVisibility();
       this.options.onFullRoomSetChanged?.([preparation.room.coordinates]);
       // Settle this preparation before callbacks that may synchronously clear
       // course overrides and invalidate this same room. Re-entrant invalidation
       // must not cancel and destroy the runtime that was just published.
       fullRoomPreparationLifecycle.markCommitted(preparation);
+      this.releasePreparationCustomBackground(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) === preparation) {
         this.pendingFullRoomPreparationsById.delete(preparation.room.id);
       }
@@ -4673,6 +4463,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         previousReleaseAt,
       );
       fullRoomPreparationLifecycle.markFailed(preparation);
+      this.releasePreparationCustomBackground(preparation);
       if (this.pendingFullRoomPreparationsById.get(preparation.room.id) !== preparation) {
         this.settleDisposedReplacementAfterPreparationStops(preparation);
       }
@@ -4705,7 +4496,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       this.fullRoomReleaseAtById.set(loadedRoom.room.id, previousReleaseAt);
     }
     this.runPreparedRoomRollbackStep('destroy destination runtime', () => {
-      this.destroyLoadedRoomResources(loadedRoom, true);
+      this.fullRoomPresenter.destroyLoadedRoomResources(loadedRoom, true);
     });
     preparation.loadedRoom = null;
 
@@ -4756,7 +4547,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       existing.customRoomTileTextureKey,
     ].filter((key): key is string => Boolean(key));
     try {
-      this.destroyLoadedRoomResources(existing, true);
+      this.fullRoomPresenter.destroyLoadedRoomResources(existing, true);
     } catch (error) {
       console.error(`Replaced room ${existing.room.id} could not be fully destroyed.`, error);
     }
@@ -4808,7 +4599,8 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
   ): void {
     this.syncRoomArtifactCachePolicy();
-    const resourceKeys = [preparation.textureKey, preparation.foregroundTextureKey];
+    const resourceKeys = [preparation.textureKey];
+    if (preparation.foregroundTextureKey) resourceKeys.push(preparation.foregroundTextureKey);
     const customTextureKey = this.getCustomRoomTileTextureKey(preparation.room);
     if (customTextureKey) resourceKeys.push(customTextureKey);
     this.roomArtifactCache.record({
@@ -4849,10 +4641,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     preparation.texturePreparation?.cancel();
     preparation.customTilePreparation?.cancel();
     preparation.customBackgroundPreparation?.cancel();
+    this.releasePreparationCustomBackground(preparation);
     if (preparation.loadedRoom) {
       const loadedRoom = preparation.loadedRoom;
       this.runPreparedRoomRollbackStep('destroy cancelled destination runtime', () => {
-        this.destroyLoadedRoomResources(loadedRoom, true);
+        this.fullRoomPresenter.destroyLoadedRoomResources(loadedRoom, true);
       });
       preparation.loadedRoom = null;
     }
@@ -4878,6 +4671,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       );
     }
     return preserveDisposedReplacementLifecycle ? disposedReplacementRoom : null;
+  }
+
+  private releasePreparationCustomBackground(
+    preparation: PendingFullRoomPreparation<TLiveObject, TEdgeWall>,
+  ): void {
+    preparation.releaseCustomBackground?.();
+    preparation.releaseCustomBackground = null;
   }
 
   private cancelAllFullRoomPreparations(reason: string): void {
@@ -4988,45 +4788,15 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
         !referencedByLoadedRoom
         && !referencedByPreparation
         && !this.roomArtifactCache.referencesResource(resourceKey)
-        && this.options.scene.textures.exists(resourceKey)
       ) {
-        this.options.scene.textures.remove(resourceKey);
+        this.fullRoomPresenter.releaseTextureIfPresent(resourceKey);
       }
     }
   }
 
-  private populateTerrainLayerRows(
-    room: RoomSnapshot,
-    terrainLayer: Phaser.Tilemaps.TilemapLayer,
-    startRow: number,
-    endRow: number,
-  ): void {
-    for (let y = Math.max(0, startRow); y < Math.min(ROOM_HEIGHT, endRow); y += 1) {
-      for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const { gid, flipX, flipY } = getTerrainCollisionTileValue(room, x, y);
-        if (gid <= 0) continue;
-        const tile = terrainLayer.putTileAt(gid, x, y);
-        if (tile) {
-          tile.flipX = flipX;
-          tile.flipY = flipY;
-        }
-      }
-    }
-  }
 
-  private setPreparedInsetBodiesActive(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-    active: boolean,
-  ): void {
-    loadedRoom.terrainInsetBodies?.children.iterate((child) => {
-      const gameObject = child as Phaser.GameObjects.GameObject & {
-        body?: Phaser.Physics.Arcade.StaticBody | null;
-      };
-      gameObject.setActive(active);
-      if (gameObject.body) gameObject.body.enable = active;
-      return true;
-    });
-  }
+
+
 
   private unloadFullRoomsOutsideStream(fullRoomIds: Set<string>): void {
     const changedCoordinates: RoomCoordinates[] = [];
@@ -5104,7 +4874,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     loadedRoom.collisionReady = false;
     this.pendingFullRoomTeardownsById.set(roomId, pending);
     try {
-      pending.restoreRuntime = this.suspendLoadedRoomRuntime(loadedRoom);
+      pending.restoreRuntime = this.fullRoomPresenter.suspendLoadedRoomRuntime(loadedRoom);
     } catch (error) {
       console.error(`Could not suspend room ${roomId} for deferred teardown.`, error);
       fullRoomTeardownLifecycle.beginDestruction(pending);
@@ -5172,14 +4942,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     if (pending.phase === 'collision') {
-      this.destroyLoadedRoomCollisionResources(pending.loadedRoom);
+      this.fullRoomPresenter.destroyLoadedRoomCollisionResources(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'insets');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'insets');
       return;
     }
 
     if (pending.phase === 'insets') {
-      if (this.destroyLoadedRoomInsetBodyBatch(pending.loadedRoom)) {
+      if (this.fullRoomPresenter.destroyLoadedRoomInsetBodyBatch(pending.loadedRoom, TEARDOWN_INSET_BODIES_PER_JOB)) {
         fullRoomTeardownLifecycle.advance(pending, 'terrain');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
@@ -5187,25 +4957,14 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     if (pending.phase === 'terrain') {
-      pending.loadedRoom.terrainLayer.destroy();
-      pending.loadedRoom.map.destroy();
+      this.fullRoomPresenter.destroyTerrain(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'backgrounds');
       return;
     }
 
     if (pending.phase === 'backgrounds') {
-      for (
-        let index = 0;
-        index < TEARDOWN_BACKGROUND_SPRITES_PER_JOB;
-        index += 1
-      ) {
-        const background = pending.loadedRoom.backgroundSprites.at(-1);
-        if (!background) break;
-        background.sprite.destroy();
-        pending.loadedRoom.backgroundSprites.pop();
-      }
-      if (pending.loadedRoom.backgroundSprites.length === 0) {
+      if (this.fullRoomPresenter.destroyBackgroundSpriteBatch(pending.loadedRoom, TEARDOWN_BACKGROUND_SPRITES_PER_JOB)) {
         fullRoomTeardownLifecycle.advance(pending, 'display');
       }
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, pending.phase);
@@ -5213,11 +4972,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
 
     if (pending.phase === 'display') {
-      pending.loadedRoom.backgroundColorRect?.destroy();
-      pending.loadedRoom.backgroundColorRect = null;
-      pending.loadedRoom.image.destroy();
-      pending.loadedRoom.foregroundImage?.destroy();
-      pending.loadedRoom.foregroundImage = null;
+      this.fullRoomPresenter.destroyDisplay(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'finalize');
       this.enqueuePendingFullRoomTeardownJob(roomId, pending, 'finalize');
       return;
@@ -5337,53 +5092,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       fullRoomTeardownLifecycle.advance(pending, 'collision');
     }
     if (pending.phase === 'collision') {
-      this.runFullRoomTeardownCleanupStep('destroy edge walls', () => {
-        this.options.destroyEdgeWalls(pending.loadedRoom);
-      });
-      this.runFullRoomTeardownCleanupStep('destroy the terrain collider', () => {
-        pending.loadedRoom.terrainCollider?.destroy();
-      });
-      pending.loadedRoom.terrainCollider = null;
-      this.runFullRoomTeardownCleanupStep('destroy the inset collider', () => {
-        pending.loadedRoom.terrainInsetCollider?.destroy();
-      });
-      pending.loadedRoom.terrainInsetCollider = null;
+      this.fullRoomPresenter.forceDestroyCollision(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'insets');
     }
     if (pending.phase === 'insets') {
-      this.forceDestroyLoadedRoomInsetBodies(pending.loadedRoom);
+      this.fullRoomPresenter.forceDestroyLoadedRoomInsetBodies(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'terrain');
     }
     if (pending.phase === 'terrain') {
-      this.runFullRoomTeardownCleanupStep('destroy the terrain layer', () => {
-        pending.loadedRoom.terrainLayer.destroy();
-      });
-      this.runFullRoomTeardownCleanupStep('destroy the tilemap', () => {
-        pending.loadedRoom.map.destroy();
-      });
+      this.fullRoomPresenter.forceDestroyTerrain(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'backgrounds');
     }
     if (pending.phase === 'backgrounds') {
-      for (const background of pending.loadedRoom.backgroundSprites) {
-        this.runFullRoomTeardownCleanupStep('destroy a background sprite', () => {
-          background.sprite.destroy();
-        });
-      }
-      pending.loadedRoom.backgroundSprites = [];
+      this.fullRoomPresenter.forceDestroyBackgrounds(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'display');
     }
     if (pending.phase === 'display') {
-      this.runFullRoomTeardownCleanupStep('destroy the background color', () => {
-        pending.loadedRoom.backgroundColorRect?.destroy();
-      });
-      pending.loadedRoom.backgroundColorRect = null;
-      this.runFullRoomTeardownCleanupStep('destroy the room image', () => {
-        pending.loadedRoom.image.destroy();
-      });
-      this.runFullRoomTeardownCleanupStep('destroy the foreground image', () => {
-        pending.loadedRoom.foregroundImage?.destroy();
-      });
-      pending.loadedRoom.foregroundImage = null;
+      this.fullRoomPresenter.forceDestroyDisplay(pending.loadedRoom);
       fullRoomTeardownLifecycle.advance(pending, 'finalize');
     }
     this.finalizePendingFullRoomTeardown(roomId, pending, queueReconciliation);
@@ -5397,60 +5122,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
   }
 
-  private forceDestroyLoadedRoomInsetBodies(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-  ): void {
-    const insetBodies = loadedRoom.terrainInsetBodies;
-    if (!insetBodies) return;
-    let children: Phaser.GameObjects.GameObject[] = [];
-    this.runFullRoomTeardownCleanupStep('enumerate terrain inset bodies', () => {
-      children = [...insetBodies.getChildren()];
-    });
-    for (const child of children) {
-      this.runFullRoomTeardownCleanupStep('detach a terrain inset body', () => {
-        insetBodies.remove(child, false, false);
-      });
-      this.runFullRoomTeardownCleanupStep('destroy a terrain inset body', () => {
-        child.destroy();
-      });
-    }
-    this.runFullRoomTeardownCleanupStep('clear terrain inset bodies', () => {
-      insetBodies.clear(false, false);
-    });
-    this.runFullRoomTeardownCleanupStep('destroy the terrain inset group', () => {
-      insetBodies.destroy();
-    });
-    loadedRoom.terrainInsetBodies = null;
-  }
 
-  private destroyLoadedRoomCollisionResources(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-  ): void {
-    this.options.destroyEdgeWalls(loadedRoom);
-    loadedRoom.terrainCollider?.destroy();
-    loadedRoom.terrainCollider = null;
-    loadedRoom.terrainInsetCollider?.destroy();
-    loadedRoom.terrainInsetCollider = null;
-  }
 
-  private destroyLoadedRoomInsetBodyBatch(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-  ): boolean {
-    const insetBodies = loadedRoom.terrainInsetBodies;
-    if (!insetBodies) return true;
-    const children = insetBodies.getChildren();
-    for (
-      let index = 0;
-      index < Math.min(TEARDOWN_INSET_BODIES_PER_JOB, children.length);
-      index += 1
-    ) {
-      insetBodies.remove(children[index], true, true);
-    }
-    if (insetBodies.getLength() > 0) return false;
-    insetBodies.destroy();
-    loadedRoom.terrainInsetBodies = null;
-    return true;
-  }
+
+
+
 
   private queueFullRoomTeardownReconciliation(): void {
     const reconciliation = fullRoomTeardownLifecycle.requestReconciliation(
@@ -5550,7 +5226,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       let collisionInfrastructureReady = false;
       try {
         this.ensurePlayerTerrainColliders(loadedRoom);
-        collisionInfrastructureReady = this.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
+        collisionInfrastructureReady = this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
       } catch (error) {
         console.error(`Could not restore collision readiness for retained room ${roomId}.`, error);
       }
@@ -5608,59 +5284,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return loadedRoom.room.coordinates;
   }
 
-  private suspendLoadedRoomRuntime(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-  ): () => void {
-    loadedRoom.runtimeSuspended = true;
-    const displayObjects = [
-      loadedRoom.backgroundColorRect,
-      ...(loadedRoom.backgroundSprites ?? []).map((background) => background.sprite),
-      loadedRoom.image,
-      loadedRoom.foregroundImage,
-      loadedRoom.terrainLayer,
-    ].filter(Boolean) as Phaser.GameObjects.GameObject[];
-    const displayStates = displayObjects.map((gameObject) => {
-      const displayObject = gameObject as Phaser.GameObjects.GameObject & {
-        visible?: boolean;
-        setVisible?: (visible: boolean) => unknown;
-      };
-      const state = {
-        gameObject: displayObject,
-        active: displayObject.active,
-        visible: displayObject.visible,
-      };
-      displayObject.setActive(false);
-      displayObject.setVisible?.(false);
-      return state;
-    });
-    const terrainColliderActive = loadedRoom.terrainCollider?.active ?? false;
-    const terrainInsetColliderActive = loadedRoom.terrainInsetCollider?.active ?? false;
-    if (loadedRoom.terrainCollider) loadedRoom.terrainCollider.active = false;
-    if (loadedRoom.terrainInsetCollider) loadedRoom.terrainInsetCollider.active = false;
-    this.setPreparedInsetBodiesActive(loadedRoom, false);
-    this.options.setLiveObjectsDormant?.(loadedRoom, true);
-    this.options.setLiveObjectWorldCollisionTargetDormant?.(loadedRoom, true);
 
-    return () => {
-      loadedRoom.runtimeSuspended = false;
-      for (const state of displayStates) {
-        if (!state.gameObject.scene) continue;
-        state.gameObject.setActive(state.active);
-        if (typeof state.visible === 'boolean') {
-          state.gameObject.setVisible?.(state.visible);
-        }
-      }
-      if (loadedRoom.terrainCollider) {
-        loadedRoom.terrainCollider.active = terrainColliderActive;
-      }
-      if (loadedRoom.terrainInsetCollider) {
-        loadedRoom.terrainInsetCollider.active = terrainInsetColliderActive;
-      }
-      this.setPreparedInsetBodiesActive(loadedRoom, true);
-      this.options.setLiveObjectsDormant?.(loadedRoom, false);
-      this.options.setLiveObjectWorldCollisionTargetDormant?.(loadedRoom, false);
-    };
-  }
 
   private cancelAllPendingFullRoomTeardowns(
     reason: string,
@@ -5780,7 +5404,7 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.loadedFullRoomsById.delete(roomId);
     this.fullRoomReleaseAtById.delete(roomId);
     this.runFullRoomTeardownCleanupStep('destroy room resources', () => {
-      this.destroyLoadedRoomResources(loadedRoom);
+      this.fullRoomPresenter.destroyLoadedRoomResources(loadedRoom);
     });
     this.runFullRoomTeardownCleanupStep('notify room destruction', () => {
       this.options.onFullRoomDestroyed?.(loadedRoom);
@@ -5796,345 +5420,23 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return loadedRoom.room.coordinates;
   }
 
-  private destroyLoadedRoomResources(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-    preserveTriggerState = false,
-  ): void {
-    let firstError: unknown;
-    let hasError = false;
-    const attempt = (operation: () => void) => {
-      try {
-        operation();
-      } catch (error) {
-        if (!hasError) {
-          firstError = error;
-          hasError = true;
-        }
-      }
-    };
-    attempt(() => this.options.destroyEdgeWalls(loadedRoom));
-    attempt(() => this.options.destroyLiveObjects(loadedRoom, { preserveTriggerState }));
-    attempt(() => loadedRoom.terrainCollider?.destroy());
-    loadedRoom.terrainCollider = null;
-    attempt(() => loadedRoom.terrainInsetCollider?.destroy());
-    loadedRoom.terrainInsetCollider = null;
-    attempt(() => loadedRoom.terrainInsetBodies?.clear(true, true));
-    attempt(() => loadedRoom.terrainInsetBodies?.destroy());
-    loadedRoom.terrainInsetBodies = null;
-    attempt(() => loadedRoom.terrainLayer.destroy());
-    attempt(() => loadedRoom.map.destroy());
-    attempt(() => loadedRoom.backgroundColorRect?.destroy());
-    loadedRoom.backgroundColorRect = null;
-    for (const backgroundSprite of loadedRoom.backgroundSprites) {
-      attempt(() => backgroundSprite.sprite.destroy());
-    }
-    loadedRoom.backgroundSprites = [];
-    attempt(() => loadedRoom.image.destroy());
-    attempt(() => loadedRoom.foregroundImage?.destroy());
-    loadedRoom.foregroundImage = null;
-    if (hasError) throw firstError;
-  }
+
 
   private syncLiveObjectWorldColliders(): void {
     this.options.syncLiveObjectWorldColliders?.(this.loadedFullRoomsById.values());
   }
 
-  private createTerrainInsetBodies(
-    room: RoomSnapshot,
-    origin: { x: number; y: number },
-    terrainLayer: Phaser.Tilemaps.TilemapLayer
-  ): Phaser.Physics.Arcade.StaticGroup | null {
-    const insetBodies = this.options.scene.physics.add.staticGroup();
-    let bodyCount = 0;
 
-    bodyCount += this.createTerrainInsetBodiesRows(
-      room,
-      origin,
-      terrainLayer,
-      insetBodies,
-      0,
-      ROOM_HEIGHT,
-      false,
-    );
 
-    if (bodyCount === 0) {
-      insetBodies.destroy();
-      return null;
-    }
 
-    terrainLayer.calculateFacesWithin(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
-    return insetBodies;
-  }
 
-  private createTerrainInsetBodiesRows(
-    room: RoomSnapshot,
-    origin: { x: number; y: number },
-    terrainLayer: Phaser.Tilemaps.TilemapLayer,
-    insetBodies: Phaser.Physics.Arcade.StaticGroup | null,
-    startRow: number,
-    endRow: number,
-    dormant: boolean,
-  ): number {
-    if (!insetBodies) return 0;
-    let bodyCount = 0;
-    for (let y = Math.max(0, startRow); y < Math.min(ROOM_HEIGHT, endRow); y += 1) {
-      for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const tile = terrainLayer.getTileAt(x, y);
-        if (tile && terrainTileDisablesTilemapCollision(room, x, y)) {
-          tile.setCollision(false, false, false, false);
-        }
-        if (!terrainTileNeedsInsetBody(room, x, y)) continue;
 
-        const profile = getTerrainTileCollisionProfile(room, x, y);
-        const zone = this.options.scene.add.zone(
-          origin.x + x * TILE_SIZE + TILE_SIZE / 2,
-          origin.y + y * TILE_SIZE + profile.topInset + profile.height / 2,
-          TILE_SIZE,
-          profile.height,
-        );
-        this.options.scene.physics.add.existing(zone, true);
-        insetBodies.add(zone);
-        if (dormant) {
-          zone.setActive(false);
-          const body = zone.body as Phaser.Physics.Arcade.StaticBody | null;
-          if (body) body.enable = false;
-        }
-        bodyCount += 1;
-      }
-    }
-    return bodyCount;
-  }
 
-  private createRoomBackground(
-    room: RoomSnapshot,
-    origin: { x: number; y: number },
-    options: {
-      dormant?: boolean;
-      requireCustomTextureReady?: boolean;
-    } = {},
-  ): {
-    colorRect: Phaser.GameObjects.Rectangle | null;
-    sprites: LoadedRoomBackgroundSprite[];
-  } {
-    const resolved = resolveRoomBackground(room.background);
-    let colorRect: Phaser.GameObjects.Rectangle | null = null;
-    const sprites: LoadedRoomBackgroundSprite[] = [];
-    const finish = () => {
-      if (options.dormant) {
-        this.setRoomBackgroundObjectsActive(colorRect, sprites, false);
-      }
-      return { colorRect, sprites };
-    };
 
-    if (resolved.kind === 'none') {
-      colorRect = this.options.scene.add.rectangle(
-        origin.x,
-        origin.y,
-        ROOM_PX_WIDTH,
-        ROOM_PX_HEIGHT,
-        RETRO_COLORS.backgroundNumber,
-      );
-      colorRect.setOrigin(0, 0);
-      colorRect.setDepth(8);
 
-      for (let index = 0; index < 2; index += 1) {
-        const config = getStarfieldLayerConfig(index, PLAY_ROOM_PARALLAX_MULTIPLIER);
-        sprites.push({
-          sprite: createStarfieldTileSprite(this.options.scene, {
-            x: origin.x,
-            y: origin.y,
-            width: ROOM_PX_WIDTH,
-            height: ROOM_PX_HEIGHT,
-            depth: 9 + index * 0.1,
-            alpha: config.alpha,
-          }),
-          parallax: config.parallax,
-          tileScale: config.tileScale,
-          useVerticalParallax: false,
-        });
-      }
 
-      return finish();
-    }
 
-    if (resolved.kind === 'solid') {
-      const color = Phaser.Display.Color.HexStringToColor(resolved.color).color;
-      colorRect = this.options.scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
-      colorRect.setOrigin(0, 0);
-      colorRect.setDepth(8);
-      return finish();
-    }
 
-    if (resolved.kind === 'custom') {
-      colorRect = this.options.scene.add.rectangle(
-        origin.x,
-        origin.y,
-        ROOM_PX_WIDTH,
-        ROOM_PX_HEIGHT,
-        RETRO_COLORS.backgroundNumber,
-      );
-      colorRect.setOrigin(0, 0);
-      colorRect.setDepth(8);
-      const createReadyCustomBackground = () => {
-        const layer = createCustomBackgroundLayer(this.options.scene, resolved.id, resolved.fit);
-        const sprite = createCustomBackgroundObject(
-          this.options.scene,
-          layer,
-          origin.x,
-          origin.y,
-          ROOM_PX_WIDTH,
-          ROOM_PX_HEIGHT,
-          9,
-        );
-        sprites.push({
-          sprite,
-          parallax: 0,
-          tileScale: ROOM_PX_HEIGHT / layer.height,
-          useVerticalParallax: false,
-          customLayer: layer,
-        });
-      };
-      if (this.options.scene.textures.exists(getCustomBackgroundTextureKey(resolved.id))) {
-        createReadyCustomBackground();
-      } else if (options.requireCustomTextureReady) {
-        colorRect.destroy();
-        colorRect = null;
-        throw new Error(`Prepared custom background texture is missing for ${room.id}.`);
-      } else {
-        const currentColorRect = colorRect;
-        void ensureCustomBackgroundTexture(this.options.scene, resolved.id)
-          .then(() => {
-            if (!currentColorRect.active || this.destroyed) return;
-            createReadyCustomBackground();
-          })
-          .catch(() => {});
-      }
-      return finish();
-    }
-
-    if (resolved.group.bgColor) {
-      const color = Phaser.Display.Color.HexStringToColor(resolved.group.bgColor).color;
-      colorRect = this.options.scene.add.rectangle(origin.x, origin.y, ROOM_PX_WIDTH, ROOM_PX_HEIGHT, color);
-      colorRect.setOrigin(0, 0);
-      colorRect.setDepth(8);
-    }
-
-    for (let index = 0; index < resolved.group.layers.length; index += 1) {
-      const layer = resolved.group.layers[index];
-      const sprite = createBuiltInBackgroundObject(
-        this.options.scene,
-        layer,
-        origin.x,
-        origin.y,
-        ROOM_PX_WIDTH,
-        ROOM_PX_HEIGHT,
-        9 + index * 0.01,
-      );
-      const tileScale = getBuiltInBackgroundTileScale(layer, ROOM_PX_HEIGHT);
-      sprites.push({
-        sprite,
-        parallax: layer.scrollFactor * PLAY_ROOM_PARALLAX_MULTIPLIER,
-        tileScale,
-        useVerticalParallax: false,
-        builtInLayer: layer,
-      });
-    }
-
-    return finish();
-  }
-
-  private setRoomBackgroundObjectsActive(
-    colorRect: Phaser.GameObjects.Rectangle | null,
-    sprites: readonly LoadedRoomBackgroundSprite[],
-    active: boolean,
-  ): void {
-    colorRect?.setActive(active);
-    colorRect?.setVisible(active);
-    for (const background of sprites) {
-      background.sprite.setActive(active);
-      background.sprite.setVisible(active);
-    }
-  }
-
-  private setPreparedRoomBackgroundActive(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-    active: boolean,
-  ): void {
-    this.setRoomBackgroundObjectsActive(
-      loadedRoom.backgroundColorRect ?? null,
-      loadedRoom.backgroundSprites ?? [],
-      active,
-    );
-  }
-
-  private updateFullRoomBackground(
-    loadedRoom: LoadedFullRoom<TLiveObject, TEdgeWall>,
-    camera: Phaser.Cameras.Scene2D.Camera
-  ): void {
-    const origin = this.options.getRoomOrigin(loadedRoom.room.coordinates);
-    const worldView = camera.worldView;
-    if (
-      origin.x + ROOM_PX_WIDTH < worldView.left
-      || origin.x > worldView.right
-      || origin.y + ROOM_PX_HEIGHT < worldView.top
-      || origin.y > worldView.bottom
-    ) {
-      return;
-    }
-
-    if (loadedRoom.backgroundColorRect) {
-      loadedRoom.backgroundColorRect.setPosition(origin.x, origin.y);
-      loadedRoom.backgroundColorRect.setSize(ROOM_PX_WIDTH, ROOM_PX_HEIGHT);
-    }
-
-    for (const backgroundSprite of loadedRoom.backgroundSprites) {
-      if (backgroundSprite.customLayer) {
-        syncCustomBackgroundObject(
-          backgroundSprite.sprite as CustomBackgroundObject,
-          backgroundSprite.customLayer,
-          origin.x,
-          origin.y,
-          ROOM_PX_WIDTH,
-          ROOM_PX_HEIGHT,
-          camera.scrollX,
-        );
-        continue;
-      }
-
-      if (backgroundSprite.builtInLayer) {
-        syncBuiltInBackgroundObject(
-          backgroundSprite.sprite as BuiltInBackgroundObject,
-          backgroundSprite.builtInLayer,
-          origin.x,
-          origin.y,
-          ROOM_PX_WIDTH,
-          ROOM_PX_HEIGHT,
-          (camera.scrollX * backgroundSprite.parallax) / backgroundSprite.tileScale,
-          backgroundSprite.useVerticalParallax
-            ? (camera.scrollY * backgroundSprite.parallax) / backgroundSprite.tileScale
-            : 0,
-        );
-        continue;
-      }
-
-      const sprite = backgroundSprite.sprite as Phaser.GameObjects.TileSprite;
-      syncStarfieldTileSprite(
-        sprite,
-        camera,
-        {
-          parallax: backgroundSprite.parallax,
-          tileScale: backgroundSprite.tileScale,
-        },
-        {
-          x: origin.x,
-          y: origin.y,
-          width: ROOM_PX_WIDTH,
-          height: ROOM_PX_HEIGHT,
-          useVerticalParallax: backgroundSprite.useVerticalParallax,
-        },
-      );
-    }
-  }
 }
 
 function sanitizeTextureNamespace(value: string): string {

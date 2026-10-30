@@ -1,3 +1,4 @@
+import { ROOM_SHARE_RENDERER_VERSION } from '../../../roomImage/types';
 import { buildRoomSharePath } from '../../../social/roomShareLinks';
 import type { ResolvedExpandedRoomTarget } from '../../../expandedRooms/model';
 import {
@@ -17,7 +18,9 @@ import {
   ROOM_SHARE_IMAGE_WIDTH,
   renderExpandedRoomSharePreviewPng,
   renderRoomSharePreviewPng,
-} from './roomPreviewImage';
+} from './imageRenderer';
+import { maskBlockedArtInSnapshots } from '../customSprites/blockedArt';
+import { loadCachedShareArtwork } from './cachedArtwork';
 
 interface RoomShareMetadata {
   roomId: string;
@@ -72,15 +75,31 @@ export async function handleRoomShareRequest(
     throw new HttpError(400, 'Room id must use x,y coordinates.');
   }
 
+  const target = match[2] ?? 'page';
   return loadAnonymousPublicCache(request, context, async () => {
     const shareTarget = await loadRoomShareTarget(env, roomId, coordinates);
     if (!shareTarget) throw new HttpError(404, 'Published room not found.');
-    const target = match[2] ?? 'page';
-    if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget), {
+    if (target === 'page') return roomSharePageRedirect(request, env, coordinates);
+    const masked = await maskBlockedShareArt(env, shareTarget);
+    // Moderation may have invalidated a leaf since its last render. Use the masked fallback until safe.
+    const unchanged = masked.previewCells.every((cell, i) => cell.snapshot === shareTarget.previewCells[i].snapshot);
+    const artwork = unchanged ? await loadCachedShareArtwork(env, masked.previewCells, masked.expandedRoom
+      ? { id: masked.expandedRoom.expandedRoomId, version: masked.expandedRoom.version ?? null } : null) : null;
+    if (target === 'meta') return jsonResponse(request, buildRoomShareMetadata(request, url, env, shareTarget, artwork), {
       headers: { 'Cache-Control': 'public, max-age=20' },
     });
-    if (target === 'image' || target === 'image.png') return roomShareImageResponse(request, shareTarget);
-    return roomSharePageResponse(request, buildRoomShareMetadata(request, url, env, shareTarget));
+    if (target === 'image' || target === 'image.png') {
+      if (artwork && env.WORLD_TILE_BUCKET?.get) {
+        try {
+          const object = request.method === 'HEAD' ? null : await env.WORLD_TILE_BUCKET.get(artwork.key);
+          if (request.method === 'HEAD' || object) return new Response(object ? await object.arrayBuffer() : null, {
+            headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=3600, s-maxage=3600', ...corsHeaders(request) },
+          });
+        } catch { /* Keep the existing renderer available if R2 is temporarily unavailable. */ }
+      }
+      return roomShareImageResponse(request, masked, env);
+    }
+    throw new HttpError(404, 'Share route not found.');
   });
 }
 
@@ -188,10 +207,24 @@ async function loadShareCellSnapshot(
   return loadPublishedRoom(env, roomId, coordinates);
 }
 
-function roomShareImageResponse(request: Request, target: RoomShareTarget): Response {
+/** Share images never show a community sprite an admin blocked (F189). */
+async function maskBlockedShareArt(env: Env, target: RoomShareTarget): Promise<RoomShareTarget> {
+  const [focusSnapshot, ...cellSnapshots] = await maskBlockedArtInSnapshots(
+    env,
+    [target.focusSnapshot, ...target.previewCells.map((cell) => cell.snapshot)],
+  );
+  return {
+    ...target,
+    focusSnapshot,
+    previewCells: target.previewCells.map((cell, index) => ({ ...cell, snapshot: cellSnapshots[index] })),
+  };
+}
+
+async function roomShareImageResponse(request: Request, target: RoomShareTarget, env: Env): Promise<Response> {
   const headers = new Headers({
     'Content-Type': 'image/png',
-    'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+    // An hour at the edge, so a sprite blocked by moderation leaves cached share images soon (F189).
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600',
     ...corsHeaders(request),
   });
 
@@ -200,8 +233,8 @@ function roomShareImageResponse(request: Request, target: RoomShareTarget): Resp
   }
 
   const bytes = target.expandedRoom && target.previewCells.length > 1
-    ? renderExpandedRoomSharePreviewPng(target.previewCells)
-    : renderRoomSharePreviewPng(target.focusSnapshot);
+    ? await renderExpandedRoomSharePreviewPng(target.previewCells, request, env)
+    : await renderRoomSharePreviewPng(target.focusSnapshot, request, env);
   const body = bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
@@ -212,11 +245,11 @@ function roomShareImageResponse(request: Request, target: RoomShareTarget): Resp
   });
 }
 
-function roomSharePageResponse(request: Request, metadata: RoomShareMetadata): Response {
-  return new Response(request.method === 'HEAD' ? null : buildRoomShareHtml(metadata), {
-    status: 200,
+function roomSharePageRedirect(request: Request, env: Env, coordinates: RoomCoordinates): Response {
+  return new Response(null, {
+    status: 301,
     headers: {
-      'Content-Type': 'text/html; charset=utf-8',
+      Location: new URL(buildRoomSharePath(coordinates), resolveFrontendBaseUrl(request, env)).toString(),
       'Cache-Control': 'public, max-age=20',
       ...corsHeaders(request),
     },
@@ -228,6 +261,7 @@ function buildRoomShareMetadata(
   url: URL,
   env: Env,
   target: RoomShareTarget,
+  artwork: Awaited<ReturnType<typeof loadCachedShareArtwork>>,
 ): RoomShareMetadata {
   const snapshot = target.focusSnapshot;
   const expandedRoom = target.expandedRoom;
@@ -242,6 +276,7 @@ function buildRoomShareMetadata(
   imageUrl.searchParams.set('x', String(snapshot.coordinates.x));
   imageUrl.searchParams.set('y', String(snapshot.coordinates.y));
   imageUrl.searchParams.set('v', String(snapshot.version));
+  imageUrl.searchParams.set('renderer', ROOM_SHARE_RENDERER_VERSION);
   if (expandedRoom) {
     imageUrl.searchParams.set('area', expandedRoom.expandedRoomId);
     if (typeof expandedRoom.version === 'number') {
@@ -259,9 +294,9 @@ function buildRoomShareMetadata(
       ? buildExpandedRoomShareDescription(expandedRoom, snapshot, creditedTitle)
       : buildRoomShareDescription(snapshot, creditedTitle),
     url: publicUrl,
-    imageUrl: imageUrl.toString(),
-    imageWidth: ROOM_SHARE_IMAGE_WIDTH,
-    imageHeight: ROOM_SHARE_IMAGE_HEIGHT,
+    imageUrl: artwork?.url ?? imageUrl.toString(),
+    imageWidth: artwork?.width ?? ROOM_SHARE_IMAGE_WIDTH,
+    imageHeight: artwork?.height ?? ROOM_SHARE_IMAGE_HEIGHT,
     expandedRoom: expandedRoom ? mapRoomShareExpandedRoomMetadata(expandedRoom, snapshot.coordinates) : null,
   };
 }
@@ -277,8 +312,8 @@ export function resolveRequestedPublicUrl(url: URL): string | null {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return null;
     }
-    // The page redirects visitors to this URL, so only WAMP's own hosts are allowed; anything
-    // else falls back to the room's own URL instead of becoming an open redirect.
+    // Metadata may name WAMP's own public URLs; other hosts fall back to the room URL.
+    // The legacy page redirect always uses the canonical room path, independent of this input.
     return isAllowedSharePageHost(parsed.hostname) ? parsed.toString() : null;
   } catch {
     return null;
@@ -371,51 +406,4 @@ function coordinatesEqual(left: RoomCoordinates, right: RoomCoordinates): boolea
 function isExpandedRoomsEnabled(env: Env): boolean {
   const raw = env.EXPANDED_ROOMS_ENABLED?.trim().toLowerCase();
   return raw !== '0' && raw !== 'false' && raw !== 'off';
-}
-
-function buildRoomShareHtml(metadata: RoomShareMetadata): string {
-  const title = escapeHtml(metadata.title);
-  const description = escapeHtml(metadata.description);
-  const url = escapeHtml(metadata.url);
-  const imageUrl = escapeHtml(metadata.imageUrl);
-
-  return [
-    '<!doctype html>',
-    '<html lang="en">',
-    '<head>',
-    '  <meta charset="utf-8">',
-    '  <meta name="viewport" content="width=device-width, initial-scale=1">',
-    `  <title>${title}</title>`,
-    '  <meta name="robots" content="index,follow">',
-    `  <link rel="canonical" href="${url}">`,
-    '  <meta property="og:type" content="website">',
-    '  <meta property="og:site_name" content="WAMP">',
-    `  <meta property="og:title" content="${title}">`,
-    `  <meta property="og:description" content="${description}">`,
-    `  <meta property="og:url" content="${url}">`,
-    `  <meta property="og:image" content="${imageUrl}">`,
-    `  <meta property="og:image:secure_url" content="${imageUrl}">`,
-    `  <meta property="og:image:width" content="${metadata.imageWidth}">`,
-    `  <meta property="og:image:height" content="${metadata.imageHeight}">`,
-    '  <meta name="twitter:card" content="summary_large_image">',
-    `  <meta name="twitter:title" content="${title}">`,
-    `  <meta name="twitter:description" content="${description}">`,
-    `  <meta name="twitter:image" content="${imageUrl}">`,
-    '  <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#070b16;color:#f5f1de;font:16px system-ui,sans-serif}a{color:#7fd4ff}</style>',
-    '</head>',
-    '<body>',
-    `  <main><p><a href="${url}">Open this WAMP room</a></p></main>`,
-    `  <script>location.replace(${JSON.stringify(metadata.url)});</script>`,
-    '</body>',
-    '</html>',
-  ].join('\n');
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

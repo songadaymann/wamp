@@ -1,3 +1,9 @@
+import { handlePublishRecognition } from './worker/activity/recognition';
+import { handleClearedRoomProgress } from './worker/runs/clearedRooms';
+import { handleCollectionPrice } from './worker/mint/price';
+import { handleCollectionRead } from './worker/collections/routes';
+export { PresenceDurableObject } from './presence/durableObject';
+import { handleCloudflarePresence } from './presence/durableObject';
 import { handleRoomGhosts } from './worker/runs/ghosts';
 import { handleBuildPrompts } from './worker/buildPrompts/routes';
 import { settleExpiredBuildPrompts } from './worker/buildPrompts/store';
@@ -11,6 +17,8 @@ import { runActivityEmails } from './worker/activity/emails';
 import { handleGuestReplay } from './worker/guestReplay/routes';
 import { runHourlyMaintenance } from './worker/maintenance/hourly';
 import { handleBugReports } from './worker/bugReports/routes';
+import { handleContentReports } from './worker/reports/routes';
+import { handleAdminGuestRoomDrafts } from './worker/guestRoomDrafts/adminRoutes';
 import { handleLostSongs } from './worker/lostSongs/routes';
 import { handleAdminRequest } from './worker/admin/routes';
 import { handleAuthRequest } from './worker/auth/routes';
@@ -25,7 +33,7 @@ import { handleBackgroundImageRequest } from './worker/backgroundImages/routes';
 import { handleAgentRequest } from './worker/agents/routes';
 import { handleDashboardStatsRequest } from './worker/dashboard/routes';
 import { handleChatRequest } from './worker/chat/routes';
-import { handleGuestActivityHeartbeat } from './worker/guestActivity/routes';
+import { handleGuestActivityHeartbeat, handleGuestActivityLinkAccount } from './worker/guestActivity/routes';
 import { handleGuestRoomDraftRequest } from './worker/guestRoomDrafts/routes';
 import { handleClaimGuestRequest, handleGuestProgressHistoryRequest, handleGuestRunRequest } from './worker/guestRuns/routes';
 import { scheduleRunGhostArchive } from './worker/runs/ghostArchive';
@@ -50,6 +58,7 @@ import { dispatchWorkerRoute, type WorkerRoute } from './worker/core/router';
 import {
   handleExpandedRoomByCoordinateGet,
   handleExpandedRoomGet,
+  handleExpandedRoomFootprint,
 } from './worker/expandedRooms/routes';
 import {
   handleExpandedRoomCellAdd,
@@ -135,7 +144,7 @@ import {
 } from './worker/worldTiles/routes';
 import { handleRoomShareRequest } from './worker/share/routes';
 import { handleSchoolRequest } from './worker/school/routes';
-import { handleWampOGramRequest } from './worker/wampOGram/routes';
+import { handleAdminWampOGramRequest, handleWampOGramRequest } from './worker/wampOGram/routes';
 import { handleCustomSpriteRequest } from './worker/customSprites/routes';
 import { handleWorldGrantRequest, handleWorldsRequest } from './worker/worlds/routes';
 
@@ -149,12 +158,14 @@ type WorkerExecutionContext = {
 };
 
 const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[] = [
+  {methods:['GET'],pattern:/^\/api\/expanded-rooms\/([^/]+)\/footprint$/,auth:'public',
+    handler:({request,url,env},match)=>handleExpandedRoomFootprint(request,url,env,decodeURIComponent(match![1]))},
   { methods: ['GET'], pattern: /^\/api\/rooms\/([^/]+)\/ghosts$/, auth: 'optional',
     handler: ({ request, url, env }, match) => handleRoomGhosts(request, url, env, decodeURIComponent(match![1])) },
   { methods: ['GET','POST','DELETE'], pattern: {prefix:'/api/build-prompts'}, auth:'optional',
     handler: ({request,url,env}) => handleBuildPrompts(request,url,env) },
   { methods: ['GET'], pattern: '/api/daily', auth: 'optional',
-    handler: ({ request, env }) => handleDaily(request,env) },
+    handler: ({ request, env, executionContext }) => handleDaily(request,env,executionContext) },
   {
     methods: ['GET'], pattern: /^\/api\/(rooms|expanded-rooms|courses)\/([^/]+)\/stats$/, auth: 'public',
     handler: ({ request, url, env }, match) => handleRoomInsights(request, url, env,
@@ -171,6 +182,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: '/api/client-errors',
     auth: 'public',
     handler: ({ request, env }) => handleClientErrorReport(request, env),
+  },
+  {
+    methods: ['GET'], pattern: '/api/me/publish-recognition', auth: 'authenticated',
+    handler: ({ request, url, env }) => handlePublishRecognition(request, url, env),
   },
   {
     methods: ['GET', 'POST', 'PUT'], pattern: { prefix: '/api/me/activity' }, auth: 'authenticated',
@@ -228,6 +243,24 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: { prefix: '/api/admin/bug-reports' },
     auth: 'admin',
     handler: ({ request, url, env }) => handleBugReports(request, url, env),
+  },
+  {
+    methods: ['GET', 'POST'],
+    pattern: { prefix: '/api/admin/guest-room-drafts' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminGuestRoomDrafts(request, url, env),
+  },
+  {
+    methods: ['DELETE'],
+    pattern: { prefix: '/api/admin/wamp-o-grams/' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleAdminWampOGramRequest(request, url, env),
+  },
+  {
+    methods: ['GET', 'PATCH'],
+    pattern: { prefix: '/api/admin/reports' },
+    auth: 'admin',
+    handler: ({ request, url, env }) => handleContentReports(request, url, env),
   },
   {
     methods: ['GET', 'PUT', 'DELETE'],
@@ -289,6 +322,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   },
   {
     methods: ['POST'],
+    pattern: '/api/reports',
+    auth: 'optional',
+    handler: ({ request, url, env, executionContext }) => handleContentReports(request, url, env, executionContext),
+  },
+  {
+    methods: ['POST'],
     pattern: { prefix: '/api/guest-replays/' },
     auth: 'public',
     handler: ({ request, url, env }) => handleGuestReplay(request, url, env),
@@ -298,6 +337,12 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
     pattern: '/api/guest-activity/heartbeat',
     auth: 'optional',
     handler: ({ request, env }) => handleGuestActivityHeartbeat(request, env),
+  },
+  {
+    methods: ['POST'],
+    pattern: '/api/guest-activity/link-account',
+    auth: 'authenticated',
+    handler: ({ request, env }) => handleGuestActivityLinkAccount(request, env),
   },
   {
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -316,6 +361,10 @@ const DECLARATIVE_API_ROUTES: readonly WorkerRoute<Env, WorkerExecutionContext>[
   {
     methods: ['POST'], pattern: '/api/me/claim-guest', auth: 'authenticated',
     handler: ({ request, env, executionContext }) => handleClaimGuestRequest(request, env, executionContext),
+  },
+  {
+    methods: ['GET'], pattern: '/api/me/cleared-rooms', auth: 'authenticated',
+    handler: ({ request, url, env }) => handleClearedRoomProgress(request, url, env),
   },
   {
     methods: ['GET'], pattern: '/api/me/guest-progress', auth: 'authenticated',
@@ -361,6 +410,7 @@ export default {
   },
   async fetch(request: Request, env: Env, ctx?: WorkerExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/parties/')) return handleCloudflarePresence(request, env);
 
     if (url.pathname === '/jam/' && (request.method === 'GET' || request.method === 'HEAD')) {
       url.pathname = '/jam';
@@ -557,6 +607,7 @@ export default {
           request,
           env,
           decodeURIComponent(playlistBySlugMatch[1]),
+          ctx,
         );
       }
 
@@ -592,6 +643,17 @@ export default {
       const profileSummaryMatch = /^\/api\/profiles\/([^/]+)\/summary$/.exec(url.pathname);
       if (profileSummaryMatch && request.method === 'GET') {
         return await handleProfileSummaryGet(request, env, decodeURIComponent(profileSummaryMatch[1]), ctx);
+      }
+
+      if (url.pathname === '/api/collections/price' && request.method === 'GET') {
+        return await handleCollectionPrice(request, env, ctx);
+      }
+      if (url.pathname === '/api/collections/attribution' && request.method === 'GET') {
+        return await handleCollectionRead(request, env, ctx);
+      }
+      const collectionShelfMatch = /^\/api\/profiles\/([^/]+)\/collection$/.exec(url.pathname);
+      if (collectionShelfMatch && request.method === 'GET') {
+        return await handleCollectionRead(request, env, ctx, decodeURIComponent(collectionShelfMatch[1]));
       }
 
       const profileRoomsMatch = /^\/api\/profiles\/([^/]+)\/rooms$/.exec(url.pathname);
@@ -885,7 +947,7 @@ export default {
       }
 
       if (url.pathname.startsWith('/api/wamp-o-grams')) {
-        return await handleWampOGramRequest(request, url, env);
+        return await handleWampOGramRequest(request, url, env, ctx);
       }
 
       if (!url.pathname.startsWith('/api/rooms/')) {

@@ -20,6 +20,7 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import type { Env } from '../core/types';
 import { hasUserAvatarEntitlement } from '../avatars/entitlements';
 import { isChatBannedUser } from '../chat/store';
+import { loadAccountSuspension } from '../moderation/suspension';
 
 const MAX_IDENTITY_TOKEN_REQUEST_BYTES = 4096;
 
@@ -49,13 +50,19 @@ async function handlePresenceIdentityTokenIssue(
   });
   const auth = await loadOptionalRequestAuth(env, request);
   const { identity, source } = await resolveIssueIdentity(body, auth?.user ?? null, env);
-  // The presence server cannot query the database, so the bubble permission travels in the token.
+  // The bubble permission travels in the token; where the presence host has the database, it re-checks while connected.
+  const emotesMuted = Boolean(auth?.user && (
+    await isChatBannedUser(env, auth.user.id) ||
+    (await loadAccountSuspension(env, auth.user.id))?.suspendedAt
+  ));
   const roomChat: RoomChatPermission | undefined = !auth?.user
     ? undefined
-    : auth.school
-      ? 'school'
-      : await isChatBannedUser(env, auth.user.id) ? 'muted' : 'ok';
-  const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret, { roomChat });
+    : auth.school ? 'school' : emotesMuted ? 'muted' : 'ok';
+  const { token, claims } = await createPartykitIdentityToken(identity, source, signingSecret.secret, {
+    roomChat,
+    classroomId: auth?.school?.classroomId,
+    emotesMuted,
+  });
   const response: PartyKitIdentityTokenIssueResponse = {
     token,
     expiresAt: new Date(claims.exp).toISOString(),

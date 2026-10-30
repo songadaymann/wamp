@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 import {
   cloneRoomSnapshot,
@@ -218,7 +219,7 @@ function createHarness(sources: {
 }): SnapshotHarness {
   const roomId = '5,7';
   return Object.assign(
-    Object.create(OverworldWorldStreamingController.prototype) as SnapshotHarness,
+    createWorldStreamingHarness() as SnapshotHarness,
     {
       transientRoomOverridesById: new Map(sources.transient ? [[roomId, sources.transient]] : []),
       draftRoomsById: new Map(sources.draft ? [[roomId, sources.draft]] : []),

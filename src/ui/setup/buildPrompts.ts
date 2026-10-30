@@ -1,3 +1,5 @@
+import { BUILD_PROMPT_OPEN_REQUEST, type BuildPromptOpenDetail } from '../../buildPrompts/events';
+import { APP_READY_EVENT } from '../appFeedback';
 import { AUTH_STATE_CHANGED_EVENT, AUTH_SESSION_REFRESHED_EVENT, getAuthDebugState } from '../../auth/client';
 import { BUILD_PROMPT_ENTRY_RESULT, BUILD_PROMPT_PUBLISH_REQUEST, type PromptEntryResult, type PromptPublishRequest } from '../../buildPrompts/publishing';
 import { createBuildPromptRepository, type BuildPromptRepository } from '../../buildPrompts/repository';
@@ -43,6 +45,9 @@ export class BuildPromptsController {
     this.publishLifecycle = createModalLifecycle({ doc, modal: this.publishModal, onClose: () => this.cancelPublish() });
   }
   init(): void {
+    this.win.addEventListener(BUILD_PROMPT_OPEN_REQUEST, this.onResultOpen);
+    this.win.addEventListener(APP_READY_EVENT, this.onReady);
+    if (this.doc.body.dataset.appReady === 'true') queueMicrotask(this.onReady);
     this.lifecycle.attach(); this.publishLifecycle.attach();
     this.openButton?.addEventListener('click', this.onOpen);
     this.menuButton?.addEventListener('click', this.onOpen);
@@ -77,6 +82,8 @@ export class BuildPromptsController {
       ['btn-build-prompt-result-close', this.onDismissResult], ['btn-build-prompt-view', this.onViewResult],
     ] as const) this.doc.getElementById(id)?.removeEventListener(id === 'build-prompt-history' ? 'change' : id === 'build-prompt-publish-form' ? 'submit' : 'click', listener);
     for (const name of [AUTH_STATE_CHANGED_EVENT, AUTH_SESSION_REFRESHED_EVENT]) this.win.removeEventListener(name, this.onAuth);
+    this.win.removeEventListener(BUILD_PROMPT_OPEN_REQUEST, this.onResultOpen);
+    this.win.removeEventListener(APP_READY_EVENT, this.onReady);
     this.win.removeEventListener(APP_MODE_CHANGED_EVENT, this.onMode);
     this.win.removeEventListener(BUILD_PROMPT_PUBLISH_REQUEST, this.onPublishRequest);
     this.win.removeEventListener(BUILD_PROMPT_ENTRY_RESULT, this.onEntryResult);
@@ -86,6 +93,17 @@ export class BuildPromptsController {
   }
   private text(id: string, value: string): void { const element = this.doc.getElementById(id); if (element) element.textContent = value; }
   private button(id: string, disabled: boolean): void { const button = this.doc.getElementById(id) as HTMLButtonElement | null; if (button) button.disabled = disabled; }
+  private readonly onResultOpen = (event: Event) => {
+    const slug = (event as CustomEvent<BuildPromptOpenDetail>).detail?.slug;
+    if (typeof slug === 'string' && slug.length > 0 && slug.length <= 128) this.open(slug);
+  };
+  private readonly onReady = () => {
+    const href = this.win.location?.href; if (!href || this.destroyed) return;
+    const url = new URL(href), slug = url.searchParams.get('buildPrompt');
+    if (!slug || slug.length > 128) return;
+    url.searchParams.delete('buildPrompt'); this.win.history.replaceState(null, '', url);
+    this.open(slug);
+  };
   private readonly onOpen = () => this.open();
   private open(slug?: string): void {
     if (this.destroyed) return;

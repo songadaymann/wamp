@@ -1,11 +1,14 @@
+import assert from 'node:assert/strict';
+import { auditReadableText } from './lib/textAudits.mjs';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { auditMannCool } from './lib/mannCoolAudits.mjs';
 import { auditNavigation, installNavigationFixtures } from './lib/navigationAudits.mjs';
-import { auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
+import { auditFirstPaint, auditStartupDownloads, installStartupFixture } from './lib/startupAudits.mjs';
 import { installHapticProbe, auditHapticSettings, auditHapticClear } from './lib/hapticAudits.mjs';
 import { auditGamepadControls } from './lib/gamepadAudits.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createApiFixtures } from './lib/apiFixtures.mjs';
 import { createMobileSpawnPickupFixtures } from './lib/mobileSpawnPickupFixture.mjs';
@@ -150,8 +153,8 @@ const scenarios = [
   { name: 'phone-portrait-tap-targets', profile: profiles.phonePortrait, run: runPhoneTapTargets },
   { name: 'phone-landscape-tap-targets', profile: profiles.phoneLandscape, run: runPhoneTapTargets },
   { name: 'phone-signed-room-controls', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, activityFixture: true, searchParams: { x: '0', y: '0' }, run: runSignedRoomControls },
-  { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
-  { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: runNavigation },
+  { name: 'phone-narrow-navigation', profile: { ...profiles.phonePortrait, viewport: { width: 320, height: 568 } }, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0', previewSmoke: '0' }, run: runNavigation },
+  { name: 'phone-navigation', profile: profiles.phonePortrait, signedFixture: true, roomEditorFixture: true, navigationFixture: true, searchParams: { x: '0', y: '0', previewSmoke: '0' }, run: runNavigation },
   { name: 'tablet-gamepad-controls', profile: profiles.tabletLandscape, signedFixture: true, roomChatFixture: true, roomEditorFixture: true, gamepadFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: runGamepadControls },
   { name: 'phone-spawn-goal-pickups', profile: profiles.phonePortrait, spawnPickupFixture: true, searchParams: { x: '0', y: '0' }, run: runSpawnGoalPickups },
   { name: 'phone-mann-cool', mannCoolFixture: true, inputRoomFixture: true, profile: profiles.phonePortrait, navigationFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
@@ -163,6 +166,9 @@ const scenarios = [
   { name: 'phone-startup-downloads', profile: profiles.phonePortrait, navigationFixture: true, startupFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditStartupDownloads(page));
     await captureScenarioScreenshot(page, row, dir, 'startup-ready');
+  } },
+  { name: 'phone-readable-text', profile: profiles.phonePortrait, navigationFixture: true, inputRoomFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
+    row.assertions.push(await auditReadableText(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));
   } },
   { name: 'phone-haptic-settings', profile: profiles.phonePortrait, navigationFixture: true, hapticFixture: true, searchParams: { x: '0', y: '0' }, run: async (page, row, dir) => {
     row.assertions.push(await auditHapticSettings(page, (label, target = page) => captureScenarioScreenshot(target, row, dir, label)));
@@ -1137,7 +1143,7 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     activeScene: summarizeActiveScene(editorState.activeScene),
   });
 
-  await assertHidden(page, '#mobile-editor-nav', 'legacy editor nav');
+  assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
   await assertVisible(page, '#editor-shell-phone-bar', 'persistent phone actions');
   await assertSelectorsWithinViewport(page, ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar'], 'phone editor bounds');
   for (const action of ['test', 'publish']) await assertVisible(page, `[data-editor-shell-action="${action}"]`, `phone ${action}`);
@@ -1166,7 +1172,7 @@ async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   assertCondition(state.device.coarsePointer === true, 'expected coarse pointer on tablet profile');
   await closeBlockingOverlays(page);
   await assertVisible(page, '#world-hud', 'tablet world HUD');
-  await assertHidden(page, '#mobile-editor-nav', 'phone editor nav on tablet browse');
+  assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
   await assertSelectorsWithinViewport(page, ['#world-hud', '#bottom-bar'], 'tablet browse bounds');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'tablet-browse');
 }
@@ -1996,6 +2002,8 @@ async function runGamepadControls(page, scenarioSummary, scenarioDir) {
 }
 
 async function runNavigation(page, summary, directory) {
+  summary.assertions.push(await auditFirstPaint(page));
   const result = await auditNavigation(page, { capture: label => captureScenarioScreenshot(page, summary, directory, label) });
+  summary.assertions.push(await auditFirstPaint(page, { editorLoaded: true }));
   summary.assertions.push({ label: 'browse, account, play and editor navigation destinations', ...result });
 }

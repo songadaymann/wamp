@@ -1,0 +1,1 @@
+| 2026-10-18 | F250 | [#244](https://github.com/songadaymann/wamp/pull/244) | [receipt](docs/review/wamp-expanded-room-leaderboards-2026-10-18.md) | Whole Expanded Room leaderboards: access and refresh fixed |

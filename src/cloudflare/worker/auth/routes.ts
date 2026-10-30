@@ -1,4 +1,4 @@
-import { verifyMessage } from 'viem';
+import { emailConfigured } from '../email/provider';
 import type {
   ApiTokenCreateRequestBody,
   ApiTokenCreateResponse,
@@ -11,10 +11,6 @@ import type {
   EmailCodeVerifyBody,
   MagicLinkRequestBody,
   MagicLinkRequestResponse,
-  WalletChallengeRequestBody,
-  WalletChallengeResponse,
-  WalletVerifyRequestBody,
-  WalletVerifyResponse,
 } from '../../../auth/model';
 import { HttpError, jsonResponse, noContentResponse, parseJsonBody, redirectResponse } from '../core/http';
 import type { Env, MagicLinkJoinRow } from '../core/types';
@@ -32,37 +28,26 @@ import { ensureFounderIdentityQualification } from '../progression/awards';
 import { assertNotSchoolRestricted, assertUserNotSchoolManaged } from '../school/restrictions';
 import {
   attachEmailToUser,
-  attachWalletToUser,
   API_TOKEN_PREFIX,
   MAGIC_LINK_TTL_MS,
-  WALLET_CHALLENGE_TTL_MS,
   consumeMagicLinkToken,
-  consumeWalletChallenge,
   createApiTokenForUser,
   createMagicLinkToken,
   createSession,
   createUserForEmail,
-  createUserForWallet,
-  createWalletChallenge,
-  createWalletChallengeMessage,
   deleteSessionById,
-  extractNonceFromWalletMessage,
   findApiTokenIdForUser,
   findUserByDisplayName,
   findUserByEmail,
-  findUserByWallet,
   generateOpaqueToken,
   hashToken,
   hasRecentEmailSignInRequest,
   isExpired,
-  isValidAddress,
   isValidEmail,
   listApiTokensForUser,
   loadMagicLinkByTokenHash,
   loadLiveEmailCodes,
   recordEmailCodeAttempt,
-  loadWalletChallengeByNonceHash,
-  normalizeAddress,
   normalizeApiTokenScopes,
   normalizeEmail,
   resolveMagicLinkRedirectBase,
@@ -76,14 +61,18 @@ import {
   createSessionCookie,
   createSessionResponse,
   loadCurrentSession,
+  hasSessionCookie,
   loadOptionalRequestAuth,
   requireAuthenticatedRequestAuth,
   requireCurrentSession,
   requireTrustedOriginForMutation,
 } from './request';
 import { NO_CHAT_MODERATION_VIEWER, resolveChatModerationViewer } from '../chat/moderation';
-import { assertGeneratedOnlyDisplayNameChangeAllowed } from '../generatedUsers/leaderboardIsolation';
 import { getRoomClaimQuota } from '../rooms/store';
+import { handleLogoutAll } from './logoutAll';
+import { handleWalletChallenge, handleWalletVerify } from './walletRoutes';
+import { cleanDisplayText } from '../core/displayText';
+export { handleWalletChallenge, handleWalletVerify } from './walletRoutes';
 
 export async function handleAuthRequest(request: Request, url: URL, env: Env): Promise<Response> {
   if (url.pathname === '/api/auth/session' && request.method === 'GET') {
@@ -104,7 +93,9 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
       responseBody.roomClaimsUsedToday = quota.claimsUsedToday;
       responseBody.roomClaimsRemainingToday = quota.claimsRemainingToday;
     }
-    return jsonResponse(request, responseBody);
+    return jsonResponse(request, responseBody, !auth && hasSessionCookie(request)
+      ? { headers: { 'Set-Cookie': clearSessionCookie(request), 'Cache-Control': 'no-store' } }
+      : undefined);
   }
 
   if (url.pathname === '/api/auth/request-link' && request.method === 'POST') {
@@ -121,6 +112,10 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
     return handleLogout(request, env);
+  }
+
+  if (url.pathname === '/api/auth/logout-all' && request.method === 'POST') {
+    return handleLogoutAll(request, env);
   }
 
   if (url.pathname === '/api/auth/display-name' && request.method === 'POST') {
@@ -145,6 +140,9 @@ export async function handleAuthRequest(request: Request, url: URL, env: Env): P
   }
 
   if (url.pathname === '/api/auth/wallet/challenge' && request.method === 'POST') {
+    // Cross-site browser posts are refused before they can use up anyone's allowance.
+    requireTrustedOriginForMutation(request);
+    await takeWalletChallengeSlot(request, env);
     return handleWalletChallenge(request, env);
   }
 
@@ -189,6 +187,21 @@ const SIGN_IN_EMAILS_PER_INBOX: RateLimitRule = { bucket: 'sign-in-email:inbox',
 const WRONG_CODES_PER_NETWORK: RateLimitRule = { bucket: 'wrong-code:network', limit: 100, windowMs: HOUR_MS };
 const WRONG_CODES_PER_ADDRESS_AND_NETWORK: RateLimitRule = { bucket: 'wrong-code:address-network', limit: 10, windowMs: DAY_MS };
 const WRONG_CODES_PER_ADDRESS: RateLimitRule = { bucket: 'wrong-code:address', limit: 30, windowMs: DAY_MS };
+// Wallet approvals are created before anyone signs in, so each one is a row anybody can add
+// (F188). One sign-in or link uses one or two; the cap leaves room for a busy shared network.
+// There is deliberately no sitewide cap: it would let many networks lock everyone out, and the
+// hourly prune already removes expired approvals.
+const WALLET_CHALLENGES_PER_NETWORK: RateLimitRule = { bucket: 'wallet-challenge:network', limit: 60, windowMs: HOUR_MS };
+
+async function takeWalletChallengeSlot(request: Request, env: Env): Promise<void> {
+  const ip = getClientIp(request);
+  const { limitedBy } = await takeRateLimitSlots(env, [
+    { rule: WALLET_CHALLENGES_PER_NETWORK, keyHash: await hashRateLimitKey(env, ip ? networkKeyForIp(ip) : 'network:unknown') },
+  ]);
+  if (limitedBy) {
+    throw new HttpError(429, 'Too many wallet approvals were requested. Wait a few minutes, then try again.');
+  }
+}
 
 interface AuthLimitKeys {
   network: string | null;
@@ -310,7 +323,7 @@ async function createAndSendSignInEmail(
     purpose,
     delivery: env.AUTH_DEBUG_MAGIC_LINKS === '1'
       ? 'debug'
-      : env.RESEND_API_KEY
+      : emailConfigured(env)
         ? 'email'
         : 'debug',
   };
@@ -318,12 +331,12 @@ async function createAndSendSignInEmail(
   if (env.AUTH_DEBUG_MAGIC_LINKS === '1') {
     responseBody.debugMagicLink = magicLink;
     responseBody.debugCode = code;
-  } else if (env.RESEND_API_KEY) {
+  } else if (emailConfigured(env)) {
     await sendMagicLinkEmail(env, email, magicLink, code);
   } else {
     throw new HttpError(
       500,
-      'Email auth is not configured. Set RESEND_API_KEY or enable AUTH_DEBUG_MAGIC_LINKS.'
+      'Email auth is not configured. Configure EMAIL or enable AUTH_DEBUG_MAGIC_LINKS.'
     );
   }
 
@@ -552,9 +565,7 @@ export async function handleUpdateDisplayName(request: Request, env: Env): Promi
     throw new HttpError(400, 'Display name must be 24 characters or fewer.');
   }
 
-  await assertGeneratedOnlyDisplayNameChangeAllowed(env, auth.user, displayName);
-
-  const existingUser = await findUserByDisplayName(env, displayName);
+  const existingUser = await findUserByDisplayName(env, displayName, auth.user.id);
   if (existingUser && existingUser.id !== auth.user.id) {
     throw new HttpError(409, 'That display name has already been claimed.');
   }
@@ -583,7 +594,7 @@ export async function handleDisplayNameAvailability(
   }
 
   const auth = await loadOptionalRequestAuth(env, request);
-  const existingUser = await findUserByDisplayName(env, displayName);
+  const existingUser = await findUserByDisplayName(env, displayName, auth?.user.id ?? null);
   const claimedByCurrentUser = Boolean(existingUser && auth?.user.id === existingUser.id);
   const responseBody: DisplayNameAvailabilityResponse = {
     available: !existingUser || claimedByCurrentUser,
@@ -634,7 +645,7 @@ export async function handleDeleteApiToken(
   env: Env,
   tokenId: string
 ): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'manage API tokens');
+  const session = await requireCurrentSession(env, request, 'manage API tokens', { allowSuspended: true });
   if (!tokenId) {
     throw new HttpError(400, 'Token id is required.');
   }
@@ -646,107 +657,6 @@ export async function handleDeleteApiToken(
 
   await revokeApiTokenForUser(env, tokenId, session.user.id, new Date().toISOString());
   return noContentResponse(request);
-}
-
-export async function handleWalletChallenge(request: Request, env: Env): Promise<Response> {
-  const body = await parseJsonBody<WalletChallengeRequestBody>(request);
-  const address = normalizeAddress(body.address);
-
-  if (!isValidAddress(address)) {
-    throw new HttpError(400, 'Wallet address must be a valid EVM address.');
-  }
-
-  const nonce = generateOpaqueToken(24);
-  const nonceHash = await hashToken(nonce);
-  const now = new Date();
-  const issuedAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + WALLET_CHALLENGE_TTL_MS).toISOString();
-  const message = createWalletChallengeMessage(request, env, address, nonce, issuedAt);
-
-  await createWalletChallenge(env, address, nonceHash, message, expiresAt, issuedAt);
-
-  const responseBody: WalletChallengeResponse = {
-    address,
-    message,
-    expiresAt,
-  };
-
-  return jsonResponse(request, responseBody);
-}
-
-export async function handleWalletVerify(request: Request, env: Env): Promise<Response> {
-  const body = await parseJsonBody<WalletVerifyRequestBody>(request);
-  const address = normalizeAddress(body.address);
-
-  if (!isValidAddress(address)) {
-    throw new HttpError(400, 'Wallet address must be a valid EVM address.');
-  }
-
-  const nonce = extractNonceFromWalletMessage(body.message);
-  if (!nonce) {
-    throw new HttpError(400, 'Wallet challenge message is invalid.');
-  }
-
-  const nonceHash = await hashToken(nonce);
-  const challenge = await loadWalletChallengeByNonceHash(env, nonceHash);
-
-  if (!challenge || challenge.consumed_at || isExpired(challenge.expires_at)) {
-    throw new HttpError(401, 'Wallet challenge has expired. Please try again.');
-  }
-
-  if (challenge.address !== address || challenge.message_text !== body.message) {
-    throw new HttpError(401, 'Wallet challenge did not match the requested address.');
-  }
-
-  const verified = await verifyMessage({
-    address: address as `0x${string}`,
-    message: body.message,
-    signature: body.signature as `0x${string}`,
-  });
-
-  if (!verified) {
-    throw new HttpError(401, 'Wallet signature could not be verified.');
-  }
-
-  const now = new Date().toISOString();
-  await consumeWalletChallenge(env, challenge.id, now);
-
-  const existingAuth = await loadOptionalRequestAuth(env, request);
-  let user: AuthUser;
-  let setCookie: string | null = null;
-  let linkedWallet = false;
-
-  if (existingAuth) {
-    if (existingAuth.source === 'api_token' || existingAuth.source === 'agent_token') {
-      throw new HttpError(403, 'API tokens cannot link wallets.');
-    }
-    assertNotSchoolRestricted(existingAuth, 'link a wallet');
-
-    user = await attachWalletToUser(env, existingAuth.user, address);
-    linkedWallet = true;
-  } else {
-    const existingWalletUser = await findUserByWallet(env, address);
-    user = existingWalletUser ?? (await createUserForWallet(env, address));
-    setCookie = createSessionCookie(request, await createSession(env, user.id));
-  }
-
-  const responseBody: WalletVerifyResponse = {
-    authenticated: true,
-    linkedWallet,
-    user,
-  };
-
-  return jsonResponse(
-    request,
-    responseBody,
-    setCookie
-      ? {
-          headers: {
-            'Set-Cookie': setCookie,
-          },
-        }
-      : undefined
-  );
 }
 
 async function parseApiTokenCreateBody(request: Request): Promise<ApiTokenCreateRequestBody> {
@@ -777,5 +687,5 @@ function normalizeDisplayName(value: unknown): string {
     return '';
   }
 
-  return value.replace(/\s+/g, ' ').trim();
+  return cleanDisplayText(value);
 }

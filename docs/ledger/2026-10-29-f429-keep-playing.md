@@ -1,0 +1,1 @@
+| 2026-10-29 | F429 | [#343](https://github.com/songadaymann/wamp/pull/343) | [receipt](docs/review/wamp-f429-keep-playing-2026-10-29.md) | Offer another unbeaten goal after a clear, fetch only on tap and preserve phone/keyboard flow; verified live |

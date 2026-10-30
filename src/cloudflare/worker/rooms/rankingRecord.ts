@@ -8,6 +8,7 @@ import {
 import type { Env } from '../core/types';
 import { computeRoomWeightedChange } from '../progression/changeMetrics';
 import { loadRoomRecordWith, parseStoredSnapshot } from './store';
+import { HIDDEN_VERSION_TITLE } from './versionRedaction';
 
 /**
  * A room for ranking paths (leaderboards, run finish, votes, ratings): every version's
@@ -157,8 +158,12 @@ async function loadVersionSnapshots(env: Env, roomId: string, versions: readonly
   const snapshots = new Map<number, RoomSnapshot>();
   if (versions.length === 0) return snapshots;
   const result = await env.DB.prepare(
-    'SELECT version, snapshot_json FROM room_versions WHERE room_id = ? AND version IN (SELECT value FROM json_each(?))',
-  ).bind(roomId, JSON.stringify(versions)).all<{ version: number; snapshot_json: string }>();
-  for (const row of result.results) snapshots.set(row.version, parseStoredSnapshot(row.snapshot_json, 'room version'));
+    'SELECT version, snapshot_json, redacted_at FROM room_versions WHERE room_id = ? AND version IN (SELECT value FROM json_each(?))',
+  ).bind(roomId, JSON.stringify(versions)).all<{ version: number; snapshot_json: string; redacted_at: string | null }>();
+  for (const row of result.results) {
+    const snapshot = parseStoredSnapshot(row.snapshot_json, 'room version');
+    // Leaderboards keep grouping a hidden version with its family, but never show its title (F189).
+    snapshots.set(row.version, row.redacted_at ? { ...snapshot, title: HIDDEN_VERSION_TITLE } : snapshot);
+  }
   return snapshots;
 }

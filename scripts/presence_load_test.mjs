@@ -1,5 +1,8 @@
+// Developer tool, not a pass/fail check: load-tests presence with many simulated players. Never
+// scheduled; see scripts/lib/smokeManifest.mjs.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 import PartySocket from 'partysocket';
 import WebSocket from 'ws';
@@ -7,7 +10,7 @@ import WebSocket from 'ws';
 const ROOM_PX_WIDTH = 640;
 const ROOM_PX_HEIGHT = 352;
 const WORLD_CHUNK_SIZE = 8;
-const DEFAULT_HOST = '127.0.0.1:1999';
+const DEFAULT_HOST = '127.0.0.1:8787'; // wrangler dev: the API Worker serves /parties/* itself
 const DEFAULT_PARTY = 'main';
 const DEFAULT_URL = 'http://127.0.0.1:3001/?x=0&y=0';
 const DEFAULT_COUNTS = '5,10,20,50';
@@ -36,6 +39,7 @@ const zoomDuring = getBooleanArg('zoom-during', false);
 const zoomEveryMs = getNumberArg('zoom-every-ms', 650, 100, 10_000);
 const headless = getBooleanArg('headless', true);
 const noObserver = getBooleanArg('no-observer', false);
+const presenceInterest = getBooleanArg('presence-interest', true);
 const screenshot = getBooleanArg('screenshot', true);
 const outputDir = path.resolve(
   getStringArg(
@@ -53,6 +57,7 @@ const summary = {
   party,
   protocol,
   identityTokenConfigured: Boolean(identityTokenSecret),
+  presenceInterest,
   observerUrl: noObserver ? null : observerUrl,
   originRoom,
   counts,
@@ -230,6 +235,8 @@ async function runPresenceLoadCase({ scenario, count }) {
       connectedBots,
       sentMessages,
       incomingMessages,
+      incomingBytes: bots.reduce((n, bot) => n + bot.incomingBytes, 0),
+      incomingPeerUpdates: bots.reduce((n, bot) => n + bot.incomingPeerUpdates, 0),
       tickCount,
       zoomActionCount,
       observerBefore,
@@ -265,6 +272,8 @@ class PresenceBot {
     this.connected = false;
     this.sentMessages = 0;
     this.incomingMessages = 0;
+    this.incomingBytes = 0;
+    this.incomingPeerUpdates = 0;
     this.errors = [];
   }
 
@@ -291,13 +300,17 @@ class PresenceBot {
       WebSocket,
       query: {
         identityToken,
+        ...(presenceInterest ? { presenceInterest: '1' } : {}),
       },
       maxRetries: 0,
       connectionTimeout: 3000,
     });
 
-    this.socket.addEventListener('message', () => {
+    this.socket.addEventListener('message', (event) => {
       this.incomingMessages += 1;
+      this.incomingBytes += Buffer.byteLength(String(event.data));
+      const data = JSON.parse(String(event.data));
+      if (data.type === 'upserts') this.incomingPeerUpdates += data.peers.length;
     });
     this.socket.addEventListener('error', (event) => {
       this.errors.push(`socket error on ${nextShardId}: ${String(event?.message ?? event?.type ?? 'unknown')}`);
@@ -308,6 +321,7 @@ class PresenceBot {
 
     await waitForSocketOpen(this.socket, 5000);
     this.connected = true;
+    if (presenceInterest) this.socket.send(JSON.stringify({ type: 'presence:interest', roomCoordinates: this.state.room }));
     this.sendPresence();
   }
 
@@ -486,7 +500,7 @@ function buildPresencePayload(state) {
 async function createPresenceIdentityToken(identity) {
   if (!identityTokenSecret) {
     throw new Error(
-      'Presence load bots need PARTYKIT_IDENTITY_TOKEN_SECRET or PARTYKIT_INTERNAL_TOKEN to sign PartyKit identities.'
+      'Presence load bots need PARTYKIT_IDENTITY_TOKEN_SECRET or PARTYKIT_INTERNAL_TOKEN to sign presence identities (use the API Worker secret).'
     );
   }
 
@@ -665,7 +679,7 @@ function waitForSocketOpen(socket, timeoutMs) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`Timed out connecting to PartyKit room ${socket.roomUrl}`));
+      reject(new Error(`Timed out connecting to presence room ${socket.roomUrl}`));
     }, timeoutMs);
 
     const handleOpen = () => {
@@ -674,7 +688,7 @@ function waitForSocketOpen(socket, timeoutMs) {
     };
     const handleError = (event) => {
       cleanup();
-      reject(new Error(`Failed to connect to PartyKit room ${socket.roomUrl}: ${String(event?.message ?? event?.type ?? 'error')}`));
+      reject(new Error(`Failed to connect to presence room ${socket.roomUrl}: ${String(event?.message ?? event?.type ?? 'error')}`));
     };
     const cleanup = () => {
       clearTimeout(timeout);

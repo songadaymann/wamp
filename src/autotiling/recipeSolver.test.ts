@@ -1,3 +1,4 @@
+import { applyRegisteredSmartBrushCells, applyRegisteredSmartBrushOutlineCells } from './brushEngine';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,9 +17,6 @@ import {
 } from './model';
 import {
   applyManualSmartOutputEdit,
-  applySmartBrushCells,
-  applySmartBrushOutlineCells,
-  lockSmartSemanticCell,
   resolveSmartRecipeDocument,
   type SmartRecipeDocument,
 } from './recipeSolver';
@@ -66,7 +64,7 @@ function paint(
   styleId: CyberStyleId,
   cells: Iterable<SmartCellCoordinate>,
 ): SmartRecipeDocument {
-  return applySmartBrushCells(document, { brushId, styleId, cells, mode: 'paint' });
+  return applyRegisteredSmartBrushCells(document, { brushId, styleId, cells, mode: 'paint' });
 }
 
 function erase(
@@ -75,7 +73,7 @@ function erase(
   styleId: CyberStyleId,
   cells: Iterable<SmartCellCoordinate>,
 ): SmartRecipeDocument {
-  return applySmartBrushCells(document, { brushId, styleId, cells, mode: 'erase' });
+  return applyRegisteredSmartBrushCells(document, { brushId, styleId, cells, mode: 'erase' });
 }
 
 function anyStyleLocal(value: number): { localIndex: number; flipX: boolean; flipY: boolean; styleId: CyberStyleId } {
@@ -224,7 +222,7 @@ function expectCollision(document: SmartRecipeDocument, x: number, y: number): v
 describe('Cyber Smart recipe solver and ownership contracts', () => {
   it('retargets primary and companion Cyber outputs to an Advanced-selected layer', () => {
     const ring = rectangle(10, 10, 3, 3).filter(({ x, y }) => !(x === 11 && y === 11));
-    let document = applySmartBrushCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushCells(emptyDocument(), {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
       cells: ring,
@@ -244,7 +242,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     });
     expect(document.smartTerrain.ownedOutputs['terrain:10,10']).toBeUndefined();
 
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       brushId: 'cyber.support',
       styleId: 'cyber-pink',
       cells: vertical(16, 2, 4),
@@ -1197,9 +1195,9 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       firstGid + 31 + TILE_FLIP_Y_FLAG,
       firstGid + 83 + TILE_FLIP_X_FLAG + TILE_FLIP_Y_FLAG,
     ];
-    document = lockSmartSemanticCell(document, 4, 4, locked[0]!, 'terrain');
-    document = lockSmartSemanticCell(document, 5, 4, locked[1]!, 'terrain');
-    document = lockSmartSemanticCell(document, 6, 4, locked[2]!, 'terrain');
+    document = editSemanticTile(document, 4, 4, locked[0]!, 'terrain');
+    document = editSemanticTile(document, 5, 4, locked[1]!, 'terrain');
+    document = editSemanticTile(document, 6, 4, locked[2]!, 'terrain');
     const neighboringCells = rectangle(3, 3, 5, 4).filter(({ x, y }) => (
       !(x >= 4 && x <= 6 && y >= 4 && y <= 5)
     ));
@@ -1218,7 +1216,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
   it('repairs a letter-matched Structure outline without stale shape locks', () => {
     const filledCells = rectangle(10, 10, 3, 3);
     const outlineCells = filledCells.filter(({ x, y }) => !(x === 11 && y === 11));
-    let document = applySmartBrushOutlineCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushOutlineCells(emptyDocument(), {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
       filledCells,
@@ -1549,7 +1547,7 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
       'cyber-yellow',
       rectangle(3, 3, 4, 4),
     );
-    document = lockSmartSemanticCell(
+    document = editSemanticTile(
       document,
       4,
       4,
@@ -1579,3 +1577,10 @@ describe('Cyber Smart recipe solver and ownership contracts', () => {
     expect(panelOutput).toMatchObject({ kind: 'recipe', layer: 'foreground' });
   });
 });
+
+// Exercise manual edits through the same state update and reconciliation used by the editor.
+function editSemanticTile(document: SmartRecipeDocument, x: number, y: number, value: number, layer: LayerName): SmartRecipeDocument {
+  const tileData = cloneTileData(document);
+  tileData[layer][y]![x] = value;
+  return resolveSmartRecipeDocument({ tileData, smartTerrain: applyManualSmartOutputEdit(document.smartTerrain, layer, x, y, value) });
+}

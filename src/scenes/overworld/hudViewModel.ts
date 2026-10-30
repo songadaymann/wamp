@@ -35,6 +35,7 @@ export interface SelectedCourseContext {
 }
 
 export interface SelectedRoomOwnershipViewData {
+  canSaveDraft?: boolean;
   claimerUserId: string | null;
   isMinted: boolean;
   mintedOwnerWalletAddress: string | null;
@@ -51,6 +52,7 @@ export interface SelectedCreatorProfileViewData {
 }
 
 interface SelectedSummaryViewData {
+  isMinted?: boolean;
   title: string | null;
   creatorUserId: string | null;
   creatorDisplayName: string | null;
@@ -58,6 +60,7 @@ interface SelectedSummaryViewData {
 }
 
 export interface BuildOverworldHudViewModelOptions {
+  cryptoVisible?: boolean;
   editorPlaytest?: boolean;
   selectedState: SelectedCellState;
   selectedCoordinates: RoomCoordinates;
@@ -127,6 +130,7 @@ export function formatRoomEditorSummary(names: string[]): string | null {
 export function buildOverworldHudViewModel(
   options: BuildOverworldHudViewModelOptions,
 ): OverworldHudViewModel {
+  const cryptoVisible = options.cryptoVisible !== false;
   const {
     selectedState,
     selectedCoordinates,
@@ -249,7 +253,7 @@ export function buildOverworldHudViewModel(
   const selectedCreatorBuilderProgressFraction = selectedCreatorProfile
     ? Math.max(0, Math.min(1, selectedCreatorProfile.builderProgressFraction))
     : 0;
-  const selectedRoomMinted = selectedState === 'published' && Boolean(selectedOwnership?.isMinted);
+  const selectedRoomMinted = selectedState === 'published' && Boolean(selectedSummary?.isMinted || selectedOwnership?.isMinted);
   const selectedTitleTone: OverworldHudViewModel['selectedTitleTone'] =
     selectedRoomMinted ? 'minted' : 'default';
   const selectedRoomClaimOwnerUserId =
@@ -265,10 +269,11 @@ export function buildOverworldHudViewModel(
     currentUserId === selectedRoomClaimOwnerUserId,
   );
   const viewerOwnsMintedRoom = Boolean(
-    selectedOwnership?.mintedOwnerWalletAddress &&
+    selectedOwnership?.canSaveDraft || (cryptoVisible && selectedOwnership?.mintedOwnerWalletAddress &&
     currentWalletAddress &&
-    currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
+    currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase()),
   );
+  const viewerCanCheckMintedOwnership = Boolean(cryptoVisible && selectedRoomMinted && currentUserId && currentWalletAddress);
   const viewerCanEditWorldRoom = Boolean(
     selectedSummary?.world && canBuildInActiveWorld(selectedSummary.world.id),
   );
@@ -280,7 +285,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'published'
         ? selectedSummary?.world
           ? viewerCanEditWorldRoom
-          : selectedOwnership === null || !selectedRoomMinted || viewerOwnsMintedRoom
+          : !selectedRoomMinted || viewerOwnsMintedRoom || viewerCanCheckMintedOwnership
         : false;
   const editButtonTitle =
     selectedState !== 'published' && selectedState !== 'draft' && selectedState !== 'claimed_unpublished'
@@ -288,7 +293,7 @@ export function buildOverworldHudViewModel(
       : selectedState === 'claimed_unpublished' && !viewerOwnsSelectedRoom
         ? 'Only the claimer can edit an unpublished claimed room.'
       : selectedRoomMinted && !viewerOwnsMintedRoom
-        ? 'Only the room token owner can edit a minted room.'
+        ? !cryptoVisible ? 'This room is protected.' : viewerCanCheckMintedOwnership ? 'Check whether your linked wallet owns this room.' : 'Only the owner can edit this collected room.'
         : '';
   const canOpenCourseBuilder = selectedState === 'published' && viewerOwnsSelectedRoom;
   const resolvedCourseBuilderButtonDisabled =
@@ -305,7 +310,9 @@ export function buildOverworldHudViewModel(
         : !viewerOwnsSelectedRoom
           ? 'Only the room claimer can build an expanded room from this room.'
           : '';
-  const editButtonText = selectedIsExpandedRoom ? 'Edit Expanded Room' : 'Edit Room';
+  const editButtonText = viewerCanCheckMintedOwnership && !viewerOwnsMintedRoom
+    ? 'Check ownership' : selectedIsExpandedRoom && !(selectedRoomMinted && viewerOwnsMintedRoom && !viewerOwnsSelectedRoom)
+      ? 'Edit Expanded Room' : 'Edit Room';
   const selectedGoalText =
     selectedExpandedRoom
       ? getExpandedRoomGoalBadgeText(selectedPublishedCourse?.goal ?? null)
@@ -316,7 +323,7 @@ export function buildOverworldHudViewModel(
         : '';
   const selectedActionReasonText = canEditSelectedRoom ? ''
     : selectedSummary?.world ? 'Only this World’s builders can edit here.'
-    : selectedRoomMinted ? 'Minted: only the token owner can edit.'
+    : selectedRoomMinted ? cryptoVisible ? 'Collected & Locked: only the owner can edit.' : 'This room is protected.'
     : selectedState === 'claimed_unpublished' ? 'Only the claimer can edit this unpublished room.'
     : '';
   const selectedStateVisible = selectedState !== 'published' && !selectedRoomMinted;
@@ -395,7 +402,7 @@ export function buildOverworldHudViewModel(
   }
 
   let leaderboardText = '';
-  if (!activeCourseRun && mode !== 'play' && roomTop && rankingMode) {
+  if (!selectedExpandedRoom && !activeCourseRun && mode !== 'play' && roomTop && rankingMode) {
     const metric =
       rankingMode === 'time'
         ? `${(roomTop.elapsedMs / 1000).toFixed(2)}s`
@@ -424,6 +431,9 @@ export function buildOverworldHudViewModel(
     && currentRoomLeaderboard?.difficulty.viewerCanVote
     && (!selectedSummary?.creatorUserId || selectedSummary.creatorUserId !== currentUserId),
   );
+  // A signed-in finish that failed to send keeps its status, and a Retry, on the run panel (F351).
+  const rankedFinishRun = activeCourseRun ?? activeRoomGoalRun;
+  const goalPanelSaveText = rankedFinishRun?.finishRetry ? rankedFinishRun.submissionMessage ?? '' : '';
   const goalPanelTone =
     activeRunResult === 'completed'
       ? 'complete'
@@ -433,6 +443,10 @@ export function buildOverworldHudViewModel(
 
   return {
     saveStatusTone,
+    collectionReminder: cryptoVisible && mode === 'browse' && selectedState === 'published'
+      && selectedOwnership && !selectedRoomMinted && viewerOwnsSelectedRoom
+      && selectedOwnership.claimerUserId === currentUserId && !selectedSummary?.world
+      ? { roomId: roomIdFromCoordinates(selectedCoordinates), userId: currentUserId!, expanded: selectedIsExpandedRoom } : null,
     jumpInputValue: roomIdFromCoordinates(selectedCoordinates),
     selectedTitleText,
     selectedSubtitleText,
@@ -451,7 +465,7 @@ export function buildOverworldHudViewModel(
     selectedStateVisible,
     selectedStateText:
       selectedRoomMinted
-        ? 'Minted'
+        ? cryptoVisible ? 'Collected & Locked' : 'Protected'
         : selectedExpandedRoomCellCount !== null && selectedExpandedRoomCellCount > 1
           ? 'Expanded'
         : selectedState === 'published'
@@ -467,7 +481,9 @@ export function buildOverworldHudViewModel(
     selectedStateInfoVisible: selectedRoomMinted,
     selectedStateInfoText:
       selectedRoomMinted
-        ? "Anyone can edit anyone else's room, but the one exception is that you can buy a room as a collectible. This locks the room from being edited."
+        ? cryptoVisible
+          ? 'Collect & Lock protects your own claimed room. Only its owner can edit or revert it.'
+          : 'Only the owner can edit or revert this protected room.'
         : '',
     selectedMetaText,
     selectedMetaTone,
@@ -570,11 +586,11 @@ export function buildOverworldHudViewModel(
           )
         : '',
     goalPanelGoalText: activeCourseRun
-      ? getExpandedRoomGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
+      ? (activeCourseRun.assisted ? 'ASSIST · ' : '') + getExpandedRoomGoalBadgeText(activeCourseRun.course.goal ?? null).toUpperCase()
       : activeRoomRushRun
         ? getRoomRushGoalBadgeText(activeRoomRushRun).toUpperCase()
       : activeRoomGoalRun
-        ? getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
+        ? (activeRoomGoalRun.assisted ? 'ASSIST · ' : '') + getGoalBadgeText(activeRoomGoalRun.goal).toUpperCase()
         : '',
     goalPanelTimerText: activeCourseRun
       ? getExpandedRoomGoalTimerText(activeCourseRun)
@@ -590,6 +606,8 @@ export function buildOverworldHudViewModel(
       : activeRoomGoalRun
         ? getPlayGoalProgressText(activeRoomGoalRun)
         : '',
+    goalPanelSaveText,
+    goalPanelRetryVisible: Boolean(goalPanelSaveText) && rankedFinishRun?.finishRetry === 'waiting',
     signPanelVisible: mode === 'play' && Boolean(activeSignState?.text),
     signPanelLabelText: '',
     signPanelText: activeSignState?.text ?? '',

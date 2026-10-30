@@ -1,3 +1,4 @@
+import { indexedRoomProtectionCountSql, loadProtectedRoomIds } from '../rooms/protection';
 import type { GoalType } from '../../../goals/goalSchema';
 import { attachRoomInsights } from '../insights/store';
 import type {
@@ -111,6 +112,7 @@ export async function loadUserProfile(
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
 
   return {
+    collectionAvailable: true,
     userId: user.id,
     displayName: user.displayName,
     username: user.username ?? null,
@@ -156,6 +158,7 @@ export async function loadUserProfileSummary(
   const isSelf = viewerUserId === targetUserId;
   const selectedAvatarId = resolveSelectablePlayerAvatarId(user.selectedAvatarId);
   return {
+    collectionAvailable: true,
     userId: user.id,
     displayName: user.displayName,
     username: user.username ?? null,
@@ -206,7 +209,8 @@ export async function loadUserProfileRoomsPage(
             legacy_course_id,
             quality_adjusted_average,
             quality_vote_count,
-            consensus_difficulty
+            consensus_difficulty,
+            ${indexedRoomProtectionCountSql('playable_content_index')} AS protected_cell_count
           FROM playable_content_index
           WHERE builder_user_id = ?
           ORDER BY published_at DESC, target_key ASC
@@ -243,6 +247,7 @@ export async function loadUserProfilePlaylists(
 }
 
 interface ProfilePlayableContentRow {
+  protected_cell_count?: number | string;
   target_key: string;
   target_type: 'room' | 'expanded_room';
   content_id: string;
@@ -283,6 +288,7 @@ function mapProfilePlayableContentRow(row: ProfilePlayableContentRow): ProfilePu
       }
     : null;
   return {
+    ...(Number(row.protected_cell_count) > 0 ? { protectedCellCount: Number(row.protected_cell_count) } : {}),
     roomId: row.representative_room_id,
     roomCoordinates: coordinates,
     roomTitle: row.title,
@@ -405,6 +411,7 @@ async function buildPublishedRooms(
     try {
       const snapshot = parseStoredSnapshot(row.published_json, 'profile room');
       entries.push({
+        ...(row.is_minted === 1 ? { protectedCellCount: 1 } : {}),
         roomId: row.id,
         roomCoordinates: { x: row.x, y: row.y },
         roomTitle: row.published_title ?? snapshot.title ?? null,
@@ -418,7 +425,7 @@ async function buildPublishedRooms(
     }
   }
 
-  const resolvedEntries = await resolveProfilePublishedRoomEntries(env, entries);
+  const resolvedEntries = await resolveProfilePublishedRoomEntries(env, entries, new Map(rows.map((row) => [row.id, row.is_minted === 1])));
   const sortedEntries = resolvedEntries
     .sort((left, right) => {
       const leftTime = left.publishedAt ? Date.parse(left.publishedAt) : 0;
@@ -449,6 +456,7 @@ async function buildPublishedRooms(
 async function resolveProfilePublishedRoomEntries(
   env: Env,
   entries: ProfilePublishedRoomBaseEntry[],
+  knownProtection: Map<string, boolean>,
 ): Promise<ProfilePublishedRoomBaseEntry[]> {
   if (!isExpandedRoomsEnabled(env)) {
     return entries;
@@ -473,6 +481,10 @@ async function resolveProfilePublishedRoomEntries(
     ] as const),
   );
   const expandedTargetById = new Map(expandedTargets);
+  const missingCellIds = expandedTargets.flatMap(([, target]) => target?.cells ?? [])
+    .map((cell) => cell.roomId).filter((roomId) => !knownProtection.has(roomId));
+  const additionalProtectedIds = await loadProtectedRoomIds(env, missingCellIds);
+  for (const roomId of missingCellIds) knownProtection.set(roomId, additionalProtectedIds.has(roomId));
   const resolvedEntries: ProfilePublishedRoomBaseEntry[] = [];
   for (const entry of entries) {
     const membership = membershipByRoomId.get(entry.roomId);
@@ -483,7 +495,7 @@ async function resolveProfilePublishedRoomEntries(
       ? candidateTarget
       : null;
     const resolvedEntry = expandedRoomTarget
-      ? mapProfileEntryToExpandedRoom(entry, expandedRoomTarget)
+      ? mapProfileEntryToExpandedRoom(entry, expandedRoomTarget, knownProtection)
       : { ...entry, expandedRoom: null };
     resolvedEntries.push(resolvedEntry);
   }
@@ -520,9 +532,13 @@ function targetContainsPinnedProfileCell(
 function mapProfileEntryToExpandedRoom(
   entry: ProfilePublishedRoomBaseEntry,
   target: ResolvedExpandedRoomTarget,
+  knownProtection: Map<string, boolean>,
 ): ProfilePublishedRoomBaseEntry {
+  const { protectedCellCount: _focusedCellCount, ...base } = entry;
+  const protectedCellCount = new Set(target.cells.filter((cell) => knownProtection.get(cell.roomId)).map((cell) => cell.roomId)).size;
   return {
-    ...entry,
+    ...base,
+    ...(protectedCellCount > 0 ? { protectedCellCount } : {}),
     roomTitle: target.title?.trim() || entry.roomTitle,
     goalType: target.goalType ?? entry.goalType,
     publishedAt: target.publishedAt ?? entry.publishedAt,

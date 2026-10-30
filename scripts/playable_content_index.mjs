@@ -77,6 +77,10 @@ if (result.status === 0 && action === 'repair') {
   const pins = spawnSync('npx', [...commonArgs.slice(0, commonArgs.indexOf('--file')),
     '--file', 'scripts/sql/refresh_featured_content_pins.sql'], { stdio: 'inherit', shell: false });
   if (pins.error) console.error(pins.error.message);
-  process.exit(pins.status ?? 1);
+  if (pins.status !== 0) process.exit(pins.status ?? 1);
+  const ratings = spawnSync('npx', ['--no-install', 'tsx', 'scripts/repair_rating_index.ts', '--apply', ...rawArgs],
+    { stdio: 'inherit', shell: false });
+  if (ratings.error) console.error(ratings.error.message);
+  process.exit(ratings.status ?? 1);
 }
 process.exit(result.status ?? 1);

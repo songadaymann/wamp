@@ -1,3 +1,4 @@
+import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
 import { getAuthDebugState } from '../../auth/client';
 import { expandedRoomIdFromStandaloneRoomId } from '../../expandedRooms/model';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
@@ -71,6 +72,7 @@ interface OverworldRoomRushModeHost {
   syncAppMode(): void;
   showTransientStatus(message: string): void;
   renderHud(): void;
+  isDeathPending(): boolean;
 }
 
 export class OverworldRoomRushModeController {
@@ -210,6 +212,11 @@ export class OverworldRoomRushModeController {
     if (!this.getCurrentRun()) {
       return;
     }
+    // A death in its beat fails a Hard or Weekly Rush once the beat ends; ending the run
+    // first would save it as completed with that death uncounted, whichever input stopped it.
+    if (this.host.isDeathPending() && this.runController.deathEndsRun()) {
+      return;
+    }
 
     const result = this.runController.completeActiveRun();
     const finalStatus = result.transientStatus;
@@ -294,6 +301,7 @@ export class OverworldRoomRushModeController {
       }),
     );
 
+    resetKeepPlayingContext();
     this.enterPlayModeAt(options.startCoordinates);
     if (options.weekly) this.host.syncModeRuntime();
     await options.afterStart();

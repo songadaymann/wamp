@@ -88,4 +88,24 @@ describe('bounded game feedback', () => {
     expect(f.controller.consumeCombatInput({ swordPressed: false, gunPressed: false }))
       .toEqual({ swordPressed: false, gunPressed: false });
   });
+  it('freezes a pending death beat across nested scene pauses and resumes its remaining delay', () => {
+    const f = fixture(), respawn = vi.fn();
+    f.controller.deathBeat(respawn); vi.advanceTimersByTime(60);
+    f.controller.setScenePaused(true); f.controller.setScenePaused(true);
+    vi.advanceTimersByTime(5000);
+    expect(respawn).not.toHaveBeenCalled(); expect(f.paused()).toBe(true);
+    f.controller.setScenePaused(false); vi.advanceTimersByTime(119);
+    expect(respawn).not.toHaveBeenCalled(); vi.advanceTimersByTime(1);
+    expect(respawn).toHaveBeenCalledOnce(); expect(f.paused()).toBe(false);
+  });
+
+  it('cancels a suspended callback on restart and preserves a new hitstop while paused', () => {
+    const f = fixture(), respawn = vi.fn(); f.controller.deathBeat(respawn);
+    f.controller.setScenePaused(true); f.controller.reset();
+    f.controller.hitstop(); vi.advanceTimersByTime(5000);
+    expect(f.controller.describe().phase).toBe('hitstop');
+    f.controller.setScenePaused(false); vi.advanceTimersByTime(KILL_HITSTOP_MS);
+    expect(respawn).not.toHaveBeenCalled(); expect(f.controller.describe().phase).toBe('none');
+  });
+
 });

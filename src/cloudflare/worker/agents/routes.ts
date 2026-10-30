@@ -90,7 +90,7 @@ async function handleDisableAgent(
   env: Env,
   agentId: string
 ): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'disable agents');
+  const session = await requireCurrentSession(env, request, 'disable agents', { allowSuspended: true });
   const existing = await loadAgentForOwner(env, agentId, session.user.id);
   if (!existing) {
     throw new HttpError(404, 'Agent not found.');
@@ -154,7 +154,7 @@ async function handleDeleteAgentToken(
   agentId: string,
   tokenId: string
 ): Promise<Response> {
-  const session = await requireCurrentSession(env, request, 'manage agent tokens');
+  const session = await requireCurrentSession(env, request, 'manage agent tokens', { allowSuspended: true });
   const existing = await findAgentTokenIdForOwner(env, tokenId, agentId, session.user.id);
   if (!existing) {
     throw new HttpError(404, 'Agent token not found.');

@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
-// Synthetic editor fixtures only. This probe requires a local development
-// server; production room/account writes are never part of recovery QA.
+// Synthetic editor fixtures only. This probe requires a local Vite dev server (`npm run dev`):
+// it imports source modules (/src/courses/draftSession.ts and the room/course record factories)
+// that production and test-hook builds don't serve. Production room/account writes are never
+// part of recovery QA.
 const base = process.env.DRAFT_RECOVERY_SMOKE_URL || 'http://127.0.0.1:3017';
 assert.ok(['127.0.0.1', 'localhost'].includes(new URL(base).hostname));
 const url = new URL(base);
@@ -109,6 +112,8 @@ try {
       isMobile: true, hasTouch: true,
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
     } : {}) });
+    // Guest replay recording would POST outside the synthetic fixtures; opt out as players can.
+    await context.addInitScript(() => localStorage.setItem('wamp_replay_opt_out', '1'));
     const page = await context.newPage();
     page.on('pageerror', (error) => summary.pageErrors.push(error.message));
     page.on('dialog', (dialog) => dialog.accept());

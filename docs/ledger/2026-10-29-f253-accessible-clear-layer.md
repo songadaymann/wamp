@@ -1,0 +1,1 @@
+| 2026-10-29 | F253 | [#349](https://github.com/songadaymann/wamp/pull/349) | [receipt](docs/review/wamp-f253-accessible-clear-layer-2026-10-29.md) | Give Clear Layer a live desktop/phone home and retire obsolete editor UI; keyboard, Undo and live assets verified |

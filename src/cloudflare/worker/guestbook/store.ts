@@ -1,5 +1,6 @@
 import type { GuestbookEntry } from '../../../guestbook/model';
 import type { Env, GuestbookEntryRow } from '../core/types';
+import { isAccountGuestbookName } from './names';
 
 export async function listGuestbookEntries(
   env: Env,
@@ -7,10 +8,18 @@ export async function listGuestbookEntries(
 ): Promise<GuestbookEntry[]> {
   const result = await env.DB.prepare(
     `
-      SELECT id, display_name, body, user_id, created_at
+      SELECT
+        guestbook_entries.id,
+        guestbook_entries.display_name,
+        guestbook_entries.body,
+        guestbook_entries.user_id,
+        guestbook_entries.created_at,
+        users.display_name AS account_display_name
       FROM guestbook_entries
-      WHERE hidden_at IS NULL
-      ORDER BY created_at DESC, id DESC
+      LEFT JOIN users
+        ON users.id = guestbook_entries.user_id
+      WHERE guestbook_entries.hidden_at IS NULL
+      ORDER BY guestbook_entries.created_at DESC, guestbook_entries.id DESC
       LIMIT ?
     `
   )
@@ -26,6 +35,8 @@ export async function createGuestbookEntry(
     displayName: string;
     body: string;
     userId: string | null;
+    /** The signed-in account's display name now, for the signed-in mark in the reply. */
+    accountDisplayName: string | null;
     guestSessionId: string | null;
     ipHash: string | null;
     userAgent: string | null;
@@ -70,7 +81,7 @@ export async function createGuestbookEntry(
     displayName: input.displayName,
     body: input.body,
     createdAt: input.createdAt,
-    signedIn: Boolean(input.userId),
+    signedIn: Boolean(input.userId) && isAccountGuestbookName(input.displayName, input.accountDisplayName),
   };
 }
 
@@ -109,50 +120,13 @@ export async function hideGuestbookEntry(
   return true;
 }
 
-export async function countRecentGuestbookEntriesForIp(
-  env: Env,
-  ipHash: string,
-  sinceIso: string,
-): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COUNT(*) AS count
-      FROM guestbook_entries
-      WHERE ip_hash = ?
-        AND created_at >= ?
-    `
-  )
-    .bind(ipHash, sinceIso)
-    .first<{ count: number }>();
-
-  return Number(row?.count ?? 0);
-}
-
-export async function countRecentGuestbookEntriesForSession(
-  env: Env,
-  guestSessionId: string,
-  sinceIso: string,
-): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COUNT(*) AS count
-      FROM guestbook_entries
-      WHERE guest_session_id = ?
-        AND created_at >= ?
-    `
-  )
-    .bind(guestSessionId, sinceIso)
-    .first<{ count: number }>();
-
-  return Number(row?.count ?? 0);
-}
-
 function mapGuestbookEntryRow(row: GuestbookEntryRow): GuestbookEntry {
   return {
     id: row.id,
     displayName: row.display_name,
     body: row.body,
     createdAt: row.created_at,
-    signedIn: Boolean(row.user_id),
+    // Decided at read time, against the account's current name, in the same query.
+    signedIn: Boolean(row.user_id) && isAccountGuestbookName(row.display_name, row.account_display_name),
   };
 }

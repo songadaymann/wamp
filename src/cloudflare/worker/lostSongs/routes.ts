@@ -3,7 +3,6 @@ import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
 import { getClientIp, hashRateLimitKey, networkKeyForIp, takeRateLimitSlots } from '../core/rateLimit';
 import type { Env } from '../core/types';
 import { guestRunIdentity, hashGuestRunValue } from '../guestRuns/identity';
-import { assertWampLeaderboardWriteAllowed } from '../generatedUsers/leaderboardIsolation';
 import { assertLostSongPickupProof, parseLostSongFind, parseLostSongTarget } from './validation';
 import { loadLostSongTarget, userOwnsSongRoom } from './targets';
 import { loadLostSongProgress, saveUserLostSong } from './progress';
@@ -49,7 +48,6 @@ export async function handleLostSongs(request: Request, url: URL, env: Env): Pro
   }
   if (url.pathname === '/api/lost-songs/claim' && request.method === 'POST') {
     const auth = await requireAuthenticatedRequestAuth(env, request, 'claim Lost Song progress', 'runs:write');
-    await assertWampLeaderboardWriteAllowed(env, auth, 'play');
     const guest = await guestRunIdentity(request);
     const identity: Identity = { type: 'guest', id: guest.guestUserId, recoveryHash: guest.recoveryTokenHash };
     await limit(env, request, identity, 'claim');
@@ -75,7 +73,6 @@ export async function handleLostSongs(request: Request, url: URL, env: Env): Pro
   }
   const auth = await loadOptionalRequestAuth(env, request);
   requireOptionalScope(auth, 'runs:write', 'save Lost Song progress');
-  if (auth) await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const guest = auth ? null : await guestRunIdentity(request);
   const identity: Identity = auth ? { type: 'user', id: auth.user.id, recoveryHash: '' }
     : { type: 'guest', id: guest!.guestUserId, recoveryHash: guest!.recoveryTokenHash };
@@ -86,15 +83,26 @@ export async function handleLostSongs(request: Request, url: URL, env: Env): Pro
     assertExpectedUser(body, auth?.user.id ?? null);
     const target = parseLostSongTarget(body);
     const { song, ownerUserId } = await loadLostSongTarget(env, target, auth?.user ?? null);
-    const id = crypto.randomUUID(), token = secret(), now = new Date().toISOString();
+    const token = secret(), tokenHash = await hashGuestRunValue(token), now = new Date().toISOString();
     const expiresAt = new Date(Date.parse(now) + 30 * 60_000).toISOString();
+    // Entering the same room again resumes its open session with a fresh token instead of opening another.
+    const resumed = await env.DB.prepare(`UPDATE lost_song_play_sessions
+      SET token_hash = ?, owner_user_id = ?, song_x = ?, song_y = ?, started_at = ?, expires_at = ?
+      WHERE id = (SELECT id FROM lost_song_play_sessions
+        WHERE identity_type = ? AND identity_id = ? AND recovery_hash = ? AND room_id = ? AND room_version = ?
+          AND expanded_room_id IS ? AND expires_at > ? AND found_at IS NULL
+        ORDER BY started_at DESC LIMIT 1)
+      RETURNING id`)
+      .bind(tokenHash, ownerUserId, song.x, song.y, now, expiresAt, identity.type, identity.id, identity.recoveryHash,
+        target.roomId, target.roomVersion, target.expandedRoomId ?? null, now).first<{ id: string }>();
+    if (resumed) return reply(request, { id: resumed.id, token, expiresAt });
+    const id = crypto.randomUUID();
     await env.DB.batch([env.DB.prepare(`INSERT INTO lost_song_play_sessions
       (id,identity_type,identity_id,recovery_hash,token_hash,room_id,room_version,expanded_room_id,owner_user_id,song_x,song_y,started_at,expires_at)
       SELECT ?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM lost_song_play_sessions
-        WHERE identity_type = ? AND identity_id = ? AND recovery_hash = ? AND expires_at > ? AND found_at IS NULL) < 32
-        AND (SELECT COUNT(*) FROM lost_song_play_sessions WHERE expires_at > ?) < 5000`)
-      .bind(id, identity.type, identity.id, identity.recoveryHash, await hashGuestRunValue(token), target.roomId, target.roomVersion,
-        target.expandedRoomId ?? null, ownerUserId, song.x, song.y, now, expiresAt, identity.type, identity.id, identity.recoveryHash, now, now)]);
+        WHERE identity_type = ? AND identity_id = ? AND recovery_hash = ? AND expires_at > ? AND found_at IS NULL) < 32`)
+      .bind(id, identity.type, identity.id, identity.recoveryHash, tokenHash, target.roomId, target.roomVersion,
+        target.expandedRoomId ?? null, ownerUserId, song.x, song.y, now, expiresAt, identity.type, identity.id, identity.recoveryHash, now)]);
     if (!await env.DB.prepare('SELECT id FROM lost_song_play_sessions WHERE id = ?').bind(id).first()) throw new HttpError(429, 'Too many active Lost Song play sessions.');
     return reply(request, { id, token, expiresAt });
   }

@@ -1,333 +1,259 @@
-/* Tools */
+@layer components {
+  /* Tools */
 
-#tools {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
+  .tool-icon-mosaic {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    width: 14px;
+    height: 14px;
+  }
 
-.tools-primary-row {
-  position: relative;
-}
+  .tool-icon-mosaic span {
+    display: block;
+    background: currentColor;
+  }
 
-.tool-btn-more {
-  flex: 0 0 52px;
-}
+  .tool-icon-mosaic span:nth-child(1) {
+    opacity: 1;
+  }
 
-.tool-btn-compact {
-  min-width: 0;
-  height: auto;
-  min-height: 40px;
-  padding: 6px 4px;
-}
+  .tool-icon-mosaic span:nth-child(2) {
+    opacity: 0.35;
+  }
 
-.tool-icon-mosaic {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  width: 14px;
-  height: 14px;
-}
+  .tool-icon-mosaic span:nth-child(3) {
+    opacity: 0.62;
+  }
 
-.tool-icon-mosaic span {
-  display: block;
-  background: currentColor;
-}
+  .tool-icon-mosaic span:nth-child(4) {
+    opacity: 0.22;
+  }
 
-.tool-icon-mosaic span:nth-child(1) { opacity: 1; }
-.tool-icon-mosaic span:nth-child(2) { opacity: 0.35; }
-.tool-icon-mosaic span:nth-child(3) { opacity: 0.62; }
-.tool-icon-mosaic span:nth-child(4) { opacity: 0.22; }
+  .editor-randomize-brush-button,
+  .editor-pencil-brush-button,
+  .editor-pencil-spray-brush-button {
+    min-width: 36px;
+    height: 28px;
+    padding: 0 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: var(--ui-text-small, 10px);
+    font-family: inherit;
+    cursor: pointer;
+  }
 
-.tool-icon-right-triangle {
-  display: inline-block;
-  width: 13px;
-  height: 13px;
-  background: currentColor;
-  clip-path: polygon(0 100%, 100% 100%, 0 0);
-}
+  .tool-icon-right-triangle {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    background: currentColor;
+    clip-path: polygon(0 100%, 100% 100%, 0 0);
+  }
 
-.editor-randomize-size-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
+  .editor-randomize-size-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 
-.editor-randomize-brush-button,
-.editor-pencil-brush-button,
-.editor-pencil-spray-brush-button {
-  min-width: 36px;
-  height: 28px;
-  padding: 0 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-family: inherit;
-  cursor: pointer;
-}
+  .editor-randomize-brush-button.active,
+  .editor-pencil-brush-button.active,
+  .editor-pencil-spray-brush-button.active {
+    background: var(--accent-cool-soft);
+    border-color: var(--accent-cool);
+    color: var(--text);
+  }
 
-.editor-randomize-brush-button.active,
-.editor-pencil-brush-button.active,
-.editor-pencil-spray-brush-button.active {
-  background: var(--accent-cool-soft);
-  border-color: var(--accent-cool);
-  color: var(--text);
-}
+  .editor-pencil-spray-rate-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 100%;
+    width: 100%;
+  }
 
-.editor-pencil-spray-rate-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 100%;
-  width: 100%;
-}
+  .editor-pencil-spray-rate {
+    flex: 1 1 auto;
+    min-width: 72px;
+    accent-color: var(--accent-cool, #2f6b7f);
+  }
 
-.editor-pencil-spray-rate {
-  flex: 1 1 auto;
-  min-width: 72px;
-  accent-color: var(--accent-cool, #2f6b7f);
-}
+  .editor-pencil-spray-rate-bound {
+    font-size: var(--ui-text-small, 10px);
+    font-weight: 700;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
 
-.editor-pencil-spray-rate-bound {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
+  .editor-shape-fill-controls {
+    margin-top: 8px;
+  }
 
-.editor-shape-fill-controls {
-  margin-top: 8px;
-}
+  .editor-shape-fill-toggle {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
 
-.editor-shape-fill-toggle {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-}
+  .editor-shape-fill-button {
+    min-width: 0;
+    flex: 1;
+    height: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 0;
+  }
 
-.editor-shape-fill-button {
-  min-width: 0;
-  flex: 1;
-  height: 44px;
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: 0;
-}
+  .layer-controls-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
 
-.tool-btn-compact .tool-label {
-  text-align: center;
-  white-space: normal;
-  line-height: 1.2;
-}
+  .layer-controls-row {
+    grid-template-columns: minmax(0, 1fr);
+    margin-top: 8px;
+  }
 
-.editor-tool-popover {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid rgba(243, 238, 226, 0.1);
-  border-radius: 10px;
-  background: rgba(18, 17, 9, 0.86);
-  box-shadow: inset 0 1px 0 rgba(var(--wamp-white-rgb), 0.03);
-}
-
-.editor-tool-popover-label {
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.editor-tool-popover-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.erase-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.erase-controls-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.erase-controls-label {
-  color: var(--text-muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-#erase-brush-select {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text);
-  font-size: 11px;
-  font-family: var(--font-code);
-}
-
-.erase-action-grid,
-.layer-controls-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.layer-controls-row {
-  grid-template-columns: minmax(0, 1fr);
-  margin-top: 8px;
-}
-
-.tool-btn {
-  flex: 1;
-  min-width: 56px;
-  height: 40px;
-  position: relative;
-  overflow: visible;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  transition:
-    background 0.1s,
+  .tool-btn {
+    flex: 1;
+    min-width: 56px;
+    height: 40px;
+    position: relative;
+    overflow: visible;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: var(--ui-text-small, 11px);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    transition: background 0.1s,
     border-color 0.1s,
     color 0.1s,
     transform 0.06s ease,
     box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
+    box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
+  }
 
-.tool-icon {
-  font-size: 15px;
-  line-height: 1;
-}
+  .tool-icon {
+    font-size: var(--ui-text-body, 15px);
+    line-height: 1;
+  }
 
-.tool-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  line-height: 1;
-}
+  .tool-label {
+    font-size: var(--ui-text-small, 9px);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
 
-.tool-btn:hover {
-  background: var(--panel-3);
-  color: var(--text);
-}
+  .tool-btn:hover {
+    background: var(--panel-3);
+    color: var(--text);
+  }
 
-.tool-btn.active {
-  background: var(--accent-cool-soft);
-  border-color: var(--accent-cool);
-  color: var(--text);
-}
+  .tool-btn.active {
+    background: var(--accent-cool-soft);
+    border-color: var(--accent-cool);
+    color: var(--text);
+  }
 
-.tool-btn.is-pressed {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
-}
+  .tool-btn.is-pressed {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
+  }
 
-.tool-mode-pips {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: flex;
-  gap: 2px;
-  pointer-events: none;
-  z-index: 1;
-}
+  .tool-mode-pips {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    gap: 2px;
+    pointer-events: none;
+    z-index: var(--z-local-content);
+  }
 
-.tool-mode-pips span {
-  display: block;
-  width: 5px;
-  height: 5px;
-  box-sizing: border-box;
-  background: transparent;
-  border: 1px solid var(--wamp-ink);
-}
+  .tool-mode-pips span {
+    display: block;
+    width: 5px;
+    height: 5px;
+    box-sizing: border-box;
+    background: transparent;
+    border: 1px solid var(--wamp-ink);
+  }
 
-.tool-mode-pips span.is-active {
-  background: var(--wamp-ink);
-}
+  .tool-mode-pips span.is-active {
+    background: var(--wamp-ink);
+  }
 
-/* Copy tool: clipboard actions and saved stamps (room and Expanded editors). */
-.editor-copy-actions {
-  flex-wrap: wrap;
-}
+  /* Copy tool: clipboard actions and saved stamps (room and Expanded editors). */
 
-.editor-copy-stamps {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  max-height: 180px;
-  overflow-y: auto;
-}
+  .editor-copy-stamps {
+    display: grid;
+    gap: 4px;
+    width: 100%;
+    max-height: 180px;
+    overflow-y: auto;
+  }
 
-.editor-copy-stamp {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px;
-}
+  .editor-copy-stamp {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px;
+  }
 
-.editor-copy-stamp-use {
-  min-width: 0;
-  min-height: 32px;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  .editor-copy-stamp-use {
+    min-width: 0;
+    min-height: 32px;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-.editor-copy-stamp-delete {
-  min-width: 32px;
-  min-height: 32px;
-}
+  .editor-copy-stamp-delete {
+    min-width: 32px;
+    min-height: 32px;
+  }
 
-.editor-copy-stamps-empty {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
+  .editor-copy-stamps-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--ui-text-small, 11px);
+    line-height: 1.4;
+  }
 
-body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls {
-  width: min(320px, calc(100vw - 32px));
-}
+  body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls {
+    width: min(320px, calc(100vw - 32px));
+  }
 
-body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls button {
-  width: auto;
-  padding: 0 10px;
-}
+  body[data-editor-dock-shell='true'] .editor-shell-eraser-size-picker.editor-copy-controls button {
+    width: auto;
+    padding: 0 10px;
+  }
 
-body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamp-use {
-  width: 100%;
-}
+  body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamp-use {
+    width: 100%;
+  }
 
-body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamps-empty {
-  color: var(--editor-retro-ink, var(--wamp-ink));
-}
+  body[data-editor-dock-shell='true'] .editor-copy-controls .editor-copy-stamps-empty {
+    color: var(--editor-retro-ink, var(--wamp-ink));
+  }
+  body[data-coarse-pointer='true'] .editor-copy-stamp-use,
+  body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
+    min-height: 44px;
+  }
 
-body[data-coarse-pointer='true'] .editor-copy-stamp-use,
-body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
-  min-height: 44px;
-}
-
-body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
-  min-width: 44px;
+  body[data-coarse-pointer='true'] .editor-copy-stamp-delete {
+    min-width: 44px;
+  }
 }

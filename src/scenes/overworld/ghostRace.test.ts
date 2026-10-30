@@ -32,7 +32,7 @@ function fixture() {
   const run = { roomId: '1,2', roomCoordinates: { x: 1, y: 2 }, roomVersion: 2, goal: room.goal,
     qualificationState: 'qualified', elapsedMs: 0, deaths: 0, result: 'active' } as GoalRunState;
   const status = vi.fn(), raceInfo = vi.fn();
-  const controller = new OverworldGhostRaceController({ scene, getRun: () => run, getMode: () => mode,
+  const controller = new OverworldGhostRaceController({ scene, getRun: () => run, runtime: { mode: { get: () => mode } },
     getUserId: () => user, getRoomOrigin: () => ({ x: 640, y: 704 }),
     onRaceInfoChanged: raceInfo, showStatus: status });
   controllers.add(controller);
@@ -41,6 +41,14 @@ function fixture() {
 }
 afterEach(() => { for (const controller of controllers) controller.clear(); controllers.clear(); vi.unstubAllGlobals(); });
 describe('independent race presentation', () => {
+  it('keeps the shared challenger on restart instead of silently switching to the new room record',async()=>{
+    const f=fixture();vi.stubGlobal('fetch',vi.fn(async()=>Response.json({roomId:'1,2',roomVersion:2,challenge:{ghost},top:{ghost:{...ghost,attemptId:'new-record'}}})));
+    f.controller.select(ghost,'challenge',f.room);await Promise.resolve();f.controller.update();
+    expect(f.raceInfo).toHaveBeenLastCalledWith({name:'Beat Leader',elapsedMs:1000});
+    await f.controller.refreshAfterRestart();
+    expect(f.controller.getDebugSnapshot().attemptId).toBe('top');
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain('vs=top');
+  });
   it('shares the run timer through death and restart, while accepting a matching equivalent-version ghost', async () => {
     const f = fixture(); f.controller.select(ghost, 'top', f.room); await Promise.resolve(); f.controller.update();
     expect(f.controller.getDebugSnapshot()).toMatchObject({ choice: 'top', visible: true, hasPhysicsBody: false });

@@ -31,8 +31,29 @@ export const JIMOTHY_ANIMATION_KEYS = {
   idle: 'jimothy_idle',
   walk: 'jimothy_walk',
   death: 'jimothy_death',
+  deathLeft: 'jimothy_death_left',
   victory: 'jimothy_victory',
+  victoryLeft: 'jimothy_victory_left',
 } as const;
+
+/** Right-facing actions stay on the original row. Left copies are pre-flipped so speech text is not mirrored at runtime. */
+export const JIMOTHY_ACTION_FRAMES = {
+  death: 2,
+  victory: 3,
+  deathLeft: 8,
+  victoryLeft: 9,
+} as const;
+
+export function getJimothyActionAnimationKey(
+  action: 'death' | 'victory',
+  directionX: number,
+): string {
+  const facingLeft = directionX < 0;
+  if (action === 'death') {
+    return facingLeft ? JIMOTHY_ANIMATION_KEYS.deathLeft : JIMOTHY_ANIMATION_KEYS.death;
+  }
+  return facingLeft ? JIMOTHY_ANIMATION_KEYS.victoryLeft : JIMOTHY_ANIMATION_KEYS.victory;
+}
 
 export function isNpcObjectId(id: string): id is NpcObjectId {
   return (NPC_OBJECT_IDS as readonly string[]).includes(id);

@@ -6,7 +6,7 @@ vi.mock('../progression/store', () => ({
   ensureFounderIdentityQualification: vi.fn(async () => undefined),
 }));
 
-import { attachEmailToUser } from './store';
+import { attachEmailToUser, resolveEmailBaseUrl, resolvePublicBaseUrl } from './store';
 
 const NOW = '2026-07-25T12:00:00.000Z';
 
@@ -142,5 +142,29 @@ describe('wallet account email linking', () => {
 
     expect(getUser(walletUser.id)?.email).toBeNull();
     expect(updateQueries).toHaveLength(0);
+  });
+});
+
+describe('link bases from the request Origin (F413)', () => {
+  const request = (url: string, headers: Record<string, string>) => new Request(url, { method: 'POST', headers });
+  const env = {} as Env;
+
+  it('uses only an https Origin on a public trusted host for email links', () => {
+    const api = 'https://api.wamp.land/api/reports';
+    expect(resolveEmailBaseUrl(request(api, { Origin: 'https://wampland.pages.dev' }), env)).toBe('https://wampland.pages.dev');
+    for (const origin of ['http://localhost:5173', 'https://localhost:5173', 'http://127.0.0.1:3000', 'http://wamp.land', 'https://evil.example']) {
+      expect(resolveEmailBaseUrl(request(api, { Origin: origin }), env)).toBe('https://wamp.land');
+    }
+    const safety = 'https://everybodys-platformer-safety.novox-robot.workers.dev/api/reports';
+    expect(resolveEmailBaseUrl(request(safety, { Origin: 'http://192.168.1.20:5173' }), env)).toBe('https://wamp.land');
+    expect(resolveEmailBaseUrl(request(api, { Origin: 'https://wampland.pages.dev', Authorization: 'Bearer epat_x' }), env)).toBe('https://wamp.land');
+    expect(resolveEmailBaseUrl(request(api, { Origin: 'https://wampland.pages.dev' }), { APP_BASE_URL: 'https://preview.wamp.land/' } as Env))
+      .toBe('https://preview.wamp.land');
+  });
+
+  it('keeps a local Origin when the worker itself runs locally', () => {
+    const local = 'http://127.0.0.1:8787/api/reports';
+    expect(resolveEmailBaseUrl(request(local, { Origin: 'http://localhost:5173' }), env)).toBe('http://localhost:5173');
+    expect(resolvePublicBaseUrl(request('https://api.wamp.land/api/share', { Origin: 'http://localhost:5173' }), env)).toBe('http://localhost:5173');
   });
 });

@@ -1,4 +1,7 @@
-import { formatGoalRoomLeaderboardMetric, formatGoalRunStatus, GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
+import { notifyKeepPlayingClear, resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
+import { supportsGhostRace } from '../../runs/ghostRace';
+import { ASSIST_RUN_MESSAGE } from './assistedRun';
+import { GOAL_LIFECYCLE_RULES, roomGoalDeliveryCompleted, roomGoalDestinationCompleted, roomGoalStartCompletion } from './goalLifecycleRules';
 import { goalCollectiblesExhausted } from '../../goals/goalRunEvents';
 import { initializeRoomGoalTargets, roomGoalCountsPlayerCollectibles, resolveRoomGoalPlayerCollect, resolveRoomGoalTick } from '../../goals/goalSchema';
 import { getObjectById, type GameObjectConfig } from '../../config';
@@ -10,7 +13,6 @@ import {
   type SurfaceAuthSource,
 } from '../../generatedUsers/leaderboardPolicy';
 import type {
-  GlobalLeaderboardResponse,
   RoomLeaderboardResponse,
   RunFinishRequestBody,
   RunResult,
@@ -37,6 +39,7 @@ import {
   notifyRewardStings,
 } from '../../progression/rewardStings';
 import type { RankedRunVerificationTrace } from '../../runs/verificationTrace';
+import { deliverRankedFinish, type RankedFinishRetryState } from '../../runs/rankedFinishDelivery';
 import type { GuestRunPlaybackController } from './guestRunPlayback';
 import type { GuestRunSaveResult } from '../../guestRooms/runService';
 import { notifyGhostBestUpdated } from '../../runs/ghostRepository';
@@ -74,10 +77,12 @@ export interface GoalRunState {
   submittedScore: number | null;
   leaderboardEligible: boolean;
   cooperative?: boolean;
+  assisted?: boolean;
   verificationSchemaVersion: number | null;
   verificationNonce: string | null;
   snapshotHash: string | null;
   guestProgress?: GuestRunSaveResult;
+  finishRetry?: RankedFinishRetryState | null;
 }
 
 export interface GoalRunMutationResult {
@@ -94,7 +99,6 @@ export interface OverworldGoalRunSnapshot {
     state: GoalRunLeaderboardState;
     message: string | null;
     room: RoomLeaderboardResponse | null;
-    global: GlobalLeaderboardResponse | null;
   };
 }
 
@@ -102,6 +106,7 @@ interface OverworldGoalRunControllerOptions {
   playerHeight: number;
   runRepository: RunRepository;
   guestRuns?: GuestRunPlaybackController;
+  isAssistActive?: () => boolean;
   getScore: () => number;
   getAuthenticated: () => boolean;
   getAuthSource: () => SurfaceAuthSource;
@@ -138,7 +143,6 @@ const NOOP_MUTATION_RESULT: GoalRunMutationResult = {
 export class OverworldGoalRunController {
   private currentGoalRun: GoalRunState | null = null;
   private currentRoomLeaderboard: RoomLeaderboardResponse | null = null;
-  private globalLeaderboard: GlobalLeaderboardResponse | null = null;
   private leaderboardState: GoalRunLeaderboardState = 'idle';
   private leaderboardMessage: string | null = null;
   private leaderboardRequestKey: string | null = null;
@@ -149,7 +153,6 @@ export class OverworldGoalRunController {
   reset(): void {
     this.currentGoalRun = null;
     this.currentRoomLeaderboard = null;
-    this.globalLeaderboard = null;
     this.leaderboardState = 'idle';
     this.leaderboardMessage = null;
     this.leaderboardRequestKey = null;
@@ -174,18 +177,6 @@ export class OverworldGoalRunController {
     return this.currentRoomLeaderboard;
   }
 
-  getGlobalLeaderboard(): GlobalLeaderboardResponse | null {
-    return this.globalLeaderboard;
-  }
-
-  getLeaderboardState(): GoalRunLeaderboardState {
-    return this.leaderboardState;
-  }
-
-  getLeaderboardMessage(): string | null {
-    return this.leaderboardMessage;
-  }
-
   syncRunForRoom(
     room: RoomSnapshot | null,
     entryContext: GoalRunEntryContext = 'transition'
@@ -200,8 +191,9 @@ export class OverworldGoalRunController {
 
     this.clearRunForRoomExit();
     const cooperative = hasCoopPressurePlates(room.placedObjects);
+    const assisted = !cooperative && Boolean(this.options.isAssistActive?.());
     const leaderboardEligible =
-      !cooperative &&
+      !assisted && !cooperative &&
       room.status === 'published' &&
       isWampLeaderboardEligibleAuth(
         this.options.getAuthenticated(),
@@ -212,6 +204,7 @@ export class OverworldGoalRunController {
       ? 'qualified'
       : 'practice';
 
+    resetKeepPlayingContext();
     this.currentGoalRun = {
       roomId: room.id,
       roomCoordinates: { ...room.coordinates },
@@ -242,13 +235,14 @@ export class OverworldGoalRunController {
             ? 'starting'
             : 'local-only',
       submissionMessage:
-        cooperative ? COOP_ROOM_PRACTICE_MESSAGE : qualificationState === 'practice'
+        assisted ? ASSIST_RUN_MESSAGE : cooperative ? COOP_ROOM_PRACTICE_MESSAGE : qualificationState === 'practice'
           ? this.getPracticeStatusMessage(room.status, leaderboardEligible)
           : this.getQualifiedSubmissionMessage(room.status, leaderboardEligible),
       pendingResult: null,
       submittedScore: null,
       leaderboardEligible,
       cooperative,
+      assisted,
       verificationSchemaVersion: null,
       verificationNonce: null,
       snapshotHash: null,
@@ -503,7 +497,11 @@ export class OverworldGoalRunController {
     runState.result = 'completed';
     runState.completionMessage = message;
     runState.pendingResult = 'completed';
-    if (runState.roomStatus === 'draft') this.options.onDraftGoalCompleted?.(runState);
+    if(runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative)notifyKeepPlayingClear({
+      contentId:runState.roomId,roomCoordinates:{...runState.roomCoordinates},
+      difficulty:this.leaderboardMatchesRun(runState,this.currentRoomLeaderboard)?this.currentRoomLeaderboard!.difficulty?.consensus ?? null:null,
+    });
+    if (runState.roomStatus === 'draft' && !runState.assisted) this.options.onDraftGoalCompleted?.(runState);
     this.maybeSubmitGoalRunResult(runState);
     this.maybePromptGuestClaimForLocalClear(runState);
     return {
@@ -557,8 +555,7 @@ export class OverworldGoalRunController {
   async refreshLeaderboardsForRoom(targetRoom: RoomSnapshot | null): Promise<void> {
     if (!targetRoom || targetRoom.status !== 'published' || !targetRoom.goal) {
       this.currentRoomLeaderboard = null;
-      this.globalLeaderboard = null;
-      this.leaderboardState = 'idle';
+        this.leaderboardState = 'idle';
       this.leaderboardMessage = targetRoom?.status === 'draft'
         ? 'Draft room runs stay local.'
         : targetRoom?.goal
@@ -577,23 +574,19 @@ export class OverworldGoalRunController {
     this.leaderboardMessage = 'Loading leaderboard...';
 
     try {
-      const [roomLeaderboard, globalLeaderboard] = await Promise.all([
-        this.options.runRepository.loadRoomLeaderboard(
-          targetRoom.id,
-          targetRoom.coordinates,
-          targetRoom.version,
-          25,
-          true,
-        ),
-        this.options.runRepository.loadGlobalLeaderboard(5),
-      ]);
+      const roomLeaderboard = await this.options.runRepository.loadRoomLeaderboard(
+        targetRoom.id,
+        targetRoom.coordinates,
+        targetRoom.version,
+        25,
+        true,
+      );
 
       if (this.leaderboardRequestKey !== requestKey) {
         return;
       }
 
       this.currentRoomLeaderboard = roomLeaderboard;
-      this.globalLeaderboard = globalLeaderboard;
       this.leaderboardState = 'ready';
       this.leaderboardMessage = roomLeaderboard.entries.length
         ? 'Leaderboard ready.'
@@ -605,56 +598,13 @@ export class OverworldGoalRunController {
       }
 
       this.currentRoomLeaderboard = null;
-      this.globalLeaderboard = null;
-      this.leaderboardState = 'error';
+        this.leaderboardState = 'error';
       this.leaderboardMessage = 'Leaderboard unavailable.';
     }
   }
 
-  getGoalStatusText(): string | null {
-    const runState = this.currentGoalRun;
-    if (!runState) {
-      return null;
-    }
-
-    return formatGoalRunStatus(runState.goal, runState, this.getGoalSubmissionStatusText(runState));
-  }
-
-  getLeaderboardSummaryText(): string | null {
-    if (this.currentGoalRun?.qualificationState === 'practice') {
-      return this.currentGoalRun.submissionMessage;
-    }
-
-    if (this.currentGoalRun?.leaderboardEligible === false && this.currentGoalRun?.submissionState === 'local-only') {
-      return this.currentGoalRun.submissionMessage;
-    }
-
-    if (this.leaderboardState === 'loading') {
-      return this.leaderboardMessage;
-    }
-
-    const roomTop = this.currentRoomLeaderboard?.entries[0] ?? null;
-    const globalTop = this.globalLeaderboard?.entries[0] ?? null;
-    const parts: string[] = [];
-
-    if (roomTop && this.currentRoomLeaderboard) {
-      const rankingMode = this.currentRoomLeaderboard.rankingMode;
-      const metric = formatGoalRoomLeaderboardMetric(this.currentGoalRun?.goal ?? null, rankingMode, roomTop);
-      parts.push(`Room top ${roomTop.userDisplayName} ${metric}`);
-    }
-
-    if (globalTop) {
-      parts.push(`Global top ${globalTop.userDisplayName} ${globalTop.totalPoints} pts`);
-    }
-
-    if (parts.length > 0) {
-      return parts.join(' · ');
-    }
-
-    return this.leaderboardMessage;
-  }
-
   getPersistentStatusText(): string | null {
+    if (this.currentGoalRun?.assisted) return ASSIST_RUN_MESSAGE;
     if (this.currentGoalRun?.qualificationState === 'practice') {
       return this.currentGoalRun.submissionMessage;
     }
@@ -709,6 +659,7 @@ export class OverworldGoalRunController {
             submittedScore: this.currentGoalRun.submittedScore,
             leaderboardEligible: this.currentGoalRun.leaderboardEligible,
             cooperative: this.currentGoalRun.cooperative ?? false,
+            assisted: this.currentGoalRun.assisted ?? false,
             verificationSchemaVersion: this.currentGoalRun.verificationSchemaVersion,
             verificationNonce: this.currentGoalRun.verificationNonce,
             snapshotHash: this.currentGoalRun.snapshotHash,
@@ -755,14 +706,6 @@ export class OverworldGoalRunController {
                 ? { ...this.currentRoomLeaderboard.viewerBest }
                 : null,
               viewerRank: this.currentRoomLeaderboard.viewerRank,
-            }
-          : null,
-        global: this.globalLeaderboard
-          ? {
-              entries: this.globalLeaderboard.entries.map((entry) => ({ ...entry })),
-              viewerEntry: this.globalLeaderboard.viewerEntry
-                ? { ...this.globalLeaderboard.viewerEntry }
-                : null,
             }
           : null,
       },
@@ -815,7 +758,7 @@ export class OverworldGoalRunController {
         startedAt: this.nowIso(),
       });
 
-      if (this.currentGoalRun !== runState) return;
+      if (this.currentGoalRun !== runState || runState.assisted) return;
 
       runState.attemptId = response.attemptId;
       runState.verificationSchemaVersion = response.verificationSchemaVersion;
@@ -838,6 +781,7 @@ export class OverworldGoalRunController {
       } as RoomSnapshot);
       this.maybeSubmitGoalRunResult(runState);
     } catch (error) {
+      if (runState.assisted) return;
       console.error('Failed to start ranked run', error);
       if (isRunApiError(error) && error.status === 401) {
         runState.submissionState = 'local-only';
@@ -853,6 +797,7 @@ export class OverworldGoalRunController {
   }
 
   private maybeSubmitGoalRunResult(runState: GoalRunState): void {
+    if (runState.assisted) { runState.submissionMessage = ASSIST_RUN_MESSAGE; return; }
     if (runState.pendingResult === null) {
       return;
     }
@@ -907,6 +852,7 @@ export class OverworldGoalRunController {
     const detail: RoomPostRunRatingRequestDetail = {
       contentType: 'room',
       contentId: runState.roomId,
+      clearedRoomIds: runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative?[runState.roomId]:[],
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
       bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates },
@@ -928,7 +874,7 @@ export class OverworldGoalRunController {
   }
 
   private shouldPromptGuestClaimForLocalClear(runState: GoalRunState): boolean {
-    if (runState.cooperative) return false;
+    if (runState.cooperative || runState.assisted) return false;
     return (
       runState.result === 'completed' &&
       runState.roomStatus === 'published' &&
@@ -945,7 +891,7 @@ export class OverworldGoalRunController {
     this.resetRunProgress(runState);
     runState.qualificationState = 'qualified';
     runState.submissionState = runState.leaderboardEligible ? 'starting' : 'local-only';
-    runState.submissionMessage = this.getQualifiedSubmissionMessage(
+    runState.submissionMessage = runState.assisted ? ASSIST_RUN_MESSAGE : this.getQualifiedSubmissionMessage(
       runState.roomStatus,
       runState.leaderboardEligible,
       runState.cooperative,
@@ -953,7 +899,7 @@ export class OverworldGoalRunController {
 
     if (runState.leaderboardEligible) {
       void this.startRemoteGoalRun(runState);
-    } else if (!runState.cooperative && runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
+    } else if (!runState.assisted && !runState.cooperative && runState.roomStatus === 'published' && !this.options.getAuthenticated()) {
       this.options.guestRuns?.begin(runState, 'room', {
         contentType: 'room', contentId: runState.roomId, version: runState.roomVersion,
       });
@@ -981,7 +927,8 @@ export class OverworldGoalRunController {
     runState: GoalRunState,
     result: Exclude<RunResult, 'active'>
   ): Promise<void> {
-    if (!runState.attemptId) {
+    const attemptId = runState.attemptId;
+    if (!attemptId || runState.assisted) {
       return;
     }
 
@@ -998,7 +945,10 @@ export class OverworldGoalRunController {
     const postRunPromptKey = this.buildPostRunRatingPromptKey(runState);
 
     try {
-      await this.options.runRepository.finishRun(runState.attemptId, payload);
+      // The payload holds its own trace copy, so the recorder is released once a send fails.
+      await deliverRankedFinish(runState, result, () => this.options.runRepository.finishRun(attemptId, payload), {
+        onChange: () => { if (this.currentGoalRun === runState) this.options.clearVerificationTrace?.(); },
+      });
       if (result === 'completed') notifyGhostBestUpdated(runState.roomId);
       runState.pendingResult = null;
       runState.submissionState = 'submitted';
@@ -1046,6 +996,7 @@ export class OverworldGoalRunController {
           requestPostRunRating({
             contentType: 'room',
             contentId: runState.roomId,
+            ghostAttemptId: supportsGhostRace(runState.goal) ? attemptId : undefined,
             contentTitle,
             roomCoordinates: { ...runState.roomCoordinates },
             version: runState.roomVersion,
@@ -1066,7 +1017,7 @@ export class OverworldGoalRunController {
       }
     } catch (error) {
       console.error('Failed to finish ranked run', {
-        attemptId: runState.attemptId,
+        attemptId,
         result,
         payload,
         error,
@@ -1086,7 +1037,8 @@ export class OverworldGoalRunController {
   }
 
   private guestClearDetail(runState: GoalRunState, body: RunFinishRequestBody): RoomPostRunRatingRequestDetail {
-    return { contentType: 'room', contentId: runState.roomId,
+    return { contentType: 'room', contentId: runState.roomId, ghostChallengeEligible: supportsGhostRace(runState.goal),
+      clearedRoomIds:runState.roomStatus==='published'&&!runState.assisted&&!runState.cooperative?[runState.roomId]:[],
       contentTitle: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? this.currentRoomLeaderboard!.roomTitle : null,
       bestRun: this.leaderboardMatchesRun(runState, this.currentRoomLeaderboard) ? getPostRunBest(this.currentRoomLeaderboard) : null,
       roomCoordinates: { ...runState.roomCoordinates }, version: runState.roomVersion, previousViewerRank: null,
@@ -1159,10 +1111,6 @@ export class OverworldGoalRunController {
       enemyCollectiblesCollected: runState.enemyCollectiblesCollected,
       verificationTrace,
     };
-  }
-
-  private getGoalSubmissionStatusText(_runState: GoalRunState): string {
-    return '';
   }
 
   private getPracticeStatusMessage(

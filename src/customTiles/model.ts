@@ -43,10 +43,6 @@ export function getCustomRoomTileIndexForGid(gid: number): number | null {
   return gid - CUSTOM_ROOM_TILE_FIRST_GID;
 }
 
-export function isCustomRoomTileGid(gid: number): boolean {
-  return getCustomRoomTileIndexForGid(gid) !== null;
-}
-
 export function assertCustomRoomTileGidRangeIsSafe(): void {
   const maxCustomGid = CUSTOM_ROOM_TILE_FIRST_GID + CUSTOM_ROOM_TILE_MAX_TILES - 1;
   if (maxCustomGid >= TILE_FLIP_X_FLAG) {
@@ -54,6 +50,32 @@ export function assertCustomRoomTileGidRangeIsSafe(): void {
   }
 }
 
+interface CustomRoomTileLookup {
+  readonly sourceLength: number;
+  readonly tiles: readonly CustomRoomTileDefinition[];
+}
+
+// Lookups run per collision probe and per drawn cell, so each customTiles
+// array is normalized once. The editor and migrations replace the array on
+// every tile change instead of mutating it, so identity plus length is the key.
+const customRoomTileLookups = new WeakMap<readonly unknown[], CustomRoomTileLookup>();
+
+function getNormalizedCustomRoomTilesForLookup(value: unknown): readonly CustomRoomTileDefinition[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const cached = customRoomTileLookups.get(value);
+  if (cached && cached.sourceLength === value.length) {
+    return cached.tiles;
+  }
+
+  const tiles = normalizeCustomRoomTileDefinitions(value);
+  customRoomTileLookups.set(value, { sourceLength: value.length, tiles });
+  return tiles;
+}
+
+/** Returns a shared normalized definition; callers must treat it as read-only. */
 export function getCustomRoomTileDefinitionForGid(
   room: CustomRoomTileHost,
   gid: number,
@@ -63,7 +85,7 @@ export function getCustomRoomTileDefinitionForGid(
     return null;
   }
 
-  return normalizeCustomRoomTileDefinitions(room.customTiles)[index] ?? null;
+  return getNormalizedCustomRoomTilesForLookup(room.customTiles)[index] ?? null;
 }
 
 export function getCustomRoomTileCollisionProfile(

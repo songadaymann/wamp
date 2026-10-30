@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -80,7 +81,9 @@ describe('world streaming teardown races', () => {
         return candidate === oldRoom;
       }),
       ensurePlayerTerrainColliders,
-      isLoadedRoomCollisionInfrastructureReady: vi.fn(() => false),
+      fullRoomPresenter: {
+        isLoadedRoomCollisionInfrastructureReady: vi.fn(() => false),
+      },
       beginFullRoomPreparation,
       queueDeferredFullRoomLoads: vi.fn(),
     });
@@ -131,7 +134,9 @@ describe('world streaming teardown races', () => {
         return candidate === oldRoom;
       }),
       ensurePlayerTerrainColliders,
-      isLoadedRoomCollisionInfrastructureReady: vi.fn(() => false),
+      fullRoomPresenter: {
+        isLoadedRoomCollisionInfrastructureReady: vi.fn(() => false),
+      },
       buildFullRoomPreparationIdentity: vi.fn(() => 'fresh-identity'),
       buildFullRoomArtifactKey: vi.fn(() => 'fresh-artifact'),
       buildScopedRoomTextureKey: vi
@@ -182,12 +187,15 @@ describe('world streaming teardown races', () => {
       isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
       isLoadedFullRoomCurrent: vi.fn((candidate: typeof oldRoom) => candidate === oldRoom),
       ensurePlayerTerrainColliders,
-      isLoadedRoomCollisionInfrastructureReady: vi.fn(
-        (candidate: typeof oldRoom | typeof newRoom) => candidate === newRoom,
-      ),
-      updateFullRoomBackground: vi.fn(() => {
-        throw failure;
-      }),
+      fullRoomPresenter: {
+        isLoadedRoomCollisionInfrastructureReady: vi.fn(
+          (candidate: typeof oldRoom | typeof newRoom) => candidate === newRoom,
+        ),
+        updateFullRoomBackground: vi.fn(() => {
+          throw failure;
+        }),
+      },
+
       retainPreparedTransitionRoom: vi.fn(),
     });
     const preparation = createPreparedReplacement(harness, roomV2, newRoom, {
@@ -255,7 +263,9 @@ describe('world streaming teardown races', () => {
     };
     Object.assign(harness, {
       isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
-      updateFullRoomBackground: vi.fn(),
+      fullRoomPresenter: {
+        updateFullRoomBackground: vi.fn(),
+      },
       retainPreparedTransitionRoom: vi.fn(),
     });
     harness.options.onFullRoomSetChanged = vi.fn(() => {
@@ -454,7 +464,9 @@ describe('world streaming teardown races', () => {
           `${room.id}:v${room.version}:${options.includedLayers?.join('-') ?? 'all'}`,
       ),
       queuePreparedCustomTiles: vi.fn(),
-      updateFullRoomBackground: vi.fn(),
+      fullRoomPresenter: {
+        updateFullRoomBackground: vi.fn(),
+      },
       retainPreparedTransitionRoom: vi.fn(),
     });
     harness.options.scene.textures.exists = vi.fn(() => true);
@@ -588,9 +600,11 @@ describe('world streaming teardown races', () => {
     const failure = new Error('injected deferred activation failure');
     Object.assign(harness, {
       isFullRoomPreparationSnapshotCurrent: vi.fn(() => true),
-      updateFullRoomBackground: vi.fn(() => {
-        throw failure;
-      }),
+      fullRoomPresenter: {
+        updateFullRoomBackground: vi.fn(() => {
+          throw failure;
+        }),
+      },
       retainPreparedTransitionRoom: vi.fn(),
     });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -694,7 +708,9 @@ describe('world streaming teardown races', () => {
       );
       Object.assign(harness, {
         ensurePlayerTerrainColliders,
-        isLoadedRoomCollisionInfrastructureReady,
+        fullRoomPresenter: {
+          isLoadedRoomCollisionInfrastructureReady,
+        },
       });
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -1081,7 +1097,7 @@ function createStreamingHarness(
     targetRoom.edgeWalls = [];
   });
   return Object.assign(
-    Object.create(OverworldWorldStreamingController.prototype),
+    createWorldStreamingHarness(),
     {
       destroyed: false,
       loadedFullRoomsById,
@@ -1369,15 +1385,8 @@ function callQueueFullRoomTeardownReconciliation(harness: object): void {
 }
 
 function callForceDestroyLoadedRoomInsetBodies(loadedRoom: object): void {
-  const method = (
-    OverworldWorldStreamingController.prototype as unknown as {
-      forceDestroyLoadedRoomInsetBodies(room: object): void;
-    }
-  ).forceDestroyLoadedRoomInsetBodies;
-  method.call(
-    Object.create(OverworldWorldStreamingController.prototype),
-    loadedRoom,
-  );
+  const presenter = createWorldStreamingHarness().fullRoomPresenter;
+  presenter.forceDestroyLoadedRoomInsetBodies(loadedRoom);
 }
 
 function callClearPortalTargetRoomPreparation(harness: object, roomId: string): void {

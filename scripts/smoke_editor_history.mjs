@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const base = process.argv[2] || 'http://127.0.0.1:3031';
@@ -22,10 +23,8 @@ async function inspect(page, expanded) {
 }
 
 async function paint(page, expanded, x = 12) {
+  // Paints one cell with the editor's default Auto-Tile brush; any tile change makes a history step.
   await page.evaluate(async ({ expanded, x }) => {
-    const { editorState } = await import('/src/config.ts');
-    editorState.paletteMode = 'tiles';
-    editorState.selectedTileIndex = 0;
     const scene = window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys[expanded ? 'CourseEditorScene' : 'EditorScene'];
     const runtime = expanded ? scene.getSelectedSlice().runtime : scene.editRuntime;
     runtime.beginTileBatch();
@@ -34,6 +33,25 @@ async function paint(page, expanded, x = 12) {
     if (expanded) scene.renderUi();
     else scene.updateBottomBar();
   }, { expanded, x });
+}
+
+// Undo and Redo must be reachable, not just visible. When another control sits on top of one, record
+// it and press the button directly so the history checks still run; the smoke fails at the end.
+const coveredButtons = [];
+report.coveredButtons = coveredButtons;
+async function press(button, hasTouch, label) {
+  const cover = await button.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    if (!top || element.contains(top)) return null;
+    const owner = top.closest('button') ?? top;
+    return owner.getAttribute('data-editor-shell-action') ?? owner.id ?? owner.className;
+  });
+  if (cover) {
+    if (!coveredButtons.includes(`${label} covered by ${cover}`)) coveredButtons.push(`${label} covered by ${cover}`);
+    await button.dispatchEvent('click');
+  } else if (hasTouch) await button.tap();
+  else await button.click();
 }
 
 try {
@@ -73,6 +91,7 @@ try {
         if (scene.roomSession) scene.roomSession.maybeAutoSave = () => {};
         if (document.querySelector('#auth-panel.menu-open')) document.getElementById('menu-toggle')?.click();
       });
+      const mode = expanded ? 'expanded' : 'room';
       const prefix = name.startsWith('phone') ? '#editor-shell-phone-bar ' : '.editor-shell-tools ';
       const undo = page.locator(`${prefix}[data-editor-history="undo"]`);
       const redo = page.locator(`${prefix}[data-editor-history="redo"]`);
@@ -89,23 +108,33 @@ try {
       assert.notEqual(after, before);
       assert.ok(await undo.isEnabled());
       assert.ok(await redo.isDisabled());
-      if (hasTouch) await undo.tap();
-      else await undo.click();
+      await press(undo, hasTouch, `${name} ${mode} Undo`);
       assert.equal(await inspect(page, expanded), before);
       assert.ok(await redo.isEnabled());
-      if (hasTouch) await redo.tap();
-      else await redo.click();
+      await press(redo, hasTouch, `${name} ${mode} Redo`);
       assert.equal(await inspect(page, expanded), after);
-      for (const lock of ['editorMusicUiLocked', 'editorSpriteUiLocked']) {
-        await page.evaluate((lock) => { document.body.dataset[lock] = 'true'; }, lock);
-        await page.waitForTimeout(50);
-        assert.ok(await undo.isDisabled());
-        await page.evaluate((lock) => { document.body.dataset[lock] = 'false'; }, lock);
-        await page.waitForTimeout(50);
-        assert.ok(await undo.isEnabled());
+      // These synthetic lock flags are normally owned by the music/sprite UI. Pause scene
+      // rendering while asserting them so a music render cannot overwrite the fixture flag.
+      await page.evaluate(() => window.__EVERYBODYS_PLATFORMER_GAME__.loop.sleep());
+      try {
+        for (const lock of ['editorMusicUiLocked', 'editorSpriteUiLocked']) {
+          await page.evaluate((lock) => { document.body.dataset[lock] = 'true'; }, lock);
+          await page.waitForFunction(selector => document.querySelector(selector)?.disabled === true,
+            `${prefix}[data-editor-history="undo"]`);
+          assert.ok(await undo.isDisabled());
+          await page.evaluate((lock) => { document.body.dataset[lock] = 'false'; }, lock);
+          await page.waitForFunction(selector => document.querySelector(selector)?.disabled === false,
+            `${prefix}[data-editor-history="undo"]`);
+          assert.ok(await undo.isEnabled());
+        }
+      } finally {
+        await page.evaluate(() => {
+          document.body.dataset.editorMusicUiLocked = 'false';
+          document.body.dataset.editorSpriteUiLocked = 'false';
+          window.__EVERYBODYS_PLATFORMER_GAME__.loop.wake();
+        });
       }
-      if (hasTouch) await undo.tap();
-      else await undo.click();
+      await press(undo, hasTouch, `${name} ${mode} Undo`);
       await paint(page, expanded, 13);
       assert.ok(await redo.isDisabled());
       if (expanded) {
@@ -123,7 +152,6 @@ try {
         });
         assert.ok(await undo.isEnabled());
       }
-      const mode = expanded ? 'expanded' : 'room';
       await page.screenshot({ path: `${output}/${name}-${mode}.png` });
       report.scenarios.push({ device: name, mode, history: true, locks: true, redoBranch: true });
       writeFileSync(`${output}/report.json`, JSON.stringify(report, null, 2));
@@ -133,6 +161,7 @@ try {
   }
   assert.deepEqual(report.errors, []);
   console.log(JSON.stringify(report, null, 2));
+  assert.deepEqual(coveredButtons, [], 'Undo and Redo must not be covered by other editor controls');
 } finally {
   await browser.close();
 }

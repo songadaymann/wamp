@@ -1,0 +1,1 @@
+| 2026-10-29 | F439 | [#351](https://github.com/songadaymann/wamp/pull/351) | [receipt](docs/review/wamp-f439-fixed-classroom-emotes-2026-10-29.md) | Add fixed guest and classroom-only student emotes with signed scope, moderation and accessible controls |

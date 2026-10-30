@@ -11,6 +11,21 @@ vi.mock('phaser', () => ({
 }));
 
 describe('RoomCommentsPlayPresentationController', () => {
+  it('updates a visible comment identity without replacing its pin or losing legacy author names', () => {
+    const scene = createScene();
+    const controller = new RoomCommentsPlayPresentationController({ scene: scene as never,
+      getRoomOrigin: () => ({ x: 0, y: 0 }) });
+    const original = comment('same-comment', 0, 0, 18, 42);
+    controller.sync([original]);
+    const container = controller.getIgnoredObjects()[0] as unknown as TestDisplayObject;
+    container.emit('pointerover');
+    controller.sync([{ ...original, authorUsername: 'unique_account' }]);
+    expect(controller.getIgnoredObjects()[0]).toBe(container);
+    expect(container.children[2].text).toBe('Player A (@unique_account)');
+    expect(container.children[2].visible).toBe(true);
+    controller.sync([{ ...original, authorDisplayName: 'Updated', authorUsername: null }]);
+    expect(container.children[2].text).toBe('Updated');
+  });
   it('owns pin creation, position, popover interaction, reconciliation, and teardown', () => {
     const scene = createScene();
     const controller = new RoomCommentsPlayPresentationController({

@@ -1,0 +1,1 @@
+| 2026-10-12 | F068, F009 | [#181](https://github.com/songadaymann/wamp/pull/181)–[#182](https://github.com/songadaymann/wamp/pull/182) | [receipt](docs/review/wamp-backdrop-camera-2026-10-12.md) | The starfield camera draws only its own layer; the editor's unused background camera is gone |

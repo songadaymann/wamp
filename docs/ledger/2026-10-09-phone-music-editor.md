@@ -1,0 +1,1 @@
+| 2026-10-09 | F227 | [#102](https://github.com/songadaymann/wamp/pull/102) | [receipt](docs/review/wamp-phone-music-editor-2026-10-09.md) | Phone music editor: larger note cells, safe touch pan and pinch, compact Tools |

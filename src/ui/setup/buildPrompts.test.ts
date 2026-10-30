@@ -61,3 +61,14 @@ describe('Build Prompt public and publishing lifecycle', () => {
     auth.user.id = 'other'; f.win.dispatchEvent(new Event('auth')); f.get('btn-build-prompt-entry-retry').click(); expect(retry).toHaveBeenCalledOnce(); expect(f.get('build-prompt-result').classList.contains('hidden')).toBe(true);
   });
 });
+
+it('opens the exact prompt from an Activity notice or a shared result link after readiness',async()=>{
+  const f=fixture();f.win.dispatchEvent(new CustomEvent('build-prompt-open-request',{detail:{slug:'older-week'}}));await tick();
+  expect(f.repository.load).toHaveBeenLastCalledWith('older-week',0);
+  const replaceState=vi.fn();Object.assign(f.win,{location:{href:'https://wamp.land/?buildPrompt=another-week&welcome=0'},history:{replaceState}});
+  f.win.dispatchEvent(new Event('wamp:app-ready'));await tick();
+  expect(f.repository.load).toHaveBeenLastCalledWith('another-week',0);
+  expect(String(replaceState.mock.calls[0][2])).toBe('https://wamp.land/?welcome=0');
+  f.controller.destroy();f.repository.load.mockClear();f.win.dispatchEvent(new CustomEvent('build-prompt-open-request',{detail:{slug:'late'}}));
+  expect(f.repository.load).not.toHaveBeenCalled();
+});

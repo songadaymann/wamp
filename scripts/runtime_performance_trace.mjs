@@ -1,6 +1,9 @@
+// Developer tool, not a pass/fail check: records phone runtime performance traces. Never
+// scheduled; see scripts/lib/smokeManifest.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
 
 const DEFAULT_URL = 'http://127.0.0.1:3000/?previewSmoke=1&perf=1&mobilePerfHud=0';

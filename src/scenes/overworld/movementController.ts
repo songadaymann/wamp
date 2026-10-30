@@ -1,5 +1,6 @@
+import type { GameplayKeyboard } from './keyboardInput';
 import Phaser from 'phaser';
-import { consumePressedAliases, mergeGamepadMovement, type GamepadControls } from './gameplayInput';
+import { mergeGamepadMovement, type GamepadControls } from './gameplayInput';
 import type { OverworldMovementInput } from './physicsCadence';
 import { OverworldJumpCornerCorrection } from './jumpCornerCorrection';
 import { OverworldTraversalMovementState } from './traversalMovement';
@@ -17,6 +18,11 @@ import {
   consumeTouchAction,
   getTouchInputState,
 } from '../../ui/mobile/touchControls';
+import {
+  resolveTouchStickDirections,
+  TouchStickPresses,
+  type TouchStickDirections,
+} from '../../ui/mobile/touchStick';
 import {
   isDynamicArcadeBody,
   type ArcadeObjectBody,
@@ -93,11 +99,6 @@ interface OverworldMovementControllerState {
   jumpBufferTime: number;
   wallJumpBufferTime: number;
   protectedJumpTime: number;
-  // Touch-stick edges, so a butt stomp needs a fresh push toward gravity.
-  touchDownHeld: boolean;
-  touchUpHeld: boolean;
-  touchLeftHeld: boolean;
-  touchRightHeld: boolean;
 }
 
 interface OverworldMovementControllerHost {
@@ -124,14 +125,8 @@ interface OverworldMovementControllerHost {
     paddingY?: number,
   ): Iterable<LoadedRoomObject>;
   getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectangle;
-  getCursors(): Phaser.Types.Input.Keyboard.CursorKeys;
+  getKeyboardInput(): GameplayKeyboard;
   getGamepadInput?(): GamepadControls;
-  getWasd(): {
-    W: Phaser.Input.Keyboard.Key;
-    A: Phaser.Input.Keyboard.Key;
-    S: Phaser.Input.Keyboard.Key;
-    D: Phaser.Input.Keyboard.Key;
-  };
   findOverlappingLadder(): LoadedRoomObject | null;
   playJumpDustFx(x: number, y: number, facing: -1 | 1): void;
   syncPlayerPickupSensor(): void;
@@ -225,15 +220,14 @@ function createMovementControllerState(): OverworldMovementControllerState {
     jumpBufferTime: 0,
     wallJumpBufferTime: 0,
     protectedJumpTime: 0,
-    touchDownHeld: false,
-    touchUpHeld: false,
-    touchLeftHeld: false,
-    touchRightHeld: false,
   };
 }
 
 export class OverworldMovementController {
   private readonly state = createMovementControllerState();
+  // The previous physics step's stick directions, so a butt stomp or a tilted-gravity jump
+  // needs a fresh push like the keyboard's key press, not a held or drifting stick.
+  private readonly touchStickPresses = new TouchStickPresses();
   private readonly ladderState = new OverworldLadderMovementStateController();
   private readonly buttStompState = new OverworldButtStompMovementStateController();
   private readonly crateState = new OverworldCrateMovementStateController();
@@ -464,24 +458,25 @@ export class OverworldMovementController {
 
   captureInput(): OverworldMovementInput {
     const touch = getTouchInputState();
-    const cursors = this.host.getCursors();
-    const wasd = this.host.getWasd();
-    const touchLeft = touch.active && touch.moveX <= -0.28;
-    const touchRight = touch.active && touch.moveX >= 0.28;
-    const touchUp = touch.active && touch.moveY <= -0.42;
-    const touchDown = touch.active && touch.moveY >= 0.42;
-    const upPressed = consumePressedAliases(cursors.up, wasd.W);
-    const downPressed = consumePressedAliases(cursors.down, wasd.S);
-    const leftPressed = consumePressedAliases(cursors.left, wasd.A);
-    const rightPressed = consumePressedAliases(cursors.right, wasd.D);
-    const spacePressed = Phaser.Input.Keyboard.JustDown(cursors.space!);
+    const keyboard = this.host.getKeyboardInput();
+    // In left or right gravity the hero walks along the stick's vertical axis. On a ladder
+    // or in water, up and down count at the plain threshold so a diagonal push still climbs.
+    const { gravityDirection: gravity, inWater } = this.host.getSpecialTileEnvironment();
+    const { left: touchLeft, right: touchRight, up: touchUp, down: touchDown } = resolveTouchStickDirections(touch,
+      gravity === 'left' || gravity === 'right' ? 'vertical'
+        : inWater || this.host.findOverlappingLadder() ? 'both' : 'horizontal');
+    const upPressed = keyboard.pressed('up');
+    const downPressed = keyboard.pressed('down');
+    const leftPressed = keyboard.pressed('left');
+    const rightPressed = keyboard.pressed('right');
+    const spacePressed = keyboard.pressed('jump');
     const touchJumpPressed = consumeTouchAction('jump');
     return mergeGamepadMovement({
-      left: cursors.left.isDown || wasd.A.isDown || touchLeft,
-      right: cursors.right.isDown || wasd.D.isDown || touchRight,
-      upKeyHeld: cursors.up.isDown || wasd.W.isDown,
-      downHeld: cursors.down.isDown || wasd.S.isDown || touchDown,
-      spaceHeld: cursors.space!.isDown || touch.jumpHeld,
+      left: keyboard.held('left') || touchLeft,
+      right: keyboard.held('right') || touchRight,
+      upKeyHeld: keyboard.held('up'),
+      downHeld: keyboard.held('down') || touchDown,
+      spaceHeld: keyboard.held('jump') || touch.jumpHeld,
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed,
       spacePressed: spacePressed || touchJumpPressed,
@@ -543,14 +538,7 @@ export class OverworldMovementController {
       touchLeft, touchRight, touchUp, touchDown,
       upPressed, downPressed, leftPressed, rightPressed, spacePressed,
     } = frameInput ?? this.captureInput();
-    const touchDownPressed = touchDown && !this.state.touchDownHeld;
-    const touchUpPressed = touchUp && !this.state.touchUpHeld;
-    const touchLeftPressed = touchLeft && !this.state.touchLeftHeld;
-    const touchRightPressed = touchRight && !this.state.touchRightHeld;
-    this.state.touchDownHeld = touchDown;
-    this.state.touchUpHeld = touchUp;
-    this.state.touchLeftHeld = touchLeft;
-    this.state.touchRightHeld = touchRight;
+    const touchPressed = this.touchStickPresses.step({ left: touchLeft, right: touchRight, up: touchUp, down: touchDown });
     const horizontalInput = (right ? 1 : 0) - (left ? 1 : 0);
     const overlappingLadder = this.host.findOverlappingLadder();
     const touchClimbUpHeld = overlappingLadder !== null && touchUp;
@@ -580,14 +568,7 @@ export class OverworldMovementController {
         rightPressed,
         spacePressed,
         spaceHeld,
-        touchLeft,
-        touchRight,
-        touchUp,
-        touchDown,
-        touchUpPressed,
-        touchDownPressed,
-        touchLeftPressed,
-        touchRightPressed,
+        touchPressed,
       });
       return this.updateDirectionalGravityMovement({
         delta,
@@ -642,7 +623,7 @@ export class OverworldMovementController {
     } else if (
       !this.buttStompState.isActive() &&
       !this.ladderState.isClimbing() &&
-      (downPressed || touchDownPressed)
+      (downPressed || touchPressed.down)
     ) {
       this.startButtStomp(playerBody);
     }
@@ -1039,14 +1020,7 @@ export class OverworldMovementController {
       rightPressed: boolean;
       spacePressed: boolean;
       spaceHeld: boolean;
-      touchLeft: boolean;
-      touchRight: boolean;
-      touchUp: boolean;
-      touchDown: boolean;
-      touchUpPressed: boolean;
-      touchDownPressed: boolean;
-      touchLeftPressed: boolean;
-      touchRightPressed: boolean;
+      touchPressed: TouchStickDirections;
     },
   ): DirectionalGravityControls {
     switch (gravityDirection) {
@@ -1054,9 +1028,9 @@ export class OverworldMovementController {
         return {
           tangentInput: -input.horizontalInput,
           crouchHeld: input.upHeld,
-          jumpPressed: input.spacePressed || input.downPressed || input.touchDown,
+          jumpPressed: input.spacePressed || input.downPressed || input.touchPressed.down,
           jumpHeld: input.spaceHeld || input.downHeld,
-          stompPressed: input.upPressed || input.touchUpPressed,
+          stompPressed: input.upPressed || input.touchPressed.up,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
         };
@@ -1064,9 +1038,9 @@ export class OverworldMovementController {
         return {
           tangentInput: -input.verticalInput,
           crouchHeld: input.left,
-          jumpPressed: input.spacePressed || input.rightPressed || input.touchRight,
+          jumpPressed: input.spacePressed || input.rightPressed || input.touchPressed.right,
           jumpHeld: input.spaceHeld || input.right,
-          stompPressed: input.leftPressed || input.touchLeftPressed,
+          stompPressed: input.leftPressed || input.touchPressed.left,
           horizontalInput: -input.verticalInput,
           verticalInput: input.verticalInput,
         };
@@ -1074,9 +1048,9 @@ export class OverworldMovementController {
         return {
           tangentInput: input.verticalInput,
           crouchHeld: input.right,
-          jumpPressed: input.spacePressed || input.leftPressed || input.touchLeft,
+          jumpPressed: input.spacePressed || input.leftPressed || input.touchPressed.left,
           jumpHeld: input.spaceHeld || input.left,
-          stompPressed: input.rightPressed || input.touchRightPressed,
+          stompPressed: input.rightPressed || input.touchPressed.right,
           horizontalInput: input.verticalInput,
           verticalInput: input.verticalInput,
         };
@@ -1085,9 +1059,9 @@ export class OverworldMovementController {
         return {
           tangentInput: input.horizontalInput,
           crouchHeld: input.downHeld,
-          jumpPressed: input.spacePressed || input.upPressed || input.touchUp,
+          jumpPressed: input.spacePressed || input.upPressed || input.touchPressed.up,
           jumpHeld: input.spaceHeld || input.upHeld,
-          stompPressed: input.downPressed || input.touchDownPressed,
+          stompPressed: input.downPressed || input.touchPressed.down,
           horizontalInput: input.horizontalInput,
           verticalInput: input.verticalInput,
         };

@@ -10,6 +10,9 @@ import type {
 } from '../model';
 import { createAdminApiClient } from '../adminApiClient';
 import { createPublishedGoalsPanel } from './publishedGoalsPanel';
+import { createBuildingPanel } from './buildingPanel';
+import { createReportsPanel } from './reportsPanel';
+import { createGuestRoomsPanel } from './guestRoomsPanel';
 import {
   countSuspiciousQueueTabs,
   filterSuspiciousUsers,
@@ -113,6 +116,10 @@ const state: ViewState = {
 };
 const apiClient = createAdminApiClient(() => state.adminKey);
 const publishedGoalsPanel = createPublishedGoalsPanel(() => state.adminKey);
+const buildingPanel = createBuildingPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin');
+const guestRoomsPanel = createGuestRoomsPanel(() => state.adminKey);
+const reportsPanel = createReportsPanel(() => state.adminKey, () => operatorLabelInput?.value.trim() || 'Admin',
+  (userId) => { void loadDetail(userId, false, true); }, (draftId) => guestRoomsPanel.hide(draftId));
 
 if (adminKeyInput) {
   adminKeyInput.value = state.adminKey;
@@ -147,6 +154,9 @@ refreshButton?.addEventListener('click', () => {
 clearKeyButton?.addEventListener('click', () => {
   state.adminKey = '';
   publishedGoalsPanel.reset();
+  buildingPanel.show(null);
+  reportsPanel.reset();
+  guestRoomsPanel.reset();
   state.lastError = null;
   state.summary = null;
   state.usersScope = 'review_window';
@@ -253,6 +263,8 @@ async function refreshAll(force = false): Promise<void> {
       adminRequest<SuspiciousUsersResponse>(buildAdminPath('/api/admin/suspicious/users')),
     ]);
     state.summary = summary;
+    void reportsPanel.load();
+    void guestRoomsPanel.load();
     state.usersScope = usersResponse.scope;
     state.users = usersResponse.items;
 
@@ -276,12 +288,13 @@ async function refreshAll(force = false): Promise<void> {
   }
 }
 
-async function loadDetail(userId: string, preserveSelection = false): Promise<void> {
+async function loadDetail(userId: string, preserveSelection = false, fullHistory = false): Promise<void> {
   if (!state.adminKey) {
     return;
   }
 
   state.selectedUserId = userId;
+  buildingPanel.show(userId);
   state.detailLoading = true;
   state.preview = null;
   render();
@@ -289,7 +302,7 @@ async function loadDetail(userId: string, preserveSelection = false): Promise<vo
   try {
     const previousScope = state.detail?.scope ?? null;
     const detail = await adminRequest<SuspiciousUserDetailResponse>(
-      buildDetailPath(userId)
+      buildDetailPath(userId, fullHistory)
     );
     state.detail = detail;
     if (!preserveSelection || previousScope !== detail.scope) {
@@ -495,9 +508,9 @@ function buildAdminPath(pathname: string): string {
   return `${pathname}?${buildAdminParams().toString()}`;
 }
 
-function buildDetailPath(userId: string): string {
+function buildDetailPath(userId: string, fullHistory = false): string {
   const params = buildAdminParams();
-  if (state.query) {
+  if (state.query || fullHistory) {
     params.set('history', '1');
   }
   return `/api/admin/suspicious/users/${encodeURIComponent(userId)}?${params.toString()}`;
@@ -853,6 +866,7 @@ function renderPreview(): void {
   previewMeta.innerHTML = `
     <div>${preview.summary.roomRunsDeleted} room runs · ${preview.summary.courseRunsDeleted} expanded room runs</div>
     <div>${preview.summary.selectedPointEventsDeleted} selected point events · ${preview.summary.runPointEventsDeleted} run point events · ${preview.summary.creatorPointEventsDeleted} creator point events</div>
+    ${preview.progress ? `<div>Also removed: ${preview.progress.pxp} player XP · ${preview.progress.bxp} builder XP · ${preview.progress.cxp} curator XP · ${preview.progress.trust} trust · ${preview.progress.ratingsRemoved} ratings, plus badges that no longer qualify</div>` : ''}
   `;
 
   previewUsers.innerHTML = preview.affectedUsers

@@ -17,9 +17,13 @@ interface Proof {
   session: Promise<LostSongPlaySession>; samples: LostSongSample[]; lastSampleAt: number;
   ready: boolean;
 }
+/** Server sessions last 30 minutes; a proof is reused well inside that, and only for a few recent rooms. */
+const PROOF_REUSE_MS = 20 * 60_000;
+const MAX_KEPT_PROOFS = 16;
 /** Small personal pickup controller; it never mutates goal traces or shared objects. */
 export class OverworldLostSongController {
-  private proof: Proof | null = null;
+  // Kept across leaving a room and respawning, so re-entry does not start another server session.
+  private proofs = new Map<string, Proof>();
   private pending = new Set<string>();
   private practice = new Set<string>();
   private retryAfter = 0;
@@ -31,7 +35,7 @@ export class OverworldLostSongController {
     this.alive = true;
     this.unsubscribe = this.service.subscribe(() => this.host.onFoundChanged());
   }
-  destroy(): void { this.alive = false; this.unsubscribe?.(); this.unsubscribe = null; this.proof = null; this.practice.clear(); }
+  destroy(): void { this.alive = false; this.unsubscribe?.(); this.unsubscribe = null; this.proofs.clear(); this.practice.clear(); }
   isGhosted(roomId: string): boolean {
     return this.service.hasFound(roomId) || this.pending.has(roomId) || this.practice.has(roomId);
   }
@@ -40,7 +44,7 @@ export class OverworldLostSongController {
     if (now - this.lastUpdateAt < 100) return false;
     this.lastUpdateAt = now;
     const context = this.host.getContext();
-    if (!context) { this.proof = null; this.practice.clear(); return true; }
+    if (!context) { this.practice.clear(); return true; }
     if (context.practice || this.service.hasFound(context.target.roomId)) return true;
     const proof = this.getProof(context);
     if (proof) this.sample(proof, context.position);
@@ -65,23 +69,32 @@ export class OverworldLostSongController {
   }
   private getProof(context: LostSongPlayContext): Proof | null {
     const key = JSON.stringify([context.target, this.service.getUserId()]);
-    if (this.proof?.key === key) return this.proof;
+    const kept = this.proofs.get(key);
+    if (kept && Date.now() - kept.startedAt < PROOF_REUSE_MS) return kept;
+    this.proofs.delete(key);
     if (Date.now() < this.retryAfter) return null;
     const identity = this.service.identity();
     const startedAt = Date.now(), session = this.service.repository.play(context.target, identity);
     // Starts early on entry. Attach a handler immediately, even before a pickup.
     void session.then(() => {
-      if (this.proof?.session === session) {
-        this.proof.startedAt = Date.now(); this.proof.samples = []; this.proof.ready = true;
+      const proof = this.proofs.get(key);
+      if (proof?.session === session) {
+        proof.startedAt = Date.now(); proof.samples = []; proof.ready = true;
       }
     }).catch(error => {
-      if (this.proof?.session !== session || !this.alive) return;
-      this.proof = null; this.retryAfter = Date.now() + 5000;
+      if (this.proofs.get(key)?.session !== session || !this.alive) return;
+      this.proofs.delete(key); this.retryAfter = Date.now() + 5000;
       if (error instanceof LostSongApiError && error.status === 409) {
         this.host.showStatus(error.message);
       } else this.host.showStatus('Song progress is unavailable. Touch the song to retry.');
     });
-    return this.proof = { key, target: context.target, identity, startedAt, session, samples: [], lastSampleAt: 0, ready: false };
+    const proof: Proof = { key, target: context.target, identity, startedAt, session, samples: [], lastSampleAt: 0, ready: false };
+    this.proofs.set(key, proof);
+    for (const oldest of this.proofs.keys()) {
+      if (this.proofs.size <= MAX_KEPT_PROOFS) break;
+      this.proofs.delete(oldest);
+    }
+    return proof;
   }
   private sample(proof: Proof, position: { x: number; y: number }): void {
     const atMs = Math.max(0, Date.now() - proof.startedAt), last = proof.samples.at(-1);
@@ -114,7 +127,7 @@ export class OverworldLostSongController {
         ? durable ? 'Lost Song saved on this device. Sign in to keep your finds.' : 'Lost Song saved for this visit. Sign in to keep it.'
         : 'Lost Song found!' + (receipt.xp ? ' +5 player XP.' : ''));
     } catch (error) {
-      if (this.proof === proof && error instanceof LostSongApiError && error.status === 409) this.proof = null;
+      if (this.proofs.get(proof.key) === proof && error instanceof LostSongApiError && error.status === 409) this.proofs.delete(proof.key);
       if (this.alive && this.service.getUserId() === proof.identity.userId) this.host.showStatus(error instanceof LostSongApiError ? error.message : 'Lost Song could not save. Touch it again to retry.');
     } finally {
       this.pending.delete(proof.target.roomId);

@@ -1,11 +1,15 @@
-import type * as Party from 'partykit/server';
+import { ROOM_EMOTES, isRoomEmoteId, canSendRoomEmote, sharesRoomEmoteAudience } from '../src/chat/roomEmotes';
+import { ShardHeartbeatScheduler } from '../src/partykit/shardHeartbeatScheduler';
+import type * as Party from '../src/partykit/presenceTypes';
 import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
+import { normalizeInterestRoom, PresenceInterestBroadcast, PRESENCE_FAR_FLUSH_MS } from '../src/partykit/presenceInterest';
 import type { PartyKitShardHeartbeat } from '../src/admin/model';
 import {
   ROOM_CHAT_MESSAGE_LIFETIME_MS,
   ROOM_CHAT_SEND_RATE_LIMIT_MS,
   type RoomChatBroadcastMessage,
   type RoomChatSayMessage,
+  type RoomChatEmoteMessage,
   type RoomChatTransportChannel,
 } from '../src/chat/roomChatModel';
 import type { RoomCoordinates } from '../src/persistence/roomModel';
@@ -25,6 +29,12 @@ import {
   canSendRoomChat,
   type PartyKitIdentityTokenClaims,
 } from '../src/presence/identityToken';
+import {
+  isRoomChatSenderMuted,
+  resolveRoomChatModerationDatabase,
+  ROOM_CHAT_PERMISSION_RECHECK_MS,
+  type RoomChatModerationDatabase,
+} from '../src/partykit/roomChatModeration';
 import {
   resolveConstructionPreviewTokenSigningSecret,
   verifyConstructionPreviewToken,
@@ -65,6 +75,7 @@ import {
   normalizePvpInviteSend,
   normalizeRoomChatText,
   PVP_INVITE_SEND_RATE_LIMIT_MS,
+  PvpInviteLimiter,
 } from '../src/partykit/relayProtocol';
 import {
   activatePvpMatchIfReady,
@@ -97,17 +108,18 @@ import {
   type PvpRoomStateEventMessage,
 } from '../src/pvp/model';
 
-const HEARTBEAT_INTERVAL_MS = 15_000;
-/**
- * Joins, leaves and room changes force a heartbeat to the shared metrics room, but each shard
- * sends at most one this often; a change inside the interval is reported when it ends (F035).
- */
-const FORCED_HEARTBEAT_MIN_INTERVAL_MS = 3_000;
 /** The metrics room prunes stale shard heartbeats at most this often, not on every heartbeat. */
 const HEARTBEAT_PRUNE_INTERVAL_MS = 60_000;
 const INTERNAL_TOKEN_HEADER = 'x-partykit-internal-token';
 const PRESENCE_UPSERT_FLUSH_MS = 80;
 const POPULATION_BROADCAST_FLUSH_MS = 250;
+const PVP_STORAGE_KEY = 'pvp:match';
+interface StoredPvpMatch { match: PvpMatchState; finalizeAt: number | null }
+interface PresenceServerRuntime {
+  waitUntil?: (work: Promise<void>) => void;
+  /** Saves a finished PvP match from this room's own state (the Cloudflare host wires it to D1). */
+  recordPvpResult?: (snapshot: PvpMatchSnapshot) => Promise<void>;
+}
 
 interface HeartbeatMutationResponse {
   ok: true;
@@ -144,26 +156,74 @@ export default class PresenceServer implements Party.Server {
     hibernate: true,
   } satisfies Party.ServerOptions;
 
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private lastHeartbeatAt = 0;
-  private forcedHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly heartbeat: ShardHeartbeatScheduler;
   private lastHeartbeatPruneAt = 0;
   private readonly previewsByConnectionId = new Map<string, RoomPreviewPayload>();
   private readonly persistedPreviewsByRoomId = new Map<string, SharedRoomPreview>();
   private readonly previewBroadcast = new RoomPreviewBroadcast();
+  private readonly pvpInviteLimiter = new PvpInviteLimiter();
   private readonly pendingPresenceUpsertsByConnectionId = new Map<string, WorldGhostPresence>();
   private presenceUpsertFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly presenceInterest = new PresenceInterestBroadcast();
+  private farPresenceFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private populationBroadcastFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private pvpMatchState: PvpMatchState | null = null;
-  private pvpStartTimer: ReturnType<typeof setTimeout> | null = null;
-  private pvpFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pvpFinalizeAt: number | null = null;
+  private pvpStorageWork: Promise<void> = Promise.resolve();
+  private pvpResultWork: Promise<void> = Promise.resolve();
 
-  constructor(readonly room: Party.Room) {}
+  constructor(readonly room: Party.Room, private readonly runtime: PresenceServerRuntime = {}) {
+    this.heartbeat = new ShardHeartbeatScheduler({
+      storage: room.storage,
+      enabled: () => !this.isMetricsRoom() && !this.isPvpRoom() && this.getInternalToken() !== null,
+      snapshot: () => this.computeShardHeartbeat() ?? {
+        shardId: this.room.id, totalConnections: 0, playConnections: 0, editConnections: 0,
+        updatedAt: new Date().toISOString(),
+      },
+      send: async (heartbeat) => {
+        const response = await this.room.context.parties[this.room.name].get(METRICS_ROOM_ID).fetch('/heartbeat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', [INTERNAL_TOKEN_HEADER]: this.getInternalToken() ?? '' },
+          body: JSON.stringify(heartbeat),
+        });
+        // Drain this bounded internal response so no unfinished body keeps the object awake.
+        await response.text();
+      },
+    });
+  }
 
-  async onStart(): Promise<void> {
-    if (this.isMetricsRoom() || this.isPvpRoom()) {
+  async onAlarm(): Promise<void> {
+    if (this.isPvpRoom()) {
+      const match = this.pvpMatchState;
+      if (match?.status === 'countdown' && match.countdownEndsAt !== null && match.countdownEndsAt <= Date.now()) this.startPvpMatch();
+      if (match?.status === 'finalizing' && this.pvpFinalizeAt !== null && this.pvpFinalizeAt <= Date.now()) this.finalizePvpMatch();
+      await this.pvpStorageWork;
+      await this.pvpResultWork;
       return;
     }
+    await this.heartbeat.alarm();
+  }
+
+  private runBackground(work: Promise<void>): void {
+    const handled = work.catch((error) => { console.warn('Presence background work failed.', error); });
+    if (this.runtime.waitUntil) this.runtime.waitUntil(handled);
+    else void handled;
+  }
+
+  private reportShardChange(): void {
+    this.runBackground(this.heartbeat.changed());
+  }
+
+  async onStart(): Promise<void> {
+    if (this.isPvpRoom()) {
+      const stored = await this.room.storage.get<StoredPvpMatch>(PVP_STORAGE_KEY);
+      if (stored) {
+        this.pvpMatchState = stored.match;
+        this.pvpFinalizeAt = stored.finalizeAt;
+      }
+      return;
+    }
+    if (this.isMetricsRoom()) return;
 
     const entries = await this.room.storage.list<SharedRoomPreview>({
       prefix: ROOM_PREVIEW_STORAGE_PREFIX,
@@ -212,6 +272,11 @@ export default class PresenceServer implements Party.Server {
       connection.close(1008, 'invalid-presence-identity');
       return;
     }
+    // Classroom accounts do not play PvP, matching the invite rule in handlePvpInvite.
+    if (this.isPvpRoom() && identity.school) {
+      connection.close(1008, 'pvp-unavailable');
+      return;
+    }
 
     connection.setState({
       ...identity,
@@ -237,6 +302,7 @@ export default class PresenceServer implements Party.Server {
         JSON.stringify({
           type: 'snapshot',
           roomChat: identity.roomChat === true,
+          ...(identity.presenceInterest ? { presenceInterest: true } : {}),
           peers: this.listPeers(connection),
           roomPopulations: this.computeRoomPopulations(),
           roomEditors: this.computeRoomEditors(),
@@ -247,8 +313,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     this.broadcastPopulations();
-    this.syncHeartbeatTimer();
-    void this.maybeSendShardHeartbeat(true);
+    await this.heartbeat.changed().catch((error) => { console.warn('Presence metrics unavailable.', error); });
   }
 
   onMessage(message: string, sender: Party.Connection<ConnectionPresenceState>): void {
@@ -262,12 +327,23 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    if (parsed.type === 'presence:interest') {
+      const current = sender.state;
+      if (current?.channel !== 'presence' || !current.presenceInterest) return;
+      const interestRoom = normalizeInterestRoom(parsed.roomCoordinates);
+      if (parsed.roomCoordinates !== null && !interestRoom) return;
+      if (current.interestRoom?.x === interestRoom?.x && current.interestRoom?.y === interestRoom?.y) return;
+      sender.setState({ ...current, interestRoom });
+      this.presenceInterest.sendFocusBaseline(sender, this.listPeers(null));
+      return;
+    }
+
     if (parsed.type === 'presence:leave') {
       this.clearPresence(sender);
       return;
     }
 
-    if (parsed.type === 'room-chat:say') {
+    if (parsed.type === 'room-chat:say' || parsed.type === 'room-chat:emote') {
       this.handleRoomChatSay(sender, parsed);
       return;
     }
@@ -293,9 +369,7 @@ export default class PresenceServer implements Party.Server {
     }
 
     if (parsed.type === 'presence:preview:update') {
-      void this.updatePreview(sender, parsed.preview).catch((error) => {
-        console.warn('Failed to update construction preview.', error);
-      });
+      this.runBackground(this.updatePreview(sender, parsed.preview));
       return;
     }
 
@@ -336,6 +410,8 @@ export default class PresenceServer implements Party.Server {
 
     if (current.channel === 'presence') {
       if (isVisiblePresence(previousPresence) && !isVisiblePresence(presence)) {
+        this.pendingPresenceUpsertsByConnectionId.delete(sender.id);
+        this.presenceInterest.forget(sender.id);
         this.sendPresenceMessage(
           {
             type: 'remove',
@@ -353,7 +429,7 @@ export default class PresenceServer implements Party.Server {
       const shouldBroadcast = this.shouldBroadcastPopulations(previousPresence, presence);
       if (shouldBroadcast || previewChanged) {
         this.broadcastPopulations();
-        void this.maybeSendShardHeartbeat(true);
+        this.reportShardChange();
       }
     }
   }
@@ -363,12 +439,18 @@ export default class PresenceServer implements Party.Server {
     if (connection.readyState === WebSocket.CLOSING) connection.close(1000, 'peer-disconnected');
     if (this.isPvpRoom()) {
       this.handlePvpClose(connection);
+      if (![...this.room.getConnections()].length) {
+        this.pvpMatchState = null;
+        this.pvpFinalizeAt = null;
+        this.persistPvpMatch();
+      }
       return;
     }
 
     const presence = connection.state?.presence;
     const preview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
+    this.presenceInterest.forget(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     this.clearStoredPreviewForPayload(preview);
     if (connection.state?.channel === 'presence' && isVisiblePresence(presence)) {
@@ -381,8 +463,7 @@ export default class PresenceServer implements Party.Server {
     if (connection.state?.channel === 'presence') {
       this.broadcastPopulations();
     }
-    this.syncHeartbeatTimer();
-    void this.maybeSendShardHeartbeat(true);
+    this.reportShardChange();
   }
 
   private clearPresence(connection: Party.Connection<ConnectionPresenceState>): void {
@@ -390,6 +471,7 @@ export default class PresenceServer implements Party.Server {
     const previousPresence = current?.presence ?? null;
     const previousPreview = this.previewsByConnectionId.get(connection.id) ?? null;
     this.pendingPresenceUpsertsByConnectionId.delete(connection.id);
+    this.presenceInterest.forget(connection.id);
     this.previewsByConnectionId.delete(connection.id);
     this.clearStoredPreviewForPayload(previousPreview);
     if (!previousPresence) {
@@ -403,7 +485,7 @@ export default class PresenceServer implements Party.Server {
       );
       if (current?.channel === 'presence' && previousPreview !== null) {
         this.broadcastPopulations();
-        void this.maybeSendShardHeartbeat(true);
+        this.reportShardChange();
       }
       return;
     }
@@ -432,7 +514,7 @@ export default class PresenceServer implements Party.Server {
       (this.shouldBroadcastPopulations(previousPresence, null) || previousPreview !== null)
     ) {
       this.broadcastPopulations();
-      void this.maybeSendShardHeartbeat(true);
+      this.reportShardChange();
     }
   }
 
@@ -677,90 +759,12 @@ export default class PresenceServer implements Party.Server {
     return pruned;
   }
 
-  private async maybeSendShardHeartbeat(force = false): Promise<void> {
-    if (this.isMetricsRoom()) {
-      return;
-    }
-
-    const token = this.getInternalToken();
-    if (!token) {
-      return;
-    }
-
-    const now = Date.now();
-    if (!force && now - this.lastHeartbeatAt < HEARTBEAT_INTERVAL_MS) {
-      return;
-    }
-    if (force && now - this.lastHeartbeatAt < FORCED_HEARTBEAT_MIN_INTERVAL_MS) {
-      this.forcedHeartbeatTimer ??= setTimeout(() => {
-        this.forcedHeartbeatTimer = null;
-        void this.maybeSendShardHeartbeat(true);
-      }, this.lastHeartbeatAt + FORCED_HEARTBEAT_MIN_INTERVAL_MS - now);
-      return;
-    }
-
-    const heartbeat = this.computeShardHeartbeat();
-    if (!heartbeat) {
-      return;
-    }
-
-    this.lastHeartbeatAt = now;
-
-    try {
-      await this.room.context.parties[this.room.name].get(METRICS_ROOM_ID).fetch('/heartbeat', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          [INTERNAL_TOKEN_HEADER]: token,
-        },
-        body: JSON.stringify(heartbeat),
-      });
-    } catch {
-      // Metrics are best-effort and should not affect live ghost traffic.
-    }
-  }
-
   private computeShardHeartbeat(): PartyKitShardHeartbeat | null {
     return computeShardHeartbeat(
       this.room.id,
       Array.from(this.room.getConnections<ConnectionPresenceState>(), ({ state }) => state),
       Date.now(),
     );
-  }
-
-  private syncHeartbeatTimer(): void {
-    if (this.isMetricsRoom()) {
-      if (this.heartbeatTimer !== null) {
-        clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = null;
-      }
-      return;
-    }
-
-    const hasConnections = this.hasAnyPresenceConnections();
-    if (!hasConnections) {
-      if (this.heartbeatTimer !== null) {
-        clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = null;
-      }
-      return;
-    }
-
-    if (this.heartbeatTimer === null) {
-      this.heartbeatTimer = setInterval(() => {
-        void this.maybeSendShardHeartbeat();
-      }, HEARTBEAT_INTERVAL_MS);
-    }
-  }
-
-  private hasAnyPresenceConnections(): boolean {
-    for (const connection of this.room.getConnections<ConnectionPresenceState>()) {
-      if (connection.state?.channel === 'presence') {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private async handleHeartbeat(req: Party.Request): Promise<Response> {
@@ -774,7 +778,8 @@ export default class PresenceServer implements Party.Server {
       this.lastHeartbeatPruneAt = now;
       await this.pruneStaleHeartbeats();
     }
-    await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
+    if (heartbeat.totalConnections === 0) await this.room.storage.delete(heartbeatStorageKey(heartbeat.shardId));
+    else await this.room.storage.put(heartbeatStorageKey(heartbeat.shardId), heartbeat);
 
     return this.json({
       ok: true,
@@ -855,9 +860,14 @@ export default class PresenceServer implements Party.Server {
       channel,
       previewDeltas: url.searchParams.get('previewDeltas') === '1',
       roomChat: channel === 'presence' && url.searchParams.get('roomChat') === '1',
+      presenceInterest: channel === 'presence' && url.searchParams.get('presenceInterest') === '1',
       canSendRoomChat: canSendRoomChat(claims),
+      canSendRoomEmote: canSendRoomEmote(claims),
+      classroomId: claims.classroomId,
       canReceiveRoomChat: canReceiveRoomChat(claims),
+      roomChatCheckedAt: claims.iat,
       school: claims.roomChat === 'school',
+      guest: claims.source === 'guest',
       userId: claims.userId,
       displayName: claims.displayName,
       avatarId: claims.avatarId,
@@ -884,11 +894,13 @@ export default class PresenceServer implements Party.Server {
 
   private handleRoomChatSay(
     sender: Party.Connection<ConnectionPresenceState>,
-    message: RoomChatSayMessage
+    message: RoomChatSayMessage | RoomChatEmoteMessage
   ): void {
     const state = sender.state;
-    // Guests, chat-banned players and classroom accounts cannot send bubbles, whatever the client does.
-    if (!state || !(state.channel === 'room-chat' || state.roomChat === true) || !state.canSendRoomChat) {
+    const emote = message.type === 'room-chat:emote';
+    // Free text and fixed emotes have separate permissions; neither trusts client identity/scope.
+    if (!state || !(state.channel === 'room-chat' || state.roomChat === true) ||
+      !(emote ? state.canSendRoomEmote : state.canSendRoomChat)) {
       return;
     }
 
@@ -897,7 +909,9 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const text = normalizeRoomChatText(message.text);
+    const text = message.type === 'room-chat:emote'
+      ? (isRoomEmoteId(message.emote) ? ROOM_EMOTES[message.emote].text : null)
+      : normalizeRoomChatText(message.text);
     if (!text) {
       return;
     }
@@ -907,11 +921,50 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    // Taken before any database read so a burst cannot slip past the rate limit.
     sender.setState({
       ...state,
       lastRoomChatSentAt: now,
     });
 
+    // A ban or suspension made after connecting applies here, re-read at most once a minute.
+    const db = resolveRoomChatModerationDatabase(this.room.env);
+    if (db && now - (state.roomChatCheckedAt ?? 0) >= ROOM_CHAT_PERMISSION_RECHECK_MS) {
+      this.runBackground(this.recheckRoomChatSender(db, sender, now).then((allowed) => {
+        if (allowed) this.broadcastRoomChat(state, presence, text, now, emote);
+      }));
+      return;
+    }
+    this.broadcastRoomChat(state, presence, text, now, emote);
+  }
+
+  /** Resolves false when the sender may no longer post bubbles; a failed read keeps the earlier decision. */
+  private async recheckRoomChatSender(
+    db: RoomChatModerationDatabase,
+    sender: Party.Connection<ConnectionPresenceState>,
+    checkedAt: number,
+  ): Promise<boolean> {
+    let muted: boolean;
+    try {
+      muted = await isRoomChatSenderMuted(db, sender.state?.userId ?? '');
+    } catch (error) {
+      console.warn('Room chat permission check unavailable.', error);
+      return true;
+    }
+    const current = sender.state;
+    if (!current) return false;
+    sender.setState({ ...current, roomChatCheckedAt: checkedAt, canSendRoomChat: current.canSendRoomChat && !muted,
+      canSendRoomEmote: current.canSendRoomEmote && !muted });
+    return !muted;
+  }
+
+  private broadcastRoomChat(
+    state: ConnectionPresenceState,
+    presence: PresencePayload,
+    text: string,
+    now: number,
+    emote: boolean,
+  ): void {
     const roomId = this.getRoomId(presence.roomCoordinates);
     const payload = buildRoomChatBroadcast(
       state, this.room.id, text, now, crypto.randomUUID(), ROOM_CHAT_MESSAGE_LIFETIME_MS,
@@ -921,7 +974,7 @@ export default class PresenceServer implements Party.Server {
       const peerPresence = connection.state?.presence;
       return (
         (connection.state?.channel === 'room-chat' || connection.state?.roomChat === true) &&
-        connection.state.canReceiveRoomChat &&
+        (emote ? sharesRoomEmoteAudience(state, connection.state) : connection.state.canReceiveRoomChat) &&
         peerPresence?.mode === 'play' &&
         this.getRoomId(peerPresence.roomCoordinates) === roomId
       );
@@ -952,7 +1005,11 @@ export default class PresenceServer implements Party.Server {
       return;
     }
     // Strangers cannot pull classroom accounts into matches, and students cannot invite strangers.
-    if (state.school || target.state.school) {
+    // Guests play no ranked PvP, and a challenge never interrupts someone's run.
+    if (state.school || target.state.school || state.guest || target.state.guest || target.state.presence?.mode === 'play') {
+      return;
+    }
+    if (!this.pvpInviteLimiter.allows(state.userId, target.state.userId, now)) {
       return;
     }
 
@@ -960,6 +1017,7 @@ export default class PresenceServer implements Party.Server {
       ...state,
       lastPvpInviteSentAt: now,
     });
+    this.pvpInviteLimiter.recordOffer(target.state.userId, now);
 
     const payload = buildPvpInviteOffer(
       invite, sender.id, this.identityFromState(state), this.identityFromState(target.state), this.room.id, now,
@@ -999,6 +1057,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
+    this.pvpInviteLimiter.recordDecline(target.state.userId, state.userId, Date.now());
     const payload = buildPvpInviteDeclined(message, this.identityFromState(state));
     target.send(JSON.stringify(payload));
   }
@@ -1120,8 +1179,10 @@ export default class PresenceServer implements Party.Server {
       return;
     }
     if (!this.pvpMatchState) {
-      this.pvpMatchState = createPvpMatchState(message, this.identityFromState(state));
-      if (!this.pvpMatchState) return;
+      const match = createPvpMatchState(message, this.identityFromState(state));
+      // A match id names exactly one room, so each match finishes in one place with one result.
+      if (!match || `pvp:${match.matchId}` !== this.room.id) return;
+      this.pvpMatchState = match;
     }
 
     this.upsertPvpParticipant(sender);
@@ -1141,22 +1202,7 @@ export default class PresenceServer implements Party.Server {
 
   private maybeActivatePvpMatch(): void {
     const match = this.pvpMatchState;
-    if (match && activatePvpMatchIfReady(match, Date.now())) this.schedulePvpStart();
-  }
-
-  private schedulePvpStart(): void {
-    const match = this.pvpMatchState;
-    if (!match || match.status !== 'countdown' || !match.countdownEndsAt) {
-      return;
-    }
-    if (this.pvpStartTimer !== null) {
-      return;
-    }
-
-    this.pvpStartTimer = setTimeout(() => {
-      this.pvpStartTimer = null;
-      this.startPvpMatch();
-    }, Math.max(0, match.countdownEndsAt - Date.now()));
+    if (match) activatePvpMatchIfReady(match, Date.now());
   }
 
   private startPvpMatch(): void {
@@ -1269,30 +1315,26 @@ export default class PresenceServer implements Party.Server {
 
   private schedulePvpFinalize(): void {
     const match = this.pvpMatchState;
-    if (!match || this.pvpFinalizeTimer !== null) {
-      return;
+    if (match && this.pvpFinalizeAt === null) {
+      this.pvpFinalizeAt = Date.now() + getMultiplayerModeDefinition(match.mode).finalizeDrawWindowMs;
     }
-
-    this.pvpFinalizeTimer = setTimeout(() => {
-      this.pvpFinalizeTimer = null;
-      this.finalizePvpMatch();
-    }, getMultiplayerModeDefinition(match.mode).finalizeDrawWindowMs);
   }
 
-  private clearPvpStartTimer(): void {
-    if (this.pvpStartTimer === null) {
-      return;
-    }
-    clearTimeout(this.pvpStartTimer);
-    this.pvpStartTimer = null;
-  }
-
-  private clearPvpFinalizeTimer(): void {
-    if (this.pvpFinalizeTimer === null) {
-      return;
-    }
-    clearTimeout(this.pvpFinalizeTimer);
-    this.pvpFinalizeTimer = null;
+  /** Persist score/phase changes only; high-frequency movement and relays do not write storage. */
+  private persistPvpMatch(): void {
+    const stored = this.pvpMatchState
+      ? structuredClone({ match: this.pvpMatchState, finalizeAt: this.pvpFinalizeAt }) : null;
+    const deadline = stored?.match.status === 'countdown' ? stored.match.countdownEndsAt
+      : stored?.match.status === 'finalizing' ? stored.finalizeAt : null;
+    const work = this.pvpStorageWork.catch(() => undefined).then(async () => {
+      // Issue both mutations without yielding so native storage commits phase and deadline together.
+      await Promise.all([
+        stored ? this.room.storage.put(PVP_STORAGE_KEY, stored) : this.room.storage.delete(PVP_STORAGE_KEY),
+        deadline !== null ? this.room.storage.setAlarm(deadline) : this.room.storage.deleteAlarm(),
+      ]);
+    });
+    this.pvpStorageWork = work;
+    this.runBackground(work);
   }
 
   private finalizePvpForfeit(participant: PvpParticipantSnapshot): void {
@@ -1301,9 +1343,8 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.clearPvpStartTimer();
-    this.clearPvpFinalizeTimer();
-    markPvpForfeit(match, participant, Date.now());
+    this.pvpFinalizeAt = null;
+    markPvpForfeit(match, participant);
     this.finalizePvpMatch();
   }
 
@@ -1313,13 +1354,26 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.clearPvpStartTimer();
-    this.clearPvpFinalizeTimer();
+    this.pvpFinalizeAt = null;
     finalizePvpMatchState(match, Date.now());
     this.broadcastPvpSnapshot();
+    this.recordPvpResult(buildPvpSnapshot(match));
+  }
+
+  private recordPvpResult(snapshot: PvpMatchSnapshot): void {
+    const record = this.runtime.recordPvpResult;
+    if (!record) {
+      return;
+    }
+
+    // Alarms wait for this too, so a match finalized by its deadline is saved before the alarm ends.
+    const work = record(snapshot).catch((error) => { console.warn('PvP match result was not saved.', error); });
+    this.pvpResultWork = work;
+    this.runBackground(work);
   }
 
   private broadcastPvpSnapshot(): void {
+    this.persistPvpMatch();
     const snapshot = this.getPvpSnapshot();
     if (!snapshot) {
       return;
@@ -1397,7 +1451,16 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    this.sendPresenceMessage({ type: 'upserts', peers });
+    this.presenceInterest.sendFast(presenceConnections, peers, this.listPeers(null));
+    if (this.farPresenceFlushTimer === null && this.presenceInterest.hasPending) {
+      this.farPresenceFlushTimer = setTimeout(() => {
+        this.farPresenceFlushTimer = null;
+        this.presenceInterest.flushFar(
+          Array.from(this.room.getConnections<ConnectionPresenceState>()).filter(c => c.state?.channel === 'presence'),
+          this.listPeers(null)
+        );
+      }, PRESENCE_FAR_FLUSH_MS);
+    }
   }
 
   private sendPresenceMessage(

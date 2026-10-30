@@ -1,7 +1,16 @@
+import { DiscoveryPublicCache } from './discoveryPublicCache';
+import { loadCachedRoomStandings } from './roomLeaderboardCache';
 import { parseGlobalLeaderboardWindow } from './globalLeaderboards';
+import { canReuseGlobalLeaderboardBase, loadGlobalLeaderboardViewer } from './globalLeaderboardViewer';
+import type { GlobalLeaderboardResponse } from '../../../runs/model';
 import { buildVerifiedRoomGhost, saveBuiltPersonalBestGhost } from './ghosts';
 import { prepareRunGhostArchive, scheduleRunGhostArchive } from './ghostArchive';
 import { assertSoloRoomRun } from './coopPolicy';
+import {
+  assertReplayableRunFinish, awaitInOrder, finalizeStatementWon, nextFinalizeSeqSql, readAhead,
+  recordRunSettlement, runNeedsResettle, runPastDisconnect, runVerificationError, storedRunFinishOrder,
+  type RunFinishMessages,
+} from './finishReplay';
 import { deathLocationsJson } from '../insights/deathLocations';
 import { scheduleActivityEmails } from '../activity/emails';
 import { applyVerifiedRunMetrics, evaluateRunFinalizationVerification } from './finalizationVerification';
@@ -28,17 +37,13 @@ import { ServerTiming, timedJsonResponse } from '../core/serverTiming';
 import type { Env, RoomRunRow, WorkerExecutionContextLike } from '../core/types';
 import { recordDiscoveryRunPlayer, scheduleDiscoveryMetrics } from '../playableContentIndex/runMetrics';
 import { scheduleRunRewards } from './deferredRewards';
-import { loadAnonymousPublicCache } from '../core/publicCache';
+import { hasPublicCache, loadAnonymousPublicCache } from '../core/publicCache';
 import {
   refreshPlayableContentIndexForRoom,
   schedulePlayableContentIndexRefresh,
 } from '../playableContentIndex/store';
-import { requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
+import { hasRequestCredentials, requireAuthenticatedRequestAuth, loadOptionalRequestAuth, requireOptionalScope } from '../auth/request';
 import { loadExactRoomVersion } from '../rooms/store';
-import {
-  assertWampLeaderboardWriteAllowed,
-  sqlUserIdIsNotLegacyGeneratedOnly,
-} from '../generatedUsers/leaderboardIsolation';
 import {
   awardRoomCreatorCompletionPoints,
   awardRunFinalizePoints,
@@ -76,6 +81,7 @@ import { loadRoomRankingRecord } from '../rooms/rankingRecord';
 import {
   computeRoomSnapshotVerificationHash,
   createRoomVerificationTrigger,
+  buildVerificationTrigger,
   createRunVerificationNonce,
   recordRunVerificationAudit,
   requireVerificationTrace,
@@ -86,7 +92,6 @@ import {
   buildRoomLeaderboardResponse,
   loadRankedRoomLeaderboardRows,
   loadViewerRankedRoomLeaderboardRow,
-  sqlIsVerificationAccepted,
 } from './leaderboards';
 
 export async function handleRunStart(request: Request, env: Env): Promise<Response> {
@@ -96,7 +101,6 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunStartBody(request);
   const exactVersion = await loadExactRoomVersion(env, body.roomId, body.roomVersion);
   if (!exactVersion) throw new HttpError(404, `Room version ${body.roomVersion} was not found.`);
@@ -178,6 +182,13 @@ export async function handleRunStart(request: Request, env: Env): Promise<Respon
   return jsonResponse(request, responseBody);
 }
 
+const ROOM_RUN_FINISH_MESSAGES: RunFinishMessages = {
+  missingTrace: 'Missing verification trace for ranked run.',
+  unverified: 'Ranked run could not be verified.',
+  timedOut: 'Ranked run verification timed out.',
+  finalized: 'This run attempt has already been finalized.',
+};
+
 export async function handleRunFinish(
   request: Request,
   env: Env,
@@ -188,15 +199,17 @@ export async function handleRunFinish(
     throw new HttpError(400, 'Attempt id is required.');
   }
 
+  // The run row needs only the attempt id, so it loads while the player signs in (F333). A request
+  // with no credentials fails sign-in without a read, so it doesn't start one.
+  const existingRead = hasRequestCredentials(request) ? readAhead(loadRoomRunByAttemptId(env, attemptId)) : null;
   const auth = await requireAuthenticatedRequestAuth(
     env,
     request,
     'submit leaderboard runs',
     'runs:write'
   );
-  await assertWampLeaderboardWriteAllowed(env, auth, 'play');
   const body = await parseRunFinishBody(request);
-  const existing = await loadRoomRunByAttemptId(env, attemptId);
+  const existing = await (existingRead ?? loadRoomRunByAttemptId(env, attemptId));
 
   if (!existing) {
     throw new HttpError(404, 'Run attempt was not found.');
@@ -206,9 +219,14 @@ export async function handleRunFinish(
     throw new HttpError(403, 'You can only finish your own run attempts.');
   }
 
-  if (existing.result !== 'active') {
-    throw new HttpError(409, 'This run attempt has already been finalized.');
+  // A resend of a finished attempt replays its stored answer (F351).
+  const resend = existing.result !== 'active';
+  if (resend) {
+    assertReplayableRunFinish(existing, body.result, ROOM_RUN_FINISH_MESSAGES);
+    if (!(await runNeedsResettle(env, 'room', attemptId, existing.finishedAt))) return noContentResponse(request);
   }
+  // A clear is checked against the player's trust tier, which needs only the player: it loads with the room.
+  const trustTierRead = !resend && body.result === 'completed' ? readAhead(loadEffectiveTrustTier(env, auth.user.id)) : null;
 
   const roomRecord = await loadRoomRankingRecord(env, existing.roomId, existing.roomCoordinates, {
     viewerUserId: auth.user.id,
@@ -220,6 +238,18 @@ export async function handleRunFinish(
   if (!snapshot.goal) {
     throw new HttpError(409, 'This room version no longer has a leaderboard goal.');
   }
+  const settlement = { attemptId, userId: auth.user.id, goal: snapshot.goal, roomRecord,
+    roomId: existing.roomId, roomVersion: existing.roomVersion,
+    rewardScope: resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id) };
+  // An earlier finish committed, then threw or was cut off before its rewards finished.
+  const settleResend = async (stored: Pick<RoomRunRecord, 'result' | 'finishedAt'>): Promise<Response> => {
+    if (await runNeedsResettle(env, 'room', attemptId, stored.finishedAt)) {
+      await runPastDisconnect(executionContext, attemptId,
+        settleRoomRunFinish(env, executionContext, { ...settlement, result: stored.result, completedGhost: null }));
+    }
+    return noContentResponse(request);
+  };
+  if (resend) return settleResend(existing);
 
   const metricCaps = getRunMetricCapsForSnapshot(snapshot);
   const clampedMetrics = clampRunMetricsToSnapshot(snapshot, {
@@ -252,19 +282,19 @@ export async function handleRunFinish(
     roomRecord,
     existing.roomVersion,
   );
-  const rewardScope = resolveRoomClearRewardScope(roomRecord, existing.roomVersion, auth.user.id);
+  const { rewardScope } = settlement;
   const provisionalScore =
     clampedBody.result === 'completed' ? computeRunScore(snapshot.goal, clampedBody) : 0;
-  const provisionalPreviousBest =
-    clampedBody.result === 'completed'
-      ? await loadBestCompletedRunForUserAndRoomVersion(
-          env,
-          auth.user.id,
-          existing.roomId,
-          rewardScope.versions,
-          snapshot.goal,
-        )
-      : null;
+  // The player's best, the top 10 and the player's row are independent reads: one wait (F333).
+  const [provisionalPreviousBest, currentTopRows, viewerBestRow] = clampedBody.result === 'completed'
+    ? await awaitInOrder([
+        loadBestCompletedRunForUserAndRoomVersion(env, auth.user.id, existing.roomId, rewardScope.versions, snapshot.goal),
+        loadRankedRoomLeaderboardRows(env, snapshot.id, leaderboardSelection.leaderboardFamilyVersions, snapshot.goal, 10),
+        loadViewerRankedRoomLeaderboardRow(
+          env, snapshot.id, leaderboardSelection.leaderboardFamilyVersions, snapshot.goal, auth.user.id,
+        ),
+      ])
+    : [null, [], null] as const;
   const provisionalIsFirstCompletion =
     clampedBody.result === 'completed' && provisionalPreviousBest === null;
   const provisionalCandidateRun: RoomRunRecord | null =
@@ -303,29 +333,9 @@ export async function handleRunFinish(
           isNewPersonalBest: provisionalIsNewPersonalBest,
         }))
       : null;
-  const currentTopRows =
-    clampedBody.result === 'completed'
-      ? await loadRankedRoomLeaderboardRows(
-          env,
-          snapshot.id,
-          leaderboardSelection.leaderboardFamilyVersions,
-          snapshot.goal,
-          10,
-        )
-      : [];
-  const viewerBestRow =
-    clampedBody.result === 'completed'
-      ? await loadViewerRankedRoomLeaderboardRow(
-          env,
-          snapshot.id,
-          leaderboardSelection.leaderboardFamilyVersions,
-          snapshot.goal,
-          auth.user.id,
-        )
-      : null;
   const baseVerificationTrigger =
     clampedBody.result === 'completed'
-      ? createRoomVerificationTrigger(snapshot.goal, {
+      ? buildVerificationTrigger(createRoomVerificationTrigger, snapshot.goal, {
           candidate: {
             attemptId,
             userId: auth.user.id,
@@ -334,35 +344,15 @@ export async function handleRunFinish(
             score: provisionalScore,
             finishedAt,
           },
-          currentTopEntries: currentTopRows.map((row) => ({
-            attemptId: row.attempt_id,
-            userId: row.user_id,
-            elapsedMs: row.elapsed_ms,
-            deaths: row.deaths,
-            score: row.score,
-            finishedAt: row.finished_at,
-            overallRank: row.overall_rank === null ? null : Number(row.overall_rank),
-          })),
-          viewerEntry:
-            viewerBestRow === null
-              ? null
-              : {
-                  attemptId: viewerBestRow.attempt_id,
-                  userId: viewerBestRow.user_id,
-                  elapsedMs: viewerBestRow.elapsed_ms,
-                  deaths: viewerBestRow.deaths,
-                  score: viewerBestRow.score,
-                  finishedAt: viewerBestRow.finished_at,
-                  overallRank:
-                    viewerBestRow.overall_rank === null ? null : Number(viewerBestRow.overall_rank),
-                },
+          currentTopRows,
+          viewerBestRow,
           pointAwardPotential: (provisionalPointAward?.points ?? 0) > 0,
         })
       : null;
   const effectiveTrustTier =
     baseVerificationTrigger === null
       ? 'T0'
-      : await loadEffectiveTrustTier(env, auth.user.id);
+      : await (trustTierRead ?? loadEffectiveTrustTier(env, auth.user.id));
   const verification = await evaluateRunFinalizationVerification(
     baseVerificationTrigger,
     effectiveTrustTier,
@@ -402,7 +392,7 @@ export async function handleRunFinish(
     snapshot, finalBody, auth.user.selectedAvatarId ?? 'default-player', verificationStatus === 'passed', reportedElapsedMs)
     : null;
 
-  await env.DB.batch([
+  const [finalized] = await env.DB.batch<{ results?: unknown[]; meta?: { changes?: number } }>([
     env.DB.prepare(
       `
         UPDATE room_runs
@@ -418,8 +408,10 @@ export async function handleRunFinish(
           verification_status = ?,
           verification_reason = ?,
           insight_deaths_json = ?,
-          insight_play_ms = ?
-        WHERE attempt_id = ?
+          insight_play_ms = ?,
+          ${nextFinalizeSeqSql('room_runs')}
+        WHERE attempt_id = ? AND result = 'active'
+        RETURNING attempt_id
       `
     ).bind(
       finishedAt,
@@ -440,81 +432,110 @@ export async function handleRunFinish(
       source: 'room', userId: auth.user.id, deaths: finalBody.deaths, createdAt: finishedAt,
     })] : []),
   ]);
-
-  if (verification.audit) {
-    await recordRunVerificationAudit(env, {
-      attemptId,
-      kind: 'room',
-      ...verification.audit,
-      // Unverified (skipped) runs keep their recording so they can be reviewed later.
-      trace: finalBody.verificationTrace ?? null,
-      createdAt: finishedAt,
-    });
+  if (!finalizeStatementWon(finalized)) {
+    // A resend raced this request and finalized first: replay its answer. Its awards are keyed.
+    const stored = await loadRoomRunByAttemptId(env, attemptId);
+    assertReplayableRunFinish(stored, body.result, ROOM_RUN_FINISH_MESSAGES);
+    return settleResend(stored);
   }
 
-  if (verificationStatus === 'failed') {
-    throw new HttpError(
-      409,
-      verificationReason === 'missing_trace'
-        ? 'Missing verification trace for ranked run.'
-        : verificationReason === 'trace_client_outdated'
-          ? 'Client update required for ranked verification.'
-          : 'Ranked run could not be verified.',
-    );
-  }
+  const verificationError = runVerificationError(verificationStatus, verificationReason, ROOM_RUN_FINISH_MESSAGES);
+  // The audit row and the reward step write different rows, so they share a wait (F333). The reply
+  // waits for both, and either failing still answers with an error the client retries.
+  await runPastDisconnect(executionContext, attemptId, (async () => {
+    await awaitInOrder([
+      verification.audit && recordRunVerificationAudit(env, {
+        attemptId,
+        kind: 'room',
+        ...verification.audit,
+        // Unverified (skipped) runs keep their recording so they can be reviewed later.
+        trace: finalBody.verificationTrace ?? null,
+        createdAt: finishedAt,
+      }),
+      verificationError ? null : settleRoomRunFinish(env, executionContext, { ...settlement, result: finalBody.result, completedGhost }),
+    ]);
+  })());
+  if (verificationError) throw verificationError;
+  return noContentResponse(request);
+}
 
-  if (verificationStatus === 'timeout') {
-    throw new HttpError(409, 'Ranked run verification timed out.');
-  }
+interface RoomRunSettlement {
+  attemptId: string;
+  userId: string;
+  goal: RoomGoal;
+  roomRecord: Awaited<ReturnType<typeof loadRoomRankingRecord>>;
+  /** The run's room and version (fixed at start), and the result its finalize stored. */
+  roomId: string;
+  roomVersion: number;
+  result: RoomRunRecord['result'];
+  rewardScope: ReturnType<typeof resolveRoomClearRewardScope>;
+  /** Only the request that finalized the run holds its built ghost; a resend skips the PB ghost. */
+  completedGhost: Awaited<ReturnType<typeof buildVerifiedRoomGhost>> | null;
+}
 
-  const finalizedRun = await loadRoomRunByAttemptId(env, attemptId);
+/**
+ * Everything after the finalize commit: discovery, reward flags, the PB ghost, the daily clear and
+ * the deferred rewards. Every award is keyed, so a recent resend runs this again when an earlier try
+ * threw or was cut off after the commit; its run_settlements row goes last, as the marker (F351).
+ */
+async function settleRoomRunFinish(
+  env: Env,
+  executionContext: WorkerExecutionContextLike | undefined,
+  { attemptId, userId, goal, roomRecord, roomId, roomVersion, result, rewardScope, completedGhost }: RoomRunSettlement,
+): Promise<void> {
+  // Only clears stored before this one count, so a late resend and a later clear agree on "first".
+  // The earlier clears load beside the run and are filtered by its stored finalize_seq (F333).
+  const reload = loadRoomRunByAttemptId(env, attemptId);
+  const order = result === 'completed' ? reload.then((run) => run && storedRunFinishOrder(run)) : null;
+  const scopeIsVersion = rewardScope.versions.length === 1 && rewardScope.versions[0] === roomVersion;
+  const [finalizedRun, previousBest, scopeBest] = await awaitInOrder([
+    reload,
+    order && loadBestCompletedRunForUserAndRoomVersion(env, userId, roomId, roomVersion, goal, attemptId, order),
+    order && !scopeIsVersion
+      ? loadBestCompletedRunForUserAndRoomVersion(env, userId, roomId, rewardScope.versions, goal, attemptId, order)
+      : null,
+  ]);
   if (!finalizedRun) {
     throw new HttpError(500, 'Failed to reload finalized run.');
   }
+  // The stored finish time keeps a resend's day and week reward keys on the original clear.
+  const finishedAt = finalizedRun.finishedAt ?? new Date().toISOString();
   await scheduleDiscoveryMetrics(executionContext, recordDiscoveryRunPlayer(
-    env, 'room:' + existing.roomId, existing.roomVersion, auth.user.id, { ...finalBody, finishedAt },
+    env, 'room:' + finalizedRun.roomId, finalizedRun.roomVersion, userId,
+    { ...finalizedRun, elapsedMs: finalizedRun.elapsedMs ?? 0, finishedAt },
   ));
 
   // The personal-best ghost follows this exact version; rewards follow the reward scope.
   let isNewPersonalBest = false;
   let rewardFlags = { isFirstCompletion: false, isNewPersonalBest: false };
-  if (finalizedRun.result === 'completed') {
-    const goal = snapshot.goal;
+  if (finalizedRun.result === 'completed' && order) {
     const isBetterThan = (best: RoomRunRecord | null) => best === null
       || sortCompletedRunsForLeaderboard([finalizedRun, best], goal)[0]?.attemptId === finalizedRun.attemptId;
-    const previousBest = await loadBestCompletedRunForUserAndRoomVersion(
-      env,
-      auth.user.id,
-      finalizedRun.roomId,
-      finalizedRun.roomVersion,
-      snapshot.goal,
-      finalizedRun.attemptId
-    );
     isNewPersonalBest = isBetterThan(previousBest);
-    const rewardBest = rewardScope.versions.length === 1 && rewardScope.versions[0] === finalizedRun.roomVersion
-      ? previousBest
-      : await loadBestCompletedRunForUserAndRoomVersion(
-          env, auth.user.id, finalizedRun.roomId, rewardScope.versions, snapshot.goal, finalizedRun.attemptId,
-        );
+    const rewardBest = scopeIsVersion ? previousBest : scopeBest;
     rewardFlags = scopeClearRewardFlags(rewardScope, {
       isFirstCompletion: rewardBest === null,
       isNewPersonalBest: isBetterThan(rewardBest),
     });
   }
 
-  if (isNewPersonalBest && completedGhost) {
-    try {
-      await saveBuiltPersonalBestGhost(env, finalizedRun, completedGhost);
-    } catch {
-      console.error(JSON.stringify({ event: 'run-ghost-save-failed', attemptId }));
-    }
-  }
-  if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
-  await awardRunDailyClear(env, finalizedRun,
-    { type: 'room', id: finalizedRun.roomId, version: finalizedRun.roomVersion }, finishedAt);
-  const goal = snapshot.goal;
+  // The PB ghost and the daily clear write different rows; the reply waits for both (F333).
+  await awaitInOrder([
+    (async () => {
+      if (isNewPersonalBest && completedGhost) {
+        try {
+          await saveBuiltPersonalBestGhost(env, finalizedRun, completedGhost);
+        } catch {
+          console.error(JSON.stringify({ event: 'run-ghost-save-failed', attemptId }));
+        }
+      }
+      if (completedGhost) await scheduleRunGhostArchive(env, executionContext, attemptId);
+    })(),
+    awardRunDailyClear(env, finalizedRun,
+      { type: 'room', id: finalizedRun.roomId, version: finalizedRun.roomVersion }, finishedAt),
+  ]);
   await scheduleRunRewards(executionContext, attemptId, async () => {
-    await awardRunFinalizePoints(env, finalizedRun, rewardFlags);
+    await awardRunFinalizePoints(env, finalizedRun, rewardFlags, finishedAt);
     const creatorPointEvent =
       finalizedRun.result === 'completed'
         ? await awardRoomCreatorCompletionPoints(env, {
@@ -524,6 +545,7 @@ export async function handleRunFinish(
             finisherUserId: finalizedRun.userId,
             attemptId: finalizedRun.attemptId,
             rewardVersions: rewardScope.versions,
+            createdAt: finishedAt,
           })
         : null;
     if (creatorPointEvent) {
@@ -539,9 +561,10 @@ export async function handleRunFinish(
       ownContent: rewardScope.ownContent,
     });
     scheduleActivityEmails(env, executionContext, finalizedRun.attemptId);
-    await upsertUserStats(env, auth.user.id);
+    await upsertUserStats(env, userId);
+    // Last: runNeedsResettle reads this row as "every reward above finished".
+    await recordRunSettlement(env, 'room', attemptId);
   });
-  return noContentResponse(request);
 }
 
 export async function handleRoomLeaderboard(
@@ -554,28 +577,38 @@ export async function handleRoomLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read room leaderboards');
-  const authenticated = auth !== null;
   const fresh = url.searchParams.get('fresh') === '1';
-  const loadResponse = async () => {
-    const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
-    const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
-      viewerUserId: auth?.user.id ?? null,
-      viewerWalletAddress: auth?.user.walletAddress ?? null,
-      snapshotVersions: [version],
-    }));
-    const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
-    if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
-    const leaderboard = await timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
-      env, record, selection, limit, auth?.user.id ?? null,
-    ));
-    timing.setDiagnostic('cache', fresh ? 'fresh' : authenticated ? 'private-20' : 'public-20');
-    return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': fresh ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated || fresh ? undefined : context, loadResponse);
+  const coordinates = getCoordinatesFromRequest(roomId, url.searchParams);
+  const version = parseOptionalPositiveIntegerQueryParam(url.searchParams, 'version');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  // Resolve access and lineage on every request, including a warmed standings hit.
+  const record = await timing.measure('room_record', () => loadRoomRankingRecord(env, roomId, coordinates, {
+    viewerUserId: auth?.user.id ?? null,
+    viewerWalletAddress: auth?.user.walletAddress ?? null,
+    viewerIsAdmin: auth?.isAdmin ?? false,
+    snapshotVersions: [version],
+  }));
+  const selection = timing.measureSync('lineage', () => resolveAggregatedRoomLeaderboardSelection(record, version));
+  if (!selection.snapshot.goal) throw new HttpError(404, 'This room version does not have a leaderboard goal.');
+  // Keep non-prime Worlds out of the shared cache, including future private/school Worlds.
+  const cached = !fresh && !record.world && hasPublicCache(context)
+    ? timing.measure('standings', () => loadCachedRoomStandings(
+      request, env, selection, limit, auth?.user.id ?? null, context!,
+    )) : null;
+  const [leaderboard, cacheResult] = await Promise.all([
+    timing.measure('leaderboard', () => buildRoomLeaderboardResponse(
+      env, record, selection, limit, auth?.user.id ?? null, cached?.then(result => result.standings),
+    )),
+    cached,
+  ]);
+  const status = cacheResult?.status ?? 'bypass';
+  timing.setDiagnostic('cache', fresh ? 'fresh' : status);
+  return timedJsonResponse(request, leaderboard, timing, {
+    headers: {
+      'Cache-Control': auth || fresh || record.world ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': status,
+    },
+  });
 }
 
 export async function handleRoomDifficultyVote(
@@ -672,24 +705,18 @@ export async function handleRoomDiscovery(
     difficultyFilter === null
     && sort === 'newest'
     && parseBooleanQueryFlag(url.searchParams.get('includeGoalLessRooms'));
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
-      env,
-      difficultyFilter,
-      limit,
-      sort,
-      includeGoalLessRooms,
-      auth?.user.id ?? null,
-      timing,
-      cursorOffset,
-    ));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
-    return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
-    });
-  };
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const publicCache = new DiscoveryPublicCache(request, env, context, fresh);
+  const response = await timing.measure('discovery', () => loadRoomDiscoveryResponse(
+    env, difficultyFilter, limit, sort, includeGoalLessRooms, auth?.user.id ?? null, timing, cursorOffset, publicCache,
+  ));
+  timing.setDiagnostic('cache', fresh ? 'fresh' : publicCache.status);
+  return timedJsonResponse(request, response, timing, {
+    headers: {
+      'Cache-Control': auth || fresh ? 'private, no-store' : 'public, max-age=20',
+      'X-WAMP-Cache': publicCache.status,
+    },
+  });
 }
 
 function decodeRoomDiscoveryCursor(value: string | null, sort: RoomDiscoverySort): number {
@@ -723,17 +750,15 @@ export async function handleBuilderDiscovery(
   const rawSort = url.searchParams.get('sort');
   const sort = rawSort && rawSort.trim() ? parseBuilderDiscoverySortOrThrow(rawSort) : 'alphabet';
   const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 100, 1, 200);
-  const authenticated = auth !== null;
   const loadResponse = async () => {
     const response = await timing.measure('builders', () => loadBuilderDiscoveryResponse(env, limit, sort));
-    timing.setDiagnostic('cache', authenticated ? 'private' : 'public-20');
+    timing.setDiagnostic('cache', 'public-20');
     return timedJsonResponse(request, response, timing, {
-      headers: { 'Cache-Control': authenticated ? 'private, no-store' : 'public, max-age=20' },
+      headers: { 'Cache-Control': 'public, max-age=20' },
     });
   };
-  return authenticated
-    ? loadAnonymousPublicCache(request, undefined, loadResponse)
-    : loadAnonymousPublicCache(request, context, loadResponse);
+  // The builder list is viewer-independent; auth and scope checks still run before cache hits.
+  return loadAnonymousPublicCache(request, context, loadResponse);
 }
 
 function parseBooleanQueryFlag(value: string | null): boolean {
@@ -762,21 +787,33 @@ export async function handleGlobalLeaderboard(
   const timing = new ServerTiming();
   const auth = await timing.measure('auth', () => loadOptionalRequestAuth(env, request));
   requireOptionalScope(auth, 'leaderboards:read', 'read global leaderboards');
-  const authenticated = auth !== null;
-  const loadResponse = async () => {
-    const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
-    const leaderboard = await timing.measure(
-      'leaderboard',
-      () => buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window),
-    );
-    const cache = window === 'week' ? 'private, no-store' : authenticated ? 'private, max-age=20' : 'public, max-age=20';
-    timing.setDiagnostic('cache', window === 'week' ? 'no-store' : authenticated ? 'private-20' : 'public-20');
+  const limit = parsePositiveIntegerQueryParam(url.searchParams, 'limit', 10, 1, 50);
+  const fresh = url.searchParams.get('fresh') === '1';
+  const loadFullResponse = async () => {
+    const leaderboard = await timing.measure('leaderboard', () =>
+      buildGlobalLeaderboardResponse(env, limit, auth?.user.id ?? null, window));
+    timing.setDiagnostic('cache', 'fresh');
     return timedJsonResponse(request, leaderboard, timing, {
-      headers: { 'Cache-Control': cache },
+      headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   };
-  if (window === 'week') return loadResponse();
-  return loadAnonymousPublicCache(request, authenticated ? undefined : context, loadResponse);
+  // Weekly rollovers, explicit refreshes and unavailable caches retain one fresh snapshot.
+  if (window === 'week' || fresh || (auth && !hasPublicCache(context))) return loadFullResponse();
+  const publicResponse = await loadAnonymousPublicCache(request, context, async () => {
+    const leaderboard = await timing.measure('leaderboard', () => buildGlobalLeaderboardResponse(env, limit, null, window));
+    timing.setDiagnostic('cache', 'public-20');
+    return timedJsonResponse(request, leaderboard, timing, { headers: { 'Cache-Control': 'public, max-age=20' } });
+  });
+  if (!auth) return publicResponse;
+  const base = await publicResponse.json() as GlobalLeaderboardResponse;
+  const viewer = await timing.measure('viewer', () => loadGlobalLeaderboardViewer(env, auth.user.id));
+  // A new score/rank or changed adjacent player must not contradict a stale top list.
+  if (!canReuseGlobalLeaderboardBase(base, viewer, auth.user.id, limit)) return loadFullResponse();
+  const cache = publicResponse.headers.get('X-WAMP-Cache') ?? 'bypass';
+  timing.setDiagnostic('cache', `public-${cache}-private-viewer`);
+  return timedJsonResponse(request, { ...base, ...viewer }, timing, {
+    headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': cache },
+  });
 }
 
 export function resolveRoomSnapshotForVersion(
@@ -794,7 +831,7 @@ export function resolveRoomSnapshotForVersion(
 export async function loadRoomRunByAttemptId(
   env: Env,
   attemptId: string
-): Promise<RoomRunRecord | null> {
+): Promise<(RoomRunRecord & { finalizeSeq: number | null }) | null> {
   const row = await env.DB.prepare(
     `
       SELECT
@@ -819,7 +856,8 @@ export async function loadRoomRunByAttemptId(
         verification_status,
         verification_reason,
         verification_nonce,
-        verification_snapshot_hash
+        verification_snapshot_hash,
+        finalize_seq
       FROM room_runs
       WHERE attempt_id = ?
       LIMIT 1
@@ -828,102 +866,8 @@ export async function loadRoomRunByAttemptId(
     .bind(attemptId)
     .first<RoomRunRow>();
 
-  return row ? mapRoomRunRow(row) : null;
-}
-
-export async function loadCompletedRoomRuns(
-  env: Env,
-  roomId: string,
-  roomVersion: number
-): Promise<RoomRunRecord[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        attempt_id,
-        room_id,
-        room_x,
-        room_y,
-        room_version,
-        goal_type,
-        goal_json,
-        user_id,
-        user_display_name,
-        started_at,
-        finished_at,
-        result,
-        elapsed_ms,
-        deaths,
-        score,
-        collectibles_collected,
-        enemies_defeated,
-        checkpoints_reached,
-        verification_status,
-        verification_reason,
-        verification_nonce,
-        verification_snapshot_hash
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version = ?
-        AND result = 'completed'
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
-    `
-  )
-    .bind(roomId, roomVersion)
-    .all<RoomRunRow>();
-
-  return result.results.map(mapRoomRunRow);
-}
-
-export async function loadCompletedRoomRunsForVersions(
-  env: Env,
-  roomId: string,
-  roomVersions: number[]
-): Promise<RoomRunRecord[]> {
-  if (roomVersions.length === 0) {
-    return [];
-  }
-
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        attempt_id,
-        room_id,
-        room_x,
-        room_y,
-        room_version,
-        goal_type,
-        goal_json,
-        user_id,
-        user_display_name,
-        started_at,
-        finished_at,
-        result,
-        elapsed_ms,
-        deaths,
-        score,
-        collectibles_collected,
-        enemies_defeated,
-        checkpoints_reached,
-        verification_status,
-        verification_reason,
-        verification_nonce,
-        verification_snapshot_hash
-      FROM room_runs
-      WHERE room_id = ?
-        AND room_version IN (
-          SELECT CAST(value AS INTEGER)
-          FROM json_each(?)
-        )
-        AND result = 'completed'
-        AND ${sqlIsVerificationAccepted('room_runs')}
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('room_runs.user_id')}
-    `
-  )
-    .bind(roomId, JSON.stringify(roomVersions))
-    .all<RoomRunRow>();
-
-  return result.results.map(mapRoomRunRow);
+  // Its place in commit order (F351) comes with the run, for the reward step's first-clear check.
+  return row ? { ...mapRoomRunRow(row), finalizeSeq: row.finalize_seq ?? null } : null;
 }
 
 export function mapRoomRunRow(row: RoomRunRow): RoomRunRecord {

@@ -8,7 +8,6 @@ import {
   expandWorldTileManifestCoordinates,
   getWorldTileRoomBounds,
   worldTileCoordinateKey,
-  type WorldTileAddress,
   type WorldTileBounds,
   type WorldTileConfig,
   type WorldTileCoordinate,
@@ -69,7 +68,10 @@ export interface WorldTileQueueBinding {
 export async function loadWorldTileConfig(
   env: WorldTileServiceEnv,
 ): Promise<WorldTileConfig> {
-  const activeRenderer = await loadActiveWorldTileRendererVersion(env);
+  const [activeRenderer, blockedCustomSpriteIds] = await Promise.all([
+    loadActiveWorldTileRendererVersion(env),
+    loadBlockedCustomSpriteIds(env),
+  ]);
   const publicBaseUrl = normalizeWorldTilePublicBaseUrl(env.WORLD_TILE_PUBLIC_BASE_URL);
   const assetContractMatches = activeRenderer?.asset_contract_hash
     === WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH;
@@ -83,7 +85,14 @@ export async function loadWorldTileConfig(
     activeRendererVersion: activeRenderer?.version ?? null,
     activeRendererAssetContractHash: activeRenderer?.asset_contract_hash ?? null,
     expectedRendererAssetContractHash: WORLD_TILE_AUTHORING_ASSET_CONTRACT_HASH,
+    blockedCustomSpriteIds,
   };
+}
+
+async function loadBlockedCustomSpriteIds(env: WorldTileServiceEnv): Promise<string[]> {
+  const rows = await env.DB.prepare("SELECT id FROM custom_sprites WHERE status = 'blocked' ORDER BY id LIMIT 1000")
+    .all<{ id: string }>();
+  return rows.results.map((row) => row.id);
 }
 
 export async function loadWorldTileManifest(
@@ -375,13 +384,4 @@ function compareRoomIdsByCoordinates(left: string, right: string): number {
   const [leftX, leftY] = left.split(',').map(Number);
   const [rightX, rightY] = right.split(',').map(Number);
   return leftY - rightY || leftX - rightX || left.localeCompare(right);
-}
-
-export function worldTileAddressFromOutbox(row: WorldRenderTileOutboxRow): WorldTileAddress {
-  return {
-    rendererVersion: row.renderer_version,
-    level: row.level,
-    x: Number(row.tile_x),
-    y: Number(row.tile_y),
-  };
 }

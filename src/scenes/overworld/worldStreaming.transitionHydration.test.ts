@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultRoomSnapshot,
@@ -51,7 +52,7 @@ describe('world streaming transition hydration', () => {
     let exactRoom: RoomSnapshot | null = null;
     const getRoomSnapshot = vi.fn(() => overview);
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype) as Record<string, unknown>,
+      createWorldStreamingHarness() as Record<string, unknown>,
       {
         transientRoomOverridesById: new Map(),
         draftRoomsById: new Map(),
@@ -283,7 +284,7 @@ describe('world streaming transition hydration', () => {
     const queueUnretainedPredictedRoomTeardown = vi.fn();
     const requestPlayableRoomSnapshotForTransition = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: {
           scene: { time: { now: 0 } },
@@ -359,7 +360,7 @@ describe('world streaming transition hydration', () => {
     const beginFullRoomPreparation = vi.fn(() => preparation);
     const requestFullRoomPreparationActivation = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: {
           scene: { time: { now: 0 } },
@@ -417,7 +418,7 @@ describe('world streaming transition hydration', () => {
       independentOfPredictedIntent: true,
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
         portalPreparationRoomId: roomId,
@@ -514,7 +515,7 @@ describe('world streaming transition hydration', () => {
         queuedJob: null,
       };
       const harness = Object.assign(
-        Object.create(OverworldWorldStreamingController.prototype),
+        createWorldStreamingHarness(),
         {
           options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
           portalPreparationRoomId: roomId,
@@ -549,7 +550,7 @@ describe('world streaming transition hydration', () => {
       queuedJob: null,
     };
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
         portalPreparationRoomId: roomId,
@@ -599,7 +600,7 @@ describe('world streaming transition hydration', () => {
     });
     const queuePreparedCustomTiles = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         destroyed: false,
         options: {
@@ -692,7 +693,7 @@ describe('world streaming transition hydration', () => {
     };
     const cancelFullRoomPreparation = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         options: { getCurrentRoomCoordinates: () => ({ x: 0, y: 0 }) },
         portalPreparationRoomId: roomId,
@@ -740,7 +741,7 @@ describe('world streaming transition hydration', () => {
     const preparePlayableRoomForTransition = vi.fn(() => false);
     const requestPlayableRoomSnapshotForTransition = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype),
+      createWorldStreamingHarness(),
       {
         portalPreparationRoomId: null,
         predictedPreparationRoomId: '1,0',
@@ -777,7 +778,7 @@ function createPrefetchHarness(
     previewUpdatedAt: null,
   } as WorldRoomSummary;
   return Object.assign(
-    Object.create(OverworldWorldStreamingController.prototype),
+    createWorldStreamingHarness(),
     {
       options: {
         scene: { time: { now: 0 } },

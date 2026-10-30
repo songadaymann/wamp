@@ -52,16 +52,6 @@ export class FullRoomPreparationLifecycleCoordinator {
     return preparation.activationRequested;
   }
 
-  inheritActivation(
-    preparation: FullRoomPreparationLifecycleState,
-    standardActivationRequested: boolean,
-    portalActivationRequested: boolean,
-  ): void {
-    preparation.standardActivationRequested ||= standardActivationRequested;
-    preparation.portalActivationRequested ||= portalActivationRequested;
-    this.syncActivation(preparation);
-  }
-
   markReady(preparation: FullRoomPreparationLifecycleState): boolean {
     preparation.phase = 'ready';
     return preparation.activationRequested;

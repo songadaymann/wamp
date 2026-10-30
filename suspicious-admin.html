@@ -431,9 +431,31 @@
 
       <section class="panel stack">
         <div class="queue-title">
+          <h2>Player Reports</h2>
+          <select id="reports-filter" aria-label="Show reports">
+            <option value="open">Open</option>
+            <option value="resolved">Handled</option>
+            <option value="dismissed">Dismissed</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div id="reports-status" class="status">Use an admin key to load player reports.</div>
+        <div id="reports-list" class="audit-list"></div>
+      </section>
+
+      <section class="panel stack">
+        <div class="queue-title">
+          <h2>Guest Rooms</h2>
+        </div>
+        <div id="guest-rooms-status" class="status">Use an admin key to load guest rooms.</div>
+        <div id="guest-rooms-list" class="audit-list"></div>
+      </section>
+
+      <section class="panel stack">
+        <div class="queue-title">
           <h2>Recent Invalidations</h2>
           <a href="/launch-admin.html">Open Launch Admin</a>
-          <a href="/background-admin.html">Open Background Admin</a>
+          <a href="/launch-admin.html#photo-review">Open Background Admin</a>
         </div>
         <div id="recent-invalidations" class="audit-list">
           <div class="empty">No invalidations yet.</div>
@@ -495,6 +517,37 @@
                 <button id="execute-button" type="button" class="danger">Execute Invalidation</button>
               </div>
               <div id="action-status" class="status"></div>
+            </section>
+
+            <section id="building-card" class="card stack" hidden>
+              <h3>Building Controls</h3>
+              <div class="field">
+                <label for="building-reason-input">Moderation Reason</label>
+                <textarea id="building-reason-input" placeholder="Why this account is being suspended or its edits undone."></textarea>
+              </div>
+              <div class="actions">
+                <button id="building-suspend-button" type="button" class="danger">Suspend Account</button>
+              </div>
+              <div class="field">
+                <label for="building-since-input">Undo this user's edits to other builders' rooms since</label>
+                <input id="building-since-input" type="datetime-local" />
+              </div>
+              <div class="actions">
+                <button id="building-preview-button" type="button" class="secondary">Preview Room Restores</button>
+                <button id="building-revert-button" type="button" class="danger" disabled>Restore Rooms</button>
+              </div>
+              <div id="building-status" class="status"></div>
+              <div id="building-rooms" class="audit-list"></div>
+              <div class="field">
+                <label for="building-version-room-input">Hide one published version of a room (room id like 3,-2, then the version number)</label>
+                <input id="building-version-room-input" type="text" placeholder="3,-2" />
+                <input id="building-version-number-input" type="number" min="1" step="1" placeholder="Version" />
+              </div>
+              <div class="actions">
+                <button id="building-version-hide-button" type="button" class="danger">Hide Version</button>
+                <button id="building-version-show-button" type="button" class="secondary">Show Version</button>
+              </div>
+              <div id="building-version-status" class="status"></div>
             </section>
 
             <section class="card stack">

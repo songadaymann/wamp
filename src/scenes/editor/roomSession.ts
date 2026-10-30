@@ -1,3 +1,5 @@
+import { hasConnectedCryptoWallet } from '../../mint/walletGate';
+import { normalizeRoomCryptoDetails } from '../../persistence/roomCryptoDetails';
 import {
   DEFAULT_ROOM_COORDINATES,
   DEFAULT_ROOM_ID,
@@ -6,18 +8,18 @@ import {
   createLocalRoomRepository,
   isRoomApiError,
   isRoomSnapshotBlank,
+  isRoomMinted,
   type RoomCoordinates,
   type RoomPermissions,
   type RoomRecord,
   type RoomSnapshot,
+  type RoomSummary,
   type RoomVersionRecord,
 } from '../../persistence/roomRepository';
 import type { RoomRepository } from '../../persistence/roomRepository';
 import {
   getAuthDebugState,
-  promptForSignIn,
   refreshAuthSession,
-  sendPreparedWalletTransaction,
 } from '../../auth/client';
 import {
   requestGuestBuilderClaim,
@@ -26,22 +28,24 @@ import {
 import { saveGuestRoomDraft } from '../../guestRooms/client';
 import { clearLocalRoomStorageEntry } from '../../persistence/browserStorage';
 import { readRoomDraftBackupMetadata, writeRoomDraftBackup } from '../../persistence/localDraftBackup';
-import { ROOM_EDIT_CONFLICT_MESSAGE } from '../../persistence/roomEditConflict';
+import { isRoomEditConflict } from '../../persistence/roomEditConflict';
+import { RoomPublicationSubmissionError } from '../../persistence/roomPublicationSubmission';
 import {
-  buildExplorerTxUrl,
   formatWalletAddress,
 } from '../../mint/roomOwnership';
-import { buildRoomTokenMetadata } from '../../mint/roomMetadata';
-import { renderRoomSnapshotToPngDataUrl } from '../../mint/roomMetadataRender';
 import {
   hideBusyOverlay,
-  showBusyOverlay,
   showBusyError,
-  updateBusyOverlay,
 } from '../../ui/appFeedback';
 import type { OverworldPlaySceneData } from '../sceneData';
+import type { RoomCollectionStageOptions, RoomCollectionFlowHost } from './roomCollectionFlow';
+import { RoomWalletActions } from './roomWalletActions';
+import type { PendingRoomWallet } from '../../mint/pendingRoomWallet';
+import type { RoomWalletRecoveryResult } from '../../mint/roomWalletRecovery';
 
 interface EditorRoomSessionHost {
+  isActive?(): boolean;
+  events?: RoomCollectionFlowHost['events'];
   applyRoomSnapshot(room: RoomSnapshot): void;
   exportRoomSnapshot(): RoomSnapshot;
   getPublishValidationError(): string | null;
@@ -50,6 +54,8 @@ interface EditorRoomSessionHost {
   getLastDirtyAt(): number;
   refreshUi(): void;
   refreshSurroundingRoomPreviews(): void;
+  /** Every draft the server accepted, autosaves included, so a course cell's session copy follows it (F379). */
+  onDraftSaved?(record: RoomRecord): void;
 }
 
 export interface EditorHistoryState {
@@ -94,10 +100,6 @@ interface AutoSaveBackoff {
   backedUpDirtyAt: number;
 }
 
-function isRoomEditConflict(error: unknown): boolean {
-  return isRoomApiError(error) && error.status === 409 && error.message === ROOM_EDIT_CONFLICT_MESSAGE;
-}
-
 function isPermanentSaveError(error: unknown): boolean {
   if (!isRoomApiError(error)) {
     return false;
@@ -136,6 +138,10 @@ export class EditorRoomSession {
   private historyLoaded = false;
   private claimerDisplayName: string | null = null;
   private claimedAt: string | null = null;
+  private protectedRoom = false;
+  private ownershipViewerKey: string | null = null;
+  private ownershipViewerUserId: string | null = null;
+  private ownershipReadAbort: AbortController | null = null;
   private mintedChainId: number | null = null;
   private mintedContractAddress: string | null = null;
   private mintedTokenId: string | null = null;
@@ -160,12 +166,37 @@ export class EditorRoomSession {
     linkLabel: '',
     linkHref: null,
   };
+  private readonly walletActions: RoomWalletActions;
   private readonly localRoomRepository: RoomRepository = createLocalRoomRepository();
 
   constructor(
     private readonly roomRepository: RoomRepository,
     private readonly host: EditorRoomSessionHost,
-  ) {}
+  ) {
+    const session = this;
+    this.walletActions = new RoomWalletActions(roomRepository, {
+      isActive: () => host.isActive?.() ?? true, events: host.events,
+      get roomId() { return session.roomId; },
+      get roomCoordinates() { return session.roomCoordinates; },
+      get publishedVersion() { return session.publishedVersion; },
+      get publishedRoomSnapshot() { return session.publishedRoomSnapshot; },
+      get roomPermissions() { return session.roomPermissions; },
+      get mintedTokenId() { return session.mintedTokenId; },
+      get mintedChainId() { return session.mintedChainId; },
+      get mintedContractAddress() { return session.mintedContractAddress; },
+      get sessionGeneration() { return session.sessionGeneration; },
+      get saveInFlight() { return session.saveInFlight; },
+      set saveInFlight(value) { session.saveInFlight = value; },
+      getRoomDirty: () => host.getRoomDirty(),
+      applyRecovery: summary => session.applyWalletRecovery(summary),
+      refreshUi: () => host.refreshUi(),
+      canRefreshMintMetadata: () => session.canRefreshMintMetadata(),
+      publishRoom: status => session.publishRoom(status),
+      syncRoomMetadata: record => session.syncRoomMetadata(record, host.getRoomDirty()),
+      setStatusText: text => session.setStatusText(text),
+      setStatusDetails: status => session.setStatusDetails(status),
+    });
+  }
 
   get currentRoomId(): string {
     return this.roomId;
@@ -223,10 +254,6 @@ export class EditorRoomSession {
     return this.claimerDisplayName;
   }
 
-  get currentClaimedAt(): string | null {
-    return this.claimedAt;
-  }
-
   get currentMintedChainId(): number | null {
     return this.mintedChainId;
   }
@@ -234,6 +261,8 @@ export class EditorRoomSession {
   get currentMintedContractAddress(): string | null {
     return this.mintedContractAddress;
   }
+
+  get currentIsProtected(): boolean { return this.protectedRoom; }
 
   get currentMintedTokenId(): string | null {
     return this.mintedTokenId;
@@ -249,6 +278,11 @@ export class EditorRoomSession {
 
   get isSaveInFlight(): boolean {
     return this.saveInFlight;
+  }
+
+  /** The server draft version this editor last loaded or saved; null for a room it has not loaded from the server. */
+  get currentServerDraftUpdatedAt(): string | null {
+    return this.serverDraftUpdatedAt;
   }
 
   private get saveInFlight(): boolean {
@@ -296,6 +330,7 @@ export class EditorRoomSession {
   }
 
   reset(): void {
+    this.cancelOwnershipPresentation();
     this.sessionGeneration += 1;
     this.serverDraftUpdatedAt = null;
     this.editConflictPending = false;
@@ -320,11 +355,13 @@ export class EditorRoomSession {
     this.claimedAt = null;
     this.mintedChainId = null;
     this.mintedContractAddress = null;
+    this.protectedRoom = false;
     this.mintedTokenId = null;
     this.mintedOwnerWalletAddress = null;
     this.mintedOwnerSyncedAt = null;
     this.mintedMetadataRoomVersion = null;
     this.mintedMetadataUpdatedAt = null;
+    this.walletActions.reset();
     this.saveInFlight = false;
     this.persistenceStatus = {
       text: '',
@@ -339,8 +376,79 @@ export class EditorRoomSession {
     return this.editConflictPending;
   }
 
+  captureContext(): () => boolean {
+    const generation = this.sessionGeneration, roomId = this.roomId;
+    return () => !this.isStale(generation) && this.roomId === roomId;
+  }
+
+  get hasPendingArtworkConfirmation(): boolean { return this.walletActions.hasPendingArtworkConfirmation; }
+  get hasPendingWalletConfirmation(): boolean { return this.walletActions.hasPendingWalletConfirmation; }
+
+  acceptWalletRecovery(pending: PendingRoomWallet, result: RoomWalletRecoveryResult): void {
+    if (pending.roomId !== this.roomId || this.saveInFlight && !this.walletActions.ownsPending(pending.id)) return;
+    this.applyWalletRecovery(result.summary);
+    this.walletActions.acceptRecovery(pending, result);
+  }
+
+  /** A fresh chain check updates rights/artwork without replacing a builder's draft or timestamps. */
+  applyWalletRecovery(summary: RoomSummary): void {
+    if (summary.id !== this.roomId || summary.coordinates.x !== this.roomCoordinates.x
+      || summary.coordinates.y !== this.roomCoordinates.y || summary.world?.worldId) return;
+    summary = normalizeRoomCryptoDetails(summary, hasConnectedCryptoWallet());
+    this.roomPermissions = { ...summary.permissions };
+    this.protectedRoom = isRoomMinted(summary);
+    this.mintedChainId = summary.mintedChainId;
+    this.mintedContractAddress = summary.mintedContractAddress;
+    this.mintedTokenId = summary.mintedTokenId;
+    this.mintedOwnerWalletAddress = summary.mintedOwnerWalletAddress;
+    this.mintedOwnerSyncedAt = summary.mintedOwnerSyncedAt;
+    this.mintedMetadataRoomVersion = summary.mintedMetadataRoomVersion;
+    this.mintedMetadataUpdatedAt = summary.mintedMetadataUpdatedAt;
+    this.host.refreshUi();
+  }
+
   private isStale(generation: number): boolean {
     return generation !== this.sessionGeneration;
+  }
+
+  private ownershipViewerContext(): string {
+    const auth = getAuthDebugState();
+    return JSON.stringify([this.sessionGeneration, this.roomId, auth.user?.id, hasConnectedCryptoWallet(), auth.walletAddress]);
+  }
+
+  cancelOwnershipPresentation(): void {
+    this.ownershipReadAbort?.abort(); this.ownershipReadAbort = null;
+    this.ownershipViewerKey = null;
+  }
+
+  /** A connection/account change updates ownership details without replacing a dirty draft. */
+  async refreshOwnershipPresentation(): Promise<void> {
+    if (!this.roomUpdatedAt || !this.protectedRoom) return;
+    const key = this.ownershipViewerContext();
+    if (key === this.ownershipViewerKey) return;
+    this.ownershipViewerKey = key;
+    this.ownershipReadAbort?.abort();
+    const abort = new AbortController(); this.ownershipReadAbort = abort;
+    const userId = getAuthDebugState().user?.id ?? null;
+    if (userId !== this.ownershipViewerUserId) {
+      this.roomPermissions = { canSaveDraft: false, canPublish: false, canRevert: false, canMint: false };
+    }
+    this.ownershipViewerUserId = userId;
+    if (!hasConnectedCryptoWallet()) {
+      this.mintedChainId = null; this.mintedContractAddress = null; this.mintedTokenId = null;
+      this.mintedOwnerWalletAddress = null; this.mintedOwnerSyncedAt = null;
+      this.mintedMetadataRoomVersion = null; this.mintedMetadataUpdatedAt = null;
+      this.host.refreshUi();
+    }
+    try {
+      const summary = await this.roomRepository.loadRoomSummary(this.roomId, this.roomCoordinates, { signal: abort.signal });
+      if (!abort.signal.aborted && key === this.ownershipViewerContext()) this.applyWalletRecovery(summary);
+    } catch {
+      // A failed presentation refresh never changes a draft or claims fresh chain ownership.
+      if (key === this.ownershipViewerKey) this.ownershipViewerKey = null;
+    } finally {
+      if (this.ownershipReadAbort === abort) this.ownershipReadAbort = null;
+    }
   }
 
   setStatusText(text: string): void {
@@ -363,12 +471,18 @@ export class EditorRoomSession {
   }
 
   getIdleStatusDetails(): EditorStatusDetails {
+    if (this.protectedRoom && !hasConnectedCryptoWallet()) {
+      return {
+        text: this.roomPermissions.canSaveDraft ? 'Your account can edit this protected room.' : 'This room is protected. Editing is locked.',
+        accentText: 'Protected', linkLabel: '', linkHref: null,
+      };
+    }
     if (this.mintedTokenId) {
-      const accentText = `Minted token #${this.mintedTokenId}`;
+      const accentText = `Collected & Locked · Token #${this.mintedTokenId}`;
       if (this.roomPermissions.canSaveDraft) {
         if (this.mintedMetadataRoomVersion === null) {
           return {
-            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. NFT metadata is not on-chain yet.`,
+            text: `Owner: ${formatWalletAddress(this.mintedOwnerWalletAddress)}. Artwork status has not been recorded here. Use Add/update artwork to add or replace it.`,
             accentText,
             linkLabel: '',
             linkHref: null,
@@ -527,6 +641,7 @@ export class EditorRoomSession {
         this.host.setRoomDirty(true);
       }
       this.host.refreshSurroundingRoomPreviews();
+      void this.walletActions.recoverPending();
       this.setStatusText(
         localRecord
           ? getAuthDebugState().authenticated
@@ -604,6 +719,7 @@ export class EditorRoomSession {
       }
       this.autoSaveBackoff = null;
       this.syncRoomMetadata(record, this.host.getLastDirtyAt() !== saveStartedAt);
+      if (this.shouldClearLocalDraftAfterRepositoryMutation()) this.host.onDraftSaved?.(record);
       if (this.host.getLastDirtyAt() === saveStartedAt) {
         this.host.setRoomDirty(false);
         if (this.shouldClearLocalDraftAfterRepositoryMutation()) {
@@ -720,9 +836,13 @@ export class EditorRoomSession {
       } else {
         this.backupDraftForPageExit();
       }
+      if (record.worldPublicationSubmission) {
+        this.setStatusText('Draft saved and submitted for World approval.');
+        return null;
+      }
       if (this.mintedTokenId && this.canRefreshMintMetadata() && !this.isMintMetadataCurrent()) {
         this.setStatusDetails({
-          text: 'NFT metadata is stale. Refresh NFT Metadata to update the on-chain snapshot.',
+          text: 'Room artwork is stale. Choose Add/update artwork to update the on-chain snapshot.',
           accentText: `Published v${this.publishedVersion}`,
           linkLabel: '',
           linkHref: null,
@@ -734,6 +854,13 @@ export class EditorRoomSession {
     } catch (error) {
       if (this.isStale(generation)) {
         return null;
+      }
+      if (error instanceof RoomPublicationSubmissionError) {
+        const laterEdits=this.host.getLastDirtyAt()!==publishStartedAt;
+        this.syncRoomMetadata(error.savedDraft,laterEdits);
+        if(laterEdits)this.backupDraftForPageExit();
+        else{this.host.setRoomDirty(false);if(this.shouldClearLocalDraftAfterRepositoryMutation())clearLocalRoomStorageEntry(this.roomId);}
+        this.setStatusText(error.message);return null;
       }
       if (isRoomEditConflict(error)) {
         await this.handleEditConflict();
@@ -979,6 +1106,7 @@ export class EditorRoomSession {
           roomCoordinates: { ...this.roomCoordinates },
           statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
           draftRoom: cloneRoomSnapshot(this.host.exportRoomSnapshot()),
+          draftRoomBaseUpdatedAt: this.serverDraftUpdatedAt,
           clearDraftRoomId: null,
           invalidateRoomId: this.roomId,
           forceRefreshAround: true,
@@ -1029,6 +1157,7 @@ export class EditorRoomSession {
       roomCoordinates: { ...this.roomCoordinates },
       statusMessage: this.DRAFT_WORLD_PREVIEW_WARNING,
       draftRoom: cloneRoomSnapshot(draftRecord.draft),
+      draftRoomBaseUpdatedAt: draftRecord.draft.updatedAt,
       clearDraftRoomId: null,
       invalidateRoomId: this.roomId,
       forceRefreshAround: true,
@@ -1036,230 +1165,12 @@ export class EditorRoomSession {
     };
   }
 
-  async mintRoom(): Promise<RoomRecord | null> {
-    if (this.saveInFlight) {
-      return null;
-    }
-
-    if (this.mintedTokenId) {
-      this.setStatusText(`Room token #${this.mintedTokenId} is already minted.`);
-      return null;
-    }
-
-    const generation = this.sessionGeneration;
-    if (this.host.getRoomDirty() || this.publishedVersion === 0) {
-      showBusyOverlay('Publishing room...', 'Preparing room for mint...');
-      const publishedRecord = await this.publishRoom(
-        this.publishedVersion === 0 ? 'Published. Ready to mint.' : 'Published latest changes before mint.'
-      );
-      hideBusyOverlay();
-      if (!publishedRecord) {
-        return null;
-      }
-    }
-
-    await refreshAuthSession();
-    if (this.isStale(generation)) {
-      return null;
-    }
-    const authState = getAuthDebugState();
-
-    if (!authState.authenticated) {
-      promptForSignIn('Sign in and link a wallet to mint this room.');
-      return null;
-    }
-
-    if (!authState.user?.walletAddress) {
-      this.setStatusText('Link a wallet from the account menu before minting.');
-      return null;
-    }
-
-    if (!this.roomPermissions.canMint) {
-      this.setStatusText(
-        this.roomPermissions.canPublish
-          ? 'Link the owning wallet from the account menu before minting.'
-          : 'Only the current claimer can mint this room.'
-      );
-      return null;
-    }
-
-    this.saveInFlight = true;
-    showBusyOverlay('Preparing mint...', 'Checking room mint configuration...');
-    this.setStatusText('Preparing mint...');
-
-    try {
-      const prepare = await this.roomRepository.prepareMint(this.roomId, this.roomCoordinates);
-      updateBusyOverlay('Waiting for wallet confirmation...', `Approve the ${prepare.chain.name} transaction in your wallet.`);
-      this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
-      updateBusyOverlay('Confirming mint...', 'Waiting for on-chain confirmation...');
-      this.setStatusText('Confirming mint...');
-
-      const record = await this.roomRepository.confirmMint(this.roomId, this.roomCoordinates, {
-        txHash: tx.hash,
-      });
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
-      }
-      this.syncRoomMetadata(record);
-      this.host.setRoomDirty(false);
-
-      const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.setStatusDetails({
-        text: '',
-        accentText: `Minted token #${record.mintedTokenId}`,
-        linkLabel: explorerUrl ? 'Transaction' : '',
-        linkHref: explorerUrl,
-      });
-      hideBusyOverlay();
-      return record;
-    } catch (error) {
-      console.error('Failed to mint room', error);
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
-      }
-      if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = createRoomRecordFromCurrent(
-          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
-        );
-        this.syncRoomMetadata(refreshed);
-      }
-
-      const message = error instanceof Error ? error.message : 'Mint failed.';
-      this.setStatusText(message);
-      hideBusyOverlay();
-    } finally {
-      if (!this.isStale(generation)) {
-        this.saveInFlight = false;
-        this.host.refreshUi();
-      }
-    }
-
-    return null;
+  mintRoom(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
+    return this.walletActions.mintRoom(options);
   }
 
-  async refreshMintMetadata(): Promise<RoomRecord | null> {
-    if (this.saveInFlight) {
-      return null;
-    }
-
-    if (!this.mintedTokenId || !this.mintedContractAddress || this.mintedChainId === null) {
-      this.setStatusText('This room is not minted yet.');
-      return null;
-    }
-
-    if (!this.publishedRoomSnapshot) {
-      this.setStatusText('Publish the room before refreshing NFT metadata.');
-      return null;
-    }
-
-    if (!this.canRefreshMintMetadata()) {
-      this.setStatusText('Only the room token owner can refresh NFT metadata.');
-      return null;
-    }
-
-    const generation = this.sessionGeneration;
-    await refreshAuthSession();
-    if (this.isStale(generation)) {
-      return null;
-    }
-    const authState = getAuthDebugState();
-
-    if (!authState.authenticated) {
-      promptForSignIn('Sign in and link the owning wallet to refresh NFT metadata.');
-      return null;
-    }
-
-    if (!authState.user?.walletAddress) {
-      this.setStatusText('Link the token-owning wallet from the account menu before refreshing NFT metadata.');
-      return null;
-    }
-
-    this.saveInFlight = true;
-    showBusyOverlay('Preparing NFT metadata...', 'Rendering room preview...');
-    this.setStatusText('Preparing NFT metadata...');
-
-    try {
-      const imageDataUrl = await renderRoomSnapshotToPngDataUrl(this.publishedRoomSnapshot, {
-        tilePixelSize: 2,
-      });
-      const built = await buildRoomTokenMetadata(
-        this.publishedRoomSnapshot,
-        imageDataUrl,
-        {
-          origin: window.location.origin,
-          chainId: this.mintedChainId,
-          contractAddress: this.mintedContractAddress,
-          tokenId: this.mintedTokenId,
-        }
-      );
-      updateBusyOverlay('Preparing wallet transaction...', 'Packaging room metadata for the wallet...');
-      const prepare = await this.roomRepository.prepareMetadataRefresh(
-        this.roomId,
-        this.roomCoordinates,
-        {
-          tokenUri: built.tokenUri,
-        }
-      );
-      updateBusyOverlay(
-        'Waiting for wallet confirmation...',
-        `Approve the ${prepare.chain.name} transaction in your wallet.`
-      );
-      this.setStatusText(`Waiting for wallet confirmation on ${prepare.chain.name}...`);
-      const tx = await sendPreparedWalletTransaction(prepare.transaction, prepare.chain);
-      updateBusyOverlay('Confirming metadata refresh...', 'Waiting for on-chain confirmation...');
-      this.setStatusText('Confirming NFT metadata refresh...');
-
-      const record = await this.roomRepository.confirmMetadataRefresh(
-        this.roomId,
-        this.roomCoordinates,
-        {
-          txHash: tx.hash,
-          metadataRoomVersion: this.publishedVersion,
-          metadataHash: built.metadataHash,
-        }
-      );
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
-      }
-      this.syncRoomMetadata(record);
-
-      const explorerUrl = buildExplorerTxUrl(prepare.chain, tx.hash);
-      this.setStatusDetails({
-        text: `On-chain metadata is now synced to room v${record.mintedMetadataRoomVersion ?? this.publishedVersion}.`,
-        accentText: `NFT metadata refreshed for token #${record.mintedTokenId}`,
-        linkLabel: explorerUrl ? 'Transaction' : '',
-        linkHref: explorerUrl,
-      });
-      hideBusyOverlay();
-      return record;
-    } catch (error) {
-      console.error('Failed to refresh room NFT metadata', error);
-      if (this.isStale(generation)) {
-        hideBusyOverlay();
-        return null;
-      }
-      if (isRoomApiError(error) && error.status === 409) {
-        const refreshed = createRoomRecordFromCurrent(
-          await this.roomRepository.loadRoomCurrent(this.roomId, this.roomCoordinates),
-        );
-        this.syncRoomMetadata(refreshed);
-      }
-
-      const message = error instanceof Error ? error.message : 'NFT metadata refresh failed.';
-      this.setStatusText(message);
-      hideBusyOverlay();
-    } finally {
-      if (!this.isStale(generation)) {
-        this.saveInFlight = false;
-        this.host.refreshUi();
-      }
-    }
-
-    return null;
+  refreshMintMetadata(options: RoomCollectionStageOptions = {}): Promise<RoomRecord | null> {
+    return this.walletActions.refreshMintMetadata(options);
   }
 
   private shouldShowDraftPreviewInWorld(): boolean {
@@ -1289,7 +1200,7 @@ export class EditorRoomSession {
       && !remoteRecord.claimerUserId
       && !remoteRecord.claimerAgentId
       && !remoteRecord.published
-      && !remoteRecord.mintedTokenId
+      && !isRoomMinted(remoteRecord)
       && isRoomSnapshotBlank(remoteRecord.draft);
     const conflictsWithServer = Boolean(backup?.baseUpdatedAt && !remoteIsUnclaimedPlaceholder
       && backup.baseUpdatedAt !== remoteRecord.draft.updatedAt);
@@ -1324,10 +1235,12 @@ export class EditorRoomSession {
     };
     showBusyError('This device has unsaved changes, and the account draft has changed. Choose which draft to continue editing.', {
       title: 'Recover your room draft',
+      tone: 'choice',
       retryLabel: 'Restore Local',
       retryHandler: () => resolve(true),
       closeLabel: 'Use Account Draft',
       closeHandler: () => resolve(false),
+      destructive: 'close',
     });
   }
 
@@ -1359,7 +1272,7 @@ export class EditorRoomSession {
   }
 
   private canRefreshMintMetadata(): boolean {
-    return Boolean(this.mintedTokenId && this.publishedRoomSnapshot && this.roomPermissions.canSaveDraft);
+    return Boolean(hasConnectedCryptoWallet() && this.mintedTokenId && this.publishedRoomSnapshot && this.roomPermissions.canSaveDraft);
   }
 
   private isMintMetadataCurrent(): boolean {
@@ -1451,6 +1364,8 @@ export class EditorRoomSession {
         + 'Keep Mine saves the version here over it.',
       {
         title: 'This Room Changed Somewhere Else',
+        tone: 'choice',
+        destructive: 'retry',
         retryLabel: 'Load Latest',
         retryHandler: () => this.resolveEditConflict(generation, 'load-latest'),
         closeLabel: 'Keep Mine',
@@ -1547,6 +1462,7 @@ export class EditorRoomSession {
   }
 
   private syncRoomMetadata(record: RoomRecord, preserveCurrentTitle = false): void {
+    record = normalizeRoomCryptoDetails(record, hasConnectedCryptoWallet());
     this.serverDraftUpdatedAt = record.draft.updatedAt;
     this.roomId = record.draft.id;
     this.roomCoordinates = { ...record.draft.coordinates };
@@ -1568,6 +1484,7 @@ export class EditorRoomSession {
     this.historyLoaded = record.versions.length > 0 || record.published === null;
     this.claimerDisplayName = record.claimerDisplayName;
     this.claimedAt = record.claimedAt;
+    this.protectedRoom = isRoomMinted(record);
     this.mintedChainId = record.mintedChainId;
     this.mintedContractAddress = record.mintedContractAddress;
     this.mintedTokenId = record.mintedTokenId;
@@ -1575,6 +1492,11 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = record.mintedOwnerSyncedAt;
     this.mintedMetadataRoomVersion = record.mintedMetadataRoomVersion;
     this.mintedMetadataUpdatedAt = record.mintedMetadataUpdatedAt;
+    this.ownershipViewerUserId = getAuthDebugState().user?.id ?? null;
+    this.ownershipViewerKey = this.ownershipViewerContext();
+    if (this.protectedRoom && hasConnectedCryptoWallet() && !this.mintedTokenId) {
+      this.ownershipViewerKey = null; void this.refreshOwnershipPresentation();
+    }
     this.host.refreshUi();
   }
 

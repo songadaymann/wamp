@@ -1,3 +1,4 @@
+import type { RuntimePlayerReader } from './runtimeContext';
 import Phaser from 'phaser';
 import {
   type DefaultPlayerAnimationState,
@@ -26,11 +27,7 @@ export interface OverworldPlayerPresentationControllerState {
 interface OverworldPlayerPresentationControllerHost {
   state: OverworldPlayerPresentationControllerState;
   getCurrentTime(): number;
-  getPlayer(): Phaser.GameObjects.Rectangle | null;
-  getPlayerBody(): Phaser.Physics.Arcade.Body | null;
-  getPlayerSprite(): Phaser.GameObjects.Sprite | null;
-  getPlayerPickupSensor(): Phaser.GameObjects.Rectangle | null;
-  getPlayerPickupSensorBody(): Phaser.Physics.Arcade.Body | null;
+  runtime: RuntimePlayerReader;
   getSpecialTileEnvironment(): Readonly<SpecialTilePlayerEnvironment>;
   getLastMovementInput(): { horizontalInput: number; verticalInput: number };
   getQuicksandVisualSink(): number;
@@ -69,7 +66,7 @@ export class OverworldPlayerPresentationController {
   }
 
   handlePlayerCreated(): void {
-    const sprite = this.host.getPlayerSprite();
+    const sprite = this.host.runtime.playerSprite;
     this.baseScaleX = sprite?.scaleX ?? 1;
     this.baseScaleY = sprite?.scaleY ?? 1;
     this.resetBodyFeedback();
@@ -102,9 +99,9 @@ export class OverworldPlayerPresentationController {
   }
 
   syncPlayerVisual(sampleBodyFeedback = true): void {
-    const player = this.host.getPlayer();
-    const playerBody = this.host.getPlayerBody();
-    const playerSprite = this.host.getPlayerSprite();
+    const player = this.host.runtime.player;
+    const playerBody = this.host.runtime.playerBody;
+    const playerSprite = this.host.runtime.playerSprite;
     if (!player || !playerBody || !playerSprite) {
       return;
     }
@@ -197,13 +194,13 @@ export class OverworldPlayerPresentationController {
 
   private resetBodyFeedback(): void {
     this.bodyFeedback.reset();
-    this.host.getPlayerSprite()?.setScale(this.baseScaleX, this.baseScaleY);
+    this.host.runtime.playerSprite?.setScale(this.baseScaleX, this.baseScaleY);
   }
 
   syncPlayerPickupSensor(): void {
-    const playerBody = this.host.getPlayerBody();
-    const playerPickupSensor = this.host.getPlayerPickupSensor();
-    const playerPickupSensorBody = this.host.getPlayerPickupSensorBody();
+    const playerBody = this.host.runtime.playerBody;
+    const playerPickupSensor = this.host.runtime.playerPickupSensor;
+    const playerPickupSensorBody = this.host.runtime.playerPickupSensorBody;
     if (!playerBody || !playerPickupSensor || !playerPickupSensorBody) {
       return;
     }

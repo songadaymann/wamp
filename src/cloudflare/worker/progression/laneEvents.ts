@@ -61,10 +61,29 @@ async function progressEventExists(
   return parseRowNumber(row?.found) === 1;
 }
 
+/** How each lane's event moves its user_progress total. */
+const LANE_TOTAL_INCREMENT: Record<LaneEventConfig['table'], string> = {
+  pxp_events: 'total_pxp = total_pxp + ?',
+  bxp_events: 'total_bxp = total_bxp + ?',
+  cxp_events: 'total_cxp = total_cxp + ?',
+  trust_events: 'hidden_trust_score = MAX(0, hidden_trust_score + ?)',
+};
+
+/** Options for an award; see awardLaneDelta. */
+export interface LaneAwardOptions {
+  /**
+   * Add the amount to the user's user_progress total in the same batch as the event, so a settle
+   * that dies between awards never leaves an event without its total (a re-run adds 0). The
+   * caller makes sure the progress row exists first and refreshes levels afterwards (F351).
+   */
+  addToTotals?: boolean;
+}
+
 async function recordLaneEvent(
   env: Env,
   userId: string,
   config: LaneEventConfig,
+  options: LaneAwardOptions = {},
 ): Promise<boolean> {
   if (config.amount <= 0) {
     return false;
@@ -72,6 +91,27 @@ async function recordLaneEvent(
 
   if (await progressEventExists(env, config.table, config.dedupeKey)) {
     return false;
+  }
+
+  if (options.addToTotals) {
+    const id = crypto.randomUUID();
+    const [inserted] = await env.DB.batch<{ results?: unknown[] }>([
+      env.DB.prepare(
+        `
+          INSERT OR IGNORE INTO ${config.table} (
+            id, user_id, event_type, source_type, source_id, dedupe_key, amount, breakdown_json, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          RETURNING id
+        `
+      ).bind(id, userId, config.eventType, config.sourceType, config.sourceId, config.dedupeKey, config.amount,
+        config.breakdown ? JSON.stringify(config.breakdown) : null, config.createdAt),
+      // The total moves only if this exact event row went in; a concurrent settle's copy was ignored.
+      env.DB.prepare(`UPDATE user_progress SET ${LANE_TOTAL_INCREMENT[config.table]}, updated_at = ?
+        WHERE user_id = ? AND EXISTS (SELECT 1 FROM ${config.table} WHERE id = ?)`)
+        .bind(config.amount, config.createdAt, userId, id),
+    ]);
+    return (inserted?.results?.length ?? 0) > 0;
   }
 
   try {
@@ -122,6 +162,16 @@ function isLaneDedupeConstraintError(
     && message.includes(`${table}.dedupe_key`);
 }
 
+function laneTable(lane: 'pxp' | 'bxp' | 'cxp' | 'trust'): LaneEventConfig['table'] {
+  return lane === 'pxp'
+    ? 'pxp_events'
+    : lane === 'bxp'
+      ? 'bxp_events'
+      : lane === 'cxp'
+        ? 'cxp_events'
+        : 'trust_events';
+}
+
 export async function awardLaneDelta(
   env: Env,
   userId: string,
@@ -133,17 +183,10 @@ export async function awardLaneDelta(
   amount: number,
   createdAt: string,
   breakdown?: Record<string, unknown> | null,
+  options: LaneAwardOptions = {},
 ): Promise<number> {
-  const table =
-    lane === 'pxp'
-      ? 'pxp_events'
-      : lane === 'bxp'
-        ? 'bxp_events'
-        : lane === 'cxp'
-          ? 'cxp_events'
-          : 'trust_events';
   const inserted = await recordLaneEvent(env, userId, {
-    table,
+    table: laneTable(lane),
     amount,
     eventType,
     sourceType,
@@ -151,8 +194,53 @@ export async function awardLaneDelta(
     dedupeKey,
     createdAt,
     breakdown,
-  });
+  }, options);
   return inserted ? amount : 0;
+}
+
+interface CappedLaneEvent {
+  eventType: string;
+  sourceType: string;
+  sourceId: string;
+  dedupeKey: string;
+  amount: number;
+  createdAt: string;
+  breakdown?: Record<string, unknown> | null;
+}
+
+/**
+ * Awards like awardLaneDelta, but never more than dailyCap per UTC day across the given
+ * event types in that lane.
+ */
+export async function awardCappedLaneDelta(
+  env: Env,
+  userId: string,
+  lane: 'pxp' | 'bxp' | 'cxp' | 'trust',
+  event: CappedLaneEvent,
+  cap: { eventTypes: readonly string[]; dailyCap: number },
+  options: LaneAwardOptions = {},
+): Promise<number> {
+  const dayStart = `${event.createdAt.slice(0, 10)}T00:00:00.000Z`;
+  // Bounded on both sides: a resend that re-settles an earlier day's clear counts that day only.
+  const dayEnd = new Date(Date.parse(dayStart) + 86_400_000).toISOString();
+  const row = await env.DB.prepare(
+    `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM ${laneTable(lane)}
+      WHERE user_id = ?
+        AND event_type IN (SELECT value FROM json_each(?))
+        AND created_at >= ?
+        AND created_at < ?
+    `
+  )
+    .bind(userId, JSON.stringify(cap.eventTypes), dayStart, dayEnd)
+    .first<{ total: number | string | null }>();
+  const amount = Math.min(event.amount, cap.dailyCap - parseRowNumber(row?.total));
+  if (amount <= 0) {
+    return 0;
+  }
+  return awardLaneDelta(env, userId, lane, event.eventType, event.sourceType, event.sourceId,
+    event.dedupeKey, amount, event.createdAt, event.breakdown, options);
 }
 
 /**
@@ -163,33 +251,9 @@ export async function awardLaneDelta(
 export async function awardCappedTrustDelta(
   env: Env,
   userId: string,
-  event: {
-    eventType: string;
-    sourceType: string;
-    sourceId: string;
-    dedupeKey: string;
-    amount: number;
-    createdAt: string;
-    breakdown?: Record<string, unknown> | null;
-  },
+  event: CappedLaneEvent,
   cap: { eventTypes: readonly string[]; dailyCap: number },
+  options: LaneAwardOptions = {},
 ): Promise<number> {
-  const dayStart = `${event.createdAt.slice(0, 10)}T00:00:00.000Z`;
-  const row = await env.DB.prepare(
-    `
-      SELECT COALESCE(SUM(amount), 0) AS total
-      FROM trust_events
-      WHERE user_id = ?
-        AND event_type IN (SELECT value FROM json_each(?))
-        AND created_at >= ?
-    `
-  )
-    .bind(userId, JSON.stringify(cap.eventTypes), dayStart)
-    .first<{ total: number | string | null }>();
-  const amount = Math.min(event.amount, cap.dailyCap - parseRowNumber(row?.total));
-  if (amount <= 0) {
-    return 0;
-  }
-  return awardLaneDelta(env, userId, 'trust', event.eventType, event.sourceType, event.sourceId,
-    event.dedupeKey, amount, event.createdAt, event.breakdown);
+  return awardCappedLaneDelta(env, userId, 'trust', event, cap, options);
 }

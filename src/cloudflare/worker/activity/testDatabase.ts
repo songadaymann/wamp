@@ -6,21 +6,46 @@ import type { RoomRunRecord } from '../../../runs/model';
 export const NOW = '2026-10-04T17:00:00.000Z';
 class Statement implements D1PreparedStatement {
   values: (string | number | null)[] = [];
-  constructor(readonly sql: string, readonly db: DatabaseSync) {}
+  constructor(readonly sql: string, readonly owner: Database) {}
   bind(...values: unknown[]): this {
     this.values = values.map(value => {
       if (value === null || typeof value === 'string' || typeof value === 'number') return value;
       throw new Error('Unexpected SQL parameter');
     }); return this;
   }
-  async first<T>(): Promise<T | null> { return (this.db.prepare(this.sql).get(...this.values) as T | undefined) ?? null; }
-  async all<T>(): Promise<{ results: T[] }> { return { results: this.db.prepare(this.sql).all(...this.values) as T[] }; }
+  async first<T>(): Promise<T | null> {
+    const held = this.owner.arrive([this.sql]); if (held) await held;
+    return (this.owner.sqlite.prepare(this.sql).get(...this.values) as T | undefined) ?? null;
+  }
+  async all<T>(): Promise<{ results: T[] }> {
+    const held = this.owner.arrive([this.sql]); if (held) await held;
+    return { results: this.owner.sqlite.prepare(this.sql).all(...this.values) as T[] };
+  }
 }
 class Database implements D1Database {
+  private holds: Array<{ match: RegExp; arrived: () => void; released: Promise<void> }> = [];
   constructor(readonly sqlite: DatabaseSync) {}
-  prepare(sql: string): Statement { return new Statement(sql, this.sqlite); }
+  prepare(sql: string): Statement { return new Statement(sql, this); }
   withSession(): this { return this; }
+  /**
+   * Holds the next call (a statement's first or all, or a batch) whose SQL matches until release(),
+   * so a test can make parallel requests reach the database out of order, as D1 may order them.
+   * `held` resolves once that call is waiting. Calls after it pass.
+   */
+  holdNext(match: RegExp): { held: Promise<void>; release: () => void } {
+    let arrived!: () => void; let release!: () => void;
+    const held = new Promise<void>(resolve => { arrived = resolve; });
+    this.holds.push({ match, arrived, released: new Promise<void>(resolve => { release = resolve; }) });
+    return { held, release };
+  }
+  /** The hold a call waits on, if it matches one; null (no extra tick) otherwise. */
+  arrive(sql: string[]): Promise<void> | null {
+    const index = this.holds.findIndex(hold => sql.some(text => hold.match.test(text)));
+    if (index < 0) return null;
+    const [hold] = this.holds.splice(index, 1); hold.arrived(); return hold.released;
+  }
   async batch<T>(statements: D1PreparedStatement[]): Promise<T[]> {
+    const held = this.arrive(statements.map(query => (query as Statement).sql ?? '')); if (held) await held;
     this.sqlite.exec('BEGIN');
     try {
       const result = statements.map(query => {
@@ -30,11 +55,12 @@ class Database implements D1Database {
     } catch (error) { this.sqlite.exec('ROLLBACK'); throw error; }
   }
 }
-export function fixture(includeActivity = true) {
+export function fixture(includeActivity = true, throughMigration?: string) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../../../../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
-    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_'))) continue;
+    if (throughMigration && file > throughMigration) continue;
+    if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_') || file.startsWith('0069_') || file.startsWith('0077_'))) continue;
     sqlite.exec(readFileSync(new URL(file, directory), 'utf8'));
   }
   for (const user of ['builder', 'p1', 'p2', 'p3', 'generated']) sqlite.prepare('INSERT INTO users (id,email,display_name,created_at,updated_at) VALUES (?,?,?,?,?)')
@@ -47,10 +73,12 @@ export function fixture(includeActivity = true) {
   sqlite.prepare(`INSERT INTO rooms (id,x,y,draft_json,published_json,published_title,claimer_user_id) VALUES ('0,0',0,0,?,?,'Lava Gauntlet','builder')`).run(json, json);
   sqlite.prepare(`INSERT INTO room_versions (room_id,version,snapshot_json,title,created_at,published_by_user_id) VALUES ('0,0',1,?,'Lava Gauntlet',?,'builder')`).run(json, NOW);
   const db = new Database(sqlite); const env: Env = { DB: db, JAM_DB: db, ASSETS: { fetch: async () => new Response() } };
-  return { sqlite, env, record, migrate: () => {
+  return { sqlite, env, record, holdNextQuery: (match: RegExp) => db.holdNext(match), migrate: () => {
     sqlite.exec(readFileSync(new URL('0055_builder_activity.sql', directory), 'utf8'));
     sqlite.exec(readFileSync(new URL('0057_daily_rooms.sql', directory), 'utf8'));
     sqlite.exec(readFileSync(new URL('0066_guest_activity_index.sql', directory), 'utf8'));
+    sqlite.exec(readFileSync(new URL('0069_room_edit_activity.sql', directory), 'utf8'));
+    sqlite.exec(readFileSync(new URL('0077_builder_recognition_activity.sql', directory), 'utf8'));
   } };
 }
 export function award(f: ReturnType<typeof fixture>, id: string, kind = 'unique_completion_room', actor = 'p1', at = NOW, structured = true): void {

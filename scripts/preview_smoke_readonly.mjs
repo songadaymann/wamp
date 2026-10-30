@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const rawUrl = getStringArg('--url') || process.env.PREVIEW_SMOKE_URL?.trim() || '';
 if (!rawUrl) {
@@ -39,6 +41,8 @@ await context.addInitScript(() => {
   window.localStorage.setItem('wamp_install_help_dismissed_v1', '1');
   window.localStorage.setItem('wamp_welcome_modal_seen_v1', '1');
 });
+// A local build has no rooms of its own; replay recorded ones (F480). Deployed previews stay live.
+if (['127.0.0.1', 'localhost'].includes(new URL(targetUrl).hostname)) await installSmokeApiReplay(context);
 const page = await context.newPage();
 page.on('console', (message) => {
   const text = message.text();
@@ -75,7 +79,7 @@ try {
     chatReady: bootState.chat !== null,
     appReady: bootState.appFeedback?.ready ?? false,
   };
-  await page.screenshot({ path: path.join(outputDir, 'browse.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'browse.png') });
 
   const targetRoom = await page.evaluate(
     ({ requestedRoomId }) => window.run_preview_smoke_action?.('selectEditableRoom', {
@@ -103,7 +107,7 @@ try {
   if (await goalIntroStart.count()) {
     await goalIntroStart.click();
   }
-  await page.screenshot({ path: path.join(outputDir, 'play.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'play.png') });
 
   await page.click('#btn-world-play');
   const browseStateAfterPlay = await waitForAppState(
@@ -135,7 +139,7 @@ try {
   summary.steps.edit = {
     activeScene: editState.activeScene,
   };
-  await page.screenshot({ path: path.join(outputDir, 'editor.png') });
+  await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(outputDir, 'editor.png') });
 
   summary.finishedAt = new Date().toISOString();
   summary.ok = summary.consoleErrors.length === 0 && summary.pageErrors.length === 0;

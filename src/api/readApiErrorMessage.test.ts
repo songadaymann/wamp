@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setFeaturedRoomStatus } from '../admin/featuredRoomsClient';
 import { readApiErrorMessage } from './readApiErrorMessage';
 import { createRunRepository, isRunApiError } from '../runs/runRepository';
-import { createProfileRepository, isProfileApiError } from '../profiles/profileRepository';
-import { createAvatarRepository, isAvatarApiError } from '../avatars/repository';
+import { createProfileRepository } from '../profiles/profileRepository';
+import { createAvatarRepository } from '../avatars/repository';
 import { createPvpRepository } from '../pvp/repository';
 import type { PvpMatchSubmissionRequestBody } from '../pvp/model';
 import { invalidateStaleWhileRevalidateCache } from './staleWhileRevalidateCache';
@@ -39,8 +39,8 @@ describe('API error messages', () => {
 
   const clients = [
     { label: 'Run', call: () => createRunRepository().loadBuilderDiscovery(), typed: isRunApiError },
-    { label: 'Profile', call: () => createProfileRepository().loadProfile('test'), typed: isProfileApiError },
-    { label: 'Avatar', call: () => createAvatarRepository().loadCryptopunkStatus(1), typed: isAvatarApiError },
+    { label: 'Profile', call: () => createProfileRepository().loadProfile('test'), typed: (error: unknown) => error instanceof Error && error.constructor.name === 'ProfileApiError' },
+    { label: 'Avatar', call: () => createAvatarRepository().loadCryptopunkStatus(1), typed: (error: unknown) => error instanceof Error && error.constructor.name === 'AvatarApiError' },
     { label: 'PVP', call: () => createPvpRepository().submitMatch({} as PvpMatchSubmissionRequestBody), typed: (error: unknown) => error instanceof Error && error.constructor.name === 'PvpApiError' },
   ];
   for (const client of clients) {

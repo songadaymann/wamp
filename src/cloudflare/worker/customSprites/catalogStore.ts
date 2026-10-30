@@ -316,6 +316,10 @@ export async function deleteOwnedCustomSprite(
   if (existing.owner_user_id !== ownerUserId) {
     throw new HttpError(403, 'Only the creator can delete this custom sprite.');
   }
+  // Deleting would clear the block and bring its art back in every room that embeds it (F189).
+  if (existing.status === 'blocked') {
+    throw new HttpError(403, 'This custom sprite was blocked by moderation and cannot be deleted.');
+  }
   if (await isCustomSpriteUsedInStoredRooms(env, spriteId)) {
     throw new HttpError(409, 'This custom sprite is used in a room.');
   }

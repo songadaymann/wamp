@@ -1,0 +1,1 @@
+| 2026-10-29 | F263 | [#334](https://github.com/songadaymann/wamp/pull/334) | [receipt](docs/review/wamp-f263-retire-mac-avatar-queue-2026-10-29.md) | Retire the obsolete Mac avatar queue scripts while keeping cloud avatar generation |

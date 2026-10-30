@@ -4,7 +4,10 @@ import {
   TILE_SIZE,
 } from '../config';
 import type { RoomSnapshot } from '../persistence/roomModel';
-import { getTerrainTileCollisionProfile } from '../scenes/overworld/terrainCollision';
+import {
+  getTerrainTileCollisionProfile,
+  type TerrainTileCollisionProfile,
+} from '../scenes/overworld/terrainCollision';
 import {
   getSwordsmanTraversalAirSpeed,
   SWORDSMAN_AI_AIR_SPEED,
@@ -22,6 +25,7 @@ import {
   getSwordsmanTraversalCurrentNodeId,
   getSwordsmanTraversalTargetContext,
   isSwordsmanLadderTraversalEdge,
+  isSwordsmanTraversalRoomInPlay,
   measureSwordsmanTraversalNodeDistanceToBody,
   type SwordsmanBodySnapshot,
   type SwordsmanTraversalEdge,
@@ -41,6 +45,8 @@ export interface SwordsmanRobustTraversalPlan {
   routeCost: number;
   expandedStates: number;
   simulatedEdges: number;
+  /** Edges this plan had to physically simulate because no earlier plan had. */
+  coldSimulatedEdges: number;
   planDurationMs: number;
 }
 
@@ -52,12 +58,6 @@ export interface SwordsmanRobustTraversalRequest {
   blockedEdgeIds: ReadonlySet<string>;
   bodyWidth: number;
   bodyHeight: number;
-}
-
-export interface SwordsmanTraversalEdgeSimulationDebug {
-  edgeId: string;
-  success: boolean;
-  travelMs: number;
 }
 
 interface SearchState {
@@ -105,7 +105,19 @@ const SURFACE_PROBE_INSET_PX = 1;
 const EPSILON = 0.01;
 const EDGE_SIMULATION_CACHE_LIMIT = 4096;
 
-const edgeSimulationCache = new Map<string, EdgeSimulationResult>();
+// Simulated edges, one bucket per room version and body size, least recently used first. Past
+// the limit whole rooms are evicted, never the one being planned or one still in play (F302).
+const edgeSimulationsByRoom = new Map<string, {
+  graphCacheKey: string;
+  simulations: Map<string, EdgeSimulationResult>;
+}>();
+let edgeSimulationCount = 0;
+let lastEdgeSimulationRoomKey: string | null = null;
+let coldSimulationCount = 0;
+const terrainProfilesByRoom = new WeakMap<RoomSnapshot, {
+  graphCacheKey: string;
+  profiles: Array<TerrainTileCollisionProfile | undefined>;
+}>();
 
 export const SWORDSMAN_AI_ROBUST_ROUTE_COMMIT_MS = ROBUST_ROUTE_COMMIT_MS;
 export const SWORDSMAN_AI_ROBUST_REPLAN_INTERVAL_MS = ROBUST_REPLAN_INTERVAL_MS;
@@ -123,6 +135,7 @@ export function planSwordsmanRobustTraversal(
     bodyWidth,
     bodyHeight,
   } = request;
+  const coldSimulationCountAtStart = coldSimulationCount;
   const currentContext = getSwordsmanTraversalContext(graph, enemy);
   const targetContext = getSwordsmanTraversalTargetContext(graph, target);
 
@@ -143,6 +156,7 @@ export function planSwordsmanRobustTraversal(
       routeCost: 0,
       expandedStates: 0,
       simulatedEdges: 0,
+      coldSimulatedEdges: 0,
       planDurationMs: performance.now() - startedAt,
     };
   }
@@ -261,23 +275,25 @@ export function planSwordsmanRobustTraversal(
     routeCost: selectedPlan.cost,
     expandedStates,
     simulatedEdges,
+    coldSimulatedEdges: coldSimulationCount - coldSimulationCountAtStart,
     planDurationMs: performance.now() - startedAt,
   };
 }
 
-export function debugSimulateSwordsmanTraversalEdge(
+/**
+ * Simulates one edge for a body size ahead of planning, so plans for that room find it cached.
+ * Returns whether it had to be simulated now.
+ */
+export function prepareSwordsmanTraversalEdgeSimulation(
   room: RoomSnapshot,
   graph: SwordsmanTraversalGraph,
   edge: SwordsmanTraversalEdge,
   bodyWidth: number,
   bodyHeight: number,
-): SwordsmanTraversalEdgeSimulationDebug {
-  const result = simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
-  return {
-    edgeId: edge.id,
-    success: result.success,
-    travelMs: Math.round(result.travelMs),
-  };
+): boolean {
+  const coldSimulationCountBefore = coldSimulationCount;
+  simulateTraversalEdge(room, graph, edge, bodyWidth, bodyHeight);
+  return coldSimulationCount > coldSimulationCountBefore;
 }
 
 function estimateRemainingCost(
@@ -381,25 +397,39 @@ function simulateTraversalEdge(
   bodyWidth: number,
   bodyHeight: number,
 ): EdgeSimulationResult {
-  const cacheKey = buildEdgeSimulationCacheKey(graph.cacheKey, edge.id, bodyWidth, bodyHeight);
-  const cached = edgeSimulationCache.get(cacheKey);
+  const roomKey = buildEdgeSimulationRoomKey(graph.cacheKey, bodyWidth, bodyHeight);
+  const simulations = getEdgeSimulationRoom(graph.cacheKey, roomKey);
+  const cached = simulations.get(edge.id);
   if (cached) {
     return cached;
   }
 
+  const result = runTraversalEdgeSimulation(room, graph, edge, bodyWidth, bodyHeight);
+  coldSimulationCount += 1;
+  simulations.set(edge.id, result);
+  edgeSimulationCount += 1;
+  evictLeastRecentEdgeSimulationRooms(roomKey);
+  return result;
+}
+
+function runTraversalEdgeSimulation(
+  room: RoomSnapshot,
+  graph: SwordsmanTraversalGraph,
+  edge: SwordsmanTraversalEdge,
+  bodyWidth: number,
+  bodyHeight: number,
+): EdgeSimulationResult {
   const sourceNode = graph.nodesById.get(edge.fromId);
   const targetNode = graph.nodesById.get(edge.toId);
   if (!sourceNode || !targetNode) {
-    return rememberEdgeSimulation(cacheKey, { success: false, travelMs: 0 });
+    return { success: false, travelMs: 0 };
   }
 
   if (isSwordsmanLadderTraversalEdge(edge)) {
-    return rememberEdgeSimulation(
-      cacheKey,
-      simulateLadderTraversalEdge(edge, sourceNode, targetNode),
-    );
+    return simulateLadderTraversalEdge(edge, sourceNode, targetNode);
   }
 
+  prepareTerrainProfiles(room, graph.cacheKey);
   const body = createInitialSimBody(edge, sourceNode, targetNode, bodyWidth, bodyHeight);
   let elapsedMs = 0;
   let preserveLaunchSteps = needsLaunchImpulse(edge) ? 1 : 0;
@@ -418,15 +448,12 @@ function simulateTraversalEdge(
       break;
     }
 
-    const currentNodeId = getSwordsmanTraversalCurrentNodeId(
-      graph,
-      toBodySnapshot(body, bodyWidth, bodyHeight),
-    );
-    if (currentNodeId === edge.toId && hasSimBodyReachedTraversalTarget(targetNode, body)) {
-      return rememberEdgeSimulation(cacheKey, {
-        success: true,
-        travelMs: elapsedMs,
-      });
+    // Landing is checked first: finding the body's node scans every surface and wall.
+    if (
+      hasSimBodyReachedTraversalTarget(targetNode, body) &&
+      getSwordsmanTraversalCurrentNodeId(graph, toBodySnapshot(body, bodyWidth, bodyHeight)) === edge.toId
+    ) {
+      return { success: true, travelMs: elapsedMs };
     }
 
     if (hasSimulationEscapedRoom(body)) {
@@ -434,7 +461,7 @@ function simulateTraversalEdge(
     }
   }
 
-  return rememberEdgeSimulation(cacheKey, { success: false, travelMs: elapsedMs });
+  return { success: false, travelMs: elapsedMs };
 }
 
 function simulateLadderTraversalEdge(
@@ -694,7 +721,7 @@ function pointCollides(room: RoomSnapshot, localX: number, localY: number): bool
     return false;
   }
 
-  const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+  const profile = getSimTerrainProfile(room, tileX, tileY);
   if (!profile.hasCollision) {
     return false;
   }
@@ -718,7 +745,7 @@ function getCollidingTerrainRects(
 
   for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
     for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
-      const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+      const profile = getSimTerrainProfile(room, tileX, tileY);
       if (!profile.hasCollision) {
         continue;
       }
@@ -738,6 +765,32 @@ function getCollidingTerrainRects(
   }
 
   return collidingRects;
+}
+
+function prepareTerrainProfiles(room: RoomSnapshot, graphCacheKey: string): void {
+  if (terrainProfilesByRoom.get(room)?.graphCacheKey !== graphCacheKey) {
+    terrainProfilesByRoom.set(room, { graphCacheKey, profiles: [] });
+  }
+}
+
+/** A simulation probes the same few tiles every step, so each tile's collision is read once. */
+function getSimTerrainProfile(
+  room: RoomSnapshot,
+  tileX: number,
+  tileY: number,
+): TerrainTileCollisionProfile {
+  const profiles = terrainProfilesByRoom.get(room)?.profiles;
+  if (!profiles) {
+    return getTerrainTileCollisionProfile(room, tileX, tileY);
+  }
+
+  const index = tileY * ROOM_WIDTH + tileX;
+  let profile = profiles[index];
+  if (!profile) {
+    profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+    profiles[index] = profile;
+  }
+  return profile;
 }
 
 function hasSimulationEscapedRoom(body: SimBody): boolean {
@@ -781,24 +834,46 @@ function getBottom(body: SimBody, bodyHeight: number): number {
   return body.centerY + bodyHeight * 0.5;
 }
 
-function buildEdgeSimulationCacheKey(
+function buildEdgeSimulationRoomKey(
   graphCacheKey: string,
-  edgeId: string,
   bodyWidth: number,
   bodyHeight: number,
 ): string {
-  return `${graphCacheKey}:${edgeId}:${Math.round(bodyWidth)}:${Math.round(bodyHeight)}`;
+  return `${graphCacheKey}:${Math.round(bodyWidth)}:${Math.round(bodyHeight)}`;
 }
 
-function rememberEdgeSimulation(
-  key: string,
-  value: EdgeSimulationResult,
-): EdgeSimulationResult {
-  if (edgeSimulationCache.size >= EDGE_SIMULATION_CACHE_LIMIT) {
-    edgeSimulationCache.clear();
+function getEdgeSimulationRoom(
+  graphCacheKey: string,
+  roomKey: string,
+): Map<string, EdgeSimulationResult> {
+  let bucket = edgeSimulationsByRoom.get(roomKey);
+  if (!bucket) {
+    bucket = { graphCacheKey, simulations: new Map() };
+    edgeSimulationsByRoom.set(roomKey, bucket);
+  } else if (roomKey !== lastEdgeSimulationRoomKey) {
+    edgeSimulationsByRoom.delete(roomKey);
+    edgeSimulationsByRoom.set(roomKey, bucket);
   }
-  edgeSimulationCache.set(key, value);
-  return value;
+  lastEdgeSimulationRoomKey = roomKey;
+  return bucket.simulations;
+}
+
+function evictLeastRecentEdgeSimulationRooms(keepRoomKey: string): void {
+  if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
+    return;
+  }
+
+  const now = performance.now();
+  for (const [roomKey, bucket] of edgeSimulationsByRoom) {
+    if (edgeSimulationCount <= EDGE_SIMULATION_CACHE_LIMIT) {
+      return;
+    }
+    if (roomKey === keepRoomKey || isSwordsmanTraversalRoomInPlay(bucket.graphCacheKey, now)) {
+      continue;
+    }
+    edgeSimulationsByRoom.delete(roomKey);
+    edgeSimulationCount -= bucket.simulations.size;
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {

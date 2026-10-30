@@ -15,7 +15,9 @@ import {
   computeRoomWeightedChange,
 } from './changeMetrics';
 import { syncUserBadges } from './badgesTrophies';
-import { awardCappedTrustDelta, awardLaneDelta, persistProgressIncrement } from './laneEvents';
+import {
+  awardCappedTrustDelta, awardLaneDelta, persistProgressIncrement, refreshProgressLevels, type LaneAwardOptions,
+} from './laneEvents';
 
 // Hidden trust grows slowly from real play (xp-badges-ratings PRD): at most this much
 // per UTC day from each source, and never from clearing your own content.
@@ -41,7 +43,7 @@ import { loadEffectiveTrustTier } from './trustCaps';
 import { resolveAggregatedRoomLeaderboardSelection } from '../runs/roomLeaderboardAggregation';
 import { sqlIsVerificationAccepted } from '../runs/verificationSql';
 import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
-import { awardDailyClear } from '../daily/store';
+import { awardDailyClear, awardDailyClearOn, findDailyClearDate } from '../daily/store';
 
 export async function ensureFounderIdentityQualification(
   env: Env,
@@ -100,29 +102,6 @@ export async function awardRoomPublishProgression(
   },
 ): Promise<ProgressionDelta> {
   const percentChange = computeRoomWeightedChange(params.previousPublishedSnapshot, params.publishedSnapshot);
-  await env.DB.batch([
-    env.DB.prepare(
-      `
-        INSERT OR REPLACE INTO room_version_attribution (
-          room_id,
-          version_key,
-          prior_version_key,
-          percent_change,
-          contributor_weight_breakdown,
-          created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-      `
-    ).bind(
-      params.roomId,
-      params.roomVersion,
-      params.previousPublishedSnapshot?.version ?? null,
-      percentChange,
-      JSON.stringify([{ userId: params.userId, weight: 1 }]),
-      params.publishedAt,
-    ),
-  ]);
-
   const delta = createEmptyProgressionDelta();
   const significant = percentChange >= ROOM_SIGNIFICANT_CHANGE_THRESHOLD || params.previousPublishedSnapshot === null;
   if (!params.hasGoal || !significant) {
@@ -368,6 +347,25 @@ function runEarnsProgression(run: { result: string; verificationStatus?: string 
  * panel re-reads it right after a clear. The deferred progression award then finds the
  * event already recorded and does not add it again.
  */
+/** Run-finish awards move the totals with each event, so a re-run settle never strands one (F351). */
+const RUN_FINISH_AWARD: LaneAwardOptions = { addToTotals: true };
+
+function awardRunLaneDelta(
+  env: Env,
+  userId: string,
+  lane: 'pxp' | 'bxp' | 'cxp' | 'trust',
+  eventType: string,
+  sourceType: string,
+  sourceId: string,
+  dedupeKey: string,
+  amount: number,
+  createdAt: string,
+  breakdown?: Record<string, unknown> | null,
+): Promise<number> {
+  return awardLaneDelta(env, userId, lane, eventType, sourceType, sourceId, dedupeKey, amount, createdAt,
+    breakdown ?? null, RUN_FINISH_AWARD);
+}
+
 export async function awardRunDailyClear(
   env: Env,
   run: { result: string; verificationStatus?: string; userId: string },
@@ -378,9 +376,15 @@ export async function awardRunDailyClear(
     return;
   }
 
-  const pxp = await awardDailyClear(env, run.userId, target.type, target.id, target.version, completedAt);
+  // The award adds to the progress row, so it must exist first; the daily-room check is a separate
+  // read, so the two share one wait (F333).
+  const [, date] = await Promise.all([
+    loadOrBackfillUserProgress(env, run.userId),
+    findDailyClearDate(env, target.type, target.id, target.version, completedAt),
+  ]);
+  const pxp = date ? await awardDailyClearOn(env, run.userId, date, completedAt, RUN_FINISH_AWARD) : 0;
   if (pxp > 0) {
-    await persistProgressIncrement(env, run.userId, { ...createEmptyProgressionDelta(), pxp }, completedAt);
+    await refreshProgressLevels(env, run.userId);
   }
 }
 
@@ -398,162 +402,19 @@ export async function awardRoomRunProgression(
     ownContent?: boolean;
   },
 ): Promise<ProgressionDelta> {
-  const delta = createEmptyProgressionDelta();
-  if (params.run.result !== 'completed' || (params.run.verificationStatus !== undefined && !['not_required', 'passed'].includes(params.run.verificationStatus))) {
-    return delta;
-  }
-
-  const dayKey = getUtcDayKey(params.completedAt);
-  const weekKey = getUtcWeekKey(params.completedAt);
-
-  delta.pxp += await awardDailyClear(env,params.run.userId,'room',params.run.roomId,params.run.roomVersion,params.completedAt);
-
-  if (params.isFirstCompletion) {
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.run.userId,
-      'pxp',
-      'room_clear_first',
-      'room',
-      `${params.run.roomId}:${params.run.roomVersion}`,
-      `pxp:room_clear_first:${params.run.userId}:${params.run.roomId}:${params.run.roomVersion}`,
-      LANE_BASE_XP.roomClear,
-      params.completedAt,
-    );
-  }
-
-  delta.pxp += await awardLaneDelta(
-    env,
-    params.run.userId,
-    'pxp',
-    'weekly_play',
-    'user_week',
-    weekKey,
-    `pxp:weekly_play:${params.run.userId}:${weekKey}`,
-    LANE_BASE_XP.weeklyPlay,
-    params.completedAt,
-  );
-
-  if (params.isNewPersonalBest) {
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.run.userId,
-      'pxp',
-      'daily_personal_best',
-      'room',
-      `${params.run.roomId}:${params.run.roomVersion}:${dayKey}`,
-      `pxp:daily_room_pb:${params.run.userId}:${params.run.roomId}:${params.run.roomVersion}:${dayKey}`,
-      LANE_BASE_XP.dailyPb,
-      params.completedAt,
-    );
-  }
-
-  const family = resolveAggregatedRoomLeaderboardSelection(params.roomRecord, params.run.roomVersion).leaderboardFamilyVersions;
-  const runs = params.ownContent ? [] : await loadLeaderboardRoomRunsForVersions(env, params.run.roomId, family, params.goal);
-  const currentRank = computeRoomRankForAttempt(runs, params.goal, params.run.attemptId);
-  const previousRank = computeRoomRankForAttempt(
-    runs.filter((entry) => entry.attemptId !== params.run.attemptId),
-    params.goal,
-    params.run.attemptId,
-    params.run.userId,
-  );
-
-  if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.run.userId,
-      'pxp',
-      'top10_entry',
-      'room_attempt',
-      params.run.attemptId,
-      `pxp:room_top10_entry:${params.run.attemptId}`,
-      LANE_BASE_XP.top10Entry,
-      params.completedAt,
-      { rank: currentRank },
-    );
-  }
-  if (currentRank !== null && previousRank !== null && currentRank < previousRank && currentRank <= 10) {
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.run.userId,
-      'pxp',
-      'top10_improve',
-      'room_attempt',
-      params.run.attemptId,
-      `pxp:room_top10_improve:${params.run.attemptId}`,
-      LANE_BASE_XP.top10Improve,
-      params.completedAt,
-      { previousRank, currentRank },
-    );
-  }
-  if (currentRank === 1 && previousRank !== 1) {
-    const priorLeader = sortCompletedRunsForLeaderboard(runs.filter(entry => entry.attemptId !== params.run.attemptId), params.goal)[0];
-
-    delta.pxp += await awardLaneDelta(
-      env,
-      params.run.userId,
-      'pxp',
-      'top1_take',
-      'room_attempt',
-      params.run.attemptId,
-      `pxp:room_top1_take:${params.run.attemptId}`,
-      LANE_BASE_XP.top1,
-      params.completedAt,
-      { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion,
-        builderUserId: params.creatorUserId, dethronedUserId: priorLeader?.userId ?? null } },
-    );
-  }
-
-  const ratingWindow = buildRoomRatingWindow(params.roomRecord.versions, params.run.roomVersion);
-  if (!params.ownContent) {
-    delta.trust += await awardCappedTrustDelta(env, params.run.userId, {
-      eventType: 'room_clear_completed',
-      sourceType: 'room_attempt',
-      sourceId: params.run.attemptId,
-      dedupeKey: `trust:room_clear:${params.run.userId}:${params.run.roomId}:${ratingWindow.versionKey}`,
-      amount: 1,
-      createdAt: params.completedAt,
-    }, CLEAR_TRUST_CAP);
-  }
-
-  if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
-    const creatorProgress = await loadOrBackfillUserProgress(env, params.creatorUserId);
-    const creatorWeight = builderContributionWeightFromTier(
-      await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
-    );
-    const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueRoomCompletion * creatorWeight));
-    // The creator's rewards are saved to the creator; the runner's stay in delta.
-    const creatorDelta: ProgressionDelta = {
-      pxp: 0,
-      bxp: await awardLaneDelta(
-        env,
-        params.creatorUserId,
-        'bxp',
-        'unique_completion_room',
-        'room_completion',
-        `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        `bxp:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        creatorBxp,
-        params.completedAt,
-        { activity: { contentType: 'room', contentId: params.run.roomId, version: params.run.roomVersion, actorUserId: params.run.userId } },
-      ),
-      cxp: 0,
-      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
-        eventType: 'unique_completion_room',
-        sourceType: 'room_completion',
-        sourceId: `${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        dedupeKey: `trust:room_unique_completion:${params.creatorUserId}:${params.run.roomId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        amount: 2,
-        createdAt: params.completedAt,
-      }, CREATOR_TRUST_CAP),
-    };
-    await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
-    await syncUserBadges(env, params.creatorUserId);
-  }
-
-  await persistProgressIncrement(env, params.run.userId, delta, params.completedAt);
-  await syncUserBadges(env, params.run.userId);
-  return delta;
+  return awardRunProgression(env,params,{
+    kind:'room',id:params.run.roomId,version:params.run.roomVersion,
+    clearXp:LANE_BASE_XP.roomClear,creatorBxp:LANE_BASE_XP.uniqueRoomCompletion,creatorTrust:2,
+    ratingWindow:()=>buildRoomRatingWindow(params.roomRecord.versions,params.run.roomVersion),
+    rankInfo:async()=>{
+      const family=resolveAggregatedRoomLeaderboardSelection(params.roomRecord,params.run.roomVersion).leaderboardFamilyVersions;
+      const runs=params.ownContent ? [] : await loadLeaderboardRoomRunsForVersions(env,params.run.roomId,family,params.goal);
+      const previous=runs.filter(entry=>entry.attemptId!==params.run.attemptId);
+      return {currentRank:computeRoomRankForAttempt(runs,params.goal,params.run.attemptId),
+        previousRank:computeRoomRankForAttempt(previous,params.goal,params.run.attemptId,params.run.userId),
+        priorLeader:sortCompletedRunsForLeaderboard(previous,params.goal)[0]};
+    },
+  });
 }
 
 export async function awardCourseRunProgression(
@@ -572,30 +433,70 @@ export async function awardCourseRunProgression(
     rankVersions?: readonly number[];
   },
 ): Promise<ProgressionDelta> {
+  return awardRunProgression(env,params,{
+    kind:'course',id:params.run.courseId,version:params.run.courseVersion,
+    clearXp:LANE_BASE_XP.courseClear,creatorBxp:LANE_BASE_XP.uniqueCourseCompletion,creatorTrust:3,
+    ratingWindow:()=>buildCourseRatingWindow(params.courseRecord.versions,params.run.courseVersion,params.run.courseId),
+    rankInfo:async()=>{
+      const runs=params.ownContent ? [] : await loadCompletedCourseRunsForVersions(env,params.run.courseId,params.rankVersions ?? [params.run.courseVersion]);
+      const previous=runs.filter(entry=>entry.attemptId!==params.run.attemptId);
+      return {currentRank:computeCourseRankForAttempt(runs,params.goal,params.run.attemptId),
+        previousRank:computeCourseRankForAttempt(previous,params.goal,params.run.attemptId,params.run.userId),
+        priorLeader:[...previous].sort((left,right)=>compareCourseLeaderboardEntries(left,right,params.goal))[0]};
+    },
+  });
+}
+
+interface RunProgressionParams {
+  run: Pick<RoomRunRecord,'attemptId'|'userId'|'result'|'verificationStatus'>;
+  isFirstCompletion: boolean;
+  isNewPersonalBest: boolean;
+  creatorUserId: string | null;
+  completedAt: string;
+  ownContent?: boolean;
+}
+interface RunProgressionTarget {
+  kind: 'room'|'course';
+  id: string;
+  version: number;
+  clearXp: number;
+  creatorBxp: number;
+  creatorTrust: number;
+  ratingWindow: ()=>{versionKey:number};
+  rankInfo: ()=>Promise<{currentRank:number|null;previousRank:number|null;priorLeader?:{userId:string}}>;
+}
+
+/** Per-kind adapters keep ranking and persisted identities; all lane awards share this pipeline. */
+async function awardRunProgression(
+  env: Env,params: RunProgressionParams,target: RunProgressionTarget,
+): Promise<ProgressionDelta> {
   const delta = createEmptyProgressionDelta();
-  if (params.run.result !== 'completed' || (params.run.verificationStatus !== undefined && !['not_required', 'passed'].includes(params.run.verificationStatus))) {
+  if (!runEarnsProgression(params.run)) {
     return delta;
   }
 
   const dayKey = getUtcDayKey(params.completedAt);
   const weekKey = getUtcWeekKey(params.completedAt);
 
-  delta.pxp += await awardDailyClear(env,params.run.userId,'course',params.run.courseId,params.run.courseVersion,params.completedAt);
+  // Each award below adds to the totals in its own batch, so the runner's row must exist first.
+  await loadOrBackfillUserProgress(env, params.run.userId);
+  delta.pxp += await awardDailyClear(env,params.run.userId,target.kind,target.id,target.version,params.completedAt,RUN_FINISH_AWARD);
 
   if (params.isFirstCompletion) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
-      'course_clear_first',
-      'course',
-      `${params.run.courseId}:${params.run.courseVersion}`,
-      `pxp:course_clear_first:${params.run.userId}:${params.run.courseId}:${params.run.courseVersion}`,
-      LANE_BASE_XP.courseClear,
+      `${target.kind}_clear_first`,
+      target.kind,
+      `${target.id}:${target.version}`,
+      `pxp:${target.kind}_clear_first:${params.run.userId}:${target.id}:${target.version}`,
+      target.clearXp,
       params.completedAt,
     );
   }
-  delta.pxp += await awardLaneDelta(
+
+  delta.pxp += await awardRunLaneDelta(
     env,
     params.run.userId,
     'pxp',
@@ -606,88 +507,78 @@ export async function awardCourseRunProgression(
     LANE_BASE_XP.weeklyPlay,
     params.completedAt,
   );
+
   if (params.isNewPersonalBest) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
       'daily_personal_best',
-      'course',
-      `${params.run.courseId}:${params.run.courseVersion}:${dayKey}`,
-      `pxp:daily_course_pb:${params.run.userId}:${params.run.courseId}:${params.run.courseVersion}:${dayKey}`,
+      target.kind,
+      `${target.id}:${target.version}:${dayKey}`,
+      `pxp:daily_${target.kind}_pb:${params.run.userId}:${target.id}:${target.version}:${dayKey}`,
       LANE_BASE_XP.dailyPb,
       params.completedAt,
     );
   }
 
-  const runs = params.ownContent
-    ? []
-    : await loadCompletedCourseRunsForVersions(env, params.run.courseId, params.rankVersions ?? [params.run.courseVersion]);
-  const currentRank = computeCourseRankForAttempt(runs, params.goal, params.run.attemptId);
-  const previousRank = computeCourseRankForAttempt(
-    runs.filter((entry) => entry.attemptId !== params.run.attemptId),
-    params.goal,
-    params.run.attemptId,
-    params.run.userId,
-  );
+  const {currentRank,previousRank,priorLeader}=await target.rankInfo();
 
   if (currentRank !== null && currentRank <= 10 && (previousRank === null || previousRank > 10)) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
       'top10_entry',
-      'course_attempt',
+      `${target.kind}_attempt`,
       params.run.attemptId,
-      `pxp:course_top10_entry:${params.run.attemptId}`,
+      `pxp:${target.kind}_top10_entry:${params.run.attemptId}`,
       LANE_BASE_XP.top10Entry,
       params.completedAt,
       { rank: currentRank },
     );
   }
   if (currentRank !== null && previousRank !== null && currentRank < previousRank && currentRank <= 10) {
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
       'top10_improve',
-      'course_attempt',
+      `${target.kind}_attempt`,
       params.run.attemptId,
-      `pxp:course_top10_improve:${params.run.attemptId}`,
+      `pxp:${target.kind}_top10_improve:${params.run.attemptId}`,
       LANE_BASE_XP.top10Improve,
       params.completedAt,
       { previousRank, currentRank },
     );
   }
   if (currentRank === 1 && previousRank !== 1) {
-    const priorLeader = runs.filter(entry => entry.attemptId !== params.run.attemptId)
-      .sort((left, right) => compareCourseLeaderboardEntries(left, right, params.goal))[0];
 
-    delta.pxp += await awardLaneDelta(
+    delta.pxp += await awardRunLaneDelta(
       env,
       params.run.userId,
       'pxp',
       'top1_take',
-      'course_attempt',
+      `${target.kind}_attempt`,
       params.run.attemptId,
-      `pxp:course_top1_take:${params.run.attemptId}`,
+      `pxp:${target.kind}_top1_take:${params.run.attemptId}`,
       LANE_BASE_XP.top1,
       params.completedAt,
-      { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion,
+      { activity: { contentType: target.kind, contentId: target.id, version: target.version,
         builderUserId: params.creatorUserId, dethronedUserId: priorLeader?.userId ?? null } },
     );
   }
 
-  const ratingWindow = buildCourseRatingWindow(params.courseRecord.versions, params.run.courseVersion, params.run.courseId);
+  const ratingWindow=target.ratingWindow();
   if (!params.ownContent) {
     delta.trust += await awardCappedTrustDelta(env, params.run.userId, {
-      eventType: 'course_clear_completed',
-      sourceType: 'course_attempt',
+      eventType: `${target.kind}_clear_completed`,
+      sourceType: `${target.kind}_attempt`,
       sourceId: params.run.attemptId,
-      dedupeKey: `trust:course_clear:${params.run.userId}:${params.run.courseId}:${ratingWindow.versionKey}`,
+      dedupeKey: `trust:${target.kind}_clear:${params.run.userId}:${target.id}:${ratingWindow.versionKey}`,
       amount: 1,
       createdAt: params.completedAt,
-    }, CLEAR_TRUST_CAP);
+    }, CLEAR_TRUST_CAP, RUN_FINISH_AWARD);
   }
 
   if (params.creatorUserId && params.creatorUserId !== params.run.userId) {
@@ -695,36 +586,33 @@ export async function awardCourseRunProgression(
     const creatorWeight = builderContributionWeightFromTier(
       await loadEffectiveTrustTier(env, params.creatorUserId, creatorProgress),
     );
-    const creatorBxp = Math.max(1, Math.round(LANE_BASE_XP.uniqueCourseCompletion * creatorWeight));
-    const creatorDelta: ProgressionDelta = {
-      pxp: 0,
-      bxp: await awardLaneDelta(
-        env,
-        params.creatorUserId,
-        'bxp',
-        'unique_completion_course',
-        'course_completion',
-        `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        `bxp:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        creatorBxp,
-        params.completedAt,
-        { activity: { contentType: 'course', contentId: params.run.courseId, version: params.run.courseVersion, actorUserId: params.run.userId } },
-      ),
-      cxp: 0,
-      trust: await awardCappedTrustDelta(env, params.creatorUserId, {
-        eventType: 'unique_completion_course',
-        sourceType: 'course_completion',
-        sourceId: `${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        dedupeKey: `trust:course_unique_completion:${params.creatorUserId}:${params.run.courseId}:${ratingWindow.versionKey}:${params.run.userId}`,
-        amount: 3,
-        createdAt: params.completedAt,
-      }, CREATOR_TRUST_CAP),
-    };
-    await persistProgressIncrement(env, params.creatorUserId, creatorDelta, params.completedAt);
+    const creatorBxp = Math.max(1, Math.round(target.creatorBxp * creatorWeight));
+    // The creator's rewards are saved to the creator, each with its total; the runner's stay in delta.
+    await awardRunLaneDelta(
+      env,
+      params.creatorUserId,
+      'bxp',
+      `unique_completion_${target.kind}`,
+      `${target.kind}_completion`,
+      `${target.id}:${ratingWindow.versionKey}:${params.run.userId}`,
+      `bxp:${target.kind}_unique_completion:${params.creatorUserId}:${target.id}:${ratingWindow.versionKey}:${params.run.userId}`,
+      creatorBxp,
+      params.completedAt,
+      { activity: { contentType: target.kind, contentId: target.id, version: target.version, actorUserId: params.run.userId } },
+    );
+    await awardCappedTrustDelta(env, params.creatorUserId, {
+      eventType: `unique_completion_${target.kind}`,
+      sourceType: `${target.kind}_completion`,
+      sourceId: `${target.id}:${ratingWindow.versionKey}:${params.run.userId}`,
+      dedupeKey: `trust:${target.kind}_unique_completion:${params.creatorUserId}:${target.id}:${ratingWindow.versionKey}:${params.run.userId}`,
+      amount: target.creatorTrust,
+      createdAt: params.completedAt,
+    }, CREATOR_TRUST_CAP, RUN_FINISH_AWARD);
+    await refreshProgressLevels(env, params.creatorUserId);
     await syncUserBadges(env, params.creatorUserId);
   }
 
-  await persistProgressIncrement(env, params.run.userId, delta, params.completedAt);
+  await refreshProgressLevels(env, params.run.userId);
   await syncUserBadges(env, params.run.userId);
   return delta;
 }

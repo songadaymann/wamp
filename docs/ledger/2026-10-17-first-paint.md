@@ -1,0 +1,1 @@
+| 2026-10-17 | F025 | [#236](https://github.com/songadaymann/wamp/pull/236) | [receipt](docs/review/wamp-first-paint-2026-10-17.md) | Faster first paint: deferred editor styles, compressed fonts, five rare menus deferred |

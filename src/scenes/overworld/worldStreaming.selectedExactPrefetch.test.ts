@@ -1,3 +1,4 @@
+import { createWorldStreamingHarness } from './worldStreaming.testHarness';
 import { describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '../../persistence/roomModel';
 import type { WorldRoomSummary } from '../../persistence/worldModel';
@@ -21,7 +22,7 @@ describe('world streaming selected exact prefetch', () => {
     const prefetchPublishedRoom = vi.fn(() => loaded.promise);
     const onSelectedExactRoomSnapshotReady = vi.fn();
     const harness = Object.assign(
-      Object.create(OverworldWorldStreamingController.prototype) as Record<string, unknown>,
+      createWorldStreamingHarness() as Record<string, unknown>,
       {
         options: {
           getMode: () => 'browse',

@@ -75,7 +75,3 @@ class ApiAvatarRepository implements AvatarRepository {
 export function createAvatarRepository(): AvatarRepository {
   return new ApiAvatarRepository(getApiBaseUrl());
 }
-
-export function isAvatarApiError(value: unknown): value is AvatarApiError {
-  return value instanceof AvatarApiError;
-}

@@ -1,0 +1,1 @@
+| 2026-10-23 | F302 | [#310](https://github.com/songadaymann/wamp/pull/310) | [receipt](docs/review/wamp-round2-speed-2026-10-23.md) | Sword Hunter jump simulations are warmed ahead of the first plan, with routes unchanged |

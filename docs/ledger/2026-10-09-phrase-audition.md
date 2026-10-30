@@ -1,0 +1,1 @@
+| 2026-10-09 | F231 | [#103](https://github.com/songadaymann/wamp/pull/103) | [receipt](docs/review/wamp-phrase-audition-2026-10-09.md) | Hear library phrases before placing them; Arrange shows the playing slot |

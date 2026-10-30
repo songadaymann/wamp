@@ -24,13 +24,24 @@ npm run smoke:mobile:ci -- --record
 
 Both engines use phone/tablet viewports and touch emulation; WebKit uses Canvas. This catches engine, layout and control differences. It does not reproduce physical iOS input zoom, collapsing toolbars, safe areas or audio unlock; those still need a real device. Keyboard cases shrink only visualViewport while keeping the layout viewport in portrait, type actual key events, check 16px field text and visibility, then restore the viewport. Chat/Say use synthetic signed API responses, refuse sockets and send no messages.
 
+## Nightly Smokes
+
+The other browser smokes run every night and when a pull request changes their runner, manifest, replay fixture helper or workflow (`.github/workflows/nightly-smokes.yml`, also startable by hand from the Actions tab). `scripts/lib/smokeManifest.mjs` lists every smoke and probe script with what it covers and where it runs: `ci`, `nightly` (with its group), `deploy`, `manual` (with the reason) or `devtool`. `scripts/smoke_manifest.test.ts` fails when a new script isn't listed or a Playwright script doesn't import `scripts/lib/mutedBrowsers.mjs`.
+
+```bash
+npm run smoke:nightly -- --list
+npm run smoke:nightly -- --group editor
+npm run smoke:nightly -- --only smoke_police_enemies.mjs --skip-build
+```
+
+Each run builds the test-hook frontend into `dist-mobile-smoke/` and starts `wrangler dev --local` on `127.0.0.1:8788` with a new D1 directory, a dedicated config, throwaway secrets and debug sign-in links. The config has no production email, queue, or service bindings, and the stack and temporary database directory are removed at exit. Logs and `results.json` land in `output/nightly-smokes/<group>/`. A terminal error that matches a script's `knownIssue` is reported as a known product bug without failing the night; matching earlier diagnostic output is insufficient. Timeouts always fail. The combined report fails for missing or incomplete group artifacts; manually selected groups are checked only against their selected group.
+
 ## Fast Automated Smoke
 
 Start a frontend that can reach a real API, then run the mobile smoke:
 
 ```bash
 VITE_ROOM_API_BASE_URL="https://api.wamp.land" \
-VITE_PARTYKIT_HOST="everybodys-platformer-presence.songadaymann.partykit.dev" \
 npm run dev -- --host 127.0.0.1
 ```
 
@@ -67,16 +78,15 @@ Use the Mac's Wi-Fi IP for a real phone or tablet on the same network:
 LAN_IP="$(ipconfig getifaddr en0)"
 ```
 
-For a local Worker-backed run:
+For a local Worker-backed run, the Worker also serves presence. `/api` goes through the Vite proxy, but the phone opens presence sockets to the Worker's own port, so `wrangler dev` must listen on the LAN too:
 
 ```bash
-npm run dev:api
-npm run dev:presence
+npm run dev:api -- --ip 0.0.0.0
 ```
 
 ```bash
 VITE_ROOM_API_BASE_URL="" \
-VITE_PARTYKIT_HOST="${LAN_IP}:1999" \
+VITE_PARTYKIT_HOST="${LAN_IP}:8787" \
 npm run dev -- --host 0.0.0.0
 ```
 
@@ -94,11 +104,7 @@ http://${LAN_IP}:3000/?x=0&y=0
 
 Use the actual Vite port if the local server is running somewhere else, for example `3232`.
 
-If the phone cannot reach local PartyKit, use the deployed PartyKit host for frontend testing:
-
-```bash
-VITE_PARTYKIT_HOST="everybodys-platformer-presence.songadaymann.partykit.dev"
-```
+If the phone cannot reach the local Worker's port, run the frontend against the safety backend instead (see the profiler setup below). Its `/api/auth/session` supplies the safety Worker's presence host.
 
 For magic-link auth on the phone, make sure the Worker `APP_BASE_URL` points at the phone URL or an HTTPS preview URL. A localhost `APP_BASE_URL` will send the phone back to the Mac-only loopback address.
 
@@ -108,7 +114,6 @@ For real-device lag checks, start the LAN frontend against the safety backend:
 
 ```bash
 VITE_ROOM_API_BASE_URL="https://everybodys-platformer-safety.novox-robot.workers.dev" \
-VITE_PARTYKIT_HOST="everybodys-platformer-presence-safety.songadaymann.partykit.dev" \
 npm run dev -- --host 0.0.0.0 --port 3232
 ```
 

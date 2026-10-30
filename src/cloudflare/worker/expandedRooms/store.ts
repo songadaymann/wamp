@@ -1,7 +1,6 @@
 import { toCourseGoalType } from '../../../courses/model';
 import {
   createExpandedRoomSummaryFromLegacyCourse,
-  createExpandedRoomSummaryFromResolvedTarget,
   createExpandedRoomSummaryFromStandaloneRoom,
   expandedRoomIdFromLegacyCourseId,
   isExpandedRoomGoalType,
@@ -100,24 +99,15 @@ export async function loadPublishedExpandedRoomMembershipsInBounds(
   maxY: number
 ): Promise<ExpandedRoomCellMembership[]> {
   const membershipsByRoomId = new Map<string, ExpandedRoomCellMembership>();
-  const nativeMemberships = await loadNativeExpandedRoomMembershipsInBounds(
-    env,
-    minX,
-    maxX,
-    minY,
-    maxY
-  );
+  // Independent reads, so they share one wait; native memberships still win a shared room.
+  const [nativeMemberships, legacyMemberships] = await Promise.all([
+    loadNativeExpandedRoomMembershipsInBounds(env, minX, maxX, minY, maxY),
+    loadLegacyCourseMembershipsAsExpandedRoomsInBounds(env, minX, maxX, minY, maxY),
+  ]);
   for (const membership of nativeMemberships) {
     membershipsByRoomId.set(membership.roomId, membership);
   }
 
-  const legacyMemberships = await loadLegacyCourseMembershipsAsExpandedRoomsInBounds(
-    env,
-    minX,
-    maxX,
-    minY,
-    maxY
-  );
   for (const membership of legacyMemberships) {
     if (membershipsByRoomId.has(membership.roomId)) {
       continue;
@@ -918,7 +908,7 @@ function getPublishedGameplaySettings(raw: string | null): {
   }
 }
 
-function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {
+export function getLegacyCourseIdFromExpandedRoomId(expandedRoomId: string): string | null {
   return expandedRoomId.startsWith('course:') ? expandedRoomId.slice('course:'.length) : null;
 }
 
@@ -955,10 +945,4 @@ function chunkValues<T>(values: T[], size: number): T[][] {
     chunks.push(values.slice(index, index + size));
   }
   return chunks;
-}
-
-export function createExpandedRoomMembershipSummaryFromTarget(
-  target: ResolvedExpandedRoomTarget
-) {
-  return createExpandedRoomSummaryFromResolvedTarget(target);
 }

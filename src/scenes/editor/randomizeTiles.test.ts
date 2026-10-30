@@ -6,11 +6,11 @@ import {
   TILE_FLIP_Y_FLAG,
   decodeTileDataValue,
   editorState,
+  updateEditorState,
   getSelectionTileValue,
 } from '../../config';
 import {
   applyEditorTileFlipModes,
-  applyRandomizeFlips,
   clampRandomizeBrushSize,
   collectOccupiedSelectionValues,
   isScrambleOneByOne,
@@ -45,25 +45,23 @@ describe('randomizeTiles', () => {
   });
 
   it('applies rand flip modes independently of the current flags', () => {
-    editorState.tileFlipXMode = 'rand';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'rand' });
+    updateEditorState({ tileFlipYMode: 'off' });
     expect(applyEditorTileFlipModes(12, { random: () => 0.1 })).toBe(12 + TILE_FLIP_X_FLAG);
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'off' });
+    updateEditorState({ tileFlipYMode: 'off' });
   });
 
   it('keeps special tileset tiles unflipped when the brush or a copy is mirrored', () => {
     const gid = SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_LOCAL_INDICES.gravityUp;
-    editorState.tileFlipXMode = 'on';
-    editorState.tileFlipYMode = 'on';
+    updateEditorState({ tileFlipXMode: 'on', tileFlipYMode: 'on' });
     expect(applyEditorTileFlipModes(gid)).toBe(gid);
     expect(decodeTileDataValue(gid + TILE_FLIP_X_FLAG + TILE_FLIP_Y_FLAG)).toEqual({
       gid,
       flipX: false,
       flipY: false,
     });
-    editorState.tileFlipXMode = 'off';
-    editorState.tileFlipYMode = 'off';
+    updateEditorState({ tileFlipXMode: 'off', tileFlipYMode: 'off' });
   });
 
   it('weights the occupied palette pool evenly, including duplicates', () => {
@@ -106,23 +104,15 @@ describe('randomizeTiles', () => {
     expect(sorted(shuffled.flat())).toEqual(sorted(source.flat()));
   });
 
-  it('randomizes H/V flips independently when those toggles are on', () => {
-    expect(applyRandomizeFlips(12, false, false, () => 0)).toBe(12);
-    expect(applyRandomizeFlips(12, true, false, () => 0.1)).toBe(12 + TILE_FLIP_X_FLAG);
-    expect(applyRandomizeFlips(12, true, false, () => 0.9)).toBe(12);
-    expect(applyRandomizeFlips(12, false, true, () => 0.1)).toBe(12 + TILE_FLIP_Y_FLAG);
-    expect(applyRandomizeFlips(-1, true, true, () => 0)).toBe(-1);
-  });
-
   it('skips empty mask cells the same way pencil stamps do', () => {
     const previous = editorState.selection;
-    editorState.selection = {
+    updateEditorState({ selection: {
       ...previous,
       width: 2,
       height: 1,
       occupiedMask: [[true, false]],
-    };
+    } });
     expect(getSelectionTileValue(1, 0)).toBe(-1);
-    editorState.selection = previous;
+    updateEditorState({ selection: previous });
   });
 });

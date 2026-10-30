@@ -7,7 +7,7 @@ vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthD
 import { RoomSequenceController } from './roomSequenceController';
 import type { RoomSequenceStartDetail } from './roomSequenceEvents';
 
-function fixture() {
+function fixture(leaderboard?: { loaded: boolean; open: (tab: 'room') => Promise<void>; close: () => void }) {
   auth.id = 'a';
   const buttons = new Map<string, EventTarget>();
   const doc = { body: { dataset: {} }, getElementById: (id: string) => {
@@ -17,8 +17,9 @@ function fixture() {
   const win = Object.assign(new EventTarget(), { setTimeout, clearTimeout });
   const summary = { reset: vi.fn(), finish: vi.fn() };
   const ratingModal = { openForSequence: vi.fn(async () => {}), close: vi.fn() };
-  const controller = new RoomSequenceController({} as never, { close: vi.fn() } as never,
-    { open: vi.fn(async () => {}) } as never, { close: vi.fn() }, doc as unknown as Document, win as unknown as Window, summary, ratingModal);
+  const controller = new RoomSequenceController({} as never, leaderboard ?? { close: vi.fn() } as never,
+    { open: vi.fn(async () => {}) } as never, { close: vi.fn() }, doc as unknown as Document, win as unknown as Window, summary,
+    leaderboard ? undefined : ratingModal);
   controller.init();
   const detail: RoomSequenceStartDetail = { kind: 'welcome', mode: 'play', sourceLabel: 'First Steps', kickerLabel: 'First Steps', forceGoalIntro: true,
     entries: [1, 2].map(x => ({ roomId: `${x},0`, roomCoordinates: { x, y: 0 }, roomVersion: 1 })) };
@@ -37,6 +38,19 @@ describe('Sequence navigation lifecycle', () => {
       await vi.advanceTimersByTimeAsync(500); expect(f.ratingModal.openForSequence).toHaveBeenLastCalledWith(f.detail.entries[1]); f.controller.destroy();
     } finally { vi.useRealTimers(); }
   });
+  it('says the Leaderboard could not load instead of waiting for a rating it can never send', async () => {
+    bridge.scene = { jumpToCoordinates: vi.fn(async () => {}) };
+    // A Leaderboard whose download failed: open() resolves, its card shows, and it never loads.
+    const leaderboard = { loaded: false, open: vi.fn(async () => {}), close: vi.fn() };
+    const f = fixture(leaderboard); f.detail.mode = 'rate'; await f.controller.start(f.detail);
+    const state = () => (f.win as unknown as { get_room_sequence_state(): { navigating: boolean; statusText: string | null } }).get_room_sequence_state();
+    expect(leaderboard.open).toHaveBeenCalledExactlyOnceWith('room');
+    expect(state()).toMatchObject({ navigating: false, statusText: "The Leaderboard couldn't load. Use Next for another room." });
+    expect((f.buttons.get('room-sequence-hud') as unknown as { setAttribute: ReturnType<typeof vi.fn> }).setAttribute)
+      .toHaveBeenLastCalledWith('data-sequence-tone', 'error');
+    leaderboard.loaded = true; f.buttons.get('btn-room-sequence-next')!.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(state().statusText).toBe('Rate this room, then the queue will advance.')); f.controller.destroy();
+  });
   it('discards a personal rating queue on account change before navigation returns', async () => {
     let resolve!: () => void;
     bridge.scene = { jumpToCoordinates: () => new Promise<void>(done => { resolve = done; }) };
@@ -46,7 +60,7 @@ describe('Sequence navigation lifecycle', () => {
   });
   it('cannot start a room after Stop while its navigation is pending', async () => {
     let resolve!: () => void; const playSelectedRoom = vi.fn();
-    bridge.scene = { jumpToCoordinates: () => new Promise<void>(done => { resolve = done; }), playSelectedRoom, returnToWorld: vi.fn() };
+    bridge.scene = { jumpToCoordinates: () => new Promise<void>(done => { resolve = done; }), playSelectedRoom, stopCurrentPlay: vi.fn() };
     const f = fixture(); const pending = f.controller.start(f.detail); f.controller.stop(); resolve(); await pending;
     expect(playSelectedRoom).not.toHaveBeenCalled(); f.controller.destroy();
   });
@@ -58,18 +72,32 @@ describe('Sequence navigation lifecycle', () => {
     resolvers[1](); await newer; expect(playSelectedRoom).toHaveBeenCalledExactlyOnceWith({ forceGoalIntro: true }); f.controller.destroy();
   });
   it('finishes First Steps in Browse with a summary instead of calling skips clears', async () => {
-    const returnToWorld = vi.fn(); bridge.scene = { jumpToCoordinates: vi.fn(async () => {}), playSelectedRoom: vi.fn(), returnToWorld };
+    const stopCurrentPlay = vi.fn(); bridge.scene = { jumpToCoordinates: vi.fn(async () => {}), playSelectedRoom: vi.fn(), stopCurrentPlay };
     const f = fixture(); await f.controller.start(f.detail);
     f.buttons.get('btn-room-sequence-next')!.dispatchEvent(new Event('click'));
     for (let i = 0; i < 6; i++) await Promise.resolve();
     f.buttons.get('btn-room-sequence-next')!.dispatchEvent(new Event('click'));
-    expect(returnToWorld).toHaveBeenCalledOnce(); expect(f.summary.finish).toHaveBeenCalledOnce(); f.controller.destroy();
+    expect(stopCurrentPlay).toHaveBeenCalledOnce(); expect(f.summary.finish).toHaveBeenCalledOnce(); f.controller.destroy();
   });
 
   it('routes mobile Stop through the sequence and prevents the normal toggle from running twice', async () => {
-    const returnToWorld = vi.fn(); bridge.scene = { jumpToCoordinates: vi.fn(async () => {}), playSelectedRoom: vi.fn(), returnToWorld };
+    // stopCurrentPlay is the shared stop path, so an active Room Rush still ends with its result.
+    const stopCurrentPlay = vi.fn(), returnToWorld = vi.fn();
+    bridge.scene = { jumpToCoordinates: vi.fn(async () => {}), playSelectedRoom: vi.fn(), stopCurrentPlay, returnToWorld };
     const f = fixture(); const toggle = vi.fn(); f.buttons.get('btn-mobile-world-stop')!.addEventListener('click', toggle);
     await f.controller.start(f.detail); f.buttons.get('btn-mobile-world-stop')!.dispatchEvent(new Event('click'));
-    expect(returnToWorld).toHaveBeenCalledOnce(); expect(toggle).not.toHaveBeenCalled(); expect(f.summary.finish).not.toHaveBeenCalled(); f.controller.destroy();
+    expect(stopCurrentPlay).toHaveBeenCalledOnce(); expect(returnToWorld).not.toHaveBeenCalled();
+    expect(toggle).not.toHaveBeenCalled(); expect(f.summary.finish).not.toHaveBeenCalled(); f.controller.destroy();
+  });
+
+  it('stops at a jump a Room Rush result took over instead of starting the Rush return room', async () => {
+    const playSelectedRoom = vi.fn(), stopCurrentPlay = vi.fn();
+    bridge.scene = { jumpToCoordinates: vi.fn(async () => false), playSelectedRoom, stopCurrentPlay };
+    const f = fixture(); await f.controller.start(f.detail);
+    expect(playSelectedRoom).not.toHaveBeenCalled();
+    // The Rush ended through its own result, so the sequence ends without another stop.
+    expect(stopCurrentPlay).not.toHaveBeenCalled();
+    const state = (f.win as unknown as { get_room_sequence_state(): { active: boolean; navigating: boolean } }).get_room_sequence_state();
+    expect(state).toMatchObject({ active: false, navigating: false }); f.controller.destroy();
   });
 });

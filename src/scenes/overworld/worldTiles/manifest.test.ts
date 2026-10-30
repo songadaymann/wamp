@@ -87,6 +87,13 @@ describe('world tile wire contracts', () => {
     });
     expect(() => parseWorldTileConfig({ schemaVersion: 2 }))
       .toThrow(WorldTileManifestCompatibilityError);
+    expect(parseWorldTileConfig({
+      schemaVersion: 1,
+      available: false,
+      rolloutPercentage: 0,
+      activeRendererVersion: null,
+      blockedCustomSpriteIds: ['vandal-art', 7, null],
+    }).blockedCustomSpriteIds).toEqual(['vandal-art']);
   });
 
   it('allows manifests only for renderer identities established by config', () => {

@@ -1,3 +1,5 @@
+import { getChallengeAttemptId } from '../../social/ghostChallengeLinks';
+import type { RuntimeModeReader } from './runtimeContext';
 import Phaser from 'phaser';
 import { hasCoopPressurePlates } from '../../placedObjects/coopPressurePlates';
 import { ensureSceneAvatarPackLoaded } from '../../player/avatar/dynamic';
@@ -17,7 +19,7 @@ export interface GhostRaceInfo {
 interface GhostRaceOptions {
   scene: Phaser.Scene;
   getRun(): GoalRunState | null;
-  getMode(): string;
+  runtime: RuntimeModeReader;
   getUserId(): string | null;
   getRoomOrigin(coordinates: RoomCoordinates): { x: number; y: number };
   onRaceInfoChanged(info: GhostRaceInfo | null): void;
@@ -28,6 +30,7 @@ export class OverworldGhostRaceController {
   private playback: GhostRacePlayback | null = null;
   private choice: GhostRaceChoice = 'off';
   private targetVersion = 0;
+  private challengeAttemptId: string | null = null;
   private targetRoom: Pick<RoomSnapshot, 'id' | 'version' | 'goal' | 'coordinates'> | null = null;
   private unsubscribe: (() => void) | null = null;
   private identity: string | null = null;
@@ -44,6 +47,7 @@ export class OverworldGhostRaceController {
     this.clear();
     if (choice === 'off' || (ghost && ghost.roomId !== room.id) || !supportsGhostRace(room.goal)
       || hasCoopPressurePlates(room.placedObjects ?? [])) return;
+    this.challengeAttemptId = choice === 'challenge' ? ghost?.attemptId ?? getChallengeAttemptId(room.coordinates) : null;
     this.choice = choice; this.targetVersion = room.version; this.targetRoom = room;
     this.identity = this.options.getUserId();
     this.unsubscribe = subscribeGhostBestUpdates(room.id, () => {
@@ -70,7 +74,7 @@ export class OverworldGhostRaceController {
   update(): void {
     const run = this.options.getRun(), ghost = this.playback?.ghost;
     if (run?.cooperative) { this.clear(); return; }
-    if (this.options.getMode() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
+    if (this.options.runtime.mode.get() !== 'play' || this.identity !== this.options.getUserId()) { this.clear(); return; }
     const visible = Boolean(run && ghost && run.roomId === ghost.roomId && run.roomVersion === this.targetVersion
       && run.qualificationState === 'qualified');
     this.sprite?.setVisible(visible);
@@ -92,7 +96,7 @@ export class OverworldGhostRaceController {
     if (this.footerGhost === ghost) return;
     this.footerGhost = ghost;
     this.options.onRaceInfoChanged(ghost ? {
-      name: `${this.choice === 'top' ? '#1 ' : ''}${ghost.displayName}`,
+      name: `${this.choice === 'top' ? '#1 ' : this.choice === 'challenge' ? 'Beat ' : ''}${ghost.displayName}`,
       elapsedMs: ghost.elapsedMs,
     } : null);
   }
@@ -116,17 +120,17 @@ export class OverworldGhostRaceController {
   }
   private async refreshRecording(expectedRun?: GoalRunState): Promise<void> {
     const room = this.targetRoom, choice = this.choice;
-    if (!room || choice === 'off' || this.options.getMode() !== 'play') return;
+    if (!room || choice === 'off' || this.options.runtime.mode.get() !== 'play') return;
     this.refreshRequest?.abort();
     const request = this.refreshRequest = new AbortController(), generation = this.generation;
     const identity = this.options.getUserId();
     const current = () => this.refreshRequest === request && !request.signal.aborted && generation === this.generation
-      && this.options.getMode() === 'play' && (!expectedRun || this.options.getRun() === expectedRun)
+      && this.options.runtime.mode.get() === 'play' && (!expectedRun || this.options.getRun() === expectedRun)
       && this.options.getUserId() === identity && this.targetRoom === room;
     try {
       const ghost = choice === 'personal' && !identity
         ? loadLocalGhostBest(getGhostStorage(), room.id, room.version)
-        : await loadRaceGhost(room.id, room.version, room.coordinates, choice, request.signal);
+        : await loadRaceGhost(room.id, room.version, room.coordinates, choice, request.signal, this.challengeAttemptId);
       if (!current()) return;
       this.setRecording(ghost);
       if (!ghost) this.options.showStatus?.('Ghost recording unavailable. Playing on your own.');
@@ -142,7 +146,7 @@ export class OverworldGhostRaceController {
     this.generation++; this.sprite?.destroy();
     this.sprite = null; this.pack = null; this.position = null;
     this.updateRaceInfo(null);
-    this.playback = null; this.choice = 'off'; this.identity = this.options.getUserId();
+    this.playback = null; this.choice = 'off'; this.challengeAttemptId = null; this.identity = this.options.getUserId();
   }
   getDebugSnapshot() {
     return { choice: this.choice, attemptId: this.playback?.ghost.attemptId ?? null,

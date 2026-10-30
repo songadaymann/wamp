@@ -1,3 +1,5 @@
+export { loadWorldRoomSummariesInBounds } from './worldSummaries';
+import { storedRoomProtectionSql } from './protection';
 import type { AuthUser } from '../../../auth/model';
 import { getLostSongPlacementError } from '../../../lostSongs/model';
 import type { PrincipalKind, RequestAuthSource } from '../../../agents/model';
@@ -23,7 +25,6 @@ import {
 import type {
   ClaimedUnpublishedWorldRoomSource,
   PublishedWorldRoomSource,
-  WorldRoomSummary,
 } from '../../../persistence/worldModel';
 import { buildRoomVersionLineage } from '../../../persistence/roomVersionLineage';
 import { getManualRoomLeaderboardSourceValidationError } from '../../../persistence/roomLeaderboardLineage';
@@ -47,6 +48,8 @@ import {
   enforceRoomMutationGuardrails,
   getDailyRoomClaimLimitForUser,
 } from './guardrails';
+import { assertOthersRoomEditsOpen, isEditOfOthersRoom } from './othersRoomEdits';
+import { assertRoomVersionNotRedacted, HIDDEN_VERSION_TITLE, hiddenVersionSnapshot } from './versionRedaction';
 import {
   applyWorldRoomPermissions,
   applyWorldRoomSummaryPermissions,
@@ -221,6 +224,8 @@ export interface RoomMutationOptions {
   // The record this request already loaded for the same room with loadRoomRecordForMutation,
   // so saveDraft does not sync ownership from Base and load the full history a second time.
   loadedRecord?: RoomRecord;
+  // Revert only: refuse with a 409 if someone published after the caller planned the revert.
+  expectedLatestVersion?: number;
 }
 
 interface CompactRoomRow extends RoomRow {
@@ -336,18 +341,19 @@ export async function loadRoomVersionPage(
         published_by_agent_id,
         published_by_display_name,
         reverted_from_version,
-        leaderboard_source_version
+        leaderboard_source_version,
+        redacted_at
       FROM room_versions
       WHERE room_id = ? AND (? IS NULL OR version < ?)
       ORDER BY version DESC
       LIMIT ?
     `,
-  ).bind(roomId, beforeVersion, beforeVersion, limit + 1).all<Omit<RoomVersionRow, 'snapshot_json'>>();
+  ).bind(roomId, beforeVersion, beforeVersion, limit + 1).all<Omit<RoomVersionRow, 'snapshot_json'> & { redacted_at: string | null }>();
   const hasMore = result.results.length > limit;
   const rows = result.results.slice(0, limit);
   const versions: RoomVersionSummary[] = rows.map((row) => ({
     version: row.version,
-    title: row.title,
+    title: row.redacted_at ? HIDDEN_VERSION_TITLE : row.title,
     createdAt: row.created_at,
     publishedByUserId: row.published_by_user_id,
     publishedByPrincipalKind: row.published_by_principal_type,
@@ -405,7 +411,7 @@ export async function loadRoomSnapshotsByReferences(
     (reference): reference is Extract<RoomSnapshotQueryReference, { kind: 'current_preview' }> => reference.kind === 'current_preview',
   );
   const versionStatements = chunkArray(versionReferences, 40).map((chunk) => env.DB.prepare(
-    `SELECT room_id, version, snapshot_json FROM room_versions WHERE (room_id, version) IN (${chunk.map(() => '(?, ?)').join(', ')})`,
+    `SELECT room_id, version, snapshot_json, redacted_at FROM room_versions WHERE (room_id, version) IN (${chunk.map(() => '(?, ?)').join(', ')})`,
   ).bind(...chunk.flatMap((reference) => [reference.roomId, reference.version])));
   const currentStatements = chunkArray(currentReferences, 60).map((chunk) => env.DB.prepare(
     `SELECT id, x, y, draft_json, published_json FROM rooms WHERE id IN (${chunk.map(() => '?').join(', ')})`,
@@ -419,10 +425,9 @@ export async function loadRoomSnapshotsByReferences(
     for (const row of result?.results ?? []) {
       const roomId = String(row.room_id);
       const version = Number(row.version);
-      snapshotsByKey.set(
-        snapshotReferenceKey({ kind: 'version', roomId, version }),
-        parseStoredSnapshot(String(row.snapshot_json), 'room version'),
-      );
+      const stored = parseStoredSnapshot(String(row.snapshot_json), 'room version');
+      snapshotsByKey.set(snapshotReferenceKey({ kind: 'version', roomId, version }),
+        row.redacted_at ? hiddenVersionSnapshot(stored) : stored);
     }
   }
 
@@ -633,10 +638,9 @@ function roomSummaryFromRecord(
 }
 
 /**
- * Loads a room for a write after syncing its ownership from Base. Saves, publishes and
- * reverts keep the stored ownership when the RPC fails ('use-stored'); minting and
- * explicit ownership refreshes pass 'throw'. The record is reloaded only when the
- * sync changed something.
+ * Syncs chain ownership before a write. Saves/publishes/reverts use stored ownership
+ * on provider failure; minting keeps its local-aware 'throw' behavior. Explicit
+ * ownership refreshes require fresh state, including locally. Reloads only on change.
  */
 export async function loadRoomRecordForMutation(
   env: Env,
@@ -728,6 +732,7 @@ export async function loadPublishedRoomsInBounds(
   const result = await env.DB.prepare(
     `
       SELECT
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted,
         published_json,
         claimer_user_id,
         claimer_display_name,
@@ -741,6 +746,7 @@ export async function loadPublishedRoomsInBounds(
   )
     .bind(minX, maxX, minY, maxY)
     .all<{
+      is_minted: number;
       published_json: string;
       claimer_user_id: string | null;
       claimer_display_name: string | null;
@@ -750,6 +756,7 @@ export async function loadPublishedRoomsInBounds(
 
   return result.results.map((row) => ({
     state: 'published',
+    ...(row.is_minted === 1 ? { isMinted: true } : {}),
     snapshot: parseStoredSnapshot(row.published_json, 'published room'),
     creatorUserId: row.claimer_user_id ?? row.last_published_by_user_id,
     creatorDisplayName: row.claimer_display_name ?? row.last_published_by_display_name,
@@ -766,6 +773,7 @@ export async function loadClaimedUnpublishedRoomsInBounds(
   const result = await env.DB.prepare(
     `
       SELECT
+        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted,
         draft_json,
         claimer_user_id,
         claimer_display_name
@@ -779,6 +787,7 @@ export async function loadClaimedUnpublishedRoomsInBounds(
   )
     .bind(minX, maxX, minY, maxY)
     .all<{
+      is_minted: number;
       draft_json: string;
       claimer_user_id: string | null;
       claimer_display_name: string | null;
@@ -786,81 +795,10 @@ export async function loadClaimedUnpublishedRoomsInBounds(
 
   return result.results.map((row) => ({
     state: 'claimed_unpublished',
+    ...(row.is_minted === 1 ? { isMinted: true } : {}),
     snapshot: parseStoredSnapshot(row.draft_json, 'claimed unpublished room'),
     claimerUserId: row.claimer_user_id,
     claimerDisplayName: row.claimer_display_name,
-  }));
-}
-
-export async function loadWorldRoomSummariesInBounds(
-  env: Env,
-  minX: number,
-  maxX: number,
-  minY: number,
-  maxY: number,
-): Promise<WorldRoomSummary[]> {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        id,
-        x,
-        y,
-        CASE WHEN published_json IS NOT NULL THEN 'published' ELSE 'claimed_unpublished' END AS state,
-        CASE WHEN published_json IS NOT NULL THEN published_title ELSE draft_title END AS title,
-        CASE WHEN published_json IS NOT NULL
-          THEN json_extract(published_json, '$.background')
-          ELSE json_extract(draft_json, '$.background') END AS background,
-        CASE WHEN published_json IS NOT NULL
-          THEN json_extract(published_json, '$.goal.type')
-          ELSE json_extract(draft_json, '$.goal.type') END AS goal_type,
-        CAST(CASE WHEN published_json IS NOT NULL
-          THEN json_extract(published_json, '$.version')
-          ELSE json_extract(draft_json, '$.version') END AS INTEGER) AS version,
-        CASE WHEN published_json IS NOT NULL THEN json_extract(published_json, '$.publishedAt') ELSE NULL END AS published_at,
-        CASE WHEN published_json IS NOT NULL
-          THEN json_extract(published_json, '$.updatedAt')
-          ELSE json_extract(draft_json, '$.updatedAt') END AS preview_updated_at,
-        claimer_user_id,
-        claimer_display_name,
-        last_published_by_user_id,
-        last_published_by_display_name
-      FROM rooms
-      WHERE x BETWEEN ? AND ?
-        AND y BETWEEN ? AND ?
-        AND (published_json IS NOT NULL OR (claimer_user_id IS NOT NULL AND claimed_at IS NOT NULL))
-    `,
-  ).bind(minX, maxX, minY, maxY).all<{
-    id: string;
-    x: number;
-    y: number;
-    state: 'published' | 'claimed_unpublished';
-    title: string | null;
-    background: string | null;
-    goal_type: WorldRoomSummary['goalType'];
-    version: number | null;
-    published_at: string | null;
-    preview_updated_at: string | null;
-    claimer_user_id: string | null;
-    claimer_display_name: string | null;
-    last_published_by_user_id: string | null;
-    last_published_by_display_name: string | null;
-  }>();
-  return result.results.map((row) => ({
-    id: row.id,
-    coordinates: { x: Number(row.x), y: Number(row.y) },
-    title: row.title,
-    state: row.state,
-    background: row.background,
-    goalType: row.goal_type,
-    version: row.version === null ? null : Number(row.version),
-    publishedAt: row.published_at,
-    previewUpdatedAt: row.preview_updated_at,
-    creatorUserId: row.claimer_user_id ?? (row.state === 'published' ? row.last_published_by_user_id : null),
-    creatorDisplayName: row.claimer_display_name ?? (row.state === 'published' ? row.last_published_by_display_name : null),
-    publishedByUserId: row.state === 'published' ? row.last_published_by_user_id : null,
-    publishedByDisplayName: row.state === 'published' ? row.last_published_by_display_name : null,
-    course: null,
-    expandedRoom: null,
   }));
 }
 
@@ -953,6 +891,9 @@ export async function saveDraft(
     }
 
     throw new HttpError(403, 'Only the room claimer can save drafts for this unpublished room.');
+  }
+  if (viewerUserId && !world && isEditOfOthersRoom(existing, viewerUserId, actorIsAdmin)) {
+    assertOthersRoomEditsOpen(env);
   }
   assertDraftUnchangedSince(existing, options.expectedDraftUpdatedAt);
   const now = new Date().toISOString();
@@ -1258,6 +1199,10 @@ export async function revertRoom(
   if (!target) {
     throw new HttpError(404, `Version ${targetVersion} was not found.`);
   }
+  await assertRoomVersionNotRedacted(env, roomId, targetVersion);
+  if (options.expectedLatestVersion !== undefined && existing.versions.at(-1)?.version !== options.expectedLatestVersion) {
+    throw new HttpError(409, 'This room was published again since the restore was planned.');
+  }
 
   const now = new Date().toISOString();
   const lastPublished = existing.versions[existing.versions.length - 1];
@@ -1377,6 +1322,7 @@ export async function setCanonicalRoomVersion(
   if (!target) {
     throw new HttpError(404, `Version ${targetVersion} was not found.`);
   }
+  await assertRoomVersionNotRedacted(env, roomId, targetVersion);
 
   await env.DB.batch([
     preparePersistRoomRecordStatement(env, {
@@ -1570,6 +1516,7 @@ async function hasPublishedOrthogonalNeighbor(
   env: Env,
   coordinates: RoomCoordinates
 ): Promise<boolean> {
+  // A numbered World's rooms grow only that World, so they never make a WAMP 0 cell claimable.
   const row = await env.DB.prepare(
     `
       SELECT 1
@@ -1580,6 +1527,9 @@ async function hasPublishedOrthogonalNeighbor(
           OR (x = ? AND y = ?)
           OR (x = ? AND y = ?)
           OR (x = ? AND y = ?)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM world_room_claims c WHERE c.room_id = rooms.id AND c.world_id <> 'wamp-prime'
         )
       LIMIT 1
     `

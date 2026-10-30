@@ -72,7 +72,7 @@ The original audit was written in a stale dirty checkout. Current `main` already
 
 ## Evidence
 
-Baseline and final artifacts are written under `output/gameplay-performance-salvage/` and summarized in `progress.md`.
+Baseline and final artifacts are written under `output/gameplay-performance-salvage/` and summarized in `docs/history/progress-2026.md`.
 
 ### Clean-main baseline
 

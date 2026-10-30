@@ -1,5 +1,7 @@
 # Performance and Code-Health Roadmap
 
+> Historical (June–August 2026). Current work is tracked in the [round 2 checkup checklist](review/wamp-checkup-round-2.md).
+
 This is the canonical implementation tracker for the June 10 and July 13 audits. It is rebased on
 `origin/main` at `4b10b27`; the older audits remain in `docs/` as historical evidence.
 

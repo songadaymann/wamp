@@ -1,4 +1,4 @@
-import type { RoomChatSayMessage, RoomChatTransportChannel } from '../chat/roomChatModel';
+import type { RoomChatSayMessage, RoomChatEmoteMessage, RoomChatTransportChannel } from '../chat/roomChatModel';
 import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
 import type {
   PvpInviteAcceptMessage,
@@ -57,11 +57,21 @@ export interface ConnectionPresenceState {
   previewDeltas?: boolean;
   /** Transport capability only; verified token claims still govern chat permissions. */
   roomChat?: boolean;
+  /** Opt-in movement interest; old clients retain their existing full-rate stream. */
+  presenceInterest?: boolean;
+  interestRoom?: RoomCoordinates | null;
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
+  canSendRoomEmote?: boolean;
+  /** Private signed scope, never included in peer payloads. */
+  classroomId?: string;
   canReceiveRoomChat: boolean;
-  /** Classroom accounts: no PvP invites to or from strangers. */
+  /** When canSendRoomChat was last confirmed against chat bans and suspensions (token issue time at connect). */
+  roomChatCheckedAt?: number;
+  /** Classroom accounts: no PvP invites to or from strangers, and no PvP rooms. */
   school: boolean;
+  /** From the verified identity token: guests neither send nor receive PvP challenges. */
+  guest?: boolean;
   userId: string;
   displayName: string;
   avatarId: string;
@@ -96,6 +106,7 @@ export type RoomPreviewDeltaMessage =
   | { type: 'preview:refresh'; roomId: string; revision: string; timestamp: number };
 
 export type IncomingMessage =
+  | { type: 'presence:interest'; roomCoordinates: RoomCoordinates | null }
   | {
       type: 'presence:update';
       presence: PresencePayload;
@@ -115,7 +126,8 @@ export type IncomingMessage =
   | PvpInviteSendMessage
   | PvpInviteAcceptMessage
   | PvpInviteDeclineMessage
-  | RoomChatSayMessage;
+  | RoomChatSayMessage
+  | RoomChatEmoteMessage;
 
 export function parseIncomingMessage(message: string): IncomingMessage | null {
   let parsed: unknown;

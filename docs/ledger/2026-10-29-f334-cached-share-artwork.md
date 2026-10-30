@@ -1,0 +1,1 @@
+| 2026-10-29 | F334 | [#338](https://github.com/songadaymann/wamp/pull/338) | [receipt](docs/review/wamp-f334-cached-share-artwork-2026-10-29.md) | Reuse real-art map PNGs for share links and cache version-safe Expanded composites; verified live |

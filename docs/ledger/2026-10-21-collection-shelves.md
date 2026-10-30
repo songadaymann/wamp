@@ -1,0 +1,1 @@
+| 2026-10-21 | F246 | [#276](https://github.com/songadaymann/wamp/pull/276) | [receipt](docs/review/wamp-collection-shelves-2026-10-21.md) | Collector attribution and profile collection shelves (F246 part) |

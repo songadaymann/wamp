@@ -1,8 +1,12 @@
+import { confirmPublishRecognition } from '../../publishing/recognition';
 import { prepareBuildPromptEntry, completeBuildPromptEntry } from '../../buildPrompts/publishing';
 import { recordReplayEditorAction } from '../../analytics/replay/editorEvents';
-import { getAuthDebugState } from '../../auth/client';
+import { AUTH_STATE_CHANGED_EVENT, getAuthDebugState } from '../../auth/client';
 import { requestRoomPublishName, suggestRoomTitle } from '../../publishing/events';
 import { capturePublishProgression, reportPublishProgression } from '../../publishing/feedback';
+import { RoomCollectionFlow, type RoomCollectionFlowHost } from './roomCollectionFlow';
+import { watchRoomWalletRecovery } from '../../mint/roomWalletRecovery';
+import { getActiveWorldId } from '../../worlds/clientContext';
 import type {
   RoomPermissions,
   RoomRecord,
@@ -19,12 +23,16 @@ import type {
   EditorRoomSession,
   EditorStatusDetails,
 } from './roomSession';
+import type { CourseRoomSessionSyncOptions } from './courseController';
 
 interface SaveDraftOptions {
   promptForSignInOnUnauthorized?: boolean;
 }
 
 interface EditorPersistenceControllerHost {
+  isActive?(): boolean;
+  events?: RoomCollectionFlowHost['events'];
+  refreshUi?(): void;
   getRoomPermissions(): RoomPermissions;
   getRoomTitle(): string | null;
   setRoomTitle(title: string | null): void;
@@ -33,17 +41,64 @@ interface EditorPersistenceControllerHost {
   getLastDirtyAt(): number;
   setLastDirtyAt(value: number): void;
   getInitialRoomSnapshot(): RoomSnapshot | null;
-  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: { published: boolean }): void;
+  syncActiveCourseRoomSessionSnapshot(room: RoomSnapshot, options: CourseRoomSessionSyncOptions): void;
   onRoomMarkedDirty(): void;
   onRoomPublished?(room: RoomSnapshot, firstPublish: boolean, userId: string): void;
 }
 
 export class EditorPersistenceController {
   private publishing = false;
+  private recognitionAbort: AbortController | null = null;
+  private readonly collection: RoomCollectionFlow;
+  private unwatchWalletRecovery: (() => void) | null = null;
   constructor(
     private readonly roomSession: EditorRoomSession,
     private readonly host: EditorPersistenceControllerHost,
-  ) {}
+  ) {
+    this.start();
+    this.collection = new RoomCollectionFlow({
+      captureContext: () => roomSession.captureContext(),
+      isActive: () => host.isActive?.() ?? true,
+      events: host.events,
+      watchIdentity: callback => {
+        window.addEventListener(AUTH_STATE_CHANGED_EVENT, callback);
+        return () => window.removeEventListener(AUTH_STATE_CHANGED_EVENT, callback);
+      },
+      getIdentity: () => { const auth = getAuthDebugState(); return {
+        userId: auth.authenticated ? auth.user?.id ?? null : null,
+        wallet: auth.authenticated ? auth.user?.walletAddress ?? null : null,
+        signer: auth.walletAddress ?? null,
+      }; },
+      mint: options => roomSession.mintRoom(options),
+      artwork: options => roomSession.refreshMintMetadata(options),
+      canAddArtwork: () => roomSession.getHistoryState().canRefreshMintMetadata,
+      isArtworkSubmitted: () => roomSession.hasPendingArtworkConfirmation,
+      isArtworkPending: () => roomSession.hasPendingWalletConfirmation,
+      isCollectionSubmitted: () => roomSession.hasPendingWalletConfirmation,
+      onStateChanged: () => host.refreshUi?.(),
+      onArtworkPending: (status, retry) => showBusyError(status.text, { title: 'Room collected', tone: 'success', closeLabel: 'Back to room',
+        retryLabel: 'Try again', retryHandler: retry ? async () => { hideBusyOverlay(); await retry(); } : null }),
+      onFailure: (status, retry) => showBusyError(status.text, { title: 'Room approval not completed', closeLabel: 'Back to room',
+        retryLabel: 'Try again', retryHandler: async () => { hideBusyOverlay(); await retry(); } }),
+      getStatus: () => roomSession.statusDetails,
+      setStatus: status => roomSession.setStatusDetails(status),
+    });
+  }
+
+  get isCollecting(): boolean { return this.collection.isCollecting; }
+
+  start(): void {
+    if (this.unwatchWalletRecovery) return;
+    this.unwatchWalletRecovery = watchRoomWalletRecovery((pending, result) => {
+      const auth = getAuthDebugState();
+      if (!getActiveWorldId() && (this.host.isActive?.() ?? true)
+        && auth.authenticated && auth.user?.id === pending.userId && auth.user.walletAddress?.toLowerCase() === pending.wallet) {
+        this.roomSession.acceptWalletRecovery(pending, result);
+      }
+    });
+  }
+
+  destroy(): void { this.roomSession.cancelOwnershipPresentation(); this.recognitionAbort?.abort(); this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
 
   get statusText(): string {
     return this.roomSession.statusText;
@@ -70,7 +125,7 @@ export class EditorPersistenceController {
   }
 
   maybeAutoSave(isPlaying: boolean): void {
-    if (this.publishing) return;
+    if (this.publishing || this.isCollecting) return;
     this.roomSession.maybeAutoSave(isPlaying);
   }
 
@@ -104,17 +159,20 @@ export class EditorPersistenceController {
     force: boolean = false,
     options?: SaveDraftOptions,
   ): Promise<RoomRecord | null> {
+    if (this.isCollecting) return null;
     recordReplayEditorAction('save_attempt');
     const record = await this.roomSession.saveDraft(force, options);
     if (record?.draft) recordReplayEditorAction('draft_saved');
-    if (record?.draft) {
-      this.host.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false });
+    // A server save refreshes the course session copy through onDraftSaved; one kept only on this
+    // device (guest or offline) has no server version and is still unsaved there (F379).
+    if (record?.draft && this.roomSession.currentServerDraftUpdatedAt === null) {
+      this.host.syncActiveCourseRoomSessionSnapshot(record.draft, { published: false, baseUpdatedAt: null, unsaved: true });
     }
     return record;
   }
 
   async publishRoom(successText?: string): Promise<RoomRecord | null> {
-    if (this.publishing) return null;
+    if (this.publishing || this.isCollecting) return null;
     recordReplayEditorAction('publish_attempt');
     const publishValidationError = this.roomSession.getPublishValidationError();
     if (publishValidationError) {
@@ -138,6 +196,10 @@ export class EditorPersistenceController {
         if (!title || this.roomSession.currentRoomId !== roomId || getAuthDebugState().user?.id !== userId) return null;
         this.setRoomTitle(title);
       }
+      this.recognitionAbort = new AbortController();
+      if (!await confirmPublishRecognition({ targetKey: `room:${roomId}`, version: this.roomSession.currentPublishedVersion,
+        userId, signal: this.recognitionAbort.signal, current: () => (this.host.isActive?.() ?? true)
+          && this.roomSession.currentRoomId === roomId && (!userId || getAuthDebugState().user?.id === userId) })) return null;
       const promptChoice = await prepareBuildPromptEntry(userId, `room:${roomId}`);
       if (!promptChoice || this.roomSession.currentRoomId !== roomId || (userId && getAuthDebugState().user?.id !== userId)) return null;
       const previousProgression = await capturePublishProgression(userId);
@@ -159,6 +221,7 @@ export class EditorPersistenceController {
       }
       return record;
     } finally {
+      this.recognitionAbort?.abort(); this.recognitionAbort = null;
       this.publishing = false;
       if (showingBusy && getAppFeedbackDebugState().busyState !== 'error') {
         hideBusyOverlay();
@@ -188,11 +251,13 @@ export class EditorPersistenceController {
   }
 
   async mintRoom(): Promise<RoomRecord | null> {
-    return this.roomSession.mintRoom();
+    if (this.publishing) return null;
+    return this.collection.collect();
   }
 
   async refreshMintMetadata(): Promise<RoomRecord | null> {
-    return this.roomSession.refreshMintMetadata();
+    if (this.publishing) return null;
+    return this.collection.addArtwork();
   }
 
   async setCanonicalVersion(targetVersion: number): Promise<RoomRecord | null> {

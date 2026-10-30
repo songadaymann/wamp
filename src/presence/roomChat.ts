@@ -1,3 +1,4 @@
+import { isRoomEmoteId, type RoomEmoteId } from '../chat/roomEmotes';
 import PartySocket from 'partysocket';
 import type { SharedRoomChatTransport } from './sharedRoomChatTransport';
 import { getAuthDebugState } from '../auth/client';
@@ -9,6 +10,7 @@ import {
   type RoomChatBroadcastMessage,
   type RoomChatMessageRecord,
   type RoomChatSayMessage,
+  type RoomChatEmoteMessage,
 } from '../chat/roomChatModel';
 import {
   chunkIdFromCoordinates,
@@ -205,12 +207,22 @@ export class WorldRoomChatClient {
   }
 
   send(text: string): RoomChatSendResult {
+    return this.sendPacket({ type: 'room-chat:say', text });
+  }
+
+  sendEmote(emote: RoomEmoteId): RoomChatSendResult {
+    if (!isRoomEmoteId(emote)) return { ok: false, reason: 'empty' };
+    return this.sendPacket({ type: 'room-chat:emote', emote });
+  }
+
+  private sendPacket(packet: RoomChatSayMessage | RoomChatEmoteMessage): RoomChatSendResult {
+    const emote = packet.type === 'room-chat:emote';
     const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user) {
+    if (!emote && (!authState.authenticated || !authState.user)) {
       return { ok: false, reason: 'unauthenticated' };
     }
     // The presence server drops these anyway; stopping here gives the player a clear reason.
-    if (authState.schoolManaged || authState.chatModeration.banned) {
+    if ((!emote && authState.schoolManaged) || authState.chatModeration.banned) {
       return { ok: false, reason: 'restricted' };
     }
 
@@ -218,7 +230,7 @@ export class WorldRoomChatClient {
       return { ok: false, reason: 'not-playing' };
     }
 
-    const normalized = text.trim();
+    const normalized = packet.type === 'room-chat:say' ? packet.text.trim() : packet.emote;
     if (normalized.length === 0) {
       return { ok: false, reason: 'empty' };
     }
@@ -231,9 +243,10 @@ export class WorldRoomChatClient {
       return { ok: false, reason: 'rate-limited' };
     }
 
+    const payload = JSON.stringify(packet.type === 'room-chat:say' ? { ...packet, text: normalized } : packet);
     const shardId = this.resolveLocalShardId();
     if (shardId && this.options.sharedTransport?.status(shardId) === 'shared') {
-      if (!this.options.sharedTransport.send(shardId, JSON.stringify({ type: 'room-chat:say', text: normalized }))) {
+      if (!this.options.sharedTransport.send(shardId, payload)) {
         return { ok: false, reason: 'connecting' };
       }
       this.lastSentAt = now;
@@ -244,12 +257,7 @@ export class WorldRoomChatClient {
       return { ok: false, reason: 'connecting' };
     }
 
-    socket.send(
-      JSON.stringify({
-        type: 'room-chat:say',
-        text: normalized,
-      } satisfies RoomChatSayMessage)
-    );
+    socket.send(payload);
     this.lastSentAt = now;
 
     return { ok: true };

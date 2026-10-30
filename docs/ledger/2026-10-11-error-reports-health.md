@@ -1,0 +1,1 @@
+| 2026-10-11 | F185, F192 | [#139](https://github.com/songadaymann/wamp/pull/139) | [receipt](docs/review/wamp-error-reporting-health-2026-10-11.md) | Client error reports, internal 500s hidden from players, and a real /api/health check |

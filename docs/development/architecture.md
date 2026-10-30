@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 storage, PartyKit presence, and Base L2 ownership flows.
+Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 storage, Durable Object presence, and Base L2 ownership flows.
 
 ## Client
 
@@ -26,8 +26,19 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 
 ## Realtime
 
-- `partykit/presenceServer.ts` handles realtime room/world presence.
-- The Worker issues presence identity tokens, and PartyKit validates the shared signing secret.
+- Presence runs inside the API Worker. `src/cloudflare/worker.ts` sends `/parties/main/:room`
+  WebSocket and metrics requests to `PresenceDurableObject`
+  (`src/cloudflare/presence/durableObject.ts`, binding `PRESENCE_ROOMS` in `wrangler.jsonc`), one
+  hibernating Durable Object per presence room.
+- The Durable Object runs the shared room logic in `partykit/presenceServer.ts`: world presence,
+  room chat, construction previews, shard heartbeats and PvP matches. That core keeps a
+  PartyKit-style lifecycle; `src/partykit/presenceTypes.ts` declares the small surface it uses.
+- The Worker issues presence identity tokens (`/api/presence/identity-token`), and the Durable
+  Object verifies them with the same Worker's `PARTYKIT_IDENTITY_TOKEN_SECRET` (or
+  `PARTYKIT_INTERNAL_TOKEN` when that is unset) before accepting a socket.
+- Clients connect with `partysocket` to the host `/api/auth/session` returns (`PARTYKIT_HOST`:
+  `api.wamp.land` in production). A build-time `VITE_PARTYKIT_HOST` overrides it. The hosted
+  PartyKit service is retired; the `PARTYKIT_*` names are kept for compatibility.
 
 ## Rendering Model
 
@@ -45,11 +56,12 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
 ## Executable Entry Inventory
 
 - `knip.json` explicitly models Vite HTML/module roots, build and test configs,
-  the Vite-read early bootstrap, Pages and Wrangler Workers, PartyKit, the
-  container runner, and command/manual scripts.
+  the Vite-read early bootstrap, Pages and Wrangler Workers, the container
+  runner, and command/manual scripts. The presence core is reached through the
+  API Worker, so it is not a separate root.
 - `src/config/executableEntryContract.test.ts` derives those roots from the Vite,
-  Wrangler, PartyKit, Docker, package-script, and filesystem contracts and keeps
-  the inventory deterministic.
+  Wrangler, Docker, package-script, and filesystem contracts and keeps the
+  inventory deterministic.
 - `npm run dead-code:report` uses Knip as a report-only audit. It is not part of
   `npm run check` or CI.
 - Treat unused-export reports as visibility candidates, not proof that an entire
@@ -58,6 +70,6 @@ Everybody's Platformer is a Phaser/Vite app backed by Cloudflare Workers, D1 sto
   reference checks. The September 2026 cleanup removed two unused forwarding
   modules after checking callers, without removing catalog or test contracts.
 - Image probe scripts import the direct development dependency `sharp`.
-  The report also identifies the manual `remote_rollout_check.mjs` script's
-  undeclared `ethers` import and the atlas generator's external ImageMagick
-  `magick` command; these are separate tooling prerequisites, not app code.
+  The atlas generator's external ImageMagick `magick` command is a separate
+  tooling prerequisite, not app code. (`remote_rollout_check.mjs` signs with
+  `viem`, a declared dependency, since F480.)

@@ -1,5 +1,30 @@
 import assert from 'node:assert/strict';
 
+/** The editor stylesheet and rare menu trees must stay out of a cold visit. */
+export async function auditFirstPaint(page, { editorLoaded = false } = {}) {
+  const state = await page.evaluate(() => {
+    const editor = document.querySelector('link[data-wamp-editor-styles]');
+    const shared = document.querySelector('link[rel="stylesheet"]:not([data-wamp-editor-styles])');
+    return {
+      editorSheets: document.querySelectorAll('link[data-wamp-editor-styles]').length,
+      editorReady: Boolean(editor?.sheet),
+      sharedFollows: Boolean(editor && shared && (editor.compareDocumentPosition(shared) & Node.DOCUMENT_POSITION_FOLLOWING)),
+      deferred: ['leaderboard-modal', 'explore-modal', 'profile-modal', 'avatar-picker-modal', 'room-history-modal']
+        .map(id => ({ id, mounted: Boolean(document.getElementById(id)), template: Boolean(document.getElementById(`deferred-${id}`)) })),
+      fonts: performance.getEntriesByType('resource').map(entry => entry.name).filter(name => /\/fonts\//.test(name)),
+    };
+  });
+  assert.equal(state.editorSheets, editorLoaded ? 1 : 0, 'editor styles load exactly once, on demand');
+  if (editorLoaded) {
+    assert(state.editorReady && state.sharedFollows, 'loaded editor defaults precede shared phone overrides');
+  } else {
+    for (const root of state.deferred) assert(!root.mounted && root.template, `${root.id} stays inert until opened`);
+    assert(state.fonts.some(name => /\.woff2(?:\?|$)/.test(name)), 'compressed fonts load on the first visit');
+    assert(!state.fonts.some(name => /\.ttf(?:\?|$)/.test(name)), 'no original TTF is needed for the first screen');
+  }
+  return { label: editorLoaded ? 'editor styles ready once' : 'deferred first-paint assets', ...state };
+}
+
 /** Hold only the first map-config reply so the cold download order is observable. */
 export async function installStartupFixture(context, { delayMs = 500 } = {}) {
   await context.addInitScript(() => {

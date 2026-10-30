@@ -1,3 +1,4 @@
+import { applyInspectPointerPan, pointerPassedPanThreshold } from './inspectCameraGestures';
 import Phaser from 'phaser';
 import { mouseButtonsReleased } from '../pointerRelease';
 import { hasBlockingModalOpen } from '../../ui/modalState';
@@ -21,7 +22,9 @@ interface OverworldInspectInputHost {
   setCameraMode(mode: CameraMode): void;
   applyCameraMode(): void;
   fitLoadedWorld(): void;
-  returnToWorld(): void;
+  /** Closes the open comment or chat composer; true when Escape was spent on that. */
+  closeComposerForEscape(): boolean;
+  stopCurrentPlay(): void;
   adjustZoomByFactor(factor: number, screenX?: number, screenY?: number): void;
   constrainInspectCamera(): void;
   getRoomCoordinatesForPoint(x: number, y: number): RoomCoordinates;
@@ -60,8 +63,7 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.on('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.on('keydown-P', this.handleReturnToWorldKeydown);
-      keyboard.on('keydown-ESC', this.handleReturnToWorldKeydown);
+      keyboard.on('keydown-ESC', this.handleEscapeKeydown);
       keyboard.on('keyup-ALT', this.handleAltKeyup);
       keyboard.on('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.on('keyup-SPACE', this.handleSpaceKeyup);
@@ -79,8 +81,7 @@ export class OverworldInspectInputController {
     const keyboard = this.scene.input.keyboard;
     if (keyboard) {
       keyboard.off('keydown-ZERO', this.handleFitWorldKeydown);
-      keyboard.off('keydown-P', this.handleReturnToWorldKeydown);
-      keyboard.off('keydown-ESC', this.handleReturnToWorldKeydown);
+      keyboard.off('keydown-ESC', this.handleEscapeKeydown);
       keyboard.off('keyup-ALT', this.handleAltKeyup);
       keyboard.off('keydown-SPACE', this.handleSpaceKeydown);
       keyboard.off('keyup-SPACE', this.handleSpaceKeyup);
@@ -116,10 +117,15 @@ export class OverworldInspectInputController {
     this.host.fitLoadedWorld();
   };
 
-  private readonly handleReturnToWorldKeydown = (): void => {
-    // P (and Escape) leave the room only when no dialog is open.
-    if (this.host.getMode() === 'play' && !hasBlockingModalOpen()) {
-      this.host.returnToWorld();
+  // The only Escape listener, so a key a composer used never also ends play (F385).
+  private readonly handleEscapeKeydown = (event: KeyboardEvent): void => {
+    if (this.host.closeComposerForEscape()) return;
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    // Escape remains a fixed way out, independent of custom command bindings. Like P and
+    // the gamepad, it leaves play alone behind the open menu (a live Rush or duel keeps running).
+    if (this.host.getMode() === 'play' && !hasBlockingModalOpen()
+      && !document.getElementById('auth-panel')?.classList.contains('menu-open')) {
+      this.host.stopCurrentPlay();
     }
   };
 
@@ -187,22 +193,12 @@ export class OverworldInspectInputController {
       return;
     }
 
-    const distance = Phaser.Math.Distance.Between(
-      this.panStartPointer.x,
-      this.panStartPointer.y,
-      pointer.x,
-      pointer.y,
-    );
-    if (distance < PAN_THRESHOLD) {
-      return;
-    }
+    if (!pointerPassedPanThreshold(this.panStartPointer, pointer, PAN_THRESHOLD)) return;
 
     this.panCurrentPointer = { x: pointer.x, y: pointer.y };
 
     const camera = this.scene.cameras.main;
-    const dx = (this.panStartPointer.x - pointer.x) / camera.zoom;
-    const dy = (this.panStartPointer.y - pointer.y) / camera.zoom;
-    camera.setScroll(this.panStartScroll.x + dx, this.panStartScroll.y + dy);
+    applyInspectPointerPan(camera, this.panStartPointer, this.panStartScroll, pointer);
     this.host.constrainInspectCamera();
   };
 

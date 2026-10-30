@@ -1,3 +1,4 @@
+import { KEEP_PLAYING_RESET_EVENT } from '../../progression/keepPlayingEvents';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../auth/client', () => ({ getAuthDebugState: () => ({ authenticated: false }) }));
 vi.mock('../../persistence/roomRepository', () => ({ createRoomRepository: () => ({}) }));
@@ -27,6 +28,7 @@ describe('capturing expanded and course clear destinations', () => {
     const detail = f.guestRuns.finish.mock.calls[0][2];
     expect(detail.contentType).toBe(id ? 'expanded_room' : 'course');
     expect(detail.shareCoordinates).toEqual({ x: 11, y: 20 });
+    expect(detail.clearedRoomIds).toEqual(['10,20','11,20']);
     f.run.course.roomRefs[1].coordinates.x = 88;
     expect(detail.shareCoordinates).toEqual({ x: 11, y: 20 });
   });
@@ -36,4 +38,21 @@ describe('capturing expanded and course clear destinations', () => {
     await new OverworldCoursePlaybackController(f.host as never).finalizeActiveCourseRun('completed');
     expect(requestPostRunGuestClaim).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'course', expandedRoomId: 'course:legacy', shareCoordinates: { x: 11, y: 20 } }));
   });
+});
+
+it.each(['native-expanded', 'course:legacy'])('keeps assisted %s clears out of guest finish and claim paths', async id => {
+  vi.mocked(requestPostRunGuestClaim).mockClear(); const f = fixture(id); f.run.assisted = true;
+  await f.controller.finalizeActiveCourseRun('completed');
+  expect(f.guestRuns.finish).not.toHaveBeenCalled(); expect(requestPostRunGuestClaim).not.toHaveBeenCalled();
+  expect(f.run.submissionState).toBe('local-only');
+});
+
+it.each(['published','draft'] as const)('resets the prior free-play suggestion at the shared %s Expanded run start',status=>{
+  const f=fixture('native-expanded'),win=new EventTarget(),reset=vi.fn();
+  win.addEventListener(KEEP_PLAYING_RESET_EVENT,reset);vi.stubGlobal('window',win);
+  try {
+    const host={...f.host,getRoomSnapshotForCoordinates:()=>null};
+    const run=new OverworldCoursePlaybackController(host as never).createCourseRunState({...f.run.course,status});
+    expect(run.course.status).toBe(status);expect(reset).toHaveBeenCalledOnce();
+  } finally {vi.unstubAllGlobals();}
 });

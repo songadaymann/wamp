@@ -1,7 +1,9 @@
 import { globalLeaderboardWeek } from './globalLeaderboardWindow';
+import { fetchWithPageReadLifetime } from '../api/pageReadLifetime';
 import { readApiErrorMessage } from '../api/readApiErrorMessage';
 import type { RoomCoordinates } from '../persistence/roomModel';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { rankedFinishRequestInit } from './rankedFinishDelivery';
 import {
   invalidateStaleWhileRevalidateCache,
   loadWithStaleWhileRevalidate,
@@ -61,7 +63,7 @@ export interface RunRepository {
     sort?: BuilderDiscoverySort,
     limit?: number
   ): Promise<BuilderDiscoveryResponse>;
-  loadGlobalLeaderboard(limit?: number, window?: GlobalLeaderboardWindow, signal?: AbortSignal): Promise<GlobalLeaderboardResponse>;
+  loadGlobalLeaderboard(limit?: number, window?: GlobalLeaderboardWindow, signal?: AbortSignal, fresh?: boolean): Promise<GlobalLeaderboardResponse>;
 }
 
 class RunApiError extends Error {
@@ -74,7 +76,7 @@ class RunApiError extends Error {
 }
 
 class ApiRunRepository implements RunRepository {
-  private bypassRoomLeaderboardCacheUntil = 0;
+  private bypassLeaderboardCacheUntil = 0;
   constructor(private readonly baseUrl: string) {}
 
   async startRun(body: RunStartRequestBody): Promise<RunStartResponse> {
@@ -85,10 +87,7 @@ class ApiRunRepository implements RunRepository {
   }
 
   async finishRun(attemptId: string, body: RunFinishRequestBody): Promise<void> {
-    await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    await this.request(`/api/runs/${encodeURIComponent(attemptId)}/finish`, rankedFinishRequestInit(body));
     this.invalidateLeaderboards();
   }
 
@@ -109,7 +108,7 @@ class ApiRunRepository implements RunRepository {
       params.set('version', String(version));
     }
 
-    const fresh = Date.now() < this.bypassRoomLeaderboardCacheUntil;
+    const fresh = Date.now() < this.bypassLeaderboardCacheUntil;
     if (fresh) params.set('fresh', '1');
     const path = `/api/leaderboards/rooms/${encodeURIComponent(roomId)}?${params.toString()}`;
     const cacheKey = cacheAsCurrent || version === null
@@ -205,15 +204,11 @@ class ApiRunRepository implements RunRepository {
       params.set('cursor', cursor);
     }
 
+    const fresh = Date.now() < this.bypassLeaderboardCacheUntil;
+    if (fresh) params.set('fresh', '1');
     const path = `/api/leaderboards/rooms/discover?${params.toString()}`;
-    // Personal lists must follow the current session, including an account switch in this tab.
-    if (sort === 'unrated' || sort === 'unbeaten' || sort === 'unvisited') {
-      return this.request<RoomDiscoveryResponse>(path);
-    }
-    return loadWithStaleWhileRevalidate(
-      `discovery:${this.baseUrl}${path}`,
-      () => this.request<RoomDiscoveryResponse>(path),
-    );
+    // Shared public reads live at the edge; viewer history must follow the current session.
+    return this.request<RoomDiscoveryResponse>(path, { cache: 'no-store' });
   }
 
   async loadBuilderDiscovery(
@@ -233,10 +228,11 @@ class ApiRunRepository implements RunRepository {
   }
 
   async loadGlobalLeaderboard(
-    limit: number = 10, window: GlobalLeaderboardWindow = 'all', signal?: AbortSignal,
+    limit: number = 10, window: GlobalLeaderboardWindow = 'all', signal?: AbortSignal, fresh: boolean = false,
   ): Promise<GlobalLeaderboardResponse> {
     const params = new URLSearchParams({ limit: String(limit), window });
-    // Viewer identity and a Monday rollover must never come from shared stale data.
+    if (window === 'all' && (fresh || Date.now() < this.bypassLeaderboardCacheUntil)) params.set('fresh', '1');
+    // Private viewer data and Monday rollovers never use the browser or memory cache.
     const response = await this.request<GlobalLeaderboardResponse>(`/api/leaderboards/global?${params}`, {
       cache: 'no-store', signal,
     });
@@ -265,7 +261,7 @@ class ApiRunRepository implements RunRepository {
 
   private invalidateLeaderboards(): void {
     // The HTTP/edge cache also lasts 20 seconds, independently of our memory cache.
-    this.bypassRoomLeaderboardCacheUntil = Date.now() + 20_000;
+    this.bypassLeaderboardCacheUntil = Date.now() + 20_000;
     invalidateStaleWhileRevalidateCache(`leaderboard:${this.baseUrl}`);
   }
 
@@ -276,7 +272,7 @@ class ApiRunRepository implements RunRepository {
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const response = await fetchWithPageReadLifetime(`${this.baseUrl}${path}`, {
       ...init,
       headers,
       credentials: 'include',

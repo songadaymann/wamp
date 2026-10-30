@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import './lib/mutedBrowsers.mjs';
 import { chromium } from 'playwright';
+import { installSmokeApiReplay } from './lib/smokeApiReplay.mjs';
 
 const base = process.argv[2] || 'http://127.0.0.1:3031';
 const output = process.argv[3] || 'output/web-game/first-visit/fixed';
@@ -11,6 +13,8 @@ try {
   for (const [device, viewport] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
     for (const shared of [true, false]) {
       const context = await browser.newContext({ viewport, hasTouch: device === 'phone', isMobile: device === 'phone' });
+      // Recorded rooms stand in for the live world (F480); -11,-6 is a published reach-exit room.
+      await installSmokeApiReplay(context);
       const page = await context.newPage();
       const name = `${device}-${shared ? 'shared' : 'home'}`;
       const passed = [];
@@ -35,7 +39,7 @@ try {
           delayed = true;
           await new Promise(resolve => setTimeout(resolve, 2200));
         }
-        return route.continue();
+        return route.fallback();
       });
       const tap = async selector => device === 'phone' ? page.locator(selector).tap() : page.locator(selector).click();
       const state = () => page.evaluate(() => {
@@ -44,7 +48,7 @@ try {
           graphics: s.graphics?.status, ready: document.body.dataset.appReady,
           modals: [...document.querySelectorAll('.history-modal:not(.hidden)')].map(node => node.id) };
       });
-      await page.goto(`${base}${shared ? '/r/-5/3' : '/'}?renderer=canvas`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`${base}${shared ? '/r/-11/-6' : '/'}?renderer=canvas`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120000 });
       if (shared) {
         await page.locator('#room-goal-intro-modal').waitFor({ state: 'visible', timeout: 45000 });

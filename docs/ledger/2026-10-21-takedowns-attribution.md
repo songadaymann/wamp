@@ -1,0 +1,1 @@
+| 2026-10-21 | F189, F127 | [#285](https://github.com/songadaymann/wamp/pull/285)–[#286](https://github.com/songadaymann/wamp/pull/286) | [receipt](docs/review/wamp-takedowns-and-attribution-2026-10-21.md) | Takedowns hide content everywhere players see it; Launch Admin shows where players come from |

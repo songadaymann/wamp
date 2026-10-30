@@ -1,0 +1,4 @@
+@layer base, components, editor-skin, responsive, overrides;
+/* Both entrypoints declare ownership before the lazy editor sheet loads. */
+@import './sections/editor.css';
+@import './sections/course-editor.css';

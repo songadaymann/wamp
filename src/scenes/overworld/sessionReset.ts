@@ -23,6 +23,7 @@ interface OverworldSessionResetHost {
   hasActivePvpMatch(): boolean;
   isPvpDamageActive(): boolean;
   tryAbsorbPlayerDamage?(): boolean;
+  isAssistProtected?(): boolean;
   onPlayerDeath?(): void;
   cancelPlayerAttack(): void;
   setActiveCourseRun(runState: ActiveExpandedRoomRunState | null): void;
@@ -67,6 +68,7 @@ export class OverworldSessionResetController {
       return;
     }
 
+    if (!activePvpMatch && !activeRoomRushRun && this.host.isAssistProtected?.()) return;
     if (!activePvpMatch && !bypassHealth && this.host.tryAbsorbPlayerDamage?.()) return;
     this.host.onPlayerDeath?.();
 

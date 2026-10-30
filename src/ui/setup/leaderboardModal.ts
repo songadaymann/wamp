@@ -1,4 +1,7 @@
-import { friendlyError, renderFriendlyError } from '../friendlyError';
+import { createExpandedRoomRepository, type ExpandedRoomRepository } from '../../expandedRooms/repository';
+import { hasExpandedRoomLeaderboardTarget, loadSelectedExpandedRoomLeaderboard } from './expandedRoomLeaderboardTarget';
+import { friendlyError, renderFriendlyError, setLiveMessage } from '../friendlyError';
+import { setToggleState } from '../toggleState';
 import { GlobalLeaderboardPanelController } from './globalLeaderboardPanel';
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
@@ -78,9 +81,17 @@ type LeaderboardModalElements = {
   roomRushList: HTMLElement | null;
 };
 
+/** Why a vote didn't save. A server reason (not your room, play this version first) won't change on a retry. */
+function voteErrorMessage(error: unknown): string {
+  const status = (error as { status?: unknown } | null)?.status;
+  const settled = typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429;
+  return friendlyError('save your rating', { error, nextStep: settled ? '' : undefined }).trim();
+}
+
 export class LeaderboardModalController {
   private readonly elements: LeaderboardModalElements;
   private activeTab: LeaderboardTab = 'room';
+  private errorTab: LeaderboardTab | null = null;
   private roomVersionOptions: RoomLeaderboardVersionOption[] = [];
   private currentPublishedVersion: number | null = null;
   private selectedVersion: number | null = null;
@@ -94,10 +105,14 @@ export class LeaderboardModalController {
   private roomLoaded = false;
   private courseLoading = false;
   private courseLoaded = false;
+  private courseRequest = 0;
+  private courseFailed = false;
   private roomRushLoading = false;
   private readonly roomRushLoadedModes = new Set<RoomRushLeaderboardModeKey>();
   private readonly roomRushFailedModes = new Set<RoomRushLeaderboardModeKey>();
   private voteSubmitting = false;
+  /** A rejected vote, shown beside the vote buttons rather than at the top of the dialog. */
+  private voteError: string | null = null;
   private selectedRoomRushMode: RoomRushLeaderboardModeKey = 'easy:selected';
   private preferredInitialTab: LeaderboardTab | null = null;
   private returnFocus: HTMLElement | null = null;
@@ -113,6 +128,11 @@ export class LeaderboardModalController {
   private readonly handleMenuOpen = () => {
     this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
     void this.open('global');
+  };
+
+  private readonly handleRoomMenuOpen = () => {
+    this.doc.getElementById('auth-panel')?.classList.remove('menu-open');
+    void this.open();
   };
 
   private readonly handleCloseClick = () => {
@@ -162,7 +182,7 @@ export class LeaderboardModalController {
       return;
     }
 
-    if (this.courseLoaded && this.courseLeaderboard?.courseId === detail.contentId) {
+    if (this.courseLoaded && (this.courseLeaderboard?.courseId === detail.contentId || this.roomContext?.expandedRoomId === detail.contentId)) {
       void this.loadCourseLeaderboard();
     }
   };
@@ -173,6 +193,7 @@ export class LeaderboardModalController {
     private readonly courseRepository: CourseRepository = createCourseRepository(),
     private readonly profileRepository: ProfileRepository = createProfileRepository(),
     private readonly doc: Document = document,
+    private readonly expandedRoomRepository: ExpandedRoomRepository = createExpandedRoomRepository(),
   ) {
     this.elements = {
       modal: this.doc.getElementById('leaderboard-modal'),
@@ -218,6 +239,7 @@ export class LeaderboardModalController {
     this.doc.defaultView?.visualViewport?.addEventListener('scroll', this.syncVisualViewport);
     this.doc.defaultView?.visualViewport?.addEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.addEventListener('click', this.handleMenuOpen);
+    this.doc.getElementById('btn-menu-room-leaderboard')?.addEventListener('click', this.handleRoomMenuOpen);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -237,6 +259,9 @@ export class LeaderboardModalController {
     });
     this.elements.globalTabButton?.addEventListener('click', () => {
       void this.activateTab('global');
+    });
+    this.doc.getElementById('btn-leaderboard-course-refresh')?.addEventListener('click', () => {
+      void this.loadCourseLeaderboard();
     });
     this.elements.versionSelect?.addEventListener('change', () => {
       const nextVersion = Number.parseInt(this.elements.versionSelect?.value ?? '', 10);
@@ -279,6 +304,7 @@ export class LeaderboardModalController {
     this.doc.defaultView?.visualViewport?.removeEventListener('scroll', this.syncVisualViewport);
     this.doc.defaultView?.visualViewport?.removeEventListener('resize', this.syncVisualViewport);
     this.doc.getElementById('btn-auth-leaderboard')?.removeEventListener('click', this.handleMenuOpen);
+    this.doc.getElementById('btn-menu-room-leaderboard')?.removeEventListener('click', this.handleRoomMenuOpen);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
@@ -304,9 +330,12 @@ export class LeaderboardModalController {
     this.roomLoaded = false;
     this.courseLoading = false;
     this.courseLoaded = false;
+    this.courseFailed = false;
+    this.courseRequest += 1;
     this.roomRushLoading = false;
     this.globalController.close();
     this.voteSubmitting = false;
+    this.voteError = null;
     this.roomLeaderboard = null;
     this.courseLeaderboard = null;
     this.roomRushLeaderboards = null;
@@ -326,6 +355,7 @@ export class LeaderboardModalController {
       return;
     }
 
+    this.courseRequest += 1;
     const wasOpen = !this.elements.modal.classList.contains('hidden');
     this.globalController.close();
     this.elements.modal.classList.add('hidden');
@@ -347,12 +377,12 @@ export class LeaderboardModalController {
   private async ensureTabLoaded(tab: LeaderboardTab): Promise<void> {
     switch (tab) {
       case 'room':
-        if (!this.roomLoaded && !this.roomLoading) {
+        if ((!this.roomLoaded || !this.roomLeaderboard) && !this.roomLoading) {
           await this.loadRoomLeaderboard();
         }
         return;
       case 'course':
-        if (!this.courseLoaded && !this.courseLoading) {
+        if ((!this.courseLoaded || this.courseFailed) && !this.courseLoading) {
           await this.loadCourseLeaderboard();
         }
         return;
@@ -392,6 +422,7 @@ export class LeaderboardModalController {
 
     this.roomLoading = true;
     this.roomLoaded = false;
+    this.voteError = null;
     this.render();
     try {
       const response = await this.runRepository.loadRoomLeaderboard(
@@ -415,11 +446,11 @@ export class LeaderboardModalController {
       this.selectedVersion = this.roomVersionOptions.find((option) =>
         option.equivalentVersions.includes(response.roomVersion)
       )?.value ?? response.displayRoomVersion;
-      this.setError(null);
+      this.setError(null, undefined, 'room');
     } catch (error) {
       console.error('Failed to load room leaderboard', error);
       this.roomLeaderboard = null;
-      this.setError(friendlyError('load room leaderboard', { error }), () => this.loadRoomLeaderboard());
+      this.setError(friendlyError('load room leaderboard', { error }), () => this.loadRoomLeaderboard(), 'room');
     } finally {
       this.roomLoading = false;
       this.roomLoaded = true;
@@ -428,7 +459,7 @@ export class LeaderboardModalController {
   }
 
   private async loadCourseLeaderboard(): Promise<void> {
-    if (!this.roomContext?.courseId) {
+    if (!hasExpandedRoomLeaderboardTarget(this.roomContext)) {
       this.courseLeaderboard = null;
       this.courseLoading = false;
       this.courseLoaded = true;
@@ -436,24 +467,30 @@ export class LeaderboardModalController {
       return;
     }
 
+    const request = ++this.courseRequest;
+    this.courseFailed = false;
     this.courseLoading = true;
     this.courseLoaded = false;
     this.render();
     try {
-      this.courseLeaderboard = await this.courseRepository.loadCourseLeaderboard(
-        this.roomContext.courseId,
-        null,
-        25
+      const response = await loadSelectedExpandedRoomLeaderboard(
+        this.roomContext!, this.expandedRoomRepository, this.courseRepository,
       );
-      this.setError(null);
+      if (request !== this.courseRequest) return;
+      this.courseLeaderboard = response;
+      this.setError(null, undefined, 'course');
     } catch (error) {
+      if (request !== this.courseRequest) return;
+      this.courseFailed = true;
       console.error('Failed to load expanded room leaderboard', error);
       this.courseLeaderboard = null;
-      this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard());
+      this.setError(friendlyError('load expanded room leaderboard', { error }), () => this.loadCourseLeaderboard(), 'course');
     } finally {
-      this.courseLoading = false;
-      this.courseLoaded = true;
-      this.render();
+      if (request === this.courseRequest) {
+        this.courseLoading = false;
+        this.courseLoaded = true;
+        this.render();
+      }
     }
   }
 
@@ -478,11 +515,11 @@ export class LeaderboardModalController {
       if (!this.roomRushLoadedModes.has(modeKey)) {
         this.roomRushFailedModes.add(modeKey);
       }
-      this.setError(null);
+      this.setError(null, undefined, 'roomRush');
     } catch (error) {
       console.error('Failed to load Room Rush leaderboards', error);
       this.roomRushFailedModes.add(modeKey);
-      this.setError(friendlyError('load Room Rush leaderboards', { error }));
+      this.setError(friendlyError('load Room Rush leaderboards', { error }), undefined, 'roomRush');
     } finally {
       this.roomRushLoading = false;
       this.render();
@@ -535,8 +572,11 @@ export class LeaderboardModalController {
     const roomTitle = this.roomLeaderboard.roomTitle ?? null;
     const previousViewerRank = this.roomLeaderboard.viewerRank ?? null;
     const authUserId = getAuthDebugState().user?.id?.trim() ?? null;
+    const votedBoard = this.roomLeaderboard;
+    const pressed = this.doc.activeElement as HTMLButtonElement | null;
 
     this.voteSubmitting = true;
+    this.voteError = null;
     this.render();
     try {
       const nextDifficultyChoice =
@@ -579,27 +619,23 @@ export class LeaderboardModalController {
         contentTitle: this.roomLeaderboard?.roomTitle ?? roomTitle,
         reason: roomTitle?.trim() ? `Rated ${roomTitle}` : 'Rated a room',
       });
-      this.setError(null);
+      this.setError(null, undefined, 'room');
     } catch (error) {
       console.error('Failed to submit room rating update', error);
-      this.setError(
-        friendlyError('submit room rating update', { error })
-      );
+      // A reopen or version change while saving shows another board; its buttons are not this vote's.
+      if (this.roomLeaderboard === votedBoard && !this.roomLoading) this.voteError = voteErrorMessage(error);
     } finally {
       this.voteSubmitting = false;
       this.render();
+      // Disabling the buttons while saving dropped keyboard focus; give it back to the one pressed.
+      if (pressed && pressed !== this.doc.body && pressed.isConnected && !pressed.disabled
+        && (!this.doc.activeElement || this.doc.activeElement === this.doc.body)) pressed.focus({ preventScroll: true });
     }
   }
 
   private render(): void {
-    this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
-    this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
-    const roomAvailable = this.roomContext?.state === 'published';
-    const courseAvailable = Boolean(this.roomContext?.courseId);
-    this.elements.roomTabButton?.classList.toggle('active', this.activeTab === 'room');
-    this.elements.courseTabButton?.classList.toggle('active', this.activeTab === 'course');
-    this.elements.roomRushTabButton?.classList.toggle('active', this.activeTab === 'roomRush');
-    this.elements.globalTabButton?.classList.toggle('active', this.activeTab === 'global');
+    const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
+    const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
     if (this.elements.roomTabButton) {
       this.elements.roomTabButton.disabled = !roomAvailable;
     }
@@ -612,6 +648,14 @@ export class LeaderboardModalController {
     if (!courseAvailable && this.activeTab === 'course') {
       this.activeTab = roomAvailable ? 'room' : 'global';
     }
+    // Marked after the fallback above, so the pressed tab and the lines shown match the panel on screen.
+    this.dropStaleError();
+    this.elements.meta?.classList.toggle('hidden', this.activeTab === 'global');
+    this.elements.error?.classList.toggle('hidden', this.activeTab === 'global' || !this.elements.error.textContent);
+    setToggleState(this.elements.roomTabButton, this.activeTab === 'room');
+    setToggleState(this.elements.courseTabButton, this.activeTab === 'course');
+    setToggleState(this.elements.roomRushTabButton, this.activeTab === 'roomRush');
+    setToggleState(this.elements.globalTabButton, this.activeTab === 'global');
 
     this.elements.roomPanel?.classList.toggle('hidden', this.activeTab !== 'room');
     this.elements.coursePanel?.classList.toggle('hidden', this.activeTab !== 'course');
@@ -662,7 +706,7 @@ export class LeaderboardModalController {
     if (this.activeTab === 'course') {
       const courseLabel = this.courseLeaderboard
         ? `${this.courseLeaderboard.courseTitle?.trim() || 'Expanded Room'} · ${this.courseLeaderboard.goalType.replace('_', ' ')} · v${this.courseLeaderboard.courseVersion}`
-        : 'No published expanded room selected.';
+        : this.roomContext?.courseTitle?.trim() || 'Expanded Room';
       this.elements.meta.textContent = courseLabel;
       return;
     }
@@ -742,7 +786,7 @@ export class LeaderboardModalController {
               difficulty.consensus ? ROOM_DIFFICULTY_LABELS[difficulty.consensus] : 'Unrated'
             } · ${difficulty.totalVotes} vote${difficulty.totalVotes === 1 ? '' : 's'} · ${this.formatQualitySummary(this.roomLeaderboard?.quality ?? null)}`;
     this.elements.roomDifficultySummary.textContent = consensusText;
-    this.elements.roomDifficultyStatus.textContent = roomPending ? '' : this.getRoomRatingStatusText();
+    this.renderRoomRatingStatus(roomPending);
     for (const button of this.elements.roomQualityButtons) {
       const qualityStars = this.parseQualityStars(button.dataset.roomQualityStars);
       if (qualityStars === null) {
@@ -752,7 +796,7 @@ export class LeaderboardModalController {
 
       const count = this.getQualityVoteCount(qualityStars);
       button.textContent = `${qualityStars} Star${qualityStars === 1 ? '' : 's'} · ${count}`;
-      button.classList.toggle('active', this.roomLeaderboard?.viewerRating?.qualityStars === qualityStars);
+      setToggleState(button, this.roomLeaderboard?.viewerRating?.qualityStars === qualityStars);
       button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
     }
     for (const button of this.elements.roomDifficultyButtons) {
@@ -764,7 +808,7 @@ export class LeaderboardModalController {
 
       const count = difficulty?.counts[difficultyValue] ?? 0;
       button.textContent = `${ROOM_DIFFICULTY_LABELS[difficultyValue]} · ${count}`;
-      button.classList.toggle('active', difficulty?.viewerVote === difficultyValue);
+      setToggleState(button, difficulty?.viewerVote === difficultyValue);
       button.disabled = roomPending || this.voteSubmitting || !difficulty?.viewerCanVote;
     }
 
@@ -798,6 +842,8 @@ export class LeaderboardModalController {
       return;
     }
 
+    const refresh = this.doc.getElementById('btn-leaderboard-course-refresh') as HTMLButtonElement | null;
+    if (refresh) refresh.disabled = this.courseLoading || this.loading;
     const coursePending =
       this.loading || this.courseLoading || (this.activeTab === 'course' && !this.courseLoaded);
     this.elements.courseList.replaceChildren();
@@ -805,7 +851,9 @@ export class LeaderboardModalController {
       ? 'Loading expanded room leaderboard...'
       : this.courseLeaderboard
         ? `${this.courseLeaderboard.entries.length} ranked run${this.courseLeaderboard.entries.length === 1 ? '' : 's'} · ${this.courseLeaderboard.rankingMode === 'time' ? 'fastest time wins' : 'highest score wins'} · ${this.formatQualitySummary(this.courseLeaderboard.quality)} · ${this.formatDifficultyConsensus(this.courseLeaderboard.difficulty)}${this.formatTrophySuffix(this.courseLeaderboard.trophy)}`
-        : 'No published expanded room leaderboard available.';
+        : this.courseFailed ? 'Expanded Room leaderboard unavailable. Try Refresh.'
+          : !this.roomContext?.courseGoalType ? 'This Expanded Room has no goal, so clears are not ranked.'
+          : 'Whole Expanded Room rankings.';
 
     const viewer = this.courseLeaderboard?.viewerBest ?? null;
     this.elements.courseViewer.classList.toggle('hidden', coursePending || viewer === null);
@@ -827,9 +875,9 @@ export class LeaderboardModalController {
     if (!this.courseLeaderboard || this.courseLeaderboard.entries.length === 0) {
       const empty = this.doc.createElement('div');
       empty.className = 'leaderboard-empty';
-      empty.textContent = this.roomContext?.courseId
-        ? 'No completed ranked expanded room runs yet.'
-        : 'Select a published expanded room cell to view expanded room rankings.';
+      empty.textContent = this.courseFailed ? 'Could not load rankings. Try Refresh.'
+        : !this.roomContext?.courseGoalType ? 'Explore freely, or ask the builder to add a goal.'
+        : 'No ranked clears yet. Complete the whole Expanded Room solo while signed in to rank.';
       this.elements.courseList.appendChild(empty);
       return;
     }
@@ -863,7 +911,7 @@ export class LeaderboardModalController {
 
     for (const button of this.elements.roomRushModeButtons) {
       const mode = this.parseRoomRushModeButtonValue(button.dataset.roomRushLeaderboardMode);
-      button.classList.toggle('active', mode === this.selectedRoomRushMode);
+      setToggleState(button, mode === this.selectedRoomRushMode);
       button.disabled = roomRushPending;
     }
 
@@ -1090,6 +1138,21 @@ export class LeaderboardModalController {
     return 'Rate this room based on your run.';
   }
 
+  /** The line under the vote buttons: your rating, or why a vote didn't save, read out as an alert. */
+  private renderRoomRatingStatus(roomPending: boolean): void {
+    const status = this.elements.roomDifficultyStatus;
+    if (!status) return;
+    const error = roomPending ? null : this.voteError;
+    status.classList.toggle('history-modal-error', Boolean(error));
+    if (error) {
+      setLiveMessage(status, error, 'error', { rerender: true });
+      return;
+    }
+    status.removeAttribute('role');
+    status.classList.remove('hidden');
+    status.textContent = roomPending ? '' : this.getRoomRatingStatusText();
+  }
+
   private getRoomRatingStatusText(): string {
     return this.getDifficultyStatusText();
   }
@@ -1161,8 +1224,8 @@ export class LeaderboardModalController {
   private resolveInitialTab(): LeaderboardTab {
     const requested = this.preferredInitialTab;
     this.preferredInitialTab = null;
-    const roomAvailable = this.roomContext?.state === 'published';
-    const courseAvailable = Boolean(this.roomContext?.courseId);
+    const roomAvailable = this.roomContext?.state === 'published' && !hasExpandedRoomLeaderboardTarget(this.roomContext);
+    const courseAvailable = hasExpandedRoomLeaderboardTarget(this.roomContext);
 
     if (requested === 'global') {
       return 'global';
@@ -1206,8 +1269,19 @@ export class LeaderboardModalController {
     return parts.join(' · ');
   }
 
-  private setError(message: string | null, retry?: () => void | Promise<void>): void {
+  /** `tab` is the tab a load or vote was for: it neither shows an error elsewhere nor clears another tab's. */
+  private setError(message: string | null, retry?: () => void | Promise<void>, tab?: LeaderboardTab): void {
+    if (tab && tab !== (message ? this.activeTab : this.errorTab)) return;
+    this.errorTab = message ? tab ?? this.activeTab : null;
     renderFriendlyError(this.elements.error, message, retry);
     if (message) this.elements.error?.classList.toggle('hidden', this.activeTab === 'global');
+  }
+
+  // An error belongs to the tab that raised it. Once another tab is open it is dropped, not just
+  // hidden, so it can't come back and be read out again; a tab that failed loads again when chosen.
+  private dropStaleError(): void {
+    if (this.errorTab === null || this.errorTab === this.activeTab) return;
+    this.errorTab = null;
+    renderFriendlyError(this.elements.error, null);
   }
 }

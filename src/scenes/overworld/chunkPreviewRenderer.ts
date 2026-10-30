@@ -7,6 +7,10 @@ import {
   getCustomBackgroundTextureKey,
 } from '../../backgrounds/runtime';
 import {
+  acquireCustomBackgroundTexture,
+  CustomBackgroundTextureLeaseSet,
+} from '../../backgrounds/textureLeases';
+import {
   LAYER_NAMES,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
@@ -28,6 +32,11 @@ import {
   drawRoomTileLayerRowsToContext,
 } from '../../visuals/roomSnapshotTexture';
 import { hashStringToSeed } from '../../visuals/starfield';
+import {
+  addStaticCanvasTexture,
+  createPooledTextureCanvas,
+  releasePooledTextureCanvas,
+} from '../../visuals/staticCanvasTexture';
 import { calculateChunkPreviewCrop, type ChunkPreviewCrop } from './chunkPreviewCrop';
 import type {
   FrameWorkGeneration,
@@ -148,8 +157,15 @@ export class OverworldChunkPreviewRenderer {
   private customBackgroundLoadGeneration = 0;
   private readonly textureNamespace: string;
   private readonly roomArt: RoomPreviewArtLoader;
+  // Previews that draw custom backgrounds (tile size >= 4, in every mode) hold them for rooms
+  // on screen. A drawn photo then never falls back to the plain fill, and an eviction cannot
+  // change a visible chunk's signature and refetch the background in a loop (F352).
+  private readonly customBackgroundLeases: CustomBackgroundTextureLeaseSet;
 
   constructor(private readonly options: OverworldChunkPreviewRendererOptions) {
+    this.customBackgroundLeases = new CustomBackgroundTextureLeaseSet(
+      (key) => acquireCustomBackgroundTexture(options.scene, key),
+    );
     this.roomArt = new RoomPreviewArtLoader(options.scene, () => this.syncChunkImages());
     this.textureNamespace = sanitizeChunkKey(options.scene.sys.settings.key);
   }
@@ -194,6 +210,7 @@ export class OverworldChunkPreviewRenderer {
     this.visiblePreviewRoomIds = new Set();
     this.pendingCustomBackgroundLoads = new Map();
     this.customBackgroundLoadGeneration += 1;
+    this.customBackgroundLeases.releaseAll();
   }
 
   getPreviewImages(): Phaser.GameObjects.Image[] {
@@ -382,6 +399,8 @@ export class OverworldChunkPreviewRenderer {
 
   private syncChunkImages(): void {
     const nextVisiblePreviewRoomIds = new Set<string>();
+    const customBackgroundKeys = new Set<string>();
+    const holdCustomBackgrounds = this.shouldDrawCustomBackgroundImages(this.getPreviewTileSize());
     const activeChunkIds = new Set(this.chunkStatesByChunkId.keys());
 
     for (const [chunkId, chunkState] of this.getPrioritizedChunkStates()) {
@@ -394,6 +413,8 @@ export class OverworldChunkPreviewRenderer {
 
       for (const room of visibleRooms) {
         nextVisiblePreviewRoomIds.add(room.id);
+        const backgroundId = holdCustomBackgrounds ? getCustomBackgroundId(room) : null;
+        if (backgroundId) customBackgroundKeys.add(getCustomBackgroundTextureKey(backgroundId));
       }
 
       this.ensureChunkPreview(chunkState.chunkCoordinates, visibleRooms);
@@ -406,6 +427,7 @@ export class OverworldChunkPreviewRenderer {
     }
 
     this.visiblePreviewRoomIds = nextVisiblePreviewRoomIds;
+    this.customBackgroundLeases.sync(customBackgroundKeys);
     this.hasCompletedInitialTexturePass = true;
     this.pruneTextureCache();
   }
@@ -426,7 +448,7 @@ export class OverworldChunkPreviewRenderer {
     const textureKey = this.buildChunkTextureKey(chunkId, contentSignature, previewTileSize);
     const schedulePreviewWork = this.shouldSchedulePreviewWork();
 
-    if (this.shouldDrawCustomBackgroundImages(previewTileSize) && !schedulePreviewWork) {
+    if (this.shouldLoadCustomBackgroundImages(previewTileSize)) {
       this.ensureCustomBackgroundsForChunk(rooms);
     }
 
@@ -592,37 +614,41 @@ export class OverworldChunkPreviewRenderer {
     crop: ChunkPreviewCrop,
   ): boolean {
     return this.measure('stream.buildChunkPreviewTexture', () => {
-      const canvasTexture = this.options.scene.textures.createCanvas(
-        textureKey,
+      if (this.options.scene.textures.exists(textureKey)) {
+        return false;
+      }
+      // Drawn once, then uploaded as a plain texture without a pixel read-back copy (F304).
+      const canvas = createPooledTextureCanvas(
         crop.roomColumns * ROOM_WIDTH * previewTileSize,
         crop.roomRows * ROOM_HEIGHT * previewTileSize,
       );
-      if (!canvasTexture) {
-        return false;
-      }
+      let registered = false;
+      try {
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return false;
+        }
 
-      const canvas = canvasTexture.getSourceImage() as HTMLCanvasElement;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        this.options.scene.textures.remove(textureKey);
-        return false;
-      }
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingEnabled = false;
 
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.imageSmoothingEnabled = false;
+        for (const room of rooms) {
+          this.drawChunkPreviewRoom(
+            context,
+            chunkCoordinates,
+            room,
+            previewTileSize,
+            crop,
+          );
+        }
 
-      for (const room of rooms) {
-        this.drawChunkPreviewRoom(
-          context,
-          chunkCoordinates,
-          room,
-          previewTileSize,
-          crop,
+        registered = Boolean(
+          addStaticCanvasTexture(this.options.scene.textures, textureKey, canvas),
         );
+        return registered;
+      } finally {
+        if (!registered) releasePooledTextureCanvas(canvas);
       }
-
-      canvasTexture.refresh();
-      return true;
     });
   }
 
@@ -1263,7 +1289,7 @@ export class OverworldChunkPreviewRenderer {
       } else {
         const canvas = request.canvas;
         this.measure('stream.uploadChunkPreviewTexture', () => {
-          this.options.scene.textures.addCanvas(request.textureKey, canvas);
+          addStaticCanvasTexture(this.options.scene.textures, request.textureKey, canvas);
         });
         if (!this.options.scene.textures.exists(request.textureKey)) {
           this.cancelPendingTextureBuild(request, 'preview-texture-upload-failed');
@@ -1435,6 +1461,15 @@ export class OverworldChunkPreviewRenderer {
 
   private shouldDrawCustomBackgroundImages(previewTileSize: number): boolean {
     return previewTileSize >= CUSTOM_BACKGROUND_PREVIEW_TILE_SIZE;
+  }
+
+  /** Play-mode previews draw only backgrounds already resident; immediate ones load them. */
+  private shouldLoadCustomBackgroundImages(previewTileSize: number): boolean {
+    return this.shouldDrawCustomBackgroundImages(previewTileSize) && !this.shouldSchedulePreviewWork();
+  }
+
+  releaseCustomBackgroundLeases(): void {
+    this.customBackgroundLeases.releaseAll();
   }
 
   private shouldDrawDetailedRoomPreviews(previewTileSize: number): boolean {

@@ -1,0 +1,1 @@
+| 2026-10-23 | F332, F348 | [#314](https://github.com/songadaymann/wamp/pull/314) | [receipt](docs/review/wamp-round2-speed-2026-10-23.md) | Share previews shrink from 3 MB to under 150 KB; Wamp-O-Gram previews cached behind a visibility check |

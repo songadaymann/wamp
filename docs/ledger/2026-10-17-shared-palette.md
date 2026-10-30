@@ -1,0 +1,1 @@
+| 2026-10-17 | F113 | [#232](https://github.com/songadaymann/wamp/pull/232) | [receipt](docs/review/wamp-shared-palette-2026-10-17.md) | Core UI colours, fonts and shadows come from one shared palette |

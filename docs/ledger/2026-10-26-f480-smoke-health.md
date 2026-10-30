@@ -1,0 +1,1 @@
+| 2026-10-26 | F480 | [#330](https://github.com/songadaymann/wamp/pull/330) | [receipt](docs/review/wamp-f480-smoke-health-2026-10-26.md) | Repair stale browser smokes and run 35 nightly checks in seven isolated groups |

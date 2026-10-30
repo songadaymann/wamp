@@ -1,0 +1,1 @@
+| 2026-10-11 | F004, F078, F223, F008, F002, F138, F011 | [#166](https://github.com/songadaymann/wamp/pull/166)–[#170](https://github.com/songadaymann/wamp/pull/170) | [receipt](docs/review/wamp-fog-music-colliders-2026-10-11.md) | Pooled fog images, music rendered in a worker, no effects at zero volume, phone map trim; F008 part |

@@ -33,7 +33,7 @@ Players claim rooms on an infinite grid, lay down tiles using a browser-based ed
   - a true anonymous-to-account save/sync flow with an inline signup prompt
   - broader mobile/touch tuning and tablet/phone layout polish
   - course authoring polish, stronger course discovery/curation, authoritative PvP, and the broader challenge platform
-  - live migration to the hardened claimer-signed mint contract plus clearer in-world ownership/minted-room UX
+  - clearer in-world ownership/minted-room UX and complete historical NFT metadata; the hardened claimer-bound contract is already deployed on Base mainnet
   - money-backed challenge settlement, anti-cheat, and broader operator/report/review tooling beyond chat moderation
   - creator identity/profile UX, ratings/favorites, and richer social systems
 
@@ -80,7 +80,7 @@ So yes: the world shell now exists. The next step is making it durable, legible,
 - Tileset stored as spritesheets with index-based references
 - Room data stored today as custom room snapshots: coordinates, title, background id, goal, spawn point, tile arrays, placed objects, and version metadata
 - **Current storage/export format is not Tiled JSON yet**
-- Portable room export and minted `tokenURI`/Tiled-style artifacts are still future work
+- Minted `tokenURI` metadata can embed a `wamp_room` snapshot and open the standalone preview. Portable Tiled JSON export remains future work; not every historical token has metadata yet.
 
 ---
 
@@ -444,7 +444,7 @@ Cross-room challenges, PvP, and crypto stakes should be treated as one future pr
 
 ### v1: Cooperative Ghosts
 
-- All players share the world in real-time via PartyKit
+- All players share the world in real-time via presence rooms (a Durable Object in the API Worker)
 - You see other players as semi-transparent sprites running and jumping
 - No player-to-player collision, no damage, no direct interaction
 - Presence is the feature — seeing a dozen tiny characters bouncing through a room feels alive
@@ -501,7 +501,7 @@ Cross-room challenges, PvP, and crypto stakes should be treated as one future pr
 - **API:** Cloudflare Workers (handles auth, rooms, world reads, runs, leaderboards, chat, and mint helpers)
 - **Database:** Cloudflare D1 (SQLite — room metadata, versions, users, sessions, API tokens, runs, stats, points, and chat messages)
 - **Object Storage:** Cloudflare R2 is still optional / not required yet
-- **Real-time:** PartyKit presence only. Persistence stays in Worker + D1; editor collaboration is not implemented
+- **Real-time:** Presence only, in a Durable Object inside the API Worker (it replaced hosted PartyKit in October 2026). Persistence stays in Worker + D1; editor collaboration is not implemented
 
 ### Planned Competitive Extension
 
@@ -513,11 +513,11 @@ Cross-room challenges, PvP, and crypto stakes should be treated as one future pr
 ### Blockchain (Base)
 
 - **Contract:** ERC-721 for room NFTs
-- **Current onchain scope:** Ownership only. Room content still lives in D1
+- **Current onchain scope:** ERC-721 ownership and holder-set `tokenURI` metadata, which can include a room snapshot. Playable saves and version history remain in D1; historical metadata completion is still pending.
 - **Minting:** Optional action from the editor. Current flow is `prepare` -> wallet transaction -> `confirm`, then edit rights lock to the current token holder
 - **Post-mint edits (current):** Token-owner-gated writes still go through the Worker/D1 flow
-- **Future blockchain upgrade:** optional fully onchain room-content storage / `tokenURI` export remains a later milestone
-- **Network target:** Base Sepolia first, then production Base deployment once the flow is hardened
+- **Future blockchain upgrade:** portable Tiled export and fully self-contained content/asset permanence remain later milestones.
+- **Network:** Production uses Base mainnet (8453), contract `0xc3032d5e67c8a67c9745943929f8dff2410dd9a1`. Base Sepolia (84532) is for isolated tests. Mint configuration and standalone previews must select their network explicitly.
 - **Wallet:** Optional wallet connection via standard connector. Only needed for minting/editing minted rooms
 
 ### Planned Challenge Contracts
@@ -853,7 +853,7 @@ This is the right bridge between the current working overworld slice and the eve
 
 - [ ] Avatar customization store (monetization)
 - [x] Wallet connect + linked wallet auth
-- [ ] Migrate live minting to the hardened claimer-signed contract with mutable price / withdraw / tokenURI controls
+- [x] Deploy the hardened claimer-bound mint contract with mutable price / withdraw / tokenURI controls on Base mainnet (existing deployment; source/runtime verified read-only October20,2026).
 - [ ] Onchain tile data in Tiled JSON format via tokenURI
 - [ ] Post-mint edit flow via onchain content transactions
 - [ ] Secondary market for room NFTs

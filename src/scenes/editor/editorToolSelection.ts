@@ -4,7 +4,7 @@ import { countOccupiedSelectionTiles } from './selectionPattern';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import {
   TILE_FLIP_MODES,
-  editorState,
+  editorState, updateEditorState,
   isSolidCustomSpriteObjectConfig,
   type ShapeFillMode,
   type TileFlipMode,
@@ -38,16 +38,13 @@ export function isTriangleEditorTool(tool: ToolName = editorState.activeTool): t
   return tool === 'triangle';
 }
 
+
 export function isShapeEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' {
   return tool === 'rect' || tool === 'ellipse';
 }
 
 export function isPathEditorTool(tool: ToolName): tool is 'line' {
   return tool === 'line';
-}
-
-export function isShapeFillEditorTool(tool: ToolName): boolean {
-  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
 }
 
 export function isPencilSprayPlacement(): boolean {
@@ -166,9 +163,9 @@ export function ensureEditorToolAvailable(): ToolName {
     return editorState.activeTool;
   }
   const previous = editorState.activeTool;
-  editorState.activeTool = 'pencil';
+  updateEditorState({ activeTool: 'pencil' });
   if (previous !== 'pencil') {
-    editorState.pencilSprayMode = false;
+    updateEditorState({ pencilSprayMode: false });
   }
   return editorState.activeTool;
 }
@@ -210,30 +207,38 @@ export function applyEditorToolSelection(tool: ToolName): void {
     return;
   }
   if (editorState.activeTool === tool && tool === 'line') {
-    if (shouldToggleToolModeOnReselect() && !getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
+    if (shouldToggleToolModeOnReselect() && !getEditorLineAxis()) {
+      updateEditorState({ lineCurve: !editorState.lineCurve });
+    }
     return;
   }
   if (editorState.activeTool === tool && tool === 'triangle') {
-    if (shouldToggleToolModeOnReselect()) editorState.trianglePaintMode = !editorState.trianglePaintMode;
+    if (shouldToggleToolModeOnReselect()) {
+      updateEditorState({ trianglePaintMode: !editorState.trianglePaintMode });
+    }
     return;
   }
   if (editorState.activeTool === tool && tool === 'pencil') {
-    if (shouldToggleToolModeOnReselect()) editorState.pencilSprayMode = !editorState.pencilSprayMode;
+    if (shouldToggleToolModeOnReselect()) {
+      updateEditorState({ pencilSprayMode: !editorState.pencilSprayMode });
+    }
     return;
   }
   if (tool === 'randomize') {
-    editorState.randomizeBrushSize = editorState.scrambleBrushSize;
+    updateEditorState({ randomizeBrushSize: editorState.scrambleBrushSize });
   }
-  editorState.activeTool = tool;
-  if (tool === 'triangle') editorState.trianglePaintMode = false;
+  updateEditorState({
+    activeTool: tool,
+    ...(tool === 'triangle' ? { trianglePaintMode: false } : {}),
+  });
 }
 
 export function toggleEditorShapeOutline(tool: 'rect' | 'ellipse'): void {
   if (tool === 'rect') {
-    editorState.rectOutline = !editorState.rectOutline;
+    updateEditorState({ rectOutline: !editorState.rectOutline });
     return;
   }
-  editorState.ellipseOutline = !editorState.ellipseOutline;
+  updateEditorState({ ellipseOutline: !editorState.ellipseOutline });
 }
 
 export function isEditorShapeOutline(tool: ToolName): boolean {
@@ -287,6 +292,7 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
       return 'Draw';
   }
 }
+
 
 export interface EditorModePipState {
   count: number;

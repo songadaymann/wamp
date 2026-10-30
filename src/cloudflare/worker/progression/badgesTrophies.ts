@@ -287,26 +287,11 @@ async function upsertBadgeAward(
   sourceId: string,
   awardedAt: string,
 ): Promise<boolean> {
-  const existing = await env.DB.prepare(
-    `
-      SELECT 1 AS found
-      FROM badge_awards
-      WHERE user_id = ?
-        AND badge_id = ?
-      LIMIT 1
-    `
-  )
-    .bind(userId, badgeId)
-    .first<{ found: number | string | null }>();
-
-  if (parseRowNumber(existing?.found) === 1) {
-    return false;
-  }
-
-  await env.DB.batch([
+  // Two settles of one finish can award the same badge at once; the slower one must not throw (F351).
+  const [inserted] = await env.DB.batch<{ results?: unknown[] }>([
     env.DB.prepare(
       `
-        INSERT INTO badge_awards (
+        INSERT OR IGNORE INTO badge_awards (
           user_id,
           badge_id,
           source_type,
@@ -315,10 +300,11 @@ async function upsertBadgeAward(
           awarded_at
         )
         VALUES (?, ?, ?, ?, NULL, ?)
+        RETURNING badge_id
       `
     ).bind(userId, badgeId, sourceType, sourceId, awardedAt),
   ]);
-  return true;
+  return (inserted?.results?.length ?? 0) > 0;
 }
 
 async function loadBadgeAwardRows(env: Env, userId: string): Promise<BadgeAwardRow[]> {
@@ -350,6 +336,36 @@ async function syncBadgeAndTrophyCounts(env: Env, userId: string): Promise<void>
     WHERE user_id = ?`).bind(badgeRows.length, trophyCount, new Date().toISOString(), userId)]);
 }
 
+/** Play, builder and curator badges a player's current counts support (founder and publish badges excluded). */
+export async function loadQualifyingActivityBadges(env: Env, userId: string): Promise<Set<string>> {
+  const metrics = await loadBackfillSeedMetrics(env, userId);
+  const hasEvent = async (eventType: string) => Boolean(await env.DB.prepare(
+    'SELECT 1 AS found FROM pxp_events WHERE user_id = ? AND event_type = ? LIMIT 1',
+  ).bind(userId, eventType).first<{ found: number }>());
+  const totalClears = metrics.roomClearCount + metrics.courseClearCount;
+  return new Set([
+    ...(totalClears >= 1 ? ['player_first_clear'] : []),
+    ...(totalClears >= 10 ? ['player_10_clears'] : []),
+    ...(totalClears >= 100 ? ['player_100_clears'] : []),
+    ...(await hasEvent('top10_entry') ? ['player_top10_entrant'] : []),
+    ...(await hasEvent('top1_take') ? ['player_top1_finisher'] : []),
+    ...(metrics.creatorUniqueCompletionCount >= 10 ? ['builder_10_unique_players'] : []),
+    ...(metrics.creatorUniqueCompletionCount >= 100 ? ['builder_100_unique_players'] : []),
+    ...(await countOwnedTrophies(env, userId) ? ['builder_first_trophy_room'] : []),
+    ...(metrics.ratingCount >= 1 ? ['curator_first_rating'] : []),
+    ...(metrics.ratingCount >= 50 ? ['curator_50_ratings'] : []),
+    ...(metrics.ratingCount >= 200 ? ['curator_200_ratings'] : []),
+  ]);
+}
+
+/** Badges are only ever awarded elsewhere; an admin cheat cleanup (F205) takes these back. */
+export async function revokeBadges(env: Env, userId: string, badgeIds: string[]): Promise<void> {
+  if (badgeIds.length === 0) return;
+  await env.DB.batch([env.DB.prepare('DELETE FROM badge_awards WHERE user_id = ? AND badge_id IN (SELECT value FROM json_each(?))')
+    .bind(userId, JSON.stringify(badgeIds))]);
+  await syncBadgeAndTrophyCounts(env, userId);
+}
+
 export async function syncUserBadges(env: Env, userId: string): Promise<void> {
   const progress = await loadOrBackfillUserProgress(env, userId);
   const now = new Date().toISOString();
@@ -377,54 +393,59 @@ export async function syncUserBadges(env: Env, userId: string): Promise<void> {
     .bind(userId)
     .first<{ found: number | string | null }>();
 
+  // One read of what the player already has; only missing badges are written.
+  const owned = new Set((await loadBadgeAwardRows(env, userId)).map((row) => row.badge_id));
+  const award = async (badgeId: string, sourceType: string, sourceId: string, awardedAt: string): Promise<void> => {
+    if (!owned.has(badgeId)) await upsertBadgeAward(env, userId, badgeId, sourceType, sourceId, awardedAt);
+  };
   const totalClears = metrics.roomClearCount + metrics.courseClearCount;
   if (progress.founder_number !== null && progress.founder_number <= 99) {
-    await upsertBadgeAward(env, userId, 'founder_first_99', 'founder_number', String(progress.founder_number), now);
+    await award('founder_first_99', 'founder_number', String(progress.founder_number), now);
   }
   if (progress.founder_number !== null && progress.founder_number <= 999) {
-    await upsertBadgeAward(env, userId, 'founder_first_999', 'founder_number', String(progress.founder_number), now);
+    await award('founder_first_999', 'founder_number', String(progress.founder_number), now);
   }
   if (progress.founder_number !== null && progress.founder_number <= 9999) {
-    await upsertBadgeAward(env, userId, 'founder_first_9999', 'founder_number', String(progress.founder_number), now);
+    await award('founder_first_9999', 'founder_number', String(progress.founder_number), now);
   }
   if (totalClears >= 1) {
-    await upsertBadgeAward(env, userId, 'player_first_clear', 'clear_count', String(totalClears), now);
+    await award('player_first_clear', 'clear_count', String(totalClears), now);
   }
   if (totalClears >= 10) {
-    await upsertBadgeAward(env, userId, 'player_10_clears', 'clear_count', String(totalClears), now);
+    await award('player_10_clears', 'clear_count', String(totalClears), now);
   }
   if (totalClears >= 100) {
-    await upsertBadgeAward(env, userId, 'player_100_clears', 'clear_count', String(totalClears), now);
+    await award('player_100_clears', 'clear_count', String(totalClears), now);
   }
   if (parseRowNumber(top10Event?.found) === 1) {
-    await upsertBadgeAward(env, userId, 'player_top10_entrant', 'pxp_event', 'top10_entry', now);
+    await award('player_top10_entrant', 'pxp_event', 'top10_entry', now);
   }
   if (parseRowNumber(top1Event?.found) === 1) {
-    await upsertBadgeAward(env, userId, 'player_top1_finisher', 'pxp_event', 'top1_take', now);
+    await award('player_top1_finisher', 'pxp_event', 'top1_take', now);
   }
   if (metrics.roomPublishCount >= 1) {
-    await upsertBadgeAward(env, userId, 'builder_first_published_challenge', 'publish_count', String(metrics.roomPublishCount), now);
+    await award('builder_first_published_challenge', 'publish_count', String(metrics.roomPublishCount), now);
   }
   if (metrics.coursePublishCount >= 1) {
-    await upsertBadgeAward(env, userId, 'builder_first_published_course', 'course_publish_count', String(metrics.coursePublishCount), now);
+    await award('builder_first_published_course', 'course_publish_count', String(metrics.coursePublishCount), now);
   }
   if (metrics.creatorUniqueCompletionCount >= 10) {
-    await upsertBadgeAward(env, userId, 'builder_10_unique_players', 'creator_unique_completion_count', String(metrics.creatorUniqueCompletionCount), now);
+    await award('builder_10_unique_players', 'creator_unique_completion_count', String(metrics.creatorUniqueCompletionCount), now);
   }
   if (metrics.creatorUniqueCompletionCount >= 100) {
-    await upsertBadgeAward(env, userId, 'builder_100_unique_players', 'creator_unique_completion_count', String(metrics.creatorUniqueCompletionCount), now);
+    await award('builder_100_unique_players', 'creator_unique_completion_count', String(metrics.creatorUniqueCompletionCount), now);
   }
   if (await countOwnedTrophies(env, userId)) {
-    await upsertBadgeAward(env, userId, 'builder_first_trophy_room', 'trophy_count', '1', now);
+    await award('builder_first_trophy_room', 'trophy_count', '1', now);
   }
   if (metrics.ratingCount >= 1) {
-    await upsertBadgeAward(env, userId, 'curator_first_rating', 'rating_count', String(metrics.ratingCount), now);
+    await award('curator_first_rating', 'rating_count', String(metrics.ratingCount), now);
   }
   if (metrics.ratingCount >= 50) {
-    await upsertBadgeAward(env, userId, 'curator_50_ratings', 'rating_count', String(metrics.ratingCount), now);
+    await award('curator_50_ratings', 'rating_count', String(metrics.ratingCount), now);
   }
   if (metrics.ratingCount >= 200) {
-    await upsertBadgeAward(env, userId, 'curator_200_ratings', 'rating_count', String(metrics.ratingCount), now);
+    await award('curator_200_ratings', 'rating_count', String(metrics.ratingCount), now);
   }
 
   await syncBadgeAndTrophyCounts(env, userId);

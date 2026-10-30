@@ -1,3 +1,4 @@
+import { BUILD_PROMPT_OPEN_REQUEST } from '../../buildPrompts/events';
 import { AUTH_SESSION_REFRESHED_EVENT, AUTH_STATE_CHANGED_EVENT, getAuthDebugState, type AuthDebugState } from '../../auth/client';
 import { type ActivityResponse, type BuilderActivity } from '../../activity/model';
 import { createActivityRepository, type ActivityRepository } from '../../activity/repository';
@@ -66,6 +67,7 @@ export class ActivityInboxController {
     for (const name of ['focus', 'online']) this.win.addEventListener(name, this.onWake);
     this.doc.addEventListener('visibilitychange', this.onWake);
     this.win.addEventListener('activity-open-request', this.onOpen);
+    this.win.addEventListener(BUILD_PROMPT_OPEN_REQUEST, this.onPromptOpen);
     this.bell?.addEventListener('click', this.onOpen); this.closeButton?.addEventListener('click', this.onClose);
     this.retry?.addEventListener('click', this.onRetry); this.more?.addEventListener('click', this.onMore);
     this.save?.addEventListener('click', this.onSave); this.catchup?.addEventListener('click', this.onOpen);
@@ -80,6 +82,7 @@ export class ActivityInboxController {
     for (const name of [AUTH_STATE_CHANGED_EVENT, AUTH_SESSION_REFRESHED_EVENT]) this.win.removeEventListener(name, this.onAuth);
     for (const name of ['focus', 'online']) this.win.removeEventListener(name, this.onWake);
     this.doc.removeEventListener('visibilitychange', this.onWake); this.win.removeEventListener('activity-open-request', this.onOpen);
+    this.win.removeEventListener(BUILD_PROMPT_OPEN_REQUEST, this.onPromptOpen);
     this.bell?.removeEventListener('click', this.onOpen); this.closeButton?.removeEventListener('click', this.onClose);
     this.retry?.removeEventListener('click', this.onRetry); this.more?.removeEventListener('click', this.onMore);
     this.save?.removeEventListener('click', this.onSave); this.catchup?.removeEventListener('click', this.onOpen);
@@ -100,6 +103,7 @@ export class ActivityInboxController {
     this.more?.classList.add('hidden'); this.renderTabs();
     this.lifecycle.show(); this.closeButton?.focus(); void this.refresh(true);
   };
+  private readonly onPromptOpen = () => { if (this.lifecycle.isOpen()) this.close(false); };
   private readonly onClose = () => this.close();
   private readonly onRetry = () => { void this.refresh(true); };
   private readonly onMore = () => { if (this.before !== null) void this.refresh(true, this.before); };

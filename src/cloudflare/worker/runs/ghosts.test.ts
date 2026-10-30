@@ -6,7 +6,7 @@ import type { RunGhost } from '../../../runs/ghostRace';
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), scope: vi.fn(), room: vi.fn(), selection: vi.fn(),
   top: vi.fn(), personal: vi.fn(), verify: vi.fn() }));
 vi.mock('../auth/request', () => ({ loadOptionalRequestAuth: mocks.auth, requireOptionalScope: mocks.scope }));
-vi.mock('../rooms/store', () => ({ loadRoomRecord: mocks.room }));
+vi.mock('../rooms/rankingRecord', () => ({ loadRoomRankingRecord: mocks.room }));
 vi.mock('./roomLeaderboardAggregation', () => ({ resolveAggregatedRoomLeaderboardSelection: mocks.selection }));
 vi.mock('./leaderboards', () => ({ loadRankedRoomLeaderboardRows: mocks.top, loadViewerRankedRoomLeaderboardRow: mocks.personal }));
 vi.mock('./verification', () => ({ verifyRoomRunTrace: mocks.verify }));
@@ -70,6 +70,7 @@ describe('ghost lookup boundaries', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('vary')).toContain('Cookie');
     expect(mocks.personal.mock.calls[0].at(-1)).toBe('viewer');
+    expect(mocks.room.mock.calls[0][3]).toEqual({ viewerUserId: 'viewer', viewerWalletAddress: null, snapshotVersions: [1] });
     expect((await response.json()).personal.ghost.attemptId).toBe('best');
     expect(mocks.top.mock.calls[0][2]).toEqual([1, 2, 3]);
   });
