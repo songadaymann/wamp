@@ -55,10 +55,11 @@ class Database implements D1Database {
     } catch (error) { this.sqlite.exec('ROLLBACK'); throw error; }
   }
 }
-export function fixture(includeActivity = true) {
+export function fixture(includeActivity = true, throughMigration?: string) {
   const sqlite = new DatabaseSync(':memory:'); sqlite.exec('PRAGMA foreign_keys = ON');
   const directory = new URL('../../../../migrations/', import.meta.url);
   for (const file of readdirSync(directory).filter(name => name.endsWith('.sql')).sort()) {
+    if (throughMigration && file > throughMigration) continue;
     if (!includeActivity && (file.startsWith('0055_') || file.startsWith('0057_') || file.startsWith('0066_') || file.startsWith('0069_') || file.startsWith('0077_'))) continue;
     sqlite.exec(readFileSync(new URL(file, directory), 'utf8'));
   }
