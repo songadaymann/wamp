@@ -1,4 +1,4 @@
-# F264 — drop the three retired D1 tables (in progress)
+# F264 — drop the three retired D1 tables (delivered)
 
 Migration0078 drops room_difficulty_votes, playfun_point_sync and
 room_version_attribution. Their runtime read/write removal was a separate earlier
@@ -35,6 +35,19 @@ schema validation is preserved.
 
 Evidence: /tmp/wamp-f264-production-before.json, native.json/native.log,
 refresh-proof.json, focused.log and check-final.log (same prefix). Native fixtures
-are ignored under output/f264-native/. No production writes, emails or wallet
-transactions. Not delivered: PR CI and guarded migration/Worker/Pages
-rollout plus live schema/health/asset verification remain.
+are ignored under output/f264-native/. No remote mutation was used for the native fixtures.
+
+## Delivery verified 2026-10-29
+
+PR #352 passed all20 checks on
+c8f68797 and merged as8cc89f21. Guarded migration0078/API/Pages release passed;
+API14e56a49 is healthy. Read-only production schema confirms all3 retired tables
+absent. Renderer deployed after API, then only its unused ADMIN_API_KEY removed;
+serving version9b978394 at100%, health200 and all3 retired admin routes404.
+Main API admin secret retained; no production R2 deletion test. Public share
+GET/HEAD301 ignores redirect input; metadata and PNG/HEAD remain correct.
+Pages reconciliation e717be84 serves exact release frontend asset bytes.
+Combined full747files/6287tests and all check stages pass; native hidden-tuner,
+D1 upgrade preservation, bounded R2 GC and share proofs described above pass.
+No production room/player/email/wallet-transaction tests. Production writes were
+the authorized schema migration, deployments and renderer-only secret removal.

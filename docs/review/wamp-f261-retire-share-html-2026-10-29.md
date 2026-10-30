@@ -1,4 +1,4 @@
-# F261 — retire unused render helpers and legacy share HTML (in progress)
+# F261 — retire unused render helpers and legacy share HTML (delivered)
 
 Removed the unused warm-all-art helper and minted-payload PNG data-URL wrapper,
 plus imports used only by the warm helper. Live canvas/snapshot render paths stay.
@@ -27,5 +27,19 @@ network request is made.
 
 Evidence: /tmp/wamp-f261-check.log, share-final.log, native-2.log/native.json
 (same prefix); ignored output/f261-native/. No production writes, emails or
-wallet transactions. Not delivered: PR CI and live rollout/redirect/image proof
-remain. No additional migration beyond parent F264's0078.
+wallet transactions. PR CI and live rollout proof are recorded below. No additional migration beyond parent F264's0078.
+
+## Delivery verified 2026-10-29
+
+PR #352 passed all20 checks on
+c8f68797 and merged as8cc89f21. Guarded migration0078/API/Pages release passed;
+API14e56a49 is healthy. Read-only production schema confirms all3 retired tables
+absent. Renderer deployed after API, then only its unused ADMIN_API_KEY removed;
+serving version9b978394 at100%, health200 and all3 retired admin routes404.
+Main API admin secret retained; no production R2 deletion test. Public share
+GET/HEAD301 ignores redirect input; metadata and PNG/HEAD remain correct.
+Pages reconciliation e717be84 serves exact release frontend asset bytes.
+Combined full747files/6287tests and all check stages pass; native hidden-tuner,
+D1 upgrade preservation, bounded R2 GC and share proofs described above pass.
+No production room/player/email/wallet-transaction tests. Production writes were
+the authorized schema migration, deployments and renderer-only secret removal.

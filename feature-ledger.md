@@ -8,6 +8,10 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F265 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f265-renderer-admin-cleanup-2026-10-29.md) | Bound main API cleanup, retire duplicate renderer admin routes and use bound metrics |
+| 2026-10-29 | F264 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f264-drop-retired-tables-2026-10-29.md) | Drop three retired tables after preserving current room, player and points data |
+| 2026-10-29 | F262 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f262-idle-camera-tuner-2026-10-29.md) | Avoid layout measurements while the developer camera tuner is hidden |
+| 2026-10-29 | F261 | [#352](https://github.com/songadaymann/wamp/pull/352) | [receipt](docs/review/wamp-f261-retire-share-html-2026-10-29.md) | Remove unused render helpers and redirect legacy share pages to canonical room links |
 | 2026-10-29 | F439 | [#351](https://github.com/songadaymann/wamp/pull/351) | [receipt](docs/review/wamp-f439-fixed-classroom-emotes-2026-10-29.md) | Add fixed guest and classroom-only student emotes with signed scope, moderation and accessible controls |
 | 2026-10-29 | F479 | [#350](https://github.com/songadaymann/wamp/pull/350) | [receipt](docs/review/wamp-f479-wallet-room-presentation-2026-10-29.md) | Require wallet connection for Protected sorting and crypto details; preserve permissions and recovery |
 | 2026-10-29 | F253 | [#349](https://github.com/songadaymann/wamp/pull/349) | [receipt](docs/review/wamp-f253-accessible-clear-layer-2026-10-29.md) | Give Clear Layer a live desktop/phone home and retire obsolete editor UI; keyboard, Undo and live assets verified |
@@ -84,7 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-17 | F091 | [#235](https://github.com/songadaymann/wamp/pull/235) | [receipt](docs/review/wamp-mann-cool-2026-10-17.md) | Plays are reported to mann.cool, and trusted mann.cool controller input is accepted |
 | 2026-10-17 | F015 | [#234](https://github.com/songadaymann/wamp/pull/234) | [receipt](docs/review/wamp-parallel-startup-2026-10-17.md) | Low-priority game downloads start alongside the map check |
 | 2026-10-17 | F090 | [#233](https://github.com/songadaymann/wamp/pull/233) | [receipt](docs/review/wamp-touch-haptics-2026-10-17.md) | Device vibration for local gameplay, with an on-device switch |
-| 2026-10-17 | F113 | [#232](https://github.com/songadaymann/wamp/pull/232) | [receipt](docs/review/wamp-shared-palette-2026-10-17.md) | Core UI colours, fonts and shadows come from one shared palette |
-| 2026-10-17 | F114 | [#231](https://github.com/songadaymann/wamp/pull/231) | [receipt](docs/review/wamp-button-roles-2026-10-17.md) | Consistent button roles in rooms and both editors, with a clear Publish |
-| 2026-10-16 | F112 | [#229](https://github.com/songadaymann/wamp/pull/229)–[#230](https://github.com/songadaymann/wamp/pull/230) | [receipt](docs/review/wamp-navigation-2026-10-16.md) | Room actions, browse navigation and the account menu are separate; the phone editor menu clears its toolbar |
-| 2026-10-16 | F148 | [#227](https://github.com/songadaymann/wamp/pull/227) | [receipt](docs/review/wamp-gamepad-restart-2026-10-16.md) | Standard gamepad controls, and R restarts |

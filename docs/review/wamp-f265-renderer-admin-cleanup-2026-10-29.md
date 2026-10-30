@@ -1,4 +1,4 @@
-# F265 — one bounded world-tile admin surface (in progress)
+# F265 — one bounded world-tile admin surface (delivered)
 
 The main API retains world-tile operator controls. Garbage collection keeps
 its admin/origin checks, explicit deletion confirmation,30-day floor and
@@ -39,5 +39,19 @@ configuration. A direct call with no internal token is still rejected.
 Evidence: /tmp/wamp-f265-check.log, focused-final.log, native-final.log and
 native.json, renderer-secret-names.json (same prefix); ignored output/f265-native/.
 No production R2 cleanup, room/player writes, email or wallet transaction tests.
-Not delivered: PR CI and guarded main/renderer rollout, secret removal and live
-verification remain. F262/F264 are also prepared in the parent cleanup commits.
+F262/F264 are included in the parent cleanup commits.
+
+## Delivery verified 2026-10-29
+
+PR #352 passed all20 checks on
+c8f68797 and merged as8cc89f21. Guarded migration0078/API/Pages release passed;
+API14e56a49 is healthy. Read-only production schema confirms all3 retired tables
+absent. Renderer deployed after API, then only its unused ADMIN_API_KEY removed;
+serving version9b978394 at100%, health200 and all3 retired admin routes404.
+Main API admin secret retained; no production R2 deletion test. Public share
+GET/HEAD301 ignores redirect input; metadata and PNG/HEAD remain correct.
+Pages reconciliation e717be84 serves exact release frontend asset bytes.
+Combined full747files/6287tests and all check stages pass; native hidden-tuner,
+D1 upgrade preservation, bounded R2 GC and share proofs described above pass.
+No production room/player/email/wallet-transaction tests. Production writes were
+the authorized schema migration, deployments and renderer-only secret removal.

@@ -42,10 +42,10 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F253 — accessible Clear Layer and retire hidden editor UI; PR #349, CI/native/live frontend verified.
 - [x] F479 — wallet-only Protected sort and appropriate non-wallet payloads; PR #350, CI/native/live verified.
 - [x] F439 — fixed guest/classroom emotes; PR #351, native/CI/live verified.
-- [ ] F262 — idle/gate hidden Camera Tuner while preserving CI coverage.
-- [ ] F264 — remove retired difficulty-vote, Play.fun sync and attribution tables.
-- [ ] F265 — retire unused admin APIs/reporting and avoid server self-fetch.
-- [ ] F261 — remove unused render helpers and retire obsolete share page.
+- [x] F262 — idle/gate hidden Camera Tuner while preserving CI coverage.
+- [x] F264 — remove retired difficulty-vote, Play.fun sync and attribution tables.
+- [x] F265 — retire unused admin APIs/reporting and avoid server self-fetch.
+- [x] F261 — remove unused render helpers and retire obsolete share page.
 - [ ] F259 — remove production clutter and keep developer/source assets appropriately.
 - [x] F263 — retire obsolete Mac avatar queue; PR #334 merged, all 18 CI jobs passed.
 - [ ] F257 — unused-helper cleanup and complete boot diagnostics correctly.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **16/28 delivered**, and Round 2 is **88/248**.
+This goal is **20/28 delivered**, and Round 2 is **92/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -146,3 +146,9 @@ isolation, real session tokens, ban/suspension/reconnect and all8 browser cases
 prove the sending/receiving flows. No migration or production room/player/email/tx
 writes. Goal16/28; Round2 88/248. F262/F264/F265/F261 are prepared separately for
 the next cleanup PR; all12 remaining items stay open. F436 content approval pending.
+
+PR #352 delivered F262/F264/F265/F261 after all20 exact-head checks passed.
+Merge8cc89f21; guarded migration0078/API/Pages release and renderer release pass.
+Live retired tables absent, health0078, canonical GET/HEAD301 and PNG/meta intact;
+renderer health200/admin404 and renderer-only admin secret removed. Exact frontend
+assets verified after Pages reconciliation. Goal20/28; Round2 92/248.
