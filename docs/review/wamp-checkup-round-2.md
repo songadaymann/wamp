@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 100 of 248 done.**
+**Progress: 101 of 248 done.**
 
 ## How to use this file
 
@@ -142,7 +142,7 @@ The Expanded Room work left two copies of several things: server routes, progres
 - [x] **F274** The Expanded Room editor has its own 930-line copy of the room editor's mouse, drawing and camera code, and it has already drifted · medium impact · large effort
 - [x] **F275** The two object inspectors are still separate 1,250-line copies, and each has picked up half of the recent fixes · medium impact · medium effort
 - [x] **F273** Room vs Expanded Room progression and rating rules are two hand-synced copies of the anti-cheat-sensitive logic · medium impact · medium effort
-- [ ] **F283** Five separate copies of 'which version of this room is current' have already drifted apart · low impact · small effort
+- [x] **F283** Five separate copies of 'which version of this room is current' have already drifted apart · low impact · small effort — **done 2026-10-30** ([PR #357](https://github.com/songadaymann/wamp/pull/357)): runtime selection prefers published content over lingering live previews; regression/browser/20 CI checks and live frontend pass. [Receipt](wamp-f283-room-version-selection-2026-10-30.md).
 - [x] **F269** Expanded Room and Wamp-O-Gram previews use a separate 838-line 'colored blocks' renderer; fold it into the real-art one · medium impact · medium effort — **done 2026-10-29** ([PR #339](https://github.com/songadaymann/wamp/pull/339), [cache follow-up #340](https://github.com/songadaymann/wamp/pull/340)): one real-art painter for API/Pages/Grams with canonical geometry, custom art, moderation and bounded caches; all CI and live rollout verified. [Receipt](wamp-f269-f389-shared-real-art-previews-2026-10-29.md).
 - [ ] **F267** Each pop-up re-declares the same paper skin by name (~750 duplicate lines); the default is still the old dark one · medium impact · medium effort
 - [ ] **F271** Most user lookups still make two database trips because of fallback code for columns added in March-May · medium impact · small effort — _also covers: Bot and API-token requests make 4 trips including a write each time, and profile lookups read the same user row twice_

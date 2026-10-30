@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-30 | F283 | [#357](https://github.com/songadaymann/wamp/pull/357) | [receipt](docs/review/wamp-f283-room-version-selection-2026-10-30.md) | Keep runtime room status and version consistent with playable content after first publish |
 | 2026-10-30 | F266 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f266-map-coverage-cleanup-2026-10-29.md) | Remove unused map contracts and keep parent retention tested against the live planner |
 | 2026-10-30 | F260 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f260-music-helper-cleanup-2026-10-29.md) | Remove retired music helpers and footstep warming while preserving saved stems playback |
 | 2026-10-30 | F258 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f258-streaming-helper-cleanup-2026-10-29.md) | Retire unused streaming wrappers and update camera, social and model import callers |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-19 | F064 | [#250](https://github.com/songadaymann/wamp/pull/250) | [receipt](docs/review/wamp-auth-state-2026-10-19.md) | Sign-out state and phone account menu taps fixed; account transitions extracted and tested |
 | 2026-10-19 | F177 | [#248](https://github.com/songadaymann/wamp/pull/248)–[#249](https://github.com/songadaymann/wamp/pull/249) | [receipt](docs/review/wamp-keyboard-controls-2026-10-19.md) | Every gameplay action can be remapped, with physical key layouts and Z/X alternates |
 | 2026-10-19 | F172 | [#247](https://github.com/songadaymann/wamp/pull/247) | [receipt](docs/review/wamp-assist-mode-2026-10-18.md) | Local Assist mode with safe-ground respawns |
-| 2026-10-18 | F171 | [#246](https://github.com/songadaymann/wamp/pull/246) | [receipt](docs/review/wamp-readable-text-2026-10-18.md) | Readable font and larger text settings, synced to the account |
