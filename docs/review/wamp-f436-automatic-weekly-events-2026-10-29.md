@@ -15,7 +15,7 @@ Rush candidates come from public standalone solo rooms, with fair deterministic
 rotation, quality, non-staff and builder cooldown weights, a preference for older
 stable publications and at least three published neighbours. Ineligible or stale
 candidates are skipped. Prompts rotate through the proposed 26-theme bank.
-Migration0077 adds attribution, prompt keys, suppression and weekly trace bindings.
+Migration0079 adds attribution, prompt keys, suppression and weekly trace bindings.
 Existing configuration remains attributed to admin.
 
 Before automatic weekly rankings launch, signed-in weekly starts now bind a
@@ -57,3 +57,23 @@ CI quality found the safety probe’s fake database still locating Rush finaliza
 guard binds by the old column count. It now reads the final three guard binds,
 preserving consumed-start/user/attempt checks as inserted metadata grows. The
 worker-safety probe passes locally; CI must rerun before any merge.
+
+## Refreshed integration proof — 2026-10-30
+
+Rebased onto the current cleanup integration after F257 delivery. Preserve current
+builder recognition, cleared-room and keep-playing behavior. Renumber the pending
+weekly migration to0079 after live0077 recognition/0078 retirement; health expects
+0079 only in this draft. No F436 migration has been applied to production.
+
+Full check passes749files/6295tests, one existing expected failure/two skips,
+all stages, boot662.5/670KB. Five focused weekly/trace files41tests and worker safety
+probe pass. Fresh native Worker/D1 populates current+next weeks2+2, then0+0 on retry.
+Actual signed-in synthetic browser crosses0,0 to1,0 with keyboard, ends Rush and
+saves two rooms with verification_status=passed; result confirms saved weekly
+ranking, zero page errors. Local ephemeral fixtures only, no production writes.
+Evidence: /tmp/wamp-f436-refresh-check.log, refresh-focused.log, refresh-types.log,
+refresh-worker-safety.log and refresh-browser.log; ignored output/f436-native/.
+
+Prompt content review remains pending. The automatic scheduling authorization
+already stands; do not re-request it. Keep the PR draft and F436 unchecked until
+the content decision and all final CI/live gates are satisfied.
