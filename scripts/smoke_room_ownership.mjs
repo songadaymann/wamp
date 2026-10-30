@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib';
 import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
+import { installReadOnlyWalletConnection } from './lib/connectedWalletFixture.mjs';
 import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 const base = process.argv[2] || 'http://127.0.0.1:4198';
 const output = process.argv[3] || 'output/web-game/room-ownership';
@@ -39,18 +40,26 @@ for (const [device, engine, width, height, touch] of [
       await installMobileSignedFixture(context, { roomEditor: true });
       const wallet = kind === 'seller' ? seller : kind === 'outsider' ? `0x${'33'.repeat(20)}` : buyer;
       const user = { id: 'mobile-smoke-fixture', walletAddress: wallet, email: null, displayName: 'Ownership test' };
-      let session = { authenticated: true, source: 'session', user, schoolManaged: false, school: null, partykitHost: '', chatModeration: { role: 'none', banned: false } };
+      const walletModules = artworkCase ? await installReadOnlyWalletConnection(context, wallet) : [];
+      let session = { walletProjectId: 'public-isolated-ownership', authenticated: true, source: 'session', user, schoolManaged: false, school: null, partykitHost: '', chatModeration: { role: 'none', banned: false } };
       let fresh = false, fail = kind === 'failure-retry', release = () => {}, started;
       const start = new Promise(resolve => { started = resolve; });
       const priceRequests = [];
       const requests = [], errors = [], consoleErrors = [], failedResponses = [], groupWrites = [];
       const membership = { expandedRoomId: 'course:ownership-fixture', title: 'Ownership adventure', goalType: null, cellCount: 2, source: 'native_expanded_room', legacyCourseId: 'ownership-fixture' };
       const course = { id: 'ownership-fixture', title: membership.title, roomRefs: [0, 1].map(x => ({ roomId: `${x},0`, coordinates: { x, y: 0 }, roomVersion: snapshot.version, roomTitle: `Cell ${x}`, protectedMinted: minted && x === 0 })), objectLinks: [], pressurePlateLinks: [], startPoint: { roomId: '0,0', x: 328, y: 304 }, goal: null, version: 1, status: 'published', createdAt: snapshot.createdAt, updatedAt: snapshot.updatedAt, publishedAt: snapshot.publishedAt };
-      const summary = () => ({ ...originalSummary, draftVersion: roomSnapshot.version, publishedVersion: roomSnapshot.version,
+      const fullSummary = () => ({ ...originalSummary, isProtected: minted, draftVersion: roomSnapshot.version, publishedVersion: roomSnapshot.version,
         ...(artworkCase ? { canonicalVersion: 8, mintedMetadataRoomVersion: fresh ? kind === 'metadata-current' ? 8 : kind === 'metadata-stale' ? 3 : null : null, mintedMetadataHash: fresh ? 'a'.repeat(64) : null, mintedMetadataUpdatedAt: fresh ? '2026-10-20T00:00:00Z' : null } : {}), ...(minted ? {} : { claimerUserId: user.id }),
         mintedChainId: minted ? 8453 : null, mintedContractAddress: minted ? seller : null, mintedTokenId: minted ? '42' : null,
         mintedOwnerWalletAddress: minted ? fresh ? buyer : seller : null,
         permissions: { canSaveDraft: !minted || wallet === (fresh ? buyer : seller), canPublish: !minted || wallet === (fresh ? buyer : seller), canRevert: false, canMint: !minted } });
+      const summary = route => {
+        const value = fullSummary();
+        if (new URL(route.request().url()).searchParams.get('crypto') !== '1') {
+          for (const key of Object.keys(value)) if (key.startsWith('minted')) delete value[key];
+        }
+        return value;
+      };
       const cors = r => ({ 'access-control-allow-origin': r.request().headers().origin || local.origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' });
       const reply = (r, json, status = 200) => r.fulfill({ status, json, headers: cors(r) });
       await context.route(u => u.pathname === '/api/collections/price', r => {
@@ -59,9 +68,13 @@ for (const [device, engine, width, height, touch] of [
           : { priceWei: '1000', chainId: 8453, contractAddress: seller, quotedAt: new Date().toISOString() }, priceUnavailable ? 503 : 200);
       });
       await context.route(u => u.pathname === '/api/auth/session', r => reply(r, session));
+      if (artworkCase) {
+        await context.route(u => u.pathname === '/api/auth/wallet/challenge', r => reply(r, { address: wallet, message: 'Isolated metadata fixture connection', expiresAt: new Date(Date.now() + 60000).toISOString() }));
+        await context.route(u => u.pathname === '/api/auth/wallet/verify', r => reply(r, { authenticated: true, linkedWallet: false, user }));
+      }
       await context.route(u => u.pathname === `/api/profiles/${originalSummary.claimerUserId}/summary`, r => reply(r, { ...profileTemplate, userId: originalSummary.claimerUserId, displayName: originalSummary.claimerDisplayName }));
-      await context.route(u => u.pathname === '/api/rooms/0%2C0/summary', r => reply(r, summary()));
-      await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(), draft: roomSnapshot, published: roomSnapshot }));
+      await context.route(u => u.pathname === '/api/rooms/0%2C0/summary', r => reply(r, summary(r)));
+      await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(r), draft: roomSnapshot, published: roomSnapshot }));
       if (artworkCase) {
         await context.route(u => u.pathname === '/api/rooms/0%2C0/versions', r => reply(r, { versions: [{ version: 8, title: roomSnapshot.title, createdAt: roomSnapshot.publishedAt || roomSnapshot.updatedAt, publishedByUserId: originalSummary.claimerUserId, publishedByPrincipalKind: 'user', publishedByAgentId: null, publishedByDisplayName: originalSummary.claimerDisplayName, revertedFromVersion: null, leaderboardSourceVersion: null }] }));
         await context.route(u => u.pathname === '/api/rooms/snapshots/query', r => {
@@ -87,7 +100,7 @@ for (const [device, engine, width, height, touch] of [
         assert.equal(r.request().method(), 'POST'); requests.push('POST'); started();
         if (kind === 'auth-cancel') await new Promise(resolve => { release = resolve; });
         if (fail) { fail = false; return reply(r, { error: 'Isolated provider outage' }, 503); }
-        fresh = true; return reply(r, summary());
+        fresh = true; return reply(r, summary(r));
       });
       await context.route(u => /\/(?:courses|expanded-rooms)\//.test(u.pathname) && u.pathname.startsWith('/api/'), r => {
         if (!['GET', 'OPTIONS'].includes(r.request().method())) { groupWrites.push(r.request().url()); return reply(r, { error: 'Unexpected group write' }, 403); }
@@ -111,6 +124,14 @@ for (const [device, engine, width, height, touch] of [
         const renderer = engine === webkit && process.platform === 'linux' ? 'canvas' : 'webgl';
         await page.goto(`${base}/?welcome=0&renderer=${renderer}`);
         await page.waitForFunction(() => document.body.dataset.appReady === 'true', null, { timeout: 120_000 });
+        if (artworkCase) {
+          await click('#menu-toggle');
+          if (!await page.locator('#btn-auth-wallet').isVisible()) await click('#account-signin-options > summary');
+          await click('#btn-auth-wallet');
+          await page.waitForFunction(() => document.documentElement.dataset.walletConnected === 'true' && !JSON.parse(window.render_game_to_text()).auth.loading);
+          assert(walletModules.some(module => module.symbol === 'createAppKit'));
+          await click('#menu-toggle');
+        }
         if (touch) { await click('#btn-world-jump-sheet'); await page.locator('#mobile-world-jump-input').fill('0,0'); await click('#btn-mobile-world-jump-go'); }
         else { await page.locator('#world-jump-input').fill('0,0'); await click('#btn-world-jump'); }
         await page.waitForFunction(() => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s?.mode === 'browse' && s.selected.x === 0 && s.selected.y === 0; });
@@ -154,7 +175,8 @@ for (const [device, engine, width, height, touch] of [
           assert.equal((await state()).scene, 'overworld-play'); await page.waitForTimeout(150); assert.equal((await state()).mode, 'browse');
           await page.locator('#btn-world-edit').waitFor({ state: 'hidden' });
         } else {
-          await page.waitForFunction(({ minted, buyer, version }) => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s?.scene === 'editor' && s.canSaveDraft === true && s.canPublish === true && s.roomVersion === version && s.publishedVersion === version && (!minted || s.mintedOwnerWalletAddress === buyer); }, { minted, buyer, version: roomSnapshot.version });
+          await page.waitForFunction(({ minted, artworkCase, buyer, version }) => { const s = JSON.parse(window.render_game_to_text()).activeScene; return s?.scene === 'editor' && s.canSaveDraft === true && s.canPublish === true && s.roomVersion === version && s.publishedVersion === version && (!minted || (artworkCase ? s.mintedOwnerWalletAddress === buyer : s.mintedTokenId === null)); }, { minted, artworkCase, buyer, version: roomSnapshot.version });
+          if (minted && !artworkCase) await page.waitForFunction(() => document.getElementById('editor-top-save-status').textContent.includes('Protected'));
           if (artworkCase) {
             const expected = kind === 'metadata-current' ? 'NFT metadata is current at v8.' : kind === 'metadata-stale' ? 'NFT metadata is stale (on-chain v3, room v8).' : 'Artwork status has not been recorded here.';
             await page.waitForFunction(expected => document.body.textContent.includes(expected), expected);

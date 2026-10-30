@@ -5,7 +5,7 @@ import { setFocusedCoordinatesInUrl } from '../../../navigation/worldNavigation'
 import { getDevicePerformanceMode } from '../../../performance/devicePerformanceMode';
 import { performanceAdvisorRuntime } from '../../../performance/performanceAdvisorRuntime';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
-import { parseRoomId, roomIdFromCoordinates } from '../../../persistence/roomModel';
+import { isRoomMinted, parseRoomId, roomIdFromCoordinates } from '../../../persistence/roomModel';
 import { createWorldRepository } from '../../../persistence/worldRepository';
 import { DEFAULT_PLAYER_VISUAL_FEET_OFFSET } from '../../../player/defaultPlayer';
 import { getDeviceLayoutState, prefersReducedMotion } from '../../../ui/deviceLayout';
@@ -737,7 +737,8 @@ export function createFlowController(
       getWalletAddress: () => { const auth = getAuthDebugState(); return auth.authenticated ? auth.user?.walletAddress ?? null : null; },
       acceptOwnership: (id, summary) => hud.setRoomOwnershipDetails(id, {
         claimerUserId: summary.claimerUserId,
-        isMinted: summary.mintedChainId !== null || summary.mintedContractAddress !== null || summary.mintedTokenId !== null,
+        isMinted: isRoomMinted(summary),
+        canSaveDraft: summary.permissions.canSaveDraft,
         mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
       }),
     }, roomId, coordinates),

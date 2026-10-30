@@ -6,6 +6,7 @@ import {
   type RoomRevertRequestBody,
   type RoomSnapshotQueryReference,
 } from '../../../persistence/roomModel';
+import { presentRoomCryptoDetails } from './cryptoPresentation';
 import {
   annotateRoomRecordWithTilesetHints,
   annotateRoomSnapshotWithTilesetHint,
@@ -148,7 +149,7 @@ export async function handleRoomRequest(
       auth?.user.walletAddress ?? null,
       auth?.isAdmin ?? false,
     );
-    return jsonResponse(request, annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, roomId, record)));
+    return jsonResponse(request, presentRoomCryptoDetails(annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, roomId, record)), url));
   }
 
   if (segments.length === 4 && segments[3] === 'summary' && request.method === 'GET') {
@@ -165,11 +166,15 @@ export async function handleRoomRequest(
         auth?.user.walletAddress ?? null,
         auth?.isAdmin ?? false,
       ));
-      return timedJsonResponse(request, summary, timing, {
+      return timedJsonResponse(request, presentRoomCryptoDetails(summary, url), timing, {
         headers: { 'Cache-Control': auth ? 'private, no-store' : 'public, max-age=20' },
       });
     };
-    return loadAnonymousPublicCache(request, auth ? undefined : context, loadResponse);
+    // Older summary cache entries contain crypto unconditionally. Do not serve
+    // them through the new default view during or after this rollout.
+    const cacheUrl = new URL(request.url);
+    cacheUrl.searchParams.set('_roomView', 'crypto-opt-in-v1');
+    return loadAnonymousPublicCache(new Request(cacheUrl, request), auth ? undefined : context, loadResponse);
   }
 
   if (segments.length === 4 && segments[3] === 'current' && request.method === 'GET') {
@@ -187,6 +192,7 @@ export async function handleRoomRequest(
     ));
     return timedJsonResponse(request, {
       ...current,
+      summary: presentRoomCryptoDetails(current.summary, url),
       draft: annotateRoomSnapshotWithTilesetHint(current.draft),
       published: current.published ? annotateRoomSnapshotWithTilesetHint(current.published) : null,
     }, timing, { headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' } });
@@ -226,7 +232,7 @@ export async function handleRoomRequest(
       auth.user.walletAddress,
       auth.isAdmin,
     ));
-    return timedJsonResponse(request, summary, timing, {
+    return timedJsonResponse(request, presentRoomCryptoDetails(summary, url), timing, {
       headers: { 'Cache-Control': 'private, no-store', 'X-WAMP-Cache': 'bypass' },
     });
   }
@@ -668,12 +674,12 @@ async function roomMutationResponse(
 ): Promise<Response> {
   if (url.searchParams.get('response') !== 'compact') {
     return jsonResponse(request, {
-      ...annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, record.draft.id, record)),
+      ...presentRoomCryptoDetails(annotateRoomRecordWithTilesetHints(await presentRoomRecordVersions(env, record.draft.id, record)), url),
       ...additions,
     });
   }
   return jsonResponse(request, {
-    summary: createRoomSummaryFromRecord(record),
+    summary: presentRoomCryptoDetails(createRoomSummaryFromRecord(record), url),
     draft: annotateRoomSnapshotWithTilesetHint(record.draft),
     published: record.published ? annotateRoomSnapshotWithTilesetHint(record.published) : null,
     ...additions,

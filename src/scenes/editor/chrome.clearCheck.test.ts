@@ -55,7 +55,7 @@ function createHarness(snapshot: RoomSnapshot) {
       getRoomCoordinates: () => snapshot.coordinates,
       getRoomGoal: () => snapshot.goal,
       getRoomPermissions: () => ({ canSaveDraft: true }) as never,
-      getMintedTokenId: () => null,
+      getIsProtected: () => false,
       getPublishedVersion: () => 0,
       getRoomVersionHistory: () => [],
       getEntrySource: () => 'world',

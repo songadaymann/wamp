@@ -98,7 +98,7 @@ export class EditorPersistenceController {
     });
   }
 
-  destroy(): void { this.recognitionAbort?.abort(); this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
+  destroy(): void { this.roomSession.cancelOwnershipPresentation(); this.recognitionAbort?.abort(); this.unwatchWalletRecovery?.(); this.unwatchWalletRecovery = null; }
 
   get statusText(): string {
     return this.roomSession.statusText;

@@ -29,7 +29,7 @@ interface EditorChromeControllerHost {
   getRoomCoordinates(): RoomCoordinates;
   getRoomGoal(): RoomGoal | null;
   getRoomPermissions(): RoomPermissions;
-  getMintedTokenId(): string | null;
+  getIsProtected(): boolean;
   getPublishedVersion(): number;
   getRoomVersionHistory(): RoomVersionRecord[];
   getEntrySource(): 'world' | 'direct';
@@ -86,7 +86,7 @@ export class EditorChromeController {
         goalSummaryText: this.toolController.getGoalSummaryText(),
         roomPermissions: this.host.getRoomPermissions(),
         publishValidationError: this.editRuntime.getPublishValidationError(),
-        mintedTokenId: this.host.getMintedTokenId(),
+        isProtected: this.host.getIsProtected(),
         canRefreshMintMetadata: historyState.canRefreshMintMetadata,
         saveInFlight: this.host.getSaveInFlight(),
         mintedMetadataCurrent: historyState.mintedMetadataCurrent,

@@ -112,7 +112,15 @@ export class ExploreModalController {
   private readonly handleAuthStateChanged = (event: Event) => {
     const detail = event instanceof CustomEvent ? (event.detail as AuthDebugState | undefined) : undefined;
     const previousUserId = this.authState.user?.id;
+    const wasProtected = this.discoverSort === 'protected';
     this.authState = detail ?? getAuthDebugState();
+    if (wasProtected && !this.canUseProtectedSort()) {
+      this.discoverSort = 'featured';
+      this.discoveryRequestId++;
+      this.roomDiscovery = null;
+      this.loading = false;
+      if (!this.elements.modal?.classList.contains('hidden')) void this.loadDiscoveryResults(false);
+    }
     if (!this.authState.authenticated) {
       this.myPlaylists = [];
       this.myPlaylistsLoaded = false;
@@ -129,6 +137,8 @@ export class ExploreModalController {
     }
     this.render();
   };
+
+  private readonly handleWalletGateChanged = () => this.handleAuthStateChanged(new Event('wallet-gate'));
 
   private readonly attribution: CollectionAttributionController;
 
@@ -189,6 +199,7 @@ export class ExploreModalController {
     this.elements.modal?.addEventListener('click', this.handleBackdropClick);
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    window.addEventListener('wallet-gate', this.handleWalletGateChanged);
 
     for (const button of this.elements.filterButtons) {
       button.addEventListener('click', () => {
@@ -202,7 +213,7 @@ export class ExploreModalController {
     for (const button of this.elements.sortButtons) {
       button.addEventListener('click', () => {
         const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
-        if (!sort) {
+        if (!sort || (sort === 'protected' && !this.canUseProtectedSort())) {
           return;
         }
         if (sort === 'builders') {
@@ -257,6 +268,7 @@ export class ExploreModalController {
     this.elements.modal?.removeEventListener('click', this.handleBackdropClick);
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);
     window.removeEventListener(AUTH_STATE_CHANGED_EVENT, this.handleAuthStateChanged as EventListener);
+    window.removeEventListener('wallet-gate', this.handleWalletGateChanged);
     this.previewObserver?.disconnect();
     this.clearPlaylistFeedback();
     this.close();
@@ -303,7 +315,13 @@ export class ExploreModalController {
     this.setError(null);
   }
 
+  private canUseProtectedSort(): boolean {
+    return this.authState.walletConnected === true && Boolean(this.authState.walletAddress)
+      && this.doc.documentElement?.dataset.wallet === 'yes';
+  }
+
   private async loadDiscoveryResults(chooseDefault = false): Promise<void> {
+    if (this.discoverSort === 'protected' && !this.canUseProtectedSort()) this.discoverSort = 'featured';
     const requestId = ++this.discoveryRequestId;
     const isCurrent = () => requestId === this.discoveryRequestId;
     this.loading = true;
@@ -390,7 +408,7 @@ export class ExploreModalController {
 
     for (const button of this.elements.sortButtons) {
       const sort = this.parseExploreSortButtonValue(button.dataset.exploreSort);
-      button.classList.toggle('hidden', sort === 'protected' && this.roomDiscovery?.protectedDiscoveryAvailable !== true);
+      button.classList.toggle('hidden', sort === 'protected' && (!this.canUseProtectedSort() || this.roomDiscovery?.protectedDiscoveryAvailable !== true));
       setToggleState(
         button,
         sort === 'builders'

@@ -618,7 +618,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       setCourseEditorStatusText: (text) => this.courseController.setStatusText(text),
       updateGoalUi: () => this.updateGoalUi(),
       getPersistenceStatusText: () => this.persistenceController.statusText,
-      getMintedTokenId: () => this.mintedTokenId,
+      getIsProtected: () => this.roomSession.currentIsProtected,
       getRoomEditCount: () => this.roomEditCount,
       publishRoom: () => this.publishRoom(),
     });
@@ -640,7 +640,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         getRoomCoordinates: () => ({ ...this.roomCoordinates }),
         getRoomGoal: () => this.roomGoal,
         getRoomPermissions: () => this.roomPermissions,
-        getMintedTokenId: () => this.mintedTokenId,
+        getIsProtected: () => this.roomSession.currentIsProtected,
         getPublishedVersion: () => this.publishedVersion,
         getRoomVersionHistory: () => this.roomVersionHistory,
         getEntrySource: () => this.entrySource,
@@ -800,26 +800,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return this.roomSession.currentClaimerDisplayName;
   }
 
-  private get mintedChainId(): number | null {
-    return this.roomSession.currentMintedChainId;
-  }
-
-  private get mintedContractAddress(): string | null {
-    return this.roomSession.currentMintedContractAddress;
-  }
-
-  private get mintedTokenId(): string | null {
-    return this.roomSession.currentMintedTokenId;
-  }
-
-  private get mintedOwnerWalletAddress(): string | null {
-    return this.roomSession.currentMintedOwnerWalletAddress;
-  }
-
-  private get mintedOwnerSyncedAt(): string | null {
-    return this.roomSession.currentMintedOwnerSyncedAt;
-  }
-
   private get saveInFlight(): boolean {
     return this.roomSession.isSaveInFlight || this.persistenceController.isCollecting;
   }
@@ -938,6 +918,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       onDocumentKeyDown: this.handleDocumentKeyDown,
       onAuthStateChanged: () => {
         this.presenceController.refreshIdentity();
+        void this.roomSession.refreshOwnershipPresentation();
         this.renderEditorUi();
       },
       onBack: () => this.handleEditorBackAction(),
@@ -1380,7 +1361,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       return;
     }
 
-    if (this.entrySource === 'world' && this.mintedTokenId && !this.roomPermissions.canSaveDraft) {
+    if (this.entrySource === 'world' && this.roomSession.currentIsProtected && !this.roomPermissions.canSaveDraft) {
       this.returnToWorldReadOnly();
       return;
     }
@@ -2060,11 +2041,11 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       versionHistoryCount: this.roomVersionHistory.length,
       roomDirty: this.roomDirty,
       claimerDisplayName: this.claimerDisplayName,
-      mintedChainId: this.mintedChainId,
-      mintedContractAddress: this.mintedContractAddress,
-      mintedTokenId: this.mintedTokenId,
-      mintedOwnerWalletAddress: this.mintedOwnerWalletAddress,
-      mintedOwnerSyncedAt: this.mintedOwnerSyncedAt,
+      mintedChainId: this.roomSession.currentMintedChainId,
+      mintedContractAddress: this.roomSession.currentMintedContractAddress,
+      mintedTokenId: this.roomSession.currentMintedTokenId,
+      mintedOwnerWalletAddress: this.roomSession.currentMintedOwnerWalletAddress,
+      mintedOwnerSyncedAt: this.roomSession.currentMintedOwnerSyncedAt,
       canSaveDraft: this.roomPermissions.canSaveDraft,
       canPublish: this.roomPermissions.canPublish,
       canRevert: this.roomPermissions.canRevert,

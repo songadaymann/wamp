@@ -231,6 +231,7 @@ export function createHudStateController(
       return {
         claimerUserId: summary.claimerUserId,
         isMinted: isRoomMinted(summary),
+        canSaveDraft: summary.permissions.canSaveDraft,
         mintedOwnerWalletAddress: summary.mintedOwnerWalletAddress,
       };
     },

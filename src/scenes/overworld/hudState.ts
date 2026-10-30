@@ -155,7 +155,7 @@ export class OverworldHudStateController {
     const auth = getAuthDebugState(), worldId = getActiveWorldId();
     const identity = JSON.stringify([worldId, worldId ? canBuildInActiveWorld(worldId) : false,
       auth.authenticated, auth.user?.id, auth.user?.walletAddress?.toLowerCase(), auth.schoolManaged,
-      auth.source, hasCryptoWallet()]);
+      auth.source, hasCryptoWallet(), auth.walletConnected, auth.walletAddress]);
     if (identity !== this.ownershipContextKey) {
       this.ownershipContextKey = identity;
       this.ownershipGeneration++;

@@ -33,7 +33,7 @@ export interface BuildEditorUiViewModelOptions {
   goalSummaryText: string;
   roomPermissions: RoomPermissions;
   publishValidationError: string | null;
-  mintedTokenId: string | null;
+  isProtected: boolean;
   canRefreshMintMetadata: boolean;
   saveInFlight: boolean;
   mintedMetadataCurrent: boolean;
@@ -53,14 +53,14 @@ export interface BuildEditorUiViewModelOptions {
 export function shouldShowPublishNudge(
   publishedVersion: number,
   canSaveDraft: boolean,
-  mintedTokenId: string | null,
+  isProtected: boolean,
   roomEditCount: number,
   threshold: number,
 ): boolean {
   return (
     publishedVersion === 0 &&
     canSaveDraft &&
-    !mintedTokenId &&
+    !isProtected &&
     roomEditCount >= threshold
   );
 }
@@ -85,7 +85,7 @@ export function buildEditorUiViewModel(
     goalSummaryText,
     roomPermissions,
     publishValidationError,
-    mintedTokenId,
+    isProtected,
     canRefreshMintMetadata,
     saveInFlight,
     publishedVersion,
@@ -144,9 +144,9 @@ export function buildEditorUiViewModel(
     publishDisabled: !roomPermissions.canPublish || saveInFlight,
     publishButtonAriaDisabled: Boolean(publishValidationError),
     mintHidden: false,
-    mintDisabled: Boolean(mintedTokenId) || saveInFlight,
-    mintButtonText: mintedTokenId ? 'Collected & Locked' : 'Collect & Lock',
-    refreshMetadataHidden: !mintedTokenId,
+    mintDisabled: isProtected || saveInFlight,
+    mintButtonText: isProtected ? 'Collected & Locked' : 'Collect & Lock',
+    refreshMetadataHidden: !isProtected,
     refreshMetadataDisabled: !canRefreshMintMetadata || saveInFlight,
     refreshMetadataButtonText: 'Add/update artwork',
     historyHidden: false,

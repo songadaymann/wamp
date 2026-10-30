@@ -60,4 +60,3 @@ output/web-game/phone-builder/, /tmp/wamp-f253-release.log,
 /tmp/wamp-f253-live-assets.log and /tmp/wamp-f253-live-assets.json.
 The subsequent documentation record may change Pages release metadata; final
 frontend reconciliation is tracked in the private machine handoff.
-

@@ -18,7 +18,7 @@ export function getRoomWalletRecovery(): RoomWalletRecovery {
     const repository = createRoomRepository();
     shared = { store, recovery: new RoomWalletRecovery({ store, getIdentity: getRoomWalletIdentity,
       isOverworld: () => getActiveWorldId() === null,
-      refresh: (pending, signal) => repository.refreshRoomOwnership(pending.roomId, pending.coordinates, { signal }),
+      refresh: (pending, signal) => repository.refreshRoomOwnership(pending.roomId, pending.coordinates, { signal, recoverPendingWallet: true }),
       receipt: checkRoomWalletReceipt,
     }) };
   }

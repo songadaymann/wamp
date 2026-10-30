@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ default: {} }));
 vi.mock('../../mint/roomMetadataRender', () => ({ renderRoomSnapshotToPngDataUrl: vi.fn() }));
 vi.mock('../../auth/client', () => ({ AUTH_STATE_CHANGED_EVENT: 'auth', getAuthDebugState: () => ({ authenticated: true, user: { id: 'me' } }) }));
@@ -21,15 +21,16 @@ function fixture() {
   const builderSorts = ['alphabet', 'rooms', 'recent'].map(exploreBuilderSort => button({ exploreBuilderSort }));
   const items = new Map<string, Item>();
   const doc = Object.assign(new EventTarget(), {
+    documentElement: { dataset: { wallet: 'yes' } },
     getElementById: (id: string) => { if (!items.has(id)) items.set(id, new Item()); return items.get(id); },
     querySelectorAll: (selector: string) => selector.startsWith('#explore-filters') ? filters
       : selector.startsWith('#explore-sorts') ? sorts : selector.startsWith('#explore-builder-sorts') ? builderSorts : [],
     createElement: () => new Item(),
   });
   const explore = new ExploreModalController({} as never, {} as never, {} as never, doc as unknown as Document, {} as never);
-  const state = explore as unknown as Record<string, unknown> & { render(): void };
+  const state = explore as unknown as Record<string, unknown> & { render(): void; loadDiscoveryResults(): Promise<void>; handleAuthStateChanged(event: Event): void };
   const pressed = (items: Item[], key: string) => items.filter(item => item.getAttribute('aria-pressed') === 'true').map(item => item.dataset[key]);
-  return { filters, sorts, builderSorts, state, pressed };
+  return { filters, sorts, builderSorts, state, pressed, doc, explore };
 }
 
 describe('Explore shows which filter and sort are on (F464)', () => {
@@ -56,5 +57,41 @@ describe('Explore shows which filter and sort are on (F464)', () => {
     f.state.render();
     expect(f.pressed(f.sorts, 'exploreSort')).toEqual(['builders']);
     expect(f.pressed(f.builderSorts, 'exploreBuilderSort')).toEqual(['alphabet']);
+  });
+});
+
+
+afterEach(() => vi.unstubAllGlobals());
+describe('Protected Explore requires a connected wallet (F479)', () => {
+  it.each([false, true])('does not show Protected for an installed but disconnected wallet (%s)', connected => {
+    const f = fixture();
+    Object.assign(f.state, { loading: true, authState: { walletConnected: connected, walletAddress: connected ? '0xowner' : null },
+      roomDiscovery: { protectedDiscoveryAvailable: true } });
+    f.state.render();
+    expect(f.sorts.find(button => button.dataset.exploreSort === 'protected')?.classes.has('hidden')).toBe(!connected);
+  });
+
+  it('ignores a programmatic protected pick without a connected wallet', () => {
+    vi.stubGlobal('window', new EventTarget());
+    const f = fixture(), load = vi.fn(); Object.assign(f.state, { runRepository: { loadRoomDiscovery: load } });
+    f.explore.init(); f.sorts.find(button => button.dataset.exploreSort === 'protected')?.dispatchEvent(new Event('click'));
+    expect(load).not.toHaveBeenCalled(); expect(f.state.discoverSort).toBe('featured');
+    f.explore.destroy();
+  });
+
+  it('resets on disconnect and rejects a delayed Protected response', async () => {
+    const f = fixture(); vi.spyOn(f.state, 'render').mockImplementation(() => {});
+    let resolveProtected!: (value: unknown) => void;
+    const featured = { results: [], protectedDiscoveryAvailable: true, marker: 'featured' };
+    const load = vi.fn().mockImplementationOnce(() => new Promise(resolve => { resolveProtected = resolve; }))
+      .mockResolvedValue(featured);
+    Object.assign(f.state, { discoverSort: 'protected', authState: { walletConnected: true, walletAddress: '0xowner' },
+      runRepository: { loadRoomDiscovery: load } });
+    const pending = f.state.loadDiscoveryResults();
+    f.state.handleAuthStateChanged(new CustomEvent('auth', { detail: { authenticated: true, user: { id: 'me' }, walletConnected: false, walletAddress: null } }));
+    await Promise.resolve(); await Promise.resolve();
+    resolveProtected({ results: [], marker: 'protected' }); await pending;
+    expect(load.mock.calls.map(call => call[1])).toEqual(['protected', 'featured']);
+    expect(f.state.discoverSort).toBe('featured'); expect(f.state.roomDiscovery).toBe(featured);
   });
 });

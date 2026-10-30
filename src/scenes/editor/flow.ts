@@ -50,7 +50,7 @@ interface EditorSceneFlowHost {
   setCourseEditorStatusText(text: string | null): void;
   updateGoalUi(): void;
   getPersistenceStatusText(): string;
-  getMintedTokenId(): string | null;
+  getIsProtected(): boolean;
   getRoomEditCount(): number;
   publishRoom(): Promise<RoomRecord | null>;
 }
@@ -144,7 +144,7 @@ export class EditorSceneFlowController {
     return shouldShowPublishNudgeHelper(
       this.host.getPublishedVersion(),
       this.host.getRoomPermissions().canSaveDraft,
-      this.host.getMintedTokenId(),
+      this.host.getIsProtected(),
       this.host.getRoomEditCount(),
       this.PUBLISH_NUDGE_EDIT_THRESHOLD,
     );

@@ -22,6 +22,12 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe('current token ownership before editor entry', () => {
+  it('uses fresh server rights when crypto details are redacted', async () => {
+    const f = harness(); const redacted = { ...summary(null), isProtected: true };
+    f.repository.loadRoomSummary.mockResolvedValue({ ...redacted, permissions: { ...redacted.permissions, canSaveDraft: false } });
+    f.repository.refreshRoomOwnership.mockResolvedValue(redacted);
+    const permit = await f.run(); expect(permit?.roomOnly).toBe(true); permit?.dispose();
+  });
   it.each([false, true])('uses ordinary game permissions without crypto reads or wallet prompts when the gate is off (allowed %s)', async allowed => {
     const f = harness(); f.host.canCheckWallet = () => false;
     f.repository.loadRoomSummary.mockResolvedValue(summary(seller, allowed));

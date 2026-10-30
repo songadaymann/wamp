@@ -8,6 +8,7 @@ import {
   type RoomMintPrepareResponse,
 } from '../../../mint/roomOwnership';
 import { isRoomMinted, type RoomCoordinates } from '../../../persistence/roomModel';
+import { presentRoomCryptoDetails } from '../rooms/cryptoPresentation';
 import { normalizeAddress } from '../auth/store';
 import { requireWalletLinkedRequestAuth } from '../auth/request';
 import { HttpError, jsonResponse, parseJsonBody } from '../core/http';
@@ -143,7 +144,7 @@ export async function handleRoomMintConfirm(
     auth.user.walletAddress
   );
 
-  return jsonResponse(request, updated);
+  return jsonResponse(request, presentRoomCryptoDetails(updated, new URL(request.url)));
 }
 
 export async function handleRoomTokenMetadataPrepare(
@@ -256,7 +257,7 @@ export async function handleRoomTokenMetadataConfirm(
     auth.user.walletAddress
   );
 
-  return jsonResponse(request, updated);
+  return jsonResponse(request, presentRoomCryptoDetails(updated, new URL(request.url)));
 }
 
 export async function parseRoomMintConfirmBody(
