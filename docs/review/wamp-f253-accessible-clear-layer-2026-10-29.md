@@ -36,4 +36,28 @@ Erase menu overlapping the tool row in landscape; its stage-height scroll bound
 addresses that issue. These are local fixtures, with external email/network sends
 disabled. No production room/player writes or live emails.
 
-Final check, durable suite and release results will be recorded after verification.
+## Final delivery
+
+PR349 tested a1c1a51d passed all20 checks in CI40975688728 and merged as
+bbc82248. Exact-head full check passes738files/6238tests, one existing expected
+failure/two skips, all remaining stages and668.8KB/670KB boot JavaScript.
+Durable dock passes all five viewports with no page, console or HTTP errors,
+including native Enter/Space Cancel/clear/Undo. Final portrait, landscape and
+narrow phone scenarios pass for ordinary and Expanded editors (six scenarios,
+zero page errors), including More Fit and unobstructed drawing options.
+Screenshots inspected. All final local processes exited successfully.
+
+Guarded Pages-only deployment from clean mainbbc82248 passes strict map assets,
+build and production smoke. Pages8b269a01 serves entrymain-C6zlHlcy.js, and the
+live entry, editor chunks, runtime, deferred review status and styles match the
+release bytes. No API Worker deployment, schema migration, production room/player
+writes or live email tests. Worker89464588 and mainDB0077 remain unchanged.
+
+Evidence: /tmp/wamp-f253-check-release.log,
+/tmp/wamp-f253-durable-dock-final.log, /tmp/wamp-f253-durable-phone-final.log,
+/tmp/wamp-f253-keyboard-native-3.log, ignored output/f253-native/ and
+output/web-game/phone-builder/, /tmp/wamp-f253-release.log,
+/tmp/wamp-f253-live-assets.log and /tmp/wamp-f253-live-assets.json.
+The subsequent documentation record may change Pages release metadata; final
+frontend reconciliation is tracked in the private machine handoff.
+

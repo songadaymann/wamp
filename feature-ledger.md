@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F253 | [#349](https://github.com/songadaymann/wamp/pull/349) | [receipt](docs/review/wamp-f253-accessible-clear-layer-2026-10-29.md) | Give Clear Layer a live desktop/phone home and retire obsolete editor UI; keyboard, Undo and live assets verified |
 | 2026-10-29 | F381 | [#348](https://github.com/songadaymann/wamp/pull/348) | [receipt](docs/review/wamp-f381-world-publication-feedback-2026-10-29.md) | Show World review outcomes and reasons, sync submitted drafts and send decision emails; verified live |
 | 2026-10-29 | F451 | [#346](https://github.com/songadaymann/wamp/pull/346), [#347](https://github.com/songadaymann/wamp/pull/347) | [receipt](docs/review/wamp-f451-equivalent-version-insights-2026-10-29.md) | Preserve matching-version stats and compare layouts with switchable death maps; indexed queries verified live |
 | 2026-10-29 | F447 | [#345](https://github.com/songadaymann/wamp/pull/345) | [receipt](docs/review/wamp-f447-builder-recognition-2026-10-29.md) | Notify builders of recognition and prompt results, warn before republishing and retain reviewed pins; verified live |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-16 | F148 | [#227](https://github.com/songadaymann/wamp/pull/227) | [receipt](docs/review/wamp-gamepad-restart-2026-10-16.md) | Standard gamepad controls, and R restarts |
 | 2026-10-16 | F108 | [#226](https://github.com/songadaymann/wamp/pull/226) | [receipt](docs/review/wamp-room-cards-2026-10-16.md) | Play Room is the main room-card action |
 | 2026-10-16 | F094 | [#225](https://github.com/songadaymann/wamp/pull/225) | [receipt](docs/review/wamp-custom-backgrounds-2026-10-16.md) | Animated custom backgrounds with bounded uploads and original-byte checks |
-| 2026-10-16 | F070 | [#224](https://github.com/songadaymann/wamp/pull/224) | [receipt](docs/review/wamp-f070-final-2026-10-16.md) | Each goal type's data, checks, scoring, display, clocks and editor rules live in one registry (PRs from #205) |

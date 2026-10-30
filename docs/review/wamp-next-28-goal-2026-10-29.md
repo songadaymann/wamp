@@ -39,7 +39,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F447 — builder recognition notifications and republish warnings; PR #345, migration/CI/live rollout verified.
 - [x] F451 — matching-version insights, layout comparison and map switching; PRs #346/#347, CI/live latency verified.
 - [x] F381 — World review statuses/reasons, saved-draft synchronization and decision emails; PR #348, CI/live verified.
-- [ ] F253 — accessible Clear Layer and retire hidden editor UI.
+- [x] F253 — accessible Clear Layer and retire hidden editor UI; PR #349, CI/native/live frontend verified.
 - [ ] F479 — wallet-only Protected sort and appropriate non-wallet payloads.
 - [ ] F439 — fixed guest emotes and classroom-scoped student emotes.
 - [ ] F262 — idle/gate hidden Camera Tuner while preserving CI coverage.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **13/28 delivered**, and Round 2 is **85/248**.
+This goal is **14/28 delivered**, and Round 2 is **86/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -114,5 +114,14 @@ and a phone touch reviewer pass submit/edit/resubmit/reject-reason/approve with
 zero page errors. Worker89464588 serves100%; Pagesbc16366a and live entry/runtime/
 editors/lazy status module/styles match release bytes. Production smoke and
 signed-out/private-directory checks pass; prior Insights grouping remains fast.
-No schema change or production room/player/email tests. F253 accessible Clear
-Layer and retired editor UI are next. The remaining15 items stay open.
+No schema change or production room/player/email tests.
+
+F253 is delivered through PR349/bbc82248: tested a1c1a51d passed all20 checks,
+full738files/6238tests/all stages, boot668.8/670KB. Clear Layer has a live desktop/
+phone Erase-menu home; Cancel/clear/Undo, native Enter/Space and selected Expanded
+cell isolation pass. Retired editor markup/CSS/state is removed; More Fit uses the
+live control. Durable dock and six final phone scenarios pass with zero errors.
+Guarded Pages-only release8b269a01, entrymain-C6zlHlcy/editor/runtime/styles byte
+matches and production smoke pass. No Worker/schema/production room/player/email
+writes. F479 wallet-only Protected sort and non-wallet payload hygiene are next.
+The remaining14 items stay open.
