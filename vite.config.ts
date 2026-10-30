@@ -85,7 +85,6 @@ export default defineConfig(({ mode }) => {
           mintedRoom: resolve(process.cwd(), 'minted-room.html'),
           roomPreviewRender: resolve(process.cwd(), 'room-preview-render.html'),
           worldTileRender: resolve(process.cwd(), 'world-tile-render.html'),
-          rewardStingsPreview: resolve(process.cwd(), 'reward-stings-preview.html'),
         },
         output: {
           entryFileNames: `${BUILD_ASSET_NAMESPACE}/[name]-[hash].js`,

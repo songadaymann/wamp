@@ -4,8 +4,9 @@ import { execFileSync } from 'node:child_process';
 
 const repoRoot = process.cwd();
 const assetRoot = path.join(repoRoot, 'public/assets/player/default');
-const sourcePngPath = path.join(assetRoot, 'PlayerCombatSheet.png');
-const sourceJsonPath = path.join(assetRoot, 'PlayerCombatSheet.json');
+const sourceRoot = path.join(repoRoot, 'art-source/player/default');
+const sourcePngPath = path.join(sourceRoot, 'PlayerCombatSheet.png');
+const sourceJsonPath = path.join(sourceRoot, 'PlayerCombatSheet.json');
 const outputPngPath = path.join(assetRoot, 'PlayerCombatActionsSheet.png');
 const outputJsonPath = path.join(assetRoot, 'PlayerCombatActionsSheet.json');
 
