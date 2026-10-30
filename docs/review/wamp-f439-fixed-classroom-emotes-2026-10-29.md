@@ -69,3 +69,10 @@ not need a pre-existing dist directory. Its Vite dependency cache is isolated in
 its output directory. This was exposed while preparing the next clean worktree;
 the corrected command passes service/reconnect and all8 browser cases again.
 Evidence: /tmp/wamp-f439-durable-clean-fixture.log. Application code unchanged.
+
+The maintained smoke is registered in both the CI smoke inventory and Knip's
+executable roots. The first next-item full run caught these two missing entries;
+all8 inventory/entry checks now pass. The final complete check including the new
+harness and registries passes745files/6276tests/all stages, boot669.5/670KB.
+Evidence: /tmp/wamp-f439-check-complete.log (terminal0). Native corrected fixture
+passes separately. All PR checks must pass again on this final head.
