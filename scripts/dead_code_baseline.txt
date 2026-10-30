@@ -385,13 +385,10 @@ export src/scenes/overworld/pvpCombatGeometry.ts getPvpRectCenterX
 export src/scenes/overworld/pvpCombatGeometry.ts getPvpRectCenterY
 export src/scenes/overworld/pvpCombatGeometry.ts getPvpRectRight
 export src/scenes/overworld/selectedExactPrefetch.ts SELECTED_EXACT_PREFETCH_RETRY_DELAYS_MS
-export src/scenes/overworld/worldTiles/coverage.ts getWorldTileAncestorAtLevel
-export src/scenes/overworld/worldTiles/geometry.ts WORLD_TILE_LEVELS
 export src/scenes/overworld/worldTiles/geometry.ts WORLD_TILE_MAX_LEVEL
 export src/scenes/overworld/worldTiles/geometry.ts WORLD_TILE_MIN_LEVEL
 export src/scenes/overworld/worldTiles/geometry.ts getWorldTileSpan
 export src/scenes/overworld/worldTiles/lod.ts WORLD_TILE_LOD_IDLE_COMMIT_MS
-export src/scenes/overworld/worldTiles/lod.ts getWorldTileLodThresholds
 export src/scenes/overworld/worldTiles/phaserLayer.ts shouldFinalizeWorldTileImageRemoval
 export src/scenes/overworld/worldTiles/retryFallback.ts WORLD_TILE_CRITICAL_FAILURE_LIMIT
 export src/scenes/overworld/worldTiles/retryFallback.ts WORLD_TILE_RETRY_DELAYS_MS
@@ -438,8 +435,6 @@ export src/weather/model.ts normalizeRoomWeatherMode
 export src/worldTiles/model.ts WORLD_TILE_MAX_LEVEL
 export src/worldTiles/model.ts WORLD_TILE_MAX_MANIFEST_AXIS
 export src/worldTiles/model.ts WORLD_TILE_MIN_LEVEL
-export src/worldTiles/model.ts getWorldTileAncestors
-export src/worldTiles/model.ts getWorldTilePixelsPerGameTile
 export src/worldTiles/model.ts getWorldTileRoomsPerAxis
 file src/cloudflare/worker/collections/testDatabase.ts
 type src/admin/model.ts AdminBuilderCapOverride
