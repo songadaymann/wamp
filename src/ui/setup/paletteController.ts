@@ -15,6 +15,7 @@ import {
   isSpecialTilesetGid,
   isTilesetLocalTileEditorEnabled,
   MOVING_PLATFORM_OBJECT_ID,
+  TRIANGLE_PIECE_OBJECT_ID,
   SPECIAL_TILE_LOCAL_INDICES,
   SPECIAL_TILESET_KEY,
   TREE_PALETTE_FAMILIES,
@@ -80,6 +81,7 @@ export function objectMatchesEditorScope(
   objectConfig: Pick<GameObjectConfig, 'id' | 'category'>,
   scope: EditorObjectScope,
 ): boolean {
+  if (objectConfig.id === TRIANGLE_PIECE_OBJECT_ID) return false;
   if (scope === 'all') return true;
   if (scope === 'stuff') {
     if (objectConfig.id === 'spawn_point') return false;

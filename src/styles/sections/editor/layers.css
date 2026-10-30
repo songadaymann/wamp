@@ -1,9 +1,57 @@
 /* Layers */
 
+#layers-section > .sidebar-section-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  column-gap: 12px;
+}
+
 #layers {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+
+#layers-section .layer-controls-row {
+  display: flex;
+  margin: 0;
+  min-width: 0;
+}
+
+#layers-section .layer-guides-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 5.5rem;
+  min-width: 5.5rem;
+  height: 100%;
+  min-height: 0;
+  padding: 4px 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--editor-button-font, var(--font-mono));
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#layers-section .layer-guides-option:has(:checked) {
+  color: var(--editor-retro-green, var(--wamp-green));
+}
+
+#layers-section .layer-guides-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--editor-retro-green, var(--wamp-green));
+  cursor: pointer;
 }
 
 .layer-row {
@@ -126,65 +174,7 @@
   transform: translateY(0);
 }
 
-.layer-stack-mini {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 2px 2px;
-}
-
-.layer-stack-mini-btn {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--panel-2);
-  cursor: pointer;
-  transition:
-    border-color 0.1s ease,
-    background 0.1s ease,
-    transform 0.06s ease,
-    box-shadow 0.06s ease;
-  box-shadow: 0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
-
-.layer-stack-mini-btn:hover {
-  background: var(--panel-3);
-  border-color: var(--border-strong);
-}
-
-.layer-stack-mini-btn.active {
-  border-color: var(--accent-cool);
-  box-shadow:
-    0 0 0 2px rgba(52, 116, 51, 0.56),
-    0 0 0 4px rgba(52, 116, 51, 0.24),
-    0 2px 0 rgba(var(--wamp-black-rgb), 0.28);
-}
-
-.layer-stack-mini-btn:focus-visible {
-  outline: 3px solid var(--accent-cool);
-  outline-offset: 2px;
-}
-
-.layer-stack-mini-image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  pointer-events: none;
-}
-
 .layer-btn.is-pressed {
   transform: translateY(2px);
   box-shadow: 0 0 0 rgba(var(--wamp-black-rgb), 0.18);
-}
-
-.sidebar-section.is-collapsed#layers-section .layer-stack-mini {
-  display: flex;
-  margin-top: 8px;
 }

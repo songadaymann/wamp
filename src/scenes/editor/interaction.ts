@@ -29,7 +29,9 @@ import {
   isPencilBrushPlacement,
   isPencilSprayPlacement,
   isPencilStampPlacement,
+  isTriangleEditorTool,
 } from './editorToolSelection';
+import { drawTriangleStampPreview } from './triangleStamp';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { clampSprayBrushSize, createCircleBrushMask, getSprayTilesPerSecond, listCircleBrushOffsets } from './sprayTiles';
 import { forEachDraggedTileCell, resolvePencilStampOrigin } from './stampDrag';
@@ -84,6 +86,7 @@ interface EditorInteractionHost {
   handleMusicPointerUp(pointer: Phaser.Input.Pointer): void;
   updateMusicCursorHighlight(graphics: Phaser.GameObjects.Graphics): boolean;
   handleObjectModePrimaryAction(pointer: Phaser.Input.Pointer): boolean;
+  handleTriangleToolAction(worldX: number, worldY: number): boolean;
   handleObjectModeSecondaryAction(worldX: number, worldY: number): boolean;
   handleObjectPlace(pointer: Phaser.Input.Pointer): void;
   placeObjectAtTile(tileX: number, tileY: number): void;
@@ -491,6 +494,13 @@ export class EditorInteractionController {
       return;
     }
 
+    if (isTriangleEditorTool()) {
+      drawTriangleStampPreview(this.cursorGraphics, tileX, tileY);
+      this.host.triangleHandles?.draw(this.cursorGraphics);
+      this.updateCursorCoords(tileX, tileY);
+      return;
+    }
+
     if (editorState.paletteMode === 'objects') {
       const objectConfig = editorState.selectedObjectId
         ? getEditorObjectConfigById(editorState.selectedObjectId)
@@ -726,7 +736,12 @@ export class EditorInteractionController {
       }
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
       else if (this.triangleHandleDown(pointer)) return;
-      else if (this.host.objectMove?.down(pointer)) return;
+      else if (this.host.objectMove?.down(pointer)) {
+        if (editorState.paletteMode === 'objects') {
+          this.host.handleObjectModePrimaryAction(pointer);
+        }
+        return;
+      }
       if (this.handleTouchPointerDown(pointer)) {
         return;
       }
@@ -803,6 +818,11 @@ export class EditorInteractionController {
       if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
       if (goalPlacementMode) {
         this.host.placeGoalMarker(tileX, tileY);
+        return;
+      }
+
+      if (isTriangleEditorTool()) {
+        this.host.handleTriangleToolAction(worldPoint.x, worldPoint.y);
         return;
       }
 
@@ -1326,6 +1346,10 @@ export class EditorInteractionController {
     const tileX = Math.floor(world.x / TILE_SIZE);
     const tileY = Math.floor(world.y / TILE_SIZE);
     if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return;
+    if (isTriangleEditorTool()) {
+      this.host.handleTriangleToolAction(world.x, world.y);
+      return;
+    }
     if (this.host.tryStartPracticeTestAt?.(tileX, tileY)) return;
     if (this.host.getGoalPlacementMode()) {
       this.host.placeGoalMarker(tileX, tileY);

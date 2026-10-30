@@ -301,6 +301,10 @@
               <span class="tool-icon">&#9585;</span>
               <span class="tool-label"><span class="tool-mode-label">Line</span></span>
             </button>
+            <button class="tool-btn tool-btn-compact" data-tool="triangle" type="button" title="Triangle (T); select again to paint existing ramps">
+              <span class="tool-icon tool-icon-right-triangle" aria-hidden="true"></span>
+              <span class="tool-label"><span class="tool-mode-label">Triangle</span></span>
+            </button>
             <button class="tool-btn tool-btn-compact" data-tool="fill" type="button" title="Fill (G)">
               <span class="tool-icon">&#9687;</span>
               <span class="tool-label">Fill</span>
@@ -418,37 +422,8 @@
       </div>
 
       <!-- Layers -->
-      <div class="sidebar-section" id="layers-section" data-mobile-panel="tools" data-sidebar-collapsible="true">
+      <div class="sidebar-section" id="layers-section" data-mobile-panel="tools">
         <div class="section-label">Layers</div>
-        <div class="layer-stack-mini" aria-hidden="true">
-          <button class="layer-stack-mini-btn" type="button" data-layer="foreground" aria-label="In front of player">
-            <img
-              class="layer-stack-mini-image"
-              src="/assets/ui/layers/foreground.png"
-              alt=""
-              width="106"
-              height="104"
-            />
-          </button>
-          <button class="layer-stack-mini-btn active" type="button" data-layer="terrain" aria-label="Main solid layer">
-            <img
-              class="layer-stack-mini-image"
-              src="/assets/ui/layers/terrain.png"
-              alt=""
-              width="106"
-              height="104"
-            />
-          </button>
-          <button class="layer-stack-mini-btn" type="button" data-layer="background" aria-label="Behind player">
-            <img
-              class="layer-stack-mini-image"
-              src="/assets/ui/layers/background.png"
-              alt=""
-              width="106"
-              height="104"
-            />
-          </button>
-        </div>
         <div class="sidebar-section-body">
           <div id="layers">
             <div class="layer-row">
@@ -480,7 +455,10 @@
             </div>
           </div>
           <div class="layer-controls-row">
-            <button id="btn-editor-layer-guides" class="bar-btn bar-btn-small" type="button" aria-pressed="false">Indicate Layers</button>
+            <label class="layer-guides-option" for="editor-layer-guides">
+              <input id="editor-layer-guides" type="checkbox" />
+              Indicate Layers
+            </label>
           </div>
         </div>
       </div>
@@ -771,6 +749,43 @@
       <!-- Object Palette (visible in objects mode) -->
       <div class="sidebar-section palette-section hidden" id="object-palette-section" data-mobile-panel="objects" data-sidebar-collapsible="true">
         <div class="section-label">Objects</div>
+        <div id="triangle-panel" class="triangle-options-panel hidden">
+          <div class="section-label">Triangle</div>
+          <div id="triangle-status" class="object-selection-description">Click empty space to place. Click a ramp to select it.</div>
+          <div class="triangle-options-body">
+            <div class="triangle-color-stack">
+              <div class="triangle-color-row">
+                <label class="goal-control-label" for="triangle-stroke-input">Stroke</label>
+                <button id="triangle-stroke-swatch" class="color-swatch" type="button" aria-label="Pick stroke color"></button>
+                <input id="triangle-stroke-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#2C3138" />
+              </div>
+              <div class="triangle-color-row">
+                <label class="goal-control-label" for="triangle-fill-input">Fill</label>
+                <button id="triangle-fill-swatch" class="color-swatch" type="button" aria-label="Pick fill color"></button>
+                <input id="triangle-fill-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#8A8F98" />
+              </div>
+            </div>
+            <div id="triangle-orient-picker" class="triangle-orient-picker" role="radiogroup" aria-label="Triangle orientation">
+              <button type="button" class="triangle-orient-option" data-triangle-orient="nw" aria-label="Upper-left ramp">
+                <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="21,1 1,21 21,21" /></svg>
+              </button>
+              <button type="button" class="triangle-orient-option" data-triangle-orient="ne" aria-label="Upper-right ramp">
+                <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="1,1 21,21 1,21" /></svg>
+              </button>
+              <button type="button" class="triangle-orient-option" data-triangle-orient="sw" aria-label="Lower-left ramp">
+                <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="21,1 1,1 21,21" /></svg>
+              </button>
+              <button type="button" class="triangle-orient-option" data-triangle-orient="se" aria-label="Lower-right ramp">
+                <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="1,1 21,1 1,21" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="color-popover" class="color-popover hidden">
+          <canvas id="color-popover-square" width="160" height="120"></canvas>
+          <input id="color-popover-hue" class="color-popover-hue" type="range" min="0" max="360" step="1" value="0" aria-label="Hue" />
+          <button id="btn-color-eyedropper" class="bar-btn bar-btn-small" type="button">Pick pixel</button>
+        </div>
         <div class="object-category-tabs">
           <button class="obj-cat-tab active" data-category="all">All</button>
           <button class="obj-cat-tab" data-category="custom">Community</button>
@@ -1180,6 +1195,10 @@
                 <span class="tool-icon">&#9585;</span>
                 <span class="tool-label"><span class="tool-mode-label">Line</span></span>
               </button>
+              <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="triangle" type="button" title="Triangle (T); select again to paint existing ramps">
+                <span class="tool-icon tool-icon-right-triangle" aria-hidden="true"></span>
+                <span class="tool-label"><span class="tool-mode-label">Triangle</span></span>
+              </button>
               <button class="tool-btn tool-btn-compact editor-top-tool-btn" data-tool="fill" type="button" title="Fill (G)">
                 <span class="tool-icon">&#9687;</span>
                 <span class="tool-label">Fill</span>
@@ -1358,6 +1377,7 @@
         <button class="tool-btn editor-shell-chunky-button" data-tool="rect" type="button" title="Rectangle (R); select again to switch Filled / Outlined"><span class="tool-icon">&#9632;</span><span class="tool-label">Rectangle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="ellipse" type="button" title="Circle (O); select again to switch Filled / Outlined"><span class="tool-icon">&#9679;</span><span class="tool-label">Circle</span></button>
         <button class="tool-btn editor-shell-chunky-button" data-tool="line" type="button" title="Line (L); select again to switch to Curve. Hold Shift to snap"><span class="tool-icon">&#9585;</span><span class="tool-label">Line</span></button>
+        <button class="tool-btn editor-shell-chunky-button" data-tool="triangle" type="button" title="Triangle (T); select again to paint existing ramps"><span class="tool-icon tool-icon-right-triangle" aria-hidden="true"></span><span class="tool-label">Triangle</span></button>
         <span class="editor-shell-tool-gap" aria-hidden="true"></span>
         <button class="editor-shell-chunky-button" data-editor-history="redo" type="button" title="Redo (Cmd/Ctrl+Shift+Z or Ctrl+Y)" disabled><span aria-hidden="true">&#8631;</span><span>Redo</span></button>
         <div id="editor-shell-pencil-picker" class="editor-shell-eraser-size-picker editor-pencil-controls hidden" role="group" aria-label="Draw options">
@@ -1671,33 +1691,6 @@
             <input id="ball-pushable-checkbox" type="checkbox" />
             <span>Can be pushed</span>
           </label>
-        </div>
-        <div id="triangle-panel" class="pressure-plate-panel hidden">
-          <div class="section-label">Triangle ramp</div>
-          <div id="triangle-status" class="goal-context-note">Drag a corner or side.</div>
-          <div id="triangle-leg-readout" class="goal-context-note">32 × -32</div>
-          <div class="goal-control-row">
-            <button id="btn-triangle-flip-x" class="bar-btn bar-btn-small" type="button">Flip left/right</button>
-            <button id="btn-triangle-flip-y" class="bar-btn bar-btn-small" type="button">Flip up/down</button>
-          </div>
-          <div class="goal-control-row">
-            <label class="goal-control-label" for="triangle-fill-input">Fill</label>
-            <button id="triangle-fill-swatch" class="color-swatch" type="button" aria-label="Pick fill color"></button>
-            <input id="triangle-fill-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#8A8F98" />
-          </div>
-          <div class="goal-control-row">
-            <label class="goal-control-label" for="triangle-stroke-input">Stroke</label>
-            <button id="triangle-stroke-swatch" class="color-swatch" type="button" aria-label="Pick stroke color"></button>
-            <input id="triangle-stroke-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#2C3138" />
-          </div>
-        </div>
-        <div id="color-popover" class="color-popover hidden">
-          <canvas id="color-popover-square" width="160" height="120"></canvas>
-          <input id="color-popover-hue" type="range" min="0" max="360" step="1" value="0" aria-label="Hue" />
-          <div class="goal-control-row">
-            <input id="color-popover-hex" class="goal-input" type="text" maxlength="7" spellcheck="false" aria-label="Hex color" />
-            <button id="btn-color-eyedropper" class="bar-btn bar-btn-small" type="button">Pick pixel</button>
-          </div>
         </div>
       </div>
       <div id="editor-music-overlay" class="editor-music-overlay hidden">

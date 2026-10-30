@@ -408,7 +408,6 @@ body[data-app-mode='editor'] #sidebar .palette-tab,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab,
 body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
 body[data-app-mode='editor'] #sidebar .layer-btn,
-body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
 body[data-app-mode='editor'] #sidebar .object-item,
 body[data-app-mode='editor'] #sidebar .layer-info-button {
   appearance: none;
@@ -440,7 +439,6 @@ body[data-app-mode='editor'] #sidebar .palette-tab:hover,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab:hover,
 body[data-app-mode='editor'] #sidebar .object-subcategory-tab:hover,
 body[data-app-mode='editor'] #sidebar .layer-btn:hover,
-body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn:hover,
 body[data-app-mode='editor'] #sidebar .object-item:hover,
 body[data-app-mode='editor'] #sidebar .layer-info-button:hover,
 body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
@@ -461,7 +459,6 @@ body[data-app-mode='editor'] #sidebar .bar-btn[aria-disabled='true'] {
 body[data-app-mode='editor'] #sidebar .bar-btn.active,
 body[data-app-mode='editor'] #sidebar .tool-btn.active,
 body[data-app-mode='editor'] #sidebar .layer-btn.active,
-body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active,
 body[data-app-mode='editor'] #sidebar .object-item.active {
   background: var(--editor-retro-green) !important;
   background-color: var(--editor-retro-green) !important;
@@ -509,7 +506,6 @@ body[data-app-mode='editor'] #sidebar .palette-tab,
 body[data-app-mode='editor'] #sidebar .obj-cat-tab,
 body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
 body[data-app-mode='editor'] #sidebar .layer-btn,
-body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
 body[data-app-mode='editor'] #sidebar .object-item {
   background: var(--editor-retro-paper) !important;
   background-color: var(--editor-retro-paper) !important;
@@ -634,11 +630,24 @@ body[data-app-mode='editor'] #sidebar .object-subcategory-tab.active {
   color: var(--wamp-black) !important;
 }
 
-body[data-app-mode='editor'] #sidebar .object-selection-details {
+body[data-app-mode='editor'] #sidebar .object-selection-details,
+body[data-app-mode='editor'] #sidebar .triangle-options-panel {
   border: 2px solid var(--editor-retro-shadow);
   border-radius: 0;
   background: var(--editor-retro-paper);
   box-shadow: 2px 2px 0 var(--editor-retro-shadow);
+}
+
+body[data-app-mode='editor'] #sidebar .triangle-orient-option {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-app-mode='editor'] #sidebar .triangle-orient-option.is-selected polygon,
+body[data-app-mode='editor'] #sidebar .triangle-orient-option[aria-pressed='true'] polygon {
+  fill: var(--editor-retro-green);
 }
 
 body[data-app-mode='editor'] #sidebar .object-selection-name {
@@ -744,8 +753,8 @@ body[data-app-mode='editor'] #object-tooltip .palette-tooltip-description {
   color: var(--editor-retro-blue-deep);
 }
 
-body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active {
-  box-shadow: inset 0 0 0 999px var(--editor-retro-green), 2px 2px 0 var(--editor-retro-shadow) !important;
+body[data-app-mode='editor'] #sidebar .triangle-color-row .goal-input {
+  width: 8em;
 }
 
 body[data-app-mode='editor'] #sidebar select,

@@ -11,11 +11,13 @@ describe('editor tool shortcuts', () => {
       R: 'rect',
       O: 'ellipse',
       L: 'line',
+      T: 'triangle',
       G: 'fill',
       V: 'randomize',
       M: 'move',
     });
     expect(getEditorToolForShortcutKey('c')).toBe('copy');
+    expect(getEditorToolForShortcutKey('t')).toBe('triangle');
     expect(getEditorToolForShortcutKey('v')).toBe('randomize');
     expect(getEditorToolForShortcutKey('m')).toBe('move');
     expect(getEditorToolForShortcutKey('x')).toBeNull();

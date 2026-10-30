@@ -7,6 +7,8 @@ import {
 import type { EditorUiElements } from './elements';
 import type { EditorInspectorState, EditorUiViewModel } from './model';
 import { inspectorWindowLabel, isInspectorWindowMinimized } from '../inspectorWindows';
+import { editorState } from '../../../config';
+import { triangleOrientId } from '../../../config/trianglePiece';
 
 export function renderEditorUiViewModel(
   elements: EditorUiElements,
@@ -89,7 +91,15 @@ export function renderInspectorPanel(
       minimized ? 'Expand object options' : 'Minimize object options',
     );
   }
-  setHidden(elements.inspectorRoot, !state.visible);
+  setHidden(elements.inspectorRoot, !state.visible || state.triangleVisible);
+  const doc = elements.trianglePanel?.ownerDocument
+    ?? elements.objectPaletteSection?.ownerDocument
+    ?? elements.inspectorRoot?.ownerDocument;
+  const triangleSidebar = doc?.body.dataset.editorTriangleOptions === 'true';
+  elements.objectPaletteSection?.classList.toggle(
+    'hidden',
+    editorState.paletteMode !== 'objects' && !triangleSidebar,
+  );
   setHidden(elements.pressurePanel, !state.pressureVisible);
   setText(elements.pressureStatus, state.pressureStatusText);
   setHidden(elements.pressureCoopRow, !state.pressureCoopVisible);
@@ -179,8 +189,14 @@ export function renderInspectorPanel(
     checkbox.disabled = !state.ballVisible;
   }
   setHidden(elements.trianglePanel, !state.triangleVisible);
+  setHidden(elements.triangleOrientPicker, !state.triangleVisible || state.trianglePaintMode);
   setText(elements.triangleStatus, state.triangleStatusText);
-  setText(elements.triangleLegReadout, state.triangleLegText);
+  const selectedOrient = triangleOrientId(state.triangleFlipX, state.triangleFlipY);
+  for (const button of elements.triangleOrientButtons) {
+    const selected = button.dataset.triangleOrient === selectedOrient;
+    button.classList.toggle('is-selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  }
   if (document.activeElement !== elements.triangleFillInput) {
     setValue(elements.triangleFillInput, state.triangleFillValue);
   }

@@ -575,6 +575,34 @@ function embedsDeeper(
   return next > current + 0.25;
 }
 
+/** A top-edge hit. Steeper than this is a side push. */
+const EDGE_LANDING_NORMAL = 0.45;
+
+/** Move the actor against gravity until their box just clears the ball. */
+function liftActorClearOfBall(
+  ball: { x: number; y: number; radius: number },
+  actor: { left: number; right: number; top: number; bottom: number },
+  gravityX: number,
+  gravityY: number,
+): { dx: number; dy: number } {
+  if (Math.abs(gravityY) >= Math.abs(gravityX)) {
+    const edgeX = clamp(ball.x, actor.left, actor.right);
+    const horizontal = ball.x - edgeX;
+    const rise = Math.sqrt(Math.max(0, ball.radius * ball.radius - horizontal * horizontal));
+    if (gravityY >= 0) {
+      return { dx: 0, dy: Math.min(0, ball.y - rise - actor.bottom) };
+    }
+    return { dx: 0, dy: Math.max(0, ball.y + rise - actor.top) };
+  }
+  const edgeY = clamp(ball.y, actor.top, actor.bottom);
+  const vertical = ball.y - edgeY;
+  const rise = Math.sqrt(Math.max(0, ball.radius * ball.radius - vertical * vertical));
+  if (gravityX >= 0) {
+    return { dx: Math.min(0, ball.x - rise - actor.right), dy: 0 };
+  }
+  return { dx: Math.max(0, ball.x + rise - actor.left), dy: 0 };
+}
+
 function separateBallAndActor(
   ball: BallSimState,
   actor: ActorRect,
@@ -683,11 +711,34 @@ function separateBallAndActor(
       dvy -= gravityY * velInto;
     }
   }
+  const gx = supportX;
+  const gy = supportY;
+  // Outside the flat top, the contact normal is diagonal. A floor under the
+  // ball used to reject the whole shove, so the player slid off and the ball
+  // stayed put. Keep the part that runs along the ground.
+  const landingOnEdge = !actor.stomping && nx * gx + ny * gy > EDGE_LANDING_NORMAL;
   const nextX = ball.x + ballDx;
   const nextY = ball.y + ballDy;
   if (embedsDeeper(nextX, nextY, ball.radius, solids, ball.x, ball.y)) {
-    let freeDx = -nx * pen;
-    let freeDy = -ny * pen;
+    const alongPos = ballDx * gx + ballDy * gy;
+    const slideDx = ballDx - gx * alongPos;
+    const slideDy = ballDy - gy * alongPos;
+    const alongVel = (ballVx - ball.vx) * gx + (ballVy - ball.vy) * gy;
+    const slideFree = Math.hypot(slideDx, slideDy) > 1e-4
+      && !embedsDeeper(ball.x + slideDx, ball.y + slideDy, ball.radius, solids, ball.x, ball.y);
+    if (slideFree) {
+      ball.x += slideDx;
+      ball.y += slideDy;
+      ball.vx = ballVx - gx * alongVel;
+      ball.vy = ballVy - gy * alongVel;
+    }
+    if (landingOnEdge) {
+      return landingCorrection(ball, actor, gx, gy, nx, ny);
+    }
+    const taken = slideFree ? slideDx * nx + slideDy * ny : 0;
+    const remain = Math.max(0, pen - taken);
+    let freeDx = -nx * remain;
+    let freeDy = -ny * remain;
     const freeInto = freeDx * gravityX + freeDy * gravityY;
     if (freeInto > 0) {
       freeDx -= gravityX * freeInto;
@@ -713,11 +764,33 @@ function separateBallAndActor(
   ball.y = nextY;
   ball.vx = ballVx;
   ball.vy = ballVy;
+  if (landingOnEdge) {
+    return landingCorrection(ball, actor, gx, gy, nx, ny);
+  }
   return {
     dx: actorDx,
     dy: actorDy,
     dvx,
     dvy,
+    normal: { x: nx, y: ny },
+  };
+}
+
+function landingCorrection(
+  ball: { x: number; y: number; radius: number },
+  actor: ActorRect,
+  gravityX: number,
+  gravityY: number,
+  nx: number,
+  ny: number,
+): { dx: number; dy: number; dvx: number; dvy: number; normal: { x: number; y: number } } {
+  const lift = liftActorClearOfBall(ball, actor, gravityX, gravityY);
+  const falling = actor.vx * gravityX + actor.vy * gravityY;
+  return {
+    dx: lift.dx,
+    dy: lift.dy,
+    dvx: falling > 0 ? -falling * gravityX : 0,
+    dvy: falling > 0 ? -falling * gravityY : 0,
     normal: { x: nx, y: ny },
   };
 }

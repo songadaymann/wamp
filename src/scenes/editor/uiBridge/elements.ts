@@ -60,9 +60,8 @@ export interface EditorUiElements {
   clearObjectButtons: HTMLButtonElement[];
   layerButtons: HTMLElement[];
   layerVisibilityButtons: HTMLButtonElement[];
-  layerMiniButtons: HTMLElement[];
   layerChip: HTMLElement | null;
-  layerGuideButton: HTMLButtonElement | null;
+  layerGuideCheckbox: HTMLInputElement | null;
   tilesetSelect: HTMLSelectElement | null;
   flipXButton: HTMLButtonElement | null;
   flipYButton: HTMLButtonElement | null;
@@ -204,9 +203,8 @@ export interface EditorUiElements {
   ballPushableCheckbox: HTMLInputElement | null;
   trianglePanel: HTMLElement | null;
   triangleStatus: HTMLElement | null;
-  triangleLegReadout: HTMLElement | null;
-  triangleFlipXButton: HTMLButtonElement | null;
-  triangleFlipYButton: HTMLButtonElement | null;
+  triangleOrientPicker: HTMLElement | null;
+  triangleOrientButtons: HTMLButtonElement[];
   triangleFillInput: HTMLInputElement | null;
   triangleFillSwatch: HTMLButtonElement | null;
   triangleStrokeInput: HTMLInputElement | null;
@@ -214,7 +212,6 @@ export interface EditorUiElements {
   colorPopover: HTMLElement | null;
   colorPopoverSquare: HTMLCanvasElement | null;
   colorPopoverHue: HTMLInputElement | null;
-  colorPopoverHex: HTMLInputElement | null;
   colorEyedropperButton: HTMLButtonElement | null;
 }
 
@@ -306,9 +303,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     clearObjectButtons: all<HTMLButtonElement>(doc, '.editor-clear-objects-btn'),
     layerButtons: all<HTMLElement>(doc, '.layer-btn'),
     layerVisibilityButtons: all<HTMLButtonElement>(doc, '.layer-visibility-button'),
-    layerMiniButtons: all<HTMLElement>(doc, '.layer-stack-mini-btn'),
     layerChip: byId<HTMLElement>(doc, 'editor-layer-chip'),
-    layerGuideButton: byId<HTMLButtonElement>(doc, 'btn-editor-layer-guides'),
+    layerGuideCheckbox: byId<HTMLInputElement>(doc, 'editor-layer-guides'),
     tilesetSelect: byId<HTMLSelectElement>(doc, 'tileset-select'),
     flipXButton: byId<HTMLButtonElement>(doc, 'btn-tile-flip-x'),
     flipYButton: byId<HTMLButtonElement>(doc, 'btn-tile-flip-y'),
@@ -456,9 +452,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     ballPushableCheckbox: byId<HTMLInputElement>(doc, 'ball-pushable-checkbox'),
     trianglePanel: byId<HTMLElement>(doc, 'triangle-panel'),
     triangleStatus: byId<HTMLElement>(doc, 'triangle-status'),
-    triangleLegReadout: byId<HTMLElement>(doc, 'triangle-leg-readout'),
-    triangleFlipXButton: byId<HTMLButtonElement>(doc, 'btn-triangle-flip-x'),
-    triangleFlipYButton: byId<HTMLButtonElement>(doc, 'btn-triangle-flip-y'),
+    triangleOrientPicker: byId<HTMLElement>(doc, 'triangle-orient-picker'),
+    triangleOrientButtons: all<HTMLButtonElement>(doc, '[data-triangle-orient]'),
     triangleFillInput: byId<HTMLInputElement>(doc, 'triangle-fill-input'),
     triangleFillSwatch: byId<HTMLButtonElement>(doc, 'triangle-fill-swatch'),
     triangleStrokeInput: byId<HTMLInputElement>(doc, 'triangle-stroke-input'),
@@ -466,7 +461,6 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     colorPopover: byId<HTMLElement>(doc, 'color-popover'),
     colorPopoverSquare: byId<HTMLCanvasElement>(doc, 'color-popover-square'),
     colorPopoverHue: byId<HTMLInputElement>(doc, 'color-popover-hue'),
-    colorPopoverHex: byId<HTMLInputElement>(doc, 'color-popover-hex'),
     colorEyedropperButton: byId<HTMLButtonElement>(doc, 'btn-color-eyedropper'),
   };
 }

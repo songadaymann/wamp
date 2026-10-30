@@ -234,6 +234,7 @@ describe('multi-state tool pips', () => {
   const originalLine = editorState.lineCurve;
   const originalSpray = editorState.pencilSprayMode;
   const originalTool = editorState.activeTool;
+  const originalTrianglePaint = editorState.trianglePaintMode;
 
   afterEach(() => {
     editorState.rectOutline = originalRect;
@@ -241,6 +242,7 @@ describe('multi-state tool pips', () => {
     editorState.lineCurve = originalLine;
     editorState.pencilSprayMode = originalSpray;
     editorState.activeTool = originalTool;
+    editorState.trianglePaintMode = originalTrianglePaint;
   });
 
   it('maps rectangle, circle, line, draw/spray, and flip cycles to pip indexes', () => {
@@ -262,6 +264,18 @@ describe('multi-state tool pips', () => {
     expect(getTileFlipModePipState('off')).toEqual({ count: 3, activeIndex: 0 });
     expect(getTileFlipModePipState('on')).toEqual({ count: 3, activeIndex: 1 });
     expect(getTileFlipModePipState('rand')).toEqual({ count: 3, activeIndex: 2 });
+    editorState.activeTool = 'pencil';
+    editorState.trianglePaintMode = true;
+    applyEditorToolSelection('triangle');
+    expect(editorState.trianglePaintMode).toBe(false);
+    expect(getEditorToolModePipState('triangle')).toEqual({ count: 2, activeIndex: 0 });
+    applyEditorToolSelection('triangle');
+    expect(editorState.trianglePaintMode).toBe(true);
+    expect(getEditorToolHudLabel('triangle')).toBe('Paint ramps');
+    expect(getEditorToolButtonAppearance('triangle', true)?.label).toBe('Paint');
+    expect(getEditorToolButtonAppearance('triangle', true)?.iconKind).toBe('right-triangle');
+    editorState.trianglePaintMode = false;
+    expect(getEditorToolButtonAppearance('triangle', true)?.iconKind).toBe('right-triangle');
   });
 });
 

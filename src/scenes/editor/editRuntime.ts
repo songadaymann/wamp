@@ -37,12 +37,15 @@ import {
 import {
   DEFAULT_TRIANGLE_FILL,
   DEFAULT_TRIANGLE_STROKE,
+  TRIANGLE_PIECE_OBJECT_ID,
+  applyTriangleStampOrientation,
   defaultTriangleLegs,
   normalizePlacedTriangle,
   parseHexColor,
   snapTriangleLeg,
   triangleBitmapLayout,
 } from '../../config/trianglePiece';
+import { stampedTriangleFields } from './triangleStamp';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
@@ -2223,11 +2226,14 @@ export class EditorEditRuntime {
       return null;
     }
 
-    if (!editorState.selectedObjectId) {
+    const placingTriangleTool = editorState.activeTool === 'triangle';
+    if (!editorState.selectedObjectId && !placingTriangleTool) {
       return null;
     }
 
-    const objectConfig = getEditorObjectConfigById(editorState.selectedObjectId);
+    const objectConfig = getEditorObjectConfigById(
+      placingTriangleTool ? TRIANGLE_PIECE_OBJECT_ID : editorState.selectedObjectId,
+    );
     if (!objectConfig) {
       return null;
     }
@@ -2242,17 +2248,20 @@ export class EditorEditRuntime {
     const triangle = isTrianglePieceObjectId(objectConfig.id);
     const ball = isRollingBallObjectId(objectConfig.id) ? rollingBallSettingsFromGraphic('basic') : null;
     const legs = triangle
-      ? defaultTriangleLegs(editorState.tileFlipXMode === 'on', editorState.tileFlipYMode === 'on')
+      ? defaultTriangleLegs(
+        placingTriangleTool ? editorState.triangleStampFlipX : editorState.tileFlipXMode === 'on',
+        placingTriangleTool ? editorState.triangleStampFlipY : editorState.tileFlipYMode === 'on',
+      )
       : null;
     const placementPoint = triangle
       ? { x: tileX * TILE_SIZE, y: (tileY + 1) * TILE_SIZE }
       : getObjectPlacementPointForTile(objectConfig, tileX, tileY);
     const placed: PlacedObject = {
-      id: editorState.selectedObjectId,
+      id: objectConfig.id,
       x: placementPoint.x,
       y: placementPoint.y,
       instanceId: createPlacedObjectInstanceId(),
-      customSpriteKind: getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId)?.kind ?? null,
+      customSpriteKind: getCustomSpriteDefinitionByObjectId(objectConfig.id)?.kind ?? null,
       facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
       layer: editorState.activeLayer,
       triggerTargetInstanceId: null,
@@ -2294,8 +2303,16 @@ export class EditorEditRuntime {
       ballPushable: ball ? ball.pushable : null,
       triangleLegX: legs?.legX ?? null,
       triangleLegY: legs?.legY ?? null,
-      triangleFill: triangle ? DEFAULT_TRIANGLE_FILL : null,
-      triangleStroke: triangle ? DEFAULT_TRIANGLE_STROKE : null,
+      triangleFill: triangle
+        ? (placingTriangleTool
+          ? parseHexColor(editorState.triangleStampFill, DEFAULT_TRIANGLE_FILL)
+          : DEFAULT_TRIANGLE_FILL)
+        : null,
+      triangleStroke: triangle
+        ? (placingTriangleTool
+          ? parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE)
+          : DEFAULT_TRIANGLE_STROKE)
+        : null,
     };
 
     const previous = this.objectBatchNext ?? this.clonePlacedObjects();
@@ -2836,6 +2853,26 @@ export class EditorEditRuntime {
       triangleFill: fill == null ? placed.triangleFill : parseHexColor(fill, placed.triangleFill ?? DEFAULT_TRIANGLE_FILL),
       triangleStroke: stroke == null ? placed.triangleStroke : parseHexColor(stroke, placed.triangleStroke ?? DEFAULT_TRIANGLE_STROKE),
     }));
+  }
+
+  applyTriangleStamp(instanceId: string): boolean {
+    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
+      ...placed,
+      ...stampedTriangleFields(placed),
+    }));
+  }
+
+  setTriangleOrientation(instanceId: string, flipX: boolean, flipY: boolean): boolean {
+    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => {
+      const geometry = normalizePlacedTriangle(placed);
+      if (!geometry) return placed;
+      const next = applyTriangleStampOrientation(geometry.legX, geometry.legY, flipX, flipY);
+      return {
+        ...placed,
+        triangleLegX: next.legX,
+        triangleLegY: next.legY,
+      };
+    });
   }
 
   flipTriangle(instanceId: string, axis: 'x' | 'y'): boolean {

@@ -57,7 +57,8 @@ export class EditorPhoneInspector {
       && body.dataset.editorMusicMode !== 'true' && body.dataset.editorMusicUiLocked !== 'true'
       && body.dataset.editorSpriteUiLocked !== 'true';
     const linking = eligible && this.state?.visible === true && this.state.connecting;
-    const open = eligible && this.state?.visible === true && this.state.pinned && !linking;
+    const open = eligible && this.state?.visible === true && this.state.pinned && !linking
+      && this.state.triangleVisible !== true;
     let changed = false;
     for (const [key, value] of [['editorPhoneInspector', open], ['editorPhoneLinking', linking]] as const) {
       const next = value ? 'true' : 'false';

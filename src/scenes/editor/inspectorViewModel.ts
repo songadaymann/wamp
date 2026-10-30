@@ -1,6 +1,12 @@
-import { getObjectById, type GameObjectConfig, type PlacedObject } from '../../config';
+import { editorState, getObjectById, type GameObjectConfig, type PlacedObject } from '../../config';
 import { getRollingBallGraphic, normalizePlacedRollingBall } from '../../config/rollingBall';
-import { normalizePlacedTriangle } from '../../config/trianglePiece';
+import {
+  normalizePlacedTriangle,
+  parseHexColor,
+  triangleFlipFromLegs,
+  DEFAULT_TRIANGLE_FILL,
+  DEFAULT_TRIANGLE_STROKE,
+} from '../../config/trianglePiece';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
@@ -81,8 +87,10 @@ export function createEmptyEditorInspectorState(): EditorInspectorState {
     ballHurtPlayerChecked: false,
     ballPushableChecked: true,
     triangleVisible: false,
+    trianglePaintMode: false,
     triangleStatusText: '',
-    triangleLegText: '',
+    triangleFlipX: false,
+    triangleFlipY: false,
     triangleFillValue: '#8A8F98',
     triangleStrokeValue: '#2C3138',
   };
@@ -115,14 +123,31 @@ export function buildTriangleInspectorState(
 ): EditorInspectorState | null {
   const geometry = normalizePlacedTriangle(placed);
   if (!geometry) return null;
+  const flip = triangleFlipFromLegs(geometry.legX, geometry.legY);
   return {
     ...createEmptyEditorInspectorState(),
     visible: true,
     triangleVisible: true,
-    triangleStatusText: statusText ?? 'Drag a corner or side to resize this ramp.',
-    triangleLegText: `${geometry.legX} × ${geometry.legY}`,
+    trianglePaintMode: false,
+    triangleStatusText: statusText ?? 'Drag a square handle to move or resize this ramp.',
+    triangleFlipX: flip.flipX,
+    triangleFlipY: flip.flipY,
     triangleFillValue: geometry.fill,
     triangleStrokeValue: geometry.stroke,
+  };
+}
+
+export function buildTriangleStampInspectorState(statusText: string | null = null): EditorInspectorState {
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    triangleVisible: true,
+    trianglePaintMode: editorState.trianglePaintMode,
+    triangleStatusText: statusText ?? 'Click empty space to place. Click a ramp to select it.',
+    triangleFlipX: editorState.triangleStampFlipX,
+    triangleFlipY: editorState.triangleStampFlipY,
+    triangleFillValue: parseHexColor(editorState.triangleStampFill, DEFAULT_TRIANGLE_FILL),
+    triangleStrokeValue: parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE),
   };
 }
 

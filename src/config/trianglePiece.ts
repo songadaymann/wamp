@@ -29,8 +29,9 @@ export type TriangleHandle =
   | 'horizontalCorner'
   | 'verticalCorner'
   | 'horizontalSide'
-  | 'verticalSide'
-  | 'hypotenuse';
+  | 'verticalSide';
+
+export type TriangleHandleMotion = 'move' | 'vertical' | 'horizontal';
 
 export interface SlopeWalk {
   supported: boolean;
@@ -38,6 +39,11 @@ export interface SlopeWalk {
   slideX: number;
   blockUphill: boolean;
   downhillX: -1 | 1;
+}
+
+export interface FlatWalk {
+  supported: boolean;
+  feetY: number;
 }
 
 export function isTrianglePieceObjectId(id: string | null | undefined): boolean {
@@ -295,6 +301,27 @@ export function evaluateSlopeWalk(input: {
   };
 }
 
+/** Stand on the axis-aligned top of a downward-pointing triangle like a platform. */
+export function evaluateFlatWalk(input: {
+  anchorX: number;
+  anchorY: number;
+  legX: number;
+  legY: number;
+  feetX: number;
+  feetY: number;
+  verticalVelocity: number;
+}): FlatWalk | null {
+  if (isFloorTriangle(input.legY)) return null;
+  const minX = Math.min(input.anchorX, input.anchorX + input.legX);
+  const maxX = Math.max(input.anchorX, input.anchorX + input.legX);
+  if (input.feetX < minX || input.feetX > maxX) return null;
+  const surfaceY = input.anchorY;
+  const delta = input.feetY - surfaceY;
+  if (delta < -8 || delta > 14) return null;
+  if (input.verticalVelocity < -40 && delta < 0) return null;
+  return { supported: true, feetY: surfaceY };
+}
+
 export function triangleHandlePoints(
   anchorX: number,
   anchorY: number,
@@ -308,7 +335,6 @@ export function triangleHandlePoints(
     { id: 'verticalCorner', x: verts.vertical.x, y: verts.vertical.y },
     { id: 'horizontalSide', x: (verts.rightAngle.x + verts.horizontal.x) / 2, y: (verts.rightAngle.y + verts.horizontal.y) / 2 },
     { id: 'verticalSide', x: (verts.rightAngle.x + verts.vertical.x) / 2, y: (verts.rightAngle.y + verts.vertical.y) / 2 },
-    { id: 'hypotenuse', x: (verts.horizontal.x + verts.vertical.x) / 2, y: (verts.horizontal.y + verts.vertical.y) / 2 },
   ];
 }
 
@@ -324,8 +350,9 @@ export function hitTriangleHandle(
   const points = triangleHandlePoints(anchorX, anchorY, legX, legY);
   const corners = points.filter((point) => point.id === 'anchor' || point.id.endsWith('Corner'));
   const sides = points.filter((point) => !corners.includes(point));
+  const half = radius;
   for (const point of [...corners, ...sides]) {
-    if (Math.hypot(point.x - x, point.y - y) <= radius) return point.id;
+    if (Math.abs(point.x - x) <= half && Math.abs(point.y - y) <= half) return point.id;
   }
   return null;
 }
@@ -354,17 +381,9 @@ export function dragTriangleHandle(
     const legY = snapTriangleLeg(fixedY - snapTriangleCoord(pointerY));
     return { ...start, anchorY: fixedY - legY, legY };
   }
-  if (handle === 'verticalSide') {
-    const fixedX = start.anchorX + start.legX;
-    const legX = snapTriangleLeg(fixedX - snapTriangleCoord(pointerX));
-    return { ...start, anchorX: fixedX - legX, legX };
-  }
-  const absX = Math.abs(pointerX - pointerStartX);
-  const absY = Math.abs(pointerY - pointerStartY);
-  if (absX >= absY) {
-    return { ...start, legX: snapTriangleLeg(start.legX + (pointerX - pointerStartX)) };
-  }
-  return { ...start, legY: snapTriangleLeg(start.legY + (pointerY - pointerStartY)) };
+  const fixedX = start.anchorX + start.legX;
+  const nextLegX = snapTriangleLeg(fixedX - snapTriangleCoord(pointerX));
+  return { ...start, anchorX: fixedX - nextLegX, legX: nextLegX };
 }
 
 export function triangleBitmapLayout(legX: number, legY: number): {
@@ -401,6 +420,59 @@ export function defaultTriangleLegs(flipX: boolean, flipY: boolean): { legX: num
     legX: flipX ? -TRIANGLE_DEFAULT_LEG_X : TRIANGLE_DEFAULT_LEG_X,
     legY: flipY ? -TRIANGLE_DEFAULT_LEG_Y : TRIANGLE_DEFAULT_LEG_Y,
   };
+}
+
+export function triangleFlipFromLegs(legX: number, legY: number): { flipX: boolean; flipY: boolean } {
+  return { flipX: legX < 0, flipY: legY > 0 };
+}
+
+export type TriangleOrientId = 'ne' | 'nw' | 'se' | 'sw';
+
+export function triangleOrientId(flipX: boolean, flipY: boolean): TriangleOrientId {
+  if (flipX && flipY) return 'sw';
+  if (flipX) return 'nw';
+  if (flipY) return 'se';
+  return 'ne';
+}
+
+export function triangleFlipFromOrient(id: TriangleOrientId): { flipX: boolean; flipY: boolean } {
+  return {
+    flipX: id === 'nw' || id === 'sw',
+    flipY: id === 'se' || id === 'sw',
+  };
+}
+
+export function trianglePlacementAtTile(
+  tileX: number,
+  tileY: number,
+  flipX: boolean,
+  flipY: boolean,
+): { anchorX: number; anchorY: number; legX: number; legY: number } {
+  const legs = defaultTriangleLegs(flipX, flipY);
+  return {
+    anchorX: tileX * TILE_SIZE,
+    anchorY: (tileY + 1) * TILE_SIZE,
+    legX: legs.legX,
+    legY: legs.legY,
+  };
+}
+
+export function applyTriangleStampOrientation(
+  legX: number,
+  legY: number,
+  flipX: boolean,
+  flipY: boolean,
+): { legX: number; legY: number } {
+  return {
+    legX: snapTriangleLeg(Math.abs(legX) * (flipX ? -1 : 1)),
+    legY: snapTriangleLeg(Math.abs(legY) * (flipY ? 1 : -1)),
+  };
+}
+
+export function triangleHandleMotion(id: TriangleHandle): TriangleHandleMotion {
+  if (id === 'anchor') return 'move';
+  if (id === 'verticalCorner' || id === 'horizontalSide') return 'vertical';
+  return 'horizontal';
 }
 
 export function normalizePlacedTriangle(placed: {

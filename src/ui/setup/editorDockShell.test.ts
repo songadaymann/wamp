@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  editorDockDrawerTitle,
   INITIAL_EDITOR_DOCK_SHELL_STATE,
   isEditorDockShellActive,
   reduceEditorDockShellState,
@@ -69,6 +70,41 @@ describe('editor dock shell state', () => {
       { type: 'toggle-room' },
     ]);
     expect(state).toMatchObject({ openPanel: 'room', roomSection: 'environment' });
+  });
+
+  it('gives Triangle its own drawer title and returns to Terrain when the dock is chosen', () => {
+    const triangle = reduce([{ type: 'follow-tool', tool: 'triangle' }]);
+    expect(triangle).toMatchObject({ openPanel: 'terrain', triangleSidebar: true });
+    expect(editorDockDrawerTitle(triangle)).toBe('Triangle');
+
+    const terrain = reduce([{ type: 'toggle-dock', dock: 'terrain' }], triangle);
+    expect(terrain.triangleSidebar).toBe(false);
+    expect(editorDockDrawerTitle(terrain)).toBe('Terrain');
+  });
+
+  it('leaves Room Setup for Terrain or Triangle when a tool is chosen', () => {
+    const room = reduce([{ type: 'toggle-room' }]);
+    expect(editorDockDrawerTitle(room)).toBe('Room Setup');
+
+    const fromDraw = reduce([{ type: 'follow-tool', tool: 'pencil' }], room);
+    expect(fromDraw).toMatchObject({ openPanel: 'terrain', triangleSidebar: false });
+    expect(editorDockDrawerTitle(fromDraw)).toBe('Terrain');
+
+    const fromTriangle = reduce([{ type: 'follow-tool', tool: 'triangle' }], room);
+    expect(fromTriangle).toMatchObject({ openPanel: 'terrain', triangleSidebar: true });
+    expect(editorDockDrawerTitle(fromTriangle)).toBe('Triangle');
+  });
+
+  it('keeps Stuff open when a terrain tool is chosen, but Triangle takes over the drawer', () => {
+    const stuff = reduce([{ type: 'toggle-dock', dock: 'stuff' }]);
+    expect(reduce([{ type: 'follow-tool', tool: 'pencil' }], stuff)).toMatchObject({
+      openPanel: 'stuff',
+      triangleSidebar: false,
+    });
+    expect(reduce([{ type: 'follow-tool', tool: 'triangle' }], stuff)).toMatchObject({
+      openPanel: 'terrain',
+      triangleSidebar: true,
+    });
   });
 
   it('tracks one-shot spawn placement independently from the Markers popover', () => {

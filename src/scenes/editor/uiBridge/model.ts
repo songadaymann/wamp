@@ -143,8 +143,10 @@ export interface EditorInspectorState {
   ballHurtPlayerChecked: boolean;
   ballPushableChecked: boolean;
   triangleVisible: boolean;
+  trianglePaintMode: boolean;
   triangleStatusText: string;
-  triangleLegText: string;
+  triangleFlipX: boolean;
+  triangleFlipY: boolean;
   triangleFillValue: string;
   triangleStrokeValue: string;
 }
@@ -308,6 +310,5 @@ export interface EditorUiBridgeActions {
   onSetFocusedBallPushable: (enabled: boolean) => void;
   onSetFocusedTriangleFill: (color: string) => void;
   onSetFocusedTriangleStroke: (color: string) => void;
-  onFlipFocusedTriangleX: () => void;
-  onFlipFocusedTriangleY: () => void;
+  onSetTriangleOrientation: (flipX: boolean, flipY: boolean) => void;
 }

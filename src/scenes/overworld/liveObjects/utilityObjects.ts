@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { isSolidRuntimeObjectConfig, isSpecialTileKindGid } from '../../../config';
 import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../../config/rollingBall';
 import {
+  evaluateFlatWalk,
   evaluateSlopeWalk,
   isButtStompSlideTriangle,
   isFloorTriangle,
@@ -537,6 +538,18 @@ function supportActor(
     syncActorRect(actor);
     return true;
   }
+  const flat = evaluateFlatWalk({
+    ...triangle,
+    feetX: actor.body.center.x,
+    feetY: actor.body.bottom,
+    verticalVelocity: actor.body.velocity.y,
+  });
+  if (flat?.supported) {
+    shiftBody(actor.body, 0, flat.feetY - actor.body.bottom);
+    if (actor.body.velocity.y > 0) actor.body.setVelocityY(0);
+    syncActorRect(actor);
+    return true;
+  }
   let separation = separationForBody(actor.body, triangle);
   if (
     separation &&
@@ -558,7 +571,8 @@ function supportActor(
       actor.body.velocity.y - into * ny,
     );
   }
-  return false;
+  syncActorRect(actor);
+  return ny < -0.5;
 }
 
 function separationForBody(

@@ -17,9 +17,12 @@ import type { SmartStyleId } from '../../autotiling/model';
 import {
   EDITOR_SHELL_ESCAPE_REQUESTED_EVENT,
   EDITOR_SPAWN_PLACED_EVENT,
+  EDITOR_TOOL_CHOSEN_EVENT,
   EDITOR_UI_STATE_CHANGED_EVENT,
   type EditorShellEscapeRequestedDetail,
+  type EditorToolChosenDetail,
 } from '../../scenes/editor/uiEvents';
+import { applyEditorToolSelection } from '../../scenes/editor/editorToolSelection';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { type EditorObjectScope, PaletteController } from './paletteController';
 import {
@@ -49,6 +52,7 @@ export interface EditorDockShellState {
   markersOpen: boolean;
   shareOpen: boolean;
   spawnPlacementActive: boolean;
+  triangleSidebar: boolean;
 }
 
 export type EditorDockShellAction =
@@ -60,6 +64,7 @@ export type EditorDockShellAction =
   | { type: 'set-room-section'; section: EditorRoomSection }
   | { type: 'start-spawn' }
   | { type: 'finish-spawn' }
+  | { type: 'follow-tool'; tool: ToolName }
   | { type: 'deactivate' };
 
 export const INITIAL_EDITOR_DOCK_SHELL_STATE: EditorDockShellState = {
@@ -69,6 +74,7 @@ export const INITIAL_EDITOR_DOCK_SHELL_STATE: EditorDockShellState = {
   markersOpen: false,
   shareOpen: false,
   spawnPlacementActive: false,
+  triangleSidebar: false,
 };
 
 export function reduceEditorDockShellState(
@@ -88,6 +94,7 @@ export function reduceEditorDockShellState(
         ...state,
         openPanel: action.dock,
         activeDock: action.dock,
+        triangleSidebar: false,
         markersOpen: false,
         shareOpen: false,
       };
@@ -97,6 +104,7 @@ export function reduceEditorDockShellState(
         ...state,
         openPanel: 'room',
         activeDock: null,
+        triangleSidebar: false,
         markersOpen: false,
         shareOpen: false,
       };
@@ -105,9 +113,12 @@ export function reduceEditorDockShellState(
         ...state,
         openPanel: 'goal',
         activeDock: 'markers',
+        triangleSidebar: false,
         markersOpen: false,
         shareOpen: false,
       };
+    case 'follow-tool':
+      return followToolDockState(state, action.tool);
     case 'toggle-share':
       return { ...state, shareOpen: !state.shareOpen, markersOpen: false };
     case 'close-popovers':
@@ -165,6 +176,37 @@ const PANEL_TITLES: Readonly<Record<EditorDockPanelId, string>> = {
   goal: 'Goal',
   room: 'Room Setup',
 };
+
+export function editorDockDrawerTitle(state: EditorDockShellState): string {
+  return state.triangleSidebar ? 'Triangle' : PANEL_TITLES[state.openPanel];
+}
+
+function followToolDockState(state: EditorDockShellState, tool: ToolName): EditorDockShellState {
+  if (tool === 'triangle') {
+    if (state.triangleSidebar && state.openPanel === 'terrain') return state;
+    return {
+      ...state,
+      openPanel: 'terrain',
+      activeDock: 'terrain',
+      triangleSidebar: true,
+      markersOpen: false,
+      shareOpen: false,
+    };
+  }
+  const leaveForTerrain = state.triangleSidebar
+    || state.openPanel === 'room'
+    || state.openPanel === 'goal';
+  if (!leaveForTerrain) return state;
+  if (!state.triangleSidebar && state.openPanel === 'terrain') return state;
+  return {
+    ...state,
+    openPanel: 'terrain',
+    activeDock: 'terrain',
+    triangleSidebar: false,
+    markersOpen: false,
+    shareOpen: false,
+  };
+}
 
 const GOAL_INSTRUCTIONS: Readonly<Record<string, string>> = {
   '': 'Remove the current goal. Players can still explore the room freely.',
@@ -242,9 +284,14 @@ export class EditorDockShellController {
     }
 
     this.state = reduceEditorDockShellState(previous, action);
-    const drawerChanged = previous.openPanel !== this.state.openPanel;
+    const drawerChanged = previous.openPanel !== this.state.openPanel
+      || previous.triangleSidebar !== this.state.triangleSidebar;
     const popoverChanged = previous.markersOpen !== this.state.markersOpen
       || previous.shareOpen !== this.state.shareOpen;
+    const leaveTriangleTool = action.type === 'toggle-dock'
+      && action.dock === 'terrain'
+      && previous.triangleSidebar
+      && editorState.activeTool === 'triangle';
 
     if (drawerChanged && this.state.openPanel) {
       this.lastDrawerTrigger = trigger ?? this.lastDrawerTrigger;
@@ -254,8 +301,17 @@ export class EditorDockShellController {
       this.lastPopoverTrigger = trigger ?? this.lastPopoverTrigger;
     }
 
-    if ((action.type === 'toggle-dock' && action.dock !== 'markers') || action.type === 'toggle-room' || action.type === 'open-goal') this.phoneDock.expand();
+    if (
+      (action.type === 'toggle-dock' && action.dock !== 'markers')
+      || action.type === 'toggle-room'
+      || action.type === 'open-goal'
+      || action.type === 'follow-tool'
+    ) this.phoneDock.expand();
     this.syncDom();
+    if (leaveTriangleTool) {
+      applyEditorToolSelection('pencil');
+      this.doc.defaultView?.dispatchEvent(new Event(EDITOR_UI_STATE_CHANGED_EVENT));
+    }
     if (drawerChanged) {
       this.queueLayoutResize();
       if (this.state.openPanel) {
@@ -457,6 +513,11 @@ export class EditorDockShellController {
       this.syncChoiceButtons();
       this.syncProxyActions();
     });
+    win.addEventListener(EDITOR_TOOL_CHOSEN_EVENT, (event) => {
+      if (!this.active) return;
+      const tool = (event as CustomEvent<EditorToolChosenDetail>).detail?.tool ?? editorState.activeTool;
+      this.dispatch({ type: 'follow-tool', tool: tool as ToolName });
+    });
     win.addEventListener(EDITOR_SPAWN_PLACED_EVENT, () => {
       if (this.state.spawnPlacementActive) this.finishSpawnPlacement(false);
     });
@@ -538,6 +599,7 @@ export class EditorDockShellController {
     delete this.doc.body.dataset.editorShellPanel;
     delete this.doc.body.dataset.editorRoomSection;
     delete this.doc.body.dataset.editorSpawnPlacement;
+    delete this.doc.body.dataset.editorTriangleOptions;
     this.queueLayoutResize();
   }
 
@@ -572,7 +634,9 @@ export class EditorDockShellController {
     const drawerHeader = this.doc.getElementById('editor-drawer-header');
     drawerHeader?.setAttribute('aria-hidden', 'false');
     const drawerTitle = this.doc.getElementById('editor-drawer-title');
-    if (drawerTitle) drawerTitle.textContent = PANEL_TITLES[this.state.openPanel];
+    if (drawerTitle) drawerTitle.textContent = editorDockDrawerTitle(this.state);
+    if (this.state.triangleSidebar) this.doc.body.dataset.editorTriangleOptions = 'true';
+    else delete this.doc.body.dataset.editorTriangleOptions;
     const back = this.doc.querySelector<HTMLButtonElement>('[data-editor-shell-action="back"]');
     const backLabel = back?.querySelector('span:last-child');
     if (backLabel) backLabel.textContent = courseMode ? 'Back to Setup' : 'Back to World';
@@ -584,10 +648,10 @@ export class EditorDockShellController {
       const dock = button.dataset.editorDock as EditorDockId;
       const selected = dock === 'markers'
         ? this.state.markersOpen || this.state.spawnPlacementActive || this.state.openPanel === 'goal'
-        : this.state.activeDock === dock;
+        : this.state.activeDock === dock && !this.state.triangleSidebar;
       const expanded = dock === 'markers'
         ? this.state.markersOpen
-        : this.state.openPanel === dock;
+        : this.state.openPanel === dock && !this.state.triangleSidebar;
       button.setAttribute('aria-pressed', selected ? 'true' : 'false');
       button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }

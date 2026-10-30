@@ -114,7 +114,9 @@ import {
   isPathEditorTool,
   isPencilBrushPlacement,
   isPencilStampPlacement,
+  isTriangleEditorTool,
 } from './editor/editorToolSelection';
+import { drawTriangleStampPreview } from './editor/triangleStamp';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
 import {
@@ -595,11 +597,6 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     });
     this.triangleHandles = new TriangleHandleController({
       selected: () => this.triangleHandleGeometry(this.objectInspectorController.getPinnedTriangleId()),
-      pick: (worldX, worldY) => {
-        const slice = this.getSliceAtWorldPoint(worldX, worldY);
-        const placed = slice?.runtime.findPlacedObjectAt(worldX, worldY, (candidate) => isTrianglePieceObjectId(candidate.id));
-        return placed?.instanceId ? this.triangleHandleGeometry(placed.instanceId) : null;
-      },
       hitRadius: () => Math.max(8, 10 / Math.max(editorState.zoom, 0.25)),
       begin: (instanceId) => {
         const match = this.triangleHandleGeometry(instanceId);
@@ -891,8 +888,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       onSetFocusedBallPushable: (enabled) => this.objectInspectorController.setFocusedBallPushable(enabled),
       onSetFocusedTriangleFill: (color) => this.objectInspectorController.setFocusedTriangleFill(color),
       onSetFocusedTriangleStroke: (color) => this.objectInspectorController.setFocusedTriangleStroke(color),
-      onFlipFocusedTriangleX: () => this.objectInspectorController.flipFocusedTriangle('x'),
-      onFlipFocusedTriangleY: () => this.objectInspectorController.flipFocusedTriangle('y'),
+      onSetTriangleOrientation: (flipX, flipY) => this.objectInspectorController.setTriangleOrientation(flipX, flipY),
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);
@@ -2423,7 +2419,14 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       if (editorState.activeTool === 'move' && !this.musicModeActive && pointer.rightButtonDown()) { this.objectMoveController.cancel(); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
       else if (this.triangleHandles.down(pointer.worldX, pointer.worldY)) return;
-      else if (this.objectMoveController.down(pointer)) return;
+      else if (this.objectMoveController.down(pointer)) {
+        const slice = this.getSliceForPointer(pointer);
+        if (slice && editorState.paletteMode === 'objects') {
+          this.objectInspectorController.handleUtilityPrimaryAction(slice, pointer.worldX, pointer.worldY);
+          this.renderUi();
+        }
+        return;
+      }
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2547,6 +2550,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     const slice = this.getSliceForPointer(pointer);
     if (!slice) {
+      return;
+    }
+
+    if (isTriangleEditorTool()) {
+      this.objectInspectorController.handleTriangleToolAction(slice, pointer.worldX, pointer.worldY);
+      this.renderUi();
       return;
     }
 
@@ -3365,6 +3374,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     const tile = this.getLocalTileForPointer(pointer, slice);
     if (!tile) {
+      return;
+    }
+
+    if (isTriangleEditorTool()) {
+      drawTriangleStampPreview(this.cursorGraphics, tile.tileX, tile.tileY, slice.origin);
+      this.triangleHandles.draw(this.cursorGraphics);
       return;
     }
 

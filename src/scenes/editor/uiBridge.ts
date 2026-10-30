@@ -1,4 +1,5 @@
 import { listRollingBallGraphics } from '../../config/rollingBall';
+import { triangleFlipFromOrient } from '../../config/trianglePiece';
 import { prepareBackgroundFile } from '../../backgrounds/upload';
 import { EditorColorPopover } from './colorPopover';
 import { populateEditorTilesetOptions } from './tilesetOptions';
@@ -39,10 +40,10 @@ import {
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
-  isMoreEditorTool,
-  isPencilSprayPlacement,
-  isPencilStampPlacement,
-  ensureEditorToolAvailable,
+    isMoreEditorTool,
+    isPencilSprayPlacement,
+    isPencilStampPlacement,
+    ensureEditorToolAvailable,
   type EditorModePipState,
   type EditorToolButtonAppearance,
 } from './editorToolSelection';
@@ -171,6 +172,7 @@ const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
   rect: 'Rectangle',
   ellipse: 'Ellipse',
   line: 'Line',
+  triangle: 'Triangle',
   fill: 'Fill',
       randomize: 'Scramble',
 };
@@ -182,6 +184,11 @@ function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearan
       icon.className = 'tool-icon tool-icon-mosaic';
       icon.innerHTML = '<span></span><span></span><span></span><span></span>';
     }
+    return;
+  }
+  if (kind === 'right-triangle') {
+    icon.className = 'tool-icon tool-icon-right-triangle';
+    icon.textContent = '';
     return;
   }
   if (appearance.icon === undefined) {
@@ -869,7 +876,7 @@ export class EditorUiBridge {
       editorState.activeLayer = layer;
       this.syncEditorChromeState();
     };
-    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
+    for (const button of this.elements.layerButtons) {
       const handler = () => handleLayerClick(button);
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
@@ -888,10 +895,15 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    bindButton(this.cleanupCallbacks, this.elements.layerGuideButton, () => {
-      editorState.showLayerGuides = !editorState.showLayerGuides;
-      this.syncEditorChromeState();
-    });
+    const layerGuideCheckbox = this.elements.layerGuideCheckbox;
+    if (layerGuideCheckbox) {
+      const onLayerGuidesChange = () => {
+        editorState.showLayerGuides = layerGuideCheckbox.checked;
+        this.syncEditorChromeState();
+      };
+      layerGuideCheckbox.addEventListener('change', onLayerGuidesChange);
+      this.cleanupCallbacks.push(() => layerGuideCheckbox.removeEventListener('change', onLayerGuidesChange));
+    }
 
     const handleTilesetChange = () => {
       if (!this.elements.tilesetSelect) {
@@ -1496,7 +1508,7 @@ export class EditorUiBridge {
         popover: this.elements.colorPopover,
         square: this.elements.colorPopoverSquare,
         hue: this.elements.colorPopoverHue,
-        hex: this.elements.colorPopoverHex,
+        hex: null,
         dropper: this.elements.colorEyedropperButton,
       },
       () => undefined,
@@ -1518,8 +1530,14 @@ export class EditorUiBridge {
     this.elements.triangleStrokeInput?.addEventListener('change', () => {
       this.actions.onSetFocusedTriangleStroke(this.elements.triangleStrokeInput?.value ?? '');
     });
-    this.elements.triangleFlipXButton?.addEventListener('click', () => this.actions.onFlipFocusedTriangleX());
-    this.elements.triangleFlipYButton?.addEventListener('click', () => this.actions.onFlipFocusedTriangleY());
+    for (const button of this.elements.triangleOrientButtons) {
+      button.addEventListener('click', () => {
+        const orient = button.dataset.triangleOrient;
+        if (orient !== 'ne' && orient !== 'nw' && orient !== 'se' && orient !== 'sw') return;
+        const flip = triangleFlipFromOrient(orient);
+        this.actions.onSetTriangleOrientation(flip.flipX, flip.flipY);
+      });
+    }
 
     bindButton(this.cleanupCallbacks, this.elements.playBtn, () => {
       runtimeConfig.closePanels();
@@ -2251,7 +2269,7 @@ export class EditorUiBridge {
     }
 
     const advancedBuilder = getGameSettings().builderMode === 'advanced';
-    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
+    for (const button of this.elements.layerButtons) {
       const layer = button.dataset.layer as LayerName | undefined;
       const unsupported = Boolean(
         paletteModeIsSmart
@@ -2286,13 +2304,8 @@ export class EditorUiBridge {
       this.elements.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
       this.elements.layerChip.setAttribute('data-layer-tone', editorState.activeLayer);
     }
-    if (this.elements.layerGuideButton) {
-      this.elements.layerGuideButton.classList.toggle('active', editorState.showLayerGuides);
-      this.elements.layerGuideButton.setAttribute(
-        'aria-pressed',
-        editorState.showLayerGuides ? 'true' : 'false'
-      );
-      this.elements.layerGuideButton.textContent = 'Indicate Layers';
+    if (this.elements.layerGuideCheckbox) {
+      this.elements.layerGuideCheckbox.checked = editorState.showLayerGuides;
     }
 
     setValue(this.elements.tilesetSelect, editorState.selectedTilesetKey);
@@ -2306,7 +2319,11 @@ export class EditorUiBridge {
     this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.tileControlsSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
-    this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
+    const triangleOptions = this.doc.body.dataset.editorTriangleOptions === 'true';
+    this.elements.objectPaletteSection?.classList.toggle(
+      'hidden',
+      editorState.paletteMode !== 'objects' && !triangleOptions,
+    );
     if (paletteModeIsTiles) {
       this.windowObj.requestAnimationFrame(() => {
         if (this.destroyed || editorState.paletteMode !== 'tiles') {

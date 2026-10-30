@@ -30,7 +30,12 @@ export function canRepeatSelectedEditorObject(): boolean {
 }
 
 export function isMoreEditorTool(tool: ToolName): boolean {
-  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill' || tool === 'randomize';
+  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'triangle'
+    || tool === 'fill' || tool === 'randomize';
+}
+
+export function isTriangleEditorTool(tool: ToolName = editorState.activeTool): tool is 'triangle' {
+  return tool === 'triangle';
 }
 
 export function isShapeEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' {
@@ -190,26 +195,37 @@ export function getEditorToolUnavailableTitle(tool: ToolName): string | null {
   return null;
 }
 
+function shouldToggleToolModeOnReselect(): boolean {
+  if (typeof document === 'undefined') return true;
+  const panel = document.body?.dataset?.editorShellPanel;
+  return panel !== 'room' && panel !== 'goal';
+}
+
 export function applyEditorToolSelection(tool: ToolName): void {
   if (isEditorToolUnavailable(tool)) {
     return;
   }
   if (editorState.activeTool === tool && isShapeEditorTool(tool)) {
-    toggleEditorShapeOutline(tool);
+    if (shouldToggleToolModeOnReselect()) toggleEditorShapeOutline(tool);
     return;
   }
   if (editorState.activeTool === tool && tool === 'line') {
-    if (!getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
+    if (shouldToggleToolModeOnReselect() && !getEditorLineAxis()) editorState.lineCurve = !editorState.lineCurve;
+    return;
+  }
+  if (editorState.activeTool === tool && tool === 'triangle') {
+    if (shouldToggleToolModeOnReselect()) editorState.trianglePaintMode = !editorState.trianglePaintMode;
     return;
   }
   if (editorState.activeTool === tool && tool === 'pencil') {
-    editorState.pencilSprayMode = !editorState.pencilSprayMode;
+    if (shouldToggleToolModeOnReselect()) editorState.pencilSprayMode = !editorState.pencilSprayMode;
     return;
   }
   if (tool === 'randomize') {
     editorState.randomizeBrushSize = editorState.scrambleBrushSize;
   }
   editorState.activeTool = tool;
+  if (tool === 'triangle') editorState.trianglePaintMode = false;
 }
 
 export function toggleEditorShapeOutline(tool: 'rect' | 'ellipse'): void {
@@ -250,6 +266,8 @@ export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false
       return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
     case 'line':
       return isEditorLineCurve() ? 'Curve' : 'Line';
+    case 'triangle':
+      return editorState.trianglePaintMode ? 'Paint ramps' : 'Triangle';
     case 'randomize':
       return `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
     case 'fill':
@@ -288,6 +306,9 @@ export function getEditorToolModePipState(tool: ToolName): EditorModePipState | 
   if (tool === 'line') {
     return getEditorLineAxis() ? null : { count: 2, activeIndex: editorState.lineCurve ? 1 : 0 };
   }
+  if (tool === 'triangle') {
+    return { count: 2, activeIndex: editorState.trianglePaintMode ? 1 : 0 };
+  }
   return null;
 }
 
@@ -298,7 +319,7 @@ export function getTileFlipModePipState(mode: TileFlipMode): EditorModePipState 
 
 export interface EditorToolButtonAppearance {
   icon?: string;
-  iconKind?: 'glyph' | 'mosaic';
+  iconKind?: 'glyph' | 'mosaic' | 'right-triangle';
   label?: string;
   title: string;
   dimPart: string | null;
@@ -337,6 +358,16 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
       title: axis ? `Line (L); stays ${axis} for this brush` : isEditorLineCurve()
         ? 'Curve (L); select again to switch to Line. Hold Shift to snap'
         : 'Line (L); select again to switch to Curve. Hold Shift to snap',
+      dimPart: null,
+    };
+  }
+  if (tool === 'triangle') {
+    return {
+      iconKind: 'right-triangle',
+      label: editorState.trianglePaintMode ? 'Paint' : 'Triangle',
+      title: editorState.trianglePaintMode
+        ? 'Paint ramps (T); select again to place a triangle'
+        : 'Triangle (T); select again to paint existing ramps',
       dimPart: null,
     };
   }

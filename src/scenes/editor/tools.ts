@@ -12,6 +12,7 @@ import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import type { EditorClipboardState, EditorEditRuntime, GoalPlacementMode } from './editRuntime';
 import type { EditorPersistenceController } from './persistence';
 import { applyEditorToolSelection, isDragStampEditorTool } from './editorToolSelection';
+import { EDITOR_TOOL_CHOSEN_EVENT, type EditorToolChosenDetail } from './uiEvents';
 
 interface EditorToolControllerHost {
   startRectDrawing(tileX: number, tileY: number): void;
@@ -38,6 +39,10 @@ export class EditorToolController {
 
   selectTool(tool: ToolName): void {
     applyEditorToolSelection(tool);
+    const win = this.scene.game.canvas?.ownerDocument?.defaultView ?? globalThis;
+    win.dispatchEvent?.(new CustomEvent<EditorToolChosenDetail>(EDITOR_TOOL_CHOSEN_EVENT, {
+      detail: { tool: editorState.activeTool },
+    }));
     this.updateToolUi();
   }
 
@@ -196,6 +201,8 @@ export class EditorToolController {
           this.editRuntime.beginTileBatch();
         }
         this.host.startRectDrawing(tileX, tileY);
+        break;
+      case 'triangle':
         break;
       case 'fill':
         this.editRuntime.beginTileBatch();

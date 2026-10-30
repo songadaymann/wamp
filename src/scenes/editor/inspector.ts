@@ -8,6 +8,9 @@ import {
   canPlacedObjectBePressurePlateTarget,
   canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
+  TILE_SIZE,
+  ROOM_WIDTH,
+  ROOM_HEIGHT,
   editorState,
   getObjectById,
   isMovingPlatformEndpointObjectId,
@@ -47,12 +50,15 @@ import {
   type NpcMode,
 } from '../../npcs/model';
 import { isRollingBallObjectId } from '../../config/rollingBall';
-import { isTrianglePieceObjectId } from '../../config/trianglePiece';
+import { isTrianglePieceObjectId, parseHexColor, DEFAULT_TRIANGLE_FILL, DEFAULT_TRIANGLE_STROKE } from '../../config/trianglePiece';
+import { isTriangleEditorTool } from './editorToolSelection';
+import { captureTriangleStamp, triangleStampStatus } from './triangleStamp';
 import {
   buildBallInspectorState,
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
   buildTriangleInspectorState,
+  buildTriangleStampInspectorState,
   createEmptyEditorInspectorState,
   getContainerAcceptedContentsLabel,
   getContainerName,
@@ -72,9 +78,7 @@ export class EditorInspectorController {
   private policeStatusText: string | null = null;
   private focusedNpcInstanceId: string | null = null;
   private npcStatusText: string | null = null;
-  private focusedBallInstanceId: string | null = null;
   private ballStatusText: string | null = null;
-  private focusedTriangleInstanceId: string | null = null;
   private triangleStatusText: string | null = null;
   private pinnedInspector: PinnedInspector = null;
 
@@ -128,8 +132,6 @@ export class EditorInspectorController {
     this.policeStatusText = null;
     this.focusedNpcInstanceId = null;
     this.npcStatusText = null;
-    this.focusedBallInstanceId = null;
-    this.focusedTriangleInstanceId = null;
     this.ballStatusText = null;
     this.triangleStatusText = null;
     this.pinnedInspector = null;
@@ -298,6 +300,12 @@ export class EditorInspectorController {
     ) {
       this.pinnedInspector = null;
     }
+    if (
+      (this.pinnedInspector?.kind === 'ball' || this.pinnedInspector?.kind === 'triangle') &&
+      !this.editRuntime.hasPlacedObjectInstanceId(this.pinnedInspector.instanceId)
+    ) {
+      this.pinnedInspector = null;
+    }
 
     const pointer = this.scene.input.activePointer;
     const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -352,26 +360,6 @@ export class EditorInspectorController {
             this.focusedNpcInstanceId = hoveredNpc.instanceId;
           } else if (this.pinnedInspector?.kind !== 'npc') {
             this.focusedNpcInstanceId = null;
-            const hoveredTriangle = this.editRuntime.findPlacedObjectAt(
-              worldPoint.x,
-              worldPoint.y,
-              (placed) => isTrianglePieceObjectId(placed.id),
-            );
-            if (hoveredTriangle) {
-              this.focusedTriangleInstanceId = hoveredTriangle.instanceId;
-            } else if (this.pinnedInspector?.kind !== 'triangle') {
-              this.focusedTriangleInstanceId = null;
-              const hoveredBall = this.editRuntime.findPlacedObjectAt(
-                worldPoint.x,
-                worldPoint.y,
-                (placed) => isRollingBallObjectId(placed.id),
-              );
-              if (hoveredBall) {
-                this.focusedBallInstanceId = hoveredBall.instanceId;
-              } else if (this.pinnedInspector?.kind !== 'ball') {
-                this.focusedBallInstanceId = null;
-              }
-            }
           }
         }
       }
@@ -411,6 +399,9 @@ export class EditorInspectorController {
     if (this.connectingPressurePlateInstanceId) {
       return this.handlePressurePlateConnectionClick(worldPoint.x, worldPoint.y);
     }
+    if (isTriangleEditorTool()) {
+      return this.handleTriangleToolAction(worldPoint.x, worldPoint.y);
+    }
 
     const clickedTriangle = this.editRuntime.findPlacedObjectAt(
       worldPoint.x,
@@ -418,7 +409,6 @@ export class EditorInspectorController {
       (placed) => isTrianglePieceObjectId(placed.id),
     );
     if (clickedTriangle?.instanceId) {
-      this.focusedTriangleInstanceId = clickedTriangle.instanceId;
       this.pinInspector('triangle', clickedTriangle.instanceId);
       this.triangleStatusText = null;
       this.renderInspectorUi();
@@ -431,7 +421,6 @@ export class EditorInspectorController {
       (placed) => isRollingBallObjectId(placed.id),
     );
     if (clickedBall?.instanceId) {
-      this.focusedBallInstanceId = clickedBall.instanceId;
       this.pinInspector('ball', clickedBall.instanceId);
       this.ballStatusText = null;
       this.renderInspectorUi();
@@ -544,15 +533,14 @@ export class EditorInspectorController {
 
   handleObjectPlaced(placed: PlacedObject | null): void {
     if (placed?.instanceId && isTrianglePieceObjectId(placed.id)) {
-      this.focusedTriangleInstanceId = placed.instanceId;
+      captureTriangleStamp(placed);
       this.pinInspector('triangle', placed.instanceId);
-      this.triangleStatusText = 'Triangle ramp placed. Drag a corner or side to reshape it.';
+      this.triangleStatusText = 'Triangle ramp placed. Drag a square handle to reshape it.';
       this.renderInspectorUi();
       return;
     }
 
     if (placed?.instanceId && isRollingBallObjectId(placed.id)) {
-      this.focusedBallInstanceId = placed.instanceId;
       this.pinInspector('ball', placed.instanceId);
       this.ballStatusText = 'Basic Ball placed.';
       this.renderInspectorUi();
@@ -1035,6 +1023,11 @@ export class EditorInspectorController {
       return;
     }
 
+    if (isTriangleEditorTool() && !connectMode) {
+      this.renderTriangleToolPanel(render);
+      return;
+    }
+
     const focusedContainer =
       this.pinnedInspector && this.pinnedInspector.kind !== 'container' && !connectMode
         ? null
@@ -1060,7 +1053,7 @@ export class EditorInspectorController {
     }
 
     const triangle = this.getFocusedTriangle();
-    if (triangle && editorState.paletteMode === 'objects' && !connectMode) {
+    if (triangle && (editorState.paletteMode === 'objects' || isTriangleEditorTool()) && !connectMode) {
       const state = buildTriangleInspectorState(triangle, this.triangleStatusText);
       if (state) { render(state); return; }
     }
@@ -1211,8 +1204,6 @@ export class EditorInspectorController {
     this.focusedSwordsmanInstanceId = null;
     this.focusedPoliceInstanceId = null;
     this.focusedNpcInstanceId = null;
-    this.focusedBallInstanceId = null;
-    this.focusedTriangleInstanceId = null;
     this.pressurePlateStatusText = null;
     this.containerStatusText = null;
     this.swordsmanStatusText = null;
@@ -1260,7 +1251,7 @@ export class EditorInspectorController {
   }
 
   getPinnedTriangleId(): string | null {
-    return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : this.focusedTriangleInstanceId;
+    return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : null;
   }
 
   setFocusedBallGraphic(graphicId: string): void {
@@ -1295,24 +1286,69 @@ export class EditorInspectorController {
   }
 
   setFocusedTriangleFill(color: string): void {
-    const focused = this.getFocusedTriangle();
-    if (!focused?.instanceId) return;
-    this.editRuntime.setTriangleColors(focused.instanceId, color, null);
+    editorState.triangleStampFill = parseHexColor(color, editorState.triangleStampFill || DEFAULT_TRIANGLE_FILL);
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    if (focused?.instanceId) this.editRuntime.setTriangleColors(focused.instanceId, editorState.triangleStampFill, null);
     this.renderInspectorUi();
   }
 
   setFocusedTriangleStroke(color: string): void {
-    const focused = this.getFocusedTriangle();
-    if (!focused?.instanceId) return;
-    this.editRuntime.setTriangleColors(focused.instanceId, null, color);
+    editorState.triangleStampStroke = parseHexColor(color, editorState.triangleStampStroke || DEFAULT_TRIANGLE_STROKE);
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    if (focused?.instanceId) this.editRuntime.setTriangleColors(focused.instanceId, null, editorState.triangleStampStroke);
     this.renderInspectorUi();
   }
 
-  flipFocusedTriangle(axis: 'x' | 'y'): void {
-    const focused = this.getFocusedTriangle();
-    if (!focused?.instanceId) return;
-    this.editRuntime.flipTriangle(focused.instanceId, axis);
+  setTriangleOrientation(flipX: boolean, flipY: boolean): void {
+    editorState.triangleStampFlipX = flipX;
+    editorState.triangleStampFlipY = flipY;
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    if (focused?.instanceId) {
+      this.editRuntime.setTriangleOrientation(focused.instanceId, flipX, flipY);
+      const next = this.getFocusedTriangle();
+      if (next) captureTriangleStamp(next);
+    }
     this.renderInspectorUi();
+  }
+
+  handleTriangleToolAction(worldX: number, worldY: number): boolean {
+    if (!isTriangleEditorTool()) return false;
+    const tileX = Math.floor(worldX / TILE_SIZE);
+    const tileY = Math.floor(worldY / TILE_SIZE);
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return true;
+    const clicked = this.editRuntime.findPlacedObjectAt(
+      worldX,
+      worldY,
+      (placed) => isTrianglePieceObjectId(placed.id),
+    );
+    if (editorState.trianglePaintMode) {
+      if (clicked?.instanceId) this.editRuntime.applyTriangleStamp(clicked.instanceId);
+      this.triangleStatusText = triangleStampStatus();
+      this.renderInspectorUi();
+      return true;
+    }
+    if (clicked?.instanceId) {
+      this.pinInspector('triangle', clicked.instanceId);
+      captureTriangleStamp(clicked);
+      this.triangleStatusText = null;
+      this.renderInspectorUi();
+      return true;
+    }
+    const placed = this.editRuntime.handleObjectPlace(worldX, worldY, tileX, tileY);
+    this.handleObjectPlaced(placed);
+    return true;
+  }
+
+  private renderTriangleToolPanel(render: (state: EditorInspectorState) => void): void {
+    if (editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle') {
+      this.pinnedInspector = null;
+    }
+    const focused = this.getFocusedTriangle();
+    if (focused && !editorState.trianglePaintMode) {
+      const state = buildTriangleInspectorState(focused, this.triangleStatusText);
+      if (state) { render(state); return; }
+    }
+    render(buildTriangleStampInspectorState(this.triangleStatusText ?? triangleStampStatus()));
   }
 
   private setFocusedBallFlag(apply: (instanceId: string) => boolean): void {
@@ -1322,16 +1358,14 @@ export class EditorInspectorController {
   }
 
   private getFocusedBall(): PlacedObject | null {
-    if (this.pinnedInspector && this.pinnedInspector.kind !== 'ball') return null;
-    const id = this.pinnedInspector?.kind === 'ball' ? this.pinnedInspector.instanceId : this.focusedBallInstanceId;
-    const focused = this.editRuntime.getPlacedObjectByInstanceId(id);
+    if (this.pinnedInspector?.kind !== 'ball') return null;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(this.pinnedInspector.instanceId);
     return focused && isRollingBallObjectId(focused.id) ? focused : null;
   }
 
   private getFocusedTriangle(): PlacedObject | null {
-    if (this.pinnedInspector && this.pinnedInspector.kind !== 'triangle') return null;
-    const id = this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : this.focusedTriangleInstanceId;
-    const focused = this.editRuntime.getPlacedObjectByInstanceId(id);
+    if (this.pinnedInspector?.kind !== 'triangle') return null;
+    const focused = this.editRuntime.getPlacedObjectByInstanceId(this.pinnedInspector.instanceId);
     return focused && isTrianglePieceObjectId(focused.id) ? focused : null;
   }
 

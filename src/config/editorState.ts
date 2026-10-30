@@ -9,6 +9,10 @@ import {
 } from '../weather/model';
 import { getTilesetByKey, isSpecialTilesetGid } from './tilesets';
 import {
+  DEFAULT_TRIANGLE_FILL,
+  DEFAULT_TRIANGLE_STROKE,
+} from './trianglePiece';
+import {
   TILE_FLIP_X_FLAG,
   TILE_FLIP_Y_FLAG,
   type DecodedTileDataValue,
@@ -31,6 +35,11 @@ export interface EditorState {
   rectOutline: boolean;
   ellipseOutline: boolean;
   lineCurve: boolean;
+  trianglePaintMode: boolean;
+  triangleStampFill: string;
+  triangleStampStroke: string;
+  triangleStampFlipX: boolean;
+  triangleStampFlipY: boolean;
   randomizeBrushSize: RandomizeBrushSize;
   scrambleBrushSize: RandomizeBrushSize;
   pencilBrushSize: RandomizeBrushSize;
@@ -97,6 +106,11 @@ export const editorState: EditorState = {
   rectOutline: false,
   ellipseOutline: false,
   lineCurve: false,
+  trianglePaintMode: false,
+  triangleStampFill: DEFAULT_TRIANGLE_FILL,
+  triangleStampStroke: DEFAULT_TRIANGLE_STROKE,
+  triangleStampFlipX: false,
+  triangleStampFlipY: false,
   randomizeBrushSize: 3,
   scrambleBrushSize: 3,
   pencilBrushSize: 1,

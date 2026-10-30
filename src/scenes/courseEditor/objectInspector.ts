@@ -11,6 +11,9 @@ import {
   canPlacedObjectBePressurePlateTarget,
   canPlacedObjectTriggerOtherObjects,
   canPlacedObjectUseObjectLink,
+  TILE_SIZE,
+  ROOM_WIDTH,
+  ROOM_HEIGHT,
   editorState,
   getObjectById,
   isMovingPlatformEndpointObjectId,
@@ -33,12 +36,15 @@ import { hitsRoomVideoAnchor, isRoomVideoLinkTarget, roomVideoAnchorPoint, roomV
 import type { EditorEditRuntime } from '../editor/editRuntime';
 import type { EditorInspectorState } from '../editor/uiBridge';
 import { isRollingBallObjectId } from '../../config/rollingBall';
-import { isTrianglePieceObjectId } from '../../config/trianglePiece';
+import { isTrianglePieceObjectId, parseHexColor, DEFAULT_TRIANGLE_FILL, DEFAULT_TRIANGLE_STROKE } from '../../config/trianglePiece';
+import { isTriangleEditorTool } from '../editor/editorToolSelection';
+import { captureTriangleStamp, triangleStampStatus } from '../editor/triangleStamp';
 import {
   buildBallInspectorState,
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
   buildTriangleInspectorState,
+  buildTriangleStampInspectorState,
   createEmptyCourseInspectorState,
   getContainerAcceptedContentsLabel,
   getContainerName,
@@ -279,15 +285,33 @@ export class CourseEditorObjectInspectorController {
   }
 
   setFocusedTriangleFill(color: string): void {
-    this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, color, null));
+    editorState.triangleStampFill = parseHexColor(color, editorState.triangleStampFill || DEFAULT_TRIANGLE_FILL);
+    if (!editorState.trianglePaintMode) {
+      this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, editorState.triangleStampFill, null));
+      return;
+    }
+    this.renderInspectorUi();
   }
 
   setFocusedTriangleStroke(color: string): void {
-    this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, null, color));
+    editorState.triangleStampStroke = parseHexColor(color, editorState.triangleStampStroke || DEFAULT_TRIANGLE_STROKE);
+    if (!editorState.trianglePaintMode) {
+      this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleColors(id, null, editorState.triangleStampStroke));
+      return;
+    }
+    this.renderInspectorUi();
   }
 
-  flipFocusedTriangle(axis: 'x' | 'y'): void {
-    this.editFocusedUtility('triangle', (runtime, id) => runtime.flipTriangle(id, axis));
+  setTriangleOrientation(flipX: boolean, flipY: boolean): void {
+    editorState.triangleStampFlipX = flipX;
+    editorState.triangleStampFlipY = flipY;
+    if (!editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle') {
+      this.editFocusedUtility('triangle', (runtime, id) => runtime.setTriangleOrientation(id, flipX, flipY));
+      const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+      if (ref) captureTriangleStamp(ref.placed);
+      return;
+    }
+    this.renderInspectorUi();
   }
 
   private editFocusedUtility(
@@ -333,7 +357,31 @@ export class CourseEditorObjectInspectorController {
     this.pressurePlateStatusText = null;
   }
 
+  handleTriangleToolAction(slice: CourseInspectorRoomSlice, worldX: number, worldY: number): boolean {
+    if (!isTriangleEditorTool()) return false;
+    const tileX = Math.floor((worldX - slice.origin.x) / TILE_SIZE);
+    const tileY = Math.floor((worldY - slice.origin.y) / TILE_SIZE);
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) return true;
+    const triangle = slice.runtime.findPlacedObjectAt(worldX, worldY, (placed) => isTrianglePieceObjectId(placed.id));
+    if (editorState.trianglePaintMode) {
+      if (triangle?.instanceId) slice.runtime.applyTriangleStamp(triangle.instanceId);
+      this.renderInspectorUi();
+      return true;
+    }
+    if (triangle?.instanceId) {
+      this.clearTransientState();
+      this.pinInspector('triangle', triangle.instanceId);
+      captureTriangleStamp(triangle);
+      this.renderInspectorUi();
+      return true;
+    }
+    const placed = slice.runtime.handleObjectPlace(worldX, worldY, tileX, tileY);
+    this.handleObjectPlaced(placed);
+    return true;
+  }
+
   handleUtilityPrimaryAction(slice: CourseInspectorRoomSlice, worldX: number, worldY: number): boolean {
+    if (isTriangleEditorTool()) return this.handleTriangleToolAction(slice, worldX, worldY);
     const triangle = slice.runtime.findPlacedObjectAt(worldX, worldY, (placed) => isTrianglePieceObjectId(placed.id));
     if (triangle?.instanceId) {
       this.clearTransientState();
@@ -363,6 +411,7 @@ export class CourseEditorObjectInspectorController {
   handleObjectPlaced(placed: PlacedObject | null): boolean {
     if (placed?.instanceId && (isTrianglePieceObjectId(placed.id) || isRollingBallObjectId(placed.id))) {
       this.clearTransientState();
+      if (isTrianglePieceObjectId(placed.id)) captureTriangleStamp(placed);
       this.pinInspector(isTrianglePieceObjectId(placed.id) ? 'triangle' : 'ball', placed.instanceId);
       this.renderInspectorUi();
       return true;
@@ -1241,6 +1290,17 @@ export class CourseEditorObjectInspectorController {
     const hiddenState = createEmptyCourseInspectorState();
     if (editorState.isPlaying) {
       render(hiddenState);
+      return;
+    }
+
+    if (isTriangleEditorTool()) {
+      if (editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle') this.pinnedInspector = null;
+      if (this.pinnedInspector?.kind === 'triangle' && !editorState.trianglePaintMode) {
+        const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+        const state = ref ? buildTriangleInspectorState(ref.placed) : null;
+        if (state) { render(state); return; }
+      }
+      render(buildTriangleStampInspectorState(triangleStampStatus()));
       return;
     }
 

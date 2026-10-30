@@ -666,10 +666,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     });
     this.triangleHandles = new TriangleHandleController({
       selected: () => this.triangleHandleGeometry(this.inspectorController.getPinnedTriangleId()),
-      pick: (worldX, worldY) => {
-        const placed = this.editRuntime.findPlacedObjectAt(worldX, worldY, (candidate) => isTrianglePieceObjectId(candidate.id));
-        return placed?.instanceId ? this.triangleHandleGeometry(placed.instanceId) : null;
-      },
       hitRadius: () => Math.max(8, 10 / Math.max(editorState.zoom, 0.25)),
       begin: (instanceId) => { this.editRuntime.beginTriangleDrag(instanceId); },
       apply: (instanceId, next) => { this.editRuntime.applyTriangleDrag(instanceId, next); },
@@ -689,6 +685,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       handleMusicPointerUp: (pointer) => this.handleMusicPointerUp(pointer),
       updateMusicCursorHighlight: (graphics) => this.updateMusicCursorHighlight(graphics),
       handleObjectModePrimaryAction: (pointer) => this.handleObjectModePrimaryAction(pointer),
+      handleTriangleToolAction: (worldX, worldY) => this.inspectorController.handleTriangleToolAction(worldX, worldY),
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
       handleObjectPlace: (pointer) => this.handleObjectPlace(pointer),
@@ -1045,8 +1042,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       onSetFocusedBallPushable: (enabled) => this.inspectorController.setFocusedBallPushable(enabled),
       onSetFocusedTriangleFill: (color) => this.inspectorController.setFocusedTriangleFill(color),
       onSetFocusedTriangleStroke: (color) => this.inspectorController.setFocusedTriangleStroke(color),
-      onFlipFocusedTriangleX: () => this.inspectorController.flipFocusedTriangle('x'),
-      onFlipFocusedTriangleY: () => this.inspectorController.flipFocusedTriangle('y'),
+      onSetTriangleOrientation: (flipX, flipY) => this.inspectorController.setTriangleOrientation(flipX, flipY),
     });
 
     this.createBackground();

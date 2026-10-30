@@ -17,6 +17,7 @@ interface EyeDropperWindow {
 export class EditorColorPopover {
   private hsv = { h: 0, s: 0, v: 1 };
   private openTarget: ((hex: string) => void) | null = null;
+  private anchor: HTMLElement | null = null;
 
   constructor(
     private readonly elements: EditorColorPopoverElements,
@@ -33,6 +34,11 @@ export class EditorColorPopover {
       this.hsv.v = 1 - clamp01((event.clientY - rect.top) / rect.height);
       this.emit();
     };
+    const dismissOutside = (event: PointerEvent) => {
+      if (!shouldDismissColorPopover(event.target, popover, this.anchor)) return;
+      this.close();
+    };
+    const keepInside = (event: PointerEvent) => event.stopPropagation();
     square?.addEventListener('pointerdown', pickFromSquare);
     hue?.addEventListener('input', () => {
       this.hsv.h = Number(hue.value) || 0;
@@ -47,30 +53,42 @@ export class EditorColorPopover {
     dropper?.addEventListener('click', () => {
       void this.sampleScreen();
     });
+    popover?.addEventListener('pointerdown', keepInside);
+    const doc = popover?.ownerDocument ?? (typeof document === 'undefined' ? null : document);
+    doc?.addEventListener('pointerdown', dismissOutside, true);
     if (square) cleanup.push(() => square.removeEventListener('pointerdown', pickFromSquare));
-    if (popover) popover.addEventListener('pointerdown', (event) => event.stopPropagation());
+    if (popover) cleanup.push(() => popover.removeEventListener('pointerdown', keepInside));
+    if (doc) cleanup.push(() => doc.removeEventListener('pointerdown', dismissOutside, true));
     paint();
   }
 
   open(anchor: HTMLElement, hex: string, onColor: (hex: string) => void): void {
     const popover = this.elements.popover;
     if (!popover) return;
+    if (!popover.classList.contains('hidden') && this.anchor === anchor) {
+      this.close();
+      return;
+    }
+    this.anchor = anchor;
     this.openTarget = onColor;
     this.hsv = hexToHsv(normalizeHex(hex) ?? '#FFFFFF');
     popover.classList.remove('hidden');
-    const parent = popover.offsetParent as HTMLElement | null;
-    const parentRect = parent?.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
-    if (parentRect) {
-      popover.style.left = `${anchorRect.left - parentRect.left}px`;
-      popover.style.top = `${anchorRect.bottom - parentRect.top + 6}px`;
-    }
+    const width = popover.offsetWidth || 184;
+    const left = Math.min(
+      Math.max(8, anchorRect.left),
+      Math.max(8, (popover.ownerDocument.defaultView?.innerWidth ?? 800) - width - 8),
+    );
+    popover.style.position = 'fixed';
+    popover.style.left = `${left}px`;
+    popover.style.top = `${anchorRect.bottom + 6}px`;
     this.paint();
   }
 
   close(): void {
     this.elements.popover?.classList.add('hidden');
     this.openTarget = null;
+    this.anchor = null;
   }
 
   private emit(): void {
@@ -121,6 +139,22 @@ export class EditorColorPopover {
       // The eyedropper dismisses when the user presses Escape.
     }
   }
+}
+
+export function shouldDismissColorPopover(
+  target: EventTarget | null,
+  popover: HTMLElement | null | undefined,
+  anchor: HTMLElement | null | undefined,
+): boolean {
+  if (!popover || popover.classList.contains('hidden')) return false;
+  if (!isDomNode(target)) return true;
+  if (popover.contains(target)) return false;
+  if (anchor?.contains(target)) return false;
+  return true;
+}
+
+function isDomNode(value: EventTarget | null): value is Node {
+  return Boolean(value && typeof (value as Node).nodeType === 'number');
 }
 
 function clamp01(value: number): number {

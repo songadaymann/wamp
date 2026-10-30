@@ -8,11 +8,15 @@ import {
 } from '../../../config/rollingBall';
 import {
   dragTriangleHandle as dragHandle,
+  evaluateFlatWalk as flatWalk,
   evaluateSlopeWalk as slopeWalk,
   isSteepTriangle as steep,
   slopeSlideVelocity,
   steepSlopeMotion,
+  applyTriangleStampOrientation,
   triangleEdges,
+  triangleHandleMotion,
+  triangleHandlePoints,
   triangleVertices,
   uphillTravelCorrection,
 } from '../../../config/trianglePiece';
@@ -222,6 +226,65 @@ describe('rolling ball and triangle helpers', () => {
       verticalVelocity: 0,
       horizontalIntent: 1,
       deltaSeconds: 1 / 60,
+    })).toBeNull();
+  });
+
+  it('stands on the flat top of a downward triangle like a platform', () => {
+    expect(flatWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: 32,
+      feetX: 16,
+      feetY: 32,
+      verticalVelocity: 80,
+    })).toMatchObject({ supported: true, feetY: 32 });
+    expect(flatWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: -32,
+      legY: 32,
+      feetX: -16,
+      feetY: 34,
+      verticalVelocity: 0,
+    })).toMatchObject({ supported: true, feetY: 32 });
+    expect(slopeWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: 32,
+      feetX: 16,
+      feetY: 32,
+      verticalVelocity: 0,
+      horizontalIntent: 0,
+      deltaSeconds: 1 / 60,
+    })).toBeNull();
+    expect(flatWalk({
+      anchorX: 0,
+      anchorY: 64,
+      legX: 32,
+      legY: -32,
+      feetX: 16,
+      feetY: 64,
+      verticalVelocity: 0,
+    })).toBeNull();
+    expect(flatWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: 32,
+      feetX: 16,
+      feetY: 24,
+      verticalVelocity: -80,
+    })).toBeNull();
+    expect(flatWalk({
+      anchorX: 0,
+      anchorY: 32,
+      legX: 32,
+      legY: 32,
+      feetX: 40,
+      feetY: 32,
+      verticalVelocity: 0,
     })).toBeNull();
   });
 
@@ -443,18 +506,72 @@ describe('rolling ball and triangle helpers', () => {
     expect(seated.vy).toBeGreaterThan(80);
   });
 
-  it('snaps a hypotenuse drag to one grid axis', () => {
+  it('rolls a grounded ball sideways when the player lands on its edge', () => {
+    const floor: SolidRect = { left: 0, right: 160, top: 48, bottom: 80, vx: 0, vy: 0, kind: 'tile' };
+    const land = (side: -1 | 1) => {
+      const ball = createBallState(80, 33, settingsFromGraphic('basic'));
+      const centerX = 80 + side * 12;
+      const actor = {
+        left: centerX - 5,
+        right: centerX + 5,
+        top: 0,
+        bottom: 26,
+        vx: 0,
+        vy: 280,
+        mass: 1,
+      };
+      const result = stepRollingBalls({
+        balls: [ball],
+        deltaSeconds: 1 / 60,
+        gravityX: 0,
+        gravityY: 1,
+        gravityAccel: 700,
+        maxSpeed: 500,
+        inWater: false,
+        solids: [floor],
+        triangles: [],
+        actors: [actor],
+      });
+      return { ball, actor: result.actorCorrections[0] };
+    };
+    const fromRight = land(1);
+    expect(fromRight.ball.vx).toBeLessThan(-30);
+    expect(fromRight.actor.dx).toBeCloseTo(0, 0);
+    expect(fromRight.actor.dy).toBeLessThan(0);
+    expect(fromRight.actor.dvx).toBeCloseTo(0, 0);
+    expect(fromRight.ball.y).toBeLessThan(36);
+    const fromLeft = land(-1);
+    expect(fromLeft.ball.vx).toBeGreaterThan(30);
+    expect(fromLeft.actor.dx).toBeCloseTo(0, 0);
+    expect(fromLeft.actor.dy).toBeLessThan(0);
+  });
+
+  it('moves the vertical side left or right and leaves the hypotenuse without a handle', () => {
     const moved = dragHandle(
       { anchorX: 0, anchorY: 32, legX: 32, legY: -32 },
-      'hypotenuse',
-      20,
-      4,
+      'verticalSide',
+      8,
+      16,
       0,
-      0,
+      16,
     );
+    expect(moved.legX).toBe(16);
+    expect(moved.anchorX).toBe(16);
     expect(moved.legY).toBe(-32);
-    expect(Math.abs(moved.legX)).toBeGreaterThanOrEqual(16);
-    expect(moved.legX % 16).toBe(0);
+    const points = triangleHandlePoints(0, 32, 32, -32);
+    expect(points.map((point) => point.id)).toEqual([
+      'anchor',
+      'horizontalCorner',
+      'verticalCorner',
+      'horizontalSide',
+      'verticalSide',
+    ]);
+    expect(triangleHandleMotion('anchor')).toBe('move');
+    expect(triangleHandleMotion('verticalCorner')).toBe('vertical');
+    expect(triangleHandleMotion('horizontalSide')).toBe('vertical');
+    expect(triangleHandleMotion('verticalSide')).toBe('horizontal');
+    expect(triangleHandleMotion('horizontalCorner')).toBe('horizontal');
+    expect(applyTriangleStampOrientation(48, -64, true, true)).toEqual({ legX: -48, legY: 64 });
   });
 
   it('keeps more speed on ice than on ordinary ground, and less when the surface is sticky', () => {
