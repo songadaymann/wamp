@@ -261,14 +261,6 @@ export class EditorMusicPatternController {
     return this.getDisplayPattern().pitchMode;
   }
 
-  getKeyTonic(): RoomMusicKeyTonic {
-    return this.getDisplayPattern().keyTonic;
-  }
-
-  getKeyMode(): RoomMusicKeyMode {
-    return this.getDisplayPattern().keyMode;
-  }
-
   getActiveOctaveShift(): number | null {
     if (this.activeInstrumentTab === 'drums') {
       return null;
@@ -280,16 +272,6 @@ export class EditorMusicPatternController {
 
   getActiveInstrumentMix(): RoomPatternInstrumentMixSettings {
     return this.getDisplayPattern().mix[this.activeInstrumentTab];
-  }
-
-  getActiveCellCount(): number {
-    const pattern = this.getDisplayPattern();
-    if (this.activeInstrumentTab === 'drums') {
-      return ROOM_PATTERN_DRUM_ROWS.reduce((count, row) => count + pattern.tabs.drums[row.id].length, 0);
-    }
-
-    const instrumentId = this.activeInstrumentTab as RoomPatternTonalInstrumentId;
-    return pattern.tabs[instrumentId].steps.filter((rowIndex) => rowIndex !== null).length;
   }
 
   hasClipboardData(): boolean {

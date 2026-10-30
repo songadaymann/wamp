@@ -33,15 +33,6 @@ export function isCyberLetterBrushId(brushId: string): brushId is CyberLetterBru
   return (CYBER_LETTER_BRUSH_IDS as readonly string[]).includes(brushId);
 }
 
-/** Names for brushes that are not letter-matched. Kept here so labels stay consistent. */
-export const CYBER_V2_BRUSH_IDS = [
-  ...CYBER_LETTER_BRUSH_IDS,
-  'cyber.fence',
-  'cyber.rubble',
-  'cyber.support',
-] as const;
-export type CyberV2BrushId = typeof CYBER_V2_BRUSH_IDS[number];
-
 /**
  * A: exterior. Faces empty space, or a brush outside the letter set (Fence, Rubble, Support).
  *     Only A may touch a void, and a void may only touch A.

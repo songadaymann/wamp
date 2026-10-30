@@ -81,28 +81,6 @@
     gap: 10px;
   }
 
-  .profile-stats-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
-    border: 1px solid rgba(243, 238, 226, 0.08);
-    border-radius: 12px;
-    background: rgba(var(--wamp-white-rgb), 0.03);
-  }
-
-  .profile-stats-label {
-    color: var(--text-muted);
-    font-size: var(--ui-text-small, 10px);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .profile-stats-value {
-    color: var(--text);
-    font-size: var(--ui-text-body, 13px);
-  }
-
   .sign-text-modal-panel {
     width: min(560px, calc(100vw - 24px));
   }

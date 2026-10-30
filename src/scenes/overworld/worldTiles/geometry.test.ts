@@ -4,14 +4,12 @@ import {
   WORLD_TILE_IMAGE_WIDTH,
   WORLD_TILE_OVERLAP,
   floorDivide,
-  getPixelsPerGameTile,
   getRoomsPerWorldTile,
   getWorldTileCorePlacement,
   getWorldTileChildren,
   getWorldTileParent,
   roomToWorldTileCoordinate,
   worldRectToTileBounds,
-  worldTileToRoomBounds,
 } from './geometry';
 import type { WorldTileAddress, WorldTileLevel } from './types';
 
@@ -31,15 +29,6 @@ describe('world tile geometry', () => {
     expect(roomToWorldTileCoordinate(2, -5, 4)).toEqual({ level: 2, x: -2, y: 1 });
     expect(roomToWorldTileCoordinate(3, -3, 2)).toEqual({ level: 3, x: -2, y: 1 });
     expect(roomToWorldTileCoordinate(4, -1, 1)).toEqual({ level: 4, x: -1, y: 1 });
-  });
-
-  it('round-trips tile room bounds at negative coordinates', () => {
-    expect(worldTileToRoomBounds({ level: 1, x: -2, y: -1 })).toEqual({
-      minRoomX: -16,
-      maxRoomX: -9,
-      minRoomY: -8,
-      maxRoomY: -1,
-    });
   });
 
   it('maps negative children to their signed parent and enumerates all four siblings', () => {
@@ -73,8 +62,6 @@ describe('world tile geometry', () => {
   it('exposes the five canonical scales and extruded image dimensions', () => {
     expect([0, 1, 2, 3, 4].map((level) => getRoomsPerWorldTile(level as WorldTileLevel)))
       .toEqual([16, 8, 4, 2, 1]);
-    expect([0, 1, 2, 3, 4].map((level) => getPixelsPerGameTile(level as WorldTileLevel)))
-      .toEqual([1, 2, 4, 8, 16]);
     expect(WORLD_TILE_OVERLAP).toBe(1);
     expect([WORLD_TILE_IMAGE_WIDTH, WORLD_TILE_IMAGE_HEIGHT]).toEqual([642, 354]);
   });

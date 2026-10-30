@@ -1,6 +1,5 @@
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../../config';
 import type {
-  WorldRoomBounds,
   WorldTileAddress,
   WorldTileBounds,
   WorldTileCoordinate,
@@ -9,7 +8,6 @@ import type {
 
 export const WORLD_TILE_MIN_LEVEL: WorldTileLevel = 0;
 export const WORLD_TILE_MAX_LEVEL: WorldTileLevel = 4;
-export const WORLD_TILE_LEVELS: readonly WorldTileLevel[] = [0, 1, 2, 3, 4];
 export const WORLD_TILE_CONTENT_WIDTH = 640;
 export const WORLD_TILE_CONTENT_HEIGHT = 352;
 export const WORLD_TILE_OVERLAP = 1;
@@ -34,10 +32,6 @@ export function floorDivide(dividend: number, divisor: number): number {
 
 export function getRoomsPerWorldTile(level: WorldTileLevel): number {
   return 2 ** (WORLD_TILE_MAX_LEVEL - level);
-}
-
-export function getPixelsPerGameTile(level: WorldTileLevel): number {
-  return 2 ** level;
 }
 
 export function getWorldTileSpan(level: WorldTileLevel): { width: number; height: number } {
@@ -70,18 +64,6 @@ export function roomToWorldTileCoordinate(
     level,
     x: floorDivide(roomX, roomSpan),
     y: floorDivide(roomY, roomSpan),
-  };
-}
-
-export function worldTileToRoomBounds(tile: WorldTileCoordinate): WorldRoomBounds {
-  const roomSpan = getRoomsPerWorldTile(tile.level);
-  const minRoomX = tile.x * roomSpan;
-  const minRoomY = tile.y * roomSpan;
-  return {
-    minRoomX,
-    maxRoomX: minRoomX + roomSpan - 1,
-    minRoomY,
-    maxRoomY: minRoomY + roomSpan - 1,
   };
 }
 

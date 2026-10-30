@@ -21,18 +21,15 @@ export type RoomPatternPitchMode = typeof ROOM_PATTERN_PITCH_MODES[number];
 export const ROOM_PATTERN_BPM = 120;
 export const ROOM_PATTERN_MIN_BPM = 60;
 export const ROOM_PATTERN_MAX_BPM = 200;
-export const ROOM_PATTERN_TEMPO_STEP = 5;
 export const ROOM_PATTERN_SWING_PERCENT = 50;
 export const ROOM_PATTERN_MIN_SWING_PERCENT = 50;
 export const ROOM_PATTERN_MAX_SWING_PERCENT = 100;
-export const ROOM_PATTERN_SWING_STEP = 1;
 export const ROOM_PATTERN_BEATS_PER_BAR = 4;
 export const ROOM_PATTERN_STEPS_PER_BEAT = 4;
 export const ROOM_PATTERN_STEP_COUNT = 32;
 export const ROOM_PATTERN_BAR_COUNT = 2;
 export const ROOM_PATTERN_GRID_ROWS = 22;
 export const ROOM_PATTERN_ACTIVE_STEP_COLUMNS = 32;
-export const ROOM_PATTERN_MARGIN_COLUMNS = 8;
 export const ROOM_PATTERN_DRUM_GRID_START_ROW = 6;
 export const ROOM_PATTERN_MIN_OCTAVE_SHIFT = -2;
 export const ROOM_PATTERN_MAX_OCTAVE_SHIFT = 2;
@@ -827,24 +824,6 @@ export function getPatternRowNote(
   };
 }
 
-export function getPatternMidiNote(
-  rowIndex: number,
-  midi: number,
-): RoomPatternRowNote | null {
-  const normalizedRow = normalizeRowIndex(rowIndex);
-  const normalizedMidi = normalizeMidi(midi);
-  if (normalizedRow === null || normalizedMidi === null) {
-    return null;
-  }
-
-  return {
-    rowIndex: normalizedRow,
-    midi: normalizedMidi,
-    frequencyHz: midiToFrequency(normalizedMidi),
-    label: noteLabelFromMidi(normalizedMidi),
-  };
-}
-
 export function getPatternStepMidi(
   pattern: Pick<RoomPatternPlaybackSequence, 'pitchMode' | 'keyTonic' | 'keyMode' | 'octaveShift' | 'tabs'>,
   instrumentId: RoomPatternTonalInstrumentId,
@@ -869,27 +848,6 @@ export function getPatternStepMidi(
     pattern.keyTonic,
     pattern.keyMode,
   )?.midi ?? null;
-}
-
-export function getPatternStepNote(
-  pattern: Pick<RoomPatternPlaybackSequence, 'pitchMode' | 'keyTonic' | 'keyMode' | 'octaveShift' | 'tabs'>,
-  instrumentId: RoomPatternTonalInstrumentId,
-  stepIndex: number,
-): RoomPatternRowNote | null {
-  const midi = getPatternStepMidi(pattern, instrumentId, stepIndex);
-  if (midi === null) {
-    return null;
-  }
-
-  const rowIndex = findPatternRowIndexForMidi(
-    instrumentId,
-    midi,
-    pattern.pitchMode,
-    pattern.octaveShift[instrumentId],
-    pattern.keyTonic,
-    pattern.keyMode,
-  );
-  return rowIndex === null ? null : getPatternMidiNote(rowIndex, midi);
 }
 
 export function getPatternRowLabel(

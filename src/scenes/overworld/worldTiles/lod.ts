@@ -97,13 +97,6 @@ export function selectWorldTileDisplayLevel(input: {
   };
 }
 
-export function getWorldTileLodThresholds(): {
-  promote: readonly number[];
-  demote: readonly number[];
-} {
-  return { promote: PROMOTE_THRESHOLDS, demote: DEMOTE_THRESHOLDS };
-}
-
 function assertValidZoom(zoom: number): void {
   if (!Number.isFinite(zoom) || zoom <= 0) {
     throw new RangeError(`Zoom must be a positive finite number; received ${zoom}.`);

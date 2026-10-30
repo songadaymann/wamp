@@ -1,3 +1,4 @@
+import { createDefaultRoomMusic } from '../music/testing/legacyStemFixture';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -11,7 +12,6 @@ vi.mock('../ui/modalState', async (importOriginal) => ({
 }));
 
 import { OverworldPlayScene } from './OverworldPlayScene';
-import { createDefaultRoomMusic } from '../music/model';
 import { createDefaultRoomSnapshot } from '../persistence/roomModel';
 import { createInspectInputController } from './overworld/composition/ui';
 import { OverworldSceneFlowController } from './overworld/flow';

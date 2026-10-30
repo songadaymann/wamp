@@ -21,14 +21,6 @@ const ROOMS_PER_AXIS_BY_LEVEL: Readonly<Record<WorldTileLevel, number>> = {
   4: 1,
 };
 
-const PIXELS_PER_GAME_TILE_BY_LEVEL: Readonly<Record<WorldTileLevel, number>> = {
-  0: 1,
-  1: 2,
-  2: 4,
-  3: 8,
-  4: 16,
-};
-
 export interface WorldTileAddress {
   rendererVersion: string;
   level: WorldTileLevel;
@@ -123,10 +115,6 @@ export function getWorldTileRoomsPerAxis(level: WorldTileLevel): number {
   return ROOMS_PER_AXIS_BY_LEVEL[level];
 }
 
-export function getWorldTilePixelsPerGameTile(level: WorldTileLevel): number {
-  return PIXELS_PER_GAME_TILE_BY_LEVEL[level];
-}
-
 export function floorDivide(value: number, divisor: number): number {
   if (!Number.isSafeInteger(value) || !Number.isSafeInteger(divisor) || divisor <= 0) {
     throw new RangeError('World tile floor division requires a safe integer and a positive divisor.');
@@ -192,18 +180,6 @@ export function getWorldTileSiblingClosure(
 ): WorldTileCoordinate[] {
   const parent = getWorldTileParent(tile);
   return parent ? getWorldTileChildren(parent) : [{ ...tile }];
-}
-
-export function getWorldTileAncestors(
-  tile: Pick<WorldTileCoordinate, 'level' | 'x' | 'y'>,
-): WorldTileCoordinate[] {
-  const ancestors: WorldTileCoordinate[] = [];
-  let cursor = getWorldTileParent(tile);
-  while (cursor) {
-    ancestors.push(cursor);
-    cursor = getWorldTileParent(cursor);
-  }
-  return ancestors;
 }
 
 export function worldTileCoordinateKey(

@@ -1,5 +1,4 @@
 import {
-  enumerateWorldTileBounds,
   getWorldTileParent,
   worldRectToTileBounds,
 } from './geometry';
@@ -16,15 +15,6 @@ export const WORLD_TILE_GUARD_RATIO = 0.25;
 export const WORLD_TILE_DIRECTIONAL_GUARD_RATIO = 0.5;
 export const WORLD_TILE_VELOCITY_PROJECTION_MS = 250;
 export const WORLD_TILE_MANIFEST_MAX_AXIS = 16;
-
-export interface WorldTileViewportCoverage {
-  visibleRect: WorldRect;
-  guardRect: WorldRect;
-  visibleTiles: WorldTileAddress[];
-  guardTiles: WorldTileAddress[];
-  siblingClosure: WorldTileAddress[];
-  ancestorClosure: WorldTileAddress[];
-}
 
 export function clampWorldTileManifestBounds(input: {
   visible: WorldTileBounds;
@@ -146,42 +136,6 @@ export function calculateDirectionalGuardRect(input: {
   }
 
   return rect;
-}
-
-export function calculateWorldTileViewportCoverage(input: {
-  rendererVersion: string;
-  level: WorldTileLevel;
-  viewport: WorldRect;
-  velocity: WorldVelocity;
-}): WorldTileViewportCoverage {
-  const guardRect = calculateDirectionalGuardRect({
-    viewport: input.viewport,
-    velocity: input.velocity,
-  });
-  const visibleTiles = enumerateWorldTileBounds(
-    input.rendererVersion,
-    input.level,
-    worldRectToTileBounds(input.level, input.viewport),
-  );
-  const guardTiles = enumerateWorldTileBounds(
-    input.rendererVersion,
-    input.level,
-    worldRectToTileBounds(input.level, guardRect),
-  );
-  const siblingClosure = getWorldTileSiblingClosure(visibleTiles);
-  const ancestorClosure = getWorldTileAncestorClosure([
-    ...visibleTiles,
-    ...siblingClosure,
-  ]);
-
-  return {
-    visibleRect: { ...input.viewport },
-    guardRect,
-    visibleTiles,
-    guardTiles,
-    siblingClosure,
-    ancestorClosure,
-  };
 }
 
 export function getWorldTileSiblingClosure(addresses: readonly WorldTileAddress[]): WorldTileAddress[] {

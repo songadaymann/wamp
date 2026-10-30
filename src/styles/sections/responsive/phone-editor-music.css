@@ -83,7 +83,6 @@
     gap: 10px;
   }
 
-  body[data-device-class='phone'][data-app-mode='editor'] .editor-music-key-grid,
   body[data-device-class='phone'][data-app-mode='editor'] .editor-music-arrangement-row {
     grid-template-columns: 1fr;
   }

@@ -47,7 +47,6 @@ export type SfxCue =
   | 'bounce'
   | 'jump'
   | 'land'
-  | 'footstep'
   | 'ladder-climb'
   | 'respawn'
   | 'warp'
@@ -85,7 +84,7 @@ const GLOBAL_SFX_VOLUME_MULTIPLIER = 0.55;
 /** Effects sounding at once; a cue past this is skipped. */
 const MAX_SFX_VOICES = 48;
 // Played most in the first seconds of a run; loaded right after the first gesture (F023).
-const HOT_GAMEPLAY_CUES: readonly SfxCue[] = ['jump', 'land', 'footstep', 'collect', 'player-hurt'];
+const HOT_GAMEPLAY_CUES: readonly SfxCue[] = ['jump', 'land', 'collect', 'player-hurt'];
 /** The other short effects load in the background after that; the large progression stingers load when first played. */
 const BACKGROUND_WARM_DELAY_MS = 1_500;
 /**
@@ -99,7 +98,7 @@ const MAX_PENDING_CUES = 16;
 const FEEDBACK_CUES: ReadonlySet<SfxCue> = new Set<SfxCue>([
   'ui-click', 'ui-hover', 'ui-disabled', 'collect', 'collect-fruit', 'collect-gem', 'collect-key',
   'enemy-kill', 'enemy-hit', 'player-hurt', 'sword-slash', 'gun-shot', 'bullet-impact', 'bounce',
-  'jump', 'land', 'footstep', 'ladder-climb', 'pressure-plate-down', 'switch-block-toggle',
+  'jump', 'land', 'ladder-climb', 'pressure-plate-down', 'switch-block-toggle',
   'chat-send', 'music-slot-clear', 'music-slot-clear-all', 'music-phrase-place',
 ]);
 
@@ -274,11 +273,7 @@ const SFX_CUES: Record<SfxCue, CueConfig> = {
     playbackRate: 0.95,
     cooldownMs: 70,
   },
-  footstep: {
-    path: 'assets/sfx/movement/footstep.wav',
-    volume: 0.28,
-    cooldownMs: 90,
-  },
+
   'ladder-climb': {
     path: 'assets/sfx/movement/ladder-climb.wav',
     volume: 0.26,

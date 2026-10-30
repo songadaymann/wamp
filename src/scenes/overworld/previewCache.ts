@@ -19,14 +19,6 @@ import {
   type StreamingRoomCandidate,
 } from './worldStreamingModel';
 
-// Compatibility re-exports while callers migrate to the streaming model.
-export {
-  isStreamingRoomCandidateRenderable,
-  type PlayableRoomSource,
-  type RenderableRoom,
-  type StreamingRoomCandidate,
-} from './worldStreamingModel';
-
 /**
  * The world summary and the room snapshot endpoint no longer agree about the
  * exact current preview. Callers must refresh the summary before retrying the

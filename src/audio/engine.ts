@@ -181,11 +181,6 @@ export class AudioEngine {
     return this.getContext() ? this.musicBus : null;
   }
 
-  /** The music bus if the context exists; never creates it. */
-  peekMusicBus(): GainNode | null {
-    return this.musicBus;
-  }
-
   getSfxBus(): GainNode | null {
     return this.getContext() ? this.sfxBus : null;
   }

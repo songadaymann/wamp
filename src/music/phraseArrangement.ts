@@ -39,10 +39,6 @@ export type RoomPhraseArrangementSlotCount = typeof ROOM_PHRASE_ARRANGEMENT_SLOT
 export const ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT: RoomPhraseArrangementSlotCount = 8;
 export const ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT = ROOM_PATTERN_BAR_COUNT;
 export const ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT = ROOM_PATTERN_STEP_COUNT;
-export const ROOM_PHRASE_ARRANGEMENT_BAR_COUNT =
-  ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT * ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT;
-export const ROOM_PHRASE_ARRANGEMENT_STEP_COUNT =
-  ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT * ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT;
 
 export type RoomPhraseArrangementLaneSlots = (string | null)[];
 export type RoomPhraseArrangementSlots = Record<RoomPatternInstrumentId, RoomPhraseArrangementLaneSlots>;

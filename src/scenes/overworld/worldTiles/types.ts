@@ -69,13 +69,6 @@ export interface WorldTileBounds {
   maxTileY: number;
 }
 
-export interface WorldRoomBounds {
-  minRoomX: number;
-  maxRoomX: number;
-  minRoomY: number;
-  maxRoomY: number;
-}
-
 export interface WorldRect {
   left: number;
   top: number;

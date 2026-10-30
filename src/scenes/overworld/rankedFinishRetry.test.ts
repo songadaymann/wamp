@@ -121,8 +121,8 @@ describe('signed-in expanded room clear retry (F351)', () => {
     const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
       getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
       getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(), countRoomObjectsByCategory: () => 0,
-      setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-      setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud,
+      setActiveCourseRun: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+      setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud,
       buildVerificationTrace: () => structuredClone(trace), clearVerificationTrace,
     });
     run = controller.createCourseRunState(course); run.expandedRoomId = 'expanded'; run.expandedRoomVersion = 1;

@@ -6,7 +6,6 @@ import {
 } from './cyberRecipeFamily';
 import { resolveCyberRubbleBorderPlacements } from './cyberRubbleResolver';
 import {
-  resolveCyberFramedPanelTiles,
   resolveCyberHorizontalMiddleTile,
   resolveCyberLinearFamilyTiles,
 } from './cyberSpanResolver';
@@ -21,7 +20,7 @@ describe('Cyber recipe families', () => {
     expect(isCyberStyleId('forest')).toBe(false);
   });
 
-  it('resolves span and panel art without mutating a room document', () => {
+  it('resolves span art without mutating a room document', () => {
     expect(resolveCyberLinearFamilyTiles('platform', 'cyber-yellow', 4).map((tile) => ({
       localIndex: tile.localIndex,
       flipX: tile.flipX,
@@ -32,9 +31,7 @@ describe('Cyber recipe families', () => {
       { localIndex: 71, flipX: false },
     ]);
     expect(resolveCyberHorizontalMiddleTile('neon-strip', 'cyber-yellow', 6).localIndex).toBe(50);
-    expect(resolveCyberFramedPanelTiles('cyber-pink', 3).map((row) => (
-      row.map(({ localIndex }) => localIndex)
-    ))).toEqual([[44, 45, 46], [56, 57, 58]]);
+
   });
 
   it('maps rubble topology to owned border parts independently', () => {

@@ -22,17 +22,12 @@ import {
   addOwnedOutput,
   clearOwnerSuppressions,
   inBounds,
-  type Bounds,
   type CyberSemanticEntry,
 } from './cyberRecipeState';
 import {
   contiguousRuns,
   extendRunThroughLegacy,
 } from './cyberSemanticResolver';
-
-export function recipeBounds(recipe: SmartRecipeInstanceState): Bounds | null {
-  return recipe.sourceCells.length > 0 ? recipe.bounds : null;
-}
 function recipeEntries(recipe: SmartRecipeInstanceState): CyberSemanticEntry[] {
   return recipe.sourceCells.map(({ layer, x, y }) => ({
     semanticKey: smartSemanticCellKey(layer, x, y),

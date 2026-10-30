@@ -1,9 +1,9 @@
+import { createDefaultRoomMusic } from '../../../music/testing/legacyStemFixture';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fixture, run, NOW } from '../activity/testDatabase';
 import { attachRoomInsights, loadInsightDeathMap, loadInsightSummaries } from './store';
 import { ensureInsightRoomFacts, insightEquivalentVersions, previousInsightLayout } from './lineage';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
-import { createDefaultRoomMusic } from '../../../music/model';
 const opened:ReturnType<typeof fixture>[]=[];
 const setup=()=>{const f=fixture();opened.push(f);return f;};
 afterEach(()=>{for(const f of opened.splice(0))f.sqlite.close();vi.restoreAllMocks();});
