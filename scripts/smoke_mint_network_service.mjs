@@ -77,7 +77,7 @@ try {
   const sellerCookie = await createSession({ DB: db }, 'p1'), outsiderCookie = await createSession({ DB: db }, 'p2');
   const resetOwner = () => db.prepare('UPDATE rooms SET minted_owner_wallet_address=?,claimer_user_id=? WHERE id=?').bind(oldWallet, 'p1', '0,0').run();
   const owner = () => db.prepare('SELECT minted_owner_wallet_address,claimer_user_id FROM rooms WHERE id=?').bind('0,0').first();
-  const refresh = (name = 'base', session = cookie, origin = 'https://wamp.land') => fetch(new URL('/api/rooms/0,0/ownership/refresh', urls[name]), { method: 'POST', headers: { Origin: origin, ...(session ? { Cookie: `ep_session=${session}` } : {}) } });
+  const refresh = (name = 'base', session = cookie, origin = 'https://wamp.land', crypto = true) => fetch(new URL('/api/rooms/0,0/ownership/refresh' + (crypto ? '?crypto=1' : ''), urls[name]), { method: 'POST', headers: { Origin: origin, ...(session ? { Cookie: `ep_session=${session}` } : {}) } });
   for (const [name, session, origin, status] of [['missing', '', 'https://wamp.land', 401], ['missing', cookie, 'https://wamp.land', 503], ['disabled', cookie, 'https://wamp.land', 503], ['base', cookie, 'https://untrusted.example', 403]]) {
     const before = count(), response = await refresh(name, session, origin); assert.equal(response.status, status, await response.text()); assert.equal(count(), before); cases.push({ name: `ownership-${name}-gate-${status}`, status });
   }
@@ -86,6 +86,11 @@ try {
     assert.equal(response.status, 200, text); assert.equal(body.permissions.canSaveDraft, canSaveDraft); assert.equal(body.mintedOwnerWalletAddress, fixtures.FIXTURE_MINT_WALLET); assert.equal(body.claimerUserId, 'p1'); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert(!text.includes('private-sentinel'));
     assert.deepEqual(await owner(), { minted_owner_wallet_address: fixtures.FIXTURE_MINT_WALLET, claimer_user_id: 'p1' }); cases.push({ name: `ownership-${role}`, status: response.status });
   }
+  const redactedRefresh = await refresh('base', cookie, 'https://wamp.land', false);
+  const redacted = await redactedRefresh.json(); assert.equal(redactedRefresh.status, 200);
+  assert.equal(redacted.isProtected, true); assert.equal(redacted.permissions.canSaveDraft, true);
+  assert.deepEqual(Object.keys(redacted).filter(key => key.startsWith('minted')), []);
+  cases.push({ name: 'ownership-default-redacted-permission-preserved', status: 200 });
   await resetOwner(); const storedOwner = await owner(); providers.base.state.chainId = 84532;
   const mismatchedRefresh = await refresh(); assert.equal(mismatchedRefresh.status, 503, await mismatchedRefresh.text()); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-mismatch', status: 503 });
   providers.base.state.chainId = 8453; providerFailure = true; const failedRefresh = await refresh(), errorText = await failedRefresh.text(); assert.equal(failedRefresh.status, 503); assert(!errorText.includes('private-sentinel')); assert(!errorText.includes('private-provider-diagnostic-sentinel')); assert.deepEqual(await owner(), storedOwner); cases.push({ name: 'ownership-private-failure', status: 503 });

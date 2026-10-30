@@ -74,3 +74,16 @@ Evidence: /tmp/wamp-f479-check-final.log, /tmp/wamp-f479-check-pr.log,
 /tmp/wamp-f479-no-wallet-native-final.log, /tmp/wamp-f479-ownership-smoke-2.log,
 /tmp/wamp-f479-recovery-smoke-3.log and ignored output/f479-native/.
 Delivery requires PR checks and an independently verified production rollout.
+
+## Native service smoke contract correction
+
+The first PR run reached the standalone mint-network service smoke, whose owner
+assertion still read token fields from a default ownership-refresh response.
+The identical local failure reproduced at its owner-address assertion. Its
+metadata/owner cases now explicitly request crypto=1; their original assertions
+remain. A new default-refresh case checks that isProtected and edit permission
+remain while all minted* keys are absent. The complete native Base/Sepolia,
+network/provider/auth/origin/owner/artwork service smoke passes, as does lint.
+Evidence: /tmp/wamp-f479-ci-mint-job.log and /tmp/wamp-f479-mint-service-2.log.
+This changes the smoke contract only; application source remains the locally
+verified version. All checks must pass again on the corrected PR head.
