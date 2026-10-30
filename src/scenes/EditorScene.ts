@@ -4,7 +4,7 @@ import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
 import { TriangleHandleController } from './editor/triangleHandles';
-import { isTrianglePieceObjectId, normalizePlacedTriangle } from '../config/trianglePiece';
+import { normalizePlacedTriangle } from '../config/trianglePiece';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { getAuthDebugState } from '../auth/client';
 import {

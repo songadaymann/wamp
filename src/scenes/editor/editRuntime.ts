@@ -2282,17 +2282,17 @@ export class EditorEditRuntime {
       policePatrolShoots: isPoliceEnemyObjectId(editorState.selectedObjectId)
         ? DEFAULT_POLICE_PATROL_SHOOTS
         : null,
-      npcMode: isNpcObjectId(editorState.selectedObjectId) ? DEFAULT_NPC_MODE : null,
-      npcPushable: isNpcObjectId(editorState.selectedObjectId) ? false : null,
-      npcCanJumpFall: isNpcObjectId(editorState.selectedObjectId) ? false : null,
-      npcPlayerCollision: isNpcObjectId(editorState.selectedObjectId)
+      npcMode: isNpcObjectId(objectConfig.id) ? DEFAULT_NPC_MODE : null,
+      npcPushable: isNpcObjectId(objectConfig.id) ? false : null,
+      npcCanJumpFall: isNpcObjectId(objectConfig.id) ? false : null,
+      npcPlayerCollision: isNpcObjectId(objectConfig.id)
         ? DEFAULT_NPC_PLAYER_COLLISION
         : null,
-      npcFriendlyFire: isNpcObjectId(editorState.selectedObjectId)
+      npcFriendlyFire: isNpcObjectId(objectConfig.id)
         ? DEFAULT_NPC_FRIENDLY_FIRE
         : null,
-      npcName: isNpcObjectId(editorState.selectedObjectId) ? objectConfig.name : null,
-      npcDefeatMode: isNpcObjectId(editorState.selectedObjectId)
+      npcName: isNpcObjectId(objectConfig.id) ? objectConfig.name : null,
+      npcDefeatMode: isNpcObjectId(objectConfig.id)
         ? DEFAULT_NPC_DEFEAT_MODE
         : null,
       ballGraphic: ball?.graphicId ?? null,

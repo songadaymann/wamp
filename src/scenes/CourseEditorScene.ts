@@ -13,7 +13,7 @@ import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecy
 import Phaser from 'phaser';
 import { CourseTouchController } from './editor/courseTouch';
 import { TriangleHandleController } from './editor/triangleHandles';
-import { isTrianglePieceObjectId, normalizePlacedTriangle } from '../config/trianglePiece';
+import { normalizePlacedTriangle } from '../config/trianglePiece';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
