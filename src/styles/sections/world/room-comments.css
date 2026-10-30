@@ -49,16 +49,6 @@
     color: #6d5a34;
     font-size: var(--ui-text-small, 11px);
   }
-
-  #bottom-bar .world-footer-settings {
-    background: var(--wamp-sky);
-    color: var(--wamp-black);
-  }
-
-  #bottom-bar .world-footer-settings:hover {
-    background: var(--wamp-sky);
-    filter: brightness(1.06);
-  }
   body[data-device-class='phone'][data-app-mode='play-world'] .room-comment-composer {
     left: calc(8px + var(--safe-left));
     right: calc(8px + var(--safe-right));

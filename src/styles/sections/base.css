@@ -883,7 +883,6 @@
     display: flex;
   }
 
-  .auth-header,
   .auth-row {
     display: flex;
     align-items: stretch;
@@ -891,25 +890,9 @@
     flex-wrap: wrap;
   }
 
-  .auth-header {
-    justify-content: space-between;
-  }
-
-  .auth-copy {
-    display: none;
-  }
-
   #auth-panel.auth-panel-guest #menu-body {
     border-color: var(--auth-retro-blue);
     box-shadow: 4px 4px 0 var(--auth-retro-shadow);
-  }
-
-  #auth-panel.auth-panel-guest .auth-copy {
-    display: none;
-  }
-
-  .auth-menu-action-row {
-    width: 100%;
   }
 
   .auth-menu-action-btn {
@@ -960,21 +943,10 @@
     fill: currentColor;
   }
 
-  .auth-title {
-    color: var(--auth-retro-ink);
-    font-size: var(--ui-text-body, 12px);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-
   .auth-identity {
     color: var(--auth-retro-ink);
     font-size: var(--ui-text-small, 11px);
     text-align: right;
-  }
-
-  .auth-identity-clickable {
-    cursor: pointer;
   }
 
   .profile-trigger {

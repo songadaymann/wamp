@@ -17,8 +17,7 @@
 
   #leaderboard-modal .leaderboard-primary,
   #profile-modal .profile-room-card-title,
-  #profile-modal .profile-display-name,
-  #profile-modal .profile-stats-value {
+  #profile-modal .profile-display-name {
     color: var(--wamp-ink);
     font-family: var(--font-ui);
   }
@@ -37,8 +36,7 @@
     -webkit-font-smoothing: none;
   }
 
-  #leaderboard-modal .leaderboard-rank,
-  #profile-modal .profile-stats-label {
+  #leaderboard-modal .leaderboard-rank {
     color: var(--wamp-sky-deep);
     font-family: var(--font-label);
     font-size: var(--ui-text-small, 8px);
@@ -50,8 +48,7 @@
   #leaderboard-modal .leaderboard-secondary,
   #profile-modal .profile-room-card-meta,
   #profile-modal .profile-room-card-quality-label,
-  #profile-modal .profile-overview-bio,
-  #profile-modal .profile-stats-value {
+  #profile-modal .profile-overview-bio {
     color: var(--wamp-sky-deep);
     font-family: var(--font-ui);
     font-size: var(--ui-text-body, 12px);

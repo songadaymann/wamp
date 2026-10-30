@@ -43,7 +43,6 @@
   #playlist-intro-modal .history-modal-kicker,
   #playlist-intro-modal .history-modal-title,
   #playlist-intro-modal .history-modal-meta,
-  #playlist-intro-modal .playlist-intro-control,
   #playlist-intro-modal .playlist-intro-level-card {
     color: var(--wamp-ink);
     font-family: var(--font-ui);
@@ -129,40 +128,6 @@
     background: #c2bbb6;
     color: #6d6768;
     box-shadow: none;
-  }
-
-  #playlist-intro-modal .playlist-intro-controls {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  #playlist-intro-modal .playlist-intro-control {
-    display: grid;
-    gap: 6px;
-    min-height: 78px;
-    align-content: center;
-    padding: 10px 8px;
-    background: var(--wamp-paper);
-    border: 2px solid var(--wamp-sky-deep);
-    box-shadow: var(--shadow-2);
-    font-size: var(--ui-text-body, 12px);
-    line-height: 1.2;
-    text-align: center;
-  }
-
-  #playlist-intro-modal .playlist-intro-control .controls-key {
-    justify-self: center;
-    max-width: 100%;
-    min-width: 0;
-    padding: 5px 7px 4px;
-    overflow-wrap: anywhere;
-    background: var(--wamp-sky);
-    color: var(--wamp-ink);
-    border-color: var(--wamp-ink);
-    box-shadow: var(--shadow-2);
-    font-size: var(--ui-text-small, 9px);
-    line-height: 1.15;
   }
 
   #playlist-intro-modal .playlist-intro-level-grid {
@@ -351,14 +316,9 @@
     #playlist-modal .playlist-remove-room-btn {
       justify-self: stretch;
     }
-
-    #playlist-intro-modal .playlist-intro-controls {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
   }
 
   @media (max-width: 440px) {
-    #playlist-intro-modal .playlist-intro-controls,
     #playlist-intro-modal .playlist-intro-level-grid {
       grid-template-columns: 1fr;
     }

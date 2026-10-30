@@ -110,8 +110,7 @@
   }
 
   #about-modal .history-modal-meta,
-  #about-modal .about-copy-status,
-  #about-modal .about-modal-note {
+  #about-modal .about-copy-status {
     color: var(--wamp-ink);
     font-family: var(--font-ui);
     font-size: var(--ui-text-small, 11px);
@@ -337,17 +336,6 @@
     color: var(--accent-cool);
   }
 
-  .course-room-row {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1.4fr) auto auto;
-    align-items: center;
-  }
-
-  .course-room-row-selected {
-    border-color: rgba(60, 143, 255, 0.5);
-    background: rgba(60, 143, 255, 0.08);
-  }
-
   .about-list {
     display: flex;
     flex-direction: column;
@@ -357,10 +345,6 @@
     color: var(--text);
     font-size: var(--ui-text-body, 12px);
     line-height: 1.6;
-  }
-
-  .about-modal-note code {
-    color: var(--accent-warm);
   }
 
   .controls-section {

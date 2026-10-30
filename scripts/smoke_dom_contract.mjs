@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import postcss from 'postcss';
 
 const indexPath = resolve(process.cwd(), 'index.html');
 const html = readFileSync(indexPath, 'utf8');
@@ -358,6 +359,43 @@ for (const file of smokeFiles) {
 }
 const danglingSmokeLookups = [...smokeIdLookups].map(([id, files]) => `#${id} (${[...files].join(', ')})`);
 
+// F254: conservative source-token evidence catches dead selector names without rejecting
+// generated classes such as `prefix-${state}`. A class can share an existing ID's name,
+// so explicitly keep the retired playlist classes out despite the live controls ID.
+const selectorSource = [
+  ...clientFiles,
+  ...readdirSync(process.cwd()).filter(name => name.endsWith('.html')).map(name => resolve(process.cwd(), name)),
+].map(file => readFileSync(file, 'utf8')).join('\n');
+const selectorTokens = new Set(selectorSource.match(/[A-Za-z_][\w-]*/g));
+const dynamicSelectorPrefixes = [...selectorTokens].filter(token => token.length > 2 && token.endsWith('-'));
+const retiredSelectorClasses = new Set(['playlist-intro-control', 'playlist-intro-controls']);
+const deadSelectorErrors = [];
+let checkedStyleSelectors = 0;
+function collectStyleFiles(dir) {
+  return readdirSync(dir).flatMap(name => {
+    const path = join(dir, name);
+    return statSync(path).isDirectory() ? collectStyleFiles(path) : path.endsWith('.css') ? [path] : [];
+  });
+}
+for (const file of collectStyleFiles(resolve(process.cwd(), 'src/styles'))) {
+  postcss.parse(readFileSync(file, 'utf8'), { from: file }).walkRules(rule => {
+    for (const selector of postcss.list.comma(rule.selector)) {
+      checkedStyleSelectors += 1;
+      // Attribute values can contain dots and hashes that are not class/ID selectors.
+      const names = [...selector.replace(/\[[^\]]*\]/g, '').matchAll(/([.#])([A-Za-z_][\w-]*)/g)];
+      const absent = names.filter(([, kind, name]) => (
+        (kind === '.' && retiredSelectorClasses.has(name))
+        || (!selectorTokens.has(name) && !dynamicSelectorPrefixes.some(prefix => name.startsWith(prefix)))
+      )).map(([, kind, name]) => kind + name);
+      const retiredEditorLayout = /\[data-app-mode\s*=\s*['"]?editor['"]?\]/.test(selector)
+        && /:not\(\s*\[data-editor-dock-shell\s*=\s*['"]?true['"]?\]\s*\)/.test(selector);
+      if (absent.length || retiredEditorLayout) {
+        deadSelectorErrors.push(`${relative(process.cwd(), file)}:${rule.source.start.line}: ${selector} (${retiredEditorLayout ? 'retired non-dock editor layout' : 'no source evidence: ' + absent.join(', ')})`);
+      }
+    }
+  });
+}
+
 if (
   duplicateIds.size > 0
   || danglingLookups.length > 0
@@ -366,6 +404,7 @@ if (
   || stalePresent.length > 0
   || earlyWorldTileBootstrapContractErrors.length > 0
   || editorDockContractErrors.length > 0
+  || deadSelectorErrors.length > 0
 ) {
   if (duplicateIds.size > 0) {
     console.error('Duplicate DOM IDs:');
@@ -409,9 +448,13 @@ if (
       console.error(`  ${error}`);
     }
   }
+  if (deadSelectorErrors.length > 0) {
+    console.error('Dead style selectors:');
+    for (const error of deadSelectorErrors.sort()) console.error(`  ${error}`);
+  }
   process.exit(1);
 }
 
 const requiredCount = Object.values(requiredIdsByController)
   .reduce((total, requiredIds) => total + requiredIds.length, 0);
-console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked, ${lookedUpIds.size} looked-up IDs resolved, ${smokeIdsChecked.size} smoke-script IDs resolved.`);
+console.log(`DOM contract smoke passed: ${ids.size} IDs found, ${requiredCount} required IDs checked, ${lookedUpIds.size} looked-up IDs resolved, ${smokeIdsChecked.size} smoke-script IDs resolved, ${checkedStyleSelectors} style selectors checked.`);

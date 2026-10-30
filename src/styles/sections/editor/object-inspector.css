@@ -42,11 +42,6 @@
     text-align: center;
   }
 
-  .selection-info {
-    color: var(--accent-cool);
-    font-size: var(--ui-text-small, 10px);
-  }
-
   /* Object Category Tabs */
 
   .object-category-tabs,
@@ -274,8 +269,7 @@
 
   /* ── Palette Tooltips ── */
 
-  #palette-tooltip,
-  #object-tooltip {
+  #palette-tooltip {
     position: fixed;
     z-index: var(--z-editor-tooltip);
     width: max-content;
@@ -293,8 +287,7 @@
     transition: opacity 0.12s;
   }
 
-  #palette-tooltip.visible,
-  #object-tooltip.visible {
+  #palette-tooltip.visible {
     opacity: 1;
   }
 
@@ -327,10 +320,6 @@
     max-width: 56px;
     max-height: 40px;
     object-fit: contain;
-  }
-
-  .palette-hint-accent {
-    color: var(--accent-soft);
   }
 
   .object-selection-details {
@@ -540,9 +529,5 @@
 
   .editor-inspector > :is(#swordsman-objective-panel, #police-behavior-panel) {
     backdrop-filter: none;
-  }
-
-  #music-summary {
-    line-height: 1.45;
   }
 }
