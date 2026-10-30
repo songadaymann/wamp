@@ -41,7 +41,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F381 — World review statuses/reasons, saved-draft synchronization and decision emails; PR #348, CI/live verified.
 - [x] F253 — accessible Clear Layer and retire hidden editor UI; PR #349, CI/native/live frontend verified.
 - [x] F479 — wallet-only Protected sort and appropriate non-wallet payloads; PR #350, CI/native/live verified.
-- [ ] F439 — fixed guest emotes and classroom-scoped student emotes.
+- [x] F439 — fixed guest/classroom emotes; PR #351, native/CI/live verified.
 - [ ] F262 — idle/gate hidden Camera Tuner while preserving CI coverage.
 - [ ] F264 — remove retired difficulty-vote, Play.fun sync and attribution tables.
 - [ ] F265 — retire unused admin APIs/reporting and avoid server self-fetch.
@@ -59,7 +59,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **15/28 delivered**, and Round 2 is **87/248**.
+This goal is **16/28 delivered**, and Round 2 is **88/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -134,3 +134,15 @@ protection/permissions and separate cached summaries; desktop/phone Explore has 
 Protected sort while disconnected, zero page errors. Older tabs need a refresh.
 No migration or production player/room/email/transaction tests. Goal15/28 and
 Round2 87/248. F439 classroom emotes are next; F436 content approval remains pending.
+
+F439 delivered through PR351, tested a212bcbf, merge31cd727e. All28 reported
+checks pass: Quality40988214787 and Nightly40988214844 attempt2. A transient
+Vines scroll timeout passed unchanged locally and on the failed-job rerun; no
+assertions were relaxed. Guarded full release Pages6487d3e9, Worker c36fbaed at100%,
+production smoke/health and exact entrymain-tuvoKYGL/editor/runtime/styles pass.
+Live desktop/phone generated controls and guest text state verify with presence
+transport blocked; no emotes sent to production players. Native classroom/public
+isolation, real session tokens, ban/suspension/reconnect and all8 browser cases
+prove the sending/receiving flows. No migration or production room/player/email/tx
+writes. Goal16/28; Round2 88/248. F262/F264/F265/F261 are prepared separately for
+the next cleanup PR; all12 remaining items stay open. F436 content approval pending.

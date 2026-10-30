@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 87 of 248 done.**
+**Progress: 88 of 248 done.**
 
 ## How to use this file
 
@@ -349,7 +349,7 @@ Each October feature is good on its own. Most of these ideas connect them, so th
 - [ ] **F430** Finding a Lost Song gives '+5 XP' and nothing musical: let each find add that room's song to your profile Mixtape · medium impact · medium effort
 - [ ] **F442** No badges reward the daily and weekly loops, flawless clears, or exploring many builders' rooms · low impact · small effort
 - [ ] **F443** Room of the Day says 'Beaten 3 of the last 7' but gives no way to play the 4 you missed · low impact · small effort
-- [ ] **F439** Guests and classroom players can't communicate in the world at all: add a small set of emotes · low impact · small effort
+- [x] **F439** Guests and classroom players can't communicate in the world at all: add a small set of emotes · low impact · small effort — **done 2026-10-29** ([PR #351](https://github.com/songadaymann/wamp/pull/351)): fixed wave/heart/GG for guests and same-class students, signed classroom scope and bans preserved; native D1/WebSocket/eight browser cases, all28 CI, guarded live Worker/Pages and exact assets verified. [Receipt](wamp-f439-fixed-classroom-emotes-2026-10-29.md).
 - [ ] **F437** Duck the room music under reward stings so level-ups and #1 moments land · low impact · small effort
 - [ ] **F438** Empty rooms feel dead even though WAMP has recordings of everyone who played them: show recent runs as faint ghosts · low impact · medium effort
 - [ ] **F440** Keep downloaded rooms on the device so returning players don't re-download their neighbourhood · low impact · medium effort

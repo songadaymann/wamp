@@ -8,6 +8,7 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 
 | Date | Items | PR | Receipt | Summary |
 |---|---|---|---|---|
+| 2026-10-29 | F439 | [#351](https://github.com/songadaymann/wamp/pull/351) | [receipt](docs/review/wamp-f439-fixed-classroom-emotes-2026-10-29.md) | Add fixed guest and classroom-only student emotes with signed scope, moderation and accessible controls |
 | 2026-10-29 | F479 | [#350](https://github.com/songadaymann/wamp/pull/350) | [receipt](docs/review/wamp-f479-wallet-room-presentation-2026-10-29.md) | Require wallet connection for Protected sorting and crypto details; preserve permissions and recovery |
 | 2026-10-29 | F253 | [#349](https://github.com/songadaymann/wamp/pull/349) | [receipt](docs/review/wamp-f253-accessible-clear-layer-2026-10-29.md) | Give Clear Layer a live desktop/phone home and retire obsolete editor UI; keyboard, Undo and live assets verified |
 | 2026-10-29 | F381 | [#348](https://github.com/songadaymann/wamp/pull/348) | [receipt](docs/review/wamp-f381-world-publication-feedback-2026-10-29.md) | Show World review outcomes and reasons, sync submitted drafts and send decision emails; verified live |
@@ -87,4 +88,3 @@ History up to 2026-10-23, in long form: [docs/history/feature-ledger-2026.md](do
 | 2026-10-17 | F114 | [#231](https://github.com/songadaymann/wamp/pull/231) | [receipt](docs/review/wamp-button-roles-2026-10-17.md) | Consistent button roles in rooms and both editors, with a clear Publish |
 | 2026-10-16 | F112 | [#229](https://github.com/songadaymann/wamp/pull/229)–[#230](https://github.com/songadaymann/wamp/pull/230) | [receipt](docs/review/wamp-navigation-2026-10-16.md) | Room actions, browse navigation and the account menu are separate; the phone editor menu clears its toolbar |
 | 2026-10-16 | F148 | [#227](https://github.com/songadaymann/wamp/pull/227) | [receipt](docs/review/wamp-gamepad-restart-2026-10-16.md) | Standard gamepad controls, and R restarts |
-| 2026-10-16 | F108 | [#226](https://github.com/songadaymann/wamp/pull/226) | [receipt](docs/review/wamp-room-cards-2026-10-16.md) | Play Room is the main room-card action |
