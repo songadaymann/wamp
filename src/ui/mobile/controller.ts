@@ -450,6 +450,7 @@ export class MobileUiController {
   }
 
   private syncMobileCameraTunerValue(): void {
+    if (this.elements.mobileCameraTuner?.classList.contains('hidden') !== false) return;
     const valueElement = this.elements.mobileCameraTunerValue;
     if (!valueElement) {
       return;

@@ -37,9 +37,8 @@ const RETIRED_SOURCE_NAME = [112, 108, 97, 121, 102, 117, 110].reduce(
 const LEGACY_GENERATED_USER_LINKS_TABLE = `${RETIRED_SOURCE_NAME}_user_links`;
 
 const INTERNAL_TABLES = new Set(['_cf_KV', 'd1_migrations']);
-// Nothing reads or writes these any more (F264); they stay in the schema until a drop migration.
-// F264 took the first two out of the snapshot routes' table list (room_version_attribution was
-// never in it), so the refresh leaves all three alone instead of trying to import them.
+// F264 drops these tables. Keep the skip list for older source databases/snapshots:
+// never re-import retired rows or require the new target to retain their schema.
 const RETIRED_TABLES = new Set([
   `${RETIRED_SOURCE_NAME}_point_sync`,
   'room_difficulty_votes',
@@ -152,7 +151,7 @@ async function main() {
   summary.targetTables = targetTables;
 
   const targetTableSet = new Set(targetTables);
-  const missingInTarget = sourceTables.filter((table) => !targetTableSet.has(table));
+  const missingInTarget = sourceTables.filter((table) => !RETIRED_TABLES.has(table) && !targetTableSet.has(table));
   if (missingInTarget.length > 0) {
     throw new Error(
       `Target DB is missing source tables: ${missingInTarget.join(', ')}. Run migrations before refreshing safety.`

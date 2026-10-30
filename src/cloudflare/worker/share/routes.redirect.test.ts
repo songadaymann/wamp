@@ -3,8 +3,8 @@ import { resolveRequestedPublicUrl } from './routes';
 
 const shareUrl = (target: string) => new URL(`https://api.wamp.land/api/share/rooms/0,0?url=${encodeURIComponent(target)}`);
 
-describe('room share page ?url=', () => {
-  it('ignores links to other sites, so the page cannot be used as an open redirect', () => {
+describe('room share metadata ?url=', () => {
+  it('ignores links to other sites, so metadata cannot point at an unrelated site', () => {
     expect(resolveRequestedPublicUrl(shareUrl('https://example.com/phish'))).toBeNull();
     expect(resolveRequestedPublicUrl(shareUrl('https://wamp.land.evil.example/x'))).toBeNull();
     expect(resolveRequestedPublicUrl(shareUrl('javascript:alert(1)'))).toBeNull();

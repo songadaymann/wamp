@@ -102,11 +102,17 @@ describe('published room share metadata builder credit', () => {
     expect(resolveExpandedRoomAtCoordinates).not.toHaveBeenCalled();
   });
 
-  it.each(['GET', 'HEAD'])('escapes public builder names in the share HTML and retains %s behavior', async method => {
+  it.each(['GET', 'HEAD'])('redirects legacy pages to canonical frontend rooms without an HTML body (%s)', async method => {
     const response = await requestShare('', method);
-    expect(response.status).toBe(200);
-    const html = await response.text();
-    if (method === 'HEAD') expect(html).toBe('');
-    else expect(html).toContain('Whole Adventure by Farès Builder &lt;Public&gt; on WAMP');
+    expect(response.status).toBe(301);
+    expect(response.headers.get('Location')).toBe('https://wamp.land/r/12/-12');
+    expect(await response.text()).toBe('');
+  });
+
+  it.each(['https://example.test/phish', 'https://wamp.land/other', 'javascript:alert(1)'])('does not let page query input choose the redirect: %s', async candidate => {
+    const url = new URL('https://api.wamp.land/api/share/rooms/12%2C-12');
+    url.searchParams.set('url', candidate);
+    const response = await handleRoomShareRequest(new Request(url), url, env);
+    expect(response.headers.get('Location')).toBe('https://wamp.land/r/12/-12');
   });
 });

@@ -93,7 +93,6 @@ export interface WorldTileRendererEnv {
   WORLD_TILE_BROWSER: BrowserWorker;
   WORLD_TILE_RENDER_QUEUE: QueueProducer<unknown>;
   WORLD_TILES: R2Bucket;
-  ADMIN_API_KEY?: string;
   WORLD_TILE_ENVIRONMENT?: string;
   WORLD_TILE_GENERATION_ENABLED?: string;
   WORLD_TILE_LEASE_SECONDS?: string;

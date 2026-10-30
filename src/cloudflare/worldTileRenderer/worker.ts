@@ -12,7 +12,6 @@ import {
   type WorldTileRenderJob,
   type WorldTileRendererVersionRow,
 } from './contracts';
-import { collectUnreferencedWorldTileObjects } from './gc';
 import {
   acquireRenderLease,
   isCustomBackgroundApproved,
@@ -58,30 +57,9 @@ export const worldTileRendererWorker = {
           generationEnabled: worldTileGenerationEnabled(env),
         });
       }
-      if (request.method === 'GET' && url.pathname === '/api/admin/status') {
-        assertAdminAuthorized(request, env);
-        return jsonResponse({ ok: true, ...(await loadRendererStatus(env)) });
-      }
-      if (request.method === 'POST' && url.pathname === '/api/admin/repair') {
-        assertAdminAuthorized(request, env);
-        const repaired = await runRepair(env);
-        return jsonResponse({ ok: true, ...repaired });
-      }
-      if (request.method === 'POST' && url.pathname === '/api/admin/gc') {
-        assertAdminAuthorized(request, env);
-        const body = await parseJsonBody(request);
-        assertProductionGarbageCollectionConfirmed(request, env, body);
-        const result = await collectUnreferencedWorldTileObjects(env.DB, env.WORLD_TILES, {
-          dryRun: body.dryRun !== false,
-          maximumDeletes: readOptionalInteger(body.maximumDeletes),
-          maximumScanned: readOptionalInteger(body.maximumScanned),
-          minimumAgeDays: readOptionalInteger(body.minimumAgeDays),
-        });
-        return jsonResponse({ ok: true, ...result });
-      }
       return jsonResponse({ ok: false, error: 'Not found.' }, 404);
     } catch (error) {
-      return jsonResponse({ ok: false, error: formatError(error) }, statusForError(error));
+      return jsonResponse({ ok: false, error: formatError(error) }, 500);
     }
   },
 
@@ -468,37 +446,6 @@ async function runRepair(env: WorldTileRendererEnv): Promise<{ dispatched: numbe
   return { dispatched, expiredLeases };
 }
 
-async function loadRendererStatus(env: WorldTileRendererEnv): Promise<Record<string, unknown>> {
-  const [versions, tileCounts, outboxCounts] = await Promise.all([
-    env.DB.prepare(
-      `SELECT version, status, created_at, activated_at, retired_at
-       FROM world_tile_renderer_versions ORDER BY created_at DESC, version ASC LIMIT 20`
-    ).all(),
-    env.DB.prepare(
-      `SELECT
-         COUNT(*) AS total,
-         SUM(CASE WHEN ready_generation = desired_generation THEN 1 ELSE 0 END) AS ready,
-         SUM(CASE WHEN ready_generation IS NULL OR ready_generation < desired_generation THEN 1 ELSE 0 END) AS pending,
-         SUM(CASE WHEN lease_owner IS NOT NULL THEN 1 ELSE 0 END) AS leased,
-         SUM(CASE WHEN last_error IS NOT NULL THEN 1 ELSE 0 END) AS failed
-       FROM world_render_tiles`
-    ).first(),
-    env.DB.prepare(
-      `SELECT
-         SUM(CASE WHEN state = 'pending' THEN 1 ELSE 0 END) AS pending,
-         SUM(CASE WHEN state = 'dispatching' THEN 1 ELSE 0 END) AS dispatching,
-         SUM(CASE WHEN state = 'dispatched' THEN 1 ELSE 0 END) AS dispatched
-       FROM world_render_tile_outbox`
-    ).first(),
-  ]);
-  return {
-    generationEnabled: worldTileGenerationEnabled(env),
-    outbox: outboxCounts ?? {},
-    tiles: tileCounts ?? {},
-    versions: versions.results,
-  };
-}
-
 function parsePublishedSnapshot(raw: string, roomId: string, x: number, y: number): RoomSnapshot {
   let parsed: unknown;
   try {
@@ -607,56 +554,6 @@ function retryDelaySeconds(attempts: number): number {
   return RETRY_DELAYS_SECONDS[Math.min(Math.max(0, attempts - 1), RETRY_DELAYS_SECONDS.length - 1)];
 }
 
-async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
-  const contentType = request.headers.get('Content-Type')?.toLowerCase() ?? '';
-  if (!contentType.includes('application/json')) {
-    throw new HttpStatusError(415, 'Expected application/json.');
-  }
-  const parsed = await request.json();
-  if (!isRecord(parsed)) {
-    throw new HttpStatusError(400, 'Expected a JSON object.');
-  }
-  return parsed;
-}
-
-function assertAdminAuthorized(request: Request, env: WorldTileRendererEnv): void {
-  const expected = env.ADMIN_API_KEY?.trim();
-  if (!expected) {
-    throw new HttpStatusError(503, 'Renderer admin API is not configured.');
-  }
-  const authorization = request.headers.get('Authorization')?.trim() ?? '';
-  const bearer = authorization.toLowerCase().startsWith('bearer ')
-    ? authorization.slice(7).trim()
-    : '';
-  const provided = bearer || request.headers.get('X-Admin-Key')?.trim() || '';
-  if (provided !== expected) {
-    throw new HttpStatusError(401, 'Unauthorized.');
-  }
-}
-
-function assertProductionGarbageCollectionConfirmed(
-  request: Request,
-  env: WorldTileRendererEnv,
-  body: Record<string, unknown>
-): void {
-  if ((env.WORLD_TILE_ENVIRONMENT ?? '').trim().toLowerCase() !== 'production') {
-    return;
-  }
-  if (
-    body.confirmProduction !== true
-    || request.headers.get('X-WAMP-Confirm-Production') !== 'world-tile-gc'
-  ) {
-    throw new HttpStatusError(
-      409,
-      'Production garbage collection requires confirmProduction=true and X-WAMP-Confirm-Production: world-tile-gc.'
-    );
-  }
-}
-
-function readOptionalInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
-}
-
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -665,10 +562,6 @@ function jsonResponse(body: unknown, status = 200): Response {
       'Content-Type': 'application/json; charset=utf-8',
     },
   });
-}
-
-function statusForError(error: unknown): number {
-  return error instanceof HttpStatusError ? error.status : 500;
 }
 
 function formatError(error: unknown): string {
@@ -681,9 +574,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 class RetryableWorldTileError extends Error {}
 class WaitingForWorldTileChildrenError extends Error {}
-
-class HttpStatusError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message);
-  }
-}
