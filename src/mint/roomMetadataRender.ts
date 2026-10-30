@@ -1,12 +1,9 @@
 import { assetUrl } from '../assets/assetUrl';
 import {
-  BACKGROUND_GROUPS,
-  GAME_OBJECTS,
   ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
   ROOM_WIDTH,
-  TILESETS,
   TILE_SIZE,
   decodeTileDataValue,
   getObjectById,
@@ -82,14 +79,6 @@ export async function renderRoomSnapshotToCanvas(
 
   await drawRoomSnapshotToContext(context, snapshot, options);
   return canvas;
-}
-
-export async function renderWampMintedRoomToPngDataUrl(
-  payload: WampMintedRoomPayload,
-  options: MintedRoomRenderOptions = {}
-): Promise<string> {
-  const canvas = await renderWampMintedRoomToCanvas(payload, options);
-  return canvas.toDataURL('image/png');
 }
 
 export async function renderRoomSnapshotToPngDataUrl(
@@ -496,22 +485,4 @@ function loadAssetImage(assetPath: string): Promise<HTMLImageElement> {
   });
   imageCache.set(normalizedPath, pending);
   return pending;
-}
-
-export function warmRoomMetadataRenderAssetCache(): Promise<void> {
-  const paths = new Set<string>();
-
-  for (const tileset of TILESETS) {
-    paths.add(tileset.path);
-  }
-  for (const backgroundGroup of BACKGROUND_GROUPS) {
-    for (const layer of backgroundGroup.layers) {
-      paths.add(layer.path);
-    }
-  }
-  for (const objectConfig of GAME_OBJECTS) {
-    paths.add(objectConfig.path);
-  }
-
-  return Promise.all([...paths].map((path) => loadAssetImage(path))).then(() => undefined);
 }

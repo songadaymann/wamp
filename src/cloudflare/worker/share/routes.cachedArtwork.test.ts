@@ -31,11 +31,13 @@ const request = async (kind: string, method = 'GET') => {
 };
 
 describe('share routes use cached map artwork', () => {
-  it('advertises cached public art and real dimensions in metadata and HTML', async () => {
+  it('advertises cached art in metadata while legacy pages redirect to the frontend', async () => {
     expect(await (await request('meta')).json()).toMatchObject({ imageUrl: cached.url, imageWidth: 642, imageHeight: 354 });
-    const html = await (await request('')).text();
-    expect(html).toContain(cached.url);
-    expect(html).toContain('content="642"');
+    const redirect = await request('');
+    expect(redirect.status).toBe(301);
+    expect(redirect.headers.get('Location')).toBe('https://wamp.land/r/1/-2');
+    expect(await redirect.text()).toBe('');
+    expect(loadCachedShareArtwork).toHaveBeenCalledOnce();
     expect(renderRoomSharePreviewPng).not.toHaveBeenCalled();
   });
 
