@@ -76,3 +76,25 @@ all8 inventory/entry checks now pass. The final complete check including the new
 harness and registries passes745files/6276tests/all stages, boot669.5/670KB.
 Evidence: /tmp/wamp-f439-check-complete.log (terminal0). Native corrected fixture
 passes separately. All PR checks must pass again on this final head.
+
+## Nightly harness alignment
+
+Final ec864623 Quality run40986563454 passed all18 jobs, including maintained
+native emotes. The inventory update also triggered the full nightly matrix.
+Completed run40986563437 had exactly two failing smokes (plus its aggregate
+report): phone inspector and clear feedback. Other groups passed.
+
+The phone inspector registers a custom sprite through /src imports. Its nightly
+entry incorrectly used the built stack, which cannot serve TypeScript source.
+Using the existing Vite test server preserves all assertions; the exact nightly
+runner now passes all6 portrait/landscape/narrow room/Expanded scenarios (126s).
+The clear-feedback smoke clicked Keep Playing and then expected a replay of the
+original room, conflicting with delivered F429 navigation. Its desktop replay
+case now closes results, waits for Browse, and explicitly replays that room;
+phone cases still use Keep Playing. All4 profiles and the original second-clear
+celebration count pass (36s). No product assertions were removed.
+
+Evidence: /tmp/wamp-f439-nightly-editor-phone.log, nightly-play.log,
+nightly-inspector-local.log and nightly-clear-local.log; ignored nightly results.
+Both source/app boundaries remain unchanged. All checks must pass on the new
+combined head before release. F439 is still not delivered.

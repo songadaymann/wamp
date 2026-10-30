@@ -73,7 +73,7 @@ export const SMOKES = [
 
   // Nightly: editor-phone (long phone editor and physics runs).
   { file: 'smoke_editor_phone_dock.mjs', covers: 'Phone editor dock: libraries, pickers, More menu, swipe and tap selection', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
-  { file: 'smoke_editor_phone_inspector.mjs', covers: 'Phone inspector for plates, chests, enemies and NPCs, and Undo across cells', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
+  { file: 'smoke_editor_phone_inspector.mjs', covers: 'Phone inspector for plates, chests, enemies and NPCs, and Undo across cells', runs: 'nightly', group: 'editor-phone', server: 'vite-dev', args: ['{viteDev}'], timeoutMinutes: 15 },
   { file: 'smoke_physics_cadence.mjs', covers: 'Physics gives the same result at 30 to 240 Hz for nine movement fixtures', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
 
   // Nightly: editor-dock (the desktop editor suites; the dock smoke alone takes about 10 minutes).
