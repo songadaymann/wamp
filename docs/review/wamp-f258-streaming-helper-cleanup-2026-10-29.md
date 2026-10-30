@@ -29,3 +29,13 @@ live-construction.log, camera-desktop-2.log, camera-phone.log, types.log and
 shrink.log. Harness ignored under output/f258-native/.
 
 Full combined check, PR CI and live rollout remain before delivery.
+
+## Combined verification — 2026-10-30
+
+Integrated all5 cleanups on delivered main649a9f12. Full check passes746files/
+6271tests, one existing expected failure/two skips, all stages, boot662.1/670KB
+across16 files. Tighten four oversized-file limits to actual reduced line counts;
+the initial combined run caught the stale streaming pin before proceeding.
+Evidence: /tmp/wamp-client-final-five-check-final.log. Individual browser/CLI/
+algorithm proofs above remain valid. PR CI and live rollout still required;
+this item remains unchecked. No API/schema change in this batch.

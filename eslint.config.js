@@ -8,10 +8,10 @@ import tseslint from 'typescript-eslint';
 // fails `npm test` when a pin sits more than 25 lines above its file (F498).
 const MAX_LINES = 1500;
 const OVERSIZED_FILE_LINES = {
-  'src/scenes/OverworldPlayScene.ts': 5144,
-  'src/scenes/overworld/worldStreaming.ts': 5095,
+  'src/scenes/OverworldPlayScene.ts': 5141,
+  'src/scenes/overworld/worldStreaming.ts': 5065,
   'src/scenes/CourseEditorScene.ts': 2908,
-  'src/scenes/editor/editRuntime.ts': 3283,
+  'src/scenes/editor/editRuntime.ts': 3277,
   'src/scenes/overworld/liveObjects/swordsmanController.ts': 2596,
   'src/scenes/overworld/liveObjects.ts': 2341,
   'src/scenes/editor/uiBridge.ts': 2176,
@@ -23,7 +23,7 @@ const OVERSIZED_FILE_LINES = {
   'src/scenes/overworld/movementController.ts': 1627,
   'src/ui/setup/paletteController.ts': 1584,
   'src/ui/setup/profileModal.ts': 1553,
-  'src/scenes/editor/musicPatternEditor.ts': 1528,
+  'src/scenes/editor/musicPatternEditor.ts': 1514,
   'src/autotiling/solver.ts': 1503,
 };
 
