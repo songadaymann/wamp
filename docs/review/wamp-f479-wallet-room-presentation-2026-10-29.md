@@ -87,3 +87,18 @@ network/provider/auth/origin/owner/artwork service smoke passes, as does lint.
 Evidence: /tmp/wamp-f479-ci-mint-job.log and /tmp/wamp-f479-mint-service-2.log.
 This changes the smoke contract only; application source remains the locally
 verified version. All checks must pass again on the corrected PR head.
+
+## Protected discovery smoke contract correction
+
+When the initial run finished, its discovery smoke also failed at the old
+expectation that every visitor could select Protected. It now keeps the badge
+checks for everyone, verifies no Protected request while disconnected, and
+explicitly connects the isolated read-only SDK/auth fixture for the Protected
+list, goal-less inclusion and full queue assertions. The no-wallet case still
+plays a normal queue containing protected rooms. Expected queue coordinates are
+checked against the chosen real discovery entry. Native protection service26
+cases and desktop/narrow-phone/Safari-phone disconnected/connected scenarios
+pass; the normal two-step Collect & Lock/artwork success case also passes.
+Evidence: /tmp/wamp-f479-ci-failures.log, /tmp/wamp-f479-protection-service.log,
+/tmp/wamp-f479-protected-discovery-2.log, /tmp/wamp-f479-protected-discovery-touch.log
+and /tmp/wamp-f479-artwork-success.log. Application source is unchanged.

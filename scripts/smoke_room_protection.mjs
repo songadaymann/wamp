@@ -5,6 +5,7 @@ import { gunzipSync } from 'node:zlib';
 import './lib/mutedBrowsers.mjs';
 import { chromium, webkit } from 'playwright';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
+import { installReadOnlyWalletConnection } from './lib/connectedWalletFixture.mjs';
 import { installMobileSignedFixture } from './lib/mobileSignedFixture.mjs';
 
 const discoveryMode = process.argv.includes('--discovery');
@@ -28,6 +29,9 @@ for (const [device, engine, width, height, touch] of [
       const context = await browser.newContext({ viewport: { width, height }, isMobile: touch, hasTouch: touch });
       const api = createMobileInputRoomFixtures('scripts/fixtures/mobile-smoke-api.json.gz', `${output}/${name}-api.json.gz`);
       await api.install(context); await installMobileSignedFixture(context, { roomEditor: true });
+      const wallet = '0x' + '2'.repeat(40);
+      const walletModules = discoveryMode && gate === '1' ? await installReadOnlyWalletConnection(context, wallet) : [];
+      let expectedQueueStart = null;
       const local = new URL(base), cors = route => ({ 'access-control-allow-origin': route.request().headers().origin || local.origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' });
       const reply = (route, json, status = 200) => route.fulfill({ status, json, headers: cors(route) });
       if (local.hostname === '127.0.0.1') await context.routeWebSocket(u => u.hostname === local.hostname && u.port === local.port && u.pathname === '/', socket => socket.connectToServer());
@@ -63,7 +67,7 @@ for (const [device, engine, width, height, touch] of [
         }
         if (method === 'OPTIONS') return reply(r, {}, 204);
         if (discoveryMode && url.pathname === '/api/runs/start' && method === 'POST') {
-          const body = r.request().postDataJSON(); assert.equal(body.roomId, '0,0'); assert.deepEqual(body.roomCoordinates, { x: 0, y: 0 });
+          const body = r.request().postDataJSON(); assert(expectedQueueStart); assert.equal(body.roomId, expectedQueueStart.roomId); assert.deepEqual(body.roomCoordinates, expectedQueueStart.roomCoordinates);
           runStarts.push(body);
           return reply(r, { attemptId: 'isolated-protected-discovery-run', roomId: body.roomId, roomVersion: body.roomVersion,
             goalType: body.goal.type, startedAt: body.startedAt, userId: 'mobile-smoke-fixture', userDisplayName: 'Mobile Test',
@@ -73,6 +77,12 @@ for (const [device, engine, width, height, touch] of [
         if (!['GET', 'HEAD'].includes(method) && url.pathname !== '/api/rooms/snapshots/query') { writes.push({ method, path: url.pathname }); return reply(r, { error: 'Unexpected write' }, 503); }
         return r.fallback();
       });
+      if (discoveryMode && gate === '1') {
+        const user = { id: 'mobile-smoke-fixture', walletAddress: wallet, displayName: 'Protection test', email: null };
+        await context.route(u => u.pathname === '/api/auth/session', r => reply(r, { authenticated: true, user, source: 'session', walletProjectId: 'public-isolated-protection', schoolManaged: false, school: null, partykitHost: '', chatModeration: { role: 'none', banned: false } }));
+        await context.route(u => u.pathname === '/api/auth/wallet/challenge', r => reply(r, { address: wallet, message: 'Isolated Protected discovery connection', expiresAt: new Date(Date.now() + 60000).toISOString() }));
+        await context.route(u => u.pathname === '/api/auth/wallet/verify', r => reply(r, { authenticated: true, linkedWallet: false, user }));
+      }
       await context.route('https://cloudflareinsights.com/cdn-cgi/rum', r => r.fulfill({ status: 204, headers: cors(r) }));
       await context.addInitScript(gate => {
         window.addEventListener('room-sequence-start', event => { window.__protectedQueue = event.detail; });
@@ -116,22 +126,37 @@ for (const [device, engine, width, height, touch] of [
           assert.equal(await page.locator('[data-explore-sort="protected"]').isVisible(), false, 'An older backend must not offer the unsupported view');
           assert(!discoveryRequests.some(r => r.sort === 'protected'));
           capable = true; await click('[data-explore-sort="newest"]');
-          await page.locator('[data-explore-sort="protected"]').waitFor({ state: 'visible' });
-          await click('[data-explore-sort="protected"]');
-          await page.waitForFunction(expected => document.querySelector('[data-explore-sort="protected"]')?.classList.contains('active') && !document.querySelector('[data-explore-sort="protected"]')?.disabled && document.querySelectorAll('#explore-modal .explore-room-card').length === expected, data.protectedDiscovery.results.length);
-          await checkBadges('#explore-modal', data.protectedDiscovery.results);
-          assert((await page.locator('#explore-modal .explore-room-title').allTextContents()).includes('Public room 13'), 'Goal-less protected rooms belong in this view');
+          await page.waitForFunction(() => document.querySelector('[data-explore-sort="newest"]')?.classList.contains('active') && !document.querySelector('[data-explore-sort="newest"]')?.disabled);
+          assert.equal(await page.locator('[data-explore-sort="protected"]').isVisible(), false, 'Capability alone never shows Protected to a disconnected visitor');
+          await page.locator('[data-explore-sort="protected"]').dispatchEvent('click');
+          assert(!discoveryRequests.some(r => r.sort === 'protected'));
+          let results = data.discovery.results;
+          if (gate === '1') {
+            await click('#btn-explore-close'); await click('#menu-toggle');
+            if (!await page.locator('#btn-auth-wallet').isVisible()) await click('#account-signin-options > summary');
+            await click('#btn-auth-wallet');
+            await page.waitForFunction(() => document.documentElement.dataset.walletConnected === 'true' && !JSON.parse(window.render_game_to_text()).auth.loading);
+            assert(walletModules.some(module => module.symbol === 'createAppKit'));
+            await click('#menu-toggle'); await click('#btn-world-explore');
+            await page.locator('[data-explore-sort="protected"]').waitFor({ state: 'visible' });
+            await click('[data-explore-sort="protected"]');
+            await page.waitForFunction(expected => document.querySelector('[data-explore-sort="protected"]')?.classList.contains('active') && !document.querySelector('[data-explore-sort="protected"]')?.disabled && document.querySelectorAll('#explore-modal .explore-room-card').length === expected, data.protectedDiscovery.results.length);
+            results = data.protectedDiscovery.results;
+            assert((await page.locator('#explore-modal .explore-room-title').allTextContents()).includes('Public room 13'), 'Goal-less protected rooms belong in this view');
+          }
+          await checkBadges('#explore-modal', results);
           await page.screenshot({ path: `${output}/${name}-protected.png` });
-          const expectedRooms = data.protectedDiscovery.results.filter(r => r.goalType !== null);
+          const expectedRooms = results.filter(r => r.goalType !== null);
+          expectedQueueStart = expectedRooms[0];
           const playAll = page.locator('#explore-queue-actions .explore-queue-start-btn');
           assert.equal(await playAll.textContent(), `Play All (${expectedRooms.length})`); await playAll.scrollIntoViewIfNeeded();
           if (touch) await playAll.tap(); else await playAll.click();
           await page.locator('#room-goal-intro-modal').waitFor({ state: 'visible' });
           queue = await page.evaluate(() => ({ requested: window.__protectedQueue, active: window.get_room_sequence_state() }));
-          assert.equal(queue.requested.sourceLabel, 'Protected rooms'); assert.equal(queue.requested.mode, 'play');
+          assert.equal(queue.requested.sourceLabel, gate === '1' ? 'Protected rooms' : 'Community rooms'); assert.equal(queue.requested.mode, 'play');
           assert.deepEqual(queue.requested.entries.map(r => r.roomId), expectedRooms.map(r => r.roomId));
           assert.equal(runStarts.length, 1, 'The selected protected room starts only an isolated run');
-          assert.equal(queue.active.kind, 'explore'); assert.equal(queue.active.count, expectedRooms.length); assert.equal(queue.active.currentRoomId, '0,0');
+          assert.equal(queue.active.kind, 'explore'); assert.equal(queue.active.count, expectedRooms.length); assert.equal(queue.active.currentRoomId, expectedQueueStart.roomId);
           await page.screenshot({ path: `${output}/${name}-queue.png` });
         } else {
           const builder = page.locator('#explore-modal .profile-trigger').first();
