@@ -27,42 +27,6 @@ export interface RoomBadgeScaleConfig {
   tierFadeSpan: number;
 }
 
-export interface CenteredRoomBadgePositionOptions {
-  origin: { x: number; y: number };
-  backgroundWidth: number;
-  backgroundHeight: number;
-  stackIndex: number;
-  stackCount: number;
-  roomWidth: number;
-  roomHeight: number;
-  stackGap?: number;
-  verticalBias?: number;
-}
-
-export function getCenteredRoomBadgePosition(
-  options: CenteredRoomBadgePositionOptions,
-): { x: number; y: number } {
-  const {
-    origin,
-    backgroundWidth,
-    backgroundHeight,
-    stackIndex,
-    stackCount,
-    roomWidth,
-    roomHeight,
-    stackGap = 8,
-    verticalBias = 0.44,
-  } = options;
-  const totalHeight =
-    stackCount * backgroundHeight + Math.max(0, stackCount - 1) * stackGap;
-  const centerX = origin.x + roomWidth * 0.5;
-  const centerY = origin.y + roomHeight * verticalBias;
-  return {
-    x: centerX - backgroundWidth * 0.5,
-    y: centerY - totalHeight * 0.5 + stackIndex * (backgroundHeight + stackGap),
-  };
-}
-
 export function getRoomBadgeOverlayScale(
   zoom: number,
   config: RoomBadgeScaleConfig,

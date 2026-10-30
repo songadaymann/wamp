@@ -1,5 +1,3 @@
-import type { ApiTokenScope } from '../auth/model';
-
 export type AgentStatus = 'active' | 'disabled';
 export type PrincipalKind = 'user' | 'agent';
 export type RequestAuthSource = 'session' | 'api_token' | 'agent_token';
@@ -69,10 +67,4 @@ export interface AgentTokenCreateRequestBody {
 export interface AgentTokenCreateResponse {
   token: string;
   record: AgentTokenRecord;
-}
-
-export function normalizeAgentTokenScopeList(scopes: ApiTokenScope[]): AgentTokenScope[] {
-  return AGENT_TOKEN_SCOPES.filter((scope) =>
-    scopes.includes(scope as ApiTokenScope)
-  ) as AgentTokenScope[];
 }

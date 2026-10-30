@@ -1,5 +1,6 @@
 import { isInWalletWindow } from './modalState';
 import { beginPendingDialog } from './pendingDialog';
+import { finishBootDiagnostics } from '../main/bootDiagnostics';
 
 const APP_READY_EVENT = 'wamp:app-ready';
 
@@ -180,11 +181,8 @@ export function markAppReady(): void {
   refs.bootRoot?.classList.add('hidden');
   refs.bootRoot?.removeAttribute('data-boot-state');
   document.body.dataset.appReady = 'true';
+  finishBootDiagnostics();
   window.dispatchEvent(new CustomEvent(APP_READY_EVENT));
-}
-
-export function hideBootSplash(): void {
-  getElements().bootRoot?.classList.add('hidden');
 }
 
 export function showBusyOverlay(title: string, status = 'Please wait...', controls?: {

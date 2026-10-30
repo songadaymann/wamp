@@ -9,7 +9,6 @@ import {
   type SwordsmanBodySnapshot,
 } from './swordsmanTraversal';
 import {
-  debugSimulateSwordsmanTraversalEdge,
   planSwordsmanRobustTraversal,
   prepareSwordsmanTraversalEdgeSimulation,
   type SwordsmanRobustTraversalPlan,
@@ -129,19 +128,25 @@ describe('robust Sword Hunter planning (F302)', () => {
     expect(planned).toBe(recorded.cases.length);
   }, 30000);
 
-  it('simulates each jump the same whichever tiles were read first', () => {
-    const layout = recorded.layouts.typical;
-    const forwardRoom = freshRoom(layout);
-    const reverseRoom = freshRoom(layout);
+  it('keeps recorded plans identical when edges are prepared in reverse order', () => {
+    const cases = recorded.cases.filter(testCase => testCase.layout === 'typical' && testCase.bodyWidth === 16 && testCase.bodyHeight === 32);
+    expect(cases.length).toBeGreaterThan(0);
+    const forwardRoom = freshRoom(recorded.layouts.typical);
+    const reverseRoom = freshRoom(recorded.layouts.typical);
     const forwardGraph = buildSwordsmanTraversalGraph(forwardRoom);
     const reverseGraph = buildSwordsmanTraversalGraph(reverseRoom);
-    const forwardEdges = Array.from(forwardGraph.edgesById.values());
-    const reverseEdges = Array.from(reverseGraph.edgesById.values()).reverse();
-    const forward = new Map(forwardEdges.map((edge) => [edge.id, debugSimulateSwordsmanTraversalEdge(forwardRoom, forwardGraph, edge, 16, 32)]));
-    const reverse = new Map(reverseEdges.map((edge) => [edge.id, debugSimulateSwordsmanTraversalEdge(reverseRoom, reverseGraph, edge, 16, 32)]));
-    expect(forwardEdges.filter((edge) => forward.get(edge.id)!.success).length).toBeGreaterThan(20);
-    expect(new Map([...reverse].sort(([left], [right]) => left.localeCompare(right))))
-      .toEqual(new Map([...forward].sort(([left], [right]) => left.localeCompare(right))));
+    warmEveryEdge(forwardRoom, 16, 32, forwardGraph);
+    for (const edge of [...reverseGraph.edgesById.values()].reverse()) {
+      prepareSwordsmanTraversalEdgeSimulation(reverseRoom, reverseGraph, edge, 16, 32);
+    }
+    for (const testCase of cases) {
+      const forward = planIn(forwardRoom, testCase, forwardGraph);
+      const reverse = planIn(reverseRoom, testCase, reverseGraph);
+      expect(summarize(forward)).toEqual(testCase.plan);
+      expect(summarize(reverse)).toEqual(testCase.plan);
+      expect(forward?.coldSimulatedEdges ?? 0).toBe(0);
+      expect(reverse?.coldSimulatedEdges ?? 0).toBe(0);
+    }
   });
 
   // This test and the next simulate over 4,500 edges each: a second or two idle, but past vitest's

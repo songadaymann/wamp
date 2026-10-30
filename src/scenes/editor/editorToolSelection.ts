@@ -37,10 +37,6 @@ export function isPathEditorTool(tool: ToolName): tool is 'line' {
   return tool === 'line';
 }
 
-export function isShapeFillEditorTool(tool: ToolName): boolean {
-  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'fill';
-}
-
 export function isPencilSprayPlacement(): boolean {
   return editorState.activeTool === 'pencil'
     && editorState.pencilSprayMode
@@ -234,36 +230,6 @@ export function getEditorStampKind(tool: ToolName, curveBend = false): EditorSha
     return curveBend ? 'curve' : 'line';
   }
   return null;
-}
-
-export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false): string {
-  switch (tool) {
-    case 'eraser':
-      return `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`;
-    case 'rect':
-      return editorState.rectOutline ? 'Rectangle Outlined' : 'Rectangle Filled';
-    case 'ellipse':
-      return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
-    case 'line':
-      return isEditorLineCurve() ? 'Curve' : 'Line';
-    case 'randomize':
-      return `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
-    case 'fill':
-      return 'Fill';
-    case 'copy':
-      return pastePreviewActive ? 'Paste' : 'Copy';
-    case 'move':
-      return 'Move';
-    case 'pencil':
-      if (isPencilSprayPlacement()) {
-        return `Spray ${editorState.pencilSprayBrushSize}x${editorState.pencilSprayBrushSize}`;
-      }
-      return isPencilBrushPlacement() && editorState.pencilBrushSize > 1
-        ? `Draw ${editorState.pencilBrushSize}x${editorState.pencilBrushSize}`
-        : 'Draw';
-    default:
-      return 'Draw';
-  }
 }
 
 export interface EditorModePipState {

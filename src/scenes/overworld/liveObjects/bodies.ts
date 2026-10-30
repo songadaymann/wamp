@@ -14,13 +14,6 @@ export function getArcadeBodyBounds(body: ArcadeObjectBody): Phaser.Geom.Rectang
   return new Phaser.Geom.Rectangle(body.left, body.top, body.width, body.height);
 }
 
-export function arcadeBodiesOverlap(first: ArcadeObjectBody, second: ArcadeObjectBody): boolean {
-  return Phaser.Geom.Intersects.RectangleToRectangle(
-    getArcadeBodyBounds(first),
-    getArcadeBodyBounds(second),
-  );
-}
-
 export function arcadeBodiesTouchOrOverlap(
   first: ArcadeObjectBody,
   second: ArcadeObjectBody,

@@ -4789,10 +4789,6 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     this.flowController.editSelectedRoom(roomOnly);
   }
 
-  editCurrentRoom(): void {
-    this.editSelectedRoom();
-  }
-
   async playSelectedCourse(expectedVersion?: number, canStart?: () => boolean): Promise<void> {
     await this.flowController.playSelectedCourse(expectedVersion, canStart);
   }

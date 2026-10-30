@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG, editorState, updateEditorState, getSelectionTileValue } from '../../config';
+import { TILE_FLIP_X_FLAG, editorState, updateEditorState, getSelectionTileValue } from '../../config';
 import {
   applyEditorTileFlipModes,
-  applyRandomizeFlips,
   clampRandomizeBrushSize,
   collectOccupiedSelectionValues,
   isScrambleOneByOne,
@@ -82,14 +81,6 @@ describe('randomizeTiles', () => {
     const sorted = (values: number[]) => [...values].sort((a, b) => a - b);
     const shuffled = scrambleWindow(source, sequenceRng([0.2, 0.9, 0.1, 0.7, 0.4]));
     expect(sorted(shuffled.flat())).toEqual(sorted(source.flat()));
-  });
-
-  it('randomizes H/V flips independently when those toggles are on', () => {
-    expect(applyRandomizeFlips(12, false, false, () => 0)).toBe(12);
-    expect(applyRandomizeFlips(12, true, false, () => 0.1)).toBe(12 + TILE_FLIP_X_FLAG);
-    expect(applyRandomizeFlips(12, true, false, () => 0.9)).toBe(12);
-    expect(applyRandomizeFlips(12, false, true, () => 0.1)).toBe(12 + TILE_FLIP_Y_FLAG);
-    expect(applyRandomizeFlips(-1, true, true, () => 0)).toBe(-1);
   });
 
   it('skips empty mask cells the same way pencil stamps do', () => {

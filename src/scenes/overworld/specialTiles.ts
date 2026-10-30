@@ -286,26 +286,6 @@ export class OverworldSpecialTilesController<TLiveObject = unknown, TEdgeWall = 
     );
   }
 
-  getGravityPlateDirectionForBody(
-    body: Phaser.Physics.Arcade.Body,
-    currentGravityDirection: PlayerGravityDirection,
-  ): PlayerGravityDirection | null {
-    if (this.host.getMode() !== 'play') {
-      return null;
-    }
-
-    const overlapDirection = this.getGravityDirectionFromMatches(
-      this.findSpecialTilesOverlappingBody(body),
-    );
-    if (overlapDirection) {
-      return overlapDirection;
-    }
-
-    return this.getGravityDirectionFromMatches(
-      this.findSpecialTilesAtGravityContact(body, currentGravityDirection),
-    );
-  }
-
   isBodyInWater(body: Phaser.Physics.Arcade.Body): boolean {
     if (this.host.getMode() !== 'play') {
       return false;

@@ -249,11 +249,3 @@ export function getManualRoomLeaderboardSourceValidationError(
 
   return null;
 }
-
-export function canVersionAdoptManualLeaderboardSource(
-  target: RoomVersionSource,
-  source: RoomVersionSource,
-  exactLineage?: RoomVersionLineage
-): boolean {
-  return getManualRoomLeaderboardSourceValidationError(target, source, exactLineage) === null;
-}

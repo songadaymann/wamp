@@ -644,10 +644,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.draftRoomsById.set(room.id, cloneRoomSnapshot(room));
   }
 
-  clearDraftRoom(roomId: string): void {
-    this.draftRoomsById.delete(roomId);
-  }
-
   setTransientRoomOverride(room: RoomSnapshot): void {
     this.setTransientRoomOverrides([room]);
   }
@@ -1381,13 +1377,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.getCurrentCachedFullRoomSnapshot(roomSummary);
   }
 
-  /** @deprecated Runtime readers should use `getPlayableRoomSnapshotViewForCoordinates`. */
-  getPlayableRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null {
-    const room = this.getPlayableRoomSnapshotViewForCoordinates(coordinates);
-    if (!room) return null;
-    return cloneRoomSnapshot(room);
-  }
-
   getRoomSnapshotCloneCountSinceReset(): number {
     return Math.max(
       0,
@@ -1958,10 +1947,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.chunkWindow;
   }
 
-  getLoadedRoomBounds(): WorldRoomBounds | null {
-    return this.loadedRoomBounds;
-  }
-
   getLoadedChunkBounds(): WorldChunkBounds | null {
     return this.loadedChunkBounds;
   }
@@ -1991,10 +1976,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
   hasPreviewForRoom(roomId: string): boolean {
     return this.previewRenderer.hasPreviewForRoom(roomId);
-  }
-
-  getPendingPreviewTextureBuildCount(): number {
-    return this.previewRenderer.getPendingTextureBuildCount();
   }
 
   flushPendingPreviewTextureBuilds(): number {

@@ -1,5 +1,6 @@
+import { applyRegisteredSmartBrushCells, applyRegisteredSmartBrushOutlineCells } from './brushEngine';
 import { describe, expect, it } from 'vitest';
-import { applySmartBrushCells, applySmartBrushOutlineCells, type SmartRecipeDocument } from './recipeSolver';
+import { type SmartRecipeDocument } from './recipeSolver';
 import { createRoomSmartTerrainState } from './model';
 import { ROOM_HEIGHT, ROOM_WIDTH } from '../config/room';
 import { decodeTileDataValue } from '../config/editorState';
@@ -44,7 +45,7 @@ function decodedLocal(
 
 describe('cyber letter matcher wiring', () => {
   it('paints isolated concrete as the AAAA seed tile', () => {
-    const document = applySmartBrushCells(emptyDocument(), {
+    const document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: [{ x: 5, y: 5 }],
       mode: 'paint',
       brushId: 'cyber.concrete',
@@ -59,13 +60,13 @@ describe('cyber letter matcher wiring', () => {
       x: 3 + (index % 6),
       y: 6 + Math.floor(index / 6),
     }));
-    let document = applySmartBrushCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: concrete,
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: [{ x: 3, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.neon',
@@ -75,7 +76,7 @@ describe('cyber letter matcher wiring', () => {
     expect(Object.values(document.smartTerrain.recipes).some((recipe) => recipe.brushId === 'cyber.neon')).toBe(false);
     expect(localIndex(document, 3, 8)).toBe(49);
 
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: [{ x: 5, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.neon',
@@ -85,7 +86,7 @@ describe('cyber letter matcher wiring', () => {
   });
 
   it('stamps 51 when Neon is painted in the void', () => {
-    const document = applySmartBrushCells(emptyDocument(), {
+    const document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: [{ x: 8, y: 4 }],
       mode: 'paint',
       brushId: 'cyber.neon',
@@ -95,7 +96,7 @@ describe('cyber letter matcher wiring', () => {
   });
 
   it('stamps 6 on a vertical Neon column in the void', () => {
-    const document = applySmartBrushCells(emptyDocument(), {
+    const document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: [{ x: 8, y: 4 }, { x: 8, y: 5 }, { x: 8, y: 6 }],
       mode: 'paint',
       brushId: 'cyber.neon',
@@ -107,7 +108,7 @@ describe('cyber letter matcher wiring', () => {
   });
 
   it('does not overlay Cyber A10 on a concrete ring or a plus', () => {
-    const ring = applySmartBrushCells(emptyDocument(), {
+    const ring = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: [
         { x: 10, y: 10 }, { x: 11, y: 10 }, { x: 12, y: 10 },
         { x: 10, y: 11 }, { x: 12, y: 11 },
@@ -117,7 +118,7 @@ describe('cyber letter matcher wiring', () => {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    const plus = applySmartBrushCells(emptyDocument(), {
+    const plus = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: [
         { x: 11, y: 10 },
         { x: 10, y: 11 }, { x: 11, y: 11 }, { x: 12, y: 11 },
@@ -127,7 +128,7 @@ describe('cyber letter matcher wiring', () => {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    const block = applySmartBrushCells(emptyDocument(), {
+    const block = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: Array.from({ length: 24 }, (_, index) => ({
         x: 4 + (index % 6),
         y: 6 + Math.floor(index / 6),
@@ -151,7 +152,7 @@ describe('cyber letter matcher wiring', () => {
   });
 
   it('paints a rectangle outline as a hollow E-frame instead of inverted tunnel mids', () => {
-    const outline = applySmartBrushOutlineCells(emptyDocument(), {
+    const outline = applyRegisteredSmartBrushOutlineCells(emptyDocument(), {
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
       filledCells: Array.from({ length: 40 }, (_, index) => ({
@@ -182,7 +183,7 @@ describe('cyber letter matcher wiring', () => {
   });
 
   it('stamps unflipped 64 for interior concrete fill', () => {
-    let document = applySmartBrushCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells: Array.from({ length: 24 }, (_, index) => ({
         x: 4 + (index % 6),
         y: 6 + Math.floor(index / 6),
@@ -194,7 +195,7 @@ describe('cyber letter matcher wiring', () => {
     expect(decodedLocal(document, 'terrain', 6, 7)).toEqual({
       localIndex: 64, flipX: false, flipY: false,
     });
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: [{ x: 6, y: 7 }],
       mode: 'paint',
       brushId: 'cyber.concrete',
@@ -210,13 +211,13 @@ describe('cyber letter matcher wiring', () => {
       x: ox + (index % 4),
       y: oy + Math.floor(index / 4),
     }));
-    let document = applySmartBrushCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells,
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: cells.filter((cell) => (cell.x - ox) + (cell.y - oy) >= 3),
       mode: 'paint',
       brushId: 'cyber.shell',
@@ -237,20 +238,20 @@ describe('cyber letter matcher wiring', () => {
       x: ox + (index % 4),
       y: oy + Math.floor(index / 4),
     }));
-    let document = applySmartBrushCells(emptyDocument(), {
+    let document = applyRegisteredSmartBrushCells(emptyDocument(), {
       cells,
       mode: 'paint',
       brushId: 'cyber.concrete',
       styleId: 'cyber-yellow',
     });
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: cells.filter((cell) => (cell.x - ox) + (cell.y - oy) >= 3),
       mode: 'paint',
       brushId: 'cyber.shell',
       styleId: 'cyber-yellow',
     });
     expect(decodedLocal(document, 'terrain', 12, 8).localIndex).toBe(52);
-    document = applySmartBrushCells(document, {
+    document = applyRegisteredSmartBrushCells(document, {
       cells: [{ x: 12, y: 8 }],
       mode: 'paint',
       brushId: 'cyber.shell',

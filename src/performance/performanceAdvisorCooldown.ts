@@ -25,10 +25,6 @@ export class PerformanceAdvisorCooldownStore {
     writeCooldown(this.storage, this.dismissedUntilMs);
     return this.dismissedUntilMs;
   }
-
-  getDismissedUntilMs(): number {
-    return this.dismissedUntilMs;
-  }
 }
 
 export function parsePerformanceAdvisorCooldown(rawValue: string | null): number {

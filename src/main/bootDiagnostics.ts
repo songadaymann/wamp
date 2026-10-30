@@ -57,10 +57,6 @@ function printEntry(entry: BootDiagnosticEntry): void {
   method(prefix);
 }
 
-export function isBootDiagnosticsActive(): boolean {
-  return active;
-}
-
 export function logBootPhase(
   phase: string,
   details?: Record<string, unknown>,

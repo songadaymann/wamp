@@ -393,7 +393,6 @@ function resolveCompressedSfxExtension(): '.ogg' | '.m4a' {
  * (F023). Buffers start within the context's output latency and follow the audio session.
  */
 export class SfxController {
-  private muted = false;
   private initialized = false;
   private readonly assetUrlsByPath = new Map<string, string[]>();
   private readonly buffers = new Map<string, SfxBuffer>();
@@ -484,14 +483,6 @@ export class SfxController {
     }
   }
 
-  setMuted(value: boolean): void {
-    this.muted = value;
-  }
-
-  isMuted(): boolean {
-    return this.muted;
-  }
-
   setVolume(value: number): void {
     const nextVolume = PhaserClamp(Number.isFinite(value) ? value : 1, 0, 1);
     if (this.volume === nextVolume) {
@@ -509,7 +500,7 @@ export class SfxController {
     for (const entry of this.buffers.values()) bufferCounts[entry.status] += 1;
     return {
       initialized: this.initialized,
-      muted: this.muted,
+      muted: false,
       volume: this.volume,
       ...this.engine.getDebugState(),
       lastPlayError: this.lastPlayError,
@@ -549,8 +540,8 @@ export class SfxController {
       this.lastPlayedAt.set(cue, now);
     }
 
-    // Muted or turned all the way down: don't spend a voice, or a download, on silence (F078).
-    if (this.muted || this.volume <= 0 || (playbackOptions?.volumeMultiplier ?? 1) <= 0) {
+    // Turned all the way down: don't spend a voice, or a download, on silence (F078).
+    if (this.volume <= 0 || (playbackOptions?.volumeMultiplier ?? 1) <= 0) {
       this.record(cue, 'blocked');
       return;
     }

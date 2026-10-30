@@ -56,12 +56,6 @@ export function getPlacedObjectPathTargetIds(
   return normalizePlacedObjectPathTargetIds([placed.triggerTargetInstanceId]);
 }
 
-export function getPlacedObjectPrimaryPathTargetId(
-  placed: PathTargetSource | null | undefined,
-): string | null {
-  return getPlacedObjectPathTargetIds(placed)[0] ?? null;
-}
-
 export function withPlacedObjectPathTargets<T extends PlacedObject>(
   placed: T,
   targetInstanceIds: readonly string[],

@@ -254,10 +254,6 @@ export class EditorRoomSession {
     return this.claimerDisplayName;
   }
 
-  get currentClaimedAt(): string | null {
-    return this.claimedAt;
-  }
-
   get currentMintedChainId(): number | null {
     return this.mintedChainId;
   }
