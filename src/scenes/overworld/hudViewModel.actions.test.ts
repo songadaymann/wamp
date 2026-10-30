@@ -35,7 +35,7 @@ describe('room card available actions', () => {
   });
   it('retains ordinary editing for the linked room owner without an installed wallet', () => {
     expect(card({ cryptoVisible: false, currentUserId: 'viewer', currentWalletAddress: '0xowner',
-      selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: '0xowner' } }))
+      selectedOwnership: { claimerUserId: 'builder', isMinted: true, mintedOwnerWalletAddress: null, canSaveDraft: true } }))
       .toMatchObject({ editButtonDisabled: false, editButtonText: 'Edit Room' });
   });
   it('does not present an individual cell record as the Expanded Room record', () => {

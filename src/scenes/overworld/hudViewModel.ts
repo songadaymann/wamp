@@ -35,6 +35,7 @@ export interface SelectedCourseContext {
 }
 
 export interface SelectedRoomOwnershipViewData {
+  canSaveDraft?: boolean;
   claimerUserId: string | null;
   isMinted: boolean;
   mintedOwnerWalletAddress: string | null;
@@ -268,9 +269,9 @@ export function buildOverworldHudViewModel(
     currentUserId === selectedRoomClaimOwnerUserId,
   );
   const viewerOwnsMintedRoom = Boolean(
-    selectedOwnership?.mintedOwnerWalletAddress &&
+    selectedOwnership?.canSaveDraft || (cryptoVisible && selectedOwnership?.mintedOwnerWalletAddress &&
     currentWalletAddress &&
-    currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase(),
+    currentWalletAddress === selectedOwnership.mintedOwnerWalletAddress.trim().toLowerCase()),
   );
   const viewerCanCheckMintedOwnership = Boolean(cryptoVisible && selectedRoomMinted && currentUserId && currentWalletAddress);
   const viewerCanEditWorldRoom = Boolean(

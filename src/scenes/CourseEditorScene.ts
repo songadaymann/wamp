@@ -3044,7 +3044,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
         goalSummaryText: 'Room goals are hidden while editing the whole expanded room.',
         roomPermissions: selectedPermissions,
         publishValidationError: null,
-        mintedTokenId: null,
+        isProtected: false,
         canRefreshMintMetadata: false,
         saveInFlight: this.loading,
         mintedMetadataCurrent: true,

@@ -114,6 +114,7 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           const auditHash = recoveryMode ? await globalThis.__roomWalletAudit(q) : null;
           if (q.method === 'wallet_switchEthereumChain') return null;
           if (q.method === 'eth_accounts') return [kind === 'wallet-mismatch' ? '0x' + '3'.repeat(40) : wallet];
+          if (q.method === 'personal_sign') return '0x' + '11'.repeat(65);
           if (q.method === 'eth_chainId') return kind === 'network-change' ? '0x14a34' : '0x2105';
           if (q.method === 'eth_blockNumber') return '0x10';
           if (q.method === 'eth_sendTransaction') {
@@ -150,7 +151,18 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
         mintedMetadataRoomVersion: metadataVersion, mintedMetadataHash: metadataHash,
         permissions: { canSaveDraft: !minted || owner === wallet, canPublish: !minted || owner === wallet, canRevert: false, canMint: !minted } });
       const record = () => ({ ...recordTemplate, ...summary(), draft: draft || snapshot, published: snapshot });
-      const reply = (r, json, status = 200) => r.fulfill({ status, json, headers: { 'access-control-allow-origin': r.request().headers().origin || local.origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' } });
+      const reply = (r, json, status = 200) => {
+        if (new URL(r.request().url()).pathname.startsWith('/api/rooms/') && new URL(r.request().url()).searchParams.get('crypto') !== '1') {
+          const project = value => {
+            if (!value?.permissions) return value;
+            const result = { ...value, isProtected: Boolean(value.isProtected || value.mintedChainId || value.mintedContractAddress || value.mintedTokenId) };
+            for (const key of Object.keys(result)) if (key.startsWith('minted')) delete result[key];
+            return result;
+          };
+          json = json?.summary ? { ...json, summary: project(json.summary) } : project(json);
+        }
+        return r.fulfill({ status, json, headers: { 'access-control-allow-origin': r.request().headers().origin || local.origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' } });
+      };
       await context.route(u => u.pathname.startsWith('/api/'), r => {
         if (new URL(r.request().url()).origin === 'https://mann.cool' && new URL(r.request().url()).pathname === '/api/v1/plays'
           && ['POST', 'OPTIONS'].includes(r.request().method())) {
@@ -170,6 +182,8 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
       await context.route(u => u.pathname === '/api/world/tiles/config', r => reply(r, { schemaVersion: 1, available: false, rolloutPercentage: 0 }));
       await context.route(u => u.pathname === '/api/auth/session', r => reply(r, { authenticated: activeUser, source: 'session', user: activeUser ? { id: 'mobile-smoke-fixture', walletAddress: wallet, displayName: 'Artwork test', email: null } : null,
         walletProjectId: 'public-test-project-id', partykitHost: '', schoolManaged: false, school: null, chatModeration: { role: 'none', banned: false } }));
+      await context.route(u => u.pathname === '/api/auth/wallet/challenge', r => reply(r, { address: wallet, message: 'Isolated recovery metadata inspection', expiresAt: new Date(Date.now() + 60000).toISOString() }));
+      await context.route(u => u.pathname === '/api/auth/wallet/verify', r => reply(r, { authenticated: true, linkedWallet: false, user: { id: 'mobile-smoke-fixture', walletAddress: wallet, displayName: 'Artwork test', email: null } }));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/summary', r => reply(r, summary()));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/current', r => reply(r, { summary: summary(), draft: draft || snapshot, published: snapshot }));
       await context.route(u => u.pathname === '/api/rooms/0%2C0/published', r => reply(r, snapshot));
@@ -301,7 +315,15 @@ for (const [device, engine, width, height, touch] of [['desktop', chromium, 1280
           console.log(`${name}: collection cost passed`); continue;
         }
         if (recoveryMode) {
-          await auditRoomWalletRecovery({ page, context, kind, name, output, audit, width, height, click, consent, enterEditor, approve, action: artworkAction, markChain,
+          const connectForInspection = async () => {
+            if (!await page.locator('#menu-toggle').isVisible()) { await click('#btn-editor-phone-menu'); await click('#btn-editor-phone-account'); }
+            else if (!await page.locator('#auth-panel').evaluate(el => el.classList.contains('menu-open'))) await click('#menu-toggle');
+            if (!await page.locator('#btn-auth-wallet').isVisible()) await click('#account-signin-options > summary');
+            await click('#btn-auth-wallet');
+            await page.waitForFunction(() => document.documentElement.dataset.walletConnected === 'true' && !JSON.parse(window.render_game_to_text()).auth.loading);
+            await click('#menu-toggle');
+          };
+          await auditRoomWalletRecovery({ page, context, kind, name, output, audit, width, height, click, consent, enterEditor, approve, action: artworkAction, markChain, connectForInspection,
             walletModules, version: snapshot.version, claimerDisplayName: sourceSummary.claimerDisplayName, transferOwner: () => { owner = '0x' + '3'.repeat(40); }, releaseDraft, waitForRefresh: () => refreshReady, releaseRefresh, setUser: value => { activeUser = value; }, metadataHash: () => metadataHash,
             supersedeArtwork: () => { chainMetadataHash = 'b'.repeat(64); chainMetadataVersion = snapshot.version; } });
           assert.deepEqual(errors, []); assert.deepEqual(unexpected, []); assert.deepEqual(api.report().misses, {});

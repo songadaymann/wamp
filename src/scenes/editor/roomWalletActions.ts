@@ -290,7 +290,7 @@ export class RoomWalletActions {
     try {
       const recovery = new RoomWalletRecovery({ store: getPendingRoomWalletStore(), getIdentity: identity,
         isOverworld: () => !getActiveWorldId(),
-        refresh: (p, s) => this.roomRepository.refreshRoomOwnership(p.roomId, p.coordinates, { signal: s }), receipt: checkRoomWalletReceipt });
+        refresh: (p, s) => this.roomRepository.refreshRoomOwnership(p.roomId, p.coordinates, { signal: s, recoverPendingWallet: true }), receipt: checkRoomWalletReceipt });
       const result = await recovery.check(pending, controller.signal);
       if (!same() || controller.signal.aborted) return;
       this.host.applyRecovery(result.summary);

@@ -1120,6 +1120,7 @@ function renderAuthUi(): void {
     }
   }
 
+  document.documentElement.dataset.walletConnected = String(state.walletConnected && Boolean(state.walletAddress));
   dispatchTypedEvent<AuthDebugState>(window, AUTH_STATE_CHANGED_EVENT, getAuthDebugState());
 }
 

@@ -20,7 +20,11 @@ export async function auditRoomWalletRecovery(h) {
     await page.locator('#busy-overlay').waitFor({ state: 'hidden' });
     await page.waitForFunction(() => {
       const s = JSON.parse(window.render_game_to_text()).activeScene;
-      return s?.scene !== 'editor' || !s.canSaveDraft || document.querySelector(s.mintedTokenId ? '#btn-refresh-room-metadata' : '#btn-mint-room')?.disabled === false;
+      if (s?.scene !== 'editor' || !s.canSaveDraft) return true;
+      // A disconnected protected room intentionally disables crypto actions; Save still reflects the shared busy lock.
+      const target = document.documentElement.dataset.walletConnected === 'true'
+        ? s.mintedTokenId ? '#btn-refresh-room-metadata' : '#btn-mint-room' : '#btn-save-draft';
+      return document.querySelector(target)?.disabled === false;
     });
   };
   const controls = async () => {
@@ -41,11 +45,17 @@ export async function auditRoomWalletRecovery(h) {
   const waitRecovered = async expected => {
     await page.waitForFunction(expected => {
       const s = JSON.parse(window.render_game_to_text()).activeScene;
-      return s?.scene === 'editor' && s.mintedTokenId === '42';
+      return s?.scene === 'editor' && (document.documentElement.dataset.walletConnected === 'true'
+        ? s.mintedTokenId === '42' : s.mintedTokenId === null && document.getElementById('editor-top-save-status').textContent.includes('Protected'));
     }, expected);
     await page.waitForFunction(key => JSON.parse(localStorage.getItem(key) || '[]').length === 0, KEY);
     if (expected === 'artwork') {
       await dismissResult();
+      if (!await page.evaluate(() => document.documentElement.dataset.walletConnected === 'true')) {
+        // Recovery has already finished without a signer. Metadata inspection is a new explicit connection.
+        await h.connectForInspection();
+        await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.mintedTokenId === '42');
+      }
       if (!await page.locator('[data-editor-room-action="history"]').isVisible()) await h.click('[data-editor-shell-action="room"]');
       await h.click('[data-editor-room-action="history"]');
       await page.locator('#room-history-modal').waitFor({ state: 'visible' });
@@ -151,8 +161,8 @@ export async function auditRoomWalletRecovery(h) {
       await page.waitForFunction(() => typeof globalThis.__artworkWallet?.pending === 'function');
       assert.equal(approvals(), 2); await close(); await h.approve(false); return;
     }
-    await waitRecovered(artwork ? 'artwork' : 'mint');
     assert.equal(audit.requests.filter(r => r.method === 'wallet_bootstrap').length, bootstraps, 'reload recovery must not bootstrap a wallet');
+    await waitRecovered(artwork ? 'artwork' : 'mint');
     await dismissResult();
   } else if (kind === 'mint-return' || kind === 'artwork-return' || kind === 'superseded-artwork') {
     await h.approve(true);

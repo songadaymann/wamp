@@ -12,6 +12,13 @@
     }
   ],
   "components": {
+    "parameters": {
+      "roomCryptoDetails": {
+        "name": "crypto", "in": "query", "required": false,
+        "schema": { "type": "string", "enum": ["1"] },
+        "description": "Explicitly include minted* wallet/token metadata. Omitted by default on room record, summary, current, ownership-refresh and mutation responses. Browser clients opt in only for a connected wallet or a prior authorized pending-transaction recovery; permissions and isProtected are always available."
+      }
+    },
     "securitySchemes": {
       "cookieSession": {
         "type": "apiKey",
@@ -1100,6 +1107,7 @@
       },
       "RoomRecord": {
         "type": "object",
+        "description": "Protection and permissions are always included. minted* crypto details are omitted unless crypto=1 is explicitly requested; this presentation option never changes edit rights.",
         "required": [
           "draft",
           "published",
@@ -1113,11 +1121,7 @@
           "lastPublishedByPrincipalKind",
           "lastPublishedByAgentId",
           "lastPublishedByDisplayName",
-          "mintedChainId",
-          "mintedContractAddress",
-          "mintedTokenId",
-          "mintedOwnerWalletAddress",
-          "mintedOwnerSyncedAt",
+          "isProtected",
           "permissions"
         ],
         "properties": {
@@ -1147,6 +1151,10 @@
           },
           "lastPublishedByAgentId": { "type": ["string", "null"] },
           "lastPublishedByDisplayName": { "type": ["string", "null"] },
+          "isProtected": { "type": "boolean" },
+          "mintedMetadataRoomVersion": { "type": ["integer", "null"] },
+          "mintedMetadataUpdatedAt": { "type": ["string", "null"], "format": "date-time" },
+          "mintedMetadataHash": { "type": ["string", "null"] },
           "mintedChainId": { "type": ["integer", "null"] },
           "mintedContractAddress": { "type": ["string", "null"] },
           "mintedTokenId": { "type": ["string", "null"] },
@@ -2862,6 +2870,7 @@
           {}
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -2927,6 +2936,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -3071,6 +3081,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -3138,6 +3149,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",
@@ -3202,6 +3214,7 @@
           { "bearerAuth": [] }
         ],
         "parameters": [
+          { "$ref": "#/components/parameters/roomCryptoDetails" },
           {
             "name": "roomId",
             "in": "path",

@@ -1,3 +1,5 @@
+import { hasConnectedCryptoWallet } from '../../mint/walletGate';
+import { normalizeRoomCryptoDetails } from '../../persistence/roomCryptoDetails';
 import {
   DEFAULT_ROOM_COORDINATES,
   DEFAULT_ROOM_ID,
@@ -6,6 +8,7 @@ import {
   createLocalRoomRepository,
   isRoomApiError,
   isRoomSnapshotBlank,
+  isRoomMinted,
   type RoomCoordinates,
   type RoomPermissions,
   type RoomRecord,
@@ -135,6 +138,10 @@ export class EditorRoomSession {
   private historyLoaded = false;
   private claimerDisplayName: string | null = null;
   private claimedAt: string | null = null;
+  private protectedRoom = false;
+  private ownershipViewerKey: string | null = null;
+  private ownershipViewerUserId: string | null = null;
+  private ownershipReadAbort: AbortController | null = null;
   private mintedChainId: number | null = null;
   private mintedContractAddress: string | null = null;
   private mintedTokenId: string | null = null;
@@ -259,6 +266,8 @@ export class EditorRoomSession {
     return this.mintedContractAddress;
   }
 
+  get currentIsProtected(): boolean { return this.protectedRoom; }
+
   get currentMintedTokenId(): string | null {
     return this.mintedTokenId;
   }
@@ -325,6 +334,7 @@ export class EditorRoomSession {
   }
 
   reset(): void {
+    this.cancelOwnershipPresentation();
     this.sessionGeneration += 1;
     this.serverDraftUpdatedAt = null;
     this.editConflictPending = false;
@@ -349,6 +359,7 @@ export class EditorRoomSession {
     this.claimedAt = null;
     this.mintedChainId = null;
     this.mintedContractAddress = null;
+    this.protectedRoom = false;
     this.mintedTokenId = null;
     this.mintedOwnerWalletAddress = null;
     this.mintedOwnerSyncedAt = null;
@@ -387,7 +398,9 @@ export class EditorRoomSession {
   applyWalletRecovery(summary: RoomSummary): void {
     if (summary.id !== this.roomId || summary.coordinates.x !== this.roomCoordinates.x
       || summary.coordinates.y !== this.roomCoordinates.y || summary.world?.worldId) return;
+    summary = normalizeRoomCryptoDetails(summary, hasConnectedCryptoWallet());
     this.roomPermissions = { ...summary.permissions };
+    this.protectedRoom = isRoomMinted(summary);
     this.mintedChainId = summary.mintedChainId;
     this.mintedContractAddress = summary.mintedContractAddress;
     this.mintedTokenId = summary.mintedTokenId;
@@ -400,6 +413,46 @@ export class EditorRoomSession {
 
   private isStale(generation: number): boolean {
     return generation !== this.sessionGeneration;
+  }
+
+  private ownershipViewerContext(): string {
+    const auth = getAuthDebugState();
+    return JSON.stringify([this.sessionGeneration, this.roomId, auth.user?.id, hasConnectedCryptoWallet(), auth.walletAddress]);
+  }
+
+  cancelOwnershipPresentation(): void {
+    this.ownershipReadAbort?.abort(); this.ownershipReadAbort = null;
+    this.ownershipViewerKey = null;
+  }
+
+  /** A connection/account change updates ownership details without replacing a dirty draft. */
+  async refreshOwnershipPresentation(): Promise<void> {
+    if (!this.roomUpdatedAt || !this.protectedRoom) return;
+    const key = this.ownershipViewerContext();
+    if (key === this.ownershipViewerKey) return;
+    this.ownershipViewerKey = key;
+    this.ownershipReadAbort?.abort();
+    const abort = new AbortController(); this.ownershipReadAbort = abort;
+    const userId = getAuthDebugState().user?.id ?? null;
+    if (userId !== this.ownershipViewerUserId) {
+      this.roomPermissions = { canSaveDraft: false, canPublish: false, canRevert: false, canMint: false };
+    }
+    this.ownershipViewerUserId = userId;
+    if (!hasConnectedCryptoWallet()) {
+      this.mintedChainId = null; this.mintedContractAddress = null; this.mintedTokenId = null;
+      this.mintedOwnerWalletAddress = null; this.mintedOwnerSyncedAt = null;
+      this.mintedMetadataRoomVersion = null; this.mintedMetadataUpdatedAt = null;
+      this.host.refreshUi();
+    }
+    try {
+      const summary = await this.roomRepository.loadRoomSummary(this.roomId, this.roomCoordinates, { signal: abort.signal });
+      if (!abort.signal.aborted && key === this.ownershipViewerContext()) this.applyWalletRecovery(summary);
+    } catch {
+      // A failed presentation refresh never changes a draft or claims fresh chain ownership.
+      if (key === this.ownershipViewerKey) this.ownershipViewerKey = null;
+    } finally {
+      if (this.ownershipReadAbort === abort) this.ownershipReadAbort = null;
+    }
   }
 
   setStatusText(text: string): void {
@@ -422,6 +475,12 @@ export class EditorRoomSession {
   }
 
   getIdleStatusDetails(): EditorStatusDetails {
+    if (this.protectedRoom && !hasConnectedCryptoWallet()) {
+      return {
+        text: this.roomPermissions.canSaveDraft ? 'Your account can edit this protected room.' : 'This room is protected. Editing is locked.',
+        accentText: 'Protected', linkLabel: '', linkHref: null,
+      };
+    }
     if (this.mintedTokenId) {
       const accentText = `Collected & Locked · Token #${this.mintedTokenId}`;
       if (this.roomPermissions.canSaveDraft) {
@@ -1145,7 +1204,7 @@ export class EditorRoomSession {
       && !remoteRecord.claimerUserId
       && !remoteRecord.claimerAgentId
       && !remoteRecord.published
-      && !remoteRecord.mintedTokenId
+      && !isRoomMinted(remoteRecord)
       && isRoomSnapshotBlank(remoteRecord.draft);
     const conflictsWithServer = Boolean(backup?.baseUpdatedAt && !remoteIsUnclaimedPlaceholder
       && backup.baseUpdatedAt !== remoteRecord.draft.updatedAt);
@@ -1217,7 +1276,7 @@ export class EditorRoomSession {
   }
 
   private canRefreshMintMetadata(): boolean {
-    return Boolean(this.mintedTokenId && this.publishedRoomSnapshot && this.roomPermissions.canSaveDraft);
+    return Boolean(hasConnectedCryptoWallet() && this.mintedTokenId && this.publishedRoomSnapshot && this.roomPermissions.canSaveDraft);
   }
 
   private isMintMetadataCurrent(): boolean {
@@ -1407,6 +1466,7 @@ export class EditorRoomSession {
   }
 
   private syncRoomMetadata(record: RoomRecord, preserveCurrentTitle = false): void {
+    record = normalizeRoomCryptoDetails(record, hasConnectedCryptoWallet());
     this.serverDraftUpdatedAt = record.draft.updatedAt;
     this.roomId = record.draft.id;
     this.roomCoordinates = { ...record.draft.coordinates };
@@ -1428,6 +1488,7 @@ export class EditorRoomSession {
     this.historyLoaded = record.versions.length > 0 || record.published === null;
     this.claimerDisplayName = record.claimerDisplayName;
     this.claimedAt = record.claimedAt;
+    this.protectedRoom = isRoomMinted(record);
     this.mintedChainId = record.mintedChainId;
     this.mintedContractAddress = record.mintedContractAddress;
     this.mintedTokenId = record.mintedTokenId;
@@ -1435,6 +1496,11 @@ export class EditorRoomSession {
     this.mintedOwnerSyncedAt = record.mintedOwnerSyncedAt;
     this.mintedMetadataRoomVersion = record.mintedMetadataRoomVersion;
     this.mintedMetadataUpdatedAt = record.mintedMetadataUpdatedAt;
+    this.ownershipViewerUserId = getAuthDebugState().user?.id ?? null;
+    this.ownershipViewerKey = this.ownershipViewerContext();
+    if (this.protectedRoom && hasConnectedCryptoWallet() && !this.mintedTokenId) {
+      this.ownershipViewerKey = null; void this.refreshOwnershipPresentation();
+    }
     this.host.refreshUi();
   }
 

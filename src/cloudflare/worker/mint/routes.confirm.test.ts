@@ -31,8 +31,8 @@ const WALLET = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
 const CONTRACT = '0x1111111111111111111111111111111111111111';
 const builder = { id: 'user-1', walletAddress: WALLET };
 
-function confirm(txHash: string = TX) {
-  const request = new Request('https://api.wamp.land/api/rooms/3,-2/mint/confirm', {
+function confirm(txHash: string = TX, crypto = true) {
+  const request = new Request('https://api.wamp.land/api/rooms/3,-2/mint/confirm' + (crypto ? '?crypto=1' : ''), {
     method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://wamp.land' }, body: JSON.stringify({ txHash }),
   });
   return handleRoomMintConfirm(request, {} as Env, '3,-2', coordinates);
@@ -57,6 +57,11 @@ beforeEach(() => {
 });
 
 describe('room mint confirmation (F064)', () => {
+  it('omits token details when confirmation does not opt into crypto', async () => {
+    const response = await confirm(TX, false);
+    expect(await response.json()).toEqual({ id: '3,-2', isProtected: true });
+    expect(mocks.persist).toHaveBeenCalledOnce();
+  });
   it('rejects a malformed transaction hash before touching the chain', async () => {
     await expectStatus(confirm('0x1234'), 400, /valid transaction hash/);
     expect(mocks.verifyMint).not.toHaveBeenCalled();

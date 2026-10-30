@@ -52,7 +52,8 @@ export async function prepareRoomOwnershipEdit(
     if (!current()) return null;
     if (fresh.id !== roomId) throw new Error();
     host.acceptOwnership(roomId, fresh);
-    if (fresh.mintedOwnerWalletAddress?.trim().toLowerCase() !== wallet) {
+    if (fresh.mintedOwnerWalletAddress
+      ? fresh.mintedOwnerWalletAddress.trim().toLowerCase() !== wallet : !fresh.permissions.canSaveDraft) {
       throw new RoomOwnershipDeniedError();
     }
     if (!fresh.permissions.canSaveDraft) throw new RoomOwnershipDeniedError('You do not have permission to edit this room.');

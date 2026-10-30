@@ -34,7 +34,7 @@ async function setup(uri = payload()) {
   };
   vi.stubGlobal('fetch', vi.fn(serve));
   const headers = { Origin: 'https://wamp.land', 'Content-Type': 'application/json', Cookie: `ep_session=${session}` };
-  const refresh = () => { const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh', { method: 'POST', headers }); return handleRoomRequest(request, new URL(request.url), f.env); };
+  const refresh = () => { const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh?crypto=1', { method: 'POST', headers }); return handleRoomRequest(request, new URL(request.url), f.env); };
   const confirm = async (version = 999, hash?: string) => handleRoomTokenMetadataConfirm(new Request('https://api.wamp.land/api/rooms/0,0/mint/metadata/confirm', { method: 'POST', headers, body: JSON.stringify({ txHash: tx, metadataRoomVersion: version, metadataHash: hash ?? await sha256Hex(provider.state.tokenUri) }) }), f.env, '0,0', { x: 0, y: 0 });
   const stored = () => f.sqlite.prepare('SELECT minted_metadata_room_version,minted_metadata_hash,minted_metadata_updated_at,minted_owner_wallet_address,claimer_user_id FROM rooms WHERE id=?').get('0,0') as { minted_metadata_room_version: number | null; minted_metadata_hash: string | null; minted_metadata_updated_at: string | null; minted_owner_wallet_address: string; claimer_user_id: string };
   const loadRecord = () => loadRoomRecord(f.env, '0,0', { x: 0, y: 0 }, 'p1', wallet);

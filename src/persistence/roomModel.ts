@@ -190,6 +190,8 @@ export interface RoomVersionRecord {
 }
 
 export interface RoomRecord {
+  /** Protection remains visible when optional crypto details are omitted. */
+  isProtected?: boolean;
   draft: RoomSnapshot;
   published: RoomSnapshot | null;
   versions: RoomVersionRecord[];
@@ -218,6 +220,8 @@ export interface RoomRecord {
 }
 
 export interface RoomSummary {
+  /** Protection remains visible when optional crypto details are omitted. */
+  isProtected?: boolean;
   id: string;
   coordinates: RoomCoordinates;
   draftTitle: string | null;
@@ -302,6 +306,7 @@ export interface RoomSnapshotQueryResponse {
 
 export function createRoomSummaryFromRecord(record: RoomRecord): RoomSummary {
   return {
+    isProtected: isRoomMinted(record),
     id: record.draft.id,
     coordinates: record.draft.coordinates,
     draftTitle: record.draft.title,
@@ -339,6 +344,7 @@ export function createRoomRecordFromCurrent(
 ): RoomRecord {
   const summary = current.summary;
   return {
+    isProtected: isRoomMinted(summary),
     draft: cloneRoomSnapshot(current.draft),
     published: current.published ? cloneRoomSnapshot(current.published) : null,
     versions,
@@ -1035,6 +1041,7 @@ export function normalizeRoomRecord(
   const world = normalizeWorldRoomContext(record.world);
 
   return {
+    isProtected: isRoomMinted(record),
     draft,
     published,
     versions: Array.isArray(record.versions)
@@ -1098,6 +1105,7 @@ export function normalizeRoomRecord(
 export function cloneRoomRecord(record: RoomRecord): RoomRecord {
   const normalized = normalizeRoomRecord(record, record.draft.id, record.draft.coordinates);
   return {
+    isProtected: isRoomMinted(normalized),
     draft: cloneRoomSnapshot(normalized.draft),
     published: normalized.published ? cloneRoomSnapshot(normalized.published) : null,
     versions: normalized.versions.map((version) => cloneRoomVersionRecord(version)),
@@ -1146,7 +1154,7 @@ function normalizeWorldRoomContext(value: unknown): import('../worlds/model').Wo
 }
 
 export function isRoomMinted(
-  room: Pick<RoomRecord, 'mintedChainId' | 'mintedContractAddress' | 'mintedTokenId'>
+  room: Partial<Pick<RoomRecord, 'mintedChainId' | 'mintedContractAddress' | 'mintedTokenId' | 'isProtected'>>
 ): boolean {
-  return room.mintedChainId !== null || room.mintedContractAddress !== null || room.mintedTokenId !== null;
+  return room.isProtected === true || room.mintedChainId != null || room.mintedContractAddress != null || room.mintedTokenId != null;
 }

@@ -24,6 +24,8 @@ import {
 } from './roomModel';
 import { ROOM_STORAGE_PREFIX } from './browserStorage';
 import { RoomPublicationSubmissionError } from './roomPublicationSubmission';
+import { normalizeRoomCryptoDetails } from './roomCryptoDetails';
+import { hasConnectedCryptoWallet, hasCryptoWallet } from '../mint/walletGate';
 import { invalidateSharedRoomPreviewCache } from './sharedRoomPreviewCache';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { buildRoomVersionLineage } from './roomVersionLineage';
@@ -53,7 +55,7 @@ export type RoomPersistenceTarget = 'local' | 'remote';
 export interface RoomRepository {
   loadRoom(roomId: string, coordinates: RoomCoordinates): Promise<RoomRecord>;
   loadRoomSummary(roomId: string, coordinates: RoomCoordinates, options?: { signal?: AbortSignal }): Promise<RoomSummary>;
-  refreshRoomOwnership(roomId: string, coordinates: RoomCoordinates, options?: { signal?: AbortSignal }): Promise<RoomSummary>;
+  refreshRoomOwnership(roomId: string, coordinates: RoomCoordinates, options?: { signal?: AbortSignal; recoverPendingWallet?: true }): Promise<RoomSummary>;
   loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord>;
   loadRoomVersions(roomId: string, limit?: number, cursor?: string): Promise<RoomVersionsPage>;
   loadExactRoomVersion(roomId: string, version: number): Promise<RoomVersionRecord>;
@@ -242,6 +244,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,
       lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -313,6 +316,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: null,
       lastPublishedByAgentId: null,
       lastPublishedByDisplayName: 'Guest',
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -382,6 +386,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.claimerPrincipalKind,
       lastPublishedByAgentId: existing.claimerAgentId,
       lastPublishedByDisplayName: existing.claimerDisplayName,
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -449,6 +454,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,
       lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -493,6 +499,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,
       lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -566,6 +573,7 @@ class LocalRoomRepository implements RoomRepository {
       lastPublishedByPrincipalKind: existing.lastPublishedByPrincipalKind,
       lastPublishedByAgentId: existing.lastPublishedByAgentId,
       lastPublishedByDisplayName: existing.lastPublishedByDisplayName,
+      isProtected: isRoomMinted(existing),
       mintedChainId: existing.mintedChainId,
       mintedContractAddress: existing.mintedContractAddress,
       mintedTokenId: existing.mintedTokenId,
@@ -674,7 +682,7 @@ class ApiRoomRepository implements RoomRepository {
   async refreshRoomOwnership(
     roomId: string,
     coordinates: RoomCoordinates,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; recoverPendingWallet?: true } = {},
   ): Promise<RoomSummary> {
     const seedSummary = loadWorldSeedEditorSummary(roomId);
     if (seedSummary) return seedSummary;
@@ -682,7 +690,7 @@ class ApiRoomRepository implements RoomRepository {
     // A failed chain refresh must never fall back to local or cached ownership.
     return this.request<RoomSummary>(`/api/rooms/${encodeURIComponent(roomId)}/ownership/refresh?${params}`, {
       method: 'POST', signal: options.signal,
-    });
+    }, options.recoverPendingWallet === true);
   }
 
   async loadRoomCurrent(roomId: string, coordinates: RoomCoordinates): Promise<RoomCurrentRecord> {
@@ -955,7 +963,10 @@ class ApiRoomRepository implements RoomRepository {
     );
   }
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+  private async request<T>(path: string, init?: RequestInit, recoverPendingWallet = false): Promise<T> {
+    // Separate URL/cache keys; provider presence alone never opts into crypto data.
+    const includeCrypto = () => hasConnectedCryptoWallet() || (recoverPendingWallet && hasCryptoWallet());
+    if (includeCrypto()) path += `${path.includes('?') ? '&' : '?'}crypto=1`;
     const headers = new Headers(init?.headers);
 
     if (init?.body && !headers.has('Content-Type')) {
@@ -992,7 +1003,16 @@ class ApiRoomRepository implements RoomRepository {
     const data = (await response.json()) as T;
     if (isRoomRecordResponse(data)) {
       if (init?.method && init.method !== 'GET') invalidateSharedRoomPreviewCache(data.draft.id);
-      return cloneRoomRecord(data) as T;
+      return cloneRoomRecord(normalizeRoomCryptoDetails(data, includeCrypto())) as T;
+    }
+
+    if (data && typeof data === 'object') {
+      if ('summary' in data) {
+        const current = data as unknown as RoomCurrentRecord;
+        current.summary = normalizeRoomCryptoDetails(current.summary, includeCrypto());
+      } else if ('permissions' in data && 'publishedVersion' in data) {
+        return normalizeRoomCryptoDetails(data as unknown as RoomSummary, includeCrypto()) as T;
+      }
     }
 
     return data;

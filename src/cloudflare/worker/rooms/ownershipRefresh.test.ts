@@ -15,8 +15,8 @@ async function setup(viewer = 'p1') {
   }
   f.sqlite.prepare('UPDATE rooms SET minted_chain_id=8453,minted_contract_address=?,minted_token_id=?,minted_owner_wallet_address=? WHERE id=?').run(FIXTURE_MINT_CONTRACT, '42', seller, '0,0');
   const cookie = await createSession(f.env, viewer); vi.stubGlobal('fetch', vi.fn(provider.fetch));
-  const run = (authenticated = true) => {
-    const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh', { method: 'POST', headers: { Origin: 'https://wamp.land', ...(authenticated ? { Cookie: `ep_session=${cookie}` } : {}) } });
+  const run = (authenticated = true, crypto = true) => {
+    const request = new Request('https://api.wamp.land/api/rooms/0,0/ownership/refresh' + (crypto ? '?crypto=1' : ''), { method: 'POST', headers: { Origin: 'https://wamp.land', ...(authenticated ? { Cookie: `ep_session=${cookie}` } : {}) } });
     return handleRoomRequest(request, new URL(request.url), f.env);
   };
   const save = () => {
@@ -31,6 +31,16 @@ async function setup(viewer = 'p1') {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('explicit room ownership refresh, real sessions/database/provider protocol', () => {
+  it('keeps a default refresh protected and permission-correct without crypto fields', async () => {
+    const f = await setup();
+    try {
+      const response = await f.run(true, false), body = await response.json();
+      expect(response.status).toBe(200); expect(body.isProtected).toBe(true);
+      expect(body.permissions.canSaveDraft).toBe(true);
+      expect(Object.keys(body).filter(key => key.startsWith('minted'))).toEqual([]);
+    } finally { f.sqlite.close(); }
+  });
+
   it.each([['p1', true], ['builder', false], ['p2', false]] as const)('refreshes holder permissions for %s without replacing the builder', async (viewer, canSaveDraft) => {
     const f = await setup(viewer);
     try {
