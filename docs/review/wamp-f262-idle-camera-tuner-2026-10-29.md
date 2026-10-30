@@ -11,5 +11,7 @@ menu open/close and an app-mode render while hidden. With cameraTuner=1 the
 same renders read the snapshot (two reads) and the actual Zoom + button updates
 the displayed value. Both cases have zero page errors. External traffic disabled.
 Evidence: /tmp/wamp-f262-native-3.log and /tmp/wamp-f262-native.json.
-Lint/diff check pass. Full check, PR CI and live Pages verification remain.
+Full local check passes745files/6276tests, one existing expected failure/two skips,
+all stages, boot669.6/670KB. Evidence: /tmp/wamp-f262-check-complete.log.
+PR CI and live Pages verification remain.
 No production API/room/player writes, emails or wallet transactions.
