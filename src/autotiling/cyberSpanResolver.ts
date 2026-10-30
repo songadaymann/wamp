@@ -1,6 +1,5 @@
 import {
   CYBER_FAMILY_DEFINITIONS,
-  resolveCyberFramedPanel,
   resolveCyberNeonStrip,
   resolveCyberPlatformSpan,
   resolveCyberRubbleColumn,
@@ -48,12 +47,4 @@ export function resolveCyberHorizontalMiddleTile(
   const sample = resolveCyberLinearFamilyTiles(familyId, styleId, cycleLength + 2);
   const cycleOffset = Math.max(0, sourceOffset - 1) % cycleLength;
   return sample[1 + cycleOffset]!;
-}
-
-export function resolveCyberFramedPanelTiles(
-  styleId: CyberStyleId,
-  width: number,
-  height = 2,
-): CyberResolvedTile[][] {
-  return resolveCyberFramedPanel(styleId, width, height);
 }

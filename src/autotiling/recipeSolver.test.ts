@@ -1,4 +1,5 @@
 import { applyRegisteredSmartBrushCells, applyRegisteredSmartBrushOutlineCells } from './brushEngine';
+import { listCyberLetterMismatches, listCyberVoidAViolations } from './testing/cyberLetterInvariants';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -25,7 +26,6 @@ import type { CyberStyleId } from './cyberProfile';
 import { applySmartCells } from './solver';
 import { edgesForOrientedCatalogTile } from './cyberEdgeCatalog';
 import { CYBERCITY_EXTRAS_TILESET_FIRST_GID } from '../config/tilesets';
-import { listCyberLetterMismatches, listCyberVoidAViolations } from './cyberEdgeMatcher';
 
 interface CyberReferenceFixture {
   provenance: { roomVersion: number; snapshotSha256: string };
