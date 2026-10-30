@@ -1,3 +1,4 @@
+import { ROOM_EMOTES, type RoomEmoteId } from '../../chat/roomEmotes';
 import Phaser from 'phaser';
 import { getAuthDebugState } from '../../auth/client';
 import { playSfx } from '../../audio/sfx';
@@ -30,6 +31,7 @@ interface ComposerElements {
   form: HTMLFormElement;
   input: HTMLInputElement;
   sendButton: HTMLButtonElement;
+  emoteButtons: HTMLButtonElement[];
 }
 
 interface RenderedRoomChatBubble {
@@ -223,14 +225,6 @@ export class OverworldRoomChatController {
     }
 
     const authState = getAuthDebugState();
-    if (!authState.authenticated || !authState.user) {
-      this.options.showTransientStatus?.('Sign in to chat in-room.');
-      return false;
-    }
-    if (authState.schoolManaged) {
-      this.options.showTransientStatus?.('Room chat is off for classroom accounts.');
-      return false;
-    }
     if (authState.chatModeration.banned) {
       this.options.showTransientStatus?.('You are banned from chat.');
       return false;
@@ -244,8 +238,10 @@ export class OverworldRoomChatController {
     this.ensureComposerDom();
     this.composerOpen = true;
     this.renderComposer();
-    this.composerElements?.input.focus();
-    this.composerElements?.input.select();
+    if (authState.authenticated && !authState.schoolManaged) {
+      this.composerElements?.input.focus();
+      this.composerElements?.input.select();
+    } else this.composerElements?.emoteButtons[0]?.focus();
     return true;
   }
 
@@ -308,6 +304,7 @@ export class OverworldRoomChatController {
   };
 
   private readonly handleComposerInputKeydown = (event: KeyboardEvent) => {
+    event.stopPropagation();
     if (event.key !== 'Escape') {
       return;
     }
@@ -386,17 +383,39 @@ export class OverworldRoomChatController {
     sendButton.textContent = 'Say';
 
     form.append(input, sendButton);
-    root.append(form);
+    const tray = doc.createElement('div');
+    tray.className = 'room-chat-emotes';
+    tray.setAttribute('role', 'group');
+    tray.setAttribute('aria-label', 'Fixed emotes');
+    const emoteButtons = (Object.keys(ROOM_EMOTES) as RoomEmoteId[]).map((id) => {
+      const button = doc.createElement('button');
+      button.type = 'button';
+      button.className = 'bar-btn bar-btn-small';
+      button.textContent = ROOM_EMOTES[id].text;
+      button.setAttribute('aria-label', ROOM_EMOTES[id].label);
+      button.dataset.emote = id;
+      button.addEventListener('click', () => {
+        const result = this.client?.sendEmote(id);
+        if (result?.ok) {
+          playSfx('chat-send');
+          this.closeComposer();
+        } else this.options.showTransientStatus?.(this.getSendFailureMessage(result?.reason ?? 'connecting'));
+      });
+      tray.append(button);
+      return button;
+    });
+    root.append(tray, form);
     host.append(root);
 
     form.addEventListener('submit', this.handleComposerSubmit);
-    input.addEventListener('keydown', this.handleComposerInputKeydown);
+    root.addEventListener('keydown', this.handleComposerInputKeydown);
 
     this.composerElements = {
       root,
       form,
       input,
       sendButton,
+      emoteButtons,
     };
   }
 
@@ -406,7 +425,7 @@ export class OverworldRoomChatController {
     }
 
     this.composerElements.form.removeEventListener('submit', this.handleComposerSubmit);
-    this.composerElements.input.removeEventListener('keydown', this.handleComposerInputKeydown);
+    this.composerElements.root.removeEventListener('keydown', this.handleComposerInputKeydown);
     this.composerElements.root.remove();
     this.composerElements = null;
   }
@@ -417,7 +436,10 @@ export class OverworldRoomChatController {
       return;
     }
 
-    const authenticated = Boolean(getAuthDebugState().authenticated);
+    const authState = getAuthDebugState();
+    const authenticated = Boolean(authState.authenticated);
+    elements.form.classList.toggle('hidden', !authenticated || authState.schoolManaged);
+    for (const button of elements.emoteButtons) button.disabled = authState.chatModeration.banned;
     const open = this.composerOpen && this.options.getMode() === 'play';
     elements.root.classList.toggle('hidden', !open);
     elements.input.disabled = !authenticated;

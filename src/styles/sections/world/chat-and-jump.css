@@ -441,3 +441,15 @@
     max-height: 100%;
   }
 }
+
+@layer components {
+  .room-chat-emotes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .room-chat-emotes button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

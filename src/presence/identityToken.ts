@@ -36,6 +36,9 @@ export interface PartyKitIdentity {
 export interface PartyKitIdentityTokenClaims extends PartyKitIdentity {
   source: PartyKitIdentityTokenSource;
   roomChat?: RoomChatPermission;
+  /** Server-issued classroom scope; never copied from a client identity request. */
+  classroomId?: string;
+  emotesMuted?: boolean;
   iat: number;
   exp: number;
   nonce: string;
@@ -57,6 +60,9 @@ export interface PartyKitIdentityTokenIssueResponse {
 
 export interface PartyKitIdentityTokenCreateOptions {
   roomChat?: RoomChatPermission;
+  /** Server-issued classroom scope; never copied from a client identity request. */
+  classroomId?: string;
+  emotesMuted?: boolean;
   nowMs?: number;
   ttlMs?: number;
   nonce?: string;
@@ -126,10 +132,14 @@ export async function createPartykitIdentityToken(
 ): Promise<{ token: string; claims: PartyKitIdentityTokenClaims }> {
   const ttlMs = clampTokenTtl(options.ttlMs ?? DEFAULT_TOKEN_TTL_MS);
   const nowMs = Math.floor(options.nowMs ?? Date.now());
+  const classroomId = source === 'auth' && options.roomChat === 'school'
+    ? normalizeIdentityString(options.classroomId, MAX_USER_ID_LENGTH) : null;
   const claims: PartyKitIdentityTokenClaims = {
     ...identity,
     source,
     ...(options.roomChat ? { roomChat: options.roomChat } : {}),
+    ...(classroomId ? { classroomId } : {}),
+    ...(options.emotesMuted === true ? { emotesMuted: true } : {}),
     iat: nowMs,
     exp: nowMs + ttlMs,
     nonce: normalizeIdentityString(options.nonce, MAX_NONCE_LENGTH) || crypto.randomUUID(),
@@ -226,10 +236,14 @@ function normalizeVerifiedClaims(
   const roomChat = raw.roomChat === 'ok' || raw.roomChat === 'muted' || raw.roomChat === 'school'
     ? raw.roomChat
     : undefined;
+  const classroomId = source === 'auth' && roomChat === 'school'
+    ? normalizeIdentityString(raw.classroomId, MAX_USER_ID_LENGTH) : null;
   return {
     ...identity,
     source,
     ...(roomChat ? { roomChat } : {}),
+    ...(classroomId ? { classroomId } : {}),
+    ...(raw.emotesMuted === true ? { emotesMuted: true } : {}),
     iat,
     exp,
     nonce,

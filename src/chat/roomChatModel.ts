@@ -29,3 +29,8 @@ export interface RoomChatSayMessage {
   type: 'room-chat:say';
   text: string;
 }
+
+export interface RoomChatEmoteMessage {
+  type: 'room-chat:emote';
+  emote: import('./roomEmotes').RoomEmoteId;
+}
