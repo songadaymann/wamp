@@ -1309,13 +1309,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return draftRoom;
     }
 
-    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
-    if (presencePreviewRoom) {
-      return presencePreviewRoom;
-    }
-
     const optimisticPublishedRoom = this.optimisticPublishedRoomsById.get(roomId);
     if (optimisticPublishedRoom) return optimisticPublishedRoom;
+
+    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
+    if (presencePreviewRoom && this.roomSummariesById.get(roomId)?.state !== 'published') {
+      return presencePreviewRoom;
+    }
 
     const loadedFullRoom = this.loadedFullRoomsById.get(roomId);
     if (loadedFullRoom) {

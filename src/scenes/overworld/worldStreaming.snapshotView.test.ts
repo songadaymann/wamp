@@ -30,14 +30,52 @@ describe('world streaming snapshot views', () => {
     getMap(harness, 'transientRoomOverridesById').clear();
     expect(callGetView(harness, coordinates)).toBe(draft);
     getMap(harness, 'draftRoomsById').clear();
-    expect(callGetView(harness, coordinates)).toBe(presence);
-    getMap(harness, 'presencePreviewRoomsById').clear();
     expect(callGetView(harness, coordinates)).toBe(optimistic);
     getMap(harness, 'optimisticPublishedRoomsById').clear();
+    expect(callGetView(harness, coordinates)).toBe(presence);
+    getMap(harness, 'presencePreviewRoomsById').clear();
     expect(callGetView(harness, coordinates)).toBe(loaded);
     getMap(harness, 'loadedFullRoomsById').clear();
     expect(callGetView(harness, coordinates)).toBe(cached);
     expect(callGetView(harness, coordinates)).toBe(cached);
+  });
+
+  it.each(['published', 'claimed_unpublished', undefined] as const)(
+    'agrees with playable selection while a presence preview remains (%s)',
+    (state) => {
+      const coordinates = { x: 5, y: 7 };
+      const presence = createSnapshot('stale live preview');
+      const published = createSnapshot('published room');
+      published.status = 'published';
+      published.version = 2;
+      published.publishedAt = '2026-10-30T12:00:00.000Z';
+      const harness = createHarness({ presence, loaded: published });
+      const summaries = getMap(harness, 'roomSummariesById');
+      if (state) summaries.set(published.id, { id: published.id, state });
+
+      const expected = state === 'published' ? published : presence;
+      expect(callGetView(harness, coordinates)).toBe(expected);
+      expect(
+        OverworldWorldStreamingController.prototype.getPlayableRoomSnapshotViewForCoordinates.call(
+          harness as never,
+          coordinates,
+        ),
+      ).toBe(expected);
+      expect(callCloneCount(harness)).toBe(0);
+    },
+  );
+
+  it('uses the published cache after first publish even before preview removal', () => {
+    const published = createSnapshot('published cache');
+    published.status = 'published';
+    published.version = 2;
+    const harness = createHarness({ presence: createSnapshot('stale preview'), cached: published });
+    getMap(harness, 'roomSummariesById').set(published.id, { state: 'published' });
+
+    expect(callGetView(harness, published.coordinates)).toBe(published);
+    getMap(harness, 'presencePreviewRoomsById').clear();
+    expect(callGetView(harness, published.coordinates)).toBe(published);
+    expect(callCloneCount(harness)).toBe(0);
   });
 
   it('keeps cloning explicit and isolates mutable clones from the cached view', () => {
@@ -229,6 +267,7 @@ function createHarness(sources: {
       previewCache: {
         getRoomSnapshot: vi.fn(() => sources.cached ?? null),
       },
+      roomSummariesById: new Map(),
       roomSnapshotCloneCountBaseline: getRoomSnapshotCloneCount(),
       presencePreviewOwnedBySource: new WeakMap<RoomSnapshot, RoomSnapshot>(),
     },
