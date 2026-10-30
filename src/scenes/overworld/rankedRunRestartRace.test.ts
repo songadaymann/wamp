@@ -101,8 +101,8 @@ describe('ranked traces across a quick restart (F055)', () => {
     const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
       getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
       getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(), countRoomObjectsByCategory: () => 0,
-      setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-      setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
+      setActiveCourseRun: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+      setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
       buildVerificationTrace: (state) => recorder.buildTrace(state.elapsedMs), ...sceneRecorder(recorder),
     });
     run = controller.createCourseRunState(course); run.expandedRoomId = 'native-expanded'; run.expandedRoomVersion = 1;

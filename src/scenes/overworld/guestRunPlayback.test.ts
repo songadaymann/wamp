@@ -70,8 +70,8 @@ function harness() {
   const courses = new OverworldCoursePlaybackController({ guestRuns: guests,
     getSelectedCoordinates: () => ({ x: 0, y: 0 }), getActiveCourseRun: () => currentCourse,
     setActiveCourseRun: run => { currentCourse = run; }, getRoomSnapshotForCoordinates: () => room(),
-    countRoomObjectsByCategory: () => 1, clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-    setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud,
+    countRoomObjectsByCategory: () => 1, clearTransientRoomOverrides: vi.fn(),
+    setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud,
     buildVerificationTrace: buildTrace, clearVerificationTrace: clearTrace });
   function setCourse(expandedRoomId: string | null) {
     const snapshot = { ...createDefaultCourseSnapshot('example'), status: 'published' as const,

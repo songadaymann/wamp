@@ -36,7 +36,7 @@ async function openRoomCameraSettings() {
 }
 await page.route('**/api/**', (route) => {
   if (!['GET', 'OPTIONS'].includes(route.request().method())) return route.abort();
-  return route.continue();
+  return route.fallback();
 });
 try {
   await page.goto(`${baseUrl}/?previewSmoke=1&renderer=${renderer}`, { waitUntil: 'domcontentloaded' });
@@ -110,7 +110,7 @@ try {
     room.coordinates = { x: 100, y: 99 };
     room.cameraMode = 'follow';
     scene.worldStreamingController.setDraftRoom(room);
-    scene.worldStreamingController.setTransientRoomOverride(room);
+    scene.worldStreamingController.setTransientRoomOverrides([room]);
   });
   await page.waitForFunction(() => window.__EVERYBODYS_PLATFORMER_GAME__.scene.keys.OverworldPlayScene.debugPrepareTransitionDestination('100,99').collisionReady, null, { timeout: 30000 });
   const crossTo = async (x) => {

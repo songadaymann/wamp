@@ -683,7 +683,6 @@ type src/scenes/overworld/liveObjects.ts LoadedRoomObjectRuntimeState
 type src/scenes/overworld/liveObjects/model.ts LiveObjectRemovedReason
 type src/scenes/overworld/playPressure.ts LocalPlayPressureProfile
 type src/scenes/overworld/playPressure.ts LocalPlayPressureRoomBreakdown
-type src/scenes/overworld/previewCache.ts PlayableRoomSource
 type src/scenes/overworld/roomCommentsComposerController.ts RoomCommentRecord
 type src/scenes/overworld/roomRushRuns.ts RoomRushResult
 type src/scenes/overworld/specialTileRooms.ts IndexedSpecialTile

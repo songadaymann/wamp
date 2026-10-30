@@ -1,3 +1,4 @@
+import type { StreamingRoomCandidate } from './worldStreamingModel';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultRoomSnapshot,
@@ -9,7 +10,6 @@ import type { WorldRoomSummary } from '../../persistence/worldModel';
 import {
   OverworldPreviewCache,
   RoomSnapshotReferenceChangedError,
-  type StreamingRoomCandidate,
 } from './previewCache';
 
 describe('overworld exact-room preview cache lifecycle', () => {

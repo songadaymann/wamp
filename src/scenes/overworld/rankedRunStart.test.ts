@@ -75,8 +75,8 @@ describe('ranked trace capture while the start request is pending', () => {
       getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
       getRoomSnapshotForCoordinates: coordinates => ({ ...createDefaultRoomSnapshot(), placedObjects: coordinates.x === 1
         ? [{ id: 'floor_trigger', instanceId: 'plate', x: 88, y: 248, coopPlate: true }] : [] }),
-      countRoomObjectsByCategory: () => 0, setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(),
-      clearTransientRoomOverrides: vi.fn(), setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(),
+      countRoomObjectsByCategory: () => 0, setActiveCourseRun: vi.fn(),
+      clearTransientRoomOverrides: vi.fn(), setTransientRoomOverrides: vi.fn(),
       showTransientStatus: vi.fn(), renderHud: vi.fn(),
     });
     const run = controller.createCourseRunState(course);
@@ -138,8 +138,8 @@ describe('ranked trace capture while the start request is pending', () => {
     const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({ getSelectedCoordinates: () => ({ x: 0, y: 0 }),
       getActiveCourseRun: () => run, getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(),
       countRoomObjectsByCategory: () => 0, renderHud: vi.fn(),
-      setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-      setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(),
+      setActiveCourseRun: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+      setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(),
       onRankedRunPreparing: kind => recorder.prepare(kind, startFrame),
       onRankedRunStarted: response => { expect(recorder.bindPrepared(response.kind, response)).toBe(true); },
     });
@@ -174,8 +174,8 @@ describe('ranked trace capture while the start request is pending', () => {
     const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
       getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
       getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(), countRoomObjectsByCategory: () => 0,
-      setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-      setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
+      setActiveCourseRun: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+      setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
       onRankedRunPreparing: kind => recorder.prepare(kind, startFrame), onRankedRunStarted: onStarted,
       buildVerificationTrace: state => recorder.buildTrace(state.elapsedMs), clearVerificationTrace: () => recorder.clear(),
     });
@@ -203,8 +203,8 @@ describe('ranked trace capture while the start request is pending', () => {
       const controller: OverworldCoursePlaybackController = new OverworldCoursePlaybackController({
         getActiveCourseRun: () => run, getSelectedCoordinates: () => ({ x: 0, y: 0 }),
         getRoomSnapshotForCoordinates: () => createDefaultRoomSnapshot(), countRoomObjectsByCategory: () => 0,
-        setActiveCourseRun: vi.fn(), clearTransientRoomOverride: vi.fn(), clearTransientRoomOverrides: vi.fn(),
-        setTransientRoomOverride: vi.fn(), setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
+        setActiveCourseRun: vi.fn(), clearTransientRoomOverrides: vi.fn(),
+        setTransientRoomOverrides: vi.fn(), showTransientStatus: vi.fn(), renderHud: vi.fn(),
       });
       const run = controller.createCourseRunState(course);
       controller.startRunAfterSpawn(); await settle();

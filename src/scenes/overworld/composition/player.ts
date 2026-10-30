@@ -244,14 +244,8 @@ export function createCoursePlaybackController(
     setActiveCourseRun: (runState) => {
       host.setActiveCourseRun(runState);
     },
-    clearTransientRoomOverride: (roomId) => {
-      host.worldStreamingController.clearTransientRoomOverride(roomId);
-    },
     clearTransientRoomOverrides: (roomIds) => {
       host.worldStreamingController.clearTransientRoomOverrides(roomIds);
-    },
-    setTransientRoomOverride: (snapshot) => {
-      host.worldStreamingController.setTransientRoomOverride(snapshot);
     },
     setTransientRoomOverrides: (snapshots) => {
       host.worldStreamingController.setTransientRoomOverrides(snapshots);
