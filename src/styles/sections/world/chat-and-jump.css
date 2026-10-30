@@ -441,3 +441,30 @@
     max-height: 100%;
   }
 }
+
+@layer components {
+  .room-chat-emotes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .room-chat-emotes button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@layer components {
+  .mobile-world-emotes {
+    position: fixed;
+    top: calc(64px + var(--safe-top));
+    right: calc(8px + var(--safe-right));
+    z-index: var(--z-world-controls);
+    min-height: 44px;
+  }
+  body[data-device-class='phone'][data-orientation-state='portrait'] .mobile-world-emotes {
+    top: calc(12px + var(--safe-top));
+    left: calc(8px + var(--safe-left));
+    right: auto;
+  }
+}

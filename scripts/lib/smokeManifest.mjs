@@ -38,6 +38,7 @@ export const SMOKES = [
   ci('smoke_assist.mjs', 'Assist mode speed and safe respawn in rooms and Expanded Rooms'),
   ci('smoke_auth_state.mjs', 'Sign-in and sign-out UI and the auth client event contract'),
   ci('smoke_chat_identity.mjs', 'Chat names and identity for guests and signed-in players'),
+  ci('smoke_room_emotes.mjs', 'Native classroom/public emote isolation, moderation and keyboard/touch bubbles'),
   ci('smoke_collections.mjs', 'Collection pages, wallet gate loss and returning selections'),
   ci('smoke_collections_service.mjs', 'Builds the API Worker and records the collection data smoke_collections replays'),
   ci('smoke_dom_contract.mjs', 'Every DOM ID the client code and the smokes use exists in a page or is created by code'),
@@ -72,7 +73,7 @@ export const SMOKES = [
 
   // Nightly: editor-phone (long phone editor and physics runs).
   { file: 'smoke_editor_phone_dock.mjs', covers: 'Phone editor dock: libraries, pickers, More menu, swipe and tap selection', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
-  { file: 'smoke_editor_phone_inspector.mjs', covers: 'Phone inspector for plates, chests, enemies and NPCs, and Undo across cells', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
+  { file: 'smoke_editor_phone_inspector.mjs', covers: 'Phone inspector for plates, chests, enemies and NPCs, and Undo across cells', runs: 'nightly', group: 'editor-phone', server: 'vite-dev', args: ['{viteDev}'], timeoutMinutes: 15 },
   { file: 'smoke_physics_cadence.mjs', covers: 'Physics gives the same result at 30 to 240 Hz for nine movement fixtures', runs: 'nightly', group: 'editor-phone', args: ['{stack}'], timeoutMinutes: 15 },
 
   // Nightly: editor-dock (the desktop editor suites; the dock smoke alone takes about 10 minutes).

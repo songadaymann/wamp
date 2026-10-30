@@ -1,4 +1,4 @@
-import type { RoomChatSayMessage, RoomChatTransportChannel } from '../chat/roomChatModel';
+import type { RoomChatSayMessage, RoomChatEmoteMessage, RoomChatTransportChannel } from '../chat/roomChatModel';
 import type { RoomCoordinates, RoomSnapshot } from '../persistence/roomModel';
 import type {
   PvpInviteAcceptMessage,
@@ -62,6 +62,9 @@ export interface ConnectionPresenceState {
   interestRoom?: RoomCoordinates | null;
   /** From the verified identity token: who may send and receive in-room speech bubbles. */
   canSendRoomChat: boolean;
+  canSendRoomEmote?: boolean;
+  /** Private signed scope, never included in peer payloads. */
+  classroomId?: string;
   canReceiveRoomChat: boolean;
   /** When canSendRoomChat was last confirmed against chat bans and suspensions (token issue time at connect). */
   roomChatCheckedAt?: number;
@@ -123,7 +126,8 @@ export type IncomingMessage =
   | PvpInviteSendMessage
   | PvpInviteAcceptMessage
   | PvpInviteDeclineMessage
-  | RoomChatSayMessage;
+  | RoomChatSayMessage
+  | RoomChatEmoteMessage;
 
 export function parseIncomingMessage(message: string): IncomingMessage | null {
   let parsed: unknown;

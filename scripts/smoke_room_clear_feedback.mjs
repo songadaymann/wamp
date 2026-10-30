@@ -120,10 +120,12 @@ try {
     writeFileSync(`${output}/${name}-result-bounds.json`, JSON.stringify(resultBounds, null, 2));
     assert.ok(resultBounds.title.y >= 0 && resultBounds.close.y >= 0 && resultBounds.close.y + resultBounds.close.height <= height, JSON.stringify(resultBounds));
     await page.screenshot({ path: `${output}/${name}-results.png` });
-    await click(page, '#btn-run-guest-claim-continue', touch);
+    // Desktop below deliberately replays this room; Keep Playing starts another room (F429).
+    await click(page, name === 'desktop' ? '#btn-run-rating-close' : '#btn-run-guest-claim-continue', touch);
     assert.equal(await page.locator('#run-rating-modal').isVisible(), false);
     const result = { name, passed: true, run: (await state(page)).goalRun ?? completed.goalRun, detail, progress, card, resultBounds };
     if (name === 'desktop') {
+      await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).activeScene?.mode === 'browse');
       await click(page, '#btn-world-play', false);
       // A time-ranked room offers its ghost race again on every Play (bf4718da).
       await start(page, false);

@@ -50,6 +50,21 @@ function setup(chunks = [{ x: 0, y: 0 }]) {
 function openShared(): void { for (const socket of [...fixtures.sockets]) { socket.open();socket.message(baseline(true)); } }
 
 describe('chat leases the presence transport', () => {
+  it.each(['guest', 'student', 'signed-in'])('sends fixed emotes as %s, sharing the text cooldown', (kind) => {
+    const { world, chat } = setup(); openShared();
+    world.updateLocalPresence(presence()); chat.updateLocalPresence(presence());
+    fixtures.auth.authenticated = kind !== 'guest';
+    fixtures.auth.schoolManaged = kind === 'student';
+    expect(chat.sendEmote('wave')).toEqual({ ok: true });
+    expect(JSON.parse(fixtures.sockets[0]!.sent.at(-1)!)).toEqual({ type: 'room-chat:emote', emote: 'wave' });
+    expect(chat.sendEmote('heart')).toEqual({ ok: false, reason: 'rate-limited' });
+    expect(chat.send('text')).toEqual({ ok: false,
+      reason: kind === 'guest' ? 'unauthenticated' : kind === 'student' ? 'restricted' : 'rate-limited' });
+    vi.advanceTimersByTime(1000);
+    fixtures.auth.chatModeration.banned = true;
+    expect(chat.sendEmote('gg')).toEqual({ ok: false, reason: 'restricted' });
+  });
+
   it('publishes room, mode and PvP action changes immediately during an idle window', async () => {
     const { world } = setup(); openShared(); const socket = fixtures.sockets[0]!;
     const updates = () => socket.sent.map(raw => JSON.parse(raw)).filter(m => m.type === 'presence:update');

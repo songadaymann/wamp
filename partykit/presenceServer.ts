@@ -1,3 +1,4 @@
+import { ROOM_EMOTES, isRoomEmoteId, canSendRoomEmote, sharesRoomEmoteAudience } from '../src/chat/roomEmotes';
 import { ShardHeartbeatScheduler } from '../src/partykit/shardHeartbeatScheduler';
 import type * as Party from '../src/partykit/presenceTypes';
 import { RoomPreviewBroadcast } from '../src/partykit/roomPreviewBroadcast';
@@ -8,6 +9,7 @@ import {
   ROOM_CHAT_SEND_RATE_LIMIT_MS,
   type RoomChatBroadcastMessage,
   type RoomChatSayMessage,
+  type RoomChatEmoteMessage,
   type RoomChatTransportChannel,
 } from '../src/chat/roomChatModel';
 import type { RoomCoordinates } from '../src/persistence/roomModel';
@@ -341,7 +343,7 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    if (parsed.type === 'room-chat:say') {
+    if (parsed.type === 'room-chat:say' || parsed.type === 'room-chat:emote') {
       this.handleRoomChatSay(sender, parsed);
       return;
     }
@@ -860,6 +862,8 @@ export default class PresenceServer implements Party.Server {
       roomChat: channel === 'presence' && url.searchParams.get('roomChat') === '1',
       presenceInterest: channel === 'presence' && url.searchParams.get('presenceInterest') === '1',
       canSendRoomChat: canSendRoomChat(claims),
+      canSendRoomEmote: canSendRoomEmote(claims),
+      classroomId: claims.classroomId,
       canReceiveRoomChat: canReceiveRoomChat(claims),
       roomChatCheckedAt: claims.iat,
       school: claims.roomChat === 'school',
@@ -890,11 +894,13 @@ export default class PresenceServer implements Party.Server {
 
   private handleRoomChatSay(
     sender: Party.Connection<ConnectionPresenceState>,
-    message: RoomChatSayMessage
+    message: RoomChatSayMessage | RoomChatEmoteMessage
   ): void {
     const state = sender.state;
-    // Guests, chat-banned players and classroom accounts cannot send bubbles, whatever the client does.
-    if (!state || !(state.channel === 'room-chat' || state.roomChat === true) || !state.canSendRoomChat) {
+    const emote = message.type === 'room-chat:emote';
+    // Free text and fixed emotes have separate permissions; neither trusts client identity/scope.
+    if (!state || !(state.channel === 'room-chat' || state.roomChat === true) ||
+      !(emote ? state.canSendRoomEmote : state.canSendRoomChat)) {
       return;
     }
 
@@ -903,7 +909,9 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const text = normalizeRoomChatText(message.text);
+    const text = message.type === 'room-chat:emote'
+      ? (isRoomEmoteId(message.emote) ? ROOM_EMOTES[message.emote].text : null)
+      : normalizeRoomChatText(message.text);
     if (!text) {
       return;
     }
@@ -923,11 +931,11 @@ export default class PresenceServer implements Party.Server {
     const db = resolveRoomChatModerationDatabase(this.room.env);
     if (db && now - (state.roomChatCheckedAt ?? 0) >= ROOM_CHAT_PERMISSION_RECHECK_MS) {
       this.runBackground(this.recheckRoomChatSender(db, sender, now).then((allowed) => {
-        if (allowed) this.broadcastRoomChat(state, presence, text, now);
+        if (allowed) this.broadcastRoomChat(state, presence, text, now, emote);
       }));
       return;
     }
-    this.broadcastRoomChat(state, presence, text, now);
+    this.broadcastRoomChat(state, presence, text, now, emote);
   }
 
   /** Resolves false when the sender may no longer post bubbles; a failed read keeps the earlier decision. */
@@ -945,7 +953,8 @@ export default class PresenceServer implements Party.Server {
     }
     const current = sender.state;
     if (!current) return false;
-    sender.setState({ ...current, roomChatCheckedAt: checkedAt, canSendRoomChat: current.canSendRoomChat && !muted });
+    sender.setState({ ...current, roomChatCheckedAt: checkedAt, canSendRoomChat: current.canSendRoomChat && !muted,
+      canSendRoomEmote: current.canSendRoomEmote && !muted });
     return !muted;
   }
 
@@ -954,6 +963,7 @@ export default class PresenceServer implements Party.Server {
     presence: PresencePayload,
     text: string,
     now: number,
+    emote: boolean,
   ): void {
     const roomId = this.getRoomId(presence.roomCoordinates);
     const payload = buildRoomChatBroadcast(
@@ -964,7 +974,7 @@ export default class PresenceServer implements Party.Server {
       const peerPresence = connection.state?.presence;
       return (
         (connection.state?.channel === 'room-chat' || connection.state?.roomChat === true) &&
-        connection.state.canReceiveRoomChat &&
+        (emote ? sharesRoomEmoteAudience(state, connection.state) : connection.state.canReceiveRoomChat) &&
         peerPresence?.mode === 'play' &&
         this.getRoomId(peerPresence.roomCoordinates) === roomId
       );

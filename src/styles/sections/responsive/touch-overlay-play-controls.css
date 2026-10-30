@@ -50,9 +50,6 @@
     bottom: calc(10px + var(--safe-bottom));
   }
 
-  body[data-mobile-touch-play-layout='overlay'][data-device-class='phone'] #btn-world-room-chat {
-    right: calc(224px + var(--safe-right));
-  }
 
   body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-stop,
   body[data-mobile-touch-play-layout='overlay'][data-device-class='tablet'] .mobile-world-restart {

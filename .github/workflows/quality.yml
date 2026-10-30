@@ -201,11 +201,14 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npx playwright install --only-shell chromium webkit
       - run: npm run smoke:mobile:ci -- --identity-only
+      - run: npm run smoke:room-emotes
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: chat-identity
-          path: output/web-game/mobile-smoke-ci/chat-identity
+          path: |
+            output/web-game/mobile-smoke-ci/chat-identity
+            output/web-game/room-emotes
           retention-days: 7
 
   map-capture:
