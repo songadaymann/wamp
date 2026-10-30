@@ -1,3 +1,4 @@
+import { createDefaultRoomMusic } from '../../music/testing/legacyStemFixture';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultCourseSnapshot,
@@ -5,7 +6,6 @@ import {
   type CourseSnapshot,
 } from '../../courses/model';
 import {
-  createDefaultRoomMusic,
   type RoomMusic,
 } from '../../music/model';
 import {

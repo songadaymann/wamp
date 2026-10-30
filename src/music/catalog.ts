@@ -1,5 +1,4 @@
 import {
-  ROOM_MUSIC_LANE_IDS,
   type RoomMusicClip,
   type RoomMusicLane,
   type RoomMusicLaneId,
@@ -69,31 +68,4 @@ export function getRoomMusicLane(pack: RoomMusicPack, laneId: RoomMusicLaneId): 
 
 export function getRoomMusicClip(pack: RoomMusicPack, clipId: string): RoomMusicClip | null {
   return pack.clips.find((clip) => clip.id === clipId) ?? null;
-}
-
-export function getRoomMusicClipsForLane(
-  pack: RoomMusicPack,
-  laneId: RoomMusicLaneId,
-): RoomMusicClip[] {
-  return pack.clips.filter((clip) => clip.laneId === laneId);
-}
-
-export function isRoomMusicClipIdValidForLane(
-  pack: RoomMusicPack,
-  laneId: RoomMusicLaneId,
-  clipId: string | null | undefined,
-): boolean {
-  if (!clipId) {
-    return true;
-  }
-
-  return getRoomMusicClipsForLane(pack, laneId).some((clip) => clip.id === clipId);
-}
-
-export function getDefaultRoomMusicPack(): RoomMusicPack {
-  return WAMP_V1_PACK;
-}
-
-export function getAllRoomMusicLaneIds(): RoomMusicLaneId[] {
-  return [...ROOM_MUSIC_LANE_IDS];
 }

@@ -304,46 +304,6 @@ export class RoomMusicController {
     }
   }
 
-  async previewClip(packId: string, clipId: string): Promise<void> {
-    this.init();
-    if (this.volume === 0) return;
-    const requestId = ++this.previewClipRequestSerial;
-    const pack = getRoomMusicPack(packId);
-    const clip = pack ? getRoomMusicClip(pack, clipId) : null;
-    if (!pack || !clip) {
-      this.stopPreviewClip();
-      return;
-    }
-
-    const buffer = await this.loadBuffer(packId, clipId);
-    if (this.volume === 0 || requestId !== this.previewClipRequestSerial) return;
-    const audioContext = this.getAudioContext();
-    const masterGain = this.ensureMasterGain(audioContext);
-    if (!audioContext || !masterGain) {
-      return;
-    }
-
-    this.stopPreviewClip();
-    const gain = audioContext.createGain();
-    gain.gain.setValueAtTime(0.92, audioContext.currentTime);
-    gain.connect(masterGain);
-
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.loop = true;
-    source.loopStart = 0;
-    source.loopEnd = Math.min(pack.loopDurationSec, buffer.duration);
-    source.connect(gain);
-    source.start(audioContext.currentTime + 0.02, 0);
-
-    this.previewClipPlayback = {
-      clipId,
-      source,
-      gain,
-    };
-    void this.engine.resume('preview-clip');
-  }
-
   /**
    * Loops a rendered sequence (a library phrase audition) through the preview
    * voice without touching room playback. Resolves false when it was superseded.

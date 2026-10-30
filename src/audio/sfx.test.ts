@@ -253,15 +253,16 @@ describe('SFX page lifecycle', () => {
     const h = harness();
     expect(h.fetchMock).not.toHaveBeenCalled();
     h.runTimers(0); await h.settle();
-    expect(h.fetchMock).toHaveBeenCalledTimes(5);
+    expect(h.fetchMock).toHaveBeenCalledTimes(4);
     expect(h.fetchMock.mock.calls.some((call) => String(call[0]).includes('/jump.ogg'))).toBe(true);
     h.controller.play('jump', { ignoreCooldown: true });
     expect(h.sources).toHaveLength(1); // already decoded: starts in the same call
     h.manualLoads(); h.runTimers(2_000); await h.settle();
-    expect(h.fetchMock).toHaveBeenCalledTimes(6); // the next file waits for this one
-    for (let i = 0; i < 40 && h.loads.length > 5; i += 1) { h.loads.at(-1)?.finish(); await h.settle(); }
+    expect(h.fetchMock).toHaveBeenCalledTimes(5); // the next file waits for this one
+    for (let i = 0; i < 40 && h.loads.length > 4; i += 1) { h.loads.at(-1)?.finish(); await h.settle(); }
     const urls = h.fetchMock.mock.calls.map((call) => String(call[0]));
     expect(new Set(urls).size).toBe(urls.length);
     expect(urls.some((url) => url.endsWith('.mp3'))).toBe(false);
+    expect(urls.some((url) => url.includes('/footstep.'))).toBe(false);
   });
 });

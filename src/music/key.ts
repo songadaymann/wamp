@@ -1,5 +1,5 @@
 import { majorKey, minorKey } from '@tonaljs/key';
-import { Interval, Note } from 'tonal';
+import { Note } from 'tonal';
 
 export const ROOM_MUSIC_KEY_TONICS = [
   'C',
@@ -54,15 +54,6 @@ export function getRoomMusicKeySemitone(tonic: RoomMusicKeyTonic): number {
   return TONIC_TO_SEMITONE.get(tonic) ?? 0;
 }
 
-export function transposeRoomMusicKeyTonic(
-  tonic: RoomMusicKeyTonic,
-  semitones: number,
-): RoomMusicKeyTonic {
-  const interval = Interval.fromSemitones(semitones);
-  const transposed = Note.transpose(tonic, interval);
-  return normalizeEnharmonicPitchClass(transposed) ?? tonic;
-}
-
 export function getRoomMusicKeyDeltaSemitones(
   sourceTonic: RoomMusicKeyTonic,
   targetTonic: RoomMusicKeyTonic,
@@ -92,13 +83,6 @@ export function getRelativeRoomMusicKey(
     tonic: normalizeEnharmonicPitchClass(relativeMajor) ?? tonic,
     mode: 'major',
   };
-}
-
-export function getRoomMusicKeyLabel(
-  tonic: RoomMusicKeyTonic,
-  mode: RoomMusicKeyMode,
-): string {
-  return `${tonic} ${mode === 'major' ? 'Major' : 'Minor'}`;
 }
 
 function getCandidateScaleSemitones(

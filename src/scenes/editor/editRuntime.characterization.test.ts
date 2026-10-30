@@ -1,3 +1,4 @@
+import { createDefaultRoomMusic } from '../../music/testing/legacyStemFixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LAYER_NAMES,
@@ -11,7 +12,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../../config';
-import { createDefaultRoomMusic, createDefaultRoomPatternMusic } from '../../music/model';
+import { createDefaultRoomPatternMusic } from '../../music/model';
 import { cloneRoomSnapshot, createDefaultRoomSnapshot, type RoomSnapshot } from '../../persistence/roomModel';
 import type { SmartBrushId } from '../../autotiling/model';
 import { updateGameSettings } from '../../settings/userSettings';
