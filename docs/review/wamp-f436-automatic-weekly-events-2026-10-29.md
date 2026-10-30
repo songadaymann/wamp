@@ -1,8 +1,8 @@
-# F436 — automatic weekly events (draft, 2026-10-29)
+# F436 — automatic weekly events (delivered, 2026-10-30)
 
-Automatic scheduling was approved. The concrete 26-theme Build Prompt bank is
-still awaiting owner content approval; PR341 is a draft and must not activate in production
-until that approval arrives. F436 remains unchecked.
+Jonathan approved automatic scheduling/manual overrides and, on 2026-10-30,
+all 26 proposed prompts as written. PR341 is merged and F436 is delivered. Earlier
+pending-review statuses in the verification history below are superseded.
 
 The existing hourly maintenance handler prefills the current and next UTC week,
 so next week's choices are visible in Launch Admin before opening. Manual picks
@@ -77,3 +77,30 @@ refresh-worker-safety.log and refresh-browser.log; ignored output/f436-native/.
 Prompt content review remains pending. The automatic scheduling authorization
 already stands; do not re-request it. Keep the PR draft and F436 unchecked until
 the content decision and all final CI/live gates are satisfied.
+
+## Final delivery — 2026-10-30
+
+All 20 checks passed on exact cc742769. PR341 merged 13a93bd2. Guarded clean-main
+migration0079, API and Pages rollout passes; API7eccabf3-241f-45f2-8e6a-31118513645a
+serves100%, health applies/expects0079, initialPages4da535d3. Exact live main/editor/
+style asset bytes match release; renderer asset contract and production smoke pass.
+
+Run the approved production scheduler once through an authenticated D1 CLI adapter
+using the actual source function and deployed configuration. It creates current/
+next weeks2 Rush+2 Prompt rows, then0+0 on repeat. Existing manual/locked metadata
+is preserved by the scheduler guards. This initializes weekly configuration only;
+no run/entry submission, player/room mutation, test email or wallet transaction.
+Hourly scheduling continues through the existing hourly cron at minute 17.
+
+Current week: Vertical parkour (2,0 v21) and One Screen Wonder. Next week begins
+2026-11-02 UTC: Rush at -1,2 and Spare Change. Public weekly/current/list APIs return
+the current automatic picks; database checks confirm next week is queued. Actual desktop and phone browsers use real weekly GETs,
+show the live Rush available and approved prompt text, and have zero page errors;
+start/entry buttons were not submitted. Native signed-in verified-run proof above
+covers the complete submission flow with ephemeral data.
+
+Evidence: /tmp/wamp-f436-release.log, deployments.txt, activation.json/log,
+live-api.json, live-assets.log, live-browser.json/log (same prefix). Ignored rollout
+adapter output/f436-activation/seed.ts validates SQL binding with a read-only quote
+probe before invoking only the approved scheduler; ignored screenshots under
+output/f436-live/. Goal28/28 complete; Round2 100/248. Ledger/progress checks pass.

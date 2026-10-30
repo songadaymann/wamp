@@ -1,9 +1,9 @@
-# Next 28 Round 2 items — active goal, 2026-10-29
+# Next 28 Round 2 items — completed goal, 2026-10-30
 
 Scope: complete and verify all 28 items discussed with Jonathan. Use the fact-checked
 findings and current code, preserve real per-kind behavior, and record delivery
 receipts in the main Round 2 checklist. An implementation or green local test alone
-is not delivered completion. This tracker remains active until all 28 are verified.
+is not delivered completion. All 28 items are verified delivered as of 2026-10-30.
 
 Jonathan explicitly approved:
 
@@ -32,7 +32,7 @@ suggested order below. No item is checked until its actual delivery is verified.
 - [x] F334 — cached map artwork for API/Pages shares and Expanded composites; PR #338, all CI and live rollout verified.
 - [x] F269 — real-art Expanded Room and Wamp-O-Gram previews.
 - [x] F389 — correct standalone share-image backgrounds, custom art and geometry.
-- [ ] F436 — automatic weekly event scheduling with overrides.
+- [x] F436 — automatic weekly event scheduling with overrides.
 - [x] F428 — ghost challenge links carrying the shared run; PR #342, all CI and live rollout verified.
 - [x] F429 — Keep Playing to another unbeaten room; PR #343, all CI and live rollout verified.
 - [x] F435 — cleared-room markers on the world map; PR #344, all CI and live rollout verified.
@@ -57,9 +57,17 @@ suggested order below. No item is checked until its actual delivery is verified.
 
 ## Current boundary
 
+**Completed 2026-10-30: 28/28 delivered; Round 2 is 100/248.**
+F436 was the final item: all 26 prompt texts approved, PR341 all 20 checks green on
+cc742769, merged 13a93bd2. Guarded migration0079/API/Pages rollout and live checks
+pass. Current and next weeks are populated, a repeat changes nothing, and actual
+desktop/phone menus show the live Rush and prompt. No outstanding item in this goal.
+
+## Delivery history
+
 Baseline: main `417f0ca7`, Round 2 72/248. F263(PR334), F273(PR335), F274(PR336),
 F275(PR337) and F334(PR338, merged `a1470b35`) are verified delivered.
-This goal is **27/28 delivered**, and Round 2 is **99/248**.
+This goal is **28/28 delivered**, and Round 2 is **100/248**.
 
 F334 passed all 18 GitHub jobs, full 722-file/6,154-test check and native
 workerd/D1/R2 probes. Guarded full rollout and production smoke passed. Worker
@@ -89,18 +97,18 @@ F436 automatic weekly events remains a draft (PR341) pending prompt-content
 approval. F429 Keep Playing is delivered through PR343 (a4ac21ea): all CI, full725-file/
 6171-test check, six keyboard scenarios and native desktop/phone flows pass.
 Worker c0ad084a serves100%, Pages60aa95e9 and live assets match the release.
-Production smoke passes. F435 cleared-map markers are delivered through PR344 (2bd76733): all20 checks,
+Production smoke passes. F435 cleared-map markers are delivered through PR344 (2bd76733): all 20 checks,
 full728-file/6186-test check and native account/phone/history flows pass. Worker
 e6f01c31 serves100%, Pages5c0b2569 and live assets match the release. Private
 progress is session-owned; public historical geometry exposes no personal state.
 Production smoke passes. F447 recognition notices and republish warnings are delivered through PR345
-(f5ae30a8): all20 checks, full732-file/6210-test check and native desktop/phone/
+(f5ae30a8): all 20 checks, full732-file/6210-test check and native desktop/phone/
 new-tab flows pass. Migration0077 retained all1748 old Activity rows and their
 sequence; Worker0bada192 serves100%, finalPagesc8dc1091 and live assets match.
 Production smoke/private-read/public-feed checks pass.
 
 F451 is delivered through PR346/e49bc683 and the indexed-query correction
-PR347/24c6e51a. Both passed all20 checks; final full734-file/6223-test check,
+PR347/24c6e51a. Both passed all 20 checks; final full734-file/6223-test check,
 native desktop/phone comparisons and map switching, and215-version cold history
 pass. Initial live latency exposed a global facts scan; the prior Worker was
 restored while the primary-key correction passed CI. Final Worker605d12f7 is100%,
@@ -108,7 +116,7 @@ Pages7dc29d78 and live assets match. Warm reads take0.24–1.02s; grouped summar
 prior layouts, Expanded exact versions and Explore counts pass. No migration or
 production room/player/email writes.
 
-F381 is delivered through PR348/e13d607a: tested412a7ecc passed all20 checks;
+F381 is delivered through PR348/e13d607a: tested412a7ecc passed all 20 checks;
 full738files/6238tests/allstages, boot669.2/670KB. Native desktop/phone builders
 and a phone touch reviewer pass submit/edit/resubmit/reject-reason/approve with
 zero page errors. Worker89464588 serves100%; Pagesbc16366a and live entry/runtime/
@@ -116,7 +124,7 @@ editors/lazy status module/styles match release bytes. Production smoke and
 signed-out/private-directory checks pass; prior Insights grouping remains fast.
 No schema change or production room/player/email tests.
 
-F253 is delivered through PR349/bbc82248: tested a1c1a51d passed all20 checks,
+F253 is delivered through PR349/bbc82248: tested a1c1a51d passed all 20 checks,
 full738files/6238tests/all stages, boot668.8/670KB. Clear Layer has a live desktop/
 phone Erase-menu home; Cancel/clear/Undo, native Enter/Space and selected Expanded
 cell isolation pass. Retired editor markup/CSS/state is removed; More Fit uses the
@@ -126,7 +134,7 @@ matches and production smoke pass. No Worker/schema/production room/player/email
 writes. F479 wallet-only Protected sort and non-wallet payload hygiene are next.
 The remaining14 items stay open.
 
-F479 delivered through PR350, tested c183e346/all20 CI40983194176 and merged
+F479 delivered through PR350, tested c183e346/all 20 CI40983194176 and merged
 08d0e589. Full742files/6262tests/all stages, boot669.2/670KB. Frontend-first guarded
 Pages0e82901e then Worker eb81b606 at100%; production smoke and exact assets pass
 (entry main-R5bSOI_g). Live default/crypto=1 record, summary and current views retain
@@ -147,26 +155,32 @@ prove the sending/receiving flows. No migration or production room/player/email/
 writes. Goal16/28; Round2 88/248. F262/F264/F265/F261 are prepared separately for
 the next cleanup PR; all12 remaining items stay open. F436 content approval pending.
 
-PR #352 delivered F262/F264/F265/F261 after all20 exact-head checks passed.
+PR #352 delivered F262/F264/F265/F261 after all 20 exact-head checks passed.
 Merge8cc89f21; guarded migration0078/API/Pages release and renderer release pass.
 Live retired tables absent, health0078, canonical GET/HEAD301 and PNG/meta intact;
 renderer health200/admin404 and renderer-only admin secret removed. Exact frontend
 assets verified after Pages reconciliation. Goal20/28; Round2 92/248.
 
-F259 delivered through PR353, testedcc46d419/all20checks, mergef3b8d780.
+F259 delivered through PR353, testedcc46d419/all 20checks, mergef3b8d780.
 Guarded Pages-only rollout/smoke passed; exact frontend and default/red runtime
 atlas bytes verified live, retired sample assets404, preview no longer deployed.
 Local developer preview and all53 byte-preserving archives verified. Goal21/28,
 Round2 93/248. F257 PR354 awaits CI/live; F255 remains local and uncounted.
 
-F257 delivered through PR354, tested97bf1712/all20checks, merge8fac31e5.
+F257 delivered through PR354, tested97bf1712/all 20checks, merge8fac31e5.
 Guarded Pages-only rollout/smoke passed. Live exact frontend assets and real-browser
 boot diagnostics inactive/one ready entry/stable logs/zero page errors verified.
 Goal22/28; Round2 94/248. Remaining6 F436,F255,F260,F258,F266,F254.
 
-PR356 delivered F255/F260/F258/F266/F254 on2026-10-30. All20 checks passed on
+PR356 delivered F255/F260/F258/F266/F254 on 2026-10-30. All 20 checks passed on
 18446370; merge067726eb. Guarded Pages-only rollout/smoke, exact frontend bytes,
 live desktop/phone menu/About/sound/no-footstep/boot and public map image checks
 pass; API remains healthy at0078. Goal27/28, Round2 99/248. Only F436 remains:
 refreshed draftPR341 cc742769, migration0079 NOT applied, full/native proofs pass,
 fresh CI and the previously pending26-prompt content decision still required.
+
+Final F436 delivery supersedes all earlier pending-content/draft statuses. Jonathan
+approved all 26 prompts as written on 2026-10-30. Worker7eccabf3 serves100%; initial
+Pages4da535d3 and exact frontend bytes pass. Approved scheduler prefill through
+authenticated D1 creates2 Rush+2 Prompt rows; retry0+0. Public APIs and live desktop/
+phone menus pass, with no production run/entry submissions. Goal complete28/28.

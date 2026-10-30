@@ -1,8 +1,8 @@
-# Proposed automatic Build Prompt rotation — 2026-10-29
+# Approved automatic Build Prompt rotation — 2026-10-30
 
 These 26 prompts rotate weekly when no manual prompt is scheduled. They are
-creative briefs, using the existing voluntary prompt rules. Automatic scheduling
-was approved; this proposed content bank is awaiting Jonathan’s review.
+creative briefs, using the existing voluntary prompt rules. Jonathan approved all 26 prompts as written on 2026-10-30. Automatic scheduling
+was already approved.
 Manual edits and deletions will remain available before the first entry.
 
 1. **One Screen Wonder** — Build a complete challenge inside one room. Give it a clear start, a satisfying finish and at least one surprising detail.
