@@ -37,7 +37,7 @@ const requiredIdsByController = {
   'EditorDockShellController': [
     'editor-shell-top',
     'btn-editor-phone-fit',
-    'btn-mobile-editor-fit',
+    'btn-editor-shell-clear-layer',
     'editor-shell-title-slot',
     'editor-shell-status-slot',
     'editor-share-popover',

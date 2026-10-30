@@ -231,8 +231,6 @@ export interface EditorUiBridgeActions {
   onMintRoom: () => void | Promise<void>;
   onRefreshMintMetadata: () => void | Promise<void>;
   onFitToScreen: () => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
   onSetRoomTitle: (title: string | null) => void;
   onSetRoomCameraCentered: (centered: boolean) => void;
   onSetRoomPitsAreDeadly?: (enabled: boolean) => void;

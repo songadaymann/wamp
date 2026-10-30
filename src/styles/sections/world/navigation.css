@@ -1,11 +1,3 @@
-@layer responsive {
-  /* Discovery belongs to the browse toolbar, separate from the selected room. */
-
-  /* Two short rows keep every destination visible even on a 320px phone. */
-
-  /* The header stays visible; long menus scroll within the actual remaining viewport. */
-}
-
 @layer components {
 
   #world-navigation {

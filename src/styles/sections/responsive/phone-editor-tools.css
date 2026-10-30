@@ -1,65 +1,4 @@
 @layer responsive {
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
-    left: 50%;
-    right: auto;
-    bottom: calc(var(--phone-editor-sheet-height) - 1px);
-    width: min(calc(100vw - 12px - var(--safe-left) - var(--safe-right)), 820px);
-    transform: translateX(-50%);
-    padding: 0;
-    background: #0e0e0e;
-    border: 1px solid var(--border-strong);
-    border-bottom: none;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'][data-mobile-editor-collapsed='true'] #mobile-editor-nav {
-    bottom: 0;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn {
-    min-width: 0;
-    padding: 10px 12px;
-    border: none;
-    border-right: 1px solid #343434;
-    background: #0e0e0e;
-    box-shadow: none;
-    color: var(--text-muted);
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .bar-btn:last-child {
-    border-right: none;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab.active {
-    background: #0b0b0b;
-    color: #f7ecd1;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-world-tab {
-    color: var(--accent-alt);
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-world-tab.active {
-    background: var(--accent-alt);
-    color: #0b0b0b;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility {
-    color: var(--accent-warm);
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-utility:active,
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:active {
-    background: #2b2b2b;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #tools,
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) #layers {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-  }
 
   body[data-device-class='phone'][data-app-mode='editor'] #layers {
     display: grid;
@@ -67,7 +6,6 @@
   }
 
   body[data-device-class='phone'][data-app-mode='editor'] #background-select,
-  body[data-device-class='phone'][data-app-mode='editor']:not([data-editor-dock-shell='true']) .palette-tabs,
   body[data-device-class='phone'][data-app-mode='editor'] #object-palette-section > .section-label,
   body[data-device-class='phone'][data-app-mode='editor'] [data-mobile-panel='background'] > .section-label {
     display: none;
@@ -122,36 +60,6 @@
   }
 
   /* Keep history reachable while the panel tabs scroll on narrow phones. */
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav {
-    justify-content: flex-start;
-    overflow: visible;
-  }
-
-  .mobile-editor-tabs {
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .mobile-editor-utilities {
-    display: flex;
-    flex: 0 0 auto;
-    border-left: 1px solid #343434;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav [data-editor-history] {
-    opacity: 1;
-    border-radius: 0;
-  }
-
-  body[data-device-class='phone'][data-app-mode='editor'] #mobile-editor-nav [data-editor-history]:disabled {
-    color: #b7b7b7;
-    background: #303030;
-    cursor: default;
-  }
 
   /* Native repeated history clicks remain enabled without double-tap zoom. */
 

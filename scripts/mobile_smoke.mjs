@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { auditReadableText } from './lib/textAudits.mjs';
 import { createMobileInputRoomFixtures } from './lib/mobileInputRoomFixture.mjs';
 import { auditMannCool } from './lib/mannCoolAudits.mjs';
@@ -1142,7 +1143,7 @@ async function runPhoneLandscapeEditorSheets(page, scenarioSummary, scenarioDir)
     activeScene: summarizeActiveScene(editorState.activeScene),
   });
 
-  await assertHidden(page, '#mobile-editor-nav', 'legacy editor nav');
+  assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
   await assertVisible(page, '#editor-shell-phone-bar', 'persistent phone actions');
   await assertSelectorsWithinViewport(page, ['#editor-shell-phone-bar', '#editor-shell-dock', '#sidebar'], 'phone editor bounds');
   for (const action of ['test', 'publish']) await assertVisible(page, `[data-editor-shell-action="${action}"]`, `phone ${action}`);
@@ -1171,7 +1172,7 @@ async function runTabletLandscapeBrowse(page, scenarioSummary, scenarioDir) {
   assertCondition(state.device.coarsePointer === true, 'expected coarse pointer on tablet profile');
   await closeBlockingOverlays(page);
   await assertVisible(page, '#world-hud', 'tablet world HUD');
-  await assertHidden(page, '#mobile-editor-nav', 'phone editor nav on tablet browse');
+  assert.equal(await page.locator('#mobile-editor-nav').count(), 0);
   await assertSelectorsWithinViewport(page, ['#world-hud', '#bottom-bar'], 'tablet browse bounds');
   await captureScenarioScreenshot(page, scenarioSummary, scenarioDir, 'tablet-browse');
 }

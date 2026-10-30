@@ -14,8 +14,6 @@
   }
 
   body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-action-rail,
-  body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-top-tools-rail,
-  body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-tool-popover,
   body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-btn:not([data-editor-feature='sprite']),
   body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-panels,
   body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #editor-actions .editor-feature-launcher-status {
@@ -32,8 +30,6 @@
     transition: opacity 0.18s ease, filter 0.18s ease;
   }
 
-  body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #mobile-editor-nav .mobile-editor-tab:not([data-mobile-editor-sheet='actions']),
-  body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-undo,
   body[data-editor-sprite-ui-locked='true'][data-app-mode='editor'] #btn-mobile-editor-toggle {
     opacity: 0.3;
     pointer-events: none;

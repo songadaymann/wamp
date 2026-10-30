@@ -1,23 +1,5 @@
 @layer components {
-  .mobile-editor-tab,
-  .mobile-editor-utility {
-    border-radius: 0;
-  }
 
-  .mobile-editor-nav .mobile-editor-tab:first-of-type {
-    border-top-left-radius: 0;
-  }
-
-  .mobile-editor-nav .mobile-editor-utility:last-of-type {
-    border-top-right-radius: 0;
-  }
-
-  .mobile-editor-utility {
-    color: var(--accent-warm);
-  }
-
-  .mobile-editor-actions-panel,
-  .mobile-editor-only,
   .background-card-grid {
     display: none;
   }

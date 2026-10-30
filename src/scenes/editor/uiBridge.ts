@@ -31,7 +31,6 @@ import {
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
-  isMoreEditorTool,
   isPencilSprayPlacement,
   isPencilStampPlacement,
   ensureEditorToolAvailable,
@@ -315,7 +314,6 @@ export class EditorUiBridge {
   private readonly elements: EditorUiElements;
   private readonly toolButtonDefaultTitles = new Map<HTMLButtonElement, string>();
   private destroyed = false;
-  private moreToolsOpen = false;
   private activeFeatureLauncher: EditorFeatureLauncher | null = null;
   private currentObjectCategory = 'all';
   private readonly historyControls: EditorHistoryControls;
@@ -652,9 +650,6 @@ export class EditorUiBridge {
           return;
         }
         this.actions.onSelectTool(tool);
-        if (!isMoreEditorTool(tool)) {
-          this.moreToolsOpen = false;
-        }
       };
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
@@ -672,53 +667,6 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    for (const button of this.elements.moreToolsButtons) {
-      const toggleMoreTools = (event: Event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        this.moreToolsOpen = !this.moreToolsOpen;
-        this.syncEditorChromeState();
-      };
-      button.addEventListener('click', toggleMoreTools);
-      this.cleanupCallbacks.push(() => button.removeEventListener('click', toggleMoreTools));
-    }
-
-    const closeMoreToolsOnOutsideClick = (event: Event) => {
-      if (this.elements.moreToolsPanels.length === 0 || !this.moreToolsOpen) {
-        return;
-      }
-      const target = event.target as Node | null;
-      if (
-        target &&
-        (this.elements.moreToolsPanels.some((panel) => panel.contains(target)) ||
-          this.elements.moreToolsButtons.some((button) => button.contains(target)))
-      ) {
-        return;
-      }
-      this.moreToolsOpen = false;
-      this.syncEditorChromeState();
-    };
-    this.doc.addEventListener('click', closeMoreToolsOnOutsideClick);
-    this.cleanupCallbacks.push(() =>
-      this.doc.removeEventListener('click', closeMoreToolsOnOutsideClick)
-    );
-
-    const handleEraserBrushChange = () => {
-      const target = this.doc.activeElement;
-      const selectedInput =
-        this.elements.eraseBrushSelects.find((input) => input === target) ?? this.elements.eraseBrushSelects[0];
-      const nextSize = Number.parseInt(selectedInput?.value ?? '', 10);
-      if (ERASER_BRUSH_SIZES.includes(nextSize as EraserBrushSize)) {
-        updateEditorState({ eraserBrushSize: nextSize as EraserBrushSize });
-        this.syncEditorChromeState();
-      }
-    };
-    for (const input of this.elements.eraseBrushSelects) {
-      input.addEventListener('change', handleEraserBrushChange);
-      this.cleanupCallbacks.push(() =>
-        input.removeEventListener('change', handleEraserBrushChange)
-      );
-    }
     for (const button of this.elements.eraseBrushButtons) {
       const handleEraserBrushButton = () => {
         const nextSize = Number.parseInt(button.dataset.eraseBrushSize ?? '', 10);
@@ -817,8 +765,19 @@ export class EditorUiBridge {
     }
 
     for (const button of this.elements.clearLayerButtons) {
+      // Keep native button activation from reaching the editor's play/pan shortcuts.
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.code === 'Space') event.stopPropagation();
+      };
+      button.addEventListener('keydown', onKey);
+      button.addEventListener('keyup', onKey);
+      this.cleanupCallbacks.push(() => {
+        button.removeEventListener('keydown', onKey);
+        button.removeEventListener('keyup', onKey);
+      });
       bindButton(this.cleanupCallbacks, button, () => {
-        if (!this.windowObj.confirm('Clear every tile on the current layer?')) {
+        const cell = this.doc.body.dataset.editorCourseMode === 'true' ? ' in the selected Expanded Room cell' : '';
+        if (!this.windowObj.confirm(`Clear every tile on the current layer${cell}?`)) {
           return;
         }
         this.actions.onClearCurrentLayer();
@@ -1470,12 +1429,7 @@ export class EditorUiBridge {
         this.actions.onFitToScreen();
       });
     }
-    bindButton(this.cleanupCallbacks, this.elements.mobileZoomInBtn, () => {
-      this.actions.onZoomIn();
-    });
-    bindButton(this.cleanupCallbacks, this.elements.mobileZoomOutBtn, () => {
-      this.actions.onZoomOut();
-    });
+
   }
 
   private applyBackgroundSelection(nextBackgroundId: string): void {
@@ -1877,7 +1831,6 @@ export class EditorUiBridge {
   }
 
   private handleFeatureLauncher(feature: EditorFeatureLauncher): void {
-    this.moreToolsOpen = false;
 
     if (feature === 'music' || feature === 'sprite') {
       this.activeFeatureLauncher = null;
@@ -1898,8 +1851,7 @@ export class EditorUiBridge {
   }
 
   private usesDesktopFeaturePanels(): boolean {
-    return this.doc.body.dataset.appMode === 'editor'
-      && (this.doc.body.dataset.deviceClass !== 'phone' || this.doc.body.dataset.editorDockShell === 'true');
+    return this.doc.body.dataset.appMode === 'editor';
   }
 
   private requestPhoneEditorAutoCollapse(): void {
@@ -1964,17 +1916,12 @@ export class EditorUiBridge {
             modeLabel.textContent = appearance.label;
           } else {
             const label = button.querySelector<HTMLElement>('.tool-label');
-            if (label && !label.querySelector('.tool-mode')) {
+            if (label) {
               label.textContent = appearance.label;
             }
           }
         }
-        for (const part of button.querySelectorAll<HTMLElement>('.tool-mode')) {
-          part.classList.toggle(
-            'is-dim',
-            Boolean(appearance.dimPart && part.dataset.part === appearance.dimPart),
-          );
-        }
+
       }
       const supportedTitle = appearance?.title ?? this.toolButtonDefaultTitles.get(button) ?? '';
       button.title = getEditorToolUnavailableTitle(tool)
@@ -2021,20 +1968,6 @@ export class EditorUiBridge {
       useFeaturePanels ? this.activeFeatureLauncher !== 'lighting' : true,
     );
 
-      const showMoreTools =
-        this.moreToolsOpen ||
-      (editorState.paletteMode !== 'objects' &&
-        isMoreEditorTool(editorState.activeTool));
-    const moreToolsActive =
-      showMoreTools || isMoreEditorTool(editorState.activeTool);
-    for (const button of this.elements.moreToolsButtons) {
-      button.classList.toggle('active', moreToolsActive);
-    }
-    for (const panel of this.elements.moreToolsPanels) {
-      panel.classList.toggle('hidden', !showMoreTools);
-      panel.dataset.open = showMoreTools ? 'true' : 'false';
-    }
-
     const showEraseControls = editorState.activeTool === 'eraser';
     for (const controls of this.elements.eraseControls) {
       controls.classList.toggle('hidden', !showEraseControls);
@@ -2049,11 +1982,6 @@ export class EditorUiBridge {
       'aria-expanded',
       showShellEraseControls ? 'true' : 'false',
     );
-    for (const input of this.elements.eraseBrushSelects) {
-      if (input.value !== String(editorState.eraserBrushSize)) {
-        input.value = String(editorState.eraserBrushSize);
-      }
-    }
     for (const button of this.elements.eraseBrushButtons) {
       const active = button.dataset.eraseBrushSize === String(editorState.eraserBrushSize);
       button.classList.toggle('active', active);
@@ -2063,10 +1991,7 @@ export class EditorUiBridge {
     const showRandomizeControls = editorState.activeTool === 'randomize';
     for (const controls of this.elements.randomizeControls) {
       controls.classList.toggle('hidden', !showRandomizeControls);
-      const popoverLabel = controls.querySelector('.editor-tool-popover-label');
-      if (popoverLabel) {
-        popoverLabel.textContent = 'Scramble';
-      }
+
     }
     this.doc.getElementById('editor-shell-randomize-picker')?.classList.toggle(
       'hidden',
@@ -2094,9 +2019,6 @@ export class EditorUiBridge {
     );
     this.doc.querySelector('[data-tool="pencil"][aria-controls="editor-shell-pencil-picker"]')
       ?.setAttribute('aria-expanded', showPencilControls ? 'true' : 'false');
-    for (const label of this.doc.querySelectorAll<HTMLElement>('.editor-pencil-controls .editor-tool-popover-label')) {
-      label.textContent = sprayPlacement ? 'Spray' : 'Draw';
-    }
     for (const button of this.elements.pencilBrushButtons) {
       const active = button.dataset.pencilBrushSize === String(editorState.pencilBrushSize);
       button.classList.toggle('active', active);

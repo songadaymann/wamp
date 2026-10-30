@@ -118,7 +118,6 @@ export class EditorInteractionController {
   ) {
     this.cursorCoordsEls = [
       doc.getElementById('cursor-coords'),
-      doc.getElementById('mobile-editor-cursor-coords'),
     ].filter((element): element is HTMLElement => Boolean(element));
     this.drawing = new EditorWorkspaceDrawingController({
       sliceAt: (x, y) => x >= 0 && x < ROOM_PX_WIDTH && y >= 0 && y < ROOM_PX_HEIGHT ? 0 : null,
