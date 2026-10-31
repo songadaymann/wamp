@@ -1,0 +1,1 @@
+| 2026-10-31 | F267 | [#359](https://github.com/songadaymann/wamp/pull/359) | [receipt](docs/review/wamp-f267-shared-modal-skin-2026-10-31.md) | Make paper dialogs the default, share action styles and keep disabled colors consistent |

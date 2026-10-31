@@ -6,7 +6,7 @@ IDs continue from round 1 ([wamp-checkup-2026-10.md](wamp-checkup-2026-10.md), F
 
 Interactive version (private to Jonathan): https://claude.ai/artifact/836rH6CASUjvBw3bSzKhJM
 
-**Progress: 101 of 248 done.**
+**Progress: 102 of 248 done.**
 
 ## How to use this file
 
@@ -144,7 +144,7 @@ The Expanded Room work left two copies of several things: server routes, progres
 - [x] **F273** Room vs Expanded Room progression and rating rules are two hand-synced copies of the anti-cheat-sensitive logic · medium impact · medium effort
 - [x] **F283** Five separate copies of 'which version of this room is current' have already drifted apart · low impact · small effort — **done 2026-10-30** ([PR #357](https://github.com/songadaymann/wamp/pull/357)): runtime selection prefers published content over lingering live previews; regression/browser/20 CI checks and live frontend pass. [Receipt](wamp-f283-room-version-selection-2026-10-30.md).
 - [x] **F269** Expanded Room and Wamp-O-Gram previews use a separate 838-line 'colored blocks' renderer; fold it into the real-art one · medium impact · medium effort — **done 2026-10-29** ([PR #339](https://github.com/songadaymann/wamp/pull/339), [cache follow-up #340](https://github.com/songadaymann/wamp/pull/340)): one real-art painter for API/Pages/Grams with canonical geometry, custom art, moderation and bounded caches; all CI and live rollout verified. [Receipt](wamp-f269-f389-shared-real-art-previews-2026-10-29.md).
-- [ ] **F267** Each pop-up re-declares the same paper skin by name (~750 duplicate lines); the default is still the old dark one · medium impact · medium effort
+- [x] **F267** Each pop-up re-declares the same paper skin by name (~750 duplicate lines); the default is still the old dark one · medium impact · medium effort — **done 2026-10-31** ([PR #359](https://github.com/songadaymann/wamp/pull/359)): shared paper defaults/actions, cream Insights/Templates, consistent disabled colors and a no-copy guard; full checks, all20 CI and live desktop/phone dialogs pass. [Receipt](wamp-f267-shared-modal-skin-2026-10-31.md).
 - [ ] **F271** Most user lookups still make two database trips because of fallback code for columns added in March-May · medium impact · small effort — _also covers: Bot and API-token requests make 4 trips including a write each time, and profile lookups read the same user row twice_
 - [ ] **F272** Play.fun was removed in July, but about 60 queries and the client still filter its leftover accounts on every read · medium impact · medium effort — _also covers: Play.fun was removed in July, but its account filters still run inside 64 queries and add a database read to every run_ — _step 1 done 2026-10-23 ([PR #319](https://github.com/songadaymann/wamp/pull/319)): the write-side checks that could no longer fire are removed, with a sign-in contract test. Step 2 (the read filters) needs a policy decision ([receipt](wamp-round2-cleanup-2026-10-23.md))._
 - [ ] **F282** Five client repositories keep private fetch-and-error copies and so miss the Safari page-leave fix in apiRequest · low impact · medium effort — _also covers: Three course and expanded-room API clients hand-roll the same request code, and five old course save methods are unused; The collection price and shelf loaders skip the shared request helper and lose its Safari page-exit fix_
