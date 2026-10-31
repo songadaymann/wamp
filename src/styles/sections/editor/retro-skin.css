@@ -382,7 +382,6 @@
   body[data-app-mode='editor'] #sidebar .obj-cat-tab,
   body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
   body[data-app-mode='editor'] #sidebar .layer-btn,
-  body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
   body[data-app-mode='editor'] #sidebar .object-item,
   body[data-app-mode='editor'] #sidebar .layer-info-button {
     appearance: none;
@@ -414,7 +413,6 @@
   body[data-app-mode='editor'] #sidebar .obj-cat-tab:hover,
   body[data-app-mode='editor'] #sidebar .object-subcategory-tab:hover,
   body[data-app-mode='editor'] #sidebar .layer-btn:hover,
-  body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn:hover,
   body[data-app-mode='editor'] #sidebar .object-item:hover,
   body[data-app-mode='editor'] #sidebar .layer-info-button:hover,
   body[data-app-mode='editor'] #sidebar .layer-info-button:focus-visible {
@@ -435,7 +433,6 @@
   body[data-app-mode='editor'] #sidebar .bar-btn.active,
   body[data-app-mode='editor'] #sidebar .tool-btn.active,
   body[data-app-mode='editor'] #sidebar .layer-btn.active,
-  body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active,
   body[data-app-mode='editor'] #sidebar .object-item.active {
     background: var(--editor-retro-green);
     background-color: var(--editor-retro-green);
@@ -483,7 +480,6 @@
   body[data-app-mode='editor'] #sidebar .obj-cat-tab,
   body[data-app-mode='editor'] #sidebar .object-subcategory-tab,
   body[data-app-mode='editor'] #sidebar .layer-btn,
-  body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn,
   body[data-app-mode='editor'] #sidebar .object-item {
     background: var(--editor-retro-paper);
     background-color: var(--editor-retro-paper);
@@ -729,11 +725,6 @@
 
   body[data-app-mode='editor'] #palette-tooltip .palette-tooltip-description {
     color: var(--editor-retro-blue-deep);
-  }
-
-  body[data-app-mode='editor'] #sidebar .layer-stack-mini-btn.active {
-    background-color: var(--editor-retro-green);
-    box-shadow: 2px 2px 0 var(--editor-retro-shadow);
   }
 
   body[data-app-mode='editor'] #sidebar select,
