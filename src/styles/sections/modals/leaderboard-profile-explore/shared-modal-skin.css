@@ -39,10 +39,6 @@
     padding: 20px 18px 18px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: var(--wamp-cream);
-    border: 3px solid var(--wamp-sky);
-    border-radius: 0;
-    box-shadow: var(--shadow-6);
   }
 
   #leaderboard-modal .leaderboard-modal-panel {
@@ -65,50 +61,6 @@
     max-height: calc(var(--visible-vh) - 32px);
   }
 
-  #leaderboard-modal .history-modal-kicker,
-  #explore-modal .history-modal-kicker,
-  #profile-modal .history-modal-kicker,
-  #guest-progress-modal .history-modal-kicker,
-  #sign-text-modal .history-modal-kicker,
-  #avatar-picker-modal .history-modal-kicker,
-  #chat-moderation-modal .history-modal-kicker,
-  #mobile-jump-sheet .history-modal-kicker,
-  #editor-music-phrase-save-modal .history-modal-kicker {
-    color: var(--wamp-sky-deep);
-    font-family: var(--font-ui);
-    font-size: var(--ui-text-small, 11px);
-    letter-spacing: 0.04em;
-    line-height: 1.3;
-    text-transform: uppercase;
-  }
-
-  #leaderboard-modal .history-modal-title,
-  #explore-modal .history-modal-title,
-  #profile-modal .history-modal-title,
-  #guest-progress-modal .history-modal-title,
-  #sign-text-modal .history-modal-title,
-  #avatar-picker-modal .history-modal-title,
-  #chat-moderation-modal .history-modal-title,
-  #mobile-jump-sheet .history-modal-title,
-  #editor-music-phrase-save-modal .history-modal-title {
-    margin-top: 6px;
-    color: var(--wamp-ink);
-    font-family: var(--font-display);
-    font-size: var(--ui-text-title, 16px);
-    line-height: 1.25;
-    font-synthesis: none;
-    -webkit-font-smoothing: none;
-  }
-
-  #leaderboard-modal .history-modal-meta,
-  #explore-modal .history-modal-meta,
-  #profile-modal .history-modal-meta,
-  #guest-progress-modal .history-modal-meta,
-  #sign-text-modal .history-modal-meta,
-  #avatar-picker-modal .history-modal-meta,
-  #chat-moderation-modal .history-modal-meta,
-  #mobile-jump-sheet .history-modal-meta,
-  #editor-music-phrase-save-modal .history-modal-meta,
   #leaderboard-modal .leaderboard-secondary,
   #explore-modal .leaderboard-secondary,
   #profile-modal .leaderboard-secondary {
@@ -116,62 +68,6 @@
     font-family: var(--font-ui);
     font-size: var(--ui-text-body, 12px);
     line-height: 1.45;
-  }
-
-  #leaderboard-modal .history-modal-error,
-  #explore-modal .history-modal-error,
-  #profile-modal .history-modal-error,
-  #guest-progress-modal .history-modal-error,
-  #sign-text-modal .history-modal-error,
-  #avatar-picker-modal .history-modal-error,
-  #chat-moderation-modal .history-modal-error,
-  #mobile-jump-sheet .history-modal-error,
-  #editor-music-phrase-save-modal .history-modal-error {
-    padding: 12px;
-    border: 2px solid var(--wamp-ink);
-    border-radius: 0;
-    background: var(--wamp-red);
-    color: var(--wamp-ink);
-    font-family: var(--font-ui);
-    font-size: var(--ui-text-body, 12px);
-    line-height: 1.45;
-    box-shadow: var(--shadow-3);
-  }
-
-  #leaderboard-modal .history-modal-header > .bar-btn,
-  #explore-modal .history-modal-header > .bar-btn,
-  #profile-modal .history-modal-header > .bar-btn,
-  #guest-progress-modal .history-modal-header > .bar-btn,
-  #sign-text-modal .history-modal-header > .bar-btn,
-  #avatar-picker-modal .history-modal-header > .bar-btn,
-  #chat-moderation-modal .history-modal-header > .bar-btn,
-  #mobile-jump-sheet .history-modal-header > .bar-btn,
-  #editor-music-phrase-save-modal .history-modal-header > .bar-btn,
-  #leaderboard-modal .leaderboard-tabs .bar-btn,
-  #leaderboard-modal .leaderboard-controls .bar-btn,
-  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
-  #explore-modal .leaderboard-discover-filters .bar-btn,
-  #profile-modal .profile-tabs .bar-btn,
-  #profile-modal .leaderboard-empty .bar-btn,
-  .history-modal-error .bar-btn,
-  #profile-modal .profile-edit-actions .bar-btn,
-  #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn,
-  #sign-text-modal .bar-btn,
-  #avatar-picker-modal .bar-btn,
-  #chat-moderation-modal .bar-btn,
-  #mobile-jump-sheet .bar-btn {
-    min-height: 34px;
-    padding: 8px 12px 7px;
-    border: 2px solid var(--wamp-ink);
-    border-radius: 0;
-    background: var(--wamp-sky);
-    color: var(--wamp-black);
-    font-family: var(--font-ui);
-    font-size: var(--ui-text-small, 11px);
-    letter-spacing: 0.03em;
-    line-height: 1.1;
-    text-transform: uppercase;
-    box-shadow: var(--shadow-3);
   }
 
   #leaderboard-modal .history-modal-header > .bar-btn:hover,
@@ -196,31 +92,6 @@
   #profile-modal .profile-room-card:hover,
   #profile-modal .profile-room-card:focus-visible {
     filter: brightness(1.04);
-  }
-
-  #leaderboard-modal .history-modal-header > .bar-btn:disabled,
-  #explore-modal .history-modal-header > .bar-btn:disabled,
-  #profile-modal .history-modal-header > .bar-btn:disabled,
-  #guest-progress-modal .history-modal-header > .bar-btn:disabled,
-  #sign-text-modal .history-modal-header > .bar-btn:disabled,
-  #avatar-picker-modal .history-modal-header > .bar-btn:disabled,
-  #chat-moderation-modal .history-modal-header > .bar-btn:disabled,
-  #mobile-jump-sheet .history-modal-header > .bar-btn:disabled,
-  #editor-music-phrase-save-modal .history-modal-header > .bar-btn:disabled,
-  #leaderboard-modal .leaderboard-tabs .bar-btn:disabled,
-  #leaderboard-modal .leaderboard-controls .bar-btn:disabled,
-  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:disabled,
-  #explore-modal .leaderboard-discover-filters .bar-btn:disabled,
-  #profile-modal .profile-tabs .bar-btn:disabled,
-  #profile-modal .profile-edit-actions .bar-btn:disabled,
-  #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn:disabled,
-  #sign-text-modal .bar-btn:disabled,
-  #avatar-picker-modal .bar-btn:disabled,
-  #chat-moderation-modal .bar-btn:disabled,
-  #mobile-jump-sheet .bar-btn:disabled {
-    background: #c2bbb6;
-    color: #6d6768;
-    box-shadow: none;
   }
 
   #leaderboard-modal #btn-leaderboard-close,
@@ -569,19 +440,6 @@
 
   /* Sign Text, Choose Avatar, Chat Moderation and the phone Warp sheet use the same paper skin
    (F115). Their inner styles read the dark-theme colour variables, so the panels redefine them. */
-
-  #sign-text-modal .history-modal-panel,
-  #avatar-picker-modal .history-modal-panel,
-  #chat-moderation-modal .history-modal-panel,
-  #mobile-jump-sheet .history-modal-panel {
-    --text: var(--wamp-ink);
-    --text-muted: #4b4552;
-    --text-dim: #6d6768;
-    --border: rgba(var(--wamp-sky-deep-rgb), 0.35);
-    --border-strong: var(--wamp-sky-deep);
-    --field: var(--wamp-cream);
-    color: var(--wamp-ink);
-  }
 
   #sign-text-modal .sign-text-modal-input {
     min-height: 140px;

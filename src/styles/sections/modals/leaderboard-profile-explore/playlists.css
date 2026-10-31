@@ -16,10 +16,6 @@
     padding: 20px 18px 18px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: var(--wamp-cream);
-    border: 3px solid var(--wamp-sky);
-    border-radius: 0;
-    box-shadow: var(--shadow-6);
   }
 
   #playlist-intro-modal .playlist-intro-modal-panel {
@@ -29,62 +25,24 @@
     padding: 20px 18px 18px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: var(--wamp-cream);
-    border: 3px solid var(--wamp-sky);
-    border-radius: 0;
-    box-shadow: var(--shadow-6);
   }
 
-  #playlist-modal .history-modal-kicker,
-  #playlist-modal .history-modal-title,
-  #playlist-modal .history-modal-meta,
   #playlist-modal .leaderboard-empty,
   #playlist-modal .profile-overview-bio,
-  #playlist-intro-modal .history-modal-kicker,
-  #playlist-intro-modal .history-modal-title,
-  #playlist-intro-modal .history-modal-meta,
   #playlist-intro-modal .playlist-intro-level-card {
     color: var(--wamp-ink);
     font-family: var(--font-ui);
   }
 
-  #playlist-modal .history-modal-kicker,
-  #playlist-intro-modal .history-modal-kicker {
-    color: var(--wamp-sky-deep);
-    font-size: var(--ui-text-small, 11px);
-    letter-spacing: 0.04em;
-    line-height: 1.3;
-    text-transform: uppercase;
-  }
-
-  #playlist-modal .history-modal-title,
-  #playlist-intro-modal .history-modal-title {
-    margin-top: 6px;
-    font-family: var(--font-display);
-    font-size: var(--ui-text-title, 16px);
-    line-height: 1.25;
-    font-synthesis: none;
-    -webkit-font-smoothing: none;
-  }
-
   #playlist-modal .history-modal-meta,
-  #playlist-modal .profile-overview-bio,
   #playlist-intro-modal .history-modal-meta {
     color: var(--wamp-sky-deep);
-    font-size: var(--ui-text-body, 12px);
-    line-height: 1.45;
   }
 
-  #playlist-modal .history-modal-error {
-    padding: 12px;
-    border: 2px solid var(--wamp-ink);
-    border-radius: 0;
-    background: var(--wamp-red);
-    color: var(--wamp-ink);
-    font-family: var(--font-ui);
+  #playlist-modal .profile-overview-bio {
+    color: var(--wamp-sky-deep);
     font-size: var(--ui-text-body, 12px);
     line-height: 1.45;
-    box-shadow: var(--shadow-3);
   }
 
   #playlist-modal .history-modal-header > .bar-btn,
@@ -125,8 +83,8 @@
   #profile-modal .profile-add-room-playlist-btn:disabled,
   #explore-modal .explore-room-playlist-action .bar-btn:disabled,
   #playlist-modal .playlist-remove-room-btn:disabled {
-    background: #c2bbb6;
-    color: #6d6768;
+    background: var(--wamp-disabled-surface);
+    color: var(--wamp-disabled-text);
     box-shadow: none;
   }
 

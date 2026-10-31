@@ -1,0 +1,143 @@
+@layer components {
+  /* Identical action bodies shared once; selector specificity and local variants
+     retain their existing colors, dimensions and responsive overrides. */
+
+  #controls-modal #btn-controls-close,
+  #about-modal #btn-about-close,
+  #about-modal .about-action-row .bar-btn,
+  #guestbook-modal #btn-guestbook-close,
+  #guestbook-modal #btn-guestbook-submit,
+  #settings-modal #btn-settings-close {
+    padding: 5px 10px 4px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    background: var(--wamp-sky);
+    color: var(--wamp-black);
+    font-family: var(--font-label);
+    font-size: var(--ui-text-small, 8px);
+    letter-spacing: 0px;
+    box-shadow: var(--shadow-2);
+    font-synthesis: none;
+    -webkit-font-smoothing: none;
+  }
+
+  #first-publish-modal .bar-btn,
+  #daily-room-modal .bar-btn {
+    min-height: 44px;
+    min-width: 44px;
+    border-radius: 0;
+    color: var(--wamp-ink);
+    background: #ffe093;
+    border: 2px solid var(--wamp-ink);
+    opacity: 1;
+  }
+
+  #explore-modal .explore-queue-actions .bar-btn:disabled,
+  .room-sequence-hud .bar-btn:disabled,
+  #leaderboard-modal .history-modal-header > .bar-btn:disabled,
+  #explore-modal .history-modal-header > .bar-btn:disabled,
+  #profile-modal .history-modal-header > .bar-btn:disabled,
+  #guest-progress-modal .history-modal-header > .bar-btn:disabled,
+  #sign-text-modal .history-modal-header > .bar-btn:disabled,
+  #avatar-picker-modal .history-modal-header > .bar-btn:disabled,
+  #chat-moderation-modal .history-modal-header > .bar-btn:disabled,
+  #mobile-jump-sheet .history-modal-header > .bar-btn:disabled,
+  #editor-music-phrase-save-modal .history-modal-header > .bar-btn:disabled,
+  #leaderboard-modal .leaderboard-tabs .bar-btn:disabled,
+  #leaderboard-modal .leaderboard-controls .bar-btn:disabled,
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn:disabled,
+  #explore-modal .leaderboard-discover-filters .bar-btn:disabled,
+  #profile-modal .profile-tabs .bar-btn:disabled,
+  #profile-modal .profile-edit-actions .bar-btn:disabled,
+  #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn:disabled,
+  #sign-text-modal .bar-btn:disabled,
+  #avatar-picker-modal .bar-btn:disabled,
+  #chat-moderation-modal .bar-btn:disabled,
+  #mobile-jump-sheet .bar-btn:disabled,
+  .pvp-modal-actions .bar-btn:disabled,
+  #run-rating-modal #btn-run-rating-close:disabled,
+  #run-rating-modal #btn-run-rating-skip:disabled,
+  #run-rating-modal #btn-run-rating-submit:disabled,
+  #run-rating-modal .run-share-actions .bar-btn:disabled,
+  #run-rating-modal .run-rating-quality-actions .bar-btn:disabled,
+  #run-rating-modal #run-rating-difficulty-actions .bar-btn:disabled,
+  #wamp-o-gram-modal .history-modal-header > .bar-btn:disabled,
+  #wamp-o-gram-modal .wamp-o-gram-actions .bar-btn:disabled,
+  #wamp-o-gram-modal .wamp-o-gram-link-row .bar-btn:disabled {
+    background: var(--wamp-disabled-surface);
+    color: var(--wamp-disabled-text);
+    box-shadow: none;
+  }
+
+  #leaderboard-modal .history-modal-header > .bar-btn,
+  #explore-modal .history-modal-header > .bar-btn,
+  #profile-modal .history-modal-header > .bar-btn,
+  #guest-progress-modal .history-modal-header > .bar-btn,
+  #sign-text-modal .history-modal-header > .bar-btn,
+  #avatar-picker-modal .history-modal-header > .bar-btn,
+  #chat-moderation-modal .history-modal-header > .bar-btn,
+  #mobile-jump-sheet .history-modal-header > .bar-btn,
+  #editor-music-phrase-save-modal .history-modal-header > .bar-btn,
+  #leaderboard-modal .leaderboard-tabs .bar-btn,
+  #leaderboard-modal .leaderboard-controls .bar-btn,
+  #leaderboard-modal .leaderboard-difficulty-actions .bar-btn,
+  #explore-modal .leaderboard-discover-filters .bar-btn,
+  #profile-modal .profile-tabs .bar-btn,
+  #profile-modal .leaderboard-empty .bar-btn,
+  .history-modal-error .bar-btn,
+  #profile-modal .profile-edit-actions .bar-btn,
+  #editor-music-phrase-save-modal .music-phrase-save-actions .bar-btn,
+  #sign-text-modal .bar-btn,
+  #avatar-picker-modal .bar-btn,
+  #chat-moderation-modal .bar-btn,
+  #mobile-jump-sheet .bar-btn,
+  #run-rating-modal #btn-run-rating-close,
+  #run-rating-modal #btn-run-rating-skip,
+  #run-rating-modal #btn-run-guest-claim-continue,
+  #guest-builder-claim-modal #btn-guest-builder-claim-close,
+  #guest-builder-claim-modal #btn-guest-builder-claim-continue,
+  #guest-builder-claim-modal #btn-guest-builder-claim-submit-guest,
+  #guest-room-recovery-modal #btn-guest-room-recovery-close,
+  #guest-room-recovery-modal #btn-guest-room-recovery-submit,
+  #guest-room-recovery-modal #btn-guest-room-recovery-go,
+  #welcome-modal .history-modal-header-actions .bar-btn,
+  #room-history-modal .history-modal-header-actions .bar-btn,
+  #room-history-modal .history-version-actions .bar-btn,
+  #room-rush-modal .history-modal-header .bar-btn,
+  #btn-room-rush-weekly,
+  #room-rush-result-modal .bar-btn,
+  #wamp-o-gram-modal .history-modal-header > .bar-btn,
+  #wamp-o-gram-modal .wamp-o-gram-actions .bar-btn,
+  #wamp-o-gram-modal .wamp-o-gram-link-row .bar-btn {
+    min-height: 34px;
+    padding: 8px 12px 7px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    background: var(--wamp-sky);
+    color: var(--wamp-black);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    box-shadow: var(--shadow-3);
+  }
+
+  #run-rating-modal #btn-run-rating-submit,
+  #run-rating-modal #btn-run-guest-claim-signin,
+  #guest-builder-claim-modal #btn-guest-builder-claim-signin,
+  #guest-room-recovery-modal #btn-guest-room-recovery-signin {
+    min-height: 34px;
+    padding: 8px 14px 7px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    background: var(--wamp-green);
+    color: var(--wamp-cream);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    box-shadow: var(--shadow-3);
+  }
+}

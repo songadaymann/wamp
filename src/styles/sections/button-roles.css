@@ -57,6 +57,20 @@
     filter: none;
   }
 
+  .history-modal-panel .bar-btn:is(:disabled, [aria-disabled='true']) {
+    background: var(--wamp-disabled-surface);
+    color: var(--wamp-disabled-text);
+    border-color: var(--wamp-disabled-border);
+    opacity: 1;
+    cursor: not-allowed;
+    filter: none;
+  }
+
+  /* A disabled choice retains its flat selected frame (F464). */
+  .history-modal-panel .bar-btn:not(.active):is(:disabled, [aria-disabled='true']) {
+    box-shadow: none;
+  }
+
   body[data-editor-dock-shell='true'] .editor-shell-chunky-button[data-button-size='lg'] > span:last-child {
     font-family: var(--font-display);
     font-size: var(--ui-text-title, 16px);
