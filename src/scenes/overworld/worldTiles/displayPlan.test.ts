@@ -19,10 +19,18 @@ describe('world tile display plan', () => {
       ...children.slice(0, 3).map((child) => [worldTileAddressKey(child), ready()] as const),
       [worldTileAddressKey(children[3]), { state: 'pending' }],
     ]);
-    const parentFallback = resolveWorldTileDisplayPlan({ targets: [target], availabilityByKey: availability });
-    expect(parentFallback)
-      .toMatchObject({ displayImageKeys: [worldTileAddressKey(parent)], uncoveredTargetKeys: [] });
-    expect(isWorldTileTargetReplacementComplete(parentFallback)).toBe(false);
+    for (const unavailable of [
+      { state: 'pending' },
+      { state: 'failed' },
+      { state: 'ready-image', decoded: true, gpuReady: false },
+      { state: 'ready-image', decoded: false, gpuReady: true },
+    ] as const) {
+      availability.set(worldTileAddressKey(children[3]), unavailable);
+      const parentFallback = resolveWorldTileDisplayPlan({ targets: [target], availabilityByKey: availability });
+      expect(parentFallback)
+        .toMatchObject({ displayImageKeys: [worldTileAddressKey(parent)], uncoveredTargetKeys: [] });
+      expect(isWorldTileTargetReplacementComplete(parentFallback)).toBe(false);
+    }
 
     availability.set(worldTileAddressKey(children[3]), { state: 'ready-empty' });
     const targetReplacement = resolveWorldTileDisplayPlan({ targets: [target], availabilityByKey: availability });

@@ -1,4 +1,5 @@
 export interface BuildPrompt {
+  pickedBy?: 'admin' | 'automatic';
   slug: string;
   title: string;
   constraint: string;

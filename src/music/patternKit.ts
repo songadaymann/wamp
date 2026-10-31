@@ -1,6 +1,5 @@
 import {
   ROOM_PATTERN_DRUM_ROWS,
-  type RoomPatternDrumRowDefinition,
   type RoomPatternDrumRowId,
 } from './pattern';
 import { loadRolandMt32DrumSample } from './rolandMt32DrumKit';
@@ -307,8 +306,4 @@ export async function getPatternDrumSamples(
   })).then((entries) => new Map<RoomPatternDrumRowId, Float32Array>(entries));
   drumSampleCache.set(cacheKey, samplePromise);
   return samplePromise;
-}
-
-export function getPatternDrumRowDefinition(rowId: RoomPatternDrumRowId): RoomPatternDrumRowDefinition | null {
-  return ROOM_PATTERN_DRUM_ROWS.find((row) => row.id === rowId) ?? null;
 }

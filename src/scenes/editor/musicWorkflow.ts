@@ -139,10 +139,6 @@ export class EditorMusicWorkflowCoordinator {
     return this.musicPreviewState;
   }
 
-  isSequencerModeActive(): boolean {
-    return this.musicModeActive && this.musicComposerMode === 'sequencer';
-  }
-
   resetForSceneOpen(): void {
     this.stopMusicPhraseAudition({ render: false });
     this.touchEditor.destroy();

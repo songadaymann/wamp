@@ -1,5 +1,6 @@
 import { handlePublishRecognition } from './worker/activity/recognition';
 import { handleClearedRoomProgress } from './worker/runs/clearedRooms';
+import { scheduleWeeklyEvents } from './worker/weeklyEvents/scheduler';
 import { handleCollectionPrice } from './worker/mint/price';
 import { handleCollectionRead } from './worker/collections/routes';
 export { PresenceDurableObject } from './presence/durableObject';
@@ -397,6 +398,11 @@ export default {
       } catch {
         console.error(JSON.stringify({ event: 'run-ghost-cost-alert-failed' }));
       }
+      try {
+        const weeklyEvents = await scheduleWeeklyEvents(env,new Date(event.scheduledTime).toISOString());
+        console.log(JSON.stringify({event:'weekly-events-scheduled',...weeklyEvents}));
+      } catch { console.error(JSON.stringify({event:'weekly-events-schedule-failed'})); }
+
       await runHourlyMaintenance(env, new Date(event.scheduledTime));
     }
     const activity = await runActivityEmails(env, { now: new Date(event.scheduledTime).toISOString() });

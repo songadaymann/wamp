@@ -95,7 +95,7 @@ export function createRoomCommentsController(
     selectRoomCoordinates: (coordinates) => host.selectRoomCoordinates(coordinates),
     jumpToRoomCoordinates: (coordinates) => host.jumpToCoordinates(coordinates),
     showTransientStatus: (message) => host.showTransientStatus(message),
-    waitForBrowseDiscoveryReady: (signal) => host.worldStreamingController.waitForBrowseCommentDiscoveryReady(signal),
+    waitForBrowseDiscoveryReady: (signal) => host.worldStreamingController.waitForBrowseSecondaryStartupReady(signal),
   });
 }
 

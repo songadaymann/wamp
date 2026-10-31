@@ -53,12 +53,10 @@
   }
 
   body[data-device-class='phone'] #world-hud::after,
-  body[data-device-class='phone'] #world-hud .world-hud-topline,
   body[data-device-class='phone'] #world-hud .world-room-subtitle,
   body[data-device-class='phone'] #world-hud #world-jump-row,
   body[data-device-class='phone'] #world-hud #world-zoom-label,
   body[data-device-class='phone'] #world-hud #world-status,
-  body[data-device-class='phone'] #world-hud .world-hud-row-secondary-actions,
   body[data-device-class='phone'] #world-hud .world-hud-row-tertiary-actions,
   body[data-device-class='phone'] #world-hud #btn-world-course-builder,
   body[data-device-class='phone'] #world-hud #btn-world-room-rush {
@@ -292,19 +290,6 @@
 
   body[data-device-class='phone'] .world-room-subtitle {
     font-size: var(--ui-text-small, 11px);
-  }
-
-  body[data-device-class='phone'] .world-hud-title {
-    font-size: var(--ui-text-small, 8px);
-  }
-
-  body[data-device-class='phone'] .world-hud-title-wrap {
-    gap: 6px;
-  }
-
-  body[data-device-class='phone'] .world-hud-beta {
-    padding: 2px 6px;
-    font-size: var(--ui-text-small, 8px);
   }
 
   body[data-device-class='phone'] .world-hud-row {

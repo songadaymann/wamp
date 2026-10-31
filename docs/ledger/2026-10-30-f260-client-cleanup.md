@@ -1,0 +1,1 @@
+| 2026-10-30 | F260 | [#356](https://github.com/songadaymann/wamp/pull/356) | [receipt](docs/review/wamp-f260-music-helper-cleanup-2026-10-29.md) | Remove retired music helpers and footstep warming while preserving saved stems playback |

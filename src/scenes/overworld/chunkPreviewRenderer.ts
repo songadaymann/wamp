@@ -244,10 +244,6 @@ export class OverworldChunkPreviewRenderer {
     return this.chunkImagesByChunkId.size * chunkTextureWidth * chunkTextureHeight;
   }
 
-  hasPreviewForRoom(roomId: string): boolean {
-    return this.visiblePreviewRoomIds.has(roomId);
-  }
-
   getPendingTextureBuildCount(): number {
     return this.pendingTextureBuildsByKey.size;
   }

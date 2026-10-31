@@ -27,20 +27,6 @@ import {
 
 export type MusicPhraseCreatorPrincipalKind = 'user' | 'agent';
 
-export interface MusicPhraseBatchRecord {
-  id: string;
-  roomId: string;
-  roomVersion: number;
-  roomTitle: string | null;
-  roomX: number;
-  roomY: number;
-  creatorUserId: string | null;
-  creatorPrincipalKind: MusicPhraseCreatorPrincipalKind | null;
-  creatorAgentId: string | null;
-  creatorDisplayName: string;
-  createdAt: string;
-}
-
 export interface MusicPhraseDrumPayload {
   kind: 'drums';
   instrumentId: 'drums';
@@ -274,18 +260,6 @@ export function isMusicPhrasePayloadEmpty(payload: MusicPhrasePayload | null | u
 
   return payload.track.steps.every((rowIndex) => rowIndex === null)
     && (!Array.isArray(payload.track.midis) || payload.track.midis.every((midi) => midi === null));
-}
-
-export function isMusicPhraseRecordTonal(
-  phrase: MusicPhraseRecord | null | undefined,
-): phrase is MusicPhraseRecord & { payload: MusicPhraseTonalPayload } {
-  return Boolean(phrase && phrase.payload.kind === 'tonal');
-}
-
-export function isMusicPhraseRecordDrum(
-  phrase: MusicPhraseRecord | null | undefined,
-): phrase is MusicPhraseRecord & { payload: MusicPhraseDrumPayload } {
-  return Boolean(phrase && phrase.payload.kind === 'drums');
 }
 
 export function extractMusicPhrasePayloadFromPattern(

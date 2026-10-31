@@ -1,0 +1,1 @@
+| 2026-10-30 | F436 | [#341](https://github.com/songadaymann/wamp/pull/341) | [receipt](docs/review/wamp-f436-automatic-weekly-events-2026-10-29.md) | Automatically schedule weekly Rush and approved Build Prompts with manual overrides and verified weekly scores |

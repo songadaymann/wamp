@@ -113,47 +113,6 @@
     }
   }
 
-  .world-hud-topline {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .world-hud-title-wrap {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .world-hud-title {
-    color: var(--hud-trial-yellow);
-    font-family: var(--font-label);
-    font-size: var(--ui-text-title, 16px);
-    line-height: 1.5;
-    letter-spacing: 1px;
-    font-synthesis: none;
-    -webkit-font-smoothing: none;
-  }
-
-  .world-hud-beta {
-    flex: 0 0 auto;
-    padding: 3px 6px 2px;
-    border: 2px solid var(--wamp-ink);
-    border-radius: 0;
-    background: var(--hud-trial-red);
-    color: var(--wamp-ink);
-    font-family: var(--font-label);
-    font-size: var(--ui-text-small, 8px);
-    letter-spacing: 1px;
-    line-height: 1;
-    transform: none;
-    box-shadow: var(--shadow-2);
-    font-synthesis: none;
-    -webkit-font-smoothing: none;
-  }
-
   .world-room-title {
     color: var(--text);
     font-family: var(--hud-room-title-font);
@@ -235,12 +194,6 @@
     font-size: var(--ui-text-body, 13px);
     line-height: 1.1;
     box-shadow: var(--shadow-3);
-  }
-  .world-hud-label {
-    color: var(--text-muted);
-    font-size: var(--ui-text-small, 10px);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
   }
 
   .world-hud-value {

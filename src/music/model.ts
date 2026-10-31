@@ -23,7 +23,6 @@ export {
   DEFAULT_ROOM_MUSIC_KEY_TONIC,
   ROOM_MUSIC_KEY_MODES,
   ROOM_MUSIC_KEY_TONICS,
-  getRoomMusicKeyLabel,
   normalizeRoomMusicKeyMode,
   normalizeRoomMusicKeyTonic,
   type RoomMusicKeyMode,
@@ -37,11 +36,9 @@ export {
   ROOM_PATTERN_BPM,
   ROOM_PATTERN_MAX_BPM,
   ROOM_PATTERN_MIN_BPM,
-  ROOM_PATTERN_TEMPO_STEP,
   ROOM_PATTERN_SWING_PERCENT,
   ROOM_PATTERN_MAX_SWING_PERCENT,
   ROOM_PATTERN_MIN_SWING_PERCENT,
-  ROOM_PATTERN_SWING_STEP,
   ROOM_PATTERN_INSTRUMENT_COLORS,
   ROOM_PATTERN_INSTRUMENT_ICONS,
   ROOM_PATTERN_DRUM_GRID_START_ROW,
@@ -49,7 +46,6 @@ export {
   ROOM_PATTERN_GRID_ROWS,
   ROOM_PATTERN_INSTRUMENT_IDS,
   ROOM_PATTERN_INSTRUMENT_LABELS,
-  ROOM_PATTERN_MARGIN_COLUMNS,
   ROOM_PATTERN_MAX_OCTAVE_SHIFT,
   ROOM_PATTERN_MIN_OCTAVE_SHIFT,
   ROOM_PATTERN_PITCH_MODES,
@@ -78,11 +74,9 @@ export {
   getPatternInstrumentColorRgbCss,
   getPatternInstrumentIcon,
   getPatternInstrumentLabel,
-  getPatternMidiNote,
   getPatternRowLabel,
   getPatternRowNote,
   getPatternStepMidi,
-  getPatternStepNote,
   getRoomPatternBarDurationSec,
   getRoomPatternKey,
   getRoomPatternLoopDurationSec,
@@ -106,12 +100,10 @@ export {
 } from './pattern';
 
 export {
-  ROOM_PHRASE_ARRANGEMENT_BAR_COUNT,
   ROOM_PHRASE_ARRANGEMENT_SEGMENT_BAR_COUNT,
   ROOM_PHRASE_ARRANGEMENT_SEGMENT_STEP_COUNT,
   ROOM_PHRASE_ARRANGEMENT_SLOT_OPTIONS,
   ROOM_PHRASE_ARRANGEMENT_SLOT_COUNT,
-  ROOM_PHRASE_ARRANGEMENT_STEP_COUNT,
   cloneRoomPhraseArrangementMusic,
   collectRoomPhraseArrangementPhraseIds,
   createDefaultRoomPhraseArrangementMusic,
@@ -198,12 +190,8 @@ export function isPhraseArrangementRoomMusic(
 }
 
 export function getRoomMusicPackBarCount(
-  packId: RoomMusicPackId | string | null | undefined,
+  _packId: RoomMusicPackId | string | null | undefined,
 ): number {
-  if (packId === 'wamp-v1') {
-    return DEFAULT_ROOM_MUSIC_BAR_COUNT;
-  }
-
   return DEFAULT_ROOM_MUSIC_BAR_COUNT;
 }
 
@@ -230,35 +218,6 @@ export function cloneRoomMusicLaneBarAssignments(
   }
 
   return next;
-}
-
-export function createEmptyRoomMusicLaneAssignments(
-  barCount: number = DEFAULT_ROOM_MUSIC_BAR_COUNT,
-): RoomMusicLaneAssignments {
-  return {
-    drums: createEmptyRoomMusicLaneBarAssignments(barCount),
-    bass: createEmptyRoomMusicLaneBarAssignments(barCount),
-    arp: createEmptyRoomMusicLaneBarAssignments(barCount),
-    hold: createEmptyRoomMusicLaneBarAssignments(barCount),
-    melody: createEmptyRoomMusicLaneBarAssignments(barCount),
-  };
-}
-
-export function createEmptyRoomMusicArrangement(
-  barCount: number = DEFAULT_ROOM_MUSIC_BAR_COUNT,
-): RoomMusicArrangement {
-  return {
-    laneAssignments: createEmptyRoomMusicLaneAssignments(barCount),
-  };
-}
-
-export function createDefaultRoomMusic(packId: RoomMusicPackId = 'wamp-v1'): StemArrangementRoomMusic {
-  const barCount = getRoomMusicPackBarCount(packId);
-  return {
-    kind: 'stemArrangement',
-    packId,
-    arrangement: createEmptyRoomMusicArrangement(barCount),
-  };
 }
 
 function normalizeAssignedClipId(value: unknown): string | null {

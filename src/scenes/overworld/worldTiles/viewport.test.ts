@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateDirectionalGuardRect,
-  calculateWorldTileViewportCoverage,
   clampWorldTileManifestBounds,
   getWorldTileSiblingClosure,
   selectWorldTileBoundedDisplayLevel,
@@ -21,23 +20,6 @@ describe('world tile viewport coverage', () => {
       top: -274,
       bottom: 440,
     });
-  });
-
-  it('adds sibling and all-level ancestor closure around a visible leaf', () => {
-    const result = calculateWorldTileViewportCoverage({
-      rendererVersion: 'renderer-v1',
-      level: 4,
-      viewport: { left: 0, top: 0, right: 640, bottom: 352 },
-      velocity: { x: 0, y: 0 },
-    });
-
-    expect(result.visibleTiles).toEqual([address(4, 0, 0)]);
-    expect(result.siblingClosure).toEqual([
-      address(4, 1, 0),
-      address(4, 0, 1),
-      address(4, 1, 1),
-    ]);
-    expect(result.ancestorClosure.map((entry) => entry.level)).toEqual([0, 1, 2, 3]);
   });
 
   it('calculates sibling closure correctly across negative coordinates', () => {

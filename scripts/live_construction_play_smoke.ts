@@ -1,3 +1,4 @@
+import { isStreamingRoomCandidateRenderable, type StreamingRoomCandidate } from '../src/scenes/overworld/worldStreamingModel';
 import assert from 'node:assert/strict';
 import {
   computeWorldChunkWindow,
@@ -14,8 +15,6 @@ import {
 } from '../src/persistence/roomModel';
 import {
   OverworldPreviewCache,
-  isStreamingRoomCandidateRenderable,
-  type StreamingRoomCandidate,
 } from '../src/scenes/overworld/previewCache';
 import {
   computeOverworldPreviewSelection,

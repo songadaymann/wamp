@@ -1,0 +1,1 @@
+| 2026-10-30 | F283 | [#357](https://github.com/songadaymann/wamp/pull/357) | [receipt](docs/review/wamp-f283-room-version-selection-2026-10-30.md) | Keep runtime room status and version consistent with playable content after first publish |

@@ -1,3 +1,4 @@
+import { createDefaultRoomMusic } from './testing/legacyStemFixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RoomMusicController } from './controller';
 import { AudioEngine } from '../audio/engine';
@@ -5,7 +6,7 @@ import { loadMusicPhrasesById } from './libraryClient';
 import { extractMusicPhrasePayloadFromPattern, type MusicPhraseRecord } from './library';
 import { getPatternDrumSamples } from './patternKit';
 import type { RoomPatternDrumRowId } from './pattern';
-import { createDefaultRoomMusic, createDefaultRoomPatternMusic, createDefaultRoomPhraseArrangementMusic, type RoomMusic } from './model';
+import { createDefaultRoomPatternMusic, createDefaultRoomPhraseArrangementMusic, type RoomMusic } from './model';
 
 const render = vi.hoisted(() => vi.fn());
 vi.mock('./patternRenderer', async (importOriginal) => ({
@@ -58,7 +59,7 @@ function harness(hold = true) {
   const engine = new AudioEngine();
   return { context, engine, contextConstructor, sources, gains, splitters, shapers, panners, doc, windowEvents,
     /** Each playback's fade gain, in start order: the gains feeding the music bus. */
-    fade(index: number) { return gains.filter(g => g.connect.mock.calls.some(([target]) => target === engine.peekMusicBus()))[index]; },
+    fade(index: number) { return gains.filter(g => g.connect.mock.calls.some(([target]) => target === engine.getMusicBus()))[index]; },
     visibility(hidden: boolean) { doc.hidden = hidden; documentEvents.get('visibilitychange')?.(); },
     controller: new RoomMusicController(engine) };
 }
@@ -229,21 +230,21 @@ describe('muted room music ownership', () => {
     expect(render.mock.calls.at(-1)?.[1].bpm).toBe(60);
   });
 
-  it('does no muted clip or note preview loading', async () => {
+  it('does no muted sequence or note preview loading', async () => {
     const h = harness(); h.controller.setVolume(0);
     const p = createDefaultRoomPatternMusic();
-    await h.controller.previewClip('wamp-v1', 'drums-1');
+    await h.controller.previewSequence('test-phrase', { bpm: 120, stepCount: 32 } as never);
     h.controller.previewPatternCell(p, 'triangle', 4); h.controller.previewPatternCell(p, 'drums', 0);
     expect(fetch).not.toHaveBeenCalled(); expect(getPatternDrumSamples).not.toHaveBeenCalled();
     expect(h.contextConstructor).not.toHaveBeenCalled(); expect(h.sources).toHaveLength(0);
   });
 
-  it('a pending clip cannot revive after mute then unmute', async () => {
-    const h = harness(); let finish!: (value: ArrayBuffer) => void;
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: true, arrayBuffer: () => new Promise<ArrayBuffer>(r => { finish = r; }) } as Response);
-    const pending = h.controller.previewClip('wamp-v1', 'drums-1');
+  it('a pending sequence cannot revive after mute then unmute', async () => {
+    const h = harness(); let finish!: (value: AudioBuffer) => void;
+    render.mockImplementationOnce(() => new Promise<AudioBuffer>(resolve => { finish = resolve; }));
+    const pending = h.controller.previewSequence('test-phrase', { bpm: 120, stepCount: 32 } as never);
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
-    h.controller.setVolume(0); h.controller.setVolume(1); finish(new ArrayBuffer(1)); await pending;
+    h.controller.setVolume(0); h.controller.setVolume(1); finish(buffer()); await pending;
     expect(h.sources).toHaveLength(0);
   });
 

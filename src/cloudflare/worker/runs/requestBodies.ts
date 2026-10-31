@@ -124,6 +124,7 @@ export async function parseRoomRushRunSubmissionBody(
     route,
     startCoordinates,
     finishCoordinates,
+    verificationTrace: normalizeRankedRunVerificationTrace(body.verificationTrace),
     finishedAt: normalizeIsoTimestamp(body.finishedAt),
   };
 }

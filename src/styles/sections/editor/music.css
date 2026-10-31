@@ -10,12 +10,6 @@
     pointer-events: auto;
   }
 
-  .editor-music-key-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
   .editor-music-select-group {
     display: grid;
     gap: 4px;
@@ -29,10 +23,6 @@
     letter-spacing: 1px;
     font-synthesis: none;
     -webkit-font-smoothing: none;
-  }
-
-  .editor-music-select {
-    width: 100%;
   }
 
   #editor-music-phrase-action-row {

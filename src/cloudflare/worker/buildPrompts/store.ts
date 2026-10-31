@@ -8,6 +8,7 @@ import { sqlUserIdIsNotLegacyGeneratedOnly, sqlUserIdDoesNotHaveLegacyGeneratedD
 import { promptVoteSelect } from './votes';
 
 interface PromptRow {
+  picked_by: 'admin' | 'automatic';
   slug: string; title: string; constraint_text: string; starts_at: string; ends_at: string;
   settled_at: string | null; entry_count: number;
 }
@@ -42,7 +43,7 @@ const ENTRY_SELECT = `SELECT entry.*, CASE WHEN i.version_key=entry.version AND 
   LEFT JOIN build_prompt_winners winner ON winner.prompt_slug=entry.prompt_slug AND winner.target_key=entry.target_key AND winner.version=entry.version`;
 const PROMPTS = `SELECT prompt.*, (SELECT COUNT(*) FROM build_prompt_entries entry WHERE entry.prompt_slug=prompt.slug AND ${ENTRY_VISIBLE}) AS entry_count FROM build_prompts prompt`;
 function mapPrompt(row: PromptRow): BuildPrompt {
-  return {slug:row.slug,title:row.title,constraint:row.constraint_text,startsAt:row.starts_at,endsAt:row.ends_at,settledAt:row.settled_at,entryCount:row.entry_count};
+  return {pickedBy:row.picked_by,slug:row.slug,title:row.title,constraint:row.constraint_text,startsAt:row.starts_at,endsAt:row.ends_at,settledAt:row.settled_at,entryCount:row.entry_count};
 }
 function mapEntry(row: EntryRow): BuildPromptEntry {
   return {targetKey:row.target_key,contentType:row.content_type,contentId:row.content_id,version:row.version,
@@ -67,22 +68,29 @@ export async function saveBuildPrompt(env: Env, body: BuildPromptInput, now=new 
   if(endsAt<=now)throw new HttpError(409,'That week has already closed.');
   const existing=await env.DB.prepare('SELECT slug FROM build_prompts WHERE slug=?').bind(input.slug).first();
   // The condition is repeated in the write so an entry arriving after this read locks the edit.
-  await env.DB.prepare(`INSERT INTO build_prompts(slug,title,constraint_text,starts_at,ends_at,created_at,updated_at)
-    SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM build_prompts WHERE slug<>? AND starts_at<? AND ends_at>?)
+  await env.DB.prepare(`INSERT INTO build_prompts(slug,title,constraint_text,starts_at,ends_at,created_at,updated_at,picked_by)
+    SELECT ?,?,?,?,?,?,?,'admin' WHERE NOT EXISTS(SELECT 1 FROM build_prompts WHERE slug<>? AND starts_at<? AND ends_at>?)
       AND NOT EXISTS(SELECT 1 FROM build_prompt_entries WHERE prompt_slug=?)
     ON CONFLICT(slug) DO UPDATE SET title=excluded.title,constraint_text=excluded.constraint_text,starts_at=excluded.starts_at,
-      ends_at=excluded.ends_at,updated_at=excluded.updated_at
+      ends_at=excluded.ends_at,updated_at=excluded.updated_at,picked_by='admin',automatic_prompt_key=NULL
     WHERE build_prompts.settled_at IS NULL AND NOT EXISTS(SELECT 1 FROM build_prompt_entries WHERE prompt_slug=excluded.slug)`)
     .bind(input.slug,input.title,input.constraint,input.startsAt,endsAt,now,now,input.slug,endsAt,input.startsAt,input.slug).all();
   const saved=await env.DB.prepare('SELECT * FROM build_prompts WHERE slug=?').bind(input.slug).first<PromptRow>();
   if(!saved || saved.title!==input.title || saved.constraint_text!==input.constraint || saved.starts_at!==input.startsAt)
     throw new HttpError(409,existing?'A prompt with entries is locked.':'This week already has a prompt.');
+  await env.DB.prepare("DELETE FROM weekly_event_suppressions WHERE event_kind='prompt' AND starts_at=?").bind(input.startsAt).all();
 }
 export async function deleteBuildPrompt(env: Env, slug: string): Promise<void> {
-  await env.DB.prepare(`DELETE FROM build_prompts WHERE slug=? AND settled_at IS NULL
-    AND NOT EXISTS(SELECT 1 FROM build_prompt_entries WHERE prompt_slug=?)`).bind(slug,slug).all();
+  await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO weekly_event_suppressions(event_kind,starts_at,created_at)
+      SELECT 'prompt',starts_at,? FROM build_prompts WHERE slug=? AND settled_at IS NULL
+        AND NOT EXISTS(SELECT 1 FROM build_prompt_entries WHERE prompt_slug=?)`).bind(new Date().toISOString(),slug,slug),
+    env.DB.prepare(`DELETE FROM build_prompts WHERE slug=? AND settled_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM build_prompt_entries WHERE prompt_slug=?)`).bind(slug,slug),
+  ]);
   if(await env.DB.prepare('SELECT 1 FROM build_prompts WHERE slug=?').bind(slug).first())throw new HttpError(409,'A prompt with entries is locked.');
 }
+
 export async function loadAdminBuildPrompts(env: Env): Promise<BuildPrompt[]> {
   const rows=await env.DB.prepare(`${PROMPTS} ORDER BY prompt.starts_at DESC LIMIT 52`).all<PromptRow>();return rows.results.map(mapPrompt);
 }

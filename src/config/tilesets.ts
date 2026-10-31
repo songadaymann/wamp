@@ -36,8 +36,6 @@ export interface EditorTileMetadata {
   enabled: boolean;
 }
 
-export type TilesetMusicColorRole = 'drums' | 'triangle' | 'saw' | 'square';
-
 export interface TilesetUiThemeConfig {
   accentCool: number;
   accentWarm: number;
@@ -1344,37 +1342,6 @@ export function colorNumberToCssRgba(value: number, alpha: number): string {
   return `rgba(${colorNumberToCssRgb(value)}, ${alpha})`;
 }
 
-export function getTilesetMusicInstrumentColor(
-  key: string | null | undefined,
-  role: TilesetMusicColorRole,
-): number {
-  const theme = getTilesetUiTheme(key);
-  if (role === 'drums') {
-    return theme.accentWarm;
-  }
-  if (role === 'triangle') {
-    return theme.accentCool;
-  }
-  if (role === 'saw') {
-    return theme.accentHot;
-  }
-  return theme.accentAlt;
-}
-
-export function getTilesetMusicInstrumentColorCss(
-  key: string | null | undefined,
-  role: TilesetMusicColorRole,
-): string {
-  return colorNumberToCssHex(getTilesetMusicInstrumentColor(key, role));
-}
-
-export function getTilesetMusicInstrumentColorRgbCss(
-  key: string | null | undefined,
-  role: TilesetMusicColorRole,
-): string {
-  return colorNumberToCssRgb(getTilesetMusicInstrumentColor(key, role));
-}
-
 export function getTilesetByGid(gid: number): TilesetConfig | undefined {
   if (gid <= 0) {
     return undefined;
@@ -1388,15 +1355,6 @@ export function getTilesetByGid(gid: number): TilesetConfig | undefined {
   }
 
   return undefined;
-}
-
-export function getTilesetLocalTileIndex(gid: number): number | null {
-  const tileset = getTilesetByGid(gid);
-  if (!tileset) {
-    return null;
-  }
-
-  return gid - tileset.firstGid;
 }
 
 export function isTilesetLocalTileEditorEnabled(

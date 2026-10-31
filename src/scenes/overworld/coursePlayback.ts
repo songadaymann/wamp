@@ -67,9 +67,7 @@ interface OverworldCoursePlaybackHost {
   getSelectedCoordinates(): RoomCoordinates;
   getActiveCourseRun(): ActiveExpandedRoomRunState | null;
   setActiveCourseRun(runState: ActiveExpandedRoomRunState | null): void;
-  clearTransientRoomOverride(roomId: string): void;
   clearTransientRoomOverrides(roomIds: Iterable<string>): void;
-  setTransientRoomOverride(snapshot: RoomSnapshot): void;
   setTransientRoomOverrides(snapshots: Iterable<RoomSnapshot>): void;
   getRoomSnapshotForCoordinates(coordinates: RoomCoordinates): RoomSnapshot | null;
   countRoomObjectsByCategory(room: RoomSnapshot, category: GameObjectConfig['category']): number;

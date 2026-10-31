@@ -1,5 +1,6 @@
+import { createDefaultRoomMusic } from './testing/legacyStemFixture';
 import { describe, expect, it } from 'vitest';
-import { createDefaultRoomMusic, createDefaultRoomPatternMusic, createDefaultRoomPhraseArrangementMusic } from './model';
+import { createDefaultRoomPatternMusic, createDefaultRoomPhraseArrangementMusic } from './model';
 import { getMusicTransitionPlan } from './transitionPlan';
 
 const pattern = () => createDefaultRoomPatternMusic();

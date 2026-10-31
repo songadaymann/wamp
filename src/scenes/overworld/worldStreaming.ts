@@ -644,10 +644,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     this.draftRoomsById.set(room.id, cloneRoomSnapshot(room));
   }
 
-  setTransientRoomOverride(room: RoomSnapshot): void {
-    this.setTransientRoomOverrides([room]);
-  }
-
   setTransientRoomOverrides(rooms: Iterable<RoomSnapshot>): void {
     const touchedRoomIds = new Set<string>();
     for (const room of rooms) {
@@ -680,10 +676,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
 
     this.presencePreviewRoomsById = nextPreviewsById;
     this.refreshVisibleRoomsFromCache();
-  }
-
-  clearTransientRoomOverride(roomId: string): void {
-    this.clearTransientRoomOverrides([roomId]);
   }
 
   clearTransientRoomOverrides(roomIds: Iterable<string>): void {
@@ -1317,13 +1309,13 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
       return draftRoom;
     }
 
-    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
-    if (presencePreviewRoom) {
-      return presencePreviewRoom;
-    }
-
     const optimisticPublishedRoom = this.optimisticPublishedRoomsById.get(roomId);
     if (optimisticPublishedRoom) return optimisticPublishedRoom;
+
+    const presencePreviewRoom = this.presencePreviewRoomsById.get(roomId);
+    if (presencePreviewRoom && this.roomSummariesById.get(roomId)?.state !== 'published') {
+      return presencePreviewRoom;
+    }
 
     const loadedFullRoom = this.loadedFullRoomsById.get(roomId);
     if (loadedFullRoom) {
@@ -1391,8 +1383,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
     return this.fullRoomPresenter.isLoadedRoomCollisionInfrastructureReady(loadedRoom);
   }
-
-
 
   /** Drop the 1 s transition retry wait, e.g. once the browser is back online. */
   retryPlayableRoomSnapshotsNow(): void {
@@ -1939,10 +1929,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return !current.enabled || current.shadow || Boolean(current.fallbackReason);
   }
 
-  async waitForBrowseCommentDiscoveryReady(signal?: AbortSignal): Promise<boolean> {
-    return this.waitForBrowseSecondaryStartupReady(signal);
-  }
-
   getChunkWindow(): WorldChunkWindow | null {
     return this.chunkWindow;
   }
@@ -1963,19 +1949,11 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return this.draftRoomsById;
   }
 
-  getRoomSnapshotsById(): Map<string, RoomSnapshot> {
-    return this.previewCache.getRoomSnapshotsById();
-  }
-
   getPreviewImages(): Phaser.GameObjects.Image[] {
     return [
       ...this.previewRenderer.getPreviewImages(),
       ...this.worldTileController.getImages(),
     ];
-  }
-
-  hasPreviewForRoom(roomId: string): boolean {
-    return this.previewRenderer.hasPreviewForRoom(roomId);
   }
 
   flushPendingPreviewTextureBuilds(): number {
@@ -4794,10 +4772,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
   }
 
-
-
-
-
   private unloadFullRoomsOutsideStream(fullRoomIds: Set<string>): void {
     const changedCoordinates: RoomCoordinates[] = [];
     this.retainedFullRoomIds = new Set(fullRoomIds);
@@ -5122,12 +5096,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     }
   }
 
-
-
-
-
-
-
   private queueFullRoomTeardownReconciliation(): void {
     const reconciliation = fullRoomTeardownLifecycle.requestReconciliation(
       this.options.getLiveObjectPhysicsReconciliationGeneration?.() ?? null,
@@ -5284,8 +5252,6 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return loadedRoom.room.coordinates;
   }
 
-
-
   private cancelAllPendingFullRoomTeardowns(
     reason: string,
     restoreCollisionReady: boolean,
@@ -5420,22 +5386,9 @@ export class OverworldWorldStreamingController<TLiveObject = unknown, TEdgeWall 
     return loadedRoom.room.coordinates;
   }
 
-
-
   private syncLiveObjectWorldColliders(): void {
     this.options.syncLiveObjectWorldColliders?.(this.loadedFullRoomsById.values());
   }
-
-
-
-
-
-
-
-
-
-
-
 
 }
 

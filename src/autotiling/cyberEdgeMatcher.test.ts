@@ -1,5 +1,6 @@
+import { listCyberLetterMismatches, listCyberVoidAViolations } from './testing/cyberLetterInvariants';
 import { describe, expect, it } from 'vitest';
-import { listCyberLetterMismatches, listCyberLetterMatches, listCyberVoidAViolations, orientCyberA10Overlay, resolveCyberLetterField } from './cyberEdgeMatcher';
+import { listCyberLetterMatches, orientCyberA10Overlay, resolveCyberLetterField } from './cyberEdgeMatcher';
 
 const inBounds = (x: number, y: number): boolean => x >= 0 && x < 40 && y >= 0 && y < 22;
 

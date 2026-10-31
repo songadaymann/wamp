@@ -14,6 +14,7 @@ import { getUtcWeekKey } from '../progression/shared';
 import { loadPublishedRoom } from '../rooms/store';
 
 export interface RoomRushWeekRow {
+  picked_by?: 'admin' | 'automatic';
   week_key: string; starts_at: string; ends_at: string;
   start_room_id: string; start_x: number; start_y: number;
   room_version: number; room_title: string; locked_at: string | null;
@@ -27,7 +28,7 @@ export async function loadRoomRushWeek(env: Env, weekKey: string): Promise<RoomR
   return env.DB.prepare('SELECT * FROM room_rush_weeks WHERE week_key = ?').bind(weekKey).first<RoomRushWeekRow>();
 }
 
-async function standalonePublishedRoom(env: Env, roomId: string) {
+export async function standalonePublishedRoom(env: Env, roomId: string) {
   const coordinates = parseRoomId(roomId);
   if (!coordinates || Math.abs(coordinates.x) > 999999 || Math.abs(coordinates.y) > 999999) {
     throw new HttpError(400, 'Enter room coordinates as x,y.');
@@ -85,21 +86,26 @@ export async function saveWeeklyRoomRushPick(env: Env, body: { openingMonday?: u
   }
   const room = await standalonePublishedRoom(env, body.roomId);
   const saved = await env.DB.prepare(`INSERT INTO room_rush_weeks
-    (week_key,starts_at,ends_at,start_room_id,start_x,start_y,room_version,room_title,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(week_key) DO UPDATE SET
+    (week_key,starts_at,ends_at,start_room_id,start_x,start_y,room_version,room_title,updated_at,picked_by)
+    VALUES (?,?,?,?,?,?,?,?,?,'admin') ON CONFLICT(week_key) DO UPDATE SET
       start_room_id=excluded.start_room_id,start_x=excluded.start_x,start_y=excluded.start_y,
-      room_version=excluded.room_version,room_title=excluded.room_title,updated_at=excluded.updated_at
+      room_version=excluded.room_version,room_title=excluded.room_title,updated_at=excluded.updated_at,picked_by='admin'
     WHERE room_rush_weeks.locked_at IS NULL
     RETURNING week_key`).bind(period.weekKey, period.startsAt, period.endsAt, room.id, room.coordinates.x,
       room.coordinates.y, room.version, (room.title ?? room.id).slice(0, 100), now.toISOString()).first();
   if (!saved) throw new HttpError(409, 'This week’s room choice is locked because a ranked Rush has started. Choose a future week.');
+  await env.DB.prepare("DELETE FROM weekly_event_suppressions WHERE event_kind='rush' AND starts_at=?").bind(period.startsAt).all();
 }
 
 export async function deleteWeeklyRoomRushPick(env: Env, openingMonday: unknown, now = new Date()): Promise<void> {
   const period = parseOpeningMonday(openingMonday, now);
-  const locked = await env.DB.prepare('DELETE FROM room_rush_weeks WHERE week_key = ? AND locked_at IS NULL RETURNING week_key')
-    .bind(period.weekKey).first();
-  if (!locked && await loadRoomRushWeek(env, period.weekKey)) throw new HttpError(409, 'This week’s room choice is locked because a ranked Rush has started.');
+  await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO weekly_event_suppressions(event_kind,starts_at,created_at)
+      SELECT 'rush',?,? WHERE NOT EXISTS(SELECT 1 FROM room_rush_weeks WHERE week_key=? AND locked_at IS NOT NULL)`)
+      .bind(period.startsAt,now.toISOString(),period.weekKey),
+    env.DB.prepare('DELETE FROM room_rush_weeks WHERE week_key = ? AND locked_at IS NULL').bind(period.weekKey),
+  ]);
+  if (await loadRoomRushWeek(env, period.weekKey)) throw new HttpError(409, 'This week’s room choice is locked because a ranked Rush has started.');
 }
 
 export async function loadWeeklyRoomRushAdmin(env: Env, now = new Date()): Promise<WeeklyRoomRushAdminResponse> {
@@ -107,7 +113,7 @@ export async function loadWeeklyRoomRushAdmin(env: Env, now = new Date()): Promi
   for (let index = 0; index <= 4; index += 1) {
     const period = weeklyRoomRushPeriod(new Date(Date.parse(current.startsAt) + index * 7 * 86400000));
     const row = await loadRoomRushWeek(env, period.weekKey);
-    weeks.push({ ...period, lockedAt: row?.locked_at ?? null, pick: row ? await mapRoomRushWeekPick(env, row, now) : null });
+    weeks.push({ ...period, pickedBy: row?.picked_by ?? (row ? 'admin' : null), lockedAt: row?.locked_at ?? null, pick: row ? await mapRoomRushWeekPick(env, row, now) : null });
   }
   return { weeks, serverTime: now.toISOString() };
 }

@@ -1,4 +1,6 @@
 import { resetKeepPlayingContext } from '../../progression/keepPlayingEvents';
+import { RankedRunTraceRecorder, type RankedRunTraceBinding, type RankedRunTraceFrameInput } from './rankedRunTraceRecorder';
+import { RANKED_RUN_TRACE_SCHEMA_VERSION } from '../../runs/verificationTrace';
 import { getAuthDebugState } from '../../auth/client';
 import { expandedRoomIdFromStandaloneRoomId } from '../../expandedRooms/model';
 import { setFocusedCoordinatesInUrl } from '../../navigation/worldNavigation';
@@ -73,10 +75,24 @@ interface OverworldRoomRushModeHost {
   showTransientStatus(message: string): void;
   renderHud(): void;
   isDeathPending(): boolean;
+  getTraceFrame?(): RankedRunTraceFrameInput | null;
 }
 
 export class OverworldRoomRushModeController {
   private readonly runController = new OverworldRoomRushRunController();
+  private readonly traceRecorder = new RankedRunTraceRecorder();
+  private traceBinding: RankedRunTraceBinding | null = null;
+  private traceElapsedMs = 0;
+
+  private clearTrace(): void { this.traceRecorder.clear(); this.traceBinding=null; this.traceElapsedMs=0; }
+
+  private captureTrace(delta: number): void {
+    const frame=this.host.getTraceFrame?.();
+    if(!this.traceBinding || !frame)return;
+    if(!this.traceRecorder.isActive())this.traceRecorder.start('room',this.traceBinding,frame);
+    const step=Math.max(0,Math.min(delta,WEEKLY_ROOM_RUSH_LIMIT_MS-this.traceElapsedMs));
+    this.traceElapsedMs+=step;this.traceRecorder.recordFrame(step,frame);
+  }
 
   constructor(
     private readonly host: OverworldRoomRushModeHost,
@@ -85,15 +101,18 @@ export class OverworldRoomRushModeController {
 
   reset(): void {
     this.runController.reset();
+    this.clearTrace();
     this.resultController.reset();
   }
 
   resetRun(): void {
     this.runController.reset();
+    this.clearTrace();
   }
 
   abandonActiveRun(): void {
     this.runController.abandonActiveRun();
+    this.clearTrace();
   }
 
   getCurrentRun(): ActiveRoomRushRunState | null {
@@ -109,6 +128,7 @@ export class OverworldRoomRushModeController {
   }
 
   tick(delta: number): void {
+    if(this.getCurrentRun()?.result==='active')this.captureTrace(delta);
     const result = this.runController.tick(delta);
     this.setMutationStatus(result, {
       renderHud: false,
@@ -123,6 +143,9 @@ export class OverworldRoomRushModeController {
   }
 
   recordDeath(reason: string): boolean {
+    this.captureTrace(0);
+    const frame=this.host.getTraceFrame?.();
+    if(this.traceBinding && frame)this.traceRecorder.recordDeath(frame);
     const result = this.runController.recordDeath(reason);
     this.setMutationStatus(result);
     if (result.terminalResult === 'failed') {
@@ -240,6 +263,12 @@ export class OverworldRoomRushModeController {
         returnCoordinates, weekly, unavailableMessage: 'The weekly start room is unavailable.',
         afterStart: () => {
           this.host.setBrowseInspectZoom(this.host.getInspectZoom());
+          // The preflight refresh ran in Browse mode, whose LOD budget has no
+          // collision rooms. Reconcile again in Play so the player can spawn.
+          this.host.refreshAroundIfNeededOrFromCache(startCoordinates, {
+            preferCachedWindow: true,
+            refreshLeaderboards: false,
+          });
           this.host.renderHud();
         },
       });
@@ -283,6 +312,11 @@ export class OverworldRoomRushModeController {
     this.host.clearRoomGoalIntroState();
     this.host.syncScenePauseState();
 
+    this.clearTrace();
+    if(options.startRule==='weekly' && serverStart?.verificationNonce && serverStart.snapshotHash) {
+      this.traceBinding={verificationSchemaVersion:serverStart.verificationSchemaVersion ?? RANKED_RUN_TRACE_SCHEMA_VERSION,
+        verificationNonce:serverStart.verificationNonce,snapshotHash:serverStart.snapshotHash};
+    }
     this.setMutationStatus(
       this.runController.startRun({
         runId: serverStart?.clientRunId ?? null,
@@ -365,6 +399,10 @@ export class OverworldRoomRushModeController {
   }
 
   private showResult(finalStatus: string | null): void {
+    const run=this.runController.getCurrentRun();
+    if(run?.startRule==='weekly' && this.traceBinding) {
+      this.captureTrace(0);run.verificationTrace=this.traceRecorder.buildTrace(this.traceElapsedMs);
+    }
     this.resultController.showResult(
       this.runController.getDebugSnapshot(),
       finalStatus,
