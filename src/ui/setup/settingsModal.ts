@@ -36,6 +36,7 @@ type SettingsModalElements = {
   cameraStyleInputs: HTMLInputElement[];
   hapticsRow: HTMLElement | null;
   hapticsCheckbox: HTMLInputElement | null;
+  clearedChecksCheckbox: HTMLInputElement | null;
 };
 
 export class SettingsModalController {
@@ -134,6 +135,9 @@ export class SettingsModalController {
     const value = this.elements.motionSelect?.value;
     updateComfortSettings({ reduceMotion: value === 'on' || value === 'off' ? value : 'system' });
   };
+  private readonly handleClearedChecksChange = () => {
+    updateComfortSettings({ clearedRoomChecks: this.elements.clearedChecksCheckbox?.checked === true });
+  };
   private readonly handleHapticsChange = () => {
     if (this.elements.hapticsCheckbox) updateComfortSettings({ haptics: this.elements.hapticsCheckbox.checked });
   };
@@ -153,6 +157,7 @@ export class SettingsModalController {
       textStyleSelect: this.doc.getElementById('settings-text-style') as HTMLSelectElement | null,
       textSizeSelect: this.doc.getElementById('settings-text-size') as HTMLSelectElement | null,
       motionSelect: this.doc.getElementById('settings-reduce-motion') as HTMLSelectElement | null,
+      clearedChecksCheckbox: this.doc.getElementById('settings-cleared-room-checks') as HTMLInputElement | null,
       hapticsRow: this.doc.getElementById('settings-haptics-row'),
       hapticsCheckbox: this.doc.getElementById('settings-haptics') as HTMLInputElement | null,
       cameraStyleInputs: Array.from(this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-camera-style"]')),
@@ -184,6 +189,7 @@ export class SettingsModalController {
     this.elements.textSizeSelect?.addEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.addEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.addEventListener('change', this.handleMotionChange);
+    this.elements.clearedChecksCheckbox?.addEventListener('change', this.handleClearedChecksChange);
     this.elements.hapticsCheckbox?.addEventListener('change', this.handleHapticsChange);
     for (const input of this.elements.cameraStyleInputs) input.addEventListener('change', this.handleCameraStyleChange);
     this.unsubscribeComfort = subscribeComfortSettings(settings => this.renderComfort(settings));
@@ -221,6 +227,7 @@ export class SettingsModalController {
     this.elements.textSizeSelect?.removeEventListener('change', this.handleTextSizeChange);
     this.elements.closeButton?.removeEventListener('click', this.handleCloseClick);
     this.elements.motionSelect?.removeEventListener('change', this.handleMotionChange);
+    this.elements.clearedChecksCheckbox?.removeEventListener('change', this.handleClearedChecksChange);
     this.elements.hapticsCheckbox?.removeEventListener('change', this.handleHapticsChange);
     for (const input of this.elements.cameraStyleInputs) input.removeEventListener('change', this.handleCameraStyleChange);
     this.unsubscribeComfort?.(); this.unsubscribeComfort = null;
@@ -304,6 +311,7 @@ export class SettingsModalController {
 
   private renderComfort(settings: ComfortSettings): void {
     this.elements.hapticsRow?.classList.toggle('hidden', !isHapticsAvailable());
+    if (this.elements.clearedChecksCheckbox) this.elements.clearedChecksCheckbox.checked = settings.clearedRoomChecks;
     if (this.elements.hapticsCheckbox) this.elements.hapticsCheckbox.checked = settings.haptics;
     if (this.elements.motionSelect) this.elements.motionSelect.value = settings.reduceMotion;
     for (const input of this.elements.cameraStyleInputs) input.checked = input.value === settings.cameraStyle;

@@ -1,3 +1,4 @@
+import { getClearedRoomChecksEnabled, subscribeComfortSettings } from '../../settings/comfortSettings';
 import { bindCanvasTextPreferences } from '../../settings/textPreferences';
 import Phaser from 'phaser';
 import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
@@ -31,12 +32,14 @@ export class OverworldRoomCellController {
   private roomFrameGraphics: Phaser.GameObjects.Graphics | null = null;
   private roomFocusGraphics: Phaser.GameObjects.Graphics | null = null;
   private frontierLabelTexts = new Map<string, Phaser.GameObjects.Text>();
+  private unsubscribeComfort: (()=>void)|null=null;
   private unsubscribeCleared:(()=>void)|null=null;
   private lastZoomRenderKey: string | null = null;
 
   constructor(private readonly host: OverworldRoomCellControllerHost) {}
 
   create(): void {
+    this.unsubscribeComfort??=subscribeComfortSettings(()=>this.redraw());
     this.unsubscribeCleared??=this.host.subscribeClearedRooms?.(()=>this.redraw())??null;
     if (!this.roomFillGraphics) {
       this.roomFillGraphics = this.host.scene.add.graphics();
@@ -55,6 +58,7 @@ export class OverworldRoomCellController {
   }
 
   destroy(): void {
+    this.unsubscribeComfort?.();this.unsubscribeComfort=null;
     this.unsubscribeCleared?.();this.unsubscribeCleared=null;
     this.destroyFrontierLabels();
     this.roomFillGraphics?.destroy();
@@ -107,7 +111,7 @@ export class OverworldRoomCellController {
         if (cellState === 'published' && this.host.getMode() === 'browse' && this.host.hasFoundLostSong?.(coordinates)) {
           this.drawInsetFrame(this.roomFrameGraphics, origin.x, origin.y, 18, 2, 0xf4cc55, 0.9);
         }
-        if(cellState==='published'&&this.host.getMode()==='browse'&&this.host.hasClearedRoom?.(coordinates)) {
+        if(getClearedRoomChecksEnabled()&&cellState==='published'&&this.host.getMode()==='browse'&&this.host.hasClearedRoom?.(coordinates)) {
           this.drawClearedMarker(origin.x,origin.y);
         }
         if (cellState === 'frontier') {
