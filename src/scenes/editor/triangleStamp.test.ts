@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editorState, type PlacedObject } from '../../config';
+import { editorState, updateEditorState, type PlacedObject } from '../../config';
 import { stampedTriangleFields, triangleStampStatus } from './triangleStamp';
 
 function triangle(overrides: Partial<PlacedObject> = {}): PlacedObject {
@@ -26,11 +26,13 @@ describe('triangle stamp paint', () => {
       flipY: editorState.triangleStampFlipY,
       paint: editorState.trianglePaintMode,
     };
-    editorState.triangleStampFill = '#FF0000';
-    editorState.triangleStampStroke = '#00FF00';
-    editorState.triangleStampFlipX = true;
-    editorState.triangleStampFlipY = true;
-    editorState.trianglePaintMode = true;
+    updateEditorState({
+      triangleStampFill: '#FF0000',
+      triangleStampStroke: '#00FF00',
+      triangleStampFlipX: true,
+      triangleStampFlipY: true,
+      trianglePaintMode: true,
+    });
     try {
       expect(stampedTriangleFields(triangle())).toEqual({
         triangleFill: '#FF0000',
@@ -38,11 +40,13 @@ describe('triangle stamp paint', () => {
       });
       expect(triangleStampStatus()).toBe('Click ramps to paint this fill and stroke.');
     } finally {
-      editorState.triangleStampFill = previous.fill;
-      editorState.triangleStampStroke = previous.stroke;
-      editorState.triangleStampFlipX = previous.flipX;
-      editorState.triangleStampFlipY = previous.flipY;
-      editorState.trianglePaintMode = previous.paint;
+      updateEditorState({
+        triangleStampFill: previous.fill,
+        triangleStampStroke: previous.stroke,
+        triangleStampFlipX: previous.flipX,
+        triangleStampFlipY: previous.flipY,
+        trianglePaintMode: previous.paint,
+      });
     }
   });
 });

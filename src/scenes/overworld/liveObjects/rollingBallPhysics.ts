@@ -14,19 +14,19 @@ export const BALL_GRAVITY = 700;
 export const BALL_MAX_SPEED = 500;
 export const BALL_WATER_GRAVITY_FACTOR = 0.35;
 export const BALL_WATER_MAX_SPEED = 118;
-export const BALL_WATER_DAMPING = 0.965;
-export const BALL_GROUND_DRAG = 40;
+const BALL_WATER_DAMPING = 0.965;
+const BALL_GROUND_DRAG = 40;
 export const BALL_ICE_DRAG = 8;
 export const BALL_STICKY_DRAG = 160;
 export const BALL_STICKY_PUSH_SCALE = 3;
-export const BALL_CONVEYOR_SPEED = 48;
-export const BALL_WIND_ACCELERATION = 980;
-export const BALL_WIND_MAX_SPEED = 280;
-export const BALL_BOUNCE_SPEED = 392;
-export const BALL_BOUNCE_COOLDOWN_MS = 180;
+const BALL_CONVEYOR_SPEED = 48;
+const BALL_WIND_ACCELERATION = 980;
+const BALL_WIND_MAX_SPEED = 280;
+const BALL_BOUNCE_SPEED = 392;
+const BALL_BOUNCE_COOLDOWN_MS = 180;
 export const ACTOR_MASS = 1;
 /** Player run speed. A butt stomp faster than this adds the difference to the ball. */
-export const BALL_REGULAR_PUSH_SPEED = 150;
+const BALL_REGULAR_PUSH_SPEED = 150;
 
 export interface BallSimState {
   x: number;
@@ -79,7 +79,7 @@ export interface TriangleSolid {
   legY: number;
 }
 
-export interface ActorCorrection {
+interface ActorCorrection {
   index: number;
   dx: number;
   dy: number;

@@ -29,11 +29,6 @@ export function canRepeatSelectedEditorObject(): boolean {
   ));
 }
 
-export function isMoreEditorTool(tool: ToolName): boolean {
-  return tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'triangle'
-    || tool === 'fill' || tool === 'randomize';
-}
-
 export function isTriangleEditorTool(tool: ToolName = editorState.activeTool): tool is 'triangle' {
   return tool === 'triangle';
 }

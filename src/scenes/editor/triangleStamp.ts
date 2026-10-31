@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { editorState, type PlacedObject } from '../../config';
+import { editorState, updateEditorState, type PlacedObject } from '../../config';
 import {
   hexToRgb,
   normalizePlacedTriangle,
@@ -14,11 +14,13 @@ import {
 export function captureTriangleStamp(placed: PlacedObject): void {
   const geometry = normalizePlacedTriangle(placed);
   if (!geometry) return;
-  editorState.triangleStampFill = geometry.fill;
-  editorState.triangleStampStroke = geometry.stroke;
   const flip = triangleFlipFromLegs(geometry.legX, geometry.legY);
-  editorState.triangleStampFlipX = flip.flipX;
-  editorState.triangleStampFlipY = flip.flipY;
+  updateEditorState({
+    triangleStampFill: geometry.fill,
+    triangleStampStroke: geometry.stroke,
+    triangleStampFlipX: flip.flipX,
+    triangleStampFlipY: flip.flipY,
+  });
 }
 
 export function triangleStampStatus(): string {
@@ -27,7 +29,7 @@ export function triangleStampStatus(): string {
     : 'Click empty space to place. Click a ramp to select it.';
 }
 
-export function triangleStampPlacement(tileX: number, tileY: number): {
+function triangleStampPlacement(tileX: number, tileY: number): {
   anchorX: number;
   anchorY: number;
   legX: number;

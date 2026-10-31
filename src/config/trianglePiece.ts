@@ -1,12 +1,12 @@
 import { TILE_SIZE } from './room';
 
 export const TRIANGLE_PIECE_OBJECT_ID = 'triangle_piece';
-export const TRIANGLE_MIN_LEG = TILE_SIZE;
-export const TRIANGLE_DEFAULT_LEG_X = 32;
-export const TRIANGLE_DEFAULT_LEG_Y = -32;
+const TRIANGLE_MIN_LEG = TILE_SIZE;
+const TRIANGLE_DEFAULT_LEG_X = 32;
+const TRIANGLE_DEFAULT_LEG_Y = -32;
 export const DEFAULT_TRIANGLE_FILL = '#8A8F98';
 export const DEFAULT_TRIANGLE_STROKE = '#2C3138';
-export const TRIANGLE_SLIDE_SPEED = 70;
+const TRIANGLE_SLIDE_SPEED = 70;
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -70,7 +70,7 @@ export function snapTriangleLeg(value: number): number {
   return sign * snapped;
 }
 
-export function snapTriangleCoord(value: number): number {
+function snapTriangleCoord(value: number): number {
   return Math.round(value / TILE_SIZE) * TILE_SIZE;
 }
 
@@ -87,7 +87,7 @@ export function isButtStompSlideTriangle(legX: number, legY: number): boolean {
   return isFloorTriangle(legY) && legX !== 0 && Math.abs(legY) >= Math.abs(legX);
 }
 
-export function downhillSignX(legX: number, legY: number): -1 | 1 {
+function downhillSignX(legX: number, legY: number): -1 | 1 {
   if (legX === 0) return 1;
   return -legY / legX >= 0 ? 1 : -1;
 }
@@ -216,7 +216,7 @@ export function triangleEdges(anchorX: number, anchorY: number, legX: number, le
   ];
 }
 
-export function hypotenuseY(
+function hypotenuseY(
   anchorX: number,
   anchorY: number,
   legX: number,

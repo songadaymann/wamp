@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { editorState, type GameObjectConfig } from '../../config';
+import { editorState, updateEditorState, type GameObjectConfig } from '../../config';
 import {
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
@@ -79,11 +79,13 @@ describe('shared editor inspector view models', () => {
       flipY: editorState.triangleStampFlipY,
       paint: editorState.trianglePaintMode,
     };
-    editorState.triangleStampFill = '#FF3366';
-    editorState.triangleStampStroke = '#112233';
-    editorState.triangleStampFlipX = true;
-    editorState.triangleStampFlipY = true;
-    editorState.trianglePaintMode = false;
+    updateEditorState({
+      triangleStampFill: '#FF3366',
+      triangleStampStroke: '#112233',
+      triangleStampFlipX: true,
+      triangleStampFlipY: true,
+      trianglePaintMode: false,
+    });
     try {
       expect(buildTriangleStampInspectorState()).toMatchObject({
         visible: true,
@@ -94,16 +96,18 @@ describe('shared editor inspector view models', () => {
         triangleFlipX: true,
         triangleFlipY: true,
       });
-      editorState.trianglePaintMode = true;
+      updateEditorState({ trianglePaintMode: true });
       expect(buildTriangleStampInspectorState()).toMatchObject({
         trianglePaintMode: true,
       });
     } finally {
-      editorState.triangleStampFill = previous.fill;
-      editorState.triangleStampStroke = previous.stroke;
-      editorState.triangleStampFlipX = previous.flipX;
-      editorState.triangleStampFlipY = previous.flipY;
-      editorState.trianglePaintMode = previous.paint;
+      updateEditorState({
+        triangleStampFill: previous.fill,
+        triangleStampStroke: previous.stroke,
+        triangleStampFlipX: previous.flipX,
+        triangleStampFlipY: previous.flipY,
+        trianglePaintMode: previous.paint,
+      });
     }
   });
 });

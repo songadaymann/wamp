@@ -19,7 +19,6 @@ import {
   EDITOR_SPAWN_PLACED_EVENT,
   EDITOR_TOOL_CHOSEN_EVENT,
   refreshEditorUi, subscribeEditorUi, EDITOR_CONTROL_STATE_KEYS,
-  type EditorShellEscapeRequestedDetail,
   type EditorToolChosenDetail,
 } from '../../scenes/editor/uiEvents';
 import { applyEditorToolSelection } from '../../scenes/editor/editorToolSelection';

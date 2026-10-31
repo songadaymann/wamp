@@ -15,7 +15,6 @@ import {
   isClimbableObjectConfig,
   placedObjectLayerAllowsRuntimeCollision,
   isDynamicRuntimeObjectConfig,
-  isRollingBallObjectId,
   isMovingPlatformEndpointObjectId,
   isMovingPlatformObjectId,
   isPushableObjectConfig,
@@ -30,10 +29,8 @@ import {
   type GameObjectConfig,
   type SpecialTileKind,
 } from '../../config';
-import { getRollingBallGraphic, rollingBallFrame } from '../../config/rollingBall';
-import { placeTriangleSprite } from './liveObjects/triangleTexture';
-import { stepUtilityObjects } from './liveObjects/utilityObjects';
-import { createBallState, resetBallMotion, type BallSimState } from './liveObjects/rollingBallPhysics';
+import { LiveUtilitySession, presentUtilityObject } from './liveObjects/liveUtilitySession';
+import { placedObjectRuntimeDepth, syncGravityPresentation } from './liveObjects/objectPresentation';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
@@ -48,7 +45,6 @@ import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
-  getGravityAngle,
   getGravityRightVector,
   getGravityVector,
   setBodyVelocityAlongVector,
@@ -284,9 +280,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly interactionCoordinator: LiveObjectInteractionCoordinator<TEdgeWall>;
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
   private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
-  private readonly ballStates = new WeakMap<LoadedRoomObject, BallSimState>();
-  private playerOnTriangle = false;
-  private readonly playerSlopeSlide = { active: false };
+  private readonly utility = new LiveUtilitySession(this.options, {
+    createBatch: (room, start, end, dormant) => this.createLiveObjectsBatch(room, start, end, dormant),
+    finalize: (room, dormant) => this.finalizeLiveObjectCreation(room, dormant),
+    remove: (room, liveObject) => this.removeLiveObject(room, liveObject),
+    defeat: (room, liveObject) => this.enemyLifecycleController.defeatFromRollingBall(room, liveObject),
+  });
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
@@ -505,33 +504,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController.resetSwitchStates();
   }
 
-  resetRollingBalls(): void {
-    for (const room of this.options.getLoadedFullRooms()) {
-      const liveKeys = new Set(room.liveObjects.map((liveObject) => liveObject.key));
-      let created = false;
-      for (let index = 0; index < room.room.placedObjects.length; index += 1) {
-        const placed = room.room.placedObjects[index];
-        if (!isRollingBallObjectId(placed.id)) continue;
-        const key = this.options.getPlacedObjectRuntimeKey(room.room.id, placed, index);
-        if (liveKeys.has(key)) continue;
-        this.createLiveObjectsBatch(room, index, index + 1, false);
-        created = true;
-      }
-      if (created) this.finalizeLiveObjectCreation(room, false);
-      for (const liveObject of room.liveObjects) {
-        if (!isRollingBallObjectId(liveObject.config.id) || !liveObject.ball || !liveObject.sprite.active) continue;
-        const state = this.ballStates.get(liveObject) ?? createBallState(
-          liveObject.runtime.baseX,
-          liveObject.runtime.baseY,
-          liveObject.ball,
-        );
-        resetBallMotion(state, liveObject.runtime.baseX, liveObject.runtime.baseY);
-        this.ballStates.set(liveObject, state);
-        liveObject.sprite.setPosition(state.x, state.y);
-        liveObject.sprite.rotation = 0;
-      }
-    }
-  }
+  resetRollingBalls(): void { this.utility.resetRollingBalls(); }
 
   resetBossChallenges(resetRoom: (room: RoomSnapshot) => void, alreadyResetRoomId: string | null): void {
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
@@ -886,28 +859,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
-    liveObject.ball = ball;
-    if (triangle) {
-      liveObject.triangle = {
-        anchorX: roomOrigin.x + x,
-        anchorY: roomOrigin.y + y,
-        legX: triangle.legX,
-        legY: triangle.legY,
-        fill: triangle.fill,
-        stroke: triangle.stroke,
-      };
-      placeTriangleSprite(
-        sprite,
-        liveObject.triangle.anchorX,
-        liveObject.triangle.anchorY,
-        triangle.legX,
-        triangle.legY,
-        triangle.fill,
-        triangle.stroke,
-      );
-    } else if (ball) {
-      sprite.setFrame(rollingBallFrame(getRollingBallGraphic(ball.graphicId).column, 0));
-    }
+    presentUtilityObject(liveObject, sprite, ball, triangle, roomOrigin.x + x, roomOrigin.y + y);
     createBossPresentation(this.options.scene, liveObject);
     this.triggerController.initializePressureControlledObjectState(liveObject);
     this.checkpointController.syncObject(loadedRoom, liveObject);
@@ -934,44 +886,10 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
   }
 
-  isPlayerOnTriangle(): boolean {
-    return this.playerOnTriangle;
-  }
+  isPlayerOnTriangle(): boolean { return this.utility.isPlayerOnTriangle(); }
 
   stepUtilityPhysics(delta: number, playerIntent: number, playerButtStomping = false): void {
-    const rooms = [...this.options.getLoadedFullRooms()];
-    this.playerOnTriangle = stepUtilityObjects({
-      rooms,
-      delta,
-      playerBody: this.options.getPlayerBody(),
-      playerIntent,
-      playerButtStomping,
-      slopeSlide: this.playerSlopeSlide,
-      states: this.ballStates,
-      sampleEnvironment: (probe, gravityDirection) => ({
-        environment: this.options.getSpecialTileEnvironmentForBody(probe, gravityDirection),
-        roomId: this.options.getBodyRoomId(probe),
-      }),
-      onDestroy: (room, liveObject) => {
-        this.removeLiveObject(
-          room as LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-          liveObject,
-        );
-      },
-      supportCrumbling: this.options.supportCrumblingTiles,
-      now: this.options.getCurrentTime(),
-      bounceSpeed: this.options.settings.bouncePadVelocity,
-      bounceCooldownMs: this.options.settings.bouncePadCooldownMs,
-      bounceActiveMs: this.options.settings.bouncePadActiveMs,
-      onPlayerHurt: () => this.options.handlePlayerDeath('A rolling ball hit you.'),
-      onDefeat: (room, liveObject) => {
-        this.enemyLifecycleController.defeatFromRollingBall(
-          room as LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-          liveObject,
-        );
-      },
-      onBounce: (x, y, coordinates) => this.options.playBounceFx(x, y, coordinates),
-    });
+    this.utility.step(delta, playerIntent, playerButtStomping);
   }
 
   updateLiveObjects(
@@ -1868,45 +1786,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private syncLiveObjectGravityPresentation(liveObject: LoadedRoomObject): void {
-    const shouldRotateWithGravity =
-      liveObject.config.category === 'enemy' &&
-      this.shouldLiveObjectUseSpecialTilePhysics(liveObject);
-    const gravityDirection = shouldRotateWithGravity
-      ? this.getLiveObjectGravityDirection(liveObject)
-      : 'down';
-    liveObject.sprite.setRotation(getGravityAngle(gravityDirection));
-
-    if (!shouldRotateWithGravity || !liveObject.config.facingDirection) {
-      return;
-    }
-
-    const body = this.getDynamicBody(liveObject.sprite);
-    const tangentVelocity = body
-      ? getBodyVelocityAlongVector(body, getGravityRightVector(gravityDirection))
-      : 0;
-    const fallbackDirectionX =
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID
-        ? liveObject.runtime.aiFacingDirectionX
-        : liveObject.runtime.directionX;
-    const directionX =
-      Math.abs(tangentVelocity) > 4 ? Math.sign(tangentVelocity) : fallbackDirectionX;
-    this.applyDirectionalFacing(
-      liveObject.sprite,
-      liveObject.config,
-      this.getScreenFacingDirectionForGravityTangent(directionX, gravityDirection),
-    );
+    syncGravityPresentation(liveObject, {
+      special: (object) => this.shouldLiveObjectUseSpecialTilePhysics(object),
+      gravity: (object) => this.getLiveObjectGravityDirection(object),
+      body: (sprite) => this.getDynamicBody(sprite),
+      face: (sprite, config, directionX) => this.applyDirectionalFacing(sprite, config, directionX),
+      screen: (directionX, gravity) => this.getScreenFacingDirectionForGravityTangent(directionX, gravity),
+    });
   }
 
   private getPlacedObjectRuntimeDepth(placedObject: Pick<RoomSnapshot['placedObjects'][number], 'layer'>): number {
-    switch (getPlacedObjectLayer(placedObject)) {
-      case 'background':
-        return 9.5;
-      case 'foreground':
-        return 28;
-      case 'terrain':
-      default:
-        return 18;
-    }
+    return placedObjectRuntimeDepth(placedObject);
   }
 
   private resetDynamicObjectIfOutOfBounds(

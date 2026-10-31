@@ -4,8 +4,10 @@ import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
-import { TriangleHandleController } from './editor/triangleHandles';
-import { normalizePlacedTriangle } from '../config/trianglePiece';
+import { createEditorTriangleHandles } from './editor/triangleHandleSetup';
+import type { TriangleHandleController } from './editor/triangleHandles';
+import { utilityInspectorCallbacks } from './editor/utilityInspectorCallbacks';
+import { courseEditorWakeData } from './editor/courseWakeData';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { getAuthDebugState } from '../auth/client';
 import {
@@ -667,12 +669,8 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       showStatus: text => this.updatePersistenceStatus(text),
       onChanged: () => this.renderEditorUi(),
     });
-    this.triangleHandles = new TriangleHandleController({
-      selected: () => this.triangleHandleGeometry(this.inspectorController.getPinnedTriangleId()),
-      hitRadius: () => Math.max(8, 10 / Math.max(editorState.zoom, 0.25)),
-      begin: (instanceId) => { this.editRuntime.beginTriangleDrag(instanceId); },
-      apply: (instanceId, next) => { this.editRuntime.applyTriangleDrag(instanceId, next); },
-      commit: () => this.editRuntime.commitTriangleDrag(),
+    this.triangleHandles = createEditorTriangleHandles({
+      pinnedId: () => this.inspectorController.getPinnedTriangleId(), placed: (id) => this.editRuntime.getPlacedObjectByInstanceId(id), origin: () => this.editRuntime.getRoomOrigin(), zoom: () => editorState.zoom, edits: this.editRuntime.utilityEdits,
     });
     this.interactionController = new EditorInteractionController(this, {
       objectMove: this.objectMoveController,
@@ -1013,15 +1011,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         this.inspectorController.setFocusedNpcDialogue(text),
       onSetFocusedNpcDefeatMode: (defeatMode) =>
         this.inspectorController.setFocusedNpcDefeatMode(defeatMode),
-      onSetFocusedBallGraphic: (graphicId) => this.inspectorController.setFocusedBallGraphic(graphicId),
-      onSetFocusedBallWeight: (weight) => this.inspectorController.setFocusedBallWeight(weight),
-      onSetFocusedBallHurtEnemies: (enabled) => this.inspectorController.setFocusedBallHurtEnemies(enabled),
-      onSetFocusedBallHurtFriendlies: (enabled) => this.inspectorController.setFocusedBallHurtFriendlies(enabled),
-      onSetFocusedBallHurtPlayer: (enabled) => this.inspectorController.setFocusedBallHurtPlayer(enabled),
-      onSetFocusedBallPushable: (enabled) => this.inspectorController.setFocusedBallPushable(enabled),
-      onSetFocusedTriangleFill: (color) => this.inspectorController.setFocusedTriangleFill(color),
-      onSetFocusedTriangleStroke: (color) => this.inspectorController.setFocusedTriangleStroke(color),
-      onSetTriangleOrientation: (flipX, flipY) => this.inspectorController.setTriangleOrientation(flipX, flipY),
+      ...utilityInspectorCallbacks(this.inspectorController),
     });
 
     this.createBackground();
@@ -1852,20 +1842,6 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.chromeController.refreshGoalUi();
   }
 
-  private triangleHandleGeometry(instanceId: string | null) {
-    const placed = this.editRuntime.getPlacedObjectByInstanceId(instanceId);
-    const geometry = placed ? normalizePlacedTriangle(placed) : null;
-    if (!placed?.instanceId || !geometry) return null;
-    const origin = this.editRuntime.getRoomOrigin();
-    return {
-      instanceId: placed.instanceId,
-      anchorX: origin.x + geometry.anchorX,
-      anchorY: origin.y + geometry.anchorY,
-      legX: geometry.legX,
-      legY: geometry.legY,
-    };
-  }
-
   private hideObjectInspectorUi(): void {
     this.inspectorController.hideTransientUi();
     this.overlayController.clearObjectInspectorOverlays();
@@ -1981,18 +1957,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData {
-    const courseEdit = this.buildCourseEditedRoomData();
-    return {
-      courseId: courseEdit?.courseId ?? null,
-      selectedCoordinates: { ...this.roomCoordinates },
-      centerCoordinates: { ...(wakeData.centerCoordinates ?? this.roomCoordinates) },
-      statusMessage: wakeData.statusMessage ?? null,
-      courseEditedRoom: this.buildCourseEditedRoomData(),
-      draftRoom: wakeData.draftRoom ?? null,
-      publishedRoom: wakeData.publishedRoom ?? null,
-      clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
-      invalidateRoomId: wakeData.invalidateRoomId ?? null,
-    };
+    return courseEditorWakeData(wakeData, this.roomCoordinates, this.buildCourseEditedRoomData());
   }
 
   async mintRoom(): Promise<RoomRecord | null> {

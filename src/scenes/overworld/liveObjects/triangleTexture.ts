@@ -9,7 +9,7 @@ import {
   triangleVertices,
 } from '../../../config/trianglePiece';
 
-export function paintTriangleCanvas(
+function paintTriangleCanvas(
   canvas: HTMLCanvasElement,
   legX: number,
   legY: number,
@@ -47,7 +47,7 @@ export function paintTriangleCanvas(
   context.putImageData(image, 0, 0);
 }
 
-export function ensureTriangleTexture(
+function ensureTriangleTexture(
   scene: Phaser.Scene,
   legX: number,
   legY: number,

@@ -4,8 +4,8 @@ export const ROLLING_BALL_FRAME_SIZE = 32;
 export const ROLLING_BALL_COLUMNS = 8;
 export const ROLLING_BALL_ROWS = 4;
 export const ROLLING_BALL_FPS = 6;
-export const ROLLING_BALL_MIN_WEIGHT = 0.25;
-export const ROLLING_BALL_MAX_WEIGHT = 8;
+const ROLLING_BALL_MIN_WEIGHT = 0.25;
+const ROLLING_BALL_MAX_WEIGHT = 8;
 
 export interface RollingBallGraphic {
   id: string;
@@ -27,7 +27,7 @@ export interface RollingBallSettings {
   pushable: boolean;
 }
 
-export const ROLLING_BALL_GRAPHICS: readonly RollingBallGraphic[] = [
+const ROLLING_BALL_GRAPHICS: readonly RollingBallGraphic[] = [
   {
     id: 'basic',
     name: 'Basic Ball',

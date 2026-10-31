@@ -1,16 +1,9 @@
-import { listRollingBallGraphics } from '../../config/rollingBall';
-import { triangleFlipFromOrient } from '../../config/trianglePiece';
 import { prepareBackgroundFile } from '../../backgrounds/upload';
-import { EditorColorPopover } from './colorPopover';
 import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
-import {
-  INSPECTOR_WINDOWS_RESET_EVENT,
-  inspectorWindowLabel,
-  isInspectorWindowMinimized,
-  setInspectorWindowMinimized,
-} from './inspectorWindows';
 import { bindBossInspector } from './uiBridge/bossInspector';
+import { bindUtilityInspectorControls } from './uiBridge/utilityInspector';
+import { SMART_TOOL_LABELS, applyEditorToolIcon } from './uiBridge/toolChrome';
 import { EditorHistoryControls } from './historyControls';
 import { EditorClipboardControls } from './clipboardControls';
 import { closeRoomTemplatePicker } from './roomTemplatePicker';
@@ -40,12 +33,10 @@ import {
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
-  isMoreEditorTool,
   isPencilSprayPlacement,
   isPencilStampPlacement,
   ensureEditorToolAvailable,
   type EditorModePipState,
-  type EditorToolButtonAppearance,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { clampSprayBrushSize, clampSprayRate, SPRAY_BRUSH_SIZES } from './sprayTiles';
@@ -165,37 +156,6 @@ const WATER_TUNNEL_BRUSH_ID = 'water.tunnel' as const;
 
 function isLegacySmartThemeId(themeId: SmartThemeId): themeId is LegacySmartThemeId {
   return LEGACY_SMART_THEME_IDS.includes(themeId as LegacySmartThemeId);
-}
-
-const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
-  pencil: 'Draw',
-  rect: 'Rectangle',
-  ellipse: 'Ellipse',
-  line: 'Line',
-  triangle: 'Triangle',
-  fill: 'Fill',
-      randomize: 'Scramble',
-};
-
-function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearance): void {
-  const kind = appearance.iconKind ?? 'glyph';
-  if (kind === 'mosaic') {
-    if (!icon.classList.contains('tool-icon-mosaic')) {
-      icon.className = 'tool-icon tool-icon-mosaic';
-      icon.innerHTML = '<span></span><span></span><span></span><span></span>';
-    }
-    return;
-  }
-  if (kind === 'right-triangle') {
-    icon.className = 'tool-icon tool-icon-right-triangle';
-    icon.textContent = '';
-    return;
-  }
-  if (appearance.icon === undefined) {
-    return;
-  }
-  icon.className = 'tool-icon';
-  icon.textContent = appearance.icon;
 }
 
 function syncModePips(host: HTMLElement, state: EditorModePipState | null): void {
@@ -1414,89 +1374,13 @@ export class EditorUiBridge {
         this.elements.npcDefeatModeSelect?.removeEventListener('change', handleNpcDefeatModeChange)
       );
     }
-    const graphicSelect = this.elements.ballGraphicSelect;
-    if (graphicSelect && graphicSelect.options.length === 0) {
-      for (const graphic of listRollingBallGraphics()) {
-        const option = graphicSelect.ownerDocument.createElement('option');
-        option.value = graphic.id;
-        option.textContent = graphic.name;
-        graphicSelect.append(option);
-      }
-    }
-    const handleBallGraphicChange = () => {
-      const value = this.elements.ballGraphicSelect?.value;
-      if (value) this.actions.onSetFocusedBallGraphic(value);
-    };
-    this.elements.ballGraphicSelect?.addEventListener('change', handleBallGraphicChange);
-    const handleBallWeightChange = () => {
-      const weight = Number(this.elements.ballWeightInput?.value);
-      if (Number.isFinite(weight)) this.actions.onSetFocusedBallWeight(weight);
-    };
-    this.elements.ballWeightInput?.addEventListener('change', handleBallWeightChange);
-    const handleInspectorMinimize = () => {
-      const state = this.lastInspectorState;
-      if (!state) return;
-      const windowInfo = inspectorWindowLabel(state);
-      if (!windowInfo) return;
-      setInspectorWindowMinimized(windowInfo.kind, !isInspectorWindowMinimized(windowInfo.kind));
-      renderInspectorPanel(this.elements, state);
-    };
-    this.elements.inspectorMinimizeButton?.addEventListener('click', handleInspectorMinimize);
-    const handleInspectorWindowsReset = () => {
-      if (this.lastInspectorState) renderInspectorPanel(this.elements, this.lastInspectorState);
-    };
-    this.windowObj.addEventListener(INSPECTOR_WINDOWS_RESET_EVENT, handleInspectorWindowsReset);
-    this.cleanupCallbacks.push(() => {
-      this.elements.inspectorMinimizeButton?.removeEventListener('click', handleInspectorMinimize);
-      this.windowObj.removeEventListener(INSPECTOR_WINDOWS_RESET_EVENT, handleInspectorWindowsReset);
+    bindUtilityInspectorControls({
+      elements: this.elements,
+      actions: this.actions,
+      cleanupCallbacks: this.cleanupCallbacks,
+      windowObj: this.windowObj,
+      getInspectorState: () => this.lastInspectorState,
     });
-    const bindBallFlag = (
-      checkbox: HTMLInputElement | null,
-      apply: (enabled: boolean) => void,
-    ) => {
-      const handle = () => apply(checkbox?.checked === true);
-      checkbox?.addEventListener('change', handle);
-      if (checkbox) this.cleanupCallbacks.push(() => checkbox.removeEventListener('change', handle));
-    };
-    bindBallFlag(this.elements.ballHurtEnemiesCheckbox, (enabled) => this.actions.onSetFocusedBallHurtEnemies(enabled));
-    bindBallFlag(this.elements.ballHurtFriendliesCheckbox, (enabled) => this.actions.onSetFocusedBallHurtFriendlies(enabled));
-    bindBallFlag(this.elements.ballHurtPlayerCheckbox, (enabled) => this.actions.onSetFocusedBallHurtPlayer(enabled));
-    bindBallFlag(this.elements.ballPushableCheckbox, (enabled) => this.actions.onSetFocusedBallPushable(enabled));
-    const colorPopover = new EditorColorPopover(
-      {
-        popover: this.elements.colorPopover,
-        square: this.elements.colorPopoverSquare,
-        hue: this.elements.colorPopoverHue,
-        hex: null,
-        dropper: this.elements.colorEyedropperButton,
-      },
-      () => undefined,
-    );
-    colorPopover.bind(this.cleanupCallbacks);
-    const openColor = (anchor: HTMLButtonElement | null, current: string, apply: (hex: string) => void) => {
-      if (!anchor) return;
-      colorPopover.open(anchor, current, apply);
-    };
-    this.elements.triangleFillSwatch?.addEventListener('click', () => {
-      openColor(this.elements.triangleFillSwatch, this.elements.triangleFillInput?.value ?? '#8A8F98', (hex) => this.actions.onSetFocusedTriangleFill(hex));
-    });
-    this.elements.triangleStrokeSwatch?.addEventListener('click', () => {
-      openColor(this.elements.triangleStrokeSwatch, this.elements.triangleStrokeInput?.value ?? '#2C3138', (hex) => this.actions.onSetFocusedTriangleStroke(hex));
-    });
-    this.elements.triangleFillInput?.addEventListener('change', () => {
-      this.actions.onSetFocusedTriangleFill(this.elements.triangleFillInput?.value ?? '');
-    });
-    this.elements.triangleStrokeInput?.addEventListener('change', () => {
-      this.actions.onSetFocusedTriangleStroke(this.elements.triangleStrokeInput?.value ?? '');
-    });
-    for (const button of this.elements.triangleOrientButtons) {
-      button.addEventListener('click', () => {
-        const orient = button.dataset.triangleOrient;
-        if (orient !== 'ne' && orient !== 'nw' && orient !== 'se' && orient !== 'sw') return;
-        const flip = triangleFlipFromOrient(orient);
-        this.actions.onSetTriangleOrientation(flip.flipX, flip.flipY);
-      });
-    }
 
     bindButton(this.cleanupCallbacks, this.elements.playBtn, () => {
       runtimeConfig.closePanels();

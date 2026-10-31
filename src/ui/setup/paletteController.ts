@@ -1,3 +1,5 @@
+export { objectMatchesEditorScope, type EditorObjectScope } from './paletteObjectScopes';
+import { objectMatchesEditorScope, type EditorObjectScope } from './paletteObjectScopes';
 import { assetUrl } from '../../assets/assetUrl';
 import { createObjectPaletteThumbnail } from './objectPaletteThumbnail';
 import {
@@ -15,7 +17,6 @@ import {
   isSpecialTilesetGid,
   isTilesetLocalTileEditorEnabled,
   MOVING_PLATFORM_OBJECT_ID,
-  TRIANGLE_PIECE_OBJECT_ID,
   SPECIAL_TILE_LOCAL_INDICES,
   SPECIAL_TILESET_KEY,
   TREE_PALETTE_FAMILIES,
@@ -76,28 +77,6 @@ type DecorationPaletteFilter = 'all' | DecorationPaletteGroup;
 type VinePaletteFilter = 'all' | VinePaletteSubgroup;
 type TreePaletteFilter = 'all' | TreePaletteSubgroup;
 type TreeFamilyFilter = 'all' | TreePaletteFamily;
-
-export type EditorObjectScope = 'all' | 'stuff' | 'characters' | 'hazards' | 'deco';
-
-export function objectMatchesEditorScope(
-  objectConfig: Pick<GameObjectConfig, 'id' | 'category'>,
-  scope: EditorObjectScope,
-): boolean {
-  if (objectConfig.id === TRIANGLE_PIECE_OBJECT_ID) return false;
-  if (scope === 'all') return true;
-  if (scope === 'stuff') {
-    if (objectConfig.id === 'spawn_point') return false;
-    if (parseCustomSpriteObjectId(objectConfig.id)) return true;
-    return objectConfig.category === 'collectible'
-      || objectConfig.category === 'interactive'
-      || objectConfig.category === 'platform';
-  }
-  if (scope === 'characters') {
-    return objectConfig.category === 'enemy' || objectConfig.category === 'npc';
-  }
-  if (scope === 'hazards') return objectConfig.category === 'hazard';
-  return !parseCustomSpriteObjectId(objectConfig.id) && objectConfig.category === 'decoration';
-}
 
 /** Where a finger came down on the picker; Cmd/Ctrl (a keyboard on a tablet) adds or removes tiles. */
 type PaletteTouchCell = { tilesetKey: string; col: number; row: number; toggle: boolean };

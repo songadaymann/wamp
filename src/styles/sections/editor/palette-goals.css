@@ -32,7 +32,8 @@
   }
 
   .tool-btn[data-smart-tool-unsupported='true'],
-  .layer-btn[data-smart-layer-unsupported='true'] {
+  .layer-btn[data-smart-layer-unsupported='true'],
+  .layer-stack-mini-btn[data-smart-layer-unsupported='true'] {
     cursor: not-allowed;
     filter: grayscale(0.65);
     opacity: 0.42;
@@ -55,10 +56,6 @@
 
   /* Smart controls are content-sized; the generic tile palette is the only
    palette section that should consume the remaining sidebar height. */
-
-  body[data-app-mode='editor'][data-builder-mode='beginner']:not([data-editor-triangle-options='true']) #layers-section {
-    display: none !important;
-  }
 
   #smart-palette-section,
   #smart-palette-section .sidebar-section-body {

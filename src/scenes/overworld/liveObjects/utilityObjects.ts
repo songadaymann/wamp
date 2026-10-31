@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { isSolidRuntimeObjectConfig, isSpecialTileKindGid } from '../../../config';
-import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../../config/rollingBall';
+import { getRollingBallGraphic, isRollingBallObjectId, ROLLING_BALL_FPS, ROLLING_BALL_ROWS, rollingBallFrame } from '../../../config/rollingBall';
 import {
   evaluateFlatWalk,
   evaluateSlopeWalk,
@@ -611,7 +611,7 @@ function separationForBody(
 
 function presentBall(liveObject: LoadedRoomObject, ball: BallSimState): void {
   const graphicColumn = getRollingBallGraphic(liveObject.ball?.graphicId).column;
-  const row = Math.floor(ball.animTime * 6) % 4;
+  const row = Math.floor(ball.animTime * ROLLING_BALL_FPS) % ROLLING_BALL_ROWS;
   liveObject.sprite.setPosition(ball.x, ball.y);
   liveObject.sprite.rotation = ball.angle;
   liveObject.sprite.setFrame(rollingBallFrame(graphicColumn, row));

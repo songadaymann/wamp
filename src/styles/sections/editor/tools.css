@@ -30,6 +30,14 @@
     opacity: 0.22;
   }
 
+  .tool-icon-right-triangle {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    background: currentColor;
+    clip-path: polygon(0 100%, 100% 100%, 0 0);
+  }
+
   .editor-randomize-brush-button,
   .editor-pencil-brush-button,
   .editor-pencil-spray-brush-button {
@@ -43,20 +51,6 @@
     font-size: var(--ui-text-small, 10px);
     font-family: inherit;
     cursor: pointer;
-  }
-
-  .tool-icon-right-triangle {
-    display: inline-block;
-    width: 13px;
-    height: 13px;
-    background: currentColor;
-    clip-path: polygon(0 100%, 100% 100%, 0 0);
-  }
-
-  .editor-randomize-size-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
   }
 
   .editor-randomize-brush-button.active,

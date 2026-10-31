@@ -26,6 +26,8 @@ describe('editor state ownership and change delivery', () => {
     const store = make(), changed = new Set<keyof EditorState>();
     store.subscribe(change => change.keys.forEach(key => changed.add(key)));
     const patch: EditorState = { activeTool: 'eraser', rectOutline: true, ellipseOutline: true, lineCurve: true,
+      trianglePaintMode: true, triangleStampFill: '#abcdef', triangleStampStroke: '#123456',
+      triangleStampFlipX: true, triangleStampFlipY: true,
       randomizeBrushSize: 5, scrambleBrushSize: 5, pencilBrushSize: 3, pencilSprayMode: true,
       pencilSprayBrushSize: 7, pencilSprayRate: 0.7, pencilContinuousStamping: true,
       fillIgnoreTileFlipping: true, shapeFillMode: 'pattern', activeLayer: 'foreground',

@@ -23,34 +23,22 @@ import {
   getObjectById,
   getObjectDisplayOffset,
   getObjectDisplayScale,
-  getObjectPlacementPointForTile,
   placedObjectContributesToCategory,
   getSelectionTileValue,
   type LayerName,
   type PlacedObject,
-  isRollingBallObjectId,
-  isTrianglePieceObjectId,
-  rollingBallSettingsFromGraphic,
-  normalizeRollingBallWeight,
 } from '../../config';
 import {
-  DEFAULT_TRIANGLE_FILL,
-  DEFAULT_TRIANGLE_STROKE,
-  TRIANGLE_PIECE_OBJECT_ID,
-  applyTriangleStampOrientation,
-  defaultTriangleLegs,
-  normalizePlacedTriangle,
-  parseHexColor,
-  snapTriangleLeg,
-  triangleBitmapLayout,
-} from '../../config/trianglePiece';
-import { stampedTriangleFields } from './triangleStamp';
+  UtilityObjectEditor,
+  createEditorPlacedObject,
+  resolveEditorPlaceObjectConfig,
+  triangleSelectionBounds,
+} from './utilityObjectEdits';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
-  DEFAULT_POLICE_PATROL_SHOOTS,
   isPoliceEnemyObjectId,
   normalizePoliceBehaviorMode,
   type PoliceBehaviorMode,
@@ -122,10 +110,7 @@ import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/mode
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
 import {
-  DEFAULT_NPC_DEFEAT_MODE,
-  DEFAULT_NPC_FRIENDLY_FIRE,
   DEFAULT_NPC_MODE,
-  DEFAULT_NPC_PLAYER_COLLISION,
   getPlacedNpcName,
   isNpcObjectId,
   normalizeNpcCanJumpFall,
@@ -318,6 +303,18 @@ export class EditorEditRuntime {
   private revision = 0;
   private goalPlacementMode: GoalPlacementMode = null;
   private readonly history = new EditorHistory<UndoAction>((action) => recordReplayEditorAction(`${action.kind}_changed`));
+  readonly utilityEdits = new UtilityObjectEditor({
+    getPlacedObjects: () => this.host.getPlacedObjects(),
+    setPlacedObjects: (objects) => this.host.setPlacedObjects(objects),
+    clonePlacedObjects: (objects) => this.clonePlacedObjects(objects),
+    rebuildObjectSprites: () => this.rebuildObjectSprites(),
+    markRoomDirty: () => this.markRoomDirty(),
+    recordObjects: (previous, next) => {
+      this.history.record({ kind: 'objects', action: { previous, next } });
+    },
+    getRoomOrigin: () => this.getRoomOrigin(),
+    getPlacedObjectByInstanceId: (instanceId) => this.getPlacedObjectByInstanceId(instanceId),
+  });
   private currentBatch: TileAction[] = [];
   private readonly currentBatchActionIndex = new Map<string, number>();
   private currentBatchSmartBefore: RoomSmartTerrainState | null = null;
@@ -992,7 +989,6 @@ export class EditorEditRuntime {
 
   private objectBatchBefore: PlacedObject[] | null = null;
   private objectBatchNext: PlacedObject[] | null = null;
-  private triangleDragBaseline: PlacedObject[] | null = null;
   private objectBatchChanged = false;
   private objectBatchLivePreview = false;
   private objectBatchPlacedCount = 0;
@@ -2227,17 +2223,8 @@ export class EditorEditRuntime {
       return null;
     }
 
-    const placingTriangleTool = editorState.activeTool === 'triangle';
-    if (!editorState.selectedObjectId && !placingTriangleTool) {
-      return null;
-    }
-
-    const objectConfig = getEditorObjectConfigById(
-      placingTriangleTool ? TRIANGLE_PIECE_OBJECT_ID : editorState.selectedObjectId,
-    );
-    if (!objectConfig) {
-      return null;
-    }
+    const objectConfig = resolveEditorPlaceObjectConfig();
+    if (!objectConfig) return null;
 
     if (objectConfig.id === 'spawn_point') {
       this.placeSpawnPoint(tileX, tileY);
@@ -2246,75 +2233,7 @@ export class EditorEditRuntime {
       return null;
     }
 
-    const triangle = isTrianglePieceObjectId(objectConfig.id);
-    const ball = isRollingBallObjectId(objectConfig.id) ? rollingBallSettingsFromGraphic('basic') : null;
-    const legs = triangle
-      ? defaultTriangleLegs(
-        placingTriangleTool ? editorState.triangleStampFlipX : editorState.tileFlipXMode === 'on',
-        placingTriangleTool ? editorState.triangleStampFlipY : editorState.tileFlipYMode === 'on',
-      )
-      : null;
-    const placementPoint = triangle
-      ? { x: tileX * TILE_SIZE, y: (tileY + 1) * TILE_SIZE }
-      : getObjectPlacementPointForTile(objectConfig, tileX, tileY);
-    const placed: PlacedObject = {
-      id: objectConfig.id,
-      x: placementPoint.x,
-      y: placementPoint.y,
-      instanceId: createPlacedObjectInstanceId(),
-      customSpriteKind: getCustomSpriteDefinitionByObjectId(objectConfig.id)?.kind ?? null,
-      facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
-      layer: editorState.activeLayer,
-      triggerTargetInstanceId: null,
-      linkedTargetInstanceIds: null,
-      containedObjectId: null,
-      signText: null,
-      swordsmanObjectiveMode:
-        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
-          ? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
-          : null,
-      swordsmanDefeatMode:
-        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
-          ? DEFAULT_SWORDSMAN_DEFEAT_MODE
-          : null,
-      policeBehaviorMode: isPoliceEnemyObjectId(editorState.selectedObjectId)
-        ? DEFAULT_POLICE_BEHAVIOR_MODE
-        : null,
-      policePatrolShoots: isPoliceEnemyObjectId(editorState.selectedObjectId)
-        ? DEFAULT_POLICE_PATROL_SHOOTS
-        : null,
-      npcMode: isNpcObjectId(objectConfig.id) ? DEFAULT_NPC_MODE : null,
-      npcPushable: isNpcObjectId(objectConfig.id) ? false : null,
-      npcCanJumpFall: isNpcObjectId(objectConfig.id) ? false : null,
-      npcPlayerCollision: isNpcObjectId(objectConfig.id)
-        ? DEFAULT_NPC_PLAYER_COLLISION
-        : null,
-      npcFriendlyFire: isNpcObjectId(objectConfig.id)
-        ? DEFAULT_NPC_FRIENDLY_FIRE
-        : null,
-      npcName: isNpcObjectId(objectConfig.id) ? objectConfig.name : null,
-      npcDefeatMode: isNpcObjectId(objectConfig.id)
-        ? DEFAULT_NPC_DEFEAT_MODE
-        : null,
-      ballGraphic: ball?.graphicId ?? null,
-      ballWeight: ball?.weight ?? null,
-      ballHurtEnemies: ball ? ball.hurtEnemies : null,
-      ballHurtFriendlies: ball ? ball.hurtFriendlies : null,
-      ballHurtPlayer: ball ? ball.hurtPlayer : null,
-      ballPushable: ball ? ball.pushable : null,
-      triangleLegX: legs?.legX ?? null,
-      triangleLegY: legs?.legY ?? null,
-      triangleFill: triangle
-        ? (placingTriangleTool
-          ? parseHexColor(editorState.triangleStampFill, DEFAULT_TRIANGLE_FILL)
-          : DEFAULT_TRIANGLE_FILL)
-        : null,
-      triangleStroke: triangle
-        ? (placingTriangleTool
-          ? parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE)
-          : DEFAULT_TRIANGLE_STROKE)
-        : null,
-    };
+    const placed = createEditorPlacedObject(objectConfig, tileX, tileY);
 
     const previous = this.objectBatchNext ?? this.clonePlacedObjects();
     if (objectConfig.id === LOST_SONG_OBJECT_ID && editorState.activeLayer !== 'terrain') {
@@ -2806,140 +2725,6 @@ export class EditorEditRuntime {
     }));
   }
 
-  setRollingBallGraphic(instanceId: string, graphicId: string): boolean {
-    const preset = rollingBallSettingsFromGraphic(graphicId);
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({
-      ...placed,
-      ballGraphic: preset.graphicId,
-      ballWeight: preset.weight,
-      ballHurtEnemies: preset.hurtEnemies,
-      ballHurtFriendlies: preset.hurtFriendlies,
-      ballHurtPlayer: preset.hurtPlayer,
-      ballPushable: preset.pushable,
-    }));
-  }
-
-  setRollingBallWeight(instanceId: string, weight: number): boolean {
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({
-      ...placed,
-      ballWeight: normalizeRollingBallWeight(weight, placed.ballWeight ?? 1),
-    }));
-  }
-
-  setRollingBallHurtEnemies(instanceId: string, enabled: boolean): boolean {
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({ ...placed, ballHurtEnemies: enabled }));
-  }
-
-  setRollingBallHurtFriendlies(instanceId: string, enabled: boolean): boolean {
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({ ...placed, ballHurtFriendlies: enabled }));
-  }
-
-  setRollingBallHurtPlayer(instanceId: string, enabled: boolean): boolean {
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({ ...placed, ballHurtPlayer: enabled }));
-  }
-
-  setRollingBallPushable(instanceId: string, enabled: boolean): boolean {
-    return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({ ...placed, ballPushable: enabled }));
-  }
-
-  setTriangleColors(instanceId: string, fill: string | null, stroke: string | null): boolean {
-    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
-      ...placed,
-      triangleFill: fill == null ? placed.triangleFill : parseHexColor(fill, placed.triangleFill ?? DEFAULT_TRIANGLE_FILL),
-      triangleStroke: stroke == null ? placed.triangleStroke : parseHexColor(stroke, placed.triangleStroke ?? DEFAULT_TRIANGLE_STROKE),
-    }));
-  }
-
-  applyTriangleStamp(instanceId: string): boolean {
-    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
-      ...placed,
-      ...stampedTriangleFields(placed),
-    }));
-  }
-
-  setTriangleOrientation(instanceId: string, flipX: boolean, flipY: boolean): boolean {
-    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry) return placed;
-      const next = applyTriangleStampOrientation(geometry.legX, geometry.legY, flipX, flipY);
-      return {
-        ...placed,
-        triangleLegX: next.legX,
-        triangleLegY: next.legY,
-      };
-    });
-  }
-
-  flipTriangle(instanceId: string, axis: 'x' | 'y'): boolean {
-    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry) return placed;
-      return {
-        ...placed,
-        triangleLegX: axis === 'x' ? snapTriangleLeg(-geometry.legX) : geometry.legX,
-        triangleLegY: axis === 'y' ? snapTriangleLeg(-geometry.legY) : geometry.legY,
-      };
-    });
-  }
-
-  beginTriangleDrag(instanceId: string): boolean {
-    if (!isTrianglePieceObjectId(this.getPlacedObjectByInstanceId(instanceId)?.id)) return false;
-    this.triangleDragBaseline = this.clonePlacedObjects();
-    return true;
-  }
-
-  applyTriangleDrag(
-    instanceId: string,
-    next: { anchorX: number; anchorY: number; legX: number; legY: number },
-  ): boolean {
-    const origin = this.getRoomOrigin();
-    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
-      ...placed,
-      x: next.anchorX - origin.x,
-      y: next.anchorY - origin.y,
-      triangleLegX: snapTriangleLeg(next.legX),
-      triangleLegY: snapTriangleLeg(next.legY),
-    }), false);
-  }
-
-  commitTriangleDrag(): void {
-    const previous = this.triangleDragBaseline;
-    this.triangleDragBaseline = null;
-    if (!previous) return;
-    const next = this.clonePlacedObjects();
-    if (JSON.stringify(previous) === JSON.stringify(next)) return;
-    this.history.record({
-      kind: 'objects',
-      action: { previous, next },
-    });
-    this.markRoomDirty();
-  }
-
-  private updateUtilityObject(
-    instanceId: string,
-    matches: (id: string) => boolean,
-    update: (placed: PlacedObject) => PlacedObject,
-    recordHistory = true,
-  ): boolean {
-    const placedObjects = this.host.getPlacedObjects();
-    const objectIndex = placedObjects.findIndex((placed) => placed.instanceId === instanceId);
-    if (objectIndex < 0 || !matches(placedObjects[objectIndex]?.id ?? '')) return false;
-    const previous = this.clonePlacedObjects();
-    const nextObject = update(previous[objectIndex]);
-    if (JSON.stringify(previous[objectIndex]) === JSON.stringify(nextObject)) return true;
-    const next = previous.map((placed, index) => index === objectIndex ? nextObject : placed);
-    this.host.setPlacedObjects(next);
-    this.rebuildObjectSprites();
-    if (recordHistory) {
-      this.history.record({
-        kind: 'objects',
-        action: { previous, next: this.clonePlacedObjects(next) },
-      });
-      this.markRoomDirty();
-    }
-    return true;
-  }
-
   private updateNpc(
     instanceId: string,
     update: (placed: PlacedObject) => PlacedObject,
@@ -3151,13 +2936,9 @@ export class EditorEditRuntime {
   }
 
   getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {
-    const triangle = normalizePlacedTriangle(placed);
-    if (triangle) {
-      const layout = triangleBitmapLayout(triangle.legX, triangle.legY);
-      const origin = this.getRoomOrigin();
-      const left = origin.x + triangle.anchorX - layout.anchorX;
-      const top = origin.y + triangle.anchorY - layout.anchorY;
-      return new Phaser.Geom.Rectangle(left - 4, top - 4, layout.width + 8, layout.height + 8);
+    const triangleBounds = triangleSelectionBounds(placed, this.getRoomOrigin());
+    if (triangleBounds) {
+      return new Phaser.Geom.Rectangle(triangleBounds.x, triangleBounds.y, triangleBounds.width, triangleBounds.height);
     }
     const objectConfig = getEditorObjectConfigById(placed.id);
     if (!objectConfig) {

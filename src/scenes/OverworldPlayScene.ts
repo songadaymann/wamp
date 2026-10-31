@@ -2371,11 +2371,9 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
   }
 
   private updateLiveObjects(delta: number): void {
-    if (this.mode !== 'play') {
-      return;
-    }
-
+    if (this.mode !== 'play') return;
     this.liveObjectController.updateLiveObjects(this.getCollisionReadyLoadedFullRooms(), delta);
+    if (!this.player || !this.playerBody?.enable) this.liveObjectController.stepUtilityPhysics(delta, 0);
   }
 
   private simulatePhysicsEnvironment(delta: number): void {
@@ -2385,10 +2383,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
     const liveStartedAt = controllerProfileSlot === 3 ? profiler?.beginSegment() : undefined;
     this.updateLiveObjects(delta);
     if (liveStartedAt !== undefined) profiler?.endSegment('controller.liveObjects', liveStartedAt);
-    if (!this.player || !this.playerBody?.enable) {
-      if (this.mode === 'play') this.liveObjectController.stepUtilityPhysics(delta, 0);
-      return;
-    }
+    if (!this.player || !this.playerBody?.enable) return;
     const specialStartedAt = controllerProfileSlot === 14 ? profiler?.beginSegment() : undefined;
     this.updateSpecialTiles();
     if (specialStartedAt !== undefined) profiler?.endSegment('controller.specialTiles', specialStartedAt);
@@ -2401,11 +2396,7 @@ export class OverworldPlayScene extends Phaser.Scene implements OverworldSceneBr
       ? this.mobilePerformanceControllerProfileSlot : -1;
     const movementStartedAt = controllerProfileSlot === 11 ? profiler?.beginSegment() : undefined;
     const movement = this.movementController.updateMovement(delta, this.quicksandController.isActive(), input);
-    this.liveObjectController.stepUtilityPhysics(
-      delta,
-      movement.horizontalInput,
-      this.movementController.isButtStomping(),
-    );
+    this.liveObjectController.stepUtilityPhysics(delta, movement.horizontalInput, this.movementController.isButtStomping());
     this.liveObjectController.pushNpcsFromPlayer();
     this.assist?.safe.capture();
     this.setLastMovementInput(movement.horizontalInput, movement.verticalInput);
