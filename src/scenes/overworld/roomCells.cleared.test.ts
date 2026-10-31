@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { updateComfortSettings } from '../../settings/comfortSettings';
+beforeEach(()=>updateComfortSettings({clearedRoomChecks:true}));
 vi.mock('phaser',()=>({default:{}}));
 import { OverworldRoomCellController } from './roomCells';
 function fixture(){
@@ -13,6 +15,16 @@ function fixture(){
    mode=values.mode??mode;state=values.state??state;cleared=values.cleared??cleared;},changed:()=>changed()};
 }
 describe('shape-based personal cleared-room checks',()=>{
+ it('hides checks by default and redraws immediately on toggle without losing progress',()=>{
+   updateComfortSettings({clearedRoomChecks:false});
+   const f=fixture();f.set({cleared:true});f.controller.redraw();
+   expect(f.layers[1].fillStyle).not.toHaveBeenCalledWith(0xfff3d6,1);
+   updateComfortSettings({clearedRoomChecks:true});
+   expect(f.layers[1].fillStyle).toHaveBeenCalledWith(0xfff3d6,1);
+   f.layers[1].fillStyle.mockClear();updateComfortSettings({clearedRoomChecks:false});
+   expect(f.layers[1].fillStyle).not.toHaveBeenCalledWith(0xfff3d6,1);
+   f.controller.destroy();
+ });
  it('draws a high-contrast corner tick alongside the Lost Song frame, including Expanded cells',()=>{
    const f=fixture();f.set({cleared:true});f.controller.redraw();
    expect(f.layers[1].fillStyle).toHaveBeenCalledWith(0xfff3d6,1);
