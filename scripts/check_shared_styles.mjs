@@ -1,6 +1,7 @@
 // Keep the shared UI palette and exact font stacks in one place (F113).
 // Specialty colors and different fallback stacks remain with their owning surface.
 import fs from 'node:fs/promises';
+import postcss from 'postcss';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +28,33 @@ function report(file, source, index, message) {
   errors.push(`${path.relative(path.dirname(root), file)}:${source.slice(0, index).split('\n').length}: ${message}`);
 }
 
+
+// Modal skin defaults live on the shared classes. Layout and intentional visual
+// variants remain local; copying a default back under a dialog ID is rejected.
+const modalDefaults = new Map();
+for (const file of ['sections/modals/room-course.css', 'sections/modals/history.css']) {
+  postcss.parse(await fs.readFile(path.join(root, file), 'utf8')).walkRules(rule => {
+    if (/^\.history-modal-(panel|title|kicker|meta|error)$/.test(rule.selector)) {
+      modalDefaults.set(rule.selector, new Map(rule.nodes.filter(n => n.type === 'decl')
+        .map(d => [d.prop, d.value.replace(/\s+/g, '')])));
+    }
+  });
+}
+function checkModalSkin(file, source) {
+  postcss.parse(source).walkRules(rule => {
+    for (const selector of rule.selectors) {
+      const match = selector.match(/#(?:[\w-]+-modal|mobile-jump-sheet)\s+(\.history-modal-(?:panel|title|kicker|meta|error))$/);
+      if (!match) continue;
+      for (const decl of rule.nodes.filter(n => n.type === 'decl')) {
+        if (!/^(?:--|color$|background|border|box-shadow$|font|line-height$|letter-spacing$|text-transform$|-webkit-font-smoothing$)/.test(decl.prop)) continue;
+        if (modalDefaults.get(match[1])?.get(decl.prop) === decl.value.replace(/\s+/g, '')) {
+          report(file, source, decl.source.start.offset, 'Use the shared ' + match[1] + ' skin; keep only layout or intentional variants here.');
+        }
+      }
+    }
+  });
+}
+
 async function checkDirectory(directory) {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
@@ -34,6 +62,7 @@ async function checkDirectory(directory) {
     if (!entry.name.endsWith('.css') || file === tokenFile) continue;
     checked++;
     const source = withoutComments(await fs.readFile(file, 'utf8'));
+    checkModalSkin(file, source);
     const values = withoutStrings(source);
     for (const match of values.matchAll(/#[a-f\d]{3,8}\b/gi)) {
       const token = palette.get(normalizeHex(match[0]));
@@ -58,6 +87,8 @@ async function checkDirectory(directory) {
 const main = await fs.readFile(path.join(root, 'main.css'), 'utf8');
 if (!/^@layer base, components, editor-skin, responsive, overrides;\s*@import '\.\/tokens\.css';/.test(withoutComments(main).trimStart())) errors.push('styles/main.css: Import tokens.css first.');
 await checkDirectory(root);
+const reporterFile = path.join(root, '../bugReports/reporter.css');
+checkModalSkin(reporterFile, withoutComments(await fs.readFile(reporterFile, 'utf8')));
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;

@@ -30,13 +30,6 @@
     box-shadow: var(--shadow-3);
   }
 
-  #explore-modal .explore-queue-actions .bar-btn:disabled,
-  .room-sequence-hud .bar-btn:disabled {
-    background: #c2bbb6;
-    color: #6d6768;
-    box-shadow: none;
-  }
-
   #explore-modal .explore-queue-actions-meta {
     color: var(--wamp-sky-deep);
     font-family: var(--font-ui);
@@ -118,7 +111,7 @@
   }
 
   #world-hud .room-sequence-hud .bar-btn:disabled {
-    color: #6d6768;
+    color: var(--wamp-disabled-text);
   }
 
   body[data-room-sequence-active='true'] #world-hud .world-hud-row-primary-actions > button {
@@ -136,23 +129,12 @@
     height: auto;
     min-height: 0;
     max-height: calc(100dvh - 28px);
-    background: var(--wamp-cream);
     border: 3px solid var(--wamp-white);
-    border-radius: 0;
     box-shadow: 8px 8px 0 var(--wamp-ink);
-  }
-
-  #first-steps-summary-modal .history-modal-title {
-    color: var(--wamp-ink);
-    font-family: var(--font-display);
-    font-size: var(--ui-text-title, 16px);
-    font-synthesis: none;
-    -webkit-font-smoothing: none;
   }
 
   #first-steps-summary-modal .history-modal-meta {
     color: var(--wamp-sky-deep);
-    font-family: var(--font-ui);
     font-size: var(--ui-text-body, 13px);
     line-height: 1.5;
   }
@@ -173,9 +155,7 @@
     display: none;
   }
 
-  .first-steps-summary-actions .bar-btn {
-    min-height: 44px;
-  }
+  .first-steps-summary-actions .bar-btn,
   body[data-coarse-pointer='true'] .room-sequence-buttons .bar-btn {
     min-height: 44px;
   }

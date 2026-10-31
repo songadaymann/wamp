@@ -199,12 +199,6 @@
     filter: brightness(1.06);
   }
 
-  .pvp-modal-actions .bar-btn:disabled {
-    background: #c2bbb6;
-    color: #6d6768;
-    box-shadow: none;
-  }
-
   .pvp-countdown-overlay {
     position: fixed;
     inset: 0;

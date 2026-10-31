@@ -3,8 +3,8 @@
     padding: 10px;
     margin: 8px 0 14px;
     border: 2px solid #6d6550;
-    background: #fff3d9;
-    color: #181818;
+    background: var(--wamp-cream);
+    color: var(--wamp-ink);
   }
 
   .clear-check-rows {
@@ -48,9 +48,6 @@
   }
 
   .publish-checklist-panel {
-    border-radius: 0;
-    background: #fff3d9;
-    color: #181818;
     box-shadow: none;
     max-height: calc(100dvh - 24px);
   }
@@ -62,10 +59,6 @@
   .publish-checklist-body {
     overflow-y: auto;
     min-height: 0;
-  }
-
-  .publish-checklist-panel .history-modal-title {
-    color: #181818;
   }
 
   .publish-checklist-panel .bar-btn {
