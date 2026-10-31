@@ -23,18 +23,22 @@ import {
   getObjectById,
   getObjectDisplayOffset,
   getObjectDisplayScale,
-  getObjectPlacementPointForTile,
   placedObjectContributesToCategory,
   getSelectionTileValue,
   type LayerName,
   type PlacedObject,
 } from '../../config';
+import {
+  UtilityObjectEditor,
+  createEditorPlacedObject,
+  resolveEditorPlaceObjectConfig,
+  triangleSelectionBounds,
+} from './utilityObjectEdits';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
 import {
   DEFAULT_POLICE_BEHAVIOR_MODE,
-  DEFAULT_POLICE_PATROL_SHOOTS,
   isPoliceEnemyObjectId,
   normalizePoliceBehaviorMode,
   type PoliceBehaviorMode,
@@ -106,10 +110,7 @@ import { canPlacedObjectHaveSignText, normalizeSignText } from '../../signs/mode
 import { EDITOR_SPAWN_PLACED_EVENT } from './uiEvents';
 import { canRepeatSelectedEditorObject, resolveEditorLineEnd } from './editorToolSelection';
 import {
-  DEFAULT_NPC_DEFEAT_MODE,
-  DEFAULT_NPC_FRIENDLY_FIRE,
   DEFAULT_NPC_MODE,
-  DEFAULT_NPC_PLAYER_COLLISION,
   getPlacedNpcName,
   isNpcObjectId,
   normalizeNpcCanJumpFall,
@@ -302,6 +303,18 @@ export class EditorEditRuntime {
   private revision = 0;
   private goalPlacementMode: GoalPlacementMode = null;
   private readonly history = new EditorHistory<UndoAction>((action) => recordReplayEditorAction(`${action.kind}_changed`));
+  readonly utilityEdits = new UtilityObjectEditor({
+    getPlacedObjects: () => this.host.getPlacedObjects(),
+    setPlacedObjects: (objects) => this.host.setPlacedObjects(objects),
+    clonePlacedObjects: (objects) => this.clonePlacedObjects(objects),
+    rebuildObjectSprites: () => this.rebuildObjectSprites(),
+    markRoomDirty: () => this.markRoomDirty(),
+    recordObjects: (previous, next) => {
+      this.history.record({ kind: 'objects', action: { previous, next } });
+    },
+    getRoomOrigin: () => this.getRoomOrigin(),
+    getPlacedObjectByInstanceId: (instanceId) => this.getPlacedObjectByInstanceId(instanceId),
+  });
   private currentBatch: TileAction[] = [];
   private readonly currentBatchActionIndex = new Map<string, number>();
   private currentBatchSmartBefore: RoomSmartTerrainState | null = null;
@@ -2210,14 +2223,8 @@ export class EditorEditRuntime {
       return null;
     }
 
-    if (!editorState.selectedObjectId) {
-      return null;
-    }
-
-    const objectConfig = getEditorObjectConfigById(editorState.selectedObjectId);
-    if (!objectConfig) {
-      return null;
-    }
+    const objectConfig = resolveEditorPlaceObjectConfig();
+    if (!objectConfig) return null;
 
     if (objectConfig.id === 'spawn_point') {
       this.placeSpawnPoint(tileX, tileY);
@@ -2226,47 +2233,7 @@ export class EditorEditRuntime {
       return null;
     }
 
-    const placementPoint = getObjectPlacementPointForTile(objectConfig, tileX, tileY);
-    const placed: PlacedObject = {
-      id: editorState.selectedObjectId,
-      x: placementPoint.x,
-      y: placementPoint.y,
-      instanceId: createPlacedObjectInstanceId(),
-      customSpriteKind: getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId)?.kind ?? null,
-      facing: objectConfig.facingDirection ? editorState.objectFacing : undefined,
-      layer: editorState.activeLayer,
-      triggerTargetInstanceId: null,
-      linkedTargetInstanceIds: null,
-      containedObjectId: null,
-      signText: null,
-      swordsmanObjectiveMode:
-        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
-          ? DEFAULT_SWORDSMAN_OBJECTIVE_MODE
-          : null,
-      swordsmanDefeatMode:
-        editorState.selectedObjectId === SWORDSMAN_AI_OBJECT_ID
-          ? DEFAULT_SWORDSMAN_DEFEAT_MODE
-          : null,
-      policeBehaviorMode: isPoliceEnemyObjectId(editorState.selectedObjectId)
-        ? DEFAULT_POLICE_BEHAVIOR_MODE
-        : null,
-      policePatrolShoots: isPoliceEnemyObjectId(editorState.selectedObjectId)
-        ? DEFAULT_POLICE_PATROL_SHOOTS
-        : null,
-      npcMode: isNpcObjectId(editorState.selectedObjectId) ? DEFAULT_NPC_MODE : null,
-      npcPushable: isNpcObjectId(editorState.selectedObjectId) ? false : null,
-      npcCanJumpFall: isNpcObjectId(editorState.selectedObjectId) ? false : null,
-      npcPlayerCollision: isNpcObjectId(editorState.selectedObjectId)
-        ? DEFAULT_NPC_PLAYER_COLLISION
-        : null,
-      npcFriendlyFire: isNpcObjectId(editorState.selectedObjectId)
-        ? DEFAULT_NPC_FRIENDLY_FIRE
-        : null,
-      npcName: isNpcObjectId(editorState.selectedObjectId) ? objectConfig.name : null,
-      npcDefeatMode: isNpcObjectId(editorState.selectedObjectId)
-        ? DEFAULT_NPC_DEFEAT_MODE
-        : null,
-    };
+    const placed = createEditorPlacedObject(objectConfig, tileX, tileY);
 
     const previous = this.objectBatchNext ?? this.clonePlacedObjects();
     if (objectConfig.id === LOST_SONG_OBJECT_ID && editorState.activeLayer !== 'terrain') {
@@ -2969,6 +2936,10 @@ export class EditorEditRuntime {
   }
 
   getPlacedObjectBounds(placed: PlacedObject): Phaser.Geom.Rectangle {
+    const triangleBounds = triangleSelectionBounds(placed, this.getRoomOrigin());
+    if (triangleBounds) {
+      return new Phaser.Geom.Rectangle(triangleBounds.x, triangleBounds.y, triangleBounds.width, triangleBounds.height);
+    }
     const objectConfig = getEditorObjectConfigById(placed.id);
     if (!objectConfig) {
       const worldPoint = this.toWorldPoint(placed.x, placed.y);

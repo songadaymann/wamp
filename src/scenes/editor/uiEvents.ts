@@ -2,6 +2,7 @@ import { editorState, subscribeEditorState } from '../../config/editorState';
 import type { EditorStateKey } from '../../config/editorStateStore';
 
 const EDITOR_UI_REFRESH_EVENT = 'editor-ui-refresh';
+export const EDITOR_TOOL_CHOSEN_EVENT = 'editor-tool-chosen';
 // Zoom labels already update with the camera; palette surfaces need every other setting.
 export const EDITOR_CONTROL_STATE_KEYS: readonly EditorStateKey[] = Object.freeze(
   (Object.keys(editorState) as EditorStateKey[]).filter(key => key !== 'zoom'),
@@ -10,12 +11,16 @@ export const EDITOR_SPAWN_PLACED_EVENT = 'editor-spawn-placed';
 export const EDITOR_SHELL_ESCAPE_REQUESTED_EVENT = 'editor-shell-escape-requested';
 export const EDITOR_AUTO_COLLAPSE_EVENT = 'mobile-editor-auto-collapse';
 
+export interface EditorToolChosenDetail {
+  tool: string;
+}
 export interface EditorUiRefreshDetail { objectCategory?: string }
 export interface EditorShellEscapeRequestedDetail { handled: boolean }
 
 declare global {
   interface WindowEventMap {
     'editor-ui-refresh': CustomEvent<EditorUiRefreshDetail>;
+    'editor-tool-chosen': CustomEvent<EditorToolChosenDetail>;
     'editor-spawn-placed': Event;
     'editor-shell-escape-requested': CustomEvent<EditorShellEscapeRequestedDetail>;
     'mobile-editor-auto-collapse': Event;

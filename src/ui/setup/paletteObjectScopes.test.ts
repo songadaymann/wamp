@@ -7,6 +7,7 @@ const objects = {
   utility: { id: 'spring', category: 'interactive' },
   checkpoint: { id: 'checkpoint_flag', category: 'interactive' },
   platform: { id: 'moving_platform', category: 'platform' },
+  triangle: { id: 'triangle_piece', category: 'platform' },
   custom: { id: 'custom_sprite:mine-1', category: 'decoration' },
   enemy: { id: 'slime', category: 'enemy' },
   npc: { id: 'npc', category: 'npc' },
@@ -23,6 +24,11 @@ function included(scope: EditorObjectScope): string[] {
 describe('editor object workspace membership', () => {
   it('keeps Stuff to community/mine, collect, and utility objects without spawn', () => {
     expect(included('stuff')).toEqual(['collectible', 'utility', 'checkpoint', 'platform', 'custom']);
+  });
+
+  it('keeps triangle ramps off every object workspace, including Stuff', () => {
+    expect(included('stuff')).not.toContain('triangle');
+    expect(included('all')).not.toContain('triangle');
   });
 
   it('separates characters, hazards, and decoration', () => {

@@ -10,6 +10,7 @@ import type {
   RoomRecord,
   RoomSnapshot,
 } from '../../persistence/roomRepository';
+import { updateEditorState } from '../../config';
 import {
   hideBusyOverlay,
   showBusyError,
@@ -96,6 +97,7 @@ export class EditorSceneFlowController {
       draftBaseUpdatedAt: this.roomSession.currentServerDraftUpdatedAt,
     });
 
+    updateEditorState({ isPlaying: true });
     this.host.hideObjectInspectorUi();
     this.host.clearEditorPresence();
     this.host.sleepEditorScene();
@@ -104,6 +106,7 @@ export class EditorSceneFlowController {
   }
 
   startPublishedPlayMode(room: RoomSnapshot): void {
+    updateEditorState({ isPlaying: true });
     this.host.cancelClipboardPastePreview(); this.host.hideObjectInspectorUi(); this.host.clearEditorPresence();
     this.host.sleepEditorScene();
     this.host.wakeOverworld({ centerCoordinates: { ...room.coordinates }, roomCoordinates: { ...room.coordinates },

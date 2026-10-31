@@ -4,6 +4,7 @@ import {
   type LayerName,
   type PlacedObject,
 } from '../config';
+import { isTrianglePieceObjectId } from '../config/trianglePiece';
 import { getPlacedObjectPathTargetIds } from './objectPaths';
 import { getEditorObjectConfigById } from '../customSprites/objectConfig';
 
@@ -38,6 +39,15 @@ export function getPlacedObjectAnchorCell(
     return null;
   }
 
+  // The right-angle corner is stored directly. Other objects store a sprite center.
+  if (isTrianglePieceObjectId(placed.id)) {
+    return {
+      tileX: Math.round(placed.x / TILE_SIZE),
+      tileY: Math.round(placed.y / TILE_SIZE) - 1,
+      layer: getPlacedObjectLayer(placed),
+    };
+  }
+
   return {
     tileX: Math.round((placed.x - objectConfig.frameWidth * 0.5) / TILE_SIZE),
     tileY: Math.round((placed.y + objectConfig.frameHeight * 0.5 - TILE_SIZE) / TILE_SIZE),
@@ -46,12 +56,11 @@ export function getPlacedObjectAnchorCell(
 }
 
 export function canPlacedObjectsShareAnchorCell(
-  _left: Pick<PlacedObject, 'id'>,
-  _right: Pick<PlacedObject, 'id'>,
+  left: Pick<PlacedObject, 'id'>,
+  right: Pick<PlacedObject, 'id'>,
 ): boolean {
-  // Default policy: one placed object per anchor cell per layer.
-  // If future design needs exceptions, define them here.
-  return false;
+  // One object per anchor cell, except triangles, which meet at the right angle.
+  return isTrianglePieceObjectId(left.id) && isTrianglePieceObjectId(right.id);
 }
 
 export function findConflictingPlacedObjectAtAnchorCell(

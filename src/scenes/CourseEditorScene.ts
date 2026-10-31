@@ -19,6 +19,10 @@ import { draftBackupRevision } from '../courses/localDraftBackup';
 import { DraftBackupDebouncer, EditorDraftLifecycle } from './editor/draftLifecycle';
 import Phaser from 'phaser';
 import { EditorTouchController } from './editor/editorTouch';
+import { createCourseTriangleHandles, drawCourseTriangleToolCursor } from './editor/triangleHandleSetup';
+import type { TriangleHandleController } from './editor/triangleHandles';
+import { utilityInspectorCallbacks } from './editor/utilityInspectorCallbacks';
+import { courseClosestTile, courseLocalTile, courseSliceAtWorldPoint } from './courseEditor/sliceGeometry';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { editorTouchToolKey } from './editor/touchGesture';
 import { getAuthDebugState, promptForSignIn, refreshAuthSession } from '../auth/client';
@@ -116,6 +120,7 @@ import {
   applyEditorToolSelection,
   canRepeatSelectedEditorObject,
   isDragStampEditorTool,
+  isTriangleEditorTool,
 } from './editor/editorToolSelection';
 import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 import { EditorObjectMoveController } from './editor/objectMoveController';
@@ -259,6 +264,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private readonly drawing: EditorWorkspaceDrawingController<CourseRoomSlice>;
   private readonly touchControls: EditorTouchController;
   private readonly objectMoveController: EditorObjectMoveController;
+  private readonly triangleHandles: TriangleHandleController;
   // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows button
   // releases: finish any mouse stroke, shape or pan as if it was released.
   private readonly handleTouchBlur = (): void => {
@@ -278,6 +284,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   } = { SPACE: null, ALT: null };
 
   private readonly handleWake = (_sys: Phaser.Scenes.Systems, data?: CourseEditorSceneData): void => {
+    updateEditorState({ isPlaying: false });
     void this.openFromData(data);
   };
 
@@ -509,7 +516,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     super({ key: 'CourseEditorScene' });
     this.objectMoveController = new EditorObjectMoveController(this, {
       isEnabled: () => this.scene.isActive() && !this.musicModeActive && !editorState.isPlaying && document.body.dataset.editorSpriteUiLocked !== 'true',
-      getRuntimeAt: (x, y) => { const slice = this.getSliceAtWorldPoint(x, y); return slice?.permissions.canSaveDraft ? slice.runtime : null; },
+      getRuntimeAt: (x, y) => { const slice = courseSliceAtWorldPoint(this.roomSlices.values(), x, y); return slice?.permissions.canSaveDraft ? slice.runtime : null; },
       prepare: runtime => {
         const slice = [...this.roomSlices.values()].find(item => item.runtime === runtime);
         if (slice) this.selectRoomById(slice.roomId);
@@ -558,11 +565,16 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       getRoomSlices: () => this.roomSlices.values(),
       getRoomSliceById: (roomId) => this.roomSlices.get(roomId) ?? null,
       getSelectedSlice: () => this.getSelectedSlice(),
-      getSliceAtWorldPoint: (worldX, worldY) => this.getSliceAtWorldPoint(worldX, worldY),
+      getSliceAtWorldPoint: (worldX, worldY) => courseSliceAtWorldPoint(this.roomSlices.values(), worldX, worldY),
       getActiveCourseDraft: () => this.getActiveCourseDraft(),
       setActiveCourseDraft: (draft) => this.setActiveCourseDraft(draft),
       getSliceLabel: (slice) => this.getSliceLabel(slice as CourseRoomSlice),
       renderInspector: (state) => this.uiBridge?.renderInspector(state),
+    });
+    this.triangleHandles = createCourseTriangleHandles({
+      slices: () => this.roomSlices.values(),
+      pinnedTriangleId: () => this.objectInspectorController.getPinnedTriangleId(),
+      zoom: () => editorState.zoom,
     });
     this.musicPatternController = new EditorMusicPatternController(this, {
       getRoomMusic: () => this.roomMusic,
@@ -577,10 +589,10 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     });
     this.musicWorkflow.attachPatternController(this.musicPatternController);
     this.drawing = new EditorWorkspaceDrawingController({
-      sliceAt: (x, y) => this.getSliceAtWorldPoint(x, y),
+      sliceAt: (x, y) => courseSliceAtWorldPoint(this.roomSlices.values(), x, y),
       originOf: slice => slice.origin, runtimeOf: slice => slice.runtime,
       clampToSlice: (slice, world) => {
-        const tile = this.getClosestTileInSlice(slice, world.x, world.y);
+        const tile = courseClosestTile(world.x, world.y, slice.origin);
         return { x: tile.tileX, y: tile.tileY };
       },
       placeObject: (slice, tile) => this.placeObjectAtTile(slice, tile.x, tile.y),
@@ -616,14 +628,14 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
             : ['pencil', 'eraser', 'randomize'].includes(editorState.activeTool) ? 'brush' : 'draw',
       begin: pointer => this.handlePrimaryPointerDown(pointer),
       beginBrush: world => {
-        const slice = this.getSliceAtWorldPoint(world.x, world.y);
+        const slice = courseSliceAtWorldPoint(this.roomSlices.values(), world.x, world.y);
         if (!slice) return;
         this.selectRoomById(slice.roomId);
         this.drawing.begin(world, editorState.activeTool, { touch: true });
       },
       beginObjects: (point) => {
         const world = this.cameras.main.getWorldPoint(point.x, point.y);
-        const slice = this.getSliceAtWorldPoint(world.x, world.y);
+        const slice = courseSliceAtWorldPoint(this.roomSlices.values(), world.x, world.y);
         if (!slice || this.objectInspectorController.isConnectingPressurePlate()) return;
         this.selectRoomById(slice.roomId);
         this.drawing.beginObjects(world, true);
@@ -836,6 +848,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       onSetFocusedNpcName: (name) => this.objectInspectorController.setFocusedNpcName(name),
       onSetFocusedNpcDialogue: (text) => this.objectInspectorController.setFocusedNpcDialogue(text),
       onSetFocusedNpcDefeatMode: (mode) => this.objectInspectorController.setFocusedNpcDefeatMode(mode),
+      ...utilityInspectorCallbacks(this.objectInspectorController),
     });
     this.selectionGraphics = this.add.graphics();
     this.selectionGraphics.setDepth(120);
@@ -1480,6 +1493,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       },
     };
 
+    updateEditorState({ isPlaying: true });
     this.hideObjectInspectorUi();
     this.musicWorkflow.setMusicModeActive(false);
     this.scene.sleep();
@@ -2457,6 +2471,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       // Touch reaches Move through the touch controls, so a second finger pinches (F371).
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
+      else if (this.triangleHandles?.down(pointer.worldX, pointer.worldY)) return;
       else if (this.objectMoveController.down(pointer)) return;
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2486,6 +2501,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.triangleHandles?.move(pointer.worldX, pointer.worldY)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (this.objectMoveController.move(pointer)) return;
       if (mouseButtonsReleased(pointer) && this.hasMousePointerAction(pointer)) {
@@ -2529,6 +2545,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   // A release over a panel or outside the window arrives as 'pointerupoutside'; it
   // finishes the stroke, shape or pan like a release over the canvas.
   private handlePointerRelease(pointer: Phaser.Input.Pointer, outside = false): void {
+    this.triangleHandles?.up();
     if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer, outside); return; }
     if (this.objectMoveController.up(pointer, outside)) return;
     if (this.pendingRightClickPanPointerId === pointer.id) {
@@ -2573,15 +2590,25 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
 
+    if (isTriangleEditorTool()) {
+      this.objectInspectorController.handleTriangleToolAction(slice, pointer.worldX, pointer.worldY);
+      this.renderUi();
+      return;
+    }
+
     if (editorState.paletteMode === 'objects') {
       if (this.objectInspectorController.isConnectingPressurePlate()) {
         this.objectInspectorController.handlePressurePlateConnectionClick(slice, pointer.worldX, pointer.worldY);
         this.renderUi();
         return;
       }
+      if (this.objectInspectorController.handleUtilityPrimaryAction(slice, pointer.worldX, pointer.worldY)) {
+        this.renderUi();
+        return;
+      }
     }
     this.selectRoomById(slice.roomId);
-    const localTile = this.getLocalTileForPointer(pointer, slice);
+    const localTile = courseLocalTile(pointer.worldX, pointer.worldY, slice.origin);
     if (!localTile) {
       return;
     }
@@ -2712,7 +2739,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     this.selectRoomById(slice.roomId);
-    const localTile = this.getLocalTileForPointer(pointer, slice);
+    const localTile = courseLocalTile(pointer.worldX, pointer.worldY, slice.origin);
     if (!localTile) {
       return;
     }
@@ -2757,50 +2784,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   }
 
   private getSliceForPointer(pointer: Phaser.Input.Pointer): CourseRoomSlice | null {
-    return this.getSliceAtWorldPoint(pointer.worldX, pointer.worldY);
-  }
-
-  private getSliceAtWorldPoint(worldX: number, worldY: number): CourseRoomSlice | null {
-    for (const slice of this.roomSlices.values()) {
-      if (
-        worldX >= slice.origin.x &&
-        worldX < slice.origin.x + ROOM_PX_WIDTH &&
-        worldY >= slice.origin.y &&
-        worldY < slice.origin.y + ROOM_PX_HEIGHT
-      ) {
-        return slice;
-      }
-    }
-
-    return null;
-  }
-
-  private getLocalTileForPointer(
-    pointer: Phaser.Input.Pointer,
-    slice: CourseRoomSlice,
-  ): { tileX: number; tileY: number } | null {
-    const localX = pointer.worldX - slice.origin.x;
-    const localY = pointer.worldY - slice.origin.y;
-    const tileX = Math.floor(localX / TILE_SIZE);
-    const tileY = Math.floor(localY / TILE_SIZE);
-    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
-      return null;
-    }
-
-    return { tileX, tileY };
-  }
-
-  private getClosestTileInSlice(
-    slice: CourseRoomSlice,
-    worldX: number,
-    worldY: number,
-  ): { tileX: number; tileY: number } {
-    const localX = Phaser.Math.Clamp(worldX - slice.origin.x, 0, ROOM_PX_WIDTH - 1);
-    const localY = Phaser.Math.Clamp(worldY - slice.origin.y, 0, ROOM_PX_HEIGHT - 1);
-    return {
-      tileX: Math.floor(localX / TILE_SIZE),
-      tileY: Math.floor(localY / TILE_SIZE),
-    };
+    return courseSliceAtWorldPoint(this.roomSlices.values(), pointer.worldX, pointer.worldY);
   }
 
   private placeCourseGoalMarker(slice: CourseRoomSlice, tileX: number, tileY: number): void {
@@ -2890,6 +2874,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
     this.cursorGraphics?.clear();
+    this.triangleHandles?.draw(this.cursorGraphics);
     if (editorState.activeTool === 'move') { this.objectMoveController.hover(pointer); return; }
     if (!this.cursorGraphics) {
       return;
@@ -2900,10 +2885,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       return;
     }
 
-    const tile = this.getLocalTileForPointer(pointer, slice);
+    const tile = courseLocalTile(pointer.worldX, pointer.worldY, slice.origin);
     if (!tile) {
       return;
     }
+
+    if (drawCourseTriangleToolCursor(this.cursorGraphics, this.triangleHandles, tile.tileX, tile.tileY, slice.origin)) return;
 
     drawEditorCursor(this.cursorGraphics, {
       tile: { x: tile.tileX, y: tile.tileY }, origin: slice.origin,

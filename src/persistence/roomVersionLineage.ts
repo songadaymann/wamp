@@ -18,6 +18,8 @@ import {
   getPlacedPolicePatrolShoots,
 } from '../enemies/policeEnemy';
 import { normalizeRoomGoal, type RoomGoal } from '../goals/roomGoals';
+import { normalizePlacedRollingBall } from '../config/rollingBall';
+import { normalizePlacedTriangle } from '../config/trianglePiece';
 import { getPlacedObjectSignText } from '../signs/model';
 import { normalizeCustomSpriteDefinitions } from '../customSprites/model';
 import { getPlacedObjectPathTargetIds } from '../placedObjects/objectPaths';
@@ -182,6 +184,16 @@ type CanonicalPlacedObjectPayload = {
   npcDefeatMode: string | null;
   triggerTarget: string | null;
   linkedTargets: string[];
+  ballGraphic?: string;
+  ballWeight?: number;
+  ballHurtEnemies?: boolean;
+  ballHurtFriendlies?: boolean;
+  ballHurtPlayer?: boolean;
+  ballPushable?: boolean;
+  triangleLegX?: number;
+  triangleLegY?: number;
+  triangleFill?: string;
+  triangleStroke?: string;
 };
 
 type CanonicalRoomFingerprintPayload = {
@@ -412,6 +424,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
           ? placed.triggerTargetInstanceId
           : null,
       linkedTargetInstanceIds: getPlacedObjectPathTargetIds(placed),
+      utility: utilityFingerprintFields(placed),
       x: Math.round(placed.x),
       y: Math.round(placed.y),
     };
@@ -455,6 +468,7 @@ function buildPlacedObjectFingerprint(placedObjects: PlacedObject[]): CanonicalP
       linkedTargets: placed.linkedTargetInstanceIds.map(
         (targetInstanceId) => canonicalIdentityByInstanceId.get(targetInstanceId) ?? targetInstanceId,
       ),
+      ...placed.utility,
     }))
     .sort(compareCanonicalPlacedObjects);
 }
@@ -501,7 +515,33 @@ function buildPlacedObjectSignature(placed: PlacedObject): string {
         : null,
     npcName: placed.id === 'jimothy' ? getPlacedNpcName(placed, 'Jimothy') : null,
     npcDefeatMode: placed.id === 'jimothy' ? getPlacedNpcDefeatMode(placed) : null,
+    ...utilityFingerprintFields(placed),
   });
+}
+
+function utilityFingerprintFields(placed: PlacedObject): Partial<CanonicalPlacedObjectPayload> {
+  const ball = normalizePlacedRollingBall(placed);
+  const triangle = normalizePlacedTriangle(placed);
+  return {
+    ...(ball
+      ? {
+          ballGraphic: ball.graphicId,
+          ballWeight: ball.weight,
+          ballHurtEnemies: ball.hurtEnemies,
+          ballHurtFriendlies: ball.hurtFriendlies,
+          ballHurtPlayer: ball.hurtPlayer,
+          ballPushable: ball.pushable,
+        }
+      : {}),
+    ...(triangle
+      ? {
+          triangleLegX: triangle.legX,
+          triangleLegY: triangle.legY,
+          triangleFill: triangle.fill,
+          triangleStroke: triangle.stroke,
+        }
+      : {}),
+  };
 }
 
 function compareCanonicalPlacedObjects(
@@ -526,7 +566,13 @@ function compareCanonicalPlacedObjects(
     Number(left.npcPlayerCollision ?? false) - Number(right.npcPlayerCollision ?? false) ||
     Number(left.npcFriendlyFire ?? false) - Number(right.npcFriendlyFire ?? false) ||
     (left.triggerTarget ?? '').localeCompare(right.triggerTarget ?? '') ||
-    left.linkedTargets.join('|').localeCompare(right.linkedTargets.join('|'))
+    left.linkedTargets.join('|').localeCompare(right.linkedTargets.join('|')) ||
+    (left.ballGraphic ?? '').localeCompare(right.ballGraphic ?? '') ||
+    (left.ballWeight ?? 0) - (right.ballWeight ?? 0) ||
+    (left.triangleLegX ?? 0) - (right.triangleLegX ?? 0) ||
+    (left.triangleLegY ?? 0) - (right.triangleLegY ?? 0) ||
+    (left.triangleFill ?? '').localeCompare(right.triangleFill ?? '') ||
+    (left.triangleStroke ?? '').localeCompare(right.triangleStroke ?? '')
   );
 }
 

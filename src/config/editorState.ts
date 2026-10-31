@@ -7,7 +7,11 @@ import {
   DEFAULT_ROOM_WEATHER_INTENSITY,
   type RoomWeatherMode,
 } from '../weather/model';
-import { getTilesetByKey } from './tilesets';
+import { getTilesetByKey, isSpecialTilesetGid } from './tilesets';
+import {
+  DEFAULT_TRIANGLE_FILL,
+  DEFAULT_TRIANGLE_STROKE,
+} from './trianglePiece';
 import {
   TILE_FLIP_X_FLAG,
   TILE_FLIP_Y_FLAG,
@@ -31,6 +35,11 @@ export interface EditorState {
   rectOutline: boolean;
   ellipseOutline: boolean;
   lineCurve: boolean;
+  trianglePaintMode: boolean;
+  triangleStampFill: string;
+  triangleStampStroke: string;
+  triangleStampFlipX: boolean;
+  triangleStampFlipY: boolean;
   randomizeBrushSize: RandomizeBrushSize;
   scrambleBrushSize: RandomizeBrushSize;
   pencilBrushSize: RandomizeBrushSize;
@@ -96,6 +105,11 @@ export function createDefaultEditorState(): EditorState { return {
   rectOutline: false,
   ellipseOutline: false,
   lineCurve: false,
+  trianglePaintMode: false,
+  triangleStampFill: DEFAULT_TRIANGLE_FILL,
+  triangleStampStroke: DEFAULT_TRIANGLE_STROKE,
+  triangleStampFlipX: false,
+  triangleStampFlipY: false,
   randomizeBrushSize: 3,
   scrambleBrushSize: 3,
   pencilBrushSize: 1,
@@ -171,11 +185,12 @@ export function encodeTileDataValue(gid: number, flipX = false, flipY = false): 
     return -1;
   }
 
+  const lockFacing = isSpecialTilesetGid(gid);
   let encoded = gid;
-  if (flipX) {
+  if (flipX && !lockFacing) {
     encoded += TILE_FLIP_X_FLAG;
   }
-  if (flipY) {
+  if (flipY && !lockFacing) {
     encoded += TILE_FLIP_Y_FLAG;
   }
   return encoded;
@@ -194,6 +209,10 @@ export function decodeTileDataValue(value: number): Readonly<DecodedTileDataValu
     value -
     (flipX ? TILE_FLIP_X_FLAG : 0) -
     (flipY ? TILE_FLIP_Y_FLAG : 0);
+
+  if (isSpecialTilesetGid(gid)) {
+    return { gid, flipX: false, flipY: false };
+  }
 
   return { gid, flipX, flipY };
 }

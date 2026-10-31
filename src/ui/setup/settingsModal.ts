@@ -9,6 +9,7 @@ import {
   type GameSettings,
   type OverworldPanningStyle,
 } from '../../settings/userSettings';
+import { resetInspectorWindows } from '../../scenes/editor/inspectorWindows';
 import {
   getDevicePerformanceMode,
   setDevicePerformanceMode,
@@ -36,6 +37,7 @@ type SettingsModalElements = {
   cameraStyleInputs: HTMLInputElement[];
   hapticsRow: HTMLElement | null;
   hapticsCheckbox: HTMLInputElement | null;
+  resetOptionWindowsButton: HTMLButtonElement | null;
   clearedChecksCheckbox: HTMLInputElement | null;
 };
 
@@ -147,6 +149,10 @@ export class SettingsModalController {
       updateComfortSettings({ cameraStyle: target.value === 'room' ? 'room' : 'follow' });
   };
 
+  private readonly handleResetOptionWindows = () => {
+    resetInspectorWindows();
+  };
+
   constructor(
     private readonly doc: Document = document,
   ) {
@@ -177,6 +183,7 @@ export class SettingsModalController {
       builderModeInputs: Array.from(
         this.doc.querySelectorAll<HTMLInputElement>('input[name="settings-builder-mode"]'),
       ),
+      resetOptionWindowsButton: this.doc.getElementById('btn-settings-reset-option-windows') as HTMLButtonElement | null,
     };
   }
 
@@ -207,6 +214,7 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.addEventListener('change', this.handleBuilderModeChange);
     }
+    this.elements.resetOptionWindowsButton?.addEventListener('click', this.handleResetOptionWindows);
     for (const input of this.elements.frameRateInputs) input.addEventListener('change', this.handleFrameRateChange);
     this.unsubscribeFrameRate = subscribeFrameRateMode(mode => this.renderFrameRate(mode));
     this.doc.addEventListener('keydown', this.handleDocumentKeydown);
@@ -244,6 +252,7 @@ export class SettingsModalController {
     for (const input of this.elements.builderModeInputs) {
       input.removeEventListener('change', this.handleBuilderModeChange);
     }
+    this.elements.resetOptionWindowsButton?.removeEventListener('click', this.handleResetOptionWindows);
     for (const input of this.elements.frameRateInputs) input.removeEventListener('change', this.handleFrameRateChange);
     this.unsubscribeFrameRate?.(); this.unsubscribeFrameRate = null;
     this.doc.removeEventListener('keydown', this.handleDocumentKeydown);

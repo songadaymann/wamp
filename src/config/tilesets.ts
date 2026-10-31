@@ -1376,6 +1376,11 @@ export function getSpecialTileLocalIndexForGid(gid: number): number | null {
   return gid - SPECIAL_TILESET_FIRST_GID;
 }
 
+/** Special tiles keep one facing. Gravity arrows and the rest should not mirror. */
+export function isSpecialTilesetGid(gid: number): boolean {
+  return getSpecialTileLocalIndexForGid(gid) !== null;
+}
+
 export function getSpecialTileKindForGid(gid: number): SpecialTileKind | null {
   const localIndex = getSpecialTileLocalIndexForGid(gid);
   if (localIndex === null) {

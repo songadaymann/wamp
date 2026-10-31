@@ -224,6 +224,16 @@ export class LiveObjectEnemyLifecycleController<TEdgeWall = unknown> {
     return this.defeatEnemy(loadedRoom, liveObject);
   }
 
+  defeatFromRollingBall(
+    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
+    liveObject: LoadedRoomObject,
+  ): WeaponHitResult | null {
+    if (liveObject.config.category !== 'enemy' && liveObject.config.category !== 'npc') {
+      return null;
+    }
+    return this.defeatEnemy(loadedRoom, liveObject);
+  }
+
   private playStompImpact(): void {
     playHaptic('hit');
     this.options.playEnemyStompImpact?.();

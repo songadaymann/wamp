@@ -4,6 +4,10 @@ import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
+import { createEditorTriangleHandles } from './editor/triangleHandleSetup';
+import type { TriangleHandleController } from './editor/triangleHandles';
+import { utilityInspectorCallbacks } from './editor/utilityInspectorCallbacks';
+import { courseEditorWakeData } from './editor/courseWakeData';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
 import { getAuthDebugState } from '../auth/client';
 import {
@@ -180,6 +184,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private readonly inspectorController: EditorInspectorController;
   private readonly interactionController: EditorInteractionController;
   private readonly objectMoveController: EditorObjectMoveController;
+  private readonly triangleHandles: TriangleHandleController;
   private readonly musicPatternController: EditorMusicPatternController;
   private readonly overlayController: EditorOverlayController;
   private readonly presenceController: EditorPresenceController;
@@ -664,8 +669,12 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       showStatus: text => this.updatePersistenceStatus(text),
       onChanged: () => this.renderEditorUi(),
     });
+    this.triangleHandles = createEditorTriangleHandles({
+      pinnedId: () => this.inspectorController.getPinnedTriangleId(), placed: (id) => this.editRuntime.getPlacedObjectByInstanceId(id), origin: () => this.editRuntime.getRoomOrigin(), zoom: () => editorState.zoom, edits: this.editRuntime.utilityEdits,
+    });
     this.interactionController = new EditorInteractionController(this, {
       objectMove: this.objectMoveController,
+      triangleHandles: this.triangleHandles,
       getNeighborRadius: () => EDITOR_NEIGHBOR_RADIUS,
       getGoalPlacementMode: () => this.goalPlacementMode as GoalPlacementMode,
       isPracticeTestPlacementActive: () => this.testFromHerePlacement,
@@ -677,6 +686,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       handleMusicPointerUp: (pointer) => this.handleMusicPointerUp(pointer),
       updateMusicCursorHighlight: (graphics) => this.updateMusicCursorHighlight(graphics),
       handleObjectModePrimaryAction: (pointer) => this.handleObjectModePrimaryAction(pointer),
+      handleTriangleToolAction: (worldX, worldY) => this.inspectorController.handleTriangleToolAction(worldX, worldY),
       handleObjectModeSecondaryAction: (worldX, worldY) =>
         this.handleObjectModeSecondaryAction(worldX, worldY),
       handleObjectPlace: (pointer) => this.handleObjectPlace(pointer),
@@ -1001,6 +1011,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
         this.inspectorController.setFocusedNpcDialogue(text),
       onSetFocusedNpcDefeatMode: (defeatMode) =>
         this.inspectorController.setFocusedNpcDefeatMode(defeatMode),
+      ...utilityInspectorCallbacks(this.inspectorController),
     });
 
     this.createBackground();
@@ -1946,18 +1957,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   }
 
   private buildCourseEditorWakeData(wakeData: OverworldPlaySceneData): CourseEditorSceneData {
-    const courseEdit = this.buildCourseEditedRoomData();
-    return {
-      courseId: courseEdit?.courseId ?? null,
-      selectedCoordinates: { ...this.roomCoordinates },
-      centerCoordinates: { ...(wakeData.centerCoordinates ?? this.roomCoordinates) },
-      statusMessage: wakeData.statusMessage ?? null,
-      courseEditedRoom: this.buildCourseEditedRoomData(),
-      draftRoom: wakeData.draftRoom ?? null,
-      publishedRoom: wakeData.publishedRoom ?? null,
-      clearDraftRoomId: wakeData.clearDraftRoomId ?? null,
-      invalidateRoomId: wakeData.invalidateRoomId ?? null,
-    };
+    return courseEditorWakeData(wakeData, this.roomCoordinates, this.buildCourseEditedRoomData());
   }
 
   async mintRoom(): Promise<RoomRecord | null> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlacedObject } from '../../config';
-import { getPlacedObjectEditorDepth } from './documentPresentationController';
+import { getPlacedObjectEditorDepth } from './placedObjectDepth';
 
 describe('editor document presentation', () => {
   it('preserves the editor depth contract for every object layer', () => {

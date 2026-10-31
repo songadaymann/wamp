@@ -2,6 +2,8 @@ import { prepareBackgroundFile } from '../../backgrounds/upload';
 import { populateEditorTilesetOptions } from './tilesetOptions';
 import { EditorPhoneInspector } from './phoneInspector';
 import { bindBossInspector } from './uiBridge/bossInspector';
+import { bindUtilityInspectorControls } from './uiBridge/utilityInspector';
+import { SMART_TOOL_LABELS, applyEditorToolIcon } from './uiBridge/toolChrome';
 import { EditorHistoryControls } from './historyControls';
 import { EditorClipboardControls } from './clipboardControls';
 import { closeRoomTemplatePicker } from './roomTemplatePicker';
@@ -35,7 +37,6 @@ import {
   isPencilStampPlacement,
   ensureEditorToolAvailable,
   type EditorModePipState,
-  type EditorToolButtonAppearance,
 } from './editorToolSelection';
 import { clampRandomizeBrushSize } from './randomizeTiles';
 import { clampSprayBrushSize, clampSprayRate, SPRAY_BRUSH_SIZES } from './sprayTiles';
@@ -155,31 +156,6 @@ const WATER_TUNNEL_BRUSH_ID = 'water.tunnel' as const;
 
 function isLegacySmartThemeId(themeId: SmartThemeId): themeId is LegacySmartThemeId {
   return LEGACY_SMART_THEME_IDS.includes(themeId as LegacySmartThemeId);
-}
-
-const SMART_TOOL_LABELS: Readonly<Partial<Record<ToolName, string>>> = {
-  pencil: 'Draw',
-  rect: 'Rectangle',
-  ellipse: 'Ellipse',
-  line: 'Line',
-  fill: 'Fill',
-      randomize: 'Scramble',
-};
-
-function applyEditorToolIcon(icon: Element, appearance: EditorToolButtonAppearance): void {
-  const kind = appearance.iconKind ?? 'glyph';
-  if (kind === 'mosaic') {
-    if (!icon.classList.contains('tool-icon-mosaic')) {
-      icon.className = 'tool-icon tool-icon-mosaic';
-      icon.innerHTML = '<span></span><span></span><span></span><span></span>';
-    }
-    return;
-  }
-  if (appearance.icon === undefined) {
-    return;
-  }
-  icon.className = 'tool-icon';
-  icon.textContent = appearance.icon;
 }
 
 function syncModePips(host: HTMLElement, state: EditorModePipState | null): void {
@@ -320,6 +296,7 @@ export class EditorUiBridge {
   private readonly clipboardControls: EditorClipboardControls;
   private readonly phoneInspector: EditorPhoneInspector;
   private lastViewModel: EditorUiViewModel | null = null;
+  private lastInspectorState: EditorInspectorState | null = null;
   private backgroundImages: BackgroundImageSummary[] = [];
   private backgroundUploadPolicy: BackgroundUploadPolicy | null = null;
   private backgroundCatalogToken = 0;
@@ -551,6 +528,7 @@ export class EditorUiBridge {
       return;
     }
 
+    this.lastInspectorState = state;
     renderInspectorPanel(this.elements, state);
     this.phoneInspector.render(state);
   }
@@ -817,7 +795,7 @@ export class EditorUiBridge {
       updateEditorState({ activeLayer: layer });
       this.syncEditorChromeState();
     };
-    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
+    for (const button of this.elements.layerButtons) {
       const handler = () => handleLayerClick(button);
       button.addEventListener('click', handler);
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
@@ -836,10 +814,15 @@ export class EditorUiBridge {
       this.cleanupCallbacks.push(() => button.removeEventListener('click', handler));
     }
 
-    bindButton(this.cleanupCallbacks, this.elements.layerGuideButton, () => {
-      updateEditorState({ showLayerGuides: !editorState.showLayerGuides });
-      this.syncEditorChromeState();
-    });
+    const layerGuideCheckbox = this.elements.layerGuideCheckbox;
+    if (layerGuideCheckbox) {
+      const onLayerGuidesChange = () => {
+        updateEditorState({ showLayerGuides: layerGuideCheckbox.checked });
+        this.syncEditorChromeState();
+      };
+      layerGuideCheckbox.addEventListener('change', onLayerGuidesChange);
+      this.cleanupCallbacks.push(() => layerGuideCheckbox.removeEventListener('change', onLayerGuidesChange));
+    }
 
     const handleTilesetChange = () => {
       if (!this.elements.tilesetSelect) {
@@ -1391,6 +1374,13 @@ export class EditorUiBridge {
         this.elements.npcDefeatModeSelect?.removeEventListener('change', handleNpcDefeatModeChange)
       );
     }
+    bindUtilityInspectorControls({
+      elements: this.elements,
+      actions: this.actions,
+      cleanupCallbacks: this.cleanupCallbacks,
+      windowObj: this.windowObj,
+      getInspectorState: () => this.lastInspectorState,
+    });
 
     bindButton(this.cleanupCallbacks, this.elements.playBtn, () => {
       runtimeConfig.closePanels();
@@ -2085,7 +2075,7 @@ export class EditorUiBridge {
     }
 
     const advancedBuilder = getGameSettings().builderMode === 'advanced';
-    for (const button of [...this.elements.layerButtons, ...this.elements.layerMiniButtons]) {
+    for (const button of this.elements.layerButtons) {
       const layer = button.dataset.layer as LayerName | undefined;
       const unsupported = Boolean(
         paletteModeIsSmart
@@ -2120,13 +2110,8 @@ export class EditorUiBridge {
       this.elements.layerChip.textContent = `Placing on ${getLayerUiLabel(editorState.activeLayer)}`;
       this.elements.layerChip.setAttribute('data-layer-tone', editorState.activeLayer);
     }
-    if (this.elements.layerGuideButton) {
-      this.elements.layerGuideButton.classList.toggle('active', editorState.showLayerGuides);
-      this.elements.layerGuideButton.setAttribute(
-        'aria-pressed',
-        editorState.showLayerGuides ? 'true' : 'false'
-      );
-      this.elements.layerGuideButton.textContent = 'Indicate Layers';
+    if (this.elements.layerGuideCheckbox) {
+      this.elements.layerGuideCheckbox.checked = editorState.showLayerGuides;
     }
 
     setValue(this.elements.tilesetSelect, editorState.selectedTilesetKey);
@@ -2140,7 +2125,11 @@ export class EditorUiBridge {
     this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.tileControlsSection?.classList.toggle('hidden', !paletteModeIsTiles);
     this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
-    this.elements.objectPaletteSection?.classList.toggle('hidden', editorState.paletteMode !== 'objects');
+    const triangleOptions = this.doc.body.dataset.editorTriangleOptions === 'true';
+    this.elements.objectPaletteSection?.classList.toggle(
+      'hidden',
+      editorState.paletteMode !== 'objects' && !triangleOptions,
+    );
     if (paletteModeIsTiles) {
       this.windowObj.requestAnimationFrame(() => {
         if (this.destroyed || editorState.paletteMode !== 'tiles') {

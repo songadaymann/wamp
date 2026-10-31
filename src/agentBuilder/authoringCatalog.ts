@@ -426,6 +426,8 @@ export function renderAgentRoomAuthoringMarkdown(): string {
     '- Gameplay-layer pressure plates (`floor_trigger`): `coopPlate` enables other live players in Prime to hold the plate. Supported by place_object and configure_object. Co-op room/Expanded Room clears are practice and do not submit solo rankings. Links still use any linked plate; crates and enemies remain a solo fallback.',
     '- Sword Hunter and police bosses: `bossHitPoints` (integer 3–10; `null` turns boss mode off). Supported by place_object and configure_object. Enabling a boss makes an existing invincible Sword Hunter defeatable; explicitly combining boss mode and invincible is rejected.',
     '- NPC: `npcMode`, `npcPushable`, `npcCanJumpFall`, `npcPlayerCollision`, `npcFriendlyFire`, `npcName`, `npcDefeatMode`.',
+    '- Rolling ball: `ballGraphic`, `ballWeight`, `ballHurtEnemies`, `ballHurtFriendlies`, `ballHurtPlayer`, `ballPushable`. Choosing `ballGraphic` copies that graphic preset, then the other fields can override it.',
+    '- Triangle ramp: `triangleLegX`, `triangleLegY` (signed 16px grid lengths), `triangleFill`, `triangleStroke` (`#RRGGBB`).',
     '- Unsupported fields are rejected; they are never silently discarded.',
     '- Lost Song: at most one `lost_song` per room cell, including each Expanded Room cell. Place it directly, never in containers. It does not contribute to collect goals or room score; explorers find it once per room across versions. Own-room finds do not count.',
     '',

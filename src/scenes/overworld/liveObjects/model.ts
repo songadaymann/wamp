@@ -10,6 +10,7 @@ import type {
 import type { SwordsmanTraversalIntent } from '../../../enemies/swordsmanTraversal';
 import type { SwordsmanTraversalPlannerMode } from '../../../enemies/swordsmanRobustPlanner';
 import type { NpcMode } from '../../../npcs/model';
+import type { RollingBallSettings } from '../../../config/rollingBall';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { PlayerGravityDirection } from '../specialTiles';
 
@@ -125,6 +126,15 @@ export interface LoadedRoomObject {
   interactions: Phaser.Physics.Arcade.Collider[];
   worldColliders: Phaser.Physics.Arcade.Collider[];
   runtime: LoadedRoomObjectRuntimeState;
+  ball?: RollingBallSettings | null;
+  triangle?: {
+    anchorX: number;
+    anchorY: number;
+    legX: number;
+    legY: number;
+    fill: string;
+    stroke: string;
+  } | null;
 }
 
 export interface CreateLiveObjectEntryOptions {
@@ -156,6 +166,13 @@ export interface CreateLiveObjectEntryOptions {
   npcFriendlyFire?: boolean | null;
   npcName?: string | null;
   npcDefeatMode?: SwordsmanDefeatMode | null;
+  ball?: RollingBallSettings | null;
+  triangle?: {
+    legX: number;
+    legY: number;
+    fill: string;
+    stroke: string;
+  } | null;
   countsTowardGoals: boolean;
 }
 

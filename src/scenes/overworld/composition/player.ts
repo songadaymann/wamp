@@ -480,6 +480,7 @@ export function createMovementController(
     getRoomSnapshotForCoordinates: (coordinates) => host.getRoomSnapshotViewForCoordinates(coordinates) as RoomSnapshot | null,
     isSolidTerrainAtWorldPoint: (room, worldX, worldY) => host.isSolidTerrainAtWorldPoint(room, worldX, worldY),
     getExternalLaunchGraceUntil: () => host.externalLaunchGraceUntil,
+    getExternalGrounded: () => host.liveObjectController.isPlayerOnTriangle(),
     shouldForceFullBodyHitbox: () => host.isPvpArenaActive(),
     getPushableLiveObjectsInBounds: (bounds, paddingX, paddingY) => host.liveObjectController.getPushableLiveObjectsInBounds(bounds, paddingX, paddingY),
     getRuntimeSolidLiveObjectsInBounds: (bounds, paddingX, paddingY) => host.liveObjectController.getRuntimeSolidLiveObjectsInBounds(bounds, paddingX, paddingY),

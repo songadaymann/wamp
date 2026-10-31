@@ -54,6 +54,7 @@
     "scripts/deploy_prod.mjs",
     "scripts/deploy_safety_branch.mjs",
     "scripts/generate_autotile_edge_case_tiles.mjs",
+    "scripts/generate-utility-object-art.mjs",
     "scripts/ledger.mjs",
     "scripts/live_construction_play_smoke.ts",
     "scripts/mobile_smoke.mjs",

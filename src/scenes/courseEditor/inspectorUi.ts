@@ -1,4 +1,7 @@
 export {
+  buildBallInspectorState,
+  buildTriangleInspectorState,
+  buildTriangleStampInspectorState,
   buildContainerInspectorState,
   canStoreEditorContainerContents,
   buildPressurePlateInspectorState,

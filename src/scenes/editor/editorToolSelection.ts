@@ -29,6 +29,11 @@ export function canRepeatSelectedEditorObject(): boolean {
   ));
 }
 
+export function isTriangleEditorTool(tool: ToolName = editorState.activeTool): tool is 'triangle' {
+  return tool === 'triangle';
+}
+
+
 export function isShapeEditorTool(tool: ToolName): tool is 'rect' | 'ellipse' {
   return tool === 'rect' || tool === 'ellipse';
 }
@@ -182,26 +187,45 @@ export function getEditorToolUnavailableTitle(tool: ToolName): string | null {
   return null;
 }
 
+function shouldToggleToolModeOnReselect(): boolean {
+  if (typeof document === 'undefined') return true;
+  const panel = document.body?.dataset?.editorShellPanel;
+  return panel !== 'room' && panel !== 'goal';
+}
+
 export function applyEditorToolSelection(tool: ToolName): void {
   if (isEditorToolUnavailable(tool)) {
     return;
   }
   if (editorState.activeTool === tool && isShapeEditorTool(tool)) {
-    toggleEditorShapeOutline(tool);
+    if (shouldToggleToolModeOnReselect()) toggleEditorShapeOutline(tool);
     return;
   }
   if (editorState.activeTool === tool && tool === 'line') {
-    if (!getEditorLineAxis()) updateEditorState({ lineCurve: !editorState.lineCurve });
+    if (shouldToggleToolModeOnReselect() && !getEditorLineAxis()) {
+      updateEditorState({ lineCurve: !editorState.lineCurve });
+    }
+    return;
+  }
+  if (editorState.activeTool === tool && tool === 'triangle') {
+    if (shouldToggleToolModeOnReselect()) {
+      updateEditorState({ trianglePaintMode: !editorState.trianglePaintMode });
+    }
     return;
   }
   if (editorState.activeTool === tool && tool === 'pencil') {
-    updateEditorState({ pencilSprayMode: !editorState.pencilSprayMode });
+    if (shouldToggleToolModeOnReselect()) {
+      updateEditorState({ pencilSprayMode: !editorState.pencilSprayMode });
+    }
     return;
   }
   if (tool === 'randomize') {
     updateEditorState({ randomizeBrushSize: editorState.scrambleBrushSize });
   }
-  updateEditorState({ activeTool: tool });
+  updateEditorState({
+    activeTool: tool,
+    ...(tool === 'triangle' ? { trianglePaintMode: false } : {}),
+  });
 }
 
 export function toggleEditorShapeOutline(tool: 'rect' | 'ellipse'): void {
@@ -232,6 +256,39 @@ export function getEditorStampKind(tool: ToolName, curveBend = false): EditorSha
   return null;
 }
 
+export function getEditorToolHudLabel(tool: ToolName, pastePreviewActive = false): string {
+  switch (tool) {
+    case 'eraser':
+      return `Erase ${editorState.eraserBrushSize}x${editorState.eraserBrushSize}`;
+    case 'rect':
+      return editorState.rectOutline ? 'Rectangle Outlined' : 'Rectangle Filled';
+    case 'ellipse':
+      return editorState.ellipseOutline ? 'Ellipse Outlined' : 'Ellipse Filled';
+    case 'line':
+      return isEditorLineCurve() ? 'Curve' : 'Line';
+    case 'triangle':
+      return editorState.trianglePaintMode ? 'Paint ramps' : 'Triangle';
+    case 'randomize':
+      return `Scramble ${editorState.randomizeBrushSize}x${editorState.randomizeBrushSize}`;
+    case 'fill':
+      return 'Fill';
+    case 'copy':
+      return pastePreviewActive ? 'Paste' : 'Copy';
+    case 'move':
+      return 'Move';
+    case 'pencil':
+      if (isPencilSprayPlacement()) {
+        return `Spray ${editorState.pencilSprayBrushSize}x${editorState.pencilSprayBrushSize}`;
+      }
+      return isPencilBrushPlacement() && editorState.pencilBrushSize > 1
+        ? `Draw ${editorState.pencilBrushSize}x${editorState.pencilBrushSize}`
+        : 'Draw';
+    default:
+      return 'Draw';
+  }
+}
+
+
 export interface EditorModePipState {
   count: number;
   activeIndex: number;
@@ -250,6 +307,9 @@ export function getEditorToolModePipState(tool: ToolName): EditorModePipState | 
   if (tool === 'line') {
     return getEditorLineAxis() ? null : { count: 2, activeIndex: editorState.lineCurve ? 1 : 0 };
   }
+  if (tool === 'triangle') {
+    return { count: 2, activeIndex: editorState.trianglePaintMode ? 1 : 0 };
+  }
   return null;
 }
 
@@ -260,7 +320,7 @@ export function getTileFlipModePipState(mode: TileFlipMode): EditorModePipState 
 
 export interface EditorToolButtonAppearance {
   icon?: string;
-  iconKind?: 'glyph' | 'mosaic';
+  iconKind?: 'glyph' | 'mosaic' | 'right-triangle';
   label?: string;
   title: string;
   dimPart: string | null;
@@ -299,6 +359,16 @@ export function getEditorToolButtonAppearance(tool: ToolName, selected: boolean)
       title: axis ? `Line (L); stays ${axis} for this brush` : isEditorLineCurve()
         ? 'Curve (L); select again to switch to Line. Hold Shift to snap'
         : 'Line (L); select again to switch to Curve. Hold Shift to snap',
+      dimPart: null,
+    };
+  }
+  if (tool === 'triangle') {
+    return {
+      iconKind: 'right-triangle',
+      label: editorState.trianglePaintMode ? 'Paint' : 'Triangle',
+      title: editorState.trianglePaintMode
+        ? 'Paint ramps (T); select again to place a triangle'
+        : 'Triangle (T); select again to paint existing ramps',
       dimPart: null,
     };
   }

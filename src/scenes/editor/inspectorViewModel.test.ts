@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { GameObjectConfig } from '../../config';
+import { editorState, updateEditorState, type GameObjectConfig } from '../../config';
 import {
   buildContainerInspectorState,
   buildPressurePlateInspectorState,
+  buildTriangleStampInspectorState,
   createEmptyEditorInspectorState,
 } from './inspectorViewModel';
 
@@ -68,5 +69,45 @@ describe('shared editor inspector view models', () => {
       containerClearDisabled: false,
       containerClearTitle: '',
     });
+  });
+
+  it('shows stamp colors and orientation when the triangle tool is waiting to place', () => {
+    const previous = {
+      fill: editorState.triangleStampFill,
+      stroke: editorState.triangleStampStroke,
+      flipX: editorState.triangleStampFlipX,
+      flipY: editorState.triangleStampFlipY,
+      paint: editorState.trianglePaintMode,
+    };
+    updateEditorState({
+      triangleStampFill: '#FF3366',
+      triangleStampStroke: '#112233',
+      triangleStampFlipX: true,
+      triangleStampFlipY: true,
+      trianglePaintMode: false,
+    });
+    try {
+      expect(buildTriangleStampInspectorState()).toMatchObject({
+        visible: true,
+        triangleVisible: true,
+        trianglePaintMode: false,
+        triangleFillValue: '#FF3366',
+        triangleStrokeValue: '#112233',
+        triangleFlipX: true,
+        triangleFlipY: true,
+      });
+      updateEditorState({ trianglePaintMode: true });
+      expect(buildTriangleStampInspectorState()).toMatchObject({
+        trianglePaintMode: true,
+      });
+    } finally {
+      updateEditorState({
+        triangleStampFill: previous.fill,
+        triangleStampStroke: previous.stroke,
+        triangleStampFlipX: previous.flipX,
+        triangleStampFlipY: previous.flipY,
+        trianglePaintMode: previous.paint,
+      });
+    }
   });
 });

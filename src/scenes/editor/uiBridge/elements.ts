@@ -56,9 +56,8 @@ export interface EditorUiElements {
   clearObjectButtons: HTMLButtonElement[];
   layerButtons: HTMLElement[];
   layerVisibilityButtons: HTMLButtonElement[];
-  layerMiniButtons: HTMLElement[];
   layerChip: HTMLElement | null;
-  layerGuideButton: HTMLButtonElement | null;
+  layerGuideCheckbox: HTMLInputElement | null;
   tilesetSelect: HTMLSelectElement | null;
   flipXButton: HTMLButtonElement | null;
   flipYButton: HTMLButtonElement | null;
@@ -152,6 +151,8 @@ export interface EditorUiElements {
   coursePlaceFinishBtn: HTMLButtonElement | null;
   courseClearMarkersBtn: HTMLButtonElement | null;
   inspectorRoot: HTMLElement | null;
+  inspectorTitle: HTMLElement | null;
+  inspectorMinimizeButton: HTMLButtonElement | null;
   pressurePanel: HTMLElement | null;
   pressureStatus: HTMLElement | null;
   pressureCoopRow: HTMLElement | null;
@@ -188,6 +189,26 @@ export interface EditorUiElements {
   npcNameInput: HTMLInputElement | null;
   npcDialogueInput: HTMLTextAreaElement | null;
   npcDefeatModeSelect: HTMLSelectElement | null;
+  ballPanel: HTMLElement | null;
+  ballStatus: HTMLElement | null;
+  ballGraphicSelect: HTMLSelectElement | null;
+  ballWeightInput: HTMLInputElement | null;
+  ballHurtEnemiesCheckbox: HTMLInputElement | null;
+  ballHurtFriendliesCheckbox: HTMLInputElement | null;
+  ballHurtPlayerCheckbox: HTMLInputElement | null;
+  ballPushableCheckbox: HTMLInputElement | null;
+  trianglePanel: HTMLElement | null;
+  triangleStatus: HTMLElement | null;
+  triangleOrientPicker: HTMLElement | null;
+  triangleOrientButtons: HTMLButtonElement[];
+  triangleFillInput: HTMLInputElement | null;
+  triangleFillSwatch: HTMLButtonElement | null;
+  triangleStrokeInput: HTMLInputElement | null;
+  triangleStrokeSwatch: HTMLButtonElement | null;
+  colorPopover: HTMLElement | null;
+  colorPopoverSquare: HTMLCanvasElement | null;
+  colorPopoverHue: HTMLInputElement | null;
+  colorEyedropperButton: HTMLButtonElement | null;
 }
 
 function byId<T extends HTMLElement>(doc: Document, id: string): T | null {
@@ -270,9 +291,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     clearObjectButtons: all<HTMLButtonElement>(doc, '.editor-clear-objects-btn'),
     layerButtons: all<HTMLElement>(doc, '.layer-btn'),
     layerVisibilityButtons: all<HTMLButtonElement>(doc, '.layer-visibility-button'),
-    layerMiniButtons: all<HTMLElement>(doc, '.layer-stack-mini-btn'),
     layerChip: byId<HTMLElement>(doc, 'editor-layer-chip'),
-    layerGuideButton: byId<HTMLButtonElement>(doc, 'btn-editor-layer-guides'),
+    layerGuideCheckbox: byId<HTMLInputElement>(doc, 'editor-layer-guides'),
     tilesetSelect: byId<HTMLSelectElement>(doc, 'tileset-select'),
     flipXButton: byId<HTMLButtonElement>(doc, 'btn-tile-flip-x'),
     flipYButton: byId<HTMLButtonElement>(doc, 'btn-tile-flip-y'),
@@ -369,6 +389,8 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     coursePlaceFinishBtn: byId<HTMLButtonElement>(doc, 'btn-course-editor-place-finish'),
     courseClearMarkersBtn: byId<HTMLButtonElement>(doc, 'btn-course-editor-clear-markers'),
     inspectorRoot: byId<HTMLElement>(doc, 'editor-inspector'),
+    inspectorTitle: byId<HTMLElement>(doc, 'editor-inspector-title'),
+    inspectorMinimizeButton: byId<HTMLButtonElement>(doc, 'btn-editor-inspector-minimize'),
     pressurePanel: byId<HTMLElement>(doc, 'pressure-plate-panel'),
     pressureStatus: byId<HTMLElement>(doc, 'pressure-plate-status'),
     pressureCoopRow: byId<HTMLElement>(doc, 'pressure-plate-coop-row'),
@@ -408,5 +430,25 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     npcNameInput: byId<HTMLInputElement>(doc, 'npc-name-input'),
     npcDialogueInput: byId<HTMLTextAreaElement>(doc, 'npc-dialogue-input'),
     npcDefeatModeSelect: byId<HTMLSelectElement>(doc, 'npc-defeat-mode-select'),
+    ballPanel: byId<HTMLElement>(doc, 'ball-panel'),
+    ballStatus: byId<HTMLElement>(doc, 'ball-status'),
+    ballGraphicSelect: byId<HTMLSelectElement>(doc, 'ball-graphic-select'),
+    ballWeightInput: byId<HTMLInputElement>(doc, 'ball-weight-input'),
+    ballHurtEnemiesCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-enemies-checkbox'),
+    ballHurtFriendliesCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-friendlies-checkbox'),
+    ballHurtPlayerCheckbox: byId<HTMLInputElement>(doc, 'ball-hurt-player-checkbox'),
+    ballPushableCheckbox: byId<HTMLInputElement>(doc, 'ball-pushable-checkbox'),
+    trianglePanel: byId<HTMLElement>(doc, 'triangle-panel'),
+    triangleStatus: byId<HTMLElement>(doc, 'triangle-status'),
+    triangleOrientPicker: byId<HTMLElement>(doc, 'triangle-orient-picker'),
+    triangleOrientButtons: all<HTMLButtonElement>(doc, '[data-triangle-orient]'),
+    triangleFillInput: byId<HTMLInputElement>(doc, 'triangle-fill-input'),
+    triangleFillSwatch: byId<HTMLButtonElement>(doc, 'triangle-fill-swatch'),
+    triangleStrokeInput: byId<HTMLInputElement>(doc, 'triangle-stroke-input'),
+    triangleStrokeSwatch: byId<HTMLButtonElement>(doc, 'triangle-stroke-swatch'),
+    colorPopover: byId<HTMLElement>(doc, 'color-popover'),
+    colorPopoverSquare: byId<HTMLCanvasElement>(doc, 'color-popover-square'),
+    colorPopoverHue: byId<HTMLInputElement>(doc, 'color-popover-hue'),
+    colorEyedropperButton: byId<HTMLButtonElement>(doc, 'btn-color-eyedropper'),
   };
 }

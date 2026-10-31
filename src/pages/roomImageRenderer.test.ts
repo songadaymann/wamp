@@ -6,7 +6,14 @@ import { parseCustomSpriteObjectId } from '../customSprites/model';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { ROOM_HEIGHT, ROOM_WIDTH, TILE_FLIP_X_FLAG, TILE_FLIP_Y_FLAG } from '../config';
+import {
+  ROOM_HEIGHT,
+  ROOM_WIDTH,
+  SPECIAL_TILESET_FIRST_GID,
+  SPECIAL_TILE_LOCAL_INDICES,
+  TILE_FLIP_X_FLAG,
+  TILE_FLIP_Y_FLAG,
+} from '../config';
 import type { PagesWorkerEnv } from './model';
 import { decodePng } from '../roomImage/roomImagePrimitives';
 import {
@@ -92,6 +99,12 @@ describe('room image renderer model normalization', () => {
       gid: 42,
       flipX: true,
       flipY: true,
+    });
+    const gravityUp = SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_LOCAL_INDICES.gravityUp;
+    expect(decodeTileValue(gravityUp + TILE_FLIP_X_FLAG + TILE_FLIP_Y_FLAG)).toEqual({
+      gid: gravityUp,
+      flipX: false,
+      flipY: false,
     });
     expect(decodeTileValue(Number.NaN)).toEqual({ gid: -1, flipX: false, flipY: false });
     expect(decodeTileValue('42')).toEqual({ gid: -1, flipX: false, flipY: false });

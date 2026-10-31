@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_FLIP_X_FLAG, editorState, updateEditorState, getSelectionTileValue } from '../../config';
+import {
+  SPECIAL_TILESET_FIRST_GID,
+  SPECIAL_TILE_LOCAL_INDICES,
+  TILE_FLIP_X_FLAG,
+  TILE_FLIP_Y_FLAG,
+  decodeTileDataValue,
+  editorState,
+  updateEditorState,
+  getSelectionTileValue,
+} from '../../config';
 import {
   applyEditorTileFlipModes,
   clampRandomizeBrushSize,
@@ -41,6 +50,18 @@ describe('randomizeTiles', () => {
     expect(applyEditorTileFlipModes(12, { random: () => 0.1 })).toBe(12 + TILE_FLIP_X_FLAG);
     updateEditorState({ tileFlipXMode: 'off' });
     updateEditorState({ tileFlipYMode: 'off' });
+  });
+
+  it('keeps special tileset tiles unflipped when the brush or a copy is mirrored', () => {
+    const gid = SPECIAL_TILESET_FIRST_GID + SPECIAL_TILE_LOCAL_INDICES.gravityUp;
+    updateEditorState({ tileFlipXMode: 'on', tileFlipYMode: 'on' });
+    expect(applyEditorTileFlipModes(gid)).toBe(gid);
+    expect(decodeTileDataValue(gid + TILE_FLIP_X_FLAG + TILE_FLIP_Y_FLAG)).toEqual({
+      gid,
+      flipX: false,
+      flipY: false,
+    });
+    updateEditorState({ tileFlipXMode: 'off', tileFlipYMode: 'off' });
   });
 
   it('weights the occupied palette pool evenly, including duplicates', () => {

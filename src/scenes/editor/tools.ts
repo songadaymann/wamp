@@ -8,6 +8,7 @@ import type { EditorMarkerPlacementMode } from '../../ui/setup/sceneBridge';
 import type { EditorClipboardState, EditorEditRuntime, GoalPlacementMode } from './editRuntime';
 import type { EditorPersistenceController } from './persistence';
 import { applyEditorToolSelection, isDragStampEditorTool } from './editorToolSelection';
+import { EDITOR_TOOL_CHOSEN_EVENT, type EditorToolChosenDetail } from './uiEvents';
 
 interface EditorToolControllerHost {
   clearShapePreview(): void;
@@ -32,6 +33,10 @@ export class EditorToolController {
 
   selectTool(tool: ToolName): void {
     applyEditorToolSelection(tool);
+    const win = globalThis as Window & typeof globalThis;
+    win.dispatchEvent?.(new CustomEvent<EditorToolChosenDetail>(EDITOR_TOOL_CHOSEN_EVENT, {
+      detail: { tool: editorState.activeTool },
+    }));
     this.updateToolUi();
   }
 

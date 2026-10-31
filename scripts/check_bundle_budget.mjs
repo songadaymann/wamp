@@ -13,7 +13,9 @@ import { brotliCompressSync, constants } from 'node:zlib';
 // opened pop-ups did (F019).
 // 2026-10-23: 663.5 KB (from 668.4) after the developer tools and the bug report form moved
 // out (F319). The budget stays at 670 so the waiting dialog work has room.
-const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 670);
+// 2026-10-31: 672.1 KB after rolling-ball physics and triangle ramp collision joined the
+// play scene. Those run before the first frame, so the budget is 673.
+const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 673);
 const report = JSON.parse(readFileSync(resolve('output/build/boot-bundle.json'), 'utf8'));
 const rows = report.files.map((file) => {
   const bytes = readFileSync(resolve('dist', file));

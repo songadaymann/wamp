@@ -1,5 +1,13 @@
-import { canObjectBeStoredInContainer, getObjectById, type GameObjectConfig } from '../../config';
+import { canObjectBeStoredInContainer, editorState, getObjectById, type GameObjectConfig, type PlacedObject } from '../../config';
 import { isCustomSpriteObjectId } from '../../customSprites/model';
+import { getRollingBallGraphic, normalizePlacedRollingBall } from '../../config/rollingBall';
+import {
+  normalizePlacedTriangle,
+  parseHexColor,
+  triangleFlipFromLegs,
+  DEFAULT_TRIANGLE_FILL,
+  DEFAULT_TRIANGLE_STROKE,
+} from '../../config/trianglePiece';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
@@ -71,6 +79,76 @@ export function createEmptyEditorInspectorState(): EditorInspectorState {
     npcNameValue: '',
     npcDialogueValue: '',
     npcDefeatModeValue: 'defeatable',
+    ballVisible: false,
+    ballStatusText: '',
+    ballGraphicValue: 'basic',
+    ballWeightValue: '1',
+    ballHurtEnemiesChecked: false,
+    ballHurtFriendliesChecked: false,
+    ballHurtPlayerChecked: false,
+    ballPushableChecked: true,
+    triangleVisible: false,
+    trianglePaintMode: false,
+    triangleStatusText: '',
+    triangleFlipX: false,
+    triangleFlipY: false,
+    triangleFillValue: '#8A8F98',
+    triangleStrokeValue: '#2C3138',
+  };
+}
+
+export function buildBallInspectorState(
+  placed: PlacedObject,
+  statusText: string | null = null,
+): EditorInspectorState | null {
+  const ball = normalizePlacedRollingBall(placed);
+  if (!ball) return null;
+  const graphic = getRollingBallGraphic(ball.graphicId);
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    ballVisible: true,
+    ballStatusText: statusText ?? graphic.name,
+    ballGraphicValue: graphic.id,
+    ballWeightValue: String(ball.weight),
+    ballHurtEnemiesChecked: ball.hurtEnemies,
+    ballHurtFriendliesChecked: ball.hurtFriendlies,
+    ballHurtPlayerChecked: ball.hurtPlayer,
+    ballPushableChecked: ball.pushable,
+  };
+}
+
+export function buildTriangleInspectorState(
+  placed: PlacedObject,
+  statusText: string | null = null,
+): EditorInspectorState | null {
+  const geometry = normalizePlacedTriangle(placed);
+  if (!geometry) return null;
+  const flip = triangleFlipFromLegs(geometry.legX, geometry.legY);
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    triangleVisible: true,
+    trianglePaintMode: false,
+    triangleStatusText: statusText ?? 'Drag a square handle to move or resize this ramp.',
+    triangleFlipX: flip.flipX,
+    triangleFlipY: flip.flipY,
+    triangleFillValue: geometry.fill,
+    triangleStrokeValue: geometry.stroke,
+  };
+}
+
+export function buildTriangleStampInspectorState(statusText: string | null = null): EditorInspectorState {
+  return {
+    ...createEmptyEditorInspectorState(),
+    visible: true,
+    triangleVisible: true,
+    trianglePaintMode: editorState.trianglePaintMode,
+    triangleStatusText: statusText ?? 'Click empty space to place. Click a ramp to select it.',
+    triangleFlipX: editorState.triangleStampFlipX,
+    triangleFlipY: editorState.triangleStampFlipY,
+    triangleFillValue: parseHexColor(editorState.triangleStampFill, DEFAULT_TRIANGLE_FILL),
+    triangleStrokeValue: parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE),
   };
 }
 

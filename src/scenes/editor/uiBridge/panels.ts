@@ -6,6 +6,9 @@ import {
 } from '../../../config';
 import type { EditorUiElements } from './elements';
 import type { EditorInspectorState, EditorUiViewModel } from './model';
+import { inspectorWindowLabel, isInspectorWindowMinimized } from '../inspectorWindows';
+import { editorState } from '../../../config';
+import { triangleOrientId } from '../../../config/trianglePiece';
 
 export function renderEditorUiViewModel(
   elements: EditorUiElements,
@@ -80,7 +83,28 @@ export function renderInspectorPanel(
   elements: EditorUiElements,
   state: EditorInspectorState,
 ): void {
-  setHidden(elements.inspectorRoot, !state.visible);
+  const windowInfo = inspectorWindowLabel(state);
+  const minimized = windowInfo !== null && isInspectorWindowMinimized(windowInfo.kind);
+  elements.inspectorRoot?.classList.toggle('is-minimized', minimized);
+  if (elements.inspectorTitle) {
+    elements.inspectorTitle.textContent = windowInfo?.title ?? 'Object options';
+  }
+  if (elements.inspectorMinimizeButton) {
+    elements.inspectorMinimizeButton.setAttribute('aria-expanded', minimized ? 'false' : 'true');
+    elements.inspectorMinimizeButton.setAttribute(
+      'aria-label',
+      minimized ? 'Expand object options' : 'Minimize object options',
+    );
+  }
+  setHidden(elements.inspectorRoot, !state.visible || state.triangleVisible);
+  const doc = elements.trianglePanel?.ownerDocument
+    ?? elements.objectPaletteSection?.ownerDocument
+    ?? elements.inspectorRoot?.ownerDocument;
+  const triangleSidebar = doc?.body.dataset.editorTriangleOptions === 'true';
+  elements.objectPaletteSection?.classList.toggle(
+    'hidden',
+    editorState.paletteMode !== 'objects' && !triangleSidebar,
+  );
   setHidden(elements.pressurePanel, !state.pressureVisible);
   setText(elements.pressureStatus, state.pressureStatusText);
   setHidden(elements.pressureCoopRow, !state.pressureCoopVisible);
@@ -151,6 +175,42 @@ export function renderInspectorPanel(
   setValue(elements.npcNameInput, state.npcNameValue);
   setValue(elements.npcDialogueInput, state.npcDialogueValue);
   setValue(elements.npcDefeatModeSelect, state.npcDefeatModeValue);
+  setHidden(elements.ballPanel, !state.ballVisible);
+  setText(elements.ballStatus, state.ballStatusText);
+  setValue(elements.ballGraphicSelect, state.ballGraphicValue);
+  setDisabled(elements.ballGraphicSelect, !state.ballVisible);
+  if (document.activeElement !== elements.ballWeightInput) {
+    setValue(elements.ballWeightInput, state.ballWeightValue);
+  }
+  setDisabled(elements.ballWeightInput, !state.ballVisible);
+  for (const [checkbox, checked] of [
+    [elements.ballHurtEnemiesCheckbox, state.ballHurtEnemiesChecked],
+    [elements.ballHurtFriendliesCheckbox, state.ballHurtFriendliesChecked],
+    [elements.ballHurtPlayerCheckbox, state.ballHurtPlayerChecked],
+    [elements.ballPushableCheckbox, state.ballPushableChecked],
+  ] as const) {
+    if (!checkbox) continue;
+    checkbox.checked = checked;
+    checkbox.disabled = !state.ballVisible;
+  }
+  setHidden(elements.trianglePanel, !state.triangleVisible);
+  setHidden(elements.triangleOrientPicker, !state.triangleVisible || state.trianglePaintMode);
+  setText(elements.triangleStatus, state.triangleStatusText);
+  const selectedOrient = triangleOrientId(state.triangleFlipX, state.triangleFlipY);
+  for (const button of elements.triangleOrientButtons) {
+    const selected = button.dataset.triangleOrient === selectedOrient;
+    button.classList.toggle('is-selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  }
+  if (document.activeElement !== elements.triangleFillInput) {
+    setValue(elements.triangleFillInput, state.triangleFillValue);
+  }
+  if (document.activeElement !== elements.triangleStrokeInput) {
+    setValue(elements.triangleStrokeInput, state.triangleStrokeValue);
+  }
+  if (elements.triangleFillSwatch) elements.triangleFillSwatch.style.background = state.triangleFillValue;
+  if (elements.triangleStrokeSwatch) elements.triangleStrokeSwatch.style.background = state.triangleStrokeValue;
+  if (!state.triangleVisible) elements.colorPopover?.classList.add('hidden');
 }
 
 function renderGoalPanel(elements: EditorUiElements, viewModel: EditorUiViewModel): void {

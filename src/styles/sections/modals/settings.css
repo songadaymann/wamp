@@ -146,6 +146,10 @@
     gap: 8px;
   }
 
+  #btn-settings-reset-option-windows {
+    margin-top: 10px;
+  }
+
   .settings-choice {
     display: flex;
     align-items: center;

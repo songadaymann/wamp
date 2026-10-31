@@ -29,6 +29,8 @@ import {
   type GameObjectConfig,
   type SpecialTileKind,
 } from '../../config';
+import { LiveUtilitySession, presentUtilityObject } from './liveObjects/liveUtilitySession';
+import { placedObjectRuntimeDepth, syncGravityPresentation } from './liveObjects/objectPresentation';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
@@ -43,7 +45,6 @@ import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
-  getGravityAngle,
   getGravityRightVector,
   getGravityVector,
   setBodyVelocityAlongVector,
@@ -166,6 +167,10 @@ interface OverworldLiveObjectControllerOptions<TEdgeWall = unknown> {
     body: Phaser.Physics.Arcade.Body,
     currentGravityDirection: PlayerGravityDirection,
   ) => Readonly<SpecialTilePlayerEnvironment>;
+  supportCrumblingTiles?: (
+    body: Phaser.Physics.Arcade.Body,
+    gravityDirection: PlayerGravityDirection,
+  ) => void;
   swordsmanTraversalPlannerMode: SwordsmanTraversalPlannerMode;
   isPlayerClimbingLadder: () => boolean;
   isLadderDropRequested: () => boolean;
@@ -275,6 +280,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly interactionCoordinator: LiveObjectInteractionCoordinator<TEdgeWall>;
   private readonly partitionIndex: LiveObjectPartitionIndex<TEdgeWall>;
   private readonly checkpointController: LiveObjectRespawnCheckpointController<TEdgeWall>;
+  private readonly utility = new LiveUtilitySession(this.options, {
+    createBatch: (room, start, end, dormant) => this.createLiveObjectsBatch(room, start, end, dormant),
+    finalize: (room, dormant) => this.finalizeLiveObjectCreation(room, dormant),
+    remove: (room, liveObject) => this.removeLiveObject(room, liveObject),
+    defeat: (room, liveObject) => this.enemyLifecycleController.defeatFromRollingBall(room, liveObject),
+  });
   private readonly distanceSleepingObjects = new WeakSet<LoadedRoomObject>();
   private readonly frameRooms: LoadedFullRoom<LoadedRoomObject, TEdgeWall>[] = [];
   private readonly flyingEnemyMotions = new Map<FlyingEnemyBehavior, FlyingEnemyMotion>();
@@ -493,6 +504,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     this.triggerController.resetSwitchStates();
   }
 
+  resetRollingBalls(): void { this.utility.resetRollingBalls(); }
+
   resetBossChallenges(resetRoom: (room: RoomSnapshot) => void, alreadyResetRoomId: string | null): void {
     for (const loadedRoom of this.options.getLoadedFullRooms()) {
       if (loadedRoom.room.id !== alreadyResetRoomId
@@ -696,6 +709,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       npcFriendlyFire = null,
       npcName = null,
       npcDefeatMode = null,
+      ball = null,
+      triangle = null,
       countsTowardGoals,
     } = options;
     ensureCustomSpriteTexture(this.options.scene, config);
@@ -844,6 +859,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
     }
 
+    presentUtilityObject(liveObject, sprite, ball, triangle, roomOrigin.x + x, roomOrigin.y + y);
     createBossPresentation(this.options.scene, liveObject);
     this.triggerController.initializePressureControlledObjectState(liveObject);
     this.checkpointController.syncObject(loadedRoom, liveObject);
@@ -868,6 +884,12 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         this.syncLiveObjectGravityPresentation(liveObject);
       }
     }
+  }
+
+  isPlayerOnTriangle(): boolean { return this.utility.isPlayerOnTriangle(); }
+
+  stepUtilityPhysics(delta: number, playerIntent: number, playerButtStomping = false): void {
+    this.utility.step(delta, playerIntent, playerButtStomping);
   }
 
   updateLiveObjects(
@@ -1764,45 +1786,17 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   }
 
   private syncLiveObjectGravityPresentation(liveObject: LoadedRoomObject): void {
-    const shouldRotateWithGravity =
-      liveObject.config.category === 'enemy' &&
-      this.shouldLiveObjectUseSpecialTilePhysics(liveObject);
-    const gravityDirection = shouldRotateWithGravity
-      ? this.getLiveObjectGravityDirection(liveObject)
-      : 'down';
-    liveObject.sprite.setRotation(getGravityAngle(gravityDirection));
-
-    if (!shouldRotateWithGravity || !liveObject.config.facingDirection) {
-      return;
-    }
-
-    const body = this.getDynamicBody(liveObject.sprite);
-    const tangentVelocity = body
-      ? getBodyVelocityAlongVector(body, getGravityRightVector(gravityDirection))
-      : 0;
-    const fallbackDirectionX =
-      liveObject.config.id === SWORDSMAN_AI_OBJECT_ID
-        ? liveObject.runtime.aiFacingDirectionX
-        : liveObject.runtime.directionX;
-    const directionX =
-      Math.abs(tangentVelocity) > 4 ? Math.sign(tangentVelocity) : fallbackDirectionX;
-    this.applyDirectionalFacing(
-      liveObject.sprite,
-      liveObject.config,
-      this.getScreenFacingDirectionForGravityTangent(directionX, gravityDirection),
-    );
+    syncGravityPresentation(liveObject, {
+      special: (object) => this.shouldLiveObjectUseSpecialTilePhysics(object),
+      gravity: (object) => this.getLiveObjectGravityDirection(object),
+      body: (sprite) => this.getDynamicBody(sprite),
+      face: (sprite, config, directionX) => this.applyDirectionalFacing(sprite, config, directionX),
+      screen: (directionX, gravity) => this.getScreenFacingDirectionForGravityTangent(directionX, gravity),
+    });
   }
 
   private getPlacedObjectRuntimeDepth(placedObject: Pick<RoomSnapshot['placedObjects'][number], 'layer'>): number {
-    switch (getPlacedObjectLayer(placedObject)) {
-      case 'background':
-        return 9.5;
-      case 'foreground':
-        return 28;
-      case 'terrain':
-      default:
-        return 18;
-    }
+    return placedObjectRuntimeDepth(placedObject);
   }
 
   private resetDynamicObjectIfOutOfBounds(

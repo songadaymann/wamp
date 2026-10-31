@@ -8,6 +8,7 @@ export const EDITOR_TOOL_KEYBOARD_SHORTCUTS = {
   R: 'rect',
   O: 'ellipse',
   L: 'line',
+  T: 'triangle',
   G: 'fill',
   V: 'randomize',
   M: 'move',

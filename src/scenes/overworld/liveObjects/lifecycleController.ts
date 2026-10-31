@@ -14,6 +14,8 @@ import {
   normalizeNpcPlayerCollision,
   normalizeNpcPushable,
 } from '../../../npcs/model';
+import { normalizePlacedRollingBall } from '../../../config/rollingBall';
+import { normalizePlacedTriangle } from '../../../config/trianglePiece';
 import { getPlacedObjectPathTargetIds } from '../../../placedObjects/objectPaths';
 import type { RoomSnapshot } from '../../../persistence/roomModel';
 import type { LoadedFullRoom } from '../worldStreaming';
@@ -120,6 +122,18 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
         npcFriendlyFire: normalizeNpcFriendlyFire(placedObject.npcFriendlyFire),
         npcName: getPlacedNpcName(placedObject, config.name),
         npcDefeatMode: getPlacedNpcDefeatMode(placedObject),
+        ball: normalizePlacedRollingBall(placedObject),
+        triangle: (() => {
+          const geometry = normalizePlacedTriangle(placedObject);
+          return geometry
+            ? {
+                legX: geometry.legX,
+                legY: geometry.legY,
+                fill: geometry.fill,
+                stroke: geometry.stroke,
+              }
+            : null;
+        })(),
         countsTowardGoals: config.countsTowardGoals !== false,
       });
       if (liveObject) {
