@@ -6,6 +6,7 @@ it('shares immutable empty results without sharing decoded occupied tiles', () =
   expect(decodeTileDataValue(-123)).toBe(empty);
   expect(empty).toEqual({ gid: -1, flipX: false, flipY: false });
   expect(Object.isFrozen(empty)).toBe(true);
-  expect(decodeTileDataValue(encodeTileDataValue(669, true, true))).toEqual({ gid: 669, flipX: true, flipY: true });
+  expect(decodeTileDataValue(encodeTileDataValue(2, true, true))).toEqual({ gid: 2, flipX: true, flipY: true });
+  expect(decodeTileDataValue(encodeTileDataValue(669, true, true))).toEqual({ gid: 669, flipX: false, flipY: false });
   expect(decodeTileDataValue(669)).not.toBe(decodeTileDataValue(669));
 });

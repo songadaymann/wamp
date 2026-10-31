@@ -307,12 +307,12 @@ export class EditorInteractionController {
   updateCursorHighlight(): void {
     if (editorState.activeTool === 'move') {
       this.cursorGraphics?.clear();
-      this.host.triangleHandles?.draw(this.cursorGraphics);
+      this.host.triangleHandles?.draw?.(this.cursorGraphics);
       this.host.objectMove?.hover(this.scene.input.activePointer);
       return;
     }
     this.cursorGraphics?.clear();
-    this.host.triangleHandles?.draw(this.cursorGraphics);
+    this.host.triangleHandles?.draw?.(this.cursorGraphics);
     if (!this.cursorGraphics || editorState.isPlaying) {
       return;
     }
@@ -332,7 +332,7 @@ export class EditorInteractionController {
 
     if (isTriangleEditorTool()) {
       drawTriangleStampPreview(this.cursorGraphics, tileX, tileY);
-      this.host.triangleHandles?.draw(this.cursorGraphics);
+      this.host.triangleHandles?.draw?.(this.cursorGraphics);
       this.updateCursorCoords(tileX, tileY);
       return;
     }
@@ -352,17 +352,17 @@ export class EditorInteractionController {
   // they finish the stroke, shape or pan exactly like a release over the canvas.
   private triangleHandleDown(pointer: Phaser.Input.Pointer): boolean {
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    return this.host.triangleHandles?.down(world.x, world.y) ?? false;
+    return this.host.triangleHandles?.down?.(world.x, world.y) ?? false;
   }
 
   private triangleHandleMove(pointer: Phaser.Input.Pointer): boolean {
     const world = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    return this.host.triangleHandles?.move(world.x, world.y) ?? false;
+    return this.host.triangleHandles?.move?.(world.x, world.y) ?? false;
   }
 
   private readonly handleMouseUp = (pointer: Phaser.Input.Pointer, outside = false): void => {
     if (roomVideoPointerUp(this.scene)) return;
-    this.host.triangleHandles?.up();
+    this.host.triangleHandles?.up?.();
     if (!this.isTouchPointer(pointer) && this.host.objectMove?.up(pointer, outside)) return;
     if (this.handleTouchPointerUp(pointer, outside)) {
       return;

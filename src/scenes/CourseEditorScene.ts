@@ -2471,7 +2471,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       // Touch reaches Move through the touch controls, so a second finger pinches (F371).
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
-      else if (this.triangleHandles.down(pointer.worldX, pointer.worldY)) return;
+      else if (this.triangleHandles?.down(pointer.worldX, pointer.worldY)) return;
       else if (this.objectMoveController.down(pointer)) return;
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2501,7 +2501,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.triangleHandles.move(pointer.worldX, pointer.worldY)) return;
+      if (this.triangleHandles?.move(pointer.worldX, pointer.worldY)) return;
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.move(pointer); return; }
       if (this.objectMoveController.move(pointer)) return;
       if (mouseButtonsReleased(pointer) && this.hasMousePointerAction(pointer)) {
@@ -2545,7 +2545,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   // A release over a panel or outside the window arrives as 'pointerupoutside'; it
   // finishes the stroke, shape or pan like a release over the canvas.
   private handlePointerRelease(pointer: Phaser.Input.Pointer, outside = false): void {
-    this.triangleHandles.up();
+    this.triangleHandles?.up();
     if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.up(pointer, outside); return; }
     if (this.objectMoveController.up(pointer, outside)) return;
     if (this.pendingRightClickPanPointerId === pointer.id) {
@@ -2874,7 +2874,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
   private updateCursorHighlight(pointer: Phaser.Input.Pointer): void {
     this.cursorGraphics?.clear();
-    this.triangleHandles.draw(this.cursorGraphics);
+    this.triangleHandles?.draw(this.cursorGraphics);
     if (editorState.activeTool === 'move') { this.objectMoveController.hover(pointer); return; }
     if (!this.cursorGraphics) {
       return;

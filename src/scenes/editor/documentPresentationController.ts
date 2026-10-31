@@ -13,6 +13,7 @@ import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import { getRollingBallGraphic, isRollingBallObjectId, rollingBallFrame } from '../../config/rollingBall';
 import { isTrianglePieceObjectId, normalizePlacedTriangle } from '../../config/trianglePiece';
 import { placeTriangleSprite } from '../overworld/liveObjects/triangleTexture';
+import { getPlacedObjectEditorDepth } from './placedObjectDepth';
 import { createGoalMarkerFlagSprite } from '../../goals/markerFlags';
 import type { RoomGoal } from '../../goals/roomGoals';
 import type { RoomSpawnPoint } from '../../persistence/roomRepository';
@@ -189,18 +190,6 @@ export class EditorDocumentPresentationController {
         this.goalMarkerLabels.push(label);
       }
     }
-  }
-}
-
-export function getPlacedObjectEditorDepth(placed: PlacedObject): number {
-  switch (getPlacedObjectLayer(placed)) {
-    case 'background':
-      return 5;
-    case 'foreground':
-      return 60;
-    case 'terrain':
-    default:
-      return 25;
   }
 }
 
