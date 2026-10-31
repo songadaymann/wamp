@@ -11,7 +11,6 @@
     max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
     min-height: 0;
     background: var(--panel);
-    border-radius: 0;
     color: var(--text);
   }
 
@@ -130,9 +129,6 @@
       left: 8px;
       bottom: 8px;
     }
-  }
-  #room-insights-modal .history-modal-meta {
-    color: var(--text);
   }
 
   body:has(.history-modal:not(.hidden)) #editor-death-map-key {

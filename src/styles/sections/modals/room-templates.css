@@ -4,15 +4,11 @@
     max-height: calc(100dvh - 24px);
     padding: 0;
     gap: 0;
-    background: #202428;
-    border: 2px solid #575c58;
-    border-radius: 0;
-    box-shadow: none;
   }
 
   .room-template-panel .history-modal-header {
     padding: 12px 16px;
-    border-bottom: 1px solid #575c58;
+    border-bottom: 1px solid var(--wamp-sky-deep);
     flex-shrink: 0;
   }
 
@@ -34,23 +30,23 @@
     flex-direction: column;
     gap: 6px;
     padding: 8px;
-    color: #e8e6d9;
-    background: #252a2c;
-    border: 2px solid #575c58;
+    color: var(--wamp-ink);
+    background: var(--wamp-paper);
+    border: 2px solid var(--wamp-sky-deep);
     text-align: left;
     cursor: pointer;
     font: inherit;
   }
 
   .room-template-card[aria-pressed="true"] {
-    border-color: #e3bf64;
-    background: #343931;
+    border-color: var(--wamp-ink);
+    background: var(--wamp-yellow);
   }
 
   .room-template-card svg {
     width: 100%;
     aspect-ratio: 40 / 22;
-    background: #161c20;
+    background: var(--wamp-cream);
   }
 
   .room-template-card span {

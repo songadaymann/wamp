@@ -59,6 +59,7 @@ describe('player names show a keyboard focus ring (F477)', () => {
 
 describe('selected choices in Explore, Leaderboard and Profile look selected (F464)', () => {
   const skin = parse(fileURLToPath(new URL('./sections/modals/leaderboard-profile-explore/shared-modal-skin.css', import.meta.url)));
+  const paperActions = parse(fileURLToPath(new URL('./sections/modals/paper-actions.css', import.meta.url)));
   const find = (selector: string) => skin.find(rule => rule.selectors.includes(selector))!;
   const selected = find('#explore-modal .leaderboard-discover-filters .bar-btn.active');
   const tick = find('#explore-modal .leaderboard-discover-filters .bar-btn.active::before');
@@ -86,8 +87,11 @@ describe('selected choices in Explore, Leaderboard and Profile look selected (F4
     const disabled = find('#explore-modal .leaderboard-discover-filters .bar-btn.active:disabled');
     expect(disabled.selectors).toContain('#leaderboard-modal .leaderboard-difficulty-actions .bar-btn.active:disabled');
     expect(declarations(disabled)['box-shadow']).toBe('inset 0 0 0 2px var(--wamp-ink)');
-    const plainDisabled = find('#explore-modal .leaderboard-discover-filters .bar-btn:disabled');
-    expect(plainDisabled.source!.start!.line).toBeLessThan(selected.source!.start!.line);
+    const plainDisabled = paperActions.find(rule => rule.selectors.includes('#explore-modal .leaderboard-discover-filters .bar-btn:disabled'))!;
+    expect(declarations(plainDisabled)['box-shadow']).toBe('none');
+    // The common action sheet loads before the selected-state owner.
+    const imports = readFileSync(`${stylesRoot}sections/modals.css`, 'utf8');
+    expect(imports.indexOf('paper-actions.css')).toBeLessThan(imports.indexOf('leaderboard-profile-explore.css'));
     expect(skin.some(rule => rule.selectors.some(selector => selector.includes('.active[data-explore-difficulty')))).toBe(false);
     expect(skin.some(rule => rule.selectors.includes('#leaderboard-modal .leaderboard-quality-actions .bar-btn.active'))).toBe(false);
   });

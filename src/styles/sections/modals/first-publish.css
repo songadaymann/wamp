@@ -12,11 +12,6 @@
     max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
     min-height: 0;
     padding: 16px;
-    border: 3px solid var(--wamp-sky);
-    border-radius: 0;
-    background: var(--wamp-cream);
-    color: var(--wamp-ink);
-    box-shadow: var(--shadow-6);
   }
 
   #first-publish-modal .history-modal-header {
@@ -29,7 +24,6 @@
   #first-publish-modal .history-modal-title {
     margin: 0;
     font-size: var(--ui-text-title, 19px);
-    color: var(--wamp-ink);
     line-height: 1.4;
   }
 
@@ -59,16 +53,6 @@
     border-radius: 0;
     color: var(--wamp-ink);
     background: var(--wamp-white);
-  }
-
-  #first-publish-modal .bar-btn {
-    min-height: 44px;
-    min-width: 44px;
-    border-radius: 0;
-    color: var(--wamp-ink);
-    background: #ffe093;
-    border: 2px solid var(--wamp-ink);
-    opacity: 1;
   }
 
   #first-publish-modal .bar-btn:hover,

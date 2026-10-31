@@ -5,7 +5,7 @@
     "src/styles/sections/editor/music.css": 1,
     "src/styles/sections/modals/leaderboard-profile-explore/explore-queues.css": 1,
     "src/styles/sections/modals/rewards-xp.css": 4,
-    "src/styles/sections/modals/room-course.css": 6,
+    "src/styles/sections/modals/room-course.css": 2,
     "src/styles/sections/responsive/phone-chrome.css": 1,
     "src/styles/sections/responsive/phone-editor-dock.css": 9,
     "src/styles/sections/responsive/phone-editor-music.css": 4,

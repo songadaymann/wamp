@@ -6,6 +6,22 @@
     gap: 16px;
   }
 
+  /* Shared default for a new dialog; distinctive action colors stay local. */
+  .history-modal-header .bar-btn {
+    min-height: 34px;
+    padding: 8px 12px 7px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    background: var(--wamp-sky);
+    color: var(--wamp-black);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+    text-transform: uppercase;
+    box-shadow: var(--shadow-3);
+  }
+
   .history-modal-header-actions {
     display: flex;
     flex-wrap: wrap;
@@ -18,44 +34,53 @@
   }
 
   .history-modal-kicker {
-    color: var(--text-muted);
-    font-size: var(--ui-text-small, 10px);
-    letter-spacing: 1px;
+    color: var(--wamp-sky-deep);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-small, 11px);
+    letter-spacing: 0.04em;
+    line-height: 1.3;
     text-transform: uppercase;
   }
 
   .history-modal-title {
-    margin-top: 4px;
-    font-size: var(--ui-text-title, 20px);
+    margin-top: 6px;
+    color: var(--wamp-ink);
+    font-family: var(--font-display);
+    font-size: var(--ui-text-title, 16px);
     font-weight: 400;
-    color: var(--text);
+    line-height: 1.25;
+    font-synthesis: none;
+    -webkit-font-smoothing: none;
   }
 
   .history-modal-meta {
     margin-top: 6px;
-    color: var(--text-muted);
-    font-size: var(--ui-text-small, 11px);
-    line-height: 1.5;
+    color: var(--wamp-ink);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.45;
   }
 
   .history-modal-meta a {
-    color: #8fd8ff;
+    color: var(--wamp-sky-deep);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
   .history-modal-meta a:hover {
-    color: #b7e9ff;
+    color: #1d3850;
   }
 
   .history-modal-error {
-    padding: 8px 10px;
-    background: rgba(255, 107, 107, 0.12);
-    border: 1px solid rgba(255, 107, 107, 0.35);
-    border-radius: 4px;
-    color: #ffd7d7;
-    font-size: var(--ui-text-small, 11px);
-    line-height: 1.4;
+    padding: 12px;
+    border: 2px solid var(--wamp-ink);
+    border-radius: 0;
+    background: var(--wamp-red);
+    color: var(--wamp-ink);
+    font-family: var(--font-ui);
+    font-size: var(--ui-text-body, 12px);
+    line-height: 1.45;
+    box-shadow: var(--shadow-3);
   }
 
   .history-version-list {

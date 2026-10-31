@@ -115,9 +115,7 @@
     border-color: var(--wamp-ink);
   }
 
-  .leaderboard-row.leaderboard-week-row {
-    grid-template-columns: 32px minmax(0, 1fr) max-content;
-  }
+  .leaderboard-row.leaderboard-week-row,
   body[data-device-class='phone'] .leaderboard-row.leaderboard-global-row.leaderboard-week-row {
     grid-template-columns: 32px minmax(0, 1fr) max-content;
   }
