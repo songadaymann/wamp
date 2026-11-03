@@ -31,11 +31,22 @@ import {
 } from '../../config';
 import { LiveUtilitySession, presentUtilityObject } from './liveObjects/liveUtilitySession';
 import { placedObjectRuntimeDepth, syncGravityPresentation } from './liveObjects/objectPresentation';
+import {
+  isFloorTriangle,
+  normalizePlacedTriangle,
+  pointInTriangle,
+  separationFromTriangle,
+  triangleHypotenuseYAt,
+  triangleFloorSurfaceYAt,
+  triangleSupportsFeetAt,
+  triangleVertices,
+} from '../../config/trianglePiece';
 import type { RoomCoordinates, RoomSnapshot } from '../../persistence/roomModel';
 import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
   SWORDSMAN_AI_OBJECT_ID,
 } from '../../enemies/swordsmanAi';
+import { GHOST_OBJECT_ID } from '../../enemies/ghost';
 import {
   isPoliceEnemyObjectId,
 } from '../../enemies/policeEnemy';
@@ -1521,9 +1532,29 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
     liveObject.runtime.elapsedMs += delta;
-    const nextY =
-      liveObject.runtime.baseY +
-      Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
+    const wave = Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
+    let nextY = liveObject.runtime.baseY + wave;
+    let onSlope = false;
+    let hitTriangleVertical = false;
+    if (liveObject.config.id !== GHOST_OBJECT_ID && liveObject.config.collidesWithWorld !== false) {
+      const resolved = this.flyingEnemyResolveTriangles(room, liveObject, body, nextY);
+      if (resolved.hitVerticalWall) {
+        hitTriangleVertical = true;
+        const pushedX = liveObject.sprite.x + resolved.pushX;
+        if (isDynamicArcadeBody(body)) {
+          body.reset(pushedX, liveObject.sprite.y);
+        } else {
+          liveObject.sprite.x = pushedX;
+        }
+        // Face out of the vertical leg — same as hitting a tile wall.
+        liveObject.runtime.directionX = resolved.pushX < 0 ? -1 : 1;
+      }
+      if (resolved.rideY != null) {
+        nextY = resolved.rideY;
+        liveObject.runtime.baseY = nextY;
+        onSlope = resolved.rideY < liveObject.sprite.y - 0.5;
+      }
+    }
 
     if (isDynamicArcadeBody(body)) {
       if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
@@ -1537,7 +1568,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
         (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
 
-      if (touchingHorizontalObstacle || reachedBounds) {
+      // Climbing the hyp must not flip; triangle vertical legs already flipped above.
+      if (
+        !hitTriangleVertical &&
+        ((touchingHorizontalObstacle && !onSlope) || reachedBounds)
+      ) {
         const clampedX = Phaser.Math.Clamp(liveObject.sprite.x, bounds.left, bounds.right);
         if (clampedX !== liveObject.sprite.x) {
           body.reset(clampedX, liveObject.sprite.y);
@@ -1546,12 +1581,16 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
 
       const deltaSeconds = Math.max(delta / 1000, 1 / 60);
-      const maxVerticalSpeed = Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
-      let velocityY = Phaser.Math.Clamp(
-        (nextY - liveObject.sprite.y) / deltaSeconds,
-        -maxVerticalSpeed,
-        maxVerticalSpeed
-      );
+      const maxVerticalSpeed = onSlope
+        ? Math.max(speed * 3, 96)
+        : Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
+      let velocityY = onSlope || waveAmplitude > 0
+        ? Phaser.Math.Clamp(
+          (nextY - liveObject.sprite.y) / deltaSeconds,
+          -maxVerticalSpeed,
+          maxVerticalSpeed,
+        )
+        : 0;
       const movingIntoVerticalObstacle =
         (velocityY < 0 && (body.blocked.up || body.touching.up)) ||
         (velocityY > 0 && (body.blocked.down || body.touching.down));
@@ -1681,9 +1720,33 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const reachedBounds =
       (tangentPosition <= bounds.min && axisDirection < 0) ||
       (tangentPosition >= bounds.max && axisDirection > 0);
-    const onFloor = bodyIsBlockedInGravityDirection(body, gravityDirection);
+    const onFloor =
+      bodyIsBlockedInGravityDirection(body, gravityDirection)
+      || (
+        gravityDirection === 'down'
+        && this.hasTriangleFloorSupportAtWorldPoint(room, body.center.x, body.bottom)
+      );
+    // Wall-assisted crest only. Flush ramp→floor seating happens in utility
+    // support along the hypotenuse so walkers never dip off the tip.
+    if (
+      touchingWall
+      && gravityDirection === 'down'
+      && this.tryStepOntoTriangleLanding(room, liveObject, body, true)
+    ) {
+      return;
+    }
+
+    const onTriangleFloor =
+      gravityDirection === 'down'
+      && (
+        this.hasTriangleFloorSupportAtWorldPoint(room, body.center.x, body.bottom)
+        || this.hasTriangleFloorNearWorldPoint(room, body.center.x, body.bottom, 4, 4)
+      );
+    // Still on a ramp: do not treat the downhill tip as a ledge. Support ahead
+    // already accepts a descending hypotenuse; this covers mid-slope frames.
     const missingGroundAhead =
       onFloor &&
+      !onTriangleFloor &&
       this.groundEnemyAvoidsEdges(liveObject.config.id) &&
       !this.hasGroundEnemySupportOrSpecialTileAhead(
         room,
@@ -1695,6 +1758,87 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     if (touchingWall || reachedBounds || missingGroundAhead) {
       liveObject.runtime.directionX *= -1;
     }
+  }
+
+  /**
+   * When a ground enemy rides a floor triangle into a tile platform, lift onto
+   * the landing before the feet leave the hypotenuse (and before a tile face
+   * reads as a wall). Keeps horizontal speed so the climb does not hitch.
+   */
+  private tryStepOntoTriangleLanding(
+    room: RoomSnapshot,
+    liveObject: LoadedRoomObject,
+    body: Phaser.Physics.Arcade.Body,
+    touchingWall = false,
+  ): boolean {
+    const directionX = liveObject.runtime.directionX < 0 ? -1 : 1;
+    const leadFootX = directionX > 0 ? body.right - 1 : body.left + 1;
+    const onTriangle =
+      this.hasTriangleFloorSupportAtWorldPoint(room, body.center.x, body.bottom)
+      || this.hasTriangleFloorSupportAtWorldPoint(room, leadFootX, body.bottom)
+      || this.hasTriangleFloorNearWorldPoint(
+        room,
+        body.center.x,
+        body.bottom,
+        4,
+        TILE_SIZE,
+      );
+    if (!onTriangle && !touchingWall) {
+      return false;
+    }
+
+    const probeXs = [
+      directionX > 0 ? body.right + 1 : body.left - 1,
+      directionX > 0 ? body.right + 4 : body.left - 4,
+      leadFootX,
+    ];
+    let landingTop: number | null = null;
+    for (const probeX of probeXs) {
+      // Slack below the feet catches a one-frame dip off the tip.
+      const top = this.findSolidTerrainTopNear(room, probeX, body.bottom + 6, TILE_SIZE + 4);
+      if (top == null) continue;
+      if (landingTop == null || top > landingTop) landingTop = top;
+    }
+    if (landingTop == null) return false;
+    const rise = body.bottom - landingTop;
+    if (rise <= 0.05 || rise > TILE_SIZE + 2) return false;
+    // Proactive tip seats only when already near the landing. A full-tile lift
+    // mid-ramp looks like a forward jump.
+    if (!touchingWall && rise > 6) return false;
+
+    const keepVx = body.velocity.x;
+    // Vertical seat only — any large X teleport reads as a forward hop.
+    const nextX = liveObject.sprite.x + directionX;
+    const nextY = liveObject.sprite.y - rise;
+    liveObject.sprite.setPosition(nextX, nextY);
+    body.reset(nextX, nextY);
+    body.setVelocity(keepVx, 0);
+    return true;
+  }
+
+  private findSolidTerrainTopNear(
+    room: RoomSnapshot,
+    worldX: number,
+    feetY: number,
+    maxRise: number,
+  ): number | null {
+    const origin = this.options.getRoomOrigin(room.coordinates);
+    const localX = Math.floor((worldX - origin.x) / TILE_SIZE);
+    if (localX < 0 || localX >= ROOM_WIDTH) return null;
+    let bestTop: number | null = null;
+    const minLocalY = Math.floor((feetY - maxRise - origin.y) / TILE_SIZE);
+    const maxLocalY = Math.floor((feetY - origin.y) / TILE_SIZE);
+    for (let localY = minLocalY; localY <= maxLocalY; localY += 1) {
+      if (localY < 0 || localY >= ROOM_HEIGHT) continue;
+      // Probe mid-tile so top-inset profiles still count as a landing.
+      if (!terrainTileCollidesAtLocalPixel(room, localX, localY, TILE_SIZE * 0.5)) continue;
+      const top = origin.y + localY * TILE_SIZE;
+      if (top >= feetY) continue;
+      if (feetY - top > maxRise) continue;
+      // Closest landing under the feet (largest top in y-down space).
+      if (bestTop == null || top > bestTop) bestTop = top;
+    }
+    return bestTop;
   }
 
   private canActorPushPushableByContact(liveObject: LoadedRoomObject): boolean {
@@ -1855,10 +1999,263 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     leadPx = 4,
   ): boolean {
     const probe = this.getGroundEnemySupportProbePoint(body, directionX, gravityDirection, leadPx);
-    return (
+    if (
       this.hasSolidTerrainAtWorldPoint(room, probe.x, probe.y) ||
       this.hasEdgeSafeSpecialTileAtWorldPoint(room, probe.x, probe.y)
-    );
+    ) {
+      return true;
+    }
+    // Triangle floors are not tile solids. A ramp against a platform edge often
+    // sits below the current feet, so accept a surface within one tile drop.
+    const rightVector = getGravityRightVector(gravityDirection);
+    const gravityVector = getGravityVector(gravityDirection);
+    const tangentHalfExtent = rightVector.x !== 0 ? body.halfWidth : body.halfHeight;
+    const feetX =
+      body.center.x + rightVector.x * directionX * (tangentHalfExtent + leadPx);
+    const feetY =
+      body.center.y
+      + rightVector.y * directionX * (tangentHalfExtent + leadPx)
+      + gravityVector.y * body.halfHeight
+      + gravityVector.x * body.halfWidth;
+    if (
+      this.hasTriangleFloorSupportAtWorldPoint(room, feetX, feetY)
+      || (
+        gravityDirection === 'down'
+        && this.hasTriangleFloorNearWorldPoint(room, feetX, feetY, 4, TILE_SIZE + 2)
+      )
+    ) {
+      return true;
+    }
+    // Descending a ramp onto a lower tile: the ahead probe sits above the
+    // landing, so look down a tile for a solid top.
+    if (gravityDirection === 'down') {
+      return this.findSolidTerrainTopNear(room, feetX, feetY + TILE_SIZE + 2, TILE_SIZE + 2) != null;
+    }
+    return false;
+  }
+
+  private hasTriangleFloorSupportAtWorldPoint(
+    room: RoomSnapshot,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const origin = this.options.getRoomOrigin(room.coordinates);
+    for (const placed of room.placedObjects) {
+      const geometry = normalizePlacedTriangle(placed);
+      if (!geometry) continue;
+      if (
+        triangleSupportsFeetAt(
+          origin.x + geometry.anchorX,
+          origin.y + geometry.anchorY,
+          geometry.legX,
+          geometry.legY,
+          worldX,
+          worldY,
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True when a floor triangle's hypotenuse is under worldX and within
+   * [feetY - maxRise, feetY + maxDrop]. Used for edge probes onto descending
+   * ramps and for landing transfers that slightly overshoot the tip.
+   */
+  private hasTriangleFloorNearWorldPoint(
+    room: RoomSnapshot,
+    worldX: number,
+    feetY: number,
+    maxRise: number,
+    maxDrop: number,
+  ): boolean {
+    const origin = this.options.getRoomOrigin(room.coordinates);
+    for (const placed of room.placedObjects) {
+      const geometry = normalizePlacedTriangle(placed);
+      if (!geometry) continue;
+      const surfaceY = triangleFloorSurfaceYAt(
+        origin.x + geometry.anchorX,
+        origin.y + geometry.anchorY,
+        geometry.legX,
+        geometry.legY,
+        worldX,
+      );
+      if (surfaceY == null) continue;
+      if (surfaceY >= feetY - maxRise && surfaceY <= feetY + maxDrop) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Flyer/swim vs triangles:
+   * - Vertical legs are walls (reverse + eject).
+   * - Hypotenuse ejects along Y (floor lifts up) and never phases through.
+   * - Open air above a floor hyp does not suck the flyer down.
+   */
+  private flyingEnemyResolveTriangles(
+    room: RoomSnapshot,
+    liveObject: LoadedRoomObject,
+    body: ArcadeObjectBody,
+    proposedSpriteY: number,
+  ): { rideY: number | null; hitVerticalWall: boolean; pushX: number } {
+    if (!isDynamicArcadeBody(body)) {
+      return { rideY: null, hitVerticalWall: false, pushX: 0 };
+    }
+    const origin = this.options.getRoomOrigin(room.coordinates);
+    const bottomOffset = body.bottom - liveObject.sprite.y;
+    const topOffset = body.top - liveObject.sprite.y;
+    const probeBottom = Math.max(proposedSpriteY + bottomOffset, body.bottom);
+    const probeTop = Math.min(proposedSpriteY + topOffset, body.top);
+    const dirX = liveObject.runtime.directionX >= 0 ? 1 : -1;
+    const maxPenetrate = Math.max(body.height + body.width, TILE_SIZE * 2);
+    const floorClearance = 2;
+    const probeXs = [
+      body.center.x,
+      body.center.x + dirX * body.halfWidth,
+      body.center.x + dirX * (body.halfWidth + 2),
+    ];
+    const samplePoints = [
+      { x: body.center.x, y: body.center.y },
+      { x: body.left + 1, y: body.center.y },
+      { x: body.right - 1, y: body.center.y },
+      { x: body.center.x, y: body.bottom - 1 },
+      { x: body.center.x, y: body.top + 1 },
+      { x: body.left + 1, y: body.bottom - 1 },
+      { x: body.right - 1, y: body.bottom - 1 },
+    ];
+
+    let bestFloorLiftY: number | null = null;
+    let bestCeilingPushY: number | null = null;
+    let hitVerticalWall = false;
+    let pushX = 0;
+
+    for (const placed of room.placedObjects) {
+      const geometry = normalizePlacedTriangle(placed);
+      if (!geometry || geometry.legX === 0) continue;
+      const anchorX = origin.x + geometry.anchorX;
+      const anchorY = origin.y + geometry.anchorY;
+      const verts = triangleVertices(anchorX, anchorY, geometry.legX, geometry.legY);
+      const floor = isFloorTriangle(geometry.legY);
+      const spanMin = Math.min(anchorX, anchorX + geometry.legX);
+      const spanMax = Math.max(anchorX, anchorX + geometry.legX);
+      const clampedX = Phaser.Math.Clamp(body.center.x, spanMin, spanMax);
+
+      let bestSep: { dx: number; dy: number } | null = null;
+      let bestSepLen = Number.POSITIVE_INFINITY;
+      for (const point of samplePoints) {
+        const separation = separationFromTriangle(
+          anchorX,
+          anchorY,
+          geometry.legX,
+          geometry.legY,
+          point.x,
+          point.y,
+        );
+        if (!separation) continue;
+        const length = Math.hypot(separation.dx, separation.dy);
+        if (length < bestSepLen) {
+          bestSep = separation;
+          bestSepLen = length;
+        }
+      }
+
+      const inside =
+        pointInTriangle(
+          { x: body.center.x, y: body.center.y },
+          verts.rightAngle,
+          verts.horizontal,
+          verts.vertical,
+        ) ||
+        pointInTriangle(
+          { x: body.center.x, y: probeBottom - 1 },
+          verts.rightAngle,
+          verts.horizontal,
+          verts.vertical,
+        ) ||
+        pointInTriangle(
+          { x: body.center.x, y: probeTop + 1 },
+          verts.rightAngle,
+          verts.horizontal,
+          verts.vertical,
+        );
+
+      // Vertical leg only (ny ≈ 0). Steep hyps also have large |dx| — do not
+      // treat those as walls or climbing ramps would flip mid-slope.
+      if (
+        bestSep &&
+        Math.abs(bestSep.dy) < 0.35 &&
+        Math.abs(bestSep.dx) > 0.5 &&
+        bestSep.dx * dirX < 0
+      ) {
+        hitVerticalWall = true;
+        if (Math.abs(bestSep.dx) > Math.abs(pushX)) {
+          pushX = bestSep.dx;
+        }
+        continue;
+      }
+
+      let deepestSurface: number | null = null;
+      for (const probeX of probeXs) {
+        const surface = triangleHypotenuseYAt(
+          anchorX,
+          anchorY,
+          geometry.legX,
+          geometry.legY,
+          probeX,
+        );
+        if (surface == null) continue;
+        if (floor) {
+          const depth = probeBottom - surface;
+          if (depth > -floorClearance - 1 && depth < maxPenetrate) {
+            deepestSurface =
+              deepestSurface == null ? surface : Math.min(deepestSurface, surface);
+          }
+        } else {
+          const depth = surface - probeTop;
+          if (depth > -floorClearance - 1 && depth < maxPenetrate) {
+            deepestSurface =
+              deepestSurface == null ? surface : Math.max(deepestSurface, surface);
+          }
+        }
+      }
+
+      if (inside || bestSep) {
+        const hypAtBody =
+          triangleHypotenuseYAt(anchorX, anchorY, geometry.legX, geometry.legY, body.center.x) ??
+          triangleHypotenuseYAt(anchorX, anchorY, geometry.legX, geometry.legY, clampedX);
+        if (hypAtBody != null) {
+          deepestSurface =
+            deepestSurface == null
+              ? hypAtBody
+              : floor
+                ? Math.min(deepestSurface, hypAtBody)
+                : Math.max(deepestSurface, hypAtBody);
+        }
+      }
+
+      if (deepestSurface == null) continue;
+
+      if (floor) {
+        const spriteY = deepestSurface - bottomOffset - floorClearance;
+        // Open-air skim above the hyp must not suck down — but anything already
+        // inside the solid always ejects onto the hyp (no phasing).
+        if (!inside && !bestSep && spriteY > proposedSpriteY + 0.5) continue;
+        bestFloorLiftY =
+          bestFloorLiftY == null ? spriteY : Math.min(bestFloorLiftY, spriteY);
+      } else {
+        const spriteY = deepestSurface - topOffset + floorClearance;
+        if (!inside && !bestSep && spriteY < proposedSpriteY - 0.5) continue;
+        bestCeilingPushY =
+          bestCeilingPushY == null ? spriteY : Math.max(bestCeilingPushY, spriteY);
+      }
+    }
+
+    const rideY = bestFloorLiftY ?? bestCeilingPushY ?? null;
+    return { rideY, hitVerticalWall, pushX };
   }
 
   private getGroundEnemySupportProbePoint(

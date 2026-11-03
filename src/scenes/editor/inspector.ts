@@ -50,7 +50,18 @@ import {
 import { isRollingBallObjectId } from '../../config/rollingBall';
 import { isTrianglePieceObjectId, parseHexColor, DEFAULT_TRIANGLE_FILL, DEFAULT_TRIANGLE_STROKE } from '../../config/trianglePiece';
 import { isTriangleEditorTool } from './editorToolSelection';
+import { watchTriangleSelectionRelease } from './triangleSelectionRelease';
 import { captureTriangleStamp, triangleStampStatus } from './triangleStamp';
+import {
+  activeTriangleLayers,
+  canTurnOffTriangleLayer,
+  closeTriangleTileSession,
+  disableTriangleTileFill,
+  enableTriangleTileFill,
+  installTriangleTileSync,
+  setTriangleSlopeOnly,
+  noteTriangleSelection,
+} from './triangleTileEditor';
 import {
   buildBallInspectorState,
   buildContainerInspectorState,
@@ -111,7 +122,15 @@ export class EditorInspectorController {
     private readonly scene: Phaser.Scene,
     private readonly editRuntime: EditorEditRuntime,
     private readonly renderInspector: (state: EditorInspectorState) => void,
-  ) {}
+  ) {
+    watchTriangleSelectionRelease(() => this.releaseTriangleSelection());
+    installTriangleTileSync((fields) => {
+      if (!this.scene.sys.isActive() || editorState.trianglePaintMode) return false;
+      const focused = this.getFocusedTriangle();
+      if (!focused?.instanceId) return false;
+      return this.editRuntime.utilityEdits.setTriangleTiles(focused.instanceId, fields);
+    });
+  }
 
   isConnectingPressurePlate(): boolean {
     return this.connectingPressurePlateInstanceId !== null;
@@ -356,6 +375,7 @@ export class EditorInspectorController {
     );
     if (clickedTriangle?.instanceId) {
       this.pinInspector('triangle', clickedTriangle.instanceId);
+      noteTriangleSelection(clickedTriangle);
       this.triangleStatusText = null;
       this.renderInspectorUi();
       return true;
@@ -952,6 +972,16 @@ export class EditorInspectorController {
     this.pinnedInspector = { kind, instanceId };
   }
 
+  private releaseTriangleSelection(): void {
+    const pinned = this.pinnedInspector?.kind === 'triangle';
+    if (pinned) {
+      this.pinnedInspector = null;
+      this.triangleStatusText = null;
+    }
+    if (!isTriangleEditorTool()) closeTriangleTileSession();
+    if (pinned && this.scene.sys.isActive()) this.renderInspectorUi();
+  }
+
   private clearPinnedInspector(): void {
     this.connectingPressurePlateInstanceId = null;
     this.pinnedInspector = null;
@@ -1041,6 +1071,49 @@ export class EditorInspectorController {
     this.setFocusedBallFlag((id) => this.editRuntime.utilityEdits.setRollingBallPushable(id, enabled));
   }
 
+  setFocusedTriangleTileFill(enabled: boolean): void {
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    if (!enabled && !canTurnOffTriangleLayer(activeTriangleLayers(focused), 'tile')) {
+      this.renderInspectorUi();
+      return;
+    }
+    const fields = enabled ? enableTriangleTileFill(focused) : disableTriangleTileFill(focused);
+    if (focused?.instanceId) this.editRuntime.utilityEdits.setTriangleTiles(focused.instanceId, fields);
+    this.renderInspectorUi();
+  }
+
+  setFocusedTriangleStrokeEnabled(enabled: boolean): void {
+    this.setTriangleDrawFlag('stroke', enabled);
+  }
+
+  setFocusedTriangleBackgroundEnabled(enabled: boolean): void {
+    this.setTriangleDrawFlag('background', enabled);
+  }
+
+  private setTriangleDrawFlag(layer: 'stroke' | 'background', enabled: boolean): void {
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    if (!enabled && !canTurnOffTriangleLayer(activeTriangleLayers(focused), layer)) {
+      this.renderInspectorUi();
+      return;
+    }
+    updateEditorState(layer === 'stroke' ? { triangleStampStrokeOn: enabled } : { triangleStampBackgroundOn: enabled });
+    if (focused?.instanceId) {
+      this.editRuntime.utilityEdits.setTriangleDrawFlags(
+        focused.instanceId,
+        layer === 'stroke' ? enabled : null,
+        layer === 'background' ? enabled : null,
+      );
+    }
+    this.renderInspectorUi();
+  }
+
+  setFocusedTriangleSlopeOnly(enabled: boolean): void {
+    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
+    const fields = setTriangleSlopeOnly(focused, enabled);
+    if (focused?.instanceId) this.editRuntime.utilityEdits.setTriangleTiles(focused.instanceId, fields);
+    this.renderInspectorUi();
+  }
+
   setFocusedTriangleFill(color: string): void {
     updateEditorState({
       triangleStampFill: parseHexColor(color, editorState.triangleStampFill || DEFAULT_TRIANGLE_FILL),
@@ -1061,13 +1134,15 @@ export class EditorInspectorController {
 
   setTriangleOrientation(flipX: boolean, flipY: boolean): void {
     updateEditorState({ triangleStampFlipX: flipX, triangleStampFlipY: flipY });
-    const focused = editorState.trianglePaintMode ? null : this.getFocusedTriangle();
-    if (focused?.instanceId) {
-      this.editRuntime.utilityEdits.setTriangleOrientation(focused.instanceId, flipX, flipY);
-      const next = this.getFocusedTriangle();
-      if (next) captureTriangleStamp(next);
-    }
     this.renderInspectorUi();
+  }
+
+  refreshAfterHistory(): void {
+    if (this.pinnedInspector?.kind === 'triangle' && !this.getFocusedTriangle()) {
+      this.pinnedInspector = null;
+      this.triangleStatusText = null;
+    }
+    if (this.scene.sys.isActive()) this.renderInspectorUi();
   }
 
   handleTriangleToolAction(worldX: number, worldY: number): boolean {
@@ -1089,6 +1164,7 @@ export class EditorInspectorController {
     if (clicked?.instanceId) {
       this.pinInspector('triangle', clicked.instanceId);
       captureTriangleStamp(clicked);
+      noteTriangleSelection(clicked);
       this.triangleStatusText = null;
       this.renderInspectorUi();
       return true;

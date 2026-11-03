@@ -44,6 +44,7 @@ import {
   TILESETS,
   TILE_SIZE,
   editorState, updateEditorState,
+  isTrianglePieceObjectId,
   resetEditorLayerVisibility,
   type PlacedObject,
 } from '../config';
@@ -339,6 +340,29 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.updateToolUi();
   };
 
+  private readonly handleHistoryShortcutCapture = (event: KeyboardEvent): void => {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    const primaryModifier = event.metaKey || event.ctrlKey;
+    const undoRequested = primaryModifier && key === 'z';
+    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
+    if (!undoRequested && !ctrlRedoRequested) {
+      return;
+    }
+    if (isNativeTextEditingFocused()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
+      this.redoAction();
+    } else {
+      this.undoAction();
+    }
+  };
+
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
     if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || event.defaultPrevented) {
       return;
@@ -346,25 +370,16 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     const key = event.key.toLowerCase();
     const primaryModifier = event.metaKey || event.ctrlKey;
-    const undoRequested = primaryModifier && key === 'z';
-    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
 
-    if (undoRequested || ctrlRedoRequested) {
-      if (isNativeTextEditingFocused()) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
-        this.redoAction();
-      } else {
-        this.undoAction();
-      }
+    if (isTextInputFocused()) {
       return;
     }
 
-    if (isTextInputFocused()) {
+    if (key === 'delete' || key === 'backspace') {
+      if (this.deletePinnedTriangle()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
 
@@ -872,6 +887,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.setupPointerControls();
     this.setupKeyboard();
     window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.addEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.renderMusicUi();
     void this.openFromData(data);
   }
@@ -1508,6 +1524,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     slice.runtime.undo();
+    this.objectInspectorController.refreshAfterHistory();
     this.renderUi();
   }
 
@@ -1519,6 +1536,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     }
 
     slice.runtime.redo();
+    this.objectInspectorController.refreshAfterHistory();
     this.renderUi();
   }
 
@@ -2471,7 +2489,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       // Touch reaches Move through the touch controls, so a second finger pinches (F371).
       if (pointer.wasTouch && !this.musicModeActive) { this.touchControls.down(pointer); return; }
       if (this.pointerRequestsPan(pointer)) this.objectMoveController.stopGesture();
-      else if (this.triangleHandles?.down(pointer.worldX, pointer.worldY)) return;
+      else if (pointer.leftButtonDown() && this.triangleHandles?.down(pointer.worldX, pointer.worldY)) return;
       else if (this.objectMoveController.down(pointer)) return;
       if (this.musicModeActive && this.pointerRequestsPan(pointer)) {
         return;
@@ -2719,13 +2737,22 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.objectInspectorController.handleObjectPlaced(placed);
   }
 
-  private removeObjectAt(slice: CourseRoomSlice, worldX: number, worldY: number): void {
-    const removed = slice.runtime.removeObjectAt(worldX, worldY);
+  private removeObjectAt(
+    slice: CourseRoomSlice,
+    worldX: number,
+    worldY: number,
+    filter?: (placed: PlacedObject) => boolean,
+  ): void {
+    const removed = slice.runtime.removeObjectAt(worldX, worldY, filter);
     if (!removed) {
       return;
     }
 
     this.objectInspectorController.handleObjectRemoved(slice.roomId, removed);
+  }
+
+  private deletePinnedTriangle(): boolean {
+    return this.objectInspectorController.deletePinnedTriangle();
   }
 
   private handleSecondaryPointerClick(pointer: Phaser.Input.Pointer): void {
@@ -2741,6 +2768,12 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.selectRoomById(slice.roomId);
     const localTile = courseLocalTile(pointer.worldX, pointer.worldY, slice.origin);
     if (!localTile) {
+      return;
+    }
+
+    if (isTriangleEditorTool()) {
+      this.removeObjectAt(slice, pointer.worldX, pointer.worldY, (placed) => isTrianglePieceObjectId(placed.id));
+      this.renderUi();
       return;
     }
 
@@ -3133,6 +3166,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     this.draftLifecycle = null;
     this.musicRoomFit.stop();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.removeEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.game.canvas.removeEventListener('contextmenu', this.handleCanvasContextMenu);

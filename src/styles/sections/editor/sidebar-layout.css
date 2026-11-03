@@ -2,7 +2,7 @@
   /* ── Sidebar ── */
 
   body[data-app-mode='editor']:not([data-device-class='phone']) {
-    --app-sidebar-width: clamp(340px, 34vw, 420px);
+    --app-sidebar-width: clamp(380px, 34vw, 420px);
   }
   #sidebar {
     grid-column: 1;

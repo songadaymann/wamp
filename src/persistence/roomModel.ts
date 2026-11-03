@@ -715,6 +715,15 @@ function utilityObjectFields(placed: {
   triangleLegY?: number | null;
   triangleFill?: string | null;
   triangleStroke?: string | null;
+  instanceId?: string | null;
+  triangleTileFill?: boolean | null;
+  triangleTileMode?: string | null;
+  triangleTileSlopeOnly?: boolean | null;
+  triangleTileFlipX?: string | null;
+  triangleTileFlipY?: string | null;
+  triangleTileGids?: readonly number[] | null;
+  triangleStrokeOn?: boolean | null;
+  triangleBackgroundOn?: boolean | null;
 }) {
   const ball = typeof placed.id === 'string' ? normalizePlacedRollingBall({ ...placed, id: placed.id }) : null;
   const triangle = typeof placed.id === 'string' && typeof placed.x === 'number' && typeof placed.y === 'number'
@@ -731,6 +740,14 @@ function utilityObjectFields(placed: {
     triangleLegY: triangle?.legY ?? null,
     triangleFill: triangle?.fill ?? null,
     triangleStroke: triangle?.stroke ?? null,
+    triangleTileFill: triangle ? triangle.tiles.fill : null,
+    triangleTileMode: triangle ? triangle.tiles.mode : null,
+    triangleTileSlopeOnly: triangle ? triangle.tiles.slopeOnly : null,
+    triangleTileFlipX: triangle ? triangle.tiles.flipX : null,
+    triangleTileFlipY: triangle ? triangle.tiles.flipY : null,
+    triangleTileGids: triangle ? triangle.tiles.gids : null,
+    triangleStrokeOn: triangle ? triangle.strokeOn : null,
+    triangleBackgroundOn: triangle ? triangle.backgroundOn : null,
   };
 }
 

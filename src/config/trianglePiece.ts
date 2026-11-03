@@ -1,4 +1,5 @@
 import { TILE_SIZE } from './room';
+import { normalizeTriangleTilePaint, triangleTileTextureToken, type TriangleTilePaint } from './triangleTileFill';
 
 export const TRIANGLE_PIECE_OBJECT_ID = 'triangle_piece';
 const TRIANGLE_MIN_LEG = TILE_SIZE;
@@ -17,6 +18,9 @@ export interface TriangleGeometry {
   legY: number;
   fill: string;
   stroke: string;
+  strokeOn: boolean;
+  backgroundOn: boolean;
+  tiles: TriangleTilePaint;
 }
 
 export interface TrianglePoint {
@@ -90,6 +94,60 @@ export function isButtStompSlideTriangle(legX: number, legY: number): boolean {
 function downhillSignX(legX: number, legY: number): -1 | 1 {
   if (legX === 0) return 1;
   return -legY / legX >= 0 ? 1 : -1;
+}
+
+export function triangleDownhillSignX(legX: number, legY: number): -1 | 1 {
+  return downhillSignX(legX, legY);
+}
+
+/** High end of a floor hypotenuse (the crest that can meet a tile landing). */
+export function triangleFloorHighTip(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+): { x: number; y: number } | null {
+  if (!isFloorTriangle(legY) || legX === 0) return null;
+  const horizontal = { x: anchorX + legX, y: anchorY };
+  const vertical = { x: anchorX, y: anchorY + legY };
+  return horizontal.y <= vertical.y ? horizontal : vertical;
+}
+
+/** Low end of a ceiling hypotenuse (where a rising ceiling ramp meets a flat hang). */
+export function triangleCeilingLowTip(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+): { x: number; y: number } | null {
+  if (isFloorTriangle(legY) || legX === 0) return null;
+  const horizontal = { x: anchorX + legX, y: anchorY };
+  const vertical = { x: anchorX, y: anchorY + legY };
+  return horizontal.y >= vertical.y ? horizontal : vertical;
+}
+
+/**
+ * Surface Y for feet on the hypotenuse, or the flush crest when feet have
+ * stepped just past the high tip onto a matching tile landing.
+ */
+export function triangleFloorSurfaceOrFlushTip(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+  feetX: number,
+  flushLandingTop: number | null,
+  maxPastTip = TILE_SIZE,
+): number | null {
+  const direct = triangleFloorSurfaceYAt(anchorX, anchorY, legX, legY, feetX);
+  if (direct != null) return direct;
+  if (flushLandingTop == null) return null;
+  const tip = triangleFloorHighTip(anchorX, anchorY, legX, legY);
+  if (!tip || Math.abs(flushLandingTop - tip.y) > 2) return null;
+  const uphill = -downhillSignX(legX, legY);
+  if ((feetX - tip.x) * uphill < 0) return null;
+  if (feetX - tip.x > maxPastTip || tip.x - feetX > maxPastTip) return null;
+  return flushLandingTop;
 }
 
 /** Constant-speed slide along the floor hypotenuse, pointing downhill. */
@@ -216,6 +274,28 @@ export function triangleEdges(anchorX: number, anchorY: number, legX: number, le
   ];
 }
 
+const STROKE_SIDES: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+];
+
+/**
+ * The inside pixel that shares a side with the outside of the triangle.
+ * That is one continuous pixel along each edge: a 45° slope stays a single
+ * stair, and a shallow slope keeps a pixel in every column.
+ */
+export function trianglePixelIsStroke(
+  pixelX: number,
+  pixelY: number,
+  contains: (point: TrianglePoint) => boolean,
+): boolean {
+  const center = { x: pixelX + 0.5, y: pixelY + 0.5 };
+  if (!contains(center)) return false;
+  for (const [dx, dy] of STROKE_SIDES) {
+    if (!contains({ x: center.x + dx, y: center.y + dy })) return true;
+  }
+  return false;
+}
+
 function hypotenuseY(
   anchorX: number,
   anchorY: number,
@@ -228,6 +308,29 @@ function hypotenuseY(
   const maxX = Math.max(anchorX, anchorX + legX);
   if (x < minX || x > maxX) return null;
   return anchorY + (legY * (anchorX + legX - x)) / legX;
+}
+
+/** Floor-ramp surface Y at X, or null when X is off the hypotenuse span. */
+export function triangleFloorSurfaceYAt(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+  feetX: number,
+): number | null {
+  if (!isFloorTriangle(legY)) return null;
+  return hypotenuseY(anchorX, anchorY, legX, legY, feetX);
+}
+
+/** Hypotenuse Y at X for any right triangle, or null off the span. */
+export function triangleHypotenuseYAt(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+  x: number,
+): number | null {
+  return hypotenuseY(anchorX, anchorY, legX, legY, x);
 }
 
 export function pointInTriangle(point: TrianglePoint, a: TrianglePoint, b: TrianglePoint, c: TrianglePoint): boolean {
@@ -275,6 +378,8 @@ export function evaluateSlopeWalk(input: {
   verticalVelocity: number;
   horizontalIntent: number;
   deltaSeconds: number;
+  /** Flying / swimming actors can climb steeper than 45°. */
+  allowSteepClimb?: boolean;
 }): SlopeWalk | null {
   if (!isFloorTriangle(input.legY)) return null;
   const surfaceY = hypotenuseY(input.anchorX, input.anchorY, input.legX, input.legY, input.feetX);
@@ -287,18 +392,53 @@ export function evaluateSlopeWalk(input: {
   const steep = isSteepTriangle(input.legX, input.legY);
   const downhillX = downhillSignX(input.legX, input.legY);
   const uphillIntent = input.horizontalIntent * downhillX < 0;
+  const climbSteep = input.allowSteepClimb === true;
   // The low tip is the floor. Grabbing it while walking uphill slides the body
   // back off, then the walk speed pulls it in again.
-  if (steep && uphillIntent && Math.abs(input.feetY - input.anchorY) <= 6) {
+  if (steep && uphillIntent && !climbSteep && Math.abs(input.feetY - input.anchorY) <= 6) {
     return null;
   }
   return {
     supported: true,
     feetY: surfaceY,
-    slideX: steep ? slopeSlideVelocity(input.legX, input.legY).x * input.deltaSeconds : 0,
-    blockUphill: steep && uphillIntent,
+    slideX: steep && !climbSteep ? slopeSlideVelocity(input.legX, input.legY).x * input.deltaSeconds : 0,
+    blockUphill: steep && uphillIntent && !climbSteep,
     downhillX,
   };
+}
+
+/** True when a floor or flat triangle can seat feet near this world point. */
+export function triangleSupportsFeetAt(
+  anchorX: number,
+  anchorY: number,
+  legX: number,
+  legY: number,
+  feetX: number,
+  feetY: number,
+): boolean {
+  return Boolean(
+    evaluateSlopeWalk({
+      anchorX,
+      anchorY,
+      legX,
+      legY,
+      feetX,
+      feetY,
+      verticalVelocity: 0,
+      horizontalIntent: 0,
+      deltaSeconds: 0,
+      allowSteepClimb: true,
+    })?.supported
+    || evaluateFlatWalk({
+      anchorX,
+      anchorY,
+      legX,
+      legY,
+      feetX,
+      feetY,
+      verticalVelocity: 0,
+    })?.supported,
+  );
 }
 
 /** Stand on the axis-aligned top of a downward-pointing triangle like a platform. */
@@ -357,7 +497,56 @@ export function hitTriangleHandle(
   return null;
 }
 
+export interface TriangleRoomBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+export function placedTriangleContainsWorldPoint(
+  placed: {
+    id: string;
+    x: number;
+    y: number;
+    triangleLegX?: number | null;
+    triangleLegY?: number | null;
+  },
+  worldX: number,
+  worldY: number,
+  originX = 0,
+  originY = 0,
+): boolean {
+  const geometry = normalizePlacedTriangle(placed);
+  if (!geometry) return false;
+  const vertices = triangleVertices(
+    originX + geometry.anchorX,
+    originY + geometry.anchorY,
+    geometry.legX,
+    geometry.legY,
+  );
+  return pointInTriangle(
+    { x: worldX, y: worldY },
+    vertices.rightAngle,
+    vertices.horizontal,
+    vertices.vertical,
+  );
+}
+
 export function dragTriangleHandle(
+  start: { anchorX: number; anchorY: number; legX: number; legY: number },
+  handle: TriangleHandle,
+  pointerX: number,
+  pointerY: number,
+  pointerStartX: number,
+  pointerStartY: number,
+  room?: TriangleRoomBounds,
+): { anchorX: number; anchorY: number; legX: number; legY: number } {
+  const dragged = dragTriangleHandleUnclamped(start, handle, pointerX, pointerY, pointerStartX, pointerStartY);
+  return room ? containDraggedTriangle(start, dragged, handle, room) : dragged;
+}
+
+function dragTriangleHandleUnclamped(
   start: { anchorX: number; anchorY: number; legX: number; legY: number },
   handle: TriangleHandle,
   pointerX: number,
@@ -384,6 +573,84 @@ export function dragTriangleHandle(
   const fixedX = start.anchorX + start.legX;
   const nextLegX = snapTriangleLeg(fixedX - snapTriangleCoord(pointerX));
   return { ...start, anchorX: fixedX - nextLegX, legX: nextLegX };
+}
+
+/** Keep every corner inside the room. Resize handles stay on the room edge instead of sliding the whole ramp. */
+export function containDraggedTriangle(
+  start: { anchorX: number; anchorY: number; legX: number; legY: number },
+  candidate: { anchorX: number; anchorY: number; legX: number; legY: number },
+  handle: TriangleHandle,
+  bounds: TriangleRoomBounds,
+): { anchorX: number; anchorY: number; legX: number; legY: number } {
+  if (handle === 'anchor') {
+    return shiftTriangleIntoRoom({ ...start, anchorX: candidate.anchorX, anchorY: candidate.anchorY }, bounds);
+  }
+  if (handle === 'horizontalCorner') {
+    return { ...start, legX: legEndingInside(start.anchorX, start.anchorX + candidate.legX, bounds.minX, bounds.maxX) };
+  }
+  if (handle === 'verticalCorner') {
+    return { ...start, legY: legEndingInside(start.anchorY, start.anchorY + candidate.legY, bounds.minY, bounds.maxY) };
+  }
+  if (handle === 'horizontalSide') {
+    const fixedY = start.anchorY + start.legY;
+    const anchorY = movingOriginInside(fixedY, candidate.anchorY, bounds.minY, bounds.maxY);
+    return { ...start, anchorY, legY: fixedY - anchorY };
+  }
+  const fixedX = start.anchorX + start.legX;
+  const anchorX = movingOriginInside(fixedX, candidate.anchorX, bounds.minX, bounds.maxX);
+  return { ...start, anchorX, legX: fixedX - anchorX };
+}
+
+function shiftTriangleIntoRoom(
+  geometry: { anchorX: number; anchorY: number; legX: number; legY: number },
+  bounds: TriangleRoomBounds,
+): { anchorX: number; anchorY: number; legX: number; legY: number } {
+  let { anchorX, anchorY, legX, legY } = geometry;
+  const roomWidth = bounds.maxX - bounds.minX;
+  const roomHeight = bounds.maxY - bounds.minY;
+  if (Math.abs(legX) > roomWidth) {
+    legX = (legX < 0 ? -1 : 1) * roomWidth;
+    anchorX = legX < 0 ? bounds.maxX : bounds.minX;
+  }
+  if (Math.abs(legY) > roomHeight) {
+    legY = (legY < 0 ? -1 : 1) * roomHeight;
+    anchorY = legY < 0 ? bounds.maxY : bounds.minY;
+  }
+  const minX = Math.min(anchorX, anchorX + legX);
+  const maxX = Math.max(anchorX, anchorX + legX);
+  const minY = Math.min(anchorY, anchorY + legY);
+  const maxY = Math.max(anchorY, anchorY + legY);
+  if (minX < bounds.minX) anchorX += bounds.minX - minX;
+  else if (maxX > bounds.maxX) anchorX -= maxX - bounds.maxX;
+  if (minY < bounds.minY) anchorY += bounds.minY - minY;
+  else if (maxY > bounds.maxY) anchorY -= maxY - bounds.maxY;
+  return { anchorX, anchorY, legX: snapTriangleLeg(legX), legY: snapTriangleLeg(legY) };
+}
+
+function legEndingInside(origin: number, desiredEnd: number, min: number, max: number): number {
+  const end = Math.min(max, Math.max(min, desiredEnd));
+  if (end === origin) {
+    const direction = desiredEnd < origin ? -1 : 1;
+    if (origin + direction * TILE_SIZE >= min && origin + direction * TILE_SIZE <= max) return direction * TILE_SIZE;
+    return -direction * TILE_SIZE;
+  }
+  const sign = end < origin ? -1 : 1;
+  const steps = Math.floor(Math.abs(end - origin) / TILE_SIZE);
+  return sign * Math.max(1, steps) * TILE_SIZE;
+}
+
+function movingOriginInside(fixed: number, desiredOrigin: number, min: number, max: number): number {
+  let origin = Math.min(max, Math.max(min, desiredOrigin));
+  if (origin === fixed) {
+    origin = desiredOrigin < fixed ? fixed - TILE_SIZE : fixed + TILE_SIZE;
+    if (origin < min || origin > max) origin = desiredOrigin < fixed ? fixed + TILE_SIZE : fixed - TILE_SIZE;
+  }
+  const steps = Math.max(1, Math.round(Math.abs(fixed - origin) / TILE_SIZE));
+  const leg = (fixed >= origin ? 1 : -1) * steps * TILE_SIZE;
+  const next = fixed - leg;
+  if (next >= min && next <= max) return next;
+  const flipped = fixed - Math.sign(fixed - next) * TILE_SIZE;
+  return flipped >= min && flipped <= max ? flipped : next;
 }
 
 export function triangleBitmapLayout(legX: number, legY: number): {
@@ -477,12 +744,21 @@ export function triangleHandleMotion(id: TriangleHandle): TriangleHandleMotion {
 
 export function normalizePlacedTriangle(placed: {
   id: string;
+  instanceId?: string | null;
   x: number;
   y: number;
   triangleLegX?: number | null;
   triangleLegY?: number | null;
   triangleFill?: string | null;
   triangleStroke?: string | null;
+  triangleTileFill?: boolean | null;
+  triangleTileMode?: string | null;
+  triangleTileSlopeOnly?: boolean | null;
+  triangleTileFlipX?: string | null;
+  triangleTileFlipY?: string | null;
+  triangleTileGids?: readonly number[] | null;
+  triangleStrokeOn?: boolean | null;
+  triangleBackgroundOn?: boolean | null;
 }): TriangleGeometry | null {
   if (!isTrianglePieceObjectId(placed.id)) return null;
   return {
@@ -492,9 +768,20 @@ export function normalizePlacedTriangle(placed: {
     legY: snapTriangleLeg(placed.triangleLegY ?? TRIANGLE_DEFAULT_LEG_Y),
     fill: parseHexColor(placed.triangleFill, DEFAULT_TRIANGLE_FILL),
     stroke: parseHexColor(placed.triangleStroke, DEFAULT_TRIANGLE_STROKE),
+    strokeOn: placed.triangleStrokeOn !== false,
+    backgroundOn: placed.triangleBackgroundOn !== false,
+    tiles: normalizeTriangleTilePaint(placed),
   };
 }
 
-export function triangleTextureKey(legX: number, legY: number, fill: string, stroke: string): string {
-  return `triangle-piece:${legX}:${legY}:${fill}:${stroke}:edge`;
+export function triangleTextureKey(
+  legX: number,
+  legY: number,
+  fill: string,
+  stroke: string,
+  tiles?: TriangleTilePaint | null,
+  strokeOn = true,
+  backgroundOn = true,
+): string {
+  return `triangle-piece:s2:${legX}:${legY}:${fill}:${stroke}:${strokeOn ? 1 : 0}:${backgroundOn ? 1 : 0}:${triangleTileTextureToken(tiles)}`;
 }

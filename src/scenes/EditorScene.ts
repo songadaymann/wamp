@@ -256,6 +256,29 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     event.stopPropagation();
     this.toolController.selectTool(shortcutTool);
   };
+  /** Capture-phase so Ctrl/Cmd+Z reaches WAMP before the browser or host chrome. */
+  private readonly handleHistoryShortcutCapture = (event: KeyboardEvent): void => {
+    if (!this.scene.isActive(this.scene.key) || editorState.isPlaying) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    const primaryModifier = event.metaKey || event.ctrlKey;
+    const undoRequested = primaryModifier && key === 'z';
+    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
+    if (!undoRequested && !ctrlRedoRequested) {
+      return;
+    }
+    if (isNativeTextEditingFocused()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
+      this.toolController.redo();
+    } else {
+      this.toolController.undo();
+    }
+  };
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
     if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || event.defaultPrevented) {
       return;
@@ -263,25 +286,16 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
 
     const key = event.key.toLowerCase();
     const primaryModifier = event.metaKey || event.ctrlKey;
-    const undoRequested = primaryModifier && key === 'z';
-    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
 
-    if (undoRequested || ctrlRedoRequested) {
-      if (isNativeTextEditingFocused()) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
-        this.toolController.redo();
-      } else {
-        this.toolController.undo();
-      }
+    if (isTextInputFocused()) {
       return;
     }
 
-    if (isTextInputFocused()) {
+    if (key === 'delete' || key === 'backspace') {
+      if (this.deletePinnedTriangle()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
 
@@ -435,6 +449,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.draftLifecycle = null;
     this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.removeEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.input.removeAllListeners();
@@ -696,7 +711,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
       cancelObjectBatch: () => this.editRuntime.cancelObjectBatch(),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
-      removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
+      removeObjectAt: (worldX, worldY, filter) => this.removeObjectAt(worldX, worldY, filter),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
       placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
       paintRandomizeAt: (worldX, worldY) => this.editRuntime.paintRandomizeAt(worldX, worldY),
@@ -1023,6 +1038,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.setupInput();
     this.setupKeyboard();
     window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.addEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.rebuildObjectSprites();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
@@ -1701,9 +1717,22 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.inspectorController.handleObjectPlaced(placed);
   }
 
-  private removeObjectAt(worldX: number, worldY: number): void {
-    const removed = this.editRuntime.removeObjectAt(worldX, worldY);
+  private removeObjectAt(
+    worldX: number,
+    worldY: number,
+    filter?: (placed: PlacedObject) => boolean,
+  ): void {
+    const removed = this.editRuntime.removeObjectAt(worldX, worldY, filter);
     this.inspectorController.handleObjectRemoved(removed);
+  }
+
+  private deletePinnedTriangle(): boolean {
+    const instanceId = this.inspectorController.getPinnedTriangleId();
+    if (!instanceId) return false;
+    const removed = this.editRuntime.removePlacedObjectByInstanceId(instanceId);
+    if (!removed) return false;
+    this.inspectorController.handleObjectRemoved(removed);
+    return true;
   }
 
   rebuildObjectSprites(): void {
@@ -1982,12 +2011,16 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   undoAction(): void {
     this.objectMoveController.cancel();
     this.toolController.undo();
+    this.inspectorController.refreshAfterHistory();
+    this.renderEditorUi();
     this.updateBottomBar();
   }
 
   redoAction(): void {
     this.objectMoveController.cancel();
     this.toolController.redo();
+    this.inspectorController.refreshAfterHistory();
+    this.renderEditorUi();
     this.updateBottomBar();
   }
 

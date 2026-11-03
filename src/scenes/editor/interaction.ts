@@ -15,6 +15,8 @@ import {
   ROOM_WIDTH,
   TILE_SIZE,
   editorState, updateEditorState,
+  isTrianglePieceObjectId,
+  type PlacedObject,
 } from '../../config';
 import { isTextInputFocused } from '../../ui/keyboardFocus';
 import { getDeviceLayoutState } from '../../ui/deviceLayout';
@@ -66,7 +68,7 @@ interface EditorInteractionHost {
   commitObjectBatch(): void;
   cancelObjectBatch(): void;
   removeGoalMarkerAt(worldX: number, worldY: number): boolean;
-  removeObjectAt(worldX: number, worldY: number): void;
+  removeObjectAt(worldX: number, worldY: number, filter?: (placed: PlacedObject) => boolean): void;
   placeGoalMarker(tileX: number, tileY: number): void;
   placeTileAt(worldX: number, worldY: number): void;
   paintRandomizeAt(worldX: number, worldY: number): void;
@@ -396,7 +398,7 @@ export class EditorInteractionController {
       }
       // Touch reaches Move through the touch gesture, so a second finger pinches (F371).
       if (this.spaceDown || pointer.middleButtonDown()) this.host.objectMove?.stopGesture();
-      else if (this.triangleHandleDown(pointer)) return;
+      else if (pointer.leftButtonDown() && this.triangleHandleDown(pointer)) return;
       else if (!this.isTouchPointer(pointer) && this.host.objectMove?.down(pointer)) return;
       if (this.handleTouchPointerDown(pointer)) {
         return;
@@ -429,6 +431,11 @@ export class EditorInteractionController {
         if (this.host.cancelPracticeTestPlacement?.()) return;
         const worldPoint = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
         if (this.host.removeGoalMarkerAt(worldPoint.x, worldPoint.y)) {
+          return;
+        }
+
+        if (isTriangleEditorTool()) {
+          this.host.removeObjectAt(worldPoint.x, worldPoint.y, (placed) => isTrianglePieceObjectId(placed.id));
           return;
         }
 

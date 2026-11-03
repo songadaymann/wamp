@@ -149,6 +149,12 @@ export interface EditorInspectorState {
   triangleFlipY: boolean;
   triangleFillValue: string;
   triangleStrokeValue: string;
+  triangleTileFillChecked: boolean;
+  triangleSlopeOnlyChecked: boolean;
+  triangleSlopeOnlyEnabled: boolean;
+  triangleStrokeEnabled: boolean;
+  triangleBackgroundEnabled: boolean;
+  triangleLayerLock: 'stroke' | 'background' | 'tile' | null;
 }
 
 export interface EditorUiViewModel {
@@ -307,6 +313,10 @@ export interface EditorUiBridgeActions {
   onSetFocusedBallHurtPlayer: (enabled: boolean) => void;
   onSetFocusedBallPushable: (enabled: boolean) => void;
   onSetFocusedTriangleFill: (color: string) => void;
+  onSetFocusedTriangleTileFill: (enabled: boolean) => void;
+  onSetFocusedTriangleSlopeOnly: (enabled: boolean) => void;
   onSetFocusedTriangleStroke: (color: string) => void;
+  onSetFocusedTriangleStrokeEnabled: (enabled: boolean) => void;
+  onSetFocusedTriangleBackgroundEnabled: (enabled: boolean) => void;
   onSetTriangleOrientation: (flipX: boolean, flipY: boolean) => void;
 }

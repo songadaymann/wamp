@@ -22,6 +22,8 @@ import {
   triangleBitmapLayout,
 } from '../../config/trianglePiece';
 import { stampedTriangleFields } from './triangleStamp';
+import { triangleTileFieldsFromEditor } from './triangleTileEditor';
+import type { TriangleTileFields } from '../../config/triangleTileFill';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
 import { getCustomSpriteDefinitionByObjectId } from '../../customSprites/registry';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
@@ -115,6 +117,22 @@ export function createEditorPlacedObject(objectConfig: GameObjectConfig, tileX: 
         ? parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE)
         : DEFAULT_TRIANGLE_STROKE)
       : null,
+    ...(triangle && placingTriangleTool
+      ? triangleTileFieldsFromEditor()
+      : {
+          triangleTileFill: null,
+          triangleTileMode: null,
+          triangleTileSlopeOnly: null,
+          triangleTileFlipX: null,
+          triangleTileFlipY: null,
+          triangleTileGids: null,
+        }),
+    triangleStrokeOn: triangle
+      ? (placingTriangleTool ? editorState.triangleStampStrokeOn : true)
+      : null,
+    triangleBackgroundOn: triangle
+      ? (placingTriangleTool ? editorState.triangleStampBackgroundOn : true)
+      : null,
   };
 }
 
@@ -169,6 +187,21 @@ export class UtilityObjectEditor {
 
   setRollingBallPushable(instanceId: string, enabled: boolean): boolean {
     return this.updateUtilityObject(instanceId, isRollingBallObjectId, (placed) => ({ ...placed, ballPushable: enabled }));
+  }
+
+  setTriangleTiles(instanceId: string, fields: TriangleTileFields): boolean {
+    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
+      ...placed,
+      ...fields,
+    }));
+  }
+
+  setTriangleDrawFlags(instanceId: string, strokeOn: boolean | null, backgroundOn: boolean | null): boolean {
+    return this.updateUtilityObject(instanceId, isTrianglePieceObjectId, (placed) => ({
+      ...placed,
+      triangleStrokeOn: strokeOn == null ? placed.triangleStrokeOn : strokeOn,
+      triangleBackgroundOn: backgroundOn == null ? placed.triangleBackgroundOn : backgroundOn,
+    }));
   }
 
   setTriangleColors(instanceId: string, fill: string | null, stroke: string | null): boolean {

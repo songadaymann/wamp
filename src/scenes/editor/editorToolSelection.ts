@@ -11,6 +11,7 @@ import {
   type ToolName,
 } from '../../config';
 import { getCustomSpriteDefinitionByObjectId } from '../../customSprites/registry';
+import { requestTriangleDeselect } from './triangleSelectionRelease';
 
 export function canRepeatSelectedEditorObject(): boolean {
   const customSprite = getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId);
@@ -69,6 +70,11 @@ export function isPencilBrushPlacement(): boolean {
 }
 
 export function getShapeFillUiMode(tool: ToolName = editorState.activeTool): ShapeFillMode {
+  if (tool === 'triangle') {
+    if (editorState.triangleStampTileMode === 'shuffle') return 'shuffle';
+    if (editorState.triangleStampTileMode === 'pattern') return 'pattern';
+    return 'stamp';
+  }
   if (tool === 'pencil' && !editorState.pencilSprayMode) {
     return editorState.shapeFillMode;
   }
@@ -79,6 +85,10 @@ export function isShapeFillModeAvailable(
   mode: ShapeFillMode,
   tool: ToolName = editorState.activeTool,
 ): boolean {
+  if (tool === 'triangle') {
+    if (mode === 'stamp') return true;
+    return countOccupiedSelectionTiles(editorState.selection) > 1;
+  }
   if (editorState.paletteMode !== 'tiles') {
     return false;
   }
@@ -94,6 +104,9 @@ export function isShapeFillModeAvailable(
 export function getShapeFillModeUnavailableTitle(mode: ShapeFillMode): string | null {
   if (isShapeFillModeAvailable(mode)) {
     return null;
+  }
+  if (editorState.activeTool === 'triangle' && countOccupiedSelectionTiles(editorState.selection) <= 1) {
+    return 'Select more than one tile to use Pattern or Shuffle';
   }
   if (editorState.paletteMode !== 'tiles' || countOccupiedSelectionTiles(editorState.selection) <= 1) {
     return 'Select more than one tile to use Stamp, Pattern, or Shuffle';
@@ -197,6 +210,7 @@ export function applyEditorToolSelection(tool: ToolName): void {
   if (isEditorToolUnavailable(tool)) {
     return;
   }
+  if (tool !== 'triangle') requestTriangleDeselect();
   if (editorState.activeTool === tool && isShapeEditorTool(tool)) {
     if (shouldToggleToolModeOnReselect()) toggleEditorShapeOutline(tool);
     return;

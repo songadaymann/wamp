@@ -14,7 +14,7 @@
   /* ── Utility ── */
 
   body[data-device-class='tablet'][data-app-mode='editor'] {
-    --app-sidebar-width: clamp(340px, 36vw, 400px);
+    --app-sidebar-width: clamp(380px, 36vw, 400px);
   }
 }
 

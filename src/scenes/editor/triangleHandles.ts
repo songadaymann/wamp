@@ -6,6 +6,7 @@ import {
   triangleHandleMotion,
   triangleHandlePoints,
   type TriangleHandle,
+  type TriangleRoomBounds,
 } from '../../config/trianglePiece';
 
 export interface TriangleHandleGeometry {
@@ -19,6 +20,7 @@ export interface TriangleHandleGeometry {
 export interface TriangleHandleHost {
   selected(): TriangleHandleGeometry | null;
   hitRadius(): number;
+  roomBounds(): TriangleRoomBounds | null;
   begin(instanceId: string): void;
   apply(instanceId: string, next: TriangleHandleGeometry): void;
   commit(): void;
@@ -73,6 +75,7 @@ export class TriangleHandleController {
       worldY,
       this.drag.pointerX,
       this.drag.pointerY,
+      this.host.roomBounds() ?? undefined,
     );
     this.host.apply(this.drag.instanceId, { instanceId: this.drag.instanceId, ...next });
     return true;

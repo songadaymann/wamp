@@ -131,6 +131,9 @@ export class LiveObjectLifecycleController<TEdgeWall = unknown> {
                 legY: geometry.legY,
                 fill: geometry.fill,
                 stroke: geometry.stroke,
+                strokeOn: geometry.strokeOn,
+                backgroundOn: geometry.backgroundOn,
+                tiles: geometry.tiles,
               }
             : null;
         })(),
