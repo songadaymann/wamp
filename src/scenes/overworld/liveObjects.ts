@@ -36,6 +36,7 @@ import {
   normalizePlacedTriangle,
   pointInTriangle,
   separationFromTriangle,
+  triangleDownhillSignX,
   triangleHypotenuseYAt,
   triangleFloorSurfaceYAt,
   triangleSupportsFeetAt,
@@ -1535,6 +1536,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const wave = Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
     let nextY = liveObject.runtime.baseY + wave;
     let onSlope = false;
+    let climbingSlope = false;
     let hitTriangleVertical = false;
     if (liveObject.config.id !== GHOST_OBJECT_ID && liveObject.config.collidesWithWorld !== false) {
       const resolved = this.flyingEnemyResolveTriangles(room, liveObject, body, nextY);
@@ -1542,6 +1544,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         hitTriangleVertical = true;
         const pushedX = liveObject.sprite.x + resolved.pushX;
         if (isDynamicArcadeBody(body)) {
+          // Keep Y — vertical faces are walls, not ramps.
           body.reset(pushedX, liveObject.sprite.y);
         } else {
           liveObject.sprite.x = pushedX;
@@ -1549,10 +1552,14 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         // Face out of the vertical leg — same as hitting a tile wall.
         liveObject.runtime.directionX = resolved.pushX < 0 ? -1 : 1;
       }
-      if (resolved.rideY != null) {
+      // Vertical-face hits must not also apply hyp lift (corner bump each bounce).
+      if (resolved.rideY != null && !resolved.hitVerticalWall) {
+        // Same triangle rules as fish: hyp owns Y while in contact. Wave (bat/bird)
+        // resumes from the exit altitude once clear of the solid.
         nextY = resolved.rideY;
-        liveObject.runtime.baseY = nextY;
-        onSlope = resolved.rideY < liveObject.sprite.y - 0.5;
+        liveObject.runtime.baseY = resolved.rideY;
+        onSlope = true;
+        climbingSlope = resolved.rideY < liveObject.sprite.y - 0.5;
       }
     }
 
@@ -1567,12 +1574,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       const reachedBounds =
         (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
         (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
+      const pinnedUp = body.blocked.up || body.touching.up;
+      const pinnedDown = body.blocked.down || body.touching.down;
 
-      // Climbing the hyp must not flip; triangle vertical legs already flipped above.
-      if (
-        !hitTriangleVertical &&
-        ((touchingHorizontalObstacle && !onSlope) || reachedBounds)
-      ) {
+      // Rising wedge into a ceiling: stop lifting so wall reverse can win.
+      if (onSlope && climbingSlope && pinnedUp) {
+        nextY = liveObject.sprite.y;
+        liveObject.runtime.baseY = liveObject.sprite.y;
+        climbingSlope = false;
+      }
+
+      // Real tile/world walls always reverse — including slope+ceiling corners.
+      // Triangle vertical legs already flipped via hitTriangleVertical above.
+      // (Triangle pieces have no arcade body, so blocked.left/right is tiles.)
+      if (!hitTriangleVertical && (touchingHorizontalObstacle || reachedBounds)) {
         const clampedX = Phaser.Math.Clamp(liveObject.sprite.x, bounds.left, bounds.right);
         if (clampedX !== liveObject.sprite.x) {
           body.reset(clampedX, liveObject.sprite.y);
@@ -1581,8 +1596,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
 
       const deltaSeconds = Math.max(delta / 1000, 1 / 60);
+      // Climb about as fast as horizontal travel so 45° is 1:1, not a rocket.
       const maxVerticalSpeed = onSlope
-        ? Math.max(speed * 3, 96)
+        ? Math.max(speed * 1.15, 40)
         : Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
       let velocityY = onSlope || waveAmplitude > 0
         ? Phaser.Math.Clamp(
@@ -1592,8 +1608,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         )
         : 0;
       const movingIntoVerticalObstacle =
-        (velocityY < 0 && (body.blocked.up || body.touching.up)) ||
-        (velocityY > 0 && (body.blocked.down || body.touching.down));
+        (velocityY < 0 && pinnedUp) ||
+        (velocityY > 0 && pinnedDown);
       if (movingIntoVerticalObstacle) {
         velocityY = 0;
       }
@@ -2093,8 +2109,8 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
   /**
    * Flyer/swim vs triangles:
    * - Vertical legs are walls (reverse + eject).
-   * - Hypotenuse ejects along Y (floor lifts up) and never phases through.
-   * - Open air above a floor hyp does not suck the flyer down.
+   * - Floor hyps only push UP (climb). Never follow a floor slope downhill.
+   * - Ceiling hyps only push DOWN. Never follow a ceiling slope upward.
    */
   private flyingEnemyResolveTriangles(
     room: RoomSnapshot,
@@ -2111,7 +2127,9 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const probeBottom = Math.max(proposedSpriteY + bottomOffset, body.bottom);
     const probeTop = Math.min(proposedSpriteY + topOffset, body.top);
     const dirX = liveObject.runtime.directionX >= 0 ? 1 : -1;
-    const maxPenetrate = Math.max(body.height + body.width, TILE_SIZE * 2);
+    // Near-hyp contact only — deep mid-solid must not teleport up to a high tip.
+    const maxFloorClimbDepth = body.height + 6;
+    const maxCeilingPushDepth = body.height + 6;
     const floorClearance = 2;
     const probeXs = [
       body.center.x,
@@ -2183,6 +2201,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
           verts.vertical,
         );
 
+      // Vertical leg wall (outward nx). Check lead face before hyp separation so
+      // wide bodies (shark) at the tip corner don't lift instead of reversing.
+      const vertOutNx = geometry.legX < 0 ? 1 : -1;
+      const vertY0 = Math.min(anchorY, anchorY + geometry.legY);
+      const vertY1 = Math.max(anchorY, anchorY + geometry.legY);
+      const leadX = dirX > 0 ? body.right - 1 : body.left + 1;
+      const leadHitsVertical =
+        dirX * vertOutNx < 0
+        && Math.abs(leadX - anchorX) <= 4
+        && body.bottom > vertY0 + 1
+        && body.top < vertY1 - 1
+        && (body.center.x - anchorX) * vertOutNx >= -2;
+      if (leadHitsVertical) {
+        hitVerticalWall = true;
+        const eject = vertOutNx * (Math.abs(leadX - anchorX) + 1);
+        if (Math.abs(eject) > Math.abs(pushX)) pushX = eject;
+        continue;
+      }
+
       // Vertical leg only (ny ≈ 0). Steep hyps also have large |dx| — do not
       // treat those as walls or climbing ramps would flip mid-slope.
       if (
@@ -2198,6 +2235,11 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         continue;
       }
 
+      // Floor climb only while moving uphill — downhill / side clips must not
+      // eject the flyer up onto a high tip (shark jump near shallow crests).
+      const floorUphill =
+        floor && dirX * -triangleDownhillSignX(geometry.legX, geometry.legY) > 0;
+
       let deepestSurface: number | null = null;
       for (const probeX of probeXs) {
         const surface = triangleHypotenuseYAt(
@@ -2209,31 +2251,40 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
         );
         if (surface == null) continue;
         if (floor) {
+          if (!floorUphill) continue;
+          // At/into the solid near the hyp only — not deep mid-volume ejects.
           const depth = probeBottom - surface;
-          if (depth > -floorClearance - 1 && depth < maxPenetrate) {
+          if (depth > -1 && depth < maxFloorClimbDepth) {
             deepestSurface =
               deepestSurface == null ? surface : Math.min(deepestSurface, surface);
           }
         } else {
+          // At/into the ceiling solid near the hyp only.
           const depth = surface - probeTop;
-          if (depth > -floorClearance - 1 && depth < maxPenetrate) {
+          if (depth > -1 && depth < maxCeilingPushDepth) {
             deepestSurface =
               deepestSurface == null ? surface : Math.max(deepestSurface, surface);
           }
         }
       }
 
-      if (inside || bestSep) {
+      if ((inside || bestSep) && (floor ? floorUphill : true)) {
         const hypAtBody =
           triangleHypotenuseYAt(anchorX, anchorY, geometry.legX, geometry.legY, body.center.x) ??
           triangleHypotenuseYAt(anchorX, anchorY, geometry.legX, geometry.legY, clampedX);
         if (hypAtBody != null) {
-          deepestSurface =
-            deepestSurface == null
-              ? hypAtBody
-              : floor
-                ? Math.min(deepestSurface, hypAtBody)
-                : Math.max(deepestSurface, hypAtBody);
+          const depth = floor
+            ? probeBottom - hypAtBody
+            : hypAtBody - probeTop;
+          const maxDepth = floor ? maxFloorClimbDepth : maxCeilingPushDepth;
+          if (depth > -1 && depth < maxDepth) {
+            deepestSurface =
+              deepestSurface == null
+                ? hypAtBody
+                : floor
+                  ? Math.min(deepestSurface, hypAtBody)
+                  : Math.max(deepestSurface, hypAtBody);
+          }
         }
       }
 
@@ -2241,14 +2292,25 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
       if (floor) {
         const spriteY = deepestSurface - bottomOffset - floorClearance;
-        // Open-air skim above the hyp must not suck down — but anything already
-        // inside the solid always ejects onto the hyp (no phasing).
-        if (!inside && !bestSep && spriteY > proposedSpriteY + 0.5) continue;
+        // Up hill only — never pull cruise altitude down a descending hyp.
+        if (spriteY > proposedSpriteY + 0.5 && spriteY > liveObject.sprite.y + 0.5) {
+          continue;
+        }
+        // Cap sudden lifts so a side-clip can't jump a full tile to the crest.
+        if (liveObject.sprite.y - spriteY > TILE_SIZE) {
+          continue;
+        }
         bestFloorLiftY =
           bestFloorLiftY == null ? spriteY : Math.min(bestFloorLiftY, spriteY);
       } else {
         const spriteY = deepestSurface - topOffset + floorClearance;
-        if (!inside && !bestSep && spriteY < proposedSpriteY - 0.5) continue;
+        // Down ceiling only — never pull cruise altitude up a rising ceiling.
+        if (spriteY < proposedSpriteY - 0.5 && spriteY < liveObject.sprite.y - 0.5) {
+          continue;
+        }
+        if (spriteY - liveObject.sprite.y > TILE_SIZE) {
+          continue;
+        }
         bestCeilingPushY =
           bestCeilingPushY == null ? spriteY : Math.max(bestCeilingPushY, spriteY);
       }

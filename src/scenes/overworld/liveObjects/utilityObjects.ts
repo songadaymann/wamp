@@ -10,12 +10,14 @@ import {
   isFloorTriangle,
   isSteepTriangle,
   isTrianglePieceObjectId,
+  pointInTriangle,
   separationFromTriangle,
   steepSlopeMotion,
   triangleDownhillSignX,
   triangleFloorHighTip,
   triangleFloorSurfaceOrFlushTip,
   triangleFloorSurfaceYAt,
+  triangleVertices,
 } from '../../../config/trianglePiece';
 import {
   getGravityVector,
@@ -680,8 +682,8 @@ function supportActor(
       && flushTop != null
       && Math.abs(hypY - tip.y) <= 2
       && (feetX - tip.x) * uphill >= -2;
-    // Uniform ±2px from the center-bottom contact (same for every NPC size).
-    // Uphill: into the solid. Downhill: away from it. (y-down: + into solid.)
+    // Slight downhill float off the solid only — never bias into the hyp
+    // (that buried walkers in the floor tile under a ramp and dropped them).
     let seatY = hypY;
     if (
       actor.liveObject
@@ -690,11 +692,17 @@ function supportActor(
       && tip
       && actor.intent !== 0
       && feetX === actor.body.center.x
+      && actor.intent * uphill < 0
     ) {
-      seatY = actor.intent * uphill > 0 ? hypY + 2 : hypY - 2;
+      seatY = hypY - 2;
     }
     const slope = triangle.legX === 0 ? 0 : -triangle.legY / triangle.legX;
     const dy = seatY - actor.body.bottom;
+    // Only seat when already touching the hyp band, or lifting out of the solid.
+    // Never yank a walker down onto a distant ramp through a floor.
+    if (dy > 2 && actor.body.bottom < hypY - 2) {
+      continue;
+    }
     const blockSnap = !climbSteep && dy < 0 && isSteepTriangle(triangle.legX, triangle.legY);
     shiftBody(actor.body, 0, blockSnap ? 0 : dy);
     if (walk.blockUphill) {
@@ -726,7 +734,37 @@ function supportActor(
     syncActorRect(actor);
     return true;
   }
+  // Standing on the shared floor plane puts the body inside the triangle
+  // volume (above the horizontal leg, below the hyp). Separation can eject
+  // downward through floor tiles onto lower ramps, or yank them up the hyp
+  // without a real foothold. Near the floor leg: walls only. Deeper in the
+  // solid: lift onto the hyp. Never push floor-ramp walkers downward.
+  const overlapsFloorTriangle =
+    isFloorTriangle(triangle.legY) && bodyOverlapsFloorTriangle(actor, triangle);
+  const nearFloorLeg =
+    overlapsFloorTriangle && Math.abs(actor.body.bottom - triangle.anchorY) <= 6;
+  if (overlapsFloorTriangle && !nearFloorLeg) {
+    const liftY = floorTriangleEjectSpriteBottom(actor, triangle);
+    if (liftY != null && liftY < actor.body.bottom - 0.5) {
+      shiftBody(actor.body, 0, liftY - actor.body.bottom);
+      if (actor.body.velocity.y > 0) actor.body.setVelocityY(0);
+      syncActorRect(actor);
+      return true;
+    }
+  }
+
   let separation = separationForBody(actor.body, triangle);
+  if (separation && isFloorTriangle(triangle.legY) && separation.dy > 0) {
+    separation = Math.abs(separation.dx) < 0.05 ? null : { dx: separation.dx, dy: 0 };
+  }
+  if (separation && nearFloorLeg) {
+    // Keep vertical-leg wall pushes; ignore hyp lift while feet stay on the floor.
+    if (Math.abs(separation.dy) >= Math.abs(separation.dx)) {
+      separation = null;
+    } else {
+      separation = { dx: separation.dx, dy: 0 };
+    }
+  }
   if (
     separation &&
     isFloorTriangle(triangle.legY) &&
@@ -735,9 +773,27 @@ function supportActor(
   ) {
     separation = Math.abs(separation.dx) < 0.2 ? null : { dx: separation.dx, dy: 0 };
   }
-  // Steep face blocking an enemy/NPC walk: turn around instead of grinding in place.
+  // Pure vertical-leg exit (ny ≈ 0). Distinct from hyp contact, which has dy.
+  const verticalLegHit =
+    separation != null
+    && Math.abs(separation.dy) < 0.35
+    && Math.abs(separation.dx) > 0.5;
+  // Vertical face is a wall on every floor ramp (shallow included) — reverse.
   if (
     separation
+    && verticalLegHit
+    && actor.liveObject
+    && isFloorTriangle(triangle.legY)
+    && actor.intent !== 0
+    && separation.dx * actor.intent < 0
+  ) {
+    actor.liveObject.runtime.directionX *= -1;
+    actor.intent *= -1;
+  }
+  // Steep hyp face blocking an enemy/NPC walk: turn around instead of grinding.
+  if (
+    separation
+    && !verticalLegHit
     && actor.liveObject
     && isFloorTriangle(triangle.legY)
     && isSteepTriangle(triangle.legX, triangle.legY)
@@ -747,10 +803,11 @@ function supportActor(
     actor.liveObject.runtime.directionX *= -1;
     actor.intent *= -1;
   }
-  // A floor-ramp tip push that fights the walk direction traps slow enemies
-  // against the first pixel of the hypotenuse. Drop that sideways shove.
+  // Shallow hyp tip: drop sideways shove that fights walk into the first hyp
+  // pixel. Never strip a vertical-leg wall hit — that lets walkers phase through.
   if (
     separation
+    && !verticalLegHit
     && isFloorTriangle(triangle.legY)
     && !isSteepTriangle(triangle.legX, triangle.legY)
     && actor.intent !== 0
@@ -785,6 +842,47 @@ function supportActor(
   }
   syncActorRect(actor);
   return ny < -0.5;
+}
+
+function bodyOverlapsFloorTriangle(actor: TrackedActor, triangle: TriangleSolid): boolean {
+  if (!isFloorTriangle(triangle.legY)) return false;
+  const verts = triangleVertices(
+    triangle.anchorX,
+    triangle.anchorY,
+    triangle.legX,
+    triangle.legY,
+  );
+  const samples = [
+    { x: actor.body.center.x, y: actor.body.center.y },
+    { x: actor.body.center.x, y: actor.body.bottom - 1 },
+    { x: actor.body.left + 1, y: actor.body.bottom - 1 },
+    { x: actor.body.right - 1, y: actor.body.bottom - 1 },
+  ];
+  return samples.some((point) =>
+    pointInTriangle(point, verts.rightAngle, verts.horizontal, verts.vertical)
+  );
+}
+
+/** Bottom Y to sit on the hyp when the body is already inside the floor ramp. */
+function floorTriangleEjectSpriteBottom(
+  actor: TrackedActor,
+  triangle: TriangleSolid,
+): number | null {
+  let best: number | null = null;
+  for (const feetX of actorFootXs(actor)) {
+    const surface = triangleFloorSurfaceYAt(
+      triangle.anchorX,
+      triangle.anchorY,
+      triangle.legX,
+      triangle.legY,
+      feetX,
+    );
+    if (surface == null) continue;
+    // Only eject when feet are at/under the hyp (inside), not when far above.
+    if (actor.body.bottom < surface - 1) continue;
+    best = best == null ? surface : Math.min(best, surface);
+  }
+  return best;
 }
 
 function separationForBody(
