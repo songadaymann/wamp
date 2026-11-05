@@ -24,6 +24,8 @@ For people and AI agents picking up work:
 - [Ideas inbox](product/ideas-inbox.md)
 - [Design ideas](product/design-ideas.md)
 - [XP, badges, ratings PRD](product/xp-badges-ratings-prd.md)
+- [WAMP engine viability report](product/wamp-engine-viability.md)
+- [WAMP engine PRD](product/wamp-engine-prd.md)
 
 ## Features
 
