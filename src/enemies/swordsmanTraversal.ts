@@ -7,6 +7,12 @@ import {
   type PlacedObject,
 } from '../config';
 import {
+  isFloorTriangle,
+  normalizePlacedTriangle,
+  triangleFloorHighTip,
+  triangleFloorSurfaceYAt,
+} from '../config/trianglePiece';
+import {
   SWORDSMAN_AI_DROP_SETUP_APPROACH_TOLERANCE_PX,
   SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
   SWORDSMAN_AI_JUMP_LANDING_INSET_PX,
@@ -42,6 +48,13 @@ export interface SwordsmanSurfaceSegment {
   centerX: number;
   hasOpenLeft: boolean;
   hasOpenRight: boolean;
+  /** Floor-ramp hyp; feet match against Y-at-X instead of flat topY. */
+  triangle?: {
+    anchorX: number;
+    anchorY: number;
+    legX: number;
+    legY: number;
+  };
 }
 
 export interface SwordsmanWallSegment {
@@ -322,6 +335,11 @@ export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): Swordsman
         for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
           addEdge(dropEdge);
         }
+        // Ramp tips nested inside a flush floor fail normal jump-up approach
+        // geometry — add an explicit tip walk-off onto that floor.
+        addEdge(buildTriangleFloorTransferEdge(room, source, target));
+        // Back-to-back peak: walk over the shared tip onto the other hyp.
+        addEdge(buildTriangleCrestTransferEdge(source, target));
       }
 
       for (const wall of wallSegments) {
@@ -367,8 +385,9 @@ export function decideSwordsmanTraversal(
   enemy: SwordsmanBodySnapshot,
   target: SwordsmanBodySnapshot,
   blockedEdgeIds: ReadonlySet<string> = new Set<string>(),
+  preferredSurfaceId: string | null = null,
 ): SwordsmanTraversalDecision {
-  const currentContext = getSwordsmanTraversalContext(graph, enemy);
+  const currentContext = getSwordsmanTraversalContext(graph, enemy, preferredSurfaceId);
   const currentSurface = currentContext.currentSurface;
   const targetContext = getSwordsmanTraversalTargetContext(graph, target);
   const targetSurface = targetContext.targetSurface;
@@ -502,7 +521,153 @@ function buildSurfaceSegments(room: RoomSnapshot): SwordsmanSurfaceSegment[] {
     }
   }
 
+  appendTriangleSurfaceSegments(room, segments);
   return segments;
+}
+
+/**
+ * One walkable surface per floor triangle so hunters can path on/off ramps.
+ * topY is the high tip (crest); matching uses the hypotenuse at the body's X.
+ */
+function appendTriangleSurfaceSegments(
+  room: RoomSnapshot,
+  segments: SwordsmanSurfaceSegment[],
+): void {
+  let index = 0;
+  for (const placed of room.placedObjects) {
+    const geometry = normalizePlacedTriangle(placed);
+    if (!geometry || !isFloorTriangle(geometry.legY) || geometry.legX === 0) {
+      continue;
+    }
+
+    const leftX = Math.min(geometry.anchorX, geometry.anchorX + geometry.legX);
+    const rightX = Math.max(geometry.anchorX, geometry.anchorX + geometry.legX);
+    if (rightX - leftX < 8) {
+      continue;
+    }
+
+    const highTipY = Math.min(geometry.anchorY, geometry.anchorY + geometry.legY);
+    const lowTipY = Math.max(geometry.anchorY, geometry.anchorY + geometry.legY);
+    const leftTipY =
+      triangleFloorSurfaceYAt(
+        geometry.anchorX,
+        geometry.anchorY,
+        geometry.legX,
+        geometry.legY,
+        leftX,
+      ) ?? lowTipY;
+    const rightTipY =
+      triangleFloorSurfaceYAt(
+        geometry.anchorX,
+        geometry.anchorY,
+        geometry.legX,
+        geometry.legY,
+        rightX,
+      ) ?? lowTipY;
+
+    const leftTileX = Math.floor(leftX / TILE_SIZE);
+    const rightTileX = Math.max(leftTileX, Math.ceil(rightX / TILE_SIZE) - 1);
+    // Vertical tips are walls — never mark them walk-off/drop open (that sent
+    // hunters into the face and locked them in a tip reverse loop). Solid tiles
+    // past a tip also close it (ramp jammed against a wall is not a ledge).
+    const leftIsVerticalTip = Math.abs(leftX - geometry.anchorX) <= 1;
+    const rightIsVerticalTip = Math.abs(rightX - geometry.anchorX) <= 1;
+    const hasOpenLeft =
+      !leftIsVerticalTip
+      && !triangleTipHasFlushFloor(room, leftX - 1, leftTipY)
+      && !triangleTipHasSolidOutside(room, leftX, leftTipY, -1);
+    const hasOpenRight =
+      !rightIsVerticalTip
+      && !triangleTipHasFlushFloor(room, rightX + 1, rightTipY)
+      && !triangleTipHasSolidOutside(room, rightX, rightTipY, 1);
+
+    segments.push({
+      id: `surface:triangle:${index}`,
+      kind: 'surface',
+      tileY: Math.floor(highTipY / TILE_SIZE),
+      topY: highTipY,
+      leftTileX,
+      rightTileX,
+      leftX,
+      rightX,
+      centerX: (leftX + rightX) * 0.5,
+      hasOpenLeft,
+      hasOpenRight,
+      triangle: {
+        anchorX: geometry.anchorX,
+        anchorY: geometry.anchorY,
+        legX: geometry.legX,
+        legY: geometry.legY,
+      },
+    });
+    index += 1;
+  }
+}
+
+function triangleTipHasFlushFloor(
+  room: RoomSnapshot,
+  worldX: number,
+  tipY: number,
+): boolean {
+  const tileX = Math.floor(worldX / TILE_SIZE);
+  const tipTileY = Math.floor(tipY / TILE_SIZE);
+  // Same row or one above (crest seating onto a platform top).
+  for (const tileY of [tipTileY, tipTileY - 1]) {
+    if (tileY < 0 || tileY >= ROOM_HEIGHT) {
+      continue;
+    }
+    if (tileX < 0 || tileX >= ROOM_WIDTH) {
+      continue;
+    }
+    const profile = getTerrainTileCollisionProfile(room, tileX, tileY);
+    if (!profile.hasCollision || roomHasTerrainTile(room, tileX, tileY - 1)) {
+      continue;
+    }
+    const topY = tileY * TILE_SIZE + profile.topInset;
+    if (Math.abs(topY - tipY) <= 6) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function triangleTipHasSolidOutside(
+  room: RoomSnapshot,
+  tipX: number,
+  tipY: number,
+  outwardX: -1 | 1,
+): boolean {
+  const tileX = Math.floor((tipX + outwardX * 2) / TILE_SIZE);
+  const tipTileY = Math.floor(tipY / TILE_SIZE);
+  for (const tileY of [tipTileY, tipTileY - 1, tipTileY + 1]) {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      continue;
+    }
+    if (roomHasTerrainTile(room, tileX, tileY)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Wall face beside a tip above the floor plane — not flush floor continuing underfoot. */
+function triangleTipHasBlockingWallOutside(
+  room: RoomSnapshot,
+  tipX: number,
+  tipY: number,
+  outwardX: -1 | 1,
+): boolean {
+  const tileX = Math.floor((tipX + outwardX * 2) / TILE_SIZE);
+  const tipTileY = Math.floor(tipY / TILE_SIZE);
+  for (const tileY of [tipTileY - 1, tipTileY - 2, tipTileY - 3]) {
+    if (tileX < 0 || tileX >= ROOM_WIDTH || tileY < 0 || tileY >= ROOM_HEIGHT) {
+      continue;
+    }
+    if (roomHasTerrainTile(room, tileX, tileY)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildWallSegments(room: RoomSnapshot): SwordsmanWallSegment[] {
@@ -558,7 +723,48 @@ function buildWallSegments(room: RoomSnapshot): SwordsmanWallSegment[] {
     }
   }
 
+  appendTriangleWallSegments(room, segments);
   return segments;
+}
+
+/** Vertical legs of placed triangles act as climbable walls for Sword Hunter. */
+function appendTriangleWallSegments(
+  room: RoomSnapshot,
+  segments: SwordsmanWallSegment[],
+): void {
+  let index = 0;
+  for (const placed of room.placedObjects) {
+    const geometry = normalizePlacedTriangle(placed);
+    if (!geometry || geometry.legX === 0) {
+      continue;
+    }
+
+    const topY = Math.min(geometry.anchorY, geometry.anchorY + geometry.legY);
+    const bottomY = Math.max(geometry.anchorY, geometry.anchorY + geometry.legY);
+    if (bottomY - topY < 8) {
+      continue;
+    }
+
+    // Outward normal of the vertical leg (same as triangleEdges in trianglePiece).
+    const vertOutNx = geometry.legX < 0 ? 1 : -1;
+    // Body on the open side: left contact when wall faces right, and vice versa.
+    const contactSide = (vertOutNx > 0 ? -1 : 1) as -1 | 1;
+    const jumpDirectionX = (-contactSide) as -1 | 1;
+
+    segments.push({
+      id: `wall:triangle:${index}`,
+      kind: 'wall',
+      tileX: Math.floor(geometry.anchorX / TILE_SIZE),
+      side: contactSide === 1 ? 'left' : 'right',
+      x: geometry.anchorX,
+      topY,
+      bottomY,
+      centerY: (topY + bottomY) * 0.5,
+      contactSide,
+      jumpDirectionX,
+    });
+    index += 1;
+  }
 }
 
 function buildLadderSegments(room: RoomSnapshot): SwordsmanLadderSegment[] {
@@ -684,17 +890,152 @@ function getLadderSurfaceAttachment(
   return { surface, anchorX };
 }
 
+/**
+ * Two floor triangles that share a high tip (mountain peak) need a walk edge
+ * over the crest. Jump-to-wall / tip-clear jumps on the paired vertical send
+ * hunters back down the side they climbed.
+ */
+function buildTriangleCrestTransferEdge(
+  source: SwordsmanSurfaceSegment,
+  target: SwordsmanSurfaceSegment,
+): SwordsmanTraversalEdge | null {
+  if (!source.triangle || !target.triangle) {
+    return null;
+  }
+
+  const sourceTip = triangleFloorHighTip(
+    source.triangle.anchorX,
+    source.triangle.anchorY,
+    source.triangle.legX,
+    source.triangle.legY,
+  );
+  const targetTip = triangleFloorHighTip(
+    target.triangle.anchorX,
+    target.triangle.anchorY,
+    target.triangle.legX,
+    target.triangle.legY,
+  );
+  if (!sourceTip || !targetTip) {
+    return null;
+  }
+  if (Math.abs(sourceTip.x - targetTip.x) > 6 || Math.abs(sourceTip.y - targetTip.y) > 6) {
+    return null;
+  }
+
+  const sourceSide = Math.sign(source.centerX - sourceTip.x);
+  const targetSide = Math.sign(target.centerX - targetTip.x);
+  if (sourceSide === 0 || targetSide === 0 || sourceSide === targetSide) {
+    return null;
+  }
+
+  const directionX = (-sourceSide) as -1 | 1;
+  const setupX = clamp(
+    sourceTip.x - directionX * 4,
+    source.leftX,
+    source.rightX,
+  );
+  const targetX = clamp(
+    targetTip.x + directionX * 10,
+    target.leftX,
+    target.rightX,
+  );
+  if (Math.sign(targetX - setupX) !== directionX) {
+    return null;
+  }
+
+  return {
+    id: `${source.id}->${target.id}:crest-walk:${directionX > 0 ? 'right' : 'left'}`,
+    type: 'jump-gap',
+    fromId: source.id,
+    toId: target.id,
+    directionX,
+    setupX,
+    targetX,
+    allowEdgeDrop: false,
+  };
+}
+
+/**
+ * When a floor-triangle tip sits on (or flush with) another surface, hunters
+ * need a walk-off edge. Standard jump-up setup requires approaching from
+ * outside the target span, which fails for ramps nested on that floor.
+ */
+function buildTriangleFloorTransferEdge(
+  room: RoomSnapshot,
+  source: SwordsmanSurfaceSegment,
+  target: SwordsmanSurfaceSegment,
+): SwordsmanTraversalEdge | null {
+  if (!source.triangle || target.triangle) {
+    return null;
+  }
+
+  const tipCandidates: Array<{ tipX: number; directionX: -1 | 1 }> = [
+    { tipX: source.leftX, directionX: -1 },
+    { tipX: source.rightX, directionX: 1 },
+  ];
+
+  let best: SwordsmanTraversalEdge | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const { tipX, directionX } of tipCandidates) {
+    // Vertical tips are walls — only the horizontal (usually low) tip transfers.
+    if (Math.abs(tipX - source.triangle.anchorX) <= 1) {
+      continue;
+    }
+
+    const tipY = surfaceTopYNearBody(source, tipX);
+    if (Math.abs(tipY - target.topY) > 6) {
+      continue;
+    }
+    if (tipX < target.leftX - 4 || tipX > target.rightX + 4) {
+      continue;
+    }
+    // Tip jammed against a blocking wall (not flush floor) is a corner trap.
+    if (triangleTipHasBlockingWallOutside(room, tipX, tipY, directionX)) {
+      continue;
+    }
+
+    const setupX = clamp(
+      tipX - directionX * SWORDSMAN_AI_JUMP_LANDING_INSET_PX,
+      source.leftX,
+      source.rightX,
+    );
+    const targetX = clamp(
+      tipX + directionX * SWORDSMAN_AI_JUMP_LANDING_INSET_PX,
+      getSurfaceMinAnchorX(target),
+      getSurfaceMaxAnchorX(target),
+    );
+    const horizontal = targetX - setupX;
+    if (Math.abs(horizontal) < 1 || Math.sign(horizontal) !== directionX) {
+      continue;
+    }
+
+    const score = Math.abs(setupX - source.centerX) + Math.abs(horizontal);
+    if (score >= bestScore) {
+      continue;
+    }
+
+    bestScore = score;
+    best = {
+      id: `${source.id}->${target.id}:triangle-transfer:${directionX > 0 ? 'right' : 'left'}`,
+      type: 'jump-gap',
+      fromId: source.id,
+      toId: target.id,
+      directionX,
+      setupX,
+      targetX,
+      allowEdgeDrop: false,
+    };
+  }
+
+  return best;
+}
+
 function buildJumpUpEdge(
   source: SwordsmanSurfaceSegment,
   target: SwordsmanSurfaceSegment,
   allSurfaces: readonly SwordsmanSurfaceSegment[],
 ): SwordsmanTraversalEdge | null {
-  const verticalRise = source.topY - target.topY;
-  if (verticalRise > JUMP_UP_MAX_VERTICAL_PX || verticalRise < -JUMP_GAP_MAX_DESCENT_PX) {
-    return null;
-  }
-  const edgeType = verticalRise >= JUMP_UP_MIN_VERTICAL_PX ? 'jump-up' : 'jump-gap';
-
   const sourceMinX = getSurfaceMinAnchorX(source);
   const sourceMaxX = getSurfaceMaxAnchorX(source);
   const targetMinX = getSurfaceMinAnchorX(target);
@@ -707,6 +1048,14 @@ function buildJumpUpEdge(
     setupX: number,
     targetX: number,
   ): void => {
+    // Sample hyp height at the departure point so tall ramps still connect to
+    // flush floor tips (flat topY would look like a full-ramp jump).
+    const verticalRise =
+      surfaceTopYNearBody(source, setupX) - surfaceTopYNearBody(target, targetX);
+    if (verticalRise > JUMP_UP_MAX_VERTICAL_PX || verticalRise < -JUMP_GAP_MAX_DESCENT_PX) {
+      return;
+    }
+    const edgeType = verticalRise >= JUMP_UP_MIN_VERTICAL_PX ? 'jump-up' : 'jump-gap';
     const horizontal = targetX - setupX;
     if (Math.abs(horizontal) > JUMP_UP_MAX_HORIZONTAL_PX) {
       return;
@@ -811,22 +1160,24 @@ function buildDropDownEdges(
   target: SwordsmanSurfaceSegment,
   allSurfaces: readonly SwordsmanSurfaceSegment[],
 ): SwordsmanTraversalEdge[] {
-  if (target.topY <= source.topY + DROP_DOWN_MIN_VERTICAL_PX) {
-    return [];
-  }
-
   const edges: SwordsmanTraversalEdge[] = [];
   const targetMinX = getSurfaceMinAnchorX(target);
   const targetMaxX = getSurfaceMaxAnchorX(target);
   const sourceEdges = [];
-  if (!roomHasTerrainTile(room, source.leftTileX - 1, source.tileY)) {
+  const openLeft = source.triangle
+    ? source.hasOpenLeft
+    : !roomHasTerrainTile(room, source.leftTileX - 1, source.tileY);
+  const openRight = source.triangle
+    ? source.hasOpenRight
+    : !roomHasTerrainTile(room, source.rightTileX + 1, source.tileY);
+  if (openLeft) {
     sourceEdges.push({
       directionX: -1 as const,
       setupX: source.leftX + SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
       suffix: 'left' as const,
     });
   }
-  if (!roomHasTerrainTile(room, source.rightTileX + 1, source.tileY)) {
+  if (openRight) {
     sourceEdges.push({
       directionX: 1 as const,
       setupX: source.rightX - SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
@@ -836,6 +1187,11 @@ function buildDropDownEdges(
 
   for (const edge of sourceEdges) {
     const targetX = clamp(edge.setupX, targetMinX, targetMaxX);
+    const sourceTop = surfaceTopYNearBody(source, edge.setupX);
+    const targetTop = surfaceTopYNearBody(target, targetX);
+    if (targetTop <= sourceTop + DROP_DOWN_MIN_VERTICAL_PX) {
+      continue;
+    }
     const horizontal = targetX - edge.setupX;
     if (Math.abs(horizontal) > DROP_DOWN_MAX_HORIZONTAL_PX) {
       continue;
@@ -885,8 +1241,31 @@ function buildJumpToWallEdge(
   source: SwordsmanSurfaceSegment,
   wall: SwordsmanWallSegment,
 ): SwordsmanTraversalEdge | null {
+  // Peak / crest verticals are walked, not jumped — jump-to-wall here wall-jumps
+  // the hunter back down the ramp he just climbed.
+  if (source.triangle) {
+    const tip = triangleFloorHighTip(
+      source.triangle.anchorX,
+      source.triangle.anchorY,
+      source.triangle.legX,
+      source.triangle.legY,
+    );
+    if (
+      tip
+      && Math.abs(wall.x - tip.x) <= 6
+      && Math.abs(wall.topY - tip.y) <= 6
+    ) {
+      return null;
+    }
+  }
+
   const sourceMinX = getSurfaceMinAnchorX(source);
   const sourceMaxX = getSurfaceMaxAnchorX(source);
+  // Wall capping this surface (ramp low tip vs tile wall) is a corner, not a jump.
+  if (wall.x >= source.leftX - 2 && wall.x <= source.rightX + 2) {
+    return null;
+  }
+
   const setupX = clamp(
     wall.x - wall.contactSide * SWORDSMAN_AI_JUMP_SETUP_BACKOFF_PX,
     sourceMinX,
@@ -976,6 +1355,16 @@ function buildDecisionFromFirstEdge(
     case 'jump-up':
     case 'jump-gap':
     case 'jump-to-wall': {
+      // Shared-tip peaks: keep walking over the crest; never jump the lip.
+      if (enemy.onFloor && edge.id.includes(':crest-walk:')) {
+        return baseDecision('same-platform', {
+          directionX: edge.directionX,
+          targetX: edge.targetX,
+          traversalEdgeId: edge.id,
+          traversalNextNodeId: edge.toId,
+        });
+      }
+
       if (enemy.onFloor) {
         const setupReferenceX = getTraversalSetupReferenceX(enemy);
         const setupDelta = edge.setupX - setupReferenceX;
@@ -1210,6 +1599,20 @@ function findBestTraversalFirstEdge(
     return null;
   }
 
+  // Peak crest walks are an extra hop, so depth-3 search often prefers jumping off
+  // the wrong tip. When the crest moves toward the target, take it immediately.
+  const crestWalk = findCrestWalkTowardTarget(
+    graph,
+    startNodeIds,
+    targetNodeIds,
+    enemyBody,
+    targetBody,
+    blockedEdgeIds,
+  );
+  if (crestWalk) {
+    return crestWalk;
+  }
+
   // The routes are listed once per start-node and blocked-edge set, so a chase only searches again
   // when the enemy reaches another node or an edge is blocked. Scoring them against the live
   // positions still runs every call, so the chosen edge is the one a full search would pick (F305).
@@ -1379,6 +1782,55 @@ function scoreTraversalPathEnd(
   return depth * 72 + distance.horizontalDistance * 1.5 + distance.verticalDistance * 2 - targetMatchBonus;
 }
 
+function findCrestWalkTowardTarget(
+  graph: SwordsmanTraversalGraph,
+  startNodeIds: readonly string[],
+  targetNodeIds: readonly string[],
+  enemyBody: SwordsmanBodySnapshot,
+  targetBody: SwordsmanBodySnapshot,
+  blockedEdgeIds: ReadonlySet<string>,
+): SwordsmanTraversalEdge | null {
+  // Avoid edgesByNodeId reads on non-triangle starts so route-list caching stays valid.
+  const triangleStarts = startNodeIds.filter((startNodeId) => {
+    const node = graph.nodesById.get(startNodeId);
+    return node?.kind === 'surface' && Boolean(node.triangle);
+  });
+  if (triangleStarts.length === 0) {
+    return null;
+  }
+
+  const targetIdSet = new Set(targetNodeIds);
+  const targetDirection = directionFromDelta(
+    targetBody.centerX - enemyBody.centerX,
+    1,
+  );
+  const horizontalSpan = Math.abs(targetBody.centerX - enemyBody.centerX);
+  let best: SwordsmanTraversalEdge | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const startNodeId of triangleStarts) {
+    for (const edge of graph.edgesByNodeId.get(startNodeId) ?? []) {
+      if (blockedEdgeIds.has(edge.id) || !edge.id.includes(':crest-walk:')) {
+        continue;
+      }
+      const towardPartner = targetIdSet.has(edge.toId);
+      const towardTargetSide =
+        horizontalSpan > TILE_SIZE * 0.75 && edge.directionX === targetDirection;
+      if (!towardPartner && !towardTargetSide) {
+        continue;
+      }
+      const score =
+        Math.abs(edge.setupX - enemyBody.centerX) + (towardPartner ? 0 : 40);
+      if (score < bestScore) {
+        best = edge;
+        bestScore = score;
+      }
+    }
+  }
+
+  return best;
+}
+
 function scoreTraversalPathEntry(
   firstEdge: SwordsmanTraversalEdge,
   enemyBody: SwordsmanBodySnapshot,
@@ -1407,16 +1859,28 @@ export function getSwordsmanTraversalCurrentNodeId(
 export function getSwordsmanTraversalContext(
   graph: SwordsmanTraversalGraph,
   body: SwordsmanBodySnapshot,
+  preferredSurfaceId: string | null = null,
 ): SwordsmanTraversalContext {
   const currentSurface = findSurfaceSegmentNearBody(
     graph,
     body,
     body.onFloor ? SURFACE_MATCH_TOLERANCE_PX : AIRBORNE_SURFACE_MATCH_TOLERANCE_PX,
+    preferredSurfaceId,
   );
   const currentWall =
     body.wallContactSide === 0
       ? null
       : findWallSegmentNearBody(graph, body, body.wallContactSide);
+  // Grounded on a ramp near its vertical tip must stay on the surface node —
+  // preferring the wall freezes dismount / walk-off planning.
+  if (body.onFloor && currentSurface) {
+    return {
+      currentSurface,
+      currentWall,
+      currentNodeId: currentSurface.id,
+      startNodeIds: uniqueNodeIds([currentSurface.id]),
+    };
+  }
   return {
     currentSurface,
     currentWall,
@@ -1436,7 +1900,7 @@ export function measureSwordsmanTraversalNodeDistanceToBody(
         getSurfaceMinAnchorX(node),
         getSurfaceMaxAnchorX(node),
       ),
-      verticalDistance: Math.abs(node.topY - body.bottom),
+      verticalDistance: Math.abs(surfaceTopYNearBody(node, body.centerX) - body.bottom),
     };
   }
 
@@ -1450,6 +1914,7 @@ function findSurfaceSegmentNearBody(
   graph: SwordsmanTraversalGraph,
   body: SwordsmanBodySnapshot,
   tolerancePx: number,
+  preferredSurfaceId: string | null = null,
 ): SwordsmanSurfaceSegment | null {
   let best: SwordsmanSurfaceSegment | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -1462,7 +1927,8 @@ function findSurfaceSegmentNearBody(
       continue;
     }
 
-    const verticalDistance = Math.abs(body.bottom - segment.topY);
+    const surfaceTopY = surfaceTopYNearBody(segment, body.centerX);
+    const verticalDistance = Math.abs(body.bottom - surfaceTopY);
     if (verticalDistance > tolerancePx) {
       continue;
     }
@@ -1473,7 +1939,11 @@ function findSurfaceSegmentNearBody(
       getSurfaceMinAnchorX(segment),
       getSurfaceMaxAnchorX(segment),
     );
-    const score = verticalDistance * 4 + horizontalOverflow;
+    // Prefer triangle hyps over a tile floor under the ramp, and stick to the
+    // last surface briefly so ramp feet don't flicker floor↔triangle each frame.
+    const triangleBias = segment.triangle ? -28 : 0;
+    const stickyBias = preferredSurfaceId && segment.id === preferredSurfaceId ? -18 : 0;
+    const score = verticalDistance * 4 + horizontalOverflow + triangleBias + stickyBias;
     if (score < bestScore) {
       best = segment;
       bestScore = score;
@@ -1481,6 +1951,21 @@ function findSurfaceSegmentNearBody(
   }
 
   return best;
+}
+
+function surfaceTopYNearBody(segment: SwordsmanSurfaceSegment, localX: number): number {
+  if (!segment.triangle) {
+    return segment.topY;
+  }
+  return (
+    triangleFloorSurfaceYAt(
+      segment.triangle.anchorX,
+      segment.triangle.anchorY,
+      segment.triangle.legX,
+      segment.triangle.legY,
+      localX,
+    ) ?? segment.topY
+  );
 }
 
 function findWallSegmentNearBody(

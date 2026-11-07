@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { isSolidRuntimeObjectConfig, isSpecialTileKindGid } from '../../../config';
 import { getRollingBallGraphic, isRollingBallObjectId, ROLLING_BALL_FPS, ROLLING_BALL_ROWS, rollingBallFrame } from '../../../config/rollingBall';
 import { GHOST_OBJECT_ID } from '../../../enemies/ghost';
+import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
 import { TILE_SIZE } from '../../../config';
 import {
   evaluateFlatWalk,
@@ -778,29 +779,51 @@ function supportActor(
     separation != null
     && Math.abs(separation.dy) < 0.35
     && Math.abs(separation.dx) > 0.5;
+  // Body seated on the hyp at the high tip overlaps the vertical leg. Treat that
+  // as crest contact, not a wall reverse — otherwise walkers vibrate L/R on tip.
+  const nearHighTip =
+    tip != null
+    && Math.abs(actor.body.bottom - tip.y) <= 6
+    && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 10;
+  // Climbing a paired peak: the other triangle's vertical meets mid-slope before
+  // feet reach tip height. Do not reverse — that vibrates facing on the way up.
+  const approachingCrestAlongHyp =
+    tip != null
+    && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 14
+    && actor.body.bottom >= tip.y - 2
+    && actor.body.bottom < tip.y + Math.abs(triangle.legY) - 4
+    && actor.intent !== 0
+    && (tip.x - actor.body.center.x) * actor.intent > 0;
+  const crestContact = nearHighTip || approachingCrestAlongHyp;
+  // Sword Hunter turns are rate-limited in its controller — flipping here blurs the run.
+  const allowTriangleReverse =
+    actor.liveObject != null
+    && actor.liveObject.config.id !== SWORDSMAN_AI_OBJECT_ID;
   // Vertical face is a wall on every floor ramp (shallow included) — reverse.
   if (
     separation
     && verticalLegHit
-    && actor.liveObject
+    && !crestContact
+    && allowTriangleReverse
     && isFloorTriangle(triangle.legY)
     && actor.intent !== 0
     && separation.dx * actor.intent < 0
   ) {
-    actor.liveObject.runtime.directionX *= -1;
+    actor.liveObject!.runtime.directionX *= -1;
     actor.intent *= -1;
   }
   // Steep hyp face blocking an enemy/NPC walk: turn around instead of grinding.
   if (
     separation
     && !verticalLegHit
-    && actor.liveObject
+    && !crestContact
+    && allowTriangleReverse
     && isFloorTriangle(triangle.legY)
     && isSteepTriangle(triangle.legX, triangle.legY)
     && actor.intent !== 0
     && separation.dx * actor.intent < 0
   ) {
-    actor.liveObject.runtime.directionX *= -1;
+    actor.liveObject!.runtime.directionX *= -1;
     actor.intent *= -1;
   }
   // Shallow hyp tip: drop sideways shove that fights walk into the first hyp
@@ -815,9 +838,15 @@ function supportActor(
   ) {
     separation = Math.abs(separation.dy) < 0.05 ? null : { dx: 0, dy: separation.dy };
   }
-  // At a flush crest the vertical face still overlaps the body. Do not shove
-  // walkers back down into the tip gap after they have reached landing height.
-  if (separation && tip && flushTop != null && actor.intent * uphill > 0) {
+  // At the crest the vertical face still overlaps the body. Do not shove
+  // walkers back down the hyp or reverse them — let them run over / jump clear.
+  if (separation && tip && crestContact) {
+    if (separation.dy > 0) separation = { dx: separation.dx, dy: 0 };
+    // Kill sideways wall shove at the tip; keep a tiny lift if still buried.
+    if (Math.abs(separation.dx) > 0) {
+      separation = Math.abs(separation.dy) < 0.05 ? null : { dx: 0, dy: separation.dy };
+    }
+  } else if (separation && tip && flushTop != null && actor.intent * uphill > 0) {
     const nearCrest =
       Math.abs(actor.body.bottom - tip.y) <= 4
       && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 6;

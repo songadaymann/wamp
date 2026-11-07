@@ -43,6 +43,8 @@ export interface LoadedRoomObjectRuntimeState {
   aiFacingDirectionX: number;
   aiFacingLastFlipAt: number;
   aiFacingLastFlipX: number;
+  /** Timestamps of recent direction turns (sliding window anti-vibration). */
+  aiDirectionTurnAtMs: number[];
   elapsedMs: number;
   nextActionAt: number;
   actionStartedAt: number;
