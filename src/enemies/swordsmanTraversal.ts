@@ -802,8 +802,13 @@ function buildJumpToWallEdge(
 
   const sourceMinX = getSurfaceMinAnchorX(source);
   const sourceMaxX = getSurfaceMaxAnchorX(source);
-  // Wall capping this surface (ramp low tip vs tile wall) is a corner, not a jump.
-  if (wall.x >= source.leftX - 2 && wall.x <= source.rightX + 2) {
+  // Ramp low tip against a tile wall is a corner stand, not a jump-to-wall.
+  // Keep this triangle-only: shaft/ledge walls under a flat floor still jump.
+  if (
+    source.triangle
+    && wall.x >= source.leftX - 2
+    && wall.x <= source.rightX + 2
+  ) {
     return null;
   }
 
