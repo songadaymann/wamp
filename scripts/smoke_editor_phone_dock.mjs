@@ -320,9 +320,11 @@ try {
       passed.push('Draw/Erase switch changes the tool in one tap and keeps the tile');
       await tap('#btn-mobile-editor-toggle');
       await tap('.editor-shell-tools [data-tool="triangle"]');
+      await page.waitForFunction(() => document.body.dataset.editorTriangleOptions === 'true');
       assert.equal(await page.evaluate(() => document.body.dataset.editorTriangleOptions), 'true');
       assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'false');
       await tap('.editor-shell-tools [data-tool="pencil"]');
+      await page.waitForFunction(() => document.body.dataset.editorTriangleOptions === undefined);
       assert.equal(await page.evaluate(() => document.body.dataset.editorTriangleOptions), undefined);
       await tap('#btn-mobile-editor-toggle');
       assert.equal(await page.locator('#editor-phone-draw-switch').isVisible(), true);
