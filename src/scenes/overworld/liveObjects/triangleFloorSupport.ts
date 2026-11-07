@@ -102,7 +102,7 @@ export function tryStepOntoTriangleLanding(
   return true;
 }
 
-export function findSolidTerrainTopNear(
+function findSolidTerrainTopNear(
   room: RoomSnapshot,
   worldX: number,
   feetY: number,

@@ -8,7 +8,7 @@ export type EditorHistoryShortcutActions = {
 };
 
 /** Capture-phase Ctrl/Cmd+Z / Ctrl+Y so history reaches WAMP before browser or host chrome. */
-export function handleEditorHistoryShortcutCapture(
+function handleEditorHistoryShortcutCapture(
   event: KeyboardEvent,
   actions: EditorHistoryShortcutActions,
 ): void {

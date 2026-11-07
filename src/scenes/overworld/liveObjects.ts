@@ -20,7 +20,6 @@ import {
   getPlacedObjectLayer,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  TILE_SIZE,
   type GameObjectConfig,
 } from '../../config';
 import { LiveUtilitySession, presentUtilityObject } from './liveObjects/liveUtilitySession';

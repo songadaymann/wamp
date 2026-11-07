@@ -9,7 +9,7 @@ import {
 import type { TriangleHandleController } from './triangleHandles';
 import type { UtilityObjectEditor } from './utilityObjectEdits';
 
-interface CourseTriangleSlice {
+export interface CourseTriangleSlice {
   origin: { x: number; y: number };
   runtime: {
     getPlacedObjectByInstanceId(instanceId: string | null): PlacedObject | null;
@@ -18,16 +18,16 @@ interface CourseTriangleSlice {
 }
 
 /** Course editor: triangle handles plus primary/secondary/delete helpers. */
-export class CourseTriangleToolController {
+export class CourseTriangleToolController<TSlice extends CourseTriangleSlice = CourseTriangleSlice> {
   readonly handles: TriangleHandleController;
 
   constructor(private readonly host: {
-    slices(): Iterable<CourseTriangleSlice>;
+    slices(): Iterable<TSlice>;
     pinnedTriangleId(): string | null;
     zoom(): number;
     deletePinned(): boolean;
-    handleToolAction(slice: CourseTriangleSlice, worldX: number, worldY: number): void;
-    removeTriangleAt(slice: CourseTriangleSlice, worldX: number, worldY: number): void;
+    handleToolAction(slice: TSlice, worldX: number, worldY: number): void;
+    removeTriangleAt(slice: TSlice, worldX: number, worldY: number): void;
   }) {
     this.handles = createCourseTriangleHandles({
       slices: () => host.slices(),
@@ -40,13 +40,13 @@ export class CourseTriangleToolController {
     return this.host.deletePinned();
   }
 
-  handlePrimary(slice: CourseTriangleSlice, worldX: number, worldY: number): boolean {
+  handlePrimary(slice: TSlice, worldX: number, worldY: number): boolean {
     if (!isTriangleEditorTool()) return false;
     this.host.handleToolAction(slice, worldX, worldY);
     return true;
   }
 
-  handleSecondary(slice: CourseTriangleSlice, worldX: number, worldY: number): boolean {
+  handleSecondary(slice: TSlice, worldX: number, worldY: number): boolean {
     if (!isTriangleEditorTool()) return false;
     this.host.removeTriangleAt(slice, worldX, worldY);
     return true;

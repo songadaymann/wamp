@@ -140,7 +140,7 @@ export function swordsmanStandingBlockedAhead(
   return !swordsmanStandingHitboxFitsAt(room, liveObject, body, probeX, origin);
 }
 
-export function swordsmanStandingHitboxFitsAt(
+function swordsmanStandingHitboxFitsAt(
   room: RoomSnapshot,
   liveObject: LoadedRoomObject,
   body: Phaser.Physics.Arcade.Body,
@@ -223,7 +223,7 @@ export function hasTriangleFloorSupport(
   return false;
 }
 
-export function hasTriangleFloorNearWorldPoint(
+function hasTriangleFloorNearWorldPoint(
   room: RoomSnapshot,
   worldX: number,
   feetY: number,
@@ -280,7 +280,7 @@ export function getSwordsmanWallContactSide(
  * from either side (hyp approach or open-air face) so tip-clear jumps and
  * wall-jumps both work.
  */
-export function getTriangleVerticalContactSide(
+function getTriangleVerticalContactSide(
   room: RoomSnapshot,
   body: ArcadeObjectBody,
   origin: RoomOrigin,
@@ -321,7 +321,7 @@ export function getTriangleVerticalContactSide(
   return bestSide;
 }
 
-export function hasTriangleFloorSupportAtWorldPoint(
+function hasTriangleFloorSupportAtWorldPoint(
   room: RoomSnapshot,
   worldX: number,
   worldY: number,

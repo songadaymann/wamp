@@ -267,7 +267,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
   private readonly drawing: EditorWorkspaceDrawingController<CourseRoomSlice>;
   private readonly touchControls: EditorTouchController;
   private readonly objectMoveController: EditorObjectMoveController;
-  private readonly triangleTool: CourseTriangleToolController;
+  private readonly triangleTool: CourseTriangleToolController<CourseRoomSlice>;
   // Focus leaving the game (Alt-Tab, a text field, a hidden tab) swallows button
   // releases: finish any mouse stroke, shape or pan as if it was released.
   private readonly handleTouchBlur = (): void => {

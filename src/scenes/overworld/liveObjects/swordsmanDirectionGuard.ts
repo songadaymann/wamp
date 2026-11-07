@@ -4,7 +4,7 @@ import {
 } from '../../../enemies/swordsmanTuning';
 import type { LoadedRoomObjectRuntimeState } from './model';
 
-export const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = Math.ceil(
+const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = Math.ceil(
   SWORDSMAN_AI_DIRECTION_TURN_WINDOW_MS / SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW,
 );
 

@@ -6,7 +6,6 @@ import {
   objectCollidesWithWorld,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  TILE_SIZE,
   type GameObjectConfig,
 } from '../../../config';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
@@ -52,6 +51,7 @@ import {
   getSwordsmanTraversalTargetContext,
   isSwordsmanLadderTraversalEdge,
   type SwordsmanBodySnapshot,
+  type SwordsmanSurfaceSegment,
   type SwordsmanTraversalDecision,
   type SwordsmanTraversalEdge,
   type SwordsmanTraversalGraph,
@@ -571,13 +571,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         directionX: deltaX >= 0 ? 1 : -1,
         withinActionRange,
       };
-      const overheadJump = getSwordsmanCollectOverheadJump(
+      const overheadJump = this.getSwordsmanCollectOverheadJump(
         room,
         currentContext.currentSurface,
         body,
         targetBody,
         sweepDirectionX,
-        this.roomOrigin(room),
       );
 
       if (withinActionRange) {
@@ -1002,6 +1001,23 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
 
     body.setVelocityX(liveObject.runtime.directionX * speed);
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'run'));
+  }
+
+  private getSwordsmanCollectOverheadJump(
+    room: RoomSnapshot,
+    currentSurface: SwordsmanSurfaceSegment | null,
+    body: Phaser.Physics.Arcade.Body,
+    targetBody: ArcadeObjectBody,
+    sweepDirectionX: -1 | 1,
+  ): NonNullable<SwordsmanObjectiveTarget['opportunisticJump']> | null {
+    return getSwordsmanCollectOverheadJump(
+      room,
+      currentSurface,
+      body,
+      targetBody,
+      sweepDirectionX,
+      this.roomOrigin(room),
+    );
   }
 
   /** Jump up-and-over a triangle vertical tip while grounded on the hypotenuse. */

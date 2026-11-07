@@ -25,15 +25,15 @@ export interface TriangleTileFields {
 
 const MAX_TRIANGLE_TILES = 512;
 
-export function normalizeTriangleTileMode(value: unknown): TriangleTileMode {
+function normalizeTriangleTileMode(value: unknown): TriangleTileMode {
   return value === 'pattern' || value === 'shuffle' ? value : 'wrap';
 }
 
-export function normalizeTriangleTileFlip(value: unknown): TileFlipMode {
+function normalizeTriangleTileFlip(value: unknown): TileFlipMode {
   return value === 'on' || value === 'rand' ? value : 'off';
 }
 
-export function normalizeTriangleTileGids(value: unknown): number[] {
+function normalizeTriangleTileGids(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
   const gids: number[] = [];
   for (const gid of value) {

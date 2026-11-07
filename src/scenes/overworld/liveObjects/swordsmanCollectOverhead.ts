@@ -93,7 +93,7 @@ export function getSwordsmanCollectOverheadJump(
   };
 }
 
-export function hasClearSwordsmanCollectOverheadPath(
+function hasClearSwordsmanCollectOverheadPath(
   room: RoomSnapshot,
   body: Phaser.Physics.Arcade.Body,
   targetBody: ArcadeObjectBody,
