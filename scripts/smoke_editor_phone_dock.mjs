@@ -309,13 +309,25 @@ try {
       passed.push('swipe scrolls the WampOS 95 picker and its last row can be tapped');
 
       // F369: with the sheet hidden, one tap switches between Draw and Erase and keeps the tile.
-      for (const tool of ['eraser', 'pencil']) {
+      for (const tool of ['eraser', 'pencil', 'eraser', 'pencil', 'eraser', 'pencil']) {
         await tap(`[data-editor-phone-tool="${tool}"]`);
         assert.equal((await selection()).activeTool, tool);
         assert.equal(await page.locator(`[data-editor-phone-tool="${tool}"]`).getAttribute('aria-pressed'), 'true');
         assert.deepEqual(await tileSelection(), tapped);
+        assert.equal(await page.locator('#editor-phone-draw-switch').isVisible(), true, 'Quick tool selection must not reopen the library');
+        assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'true');
       }
       passed.push('Draw/Erase switch changes the tool in one tap and keeps the tile');
+      await tap('#btn-mobile-editor-toggle');
+      await tap('.editor-shell-tools [data-tool="triangle"]');
+      assert.equal(await page.evaluate(() => document.body.dataset.editorTriangleOptions), 'true');
+      assert.equal(await page.evaluate(() => document.body.dataset.mobileEditorCollapsed), 'false');
+      await tap('.editor-shell-tools [data-tool="pencil"]');
+      assert.equal(await page.evaluate(() => document.body.dataset.editorTriangleOptions), undefined);
+      await tap('#btn-mobile-editor-toggle');
+      assert.equal(await page.locator('#editor-phone-draw-switch').isVisible(), true);
+      passed.push('Triangle still opens its options and returning to Draw restores the quick switch');
+
 
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.waitForFunction(() => document.body.dataset.deviceClass !== 'phone');

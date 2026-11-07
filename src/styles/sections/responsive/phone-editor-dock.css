@@ -530,7 +530,33 @@
     z-index: var(--z-phone-editor-inspector);
   }
 
+  /* Keep Done and minimize in separate 44px touch targets. Desktop chrome is
+     otherwise absolute at the same top-right position as the phone's Done. */
+  body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .editor-inspector-chrome {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'] #editor-inspector .editor-inspector-title {
+    display: none;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'] #btn-editor-inspector-minimize {
+    min-width: 44px;
+  }
+
+  body[data-device-class='phone'][data-app-mode='editor'][data-editor-phone-inspector='true']:has(#editor-inspector.is-minimized) {
+    --phone-editor-sheet-height: 60px;
+  }
+
   body[data-device-class='phone'][data-app-mode='editor'][data-editor-phone-inspector='true'] #editor-phone-inspector-heading {
+    padding-right: 52px;
     display: flex;
     align-items: center;
     justify-content: space-between;

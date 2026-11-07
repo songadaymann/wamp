@@ -55,7 +55,40 @@ try {
    await canvasTap((await get('floor_trigger')).x+100,(await get('floor_trigger')).y);
    assert.equal(await page.locator('#editor-phone-link-prompt').isVisible(),true);
    await page.screenshot({path:`${prefix}-no-target.png`});
-   await tap('#btn-editor-link-cancel');await open();await done();
+   await tap('#btn-editor-link-cancel');await open();
+   const beforeChrome = await snapshot();
+   const checkHeaderTargets = async () => {
+    const done = await page.locator('#btn-editor-inspector-done').boundingBox();
+    const minimize = await page.locator('#btn-editor-inspector-minimize').boundingBox();
+    assert.ok(done && minimize && minimize.width >= 44 && minimize.height >= 44);
+    assert.ok(done.x + done.width <= minimize.x || minimize.x + minimize.width <= done.x,
+      `Inspector actions overlap: ${JSON.stringify({done,minimize})}`);
+    for (const id of ['btn-editor-inspector-done','btn-editor-inspector-minimize']) {
+     assert.equal(await page.locator('#'+id).evaluate(e=>{
+      const r=e.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')?.id;
+     }),id,`${id} must receive native taps`);
+    }
+   };
+   for (let cycle=0;cycle<2;cycle++) {
+    await checkHeaderTargets();
+    const expandedHeight = (await page.locator('#editor-inspector').boundingBox()).height;
+    await tap('#btn-editor-inspector-minimize');
+    assert.equal(await page.locator('#btn-editor-inspector-minimize').getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('#pressure-plate-panel').isVisible(),false);
+    assert.ok((await page.locator('#editor-inspector').boundingBox()).height < expandedHeight);
+    await checkHeaderTargets();
+    await page.screenshot({path:`${prefix}-minimized-${cycle}.png`});
+    await tap('#btn-editor-inspector-minimize');await open();
+    assert.equal(await page.locator('#btn-editor-inspector-minimize').getAttribute('aria-expanded'),'true');
+    assert.equal(await page.locator('#pressure-plate-panel').isVisible(),true);
+   }
+   await tap('#btn-editor-inspector-minimize');await done();
+   await objectTap('floor_trigger');await open();await checkHeaderTargets();
+   assert.equal(await page.locator('#btn-editor-inspector-minimize').getAttribute('aria-expanded'),'false');
+   await tap('#btn-editor-inspector-minimize');await open();
+   assert.deepEqual((await snapshot()).placedObjects,beforeChrome.placedObjects,'Inspector chrome must not modify object settings');
+   await done();
+   passed.push('independent Done/minimize hit targets, repeated minimize/restore and reopening a minimized inspector');
    await place('door_metal',440,240);if(await page.locator('#editor-phone-link-prompt').isVisible())await tap('#btn-editor-link-cancel');if(await page.locator('#editor-inspector').isVisible())await done();
    passed.push('native plate-before-target trap and touch Cancel');
    await objectTap('floor_trigger');await open();await tap('#btn-pressure-plate-connect');assert.equal(await page.locator('#editor-phone-link-prompt').isVisible(),true);await objectTap('door_metal');await open();

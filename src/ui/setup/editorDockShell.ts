@@ -310,7 +310,7 @@ export class EditorDockShellController {
       (action.type === 'toggle-dock' && action.dock !== 'markers')
       || action.type === 'toggle-room'
       || action.type === 'open-goal'
-      || action.type === 'follow-tool'
+      || (action.type === 'follow-tool' && this.state.triangleSidebar)
     ) this.phoneDock.expand();
     this.syncDom();
     if (leaveTriangleTool) {

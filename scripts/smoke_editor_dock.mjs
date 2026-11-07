@@ -162,7 +162,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
   await auditButtonRoles(page, 'editor');
   const topTools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await topTools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
-    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line', 'triangle']);
   for (const tool of await topTools.all()) assert.equal(await tool.isVisible(), true);
   assert.equal(await page.locator('[data-editor-shell-action="back"] span:last-child').textContent(), 'Back to Setup');
   assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), true);
@@ -295,7 +295,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   await auditButtonRoles(page, 'editor');
   const tools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await tools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
-    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line', 'triangle']);
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
   await page.locator('#menu-toggle').click();
   for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
