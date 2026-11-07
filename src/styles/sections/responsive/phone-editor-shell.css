@@ -98,6 +98,12 @@
     overflow: hidden;
   }
 
+  body[data-app-mode='editor']:not([data-device-class='phone'])[data-editor-triangle-options='true'] #object-palette-section {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
   body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section {
     flex: 0 0 auto;
     min-height: 0;
@@ -107,6 +113,12 @@
 
   body[data-app-mode='editor']:not([data-device-class='phone']) #object-palette-section .sidebar-section-body {
     overflow: hidden;
+  }
+
+  body[data-app-mode='editor']:not([data-device-class='phone'])[data-editor-triangle-options='true'] #object-palette-section .sidebar-section-body {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
   }
 
   body[data-app-mode='editor']:not([data-device-class='phone']) #tileset-section .sidebar-section-body,

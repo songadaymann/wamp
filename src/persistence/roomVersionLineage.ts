@@ -194,6 +194,14 @@ type CanonicalPlacedObjectPayload = {
   triangleLegY?: number;
   triangleFill?: string;
   triangleStroke?: string;
+  triangleTileFill?: boolean;
+  triangleTileMode?: string;
+  triangleTileSlopeOnly?: boolean;
+  triangleStrokeOn?: boolean;
+  triangleBackgroundOn?: boolean;
+  triangleTileFlipX?: string;
+  triangleTileFlipY?: string;
+  triangleTileGids?: number[];
 };
 
 type CanonicalRoomFingerprintPayload = {
@@ -539,6 +547,14 @@ function utilityFingerprintFields(placed: PlacedObject): Partial<CanonicalPlaced
           triangleLegY: triangle.legY,
           triangleFill: triangle.fill,
           triangleStroke: triangle.stroke,
+          triangleTileFill: triangle.tiles.fill,
+          triangleTileMode: triangle.tiles.mode,
+          triangleTileSlopeOnly: triangle.tiles.slopeOnly,
+          triangleTileFlipX: triangle.tiles.flipX,
+          triangleTileFlipY: triangle.tiles.flipY,
+          triangleTileGids: triangle.tiles.gids,
+          triangleStrokeOn: triangle.strokeOn,
+          triangleBackgroundOn: triangle.backgroundOn,
         }
       : {}),
   };
@@ -572,7 +588,13 @@ function compareCanonicalPlacedObjects(
     (left.triangleLegX ?? 0) - (right.triangleLegX ?? 0) ||
     (left.triangleLegY ?? 0) - (right.triangleLegY ?? 0) ||
     (left.triangleFill ?? '').localeCompare(right.triangleFill ?? '') ||
-    (left.triangleStroke ?? '').localeCompare(right.triangleStroke ?? '')
+    (left.triangleStroke ?? '').localeCompare(right.triangleStroke ?? '') ||
+    Number(left.triangleTileFill ?? false) - Number(right.triangleTileFill ?? false) ||
+    Number(left.triangleTileSlopeOnly ?? false) - Number(right.triangleTileSlopeOnly ?? false) ||
+    Number(left.triangleStrokeOn ?? true) - Number(right.triangleStrokeOn ?? true) ||
+    Number(left.triangleBackgroundOn ?? true) - Number(right.triangleBackgroundOn ?? true) ||
+    (left.triangleTileMode ?? '').localeCompare(right.triangleTileMode ?? '') ||
+    (left.triangleTileGids ?? []).join(',').localeCompare((right.triangleTileGids ?? []).join(','))
   );
 }
 

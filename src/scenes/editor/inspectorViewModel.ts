@@ -4,10 +4,10 @@ import { getRollingBallGraphic, normalizePlacedRollingBall } from '../../config/
 import {
   normalizePlacedTriangle,
   parseHexColor,
-  triangleFlipFromLegs,
   DEFAULT_TRIANGLE_FILL,
   DEFAULT_TRIANGLE_STROKE,
 } from '../../config/trianglePiece';
+import { countOccupiedSelectionTiles } from './selectionPattern';
 import type { EditorInspectorState } from './uiBridge';
 
 export interface PressurePlateInspectorOptions {
@@ -94,6 +94,12 @@ export function createEmptyEditorInspectorState(): EditorInspectorState {
     triangleFlipY: false,
     triangleFillValue: '#8A8F98',
     triangleStrokeValue: '#2C3138',
+    triangleTileFillChecked: false,
+    triangleSlopeOnlyChecked: false,
+    triangleSlopeOnlyEnabled: false,
+    triangleStrokeEnabled: true,
+    triangleBackgroundEnabled: true,
+    triangleLayerLock: null,
   };
 }
 
@@ -124,17 +130,22 @@ export function buildTriangleInspectorState(
 ): EditorInspectorState | null {
   const geometry = normalizePlacedTriangle(placed);
   if (!geometry) return null;
-  const flip = triangleFlipFromLegs(geometry.legX, geometry.legY);
   return {
     ...createEmptyEditorInspectorState(),
     visible: true,
     triangleVisible: true,
     trianglePaintMode: false,
     triangleStatusText: statusText ?? 'Drag a square handle to move or resize this ramp.',
-    triangleFlipX: flip.flipX,
-    triangleFlipY: flip.flipY,
+    triangleFlipX: editorState.triangleStampFlipX,
+    triangleFlipY: editorState.triangleStampFlipY,
     triangleFillValue: geometry.fill,
     triangleStrokeValue: geometry.stroke,
+    triangleTileFillChecked: geometry.tiles.fill,
+    triangleSlopeOnlyChecked: geometry.tiles.slopeOnly,
+    triangleSlopeOnlyEnabled: countOccupiedSelectionTiles(editorState.selection) > 1,
+    triangleStrokeEnabled: geometry.strokeOn,
+    triangleBackgroundEnabled: geometry.backgroundOn,
+    triangleLayerLock: requiredTriangleLayer(geometry.strokeOn, geometry.backgroundOn, geometry.tiles.fill),
   };
 }
 
@@ -149,7 +160,30 @@ export function buildTriangleStampInspectorState(statusText: string | null = nul
     triangleFlipY: editorState.triangleStampFlipY,
     triangleFillValue: parseHexColor(editorState.triangleStampFill, DEFAULT_TRIANGLE_FILL),
     triangleStrokeValue: parseHexColor(editorState.triangleStampStroke, DEFAULT_TRIANGLE_STROKE),
+    triangleTileFillChecked: editorState.triangleStampTileFill,
+    triangleSlopeOnlyChecked: editorState.triangleStampTileSlopeOnly,
+    triangleSlopeOnlyEnabled: countOccupiedSelectionTiles(editorState.selection) > 1,
+    triangleStrokeEnabled: editorState.triangleStampStrokeOn,
+    triangleBackgroundEnabled: editorState.triangleStampBackgroundOn,
+    triangleLayerLock: requiredTriangleLayer(
+      editorState.triangleStampStrokeOn,
+      editorState.triangleStampBackgroundOn,
+      editorState.triangleStampTileFill,
+    ),
   };
+}
+
+function requiredTriangleLayer(
+  stroke: boolean,
+  background: boolean,
+  tile: boolean,
+): 'stroke' | 'background' | 'tile' | null {
+  const selected = [
+    stroke ? 'stroke' : null,
+    background ? 'background' : null,
+    tile ? 'tile' : null,
+  ].filter((layer): layer is 'stroke' | 'background' | 'tile' => layer !== null);
+  return selected.length === 1 ? selected[0] : null;
 }
 
 export function buildPressurePlateInspectorState(

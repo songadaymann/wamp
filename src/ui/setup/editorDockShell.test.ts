@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   editorDockDrawerTitle,
+  editorShellReleasesTriangleSelection,
   INITIAL_EDITOR_DOCK_SHELL_STATE,
   isEditorDockShellActive,
   reduceEditorDockShellState,
@@ -119,5 +120,20 @@ describe('editor dock shell state', () => {
       spawnPlacementActive: true,
     });
     expect(reduce([{ type: 'finish-spawn' }], pending).spawnPlacementActive).toBe(false);
+  });
+
+  it('releases a selected triangle when leaving the triangle sidebar or opening another dock', () => {
+    const triangle = reduce([{ type: 'follow-tool', tool: 'triangle' }]);
+    const terrain = reduce([{ type: 'toggle-dock', dock: 'terrain' }], triangle);
+    const stuff = reduce([{ type: 'toggle-dock', dock: 'stuff' }], triangle);
+    const characters = reduce([{ type: 'toggle-dock', dock: 'characters' }], { ...INITIAL_EDITOR_DOCK_SHELL_STATE, openPanel: 'stuff', activeDock: 'stuff' });
+    expect(editorShellReleasesTriangleSelection(triangle, terrain)).toBe(true);
+    expect(editorShellReleasesTriangleSelection(triangle, stuff)).toBe(true);
+    expect(editorShellReleasesTriangleSelection(
+      { ...INITIAL_EDITOR_DOCK_SHELL_STATE, openPanel: 'stuff', activeDock: 'stuff' },
+      characters,
+    )).toBe(true);
+    expect(editorShellReleasesTriangleSelection(INITIAL_EDITOR_DOCK_SHELL_STATE, triangle)).toBe(false);
+    expect(editorShellReleasesTriangleSelection(terrain, terrain)).toBe(false);
   });
 });

@@ -40,6 +40,11 @@ export interface EditorState {
   triangleStampStroke: string;
   triangleStampFlipX: boolean;
   triangleStampFlipY: boolean;
+  triangleStampTileFill: boolean;
+  triangleStampTileMode: 'wrap' | 'pattern' | 'shuffle';
+  triangleStampTileSlopeOnly: boolean;
+  triangleStampStrokeOn: boolean;
+  triangleStampBackgroundOn: boolean;
   randomizeBrushSize: RandomizeBrushSize;
   scrambleBrushSize: RandomizeBrushSize;
   pencilBrushSize: RandomizeBrushSize;
@@ -110,6 +115,11 @@ export function createDefaultEditorState(): EditorState { return {
   triangleStampStroke: DEFAULT_TRIANGLE_STROKE,
   triangleStampFlipX: false,
   triangleStampFlipY: false,
+  triangleStampTileFill: false,
+  triangleStampTileMode: 'wrap',
+  triangleStampTileSlopeOnly: false,
+  triangleStampStrokeOn: true,
+  triangleStampBackgroundOn: true,
   randomizeBrushSize: 3,
   scrambleBrushSize: 3,
   pencilBrushSize: 1,

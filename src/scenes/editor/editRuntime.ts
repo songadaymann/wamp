@@ -35,6 +35,8 @@ import {
   triangleSelectionBounds,
 } from './utilityObjectEdits';
 import { getEditorObjectConfigById } from '../../customSprites/objectConfig';
+import { isTrianglePieceObjectId, placedTriangleContainsWorldPoint } from '../../config/trianglePiece';
+import { clearAllEditorTiles, clearCurrentEditorLayer } from './editRuntimeTileClear';
 import { SWORDSMAN_AI_OBJECT_ID } from '../../enemies/swordsmanAi';
 import { isBossEnemyObjectId, withPlacedBossHitPoints } from '../../enemies/boss';
 import {
@@ -188,7 +190,6 @@ import {
   normalizeRoomSmartTerrainState,
   serializeRoomSmartTerrainState,
   smartCellKey,
-  smartDecorationSlotKey,
   smartSemanticCellKey,
   smartOwnedOutputKey,
   type RoomSmartTerrainState,
@@ -205,8 +206,6 @@ import {
 } from '../../autotiling/solver';
 import {
   applyManualSmartOutputEdit,
-  clearSmartRecipeLayerState,
-  planSmartRecipeLayerClear,
 } from '../../autotiling/recipeSolver';
 import { getGameSettings } from '../../settings/userSettings';
 import { SmartTileController } from './smartTileController';
@@ -245,6 +244,7 @@ type UndoAction =
       actions: TileAction[];
       smartBefore?: RoomSmartTerrainState;
       smartAfter?: RoomSmartTerrainState;
+      objects?: ObjectsAction;
     }
   | { kind: 'objects'; action: ObjectsAction }
   | { kind: 'layout'; action: { previous: RoomSnapshot; next: RoomSnapshot } }
@@ -310,7 +310,10 @@ export class EditorEditRuntime {
     rebuildObjectSprites: () => this.rebuildObjectSprites(),
     markRoomDirty: () => this.markRoomDirty(),
     recordObjects: (previous, next) => {
-      this.history.record({ kind: 'objects', action: { previous, next } });
+      this.history.record({
+        kind: 'objects',
+        action: { previous: this.clonePlacedObjects(previous), next: this.clonePlacedObjects(next) },
+      });
     },
     getRoomOrigin: () => this.getRoomOrigin(),
     getPlacedObjectByInstanceId: (instanceId) => this.getPlacedObjectByInstanceId(instanceId),
@@ -1729,137 +1732,34 @@ export class EditorEditRuntime {
   }
 
   clearCurrentLayer(): void {
-    if (!this.guardEditable()) {
-      return;
-    }
-
-    const layer = this.host.getLayers().get(editorState.activeLayer);
-    if (!layer) {
-      return;
-    }
-
-    const actions: TileAction[] = [];
-    const smartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
-    const recipeClearPlan = planSmartRecipeLayerClear(smartBefore, editorState.activeLayer);
-    for (const output of recipeClearPlan.removedOutputs) {
-      if (output.layer === editorState.activeLayer) continue;
-      const { x, y } = output;
-      const outputLayer = this.host.getLayers().get(output.layer);
-      const outputTile = outputLayer?.getTileAt(x, y);
-      const oldGid = outputTile
-        ? encodeTileDataValue(outputTile.index, outputTile.flipX, outputTile.flipY)
-        : -1;
-      if (oldGid !== output.value) continue;
-      outputLayer?.removeTileAt(x, y);
-      actions.push({ layer: output.layer, x, y, oldGid, newGid: -1 });
-    }
-    for (let y = 0; y < ROOM_HEIGHT; y += 1) {
-      for (let x = 0; x < ROOM_WIDTH; x += 1) {
-        const existingTile = layer.getTileAt(x, y);
-        if (!existingTile) {
-          continue;
-        }
-
-        actions.push({
-          layer: editorState.activeLayer,
-          x,
-          y,
-          oldGid: encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY),
-          newGid: -1,
-        });
-        layer.removeTileAt(x, y);
-      }
-    }
-
-    if (editorState.activeLayer === 'terrain') {
-      for (const generated of [
-        this.smartTerrain.generatedDecorations,
-        this.smartTerrain.generatedBackgroundDecorations,
-      ]) {
-        for (const [targetKey, decoration] of Object.entries(generated)) {
-          const [x, y] = targetKey.split(',').map(Number);
-          const detailLayer = this.host.getLayers().get(decoration.layer);
-          const tile = detailLayer?.getTileAt(x, y);
-          const encoded = tile
-            ? encodeTileDataValue(tile.index, tile.flipX, tile.flipY)
-            : -1;
-          if (!tile || encoded !== (decoration.value ?? decoration.gid)) continue;
-          detailLayer?.removeTileAt(x, y);
-          actions.push({ layer: decoration.layer, x, y, oldGid: encoded, newGid: -1 });
-        }
-      }
-      this.smartTerrain.cells = {};
-      this.smartTerrain.generatedDecorations = {};
-      this.smartTerrain.generatedBackgroundDecorations = {};
-      this.smartTerrain.suppressedDecorationSlots = [];
-    } else if (editorState.activeLayer === 'foreground' || editorState.activeLayer === 'background') {
-      if (editorState.activeLayer === 'background') this.smartTerrain.backdropCells = {};
-      for (const generated of [
-        this.smartTerrain.generatedDecorations,
-        this.smartTerrain.generatedBackgroundDecorations,
-      ]) {
-        for (const [targetKey, decoration] of Object.entries(generated)) {
-          if (decoration.layer !== editorState.activeLayer) continue;
-          this.smartTerrain.suppressedDecorationSlots = Array.from(new Set([
-            ...this.smartTerrain.suppressedDecorationSlots,
-            smartDecorationSlotKey(decoration.ownerKey, decoration.slot),
-          ]));
-          delete generated[targetKey];
-        }
-      }
-    }
-    this.smartTerrain = clearSmartRecipeLayerState(this.smartTerrain, editorState.activeLayer);
-    if (actions.length === 0 && JSON.stringify(smartBefore) === JSON.stringify(this.smartTerrain)) {
-      return;
-    }
-    this.history.record({
-      kind: 'tiles', actions, smartBefore, smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
-    });
-    this.markRoomDirty();
+    clearCurrentEditorLayer(this.tileClearHost());
   }
 
   clearAllTiles(): void {
-    if (!this.guardEditable()) {
-      return;
-    }
+    clearAllEditorTiles(this.tileClearHost());
+  }
 
-    const actions: TileAction[] = [];
-    const smartBefore = cloneRoomSmartTerrainState(this.smartTerrain);
-    for (const layerName of LAYER_NAMES) {
-      const layer = this.host.getLayers().get(layerName);
-      if (!layer) {
-        continue;
-      }
-
-      for (let y = 0; y < ROOM_HEIGHT; y += 1) {
-        for (let x = 0; x < ROOM_WIDTH; x += 1) {
-          const existingTile = layer.getTileAt(x, y);
-          if (!existingTile) {
-            continue;
-          }
-
-          actions.push({
-            layer: layerName,
-            x,
-            y,
-            oldGid: encodeTileDataValue(existingTile.index, existingTile.flipX, existingTile.flipY),
-            newGid: -1,
-          });
-          layer.removeTileAt(x, y);
-        }
-      }
-    }
-
-    const clearedSmartTerrain = createRoomSmartTerrainState();
-    if (actions.length === 0 && JSON.stringify(smartBefore) === JSON.stringify(clearedSmartTerrain)) {
-      return;
-    }
-
-    this.smartTerrain = clearedSmartTerrain;
-    this.history.record({
-      kind: 'tiles', actions, smartBefore, smartAfter: cloneRoomSmartTerrainState(this.smartTerrain),
-    });
-    this.markRoomDirty();
+  private tileClearHost() {
+    return {
+      guardEditable: () => this.guardEditable(),
+      getLayers: () => this.host.getLayers(),
+      getPlacedObjects: () => this.host.getPlacedObjects(),
+      setPlacedObjects: (objects: PlacedObject[]) => this.host.setPlacedObjects(objects),
+      rebuildObjectSprites: () => this.rebuildObjectSprites(),
+      getSmartTerrain: () => this.smartTerrain,
+      setSmartTerrain: (smartTerrain: RoomSmartTerrainState) => {
+        this.smartTerrain = smartTerrain;
+      },
+      recordTileHistory: (entry: {
+        actions: TileAction[];
+        smartBefore: RoomSmartTerrainState;
+        smartAfter: RoomSmartTerrainState;
+        objects?: ObjectsAction;
+      }) => {
+        this.history.record({ kind: 'tiles', ...entry });
+      },
+      markRoomDirty: () => this.markRoomDirty(),
+    };
   }
 
   clearAllObjects(): void {
@@ -2284,12 +2184,16 @@ export class EditorEditRuntime {
     return placed;
   }
 
-  removeObjectAt(worldX: number, worldY: number): PlacedObject | null {
+  removeObjectAt(
+    worldX: number,
+    worldY: number,
+    filter?: (placed: PlacedObject) => boolean,
+  ): PlacedObject | null {
     if (!this.guardEditable()) {
       return null;
     }
-    const localPoint = this.toLocalWorldPoint(worldX, worldY);
-    if (this.roomSpawnPoint) {
+    if (!filter && this.roomSpawnPoint) {
+      const localPoint = this.toLocalWorldPoint(worldX, worldY);
       const spawnDist = Math.hypot(this.roomSpawnPoint.x - localPoint.x, this.roomSpawnPoint.y - localPoint.y);
       if (spawnDist < 14) {
         this.updateSpawnPoint(null);
@@ -2297,11 +2201,11 @@ export class EditorEditRuntime {
       }
     }
 
-    if (this.removeGoalMarkerAt(worldX, worldY)) {
+    if (!filter && this.removeGoalMarkerAt(worldX, worldY)) {
       return null;
     }
 
-    const target = this.findPlacedObjectAt(worldX, worldY);
+    const target = this.findPlacedObjectAt(worldX, worldY, filter);
     if (!target) {
       return null;
     }
@@ -2367,6 +2271,25 @@ export class EditorEditRuntime {
     return this.host.getPlacedObjects().find((placed) => placed.instanceId === instanceId) ?? null;
   }
 
+  removePlacedObjectByInstanceId(instanceId: string | null | undefined): PlacedObject | null {
+    if (!this.guardEditable() || !instanceId) {
+      return null;
+    }
+    const previous = this.clonePlacedObjects();
+    const removal = removePlacedObjectFromDocument(previous, instanceId);
+    if (!removal.removed) {
+      return null;
+    }
+    this.host.setPlacedObjects(removal.placedObjects);
+    this.history.record({
+      kind: 'objects',
+      action: { previous, next: this.clonePlacedObjects(removal.placedObjects) },
+    });
+    this.rebuildObjectSprites();
+    this.markRoomDirty();
+    return removal.removed;
+  }
+
   getPlacedObjectSprite(instanceId: string): Phaser.GameObjects.Sprite | null {
     return this.documentPresentation.getPlacedObjectSprite(instanceId);
   }
@@ -2402,6 +2325,18 @@ export class EditorEditRuntime {
     for (let index = placedObjects.length - 1; index >= 0; index -= 1) {
       const placed = placedObjects[index];
       if (filter && !filter(placed)) {
+        continue;
+      }
+
+      if (isTrianglePieceObjectId(placed.id)) {
+        const origin = this.getRoomOrigin();
+        if (!placedTriangleContainsWorldPoint(placed, worldX, worldY, origin.x, origin.y)) continue;
+        const worldPoint = this.toWorldPoint(placed.x, placed.y);
+        const distance = Math.hypot(worldPoint.x - worldX, worldPoint.y - worldY);
+        if (distance < bestScore) {
+          bestScore = distance;
+          bestMatch = placed;
+        }
         continue;
       }
 
@@ -3281,10 +3216,17 @@ export class EditorEditRuntime {
       if (action.smartBefore) {
         this.smartTerrain = cloneRoomSmartTerrainState(action.smartBefore);
       }
+      if (action.objects) {
+        this.host.setPlacedObjects(this.clonePlacedObjects(action.objects.previous));
+        this.rebuildObjectSprites();
+      }
       this.history.pushRedo({
         kind: 'tiles', actions: reverseActions,
         smartBefore: action.smartAfter ? cloneRoomSmartTerrainState(action.smartAfter) : undefined,
         smartAfter: action.smartBefore ? cloneRoomSmartTerrainState(action.smartBefore) : undefined,
+        objects: action.objects
+          ? { previous: this.clonePlacedObjects(action.objects.next), next: this.clonePlacedObjects(action.objects.previous) }
+          : undefined,
       });
       this.markRoomDirty();
       return;
@@ -3390,10 +3332,17 @@ export class EditorEditRuntime {
       if (action.smartBefore) {
         this.smartTerrain = cloneRoomSmartTerrainState(action.smartBefore);
       }
+      if (action.objects) {
+        this.host.setPlacedObjects(this.clonePlacedObjects(action.objects.previous));
+        this.rebuildObjectSprites();
+      }
       this.history.pushUndo({
         kind: 'tiles', actions: reverseActions,
         smartBefore: action.smartAfter ? cloneRoomSmartTerrainState(action.smartAfter) : undefined,
         smartAfter: action.smartBefore ? cloneRoomSmartTerrainState(action.smartBefore) : undefined,
+        objects: action.objects
+          ? { previous: this.clonePlacedObjects(action.objects.next), next: this.clonePlacedObjects(action.objects.previous) }
+          : undefined,
       });
       this.markRoomDirty();
       return;

@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { isSolidRuntimeObjectConfig, isSpecialTileKindGid } from '../../../config';
 import { getRollingBallGraphic, isRollingBallObjectId, ROLLING_BALL_FPS, ROLLING_BALL_ROWS, rollingBallFrame } from '../../../config/rollingBall';
+import { GHOST_OBJECT_ID } from '../../../enemies/ghost';
+import { SWORDSMAN_AI_OBJECT_ID } from '../../../enemies/swordsmanAi';
+import { TILE_SIZE } from '../../../config';
 import {
   evaluateFlatWalk,
   evaluateSlopeWalk,
@@ -8,8 +11,14 @@ import {
   isFloorTriangle,
   isSteepTriangle,
   isTrianglePieceObjectId,
+  pointInTriangle,
   separationFromTriangle,
   steepSlopeMotion,
+  triangleDownhillSignX,
+  triangleFloorHighTip,
+  triangleFloorSurfaceOrFlushTip,
+  triangleFloorSurfaceYAt,
+  triangleVertices,
 } from '../../../config/trianglePiece';
 import {
   getGravityVector,
@@ -161,7 +170,9 @@ export function stepUtilityObjects(options: UtilityStepOptions): boolean {
   actors.forEach((actor, index) => {
     const correction = lastActorCorrection(actors, index);
     if (!correction) return;
+    const facing = actor.liveObject?.runtime.directionX ?? 0;
     moveActor(actor, correction.dx, correction.dy, correction.dvx, correction.dvy);
+    maybeReverseNpcFromBallPush(actor, correction, facing);
   });
 
   for (const room of options.rooms) {
@@ -198,6 +209,25 @@ function lastActorCorrection(
   const stored = actors[index].correction;
   if (!stored || (stored.dx === 0 && stored.dy === 0 && stored.dvx === 0 && stored.dvy === 0)) return null;
   return stored;
+}
+
+/** When a solid NPC pushes a ball and the ball stops or shoves them back, turn around. */
+function maybeReverseNpcFromBallPush(
+  actor: TrackedActor,
+  correction: { dx: number; dy: number; dvx: number; dvy: number },
+  facing: number,
+): void {
+  const liveObject = actor.liveObject;
+  if (!liveObject || liveObject.config.category !== 'npc' || facing === 0) return;
+  const mode = liveObject.runtime.npcMode ?? 'idle';
+  if (mode === 'idle' && !liveObject.runtime.npcPushable) return;
+  const pushedBack = correction.dx * facing < -0.35 || correction.dvx * facing < -8;
+  const stopped =
+    Math.abs(actor.body.velocity.x) < 10
+    && correction.dx * facing <= 0
+    && (Math.abs(correction.dx) > 0.2 || Math.abs(correction.dvx) > 1);
+  if (!pushedBack && !stopped) return;
+  liveObject.runtime.directionX = facing < 0 ? 1 : -1;
 }
 
 interface BallSurfaceProbe {
@@ -371,8 +401,13 @@ function syncTriangleSprite(liveObject: LoadedRoomObject): void {
     triangle.legY,
     triangle.fill,
     triangle.stroke,
+    triangle.tiles ?? null,
+    triangle.strokeOn !== false,
+    triangle.backgroundOn !== false,
   );
 }
+
+type TriangleRideMode = 'walk' | 'climb';
 
 interface TrackedActor {
   rect: ActorRect;
@@ -381,6 +416,22 @@ interface TrackedActor {
   liveObject: LoadedRoomObject | null;
   room: UtilityRoom | null;
   intent: number;
+  rideMode: TriangleRideMode;
+}
+
+function triangleRideModeFor(liveObject: LoadedRoomObject): TriangleRideMode | null {
+  if (liveObject.config.id === GHOST_OBJECT_ID || liveObject.config.collidesWithWorld === false) {
+    return null;
+  }
+  // Fly/swim slope following lives in updateFlyingEnemyObject so it does not
+  // fight horizontal cruise velocity or reverse on hypotenuse contact.
+  if (liveObject.config.behavior === 'fly') {
+    return null;
+  }
+  if (liveObject.config.category === 'npc' || liveObject.config.category === 'enemy') {
+    return 'walk';
+  }
+  return null;
 }
 
 function collectActors(
@@ -391,20 +442,20 @@ function collectActors(
 ): TrackedActor[] {
   const actors: TrackedActor[] = [];
   if (playerBody?.enable) {
-    actors.push(trackActor(playerBody, null, null, playerIntent, playerButtStomping));
+    actors.push(trackActor(playerBody, null, null, playerIntent, 'walk', playerButtStomping));
   }
   for (const room of rooms) {
     for (const liveObject of room.liveObjects) {
       if (!liveObject.sprite.active) continue;
-      const rides = liveObject.config.category === 'npc'
-        || (liveObject.config.category === 'enemy' && liveObject.config.behavior !== 'fly');
-      if (!rides) continue;
+      const rideMode = triangleRideModeFor(liveObject);
+      if (!rideMode) continue;
       const body = liveObject.sprite.body;
       if (!body || !isDynamicArcadeBody(body as ArcadeObjectBody)) continue;
       const enabled = body as Phaser.Physics.Arcade.Body;
       if (enabled.enable === false) continue;
       const dynamic = body as Phaser.Physics.Arcade.Body;
-      actors.push(trackActor(dynamic, liveObject, room, Math.sign(dynamic.velocity.x)));
+      const intent = liveObject.runtime.directionX || Math.sign(dynamic.velocity.x);
+      actors.push(trackActor(dynamic, liveObject, room, intent, rideMode));
     }
   }
   return actors;
@@ -415,6 +466,7 @@ function trackActor(
   liveObject: LoadedRoomObject | null,
   room: UtilityRoom | null,
   intent: number,
+  rideMode: TriangleRideMode,
   stomping = false,
 ): TrackedActor {
   return {
@@ -422,6 +474,7 @@ function trackActor(
     liveObject,
     room,
     intent,
+    rideMode,
     correction: { dx: 0, dy: 0, dvx: 0, dvy: 0 },
     rect: {
       left: body.left,
@@ -496,61 +549,223 @@ function seatActorsOnBalls(actors: TrackedActor[], balls: BallSimState[]): boole
   return playerSeated;
 }
 
+/**
+ * Ride contact is the center of the collision bottom so every NPC seats the
+ * same way on the hypotenuse. Lead/trail are mount fallbacks when the center
+ * is still just shy of the tip span.
+ */
+function actorFootXs(actor: TrackedActor): number[] {
+  const inset = Math.min(4, Math.max(1, actor.body.halfWidth * 0.35));
+  const lead = actor.intent < 0 ? actor.body.left + inset : actor.body.right - inset;
+  const trail = actor.intent < 0 ? actor.body.right - inset : actor.body.left + inset;
+  return [actor.body.center.x, lead, trail];
+}
+
+/** Tile top flush with a ramp crest (within 2px), or null. */
+function flushFloorTopAt(
+  room: UtilityRoom | null,
+  worldX: number,
+  tipY: number,
+): number | null {
+  const layer = room?.terrainLayer;
+  if (!layer) return null;
+  for (const probeY of [tipY + 1, tipY + 4, tipY + 8, tipY]) {
+    const tile = layer.getTileAtWorldXY(worldX, probeY, true);
+    if (!tile || !tile.collides) continue;
+    const top = tile.getTop();
+    if (Math.abs(top - tipY) <= 2) return top;
+  }
+  return null;
+}
+
 function supportActor(
   actor: TrackedActor,
   triangle: TriangleSolid,
   dt: number,
   forceSlide: boolean,
 ): boolean {
-  const motion = steepSlopeMotion({
-    ...triangle,
-    feetX: actor.body.center.x,
-    feetY: actor.body.bottom,
-    traveledX: actor.body.position.x - actor.body.prev.x,
-    traveledY: actor.body.position.y - actor.body.prev.y,
-    deltaSeconds: dt,
-    forceSlide,
-    verticalVelocity: actor.body.velocity.y,
-  });
-  if (motion) {
-    shiftBody(actor.body, motion.dx, motion.dy);
-    actor.body.setVelocity(motion.vx, motion.vy);
-    syncActorRect(actor);
-    return true;
+  const climbSteep = actor.rideMode === 'climb';
+  const footXs = actorFootXs(actor);
+  if (!climbSteep) {
+    for (const feetX of footXs) {
+      const motion = steepSlopeMotion({
+        ...triangle,
+        feetX,
+        feetY: actor.body.bottom,
+        traveledX: actor.body.position.x - actor.body.prev.x,
+        traveledY: actor.body.position.y - actor.body.prev.y,
+        deltaSeconds: dt,
+        forceSlide,
+        verticalVelocity: actor.body.velocity.y,
+      });
+      if (!motion) continue;
+      shiftBody(actor.body, motion.dx, motion.dy);
+      actor.body.setVelocity(motion.vx, motion.vy);
+      syncActorRect(actor);
+      return true;
+    }
   }
-  const walk = evaluateSlopeWalk({
-    ...triangle,
-    feetX: actor.body.center.x,
-    feetY: actor.body.bottom,
-    verticalVelocity: actor.body.velocity.y,
-    horizontalIntent: actor.intent,
-    deltaSeconds: dt,
-  });
-  if (walk?.supported) {
+  const tip = triangleFloorHighTip(
+    triangle.anchorX,
+    triangle.anchorY,
+    triangle.legX,
+    triangle.legY,
+  );
+  const uphill = tip ? -triangleDownhillSignX(triangle.legX, triangle.legY) : 0;
+  const flushTop = tip
+    ? flushFloorTopAt(actor.room, tip.x + uphill * 2, tip.y)
+      ?? flushFloorTopAt(actor.room, tip.x, tip.y)
+    : null;
+  // Flush crest → tile: seat to landing height without falling.
+  // Narrow bodies: center arrives near the tip (small lift).
+  // Wide bodies (snake): lead hits the tip/face while center is still
+  // halfWidth downhill — allow a full-tile lift so they still transfer.
+  if (
+    tip
+    && flushTop != null
+    && actor.intent * uphill > 0
+    && !isSteepTriangle(triangle.legX, triangle.legY)
+  ) {
+    const lead = actor.intent < 0 ? actor.body.left + 1 : actor.body.right - 1;
+    const leadAtCrest = (lead - tip.x) * uphill >= -2;
+    const centerAtCrest = (actor.body.center.x - tip.x) * uphill >= -2;
+    if (leadAtCrest || centerAtCrest) {
+      const dy = flushTop - actor.body.bottom;
+      const maxLift = leadAtCrest ? TILE_SIZE + 2 : 14;
+      if (dy >= -maxLift && dy <= 14) {
+        shiftBody(actor.body, 0, dy);
+        actor.body.setVelocityY(0);
+        syncActorRect(actor);
+        return true;
+      }
+    }
+  }
+  for (const feetX of footXs) {
+    const surfaceY = triangleFloorSurfaceOrFlushTip(
+      triangle.anchorX,
+      triangle.anchorY,
+      triangle.legX,
+      triangle.legY,
+      feetX,
+      flushTop,
+      Math.max(TILE_SIZE, actor.body.halfWidth + 4),
+    );
+    const onHypotenuse = triangleFloorSurfaceYAt(
+      triangle.anchorX,
+      triangle.anchorY,
+      triangle.legX,
+      triangle.legY,
+      feetX,
+    ) != null;
+    const walk = onHypotenuse
+      ? evaluateSlopeWalk({
+          ...triangle,
+          feetX,
+          feetY: actor.body.bottom,
+          verticalVelocity: actor.body.velocity.y,
+          horizontalIntent: actor.intent,
+          deltaSeconds: dt,
+          allowSteepClimb: climbSteep,
+        })
+      : surfaceY != null
+        ? {
+            supported: true as const,
+            feetY: surfaceY,
+            slideX: 0,
+            blockUphill: false,
+            downhillX: triangleDownhillSignX(triangle.legX, triangle.legY),
+          }
+        : null;
+    if (!walk?.supported) continue;
+    const hypY = surfaceY ?? walk.feetY;
+    const atFlushCrest =
+      tip != null
+      && flushTop != null
+      && Math.abs(hypY - tip.y) <= 2
+      && (feetX - tip.x) * uphill >= -2;
+    // Slight downhill float off the solid only — never bias into the hyp
+    // (that buried walkers in the floor tile under a ramp and dropped them).
+    let seatY = hypY;
+    if (
+      actor.liveObject
+      && onHypotenuse
+      && !atFlushCrest
+      && tip
+      && actor.intent !== 0
+      && feetX === actor.body.center.x
+      && actor.intent * uphill < 0
+    ) {
+      seatY = hypY - 2;
+    }
     const slope = triangle.legX === 0 ? 0 : -triangle.legY / triangle.legX;
-    const dy = walk.feetY - actor.body.bottom;
-    shiftBody(actor.body, 0, dy < 0 && isSteepTriangle(triangle.legX, triangle.legY) ? 0 : dy);
+    const dy = seatY - actor.body.bottom;
+    // Only seat when already touching the hyp band, or lifting out of the solid.
+    // Never yank a walker down onto a distant ramp through a floor.
+    if (dy > 2 && actor.body.bottom < hypY - 2) {
+      continue;
+    }
+    const blockSnap = !climbSteep && dy < 0 && isSteepTriangle(triangle.legX, triangle.legY);
+    shiftBody(actor.body, 0, blockSnap ? 0 : dy);
     if (walk.blockUphill) {
       actor.body.setVelocity(0, 0);
+      // Gravity walkers cannot climb steep faces — turn around instead of stalling.
+      if (actor.liveObject && actor.intent !== 0) {
+        actor.liveObject.runtime.directionX *= -1;
+        actor.intent *= -1;
+      }
+    } else if (atFlushCrest) {
+      // Hypotenuse meets a tile corner: finish the climb horizontally, no dip.
+      actor.body.setVelocityY(0);
     } else if (actor.body.velocity.y > -40) {
       actor.body.setVelocityY(actor.body.velocity.x * slope);
     }
     syncActorRect(actor);
     return true;
   }
-  const flat = evaluateFlatWalk({
-    ...triangle,
-    feetX: actor.body.center.x,
-    feetY: actor.body.bottom,
-    verticalVelocity: actor.body.velocity.y,
-  });
-  if (flat?.supported) {
+  for (const feetX of footXs) {
+    const flat = evaluateFlatWalk({
+      ...triangle,
+      feetX,
+      feetY: actor.body.bottom,
+      verticalVelocity: actor.body.velocity.y,
+    });
+    if (!flat?.supported) continue;
     shiftBody(actor.body, 0, flat.feetY - actor.body.bottom);
     if (actor.body.velocity.y > 0) actor.body.setVelocityY(0);
     syncActorRect(actor);
     return true;
   }
+  // Standing on the shared floor plane puts the body inside the triangle
+  // volume (above the horizontal leg, below the hyp). Separation can eject
+  // downward through floor tiles onto lower ramps, or yank them up the hyp
+  // without a real foothold. Near the floor leg: walls only. Deeper in the
+  // solid: lift onto the hyp. Never push floor-ramp walkers downward.
+  const overlapsFloorTriangle =
+    isFloorTriangle(triangle.legY) && bodyOverlapsFloorTriangle(actor, triangle);
+  const nearFloorLeg =
+    overlapsFloorTriangle && Math.abs(actor.body.bottom - triangle.anchorY) <= 6;
+  if (overlapsFloorTriangle && !nearFloorLeg) {
+    const liftY = floorTriangleEjectSpriteBottom(actor, triangle);
+    if (liftY != null && liftY < actor.body.bottom - 0.5) {
+      shiftBody(actor.body, 0, liftY - actor.body.bottom);
+      if (actor.body.velocity.y > 0) actor.body.setVelocityY(0);
+      syncActorRect(actor);
+      return true;
+    }
+  }
+
   let separation = separationForBody(actor.body, triangle);
+  if (separation && isFloorTriangle(triangle.legY) && separation.dy > 0) {
+    separation = Math.abs(separation.dx) < 0.05 ? null : { dx: separation.dx, dy: 0 };
+  }
+  if (separation && nearFloorLeg) {
+    // Keep vertical-leg wall pushes; ignore hyp lift while feet stay on the floor.
+    if (Math.abs(separation.dy) >= Math.abs(separation.dx)) {
+      separation = null;
+    } else {
+      separation = { dx: separation.dx, dy: 0 };
+    }
+  }
   if (
     separation &&
     isFloorTriangle(triangle.legY) &&
@@ -558,6 +773,89 @@ function supportActor(
     separation.dy < 0
   ) {
     separation = Math.abs(separation.dx) < 0.2 ? null : { dx: separation.dx, dy: 0 };
+  }
+  // Pure vertical-leg exit (ny ≈ 0). Distinct from hyp contact, which has dy.
+  const verticalLegHit =
+    separation != null
+    && Math.abs(separation.dy) < 0.35
+    && Math.abs(separation.dx) > 0.5;
+  // Body seated on the hyp at the high tip overlaps the vertical leg. Treat that
+  // as crest contact, not a wall reverse — otherwise walkers vibrate L/R on tip.
+  const nearHighTip =
+    tip != null
+    && Math.abs(actor.body.bottom - tip.y) <= 6
+    && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 10;
+  // Climbing a paired peak: the other triangle's vertical meets mid-slope before
+  // feet reach tip height. Do not reverse — that vibrates facing on the way up.
+  const approachingCrestAlongHyp =
+    tip != null
+    && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 14
+    && actor.body.bottom >= tip.y - 2
+    && actor.body.bottom < tip.y + Math.abs(triangle.legY) - 4
+    && actor.intent !== 0
+    && (tip.x - actor.body.center.x) * actor.intent > 0;
+  const crestContact = nearHighTip || approachingCrestAlongHyp;
+  // Sword Hunter turns are rate-limited in its controller — flipping here blurs the run.
+  const allowTriangleReverse =
+    actor.liveObject != null
+    && actor.liveObject.config.id !== SWORDSMAN_AI_OBJECT_ID;
+  // Vertical face is a wall on every floor ramp (shallow included) — reverse.
+  if (
+    separation
+    && verticalLegHit
+    && !crestContact
+    && allowTriangleReverse
+    && isFloorTriangle(triangle.legY)
+    && actor.intent !== 0
+    && separation.dx * actor.intent < 0
+  ) {
+    actor.liveObject!.runtime.directionX *= -1;
+    actor.intent *= -1;
+  }
+  // Steep hyp face blocking an enemy/NPC walk: turn around instead of grinding.
+  if (
+    separation
+    && !verticalLegHit
+    && !crestContact
+    && allowTriangleReverse
+    && isFloorTriangle(triangle.legY)
+    && isSteepTriangle(triangle.legX, triangle.legY)
+    && actor.intent !== 0
+    && separation.dx * actor.intent < 0
+  ) {
+    actor.liveObject!.runtime.directionX *= -1;
+    actor.intent *= -1;
+  }
+  // Shallow hyp tip: drop sideways shove that fights walk into the first hyp
+  // pixel. Never strip a vertical-leg wall hit — that lets walkers phase through.
+  if (
+    separation
+    && !verticalLegHit
+    && isFloorTriangle(triangle.legY)
+    && !isSteepTriangle(triangle.legX, triangle.legY)
+    && actor.intent !== 0
+    && separation.dx * actor.intent < 0
+  ) {
+    separation = Math.abs(separation.dy) < 0.05 ? null : { dx: 0, dy: separation.dy };
+  }
+  // At the crest the vertical face still overlaps the body. Do not shove
+  // walkers back down the hyp or reverse them — let them run over / jump clear.
+  if (separation && tip && crestContact) {
+    if (separation.dy > 0) separation = { dx: separation.dx, dy: 0 };
+    // Kill sideways wall shove at the tip; keep a tiny lift if still buried.
+    if (Math.abs(separation.dx) > 0) {
+      separation = Math.abs(separation.dy) < 0.05 ? null : { dx: 0, dy: separation.dy };
+    }
+  } else if (separation && tip && flushTop != null && actor.intent * uphill > 0) {
+    const nearCrest =
+      Math.abs(actor.body.bottom - tip.y) <= 4
+      && Math.abs(actor.body.center.x - tip.x) <= actor.body.halfWidth + 6;
+    if (nearCrest) {
+      if (separation.dy > 0) separation = { dx: separation.dx, dy: 0 };
+      if (separation.dx * uphill < 0) {
+        separation = Math.abs(separation.dy) < 0.05 ? null : { dx: 0, dy: separation.dy };
+      }
+    }
   }
   if (!separation) return false;
   shiftBody(actor.body, separation.dx, separation.dy);
@@ -573,6 +871,47 @@ function supportActor(
   }
   syncActorRect(actor);
   return ny < -0.5;
+}
+
+function bodyOverlapsFloorTriangle(actor: TrackedActor, triangle: TriangleSolid): boolean {
+  if (!isFloorTriangle(triangle.legY)) return false;
+  const verts = triangleVertices(
+    triangle.anchorX,
+    triangle.anchorY,
+    triangle.legX,
+    triangle.legY,
+  );
+  const samples = [
+    { x: actor.body.center.x, y: actor.body.center.y },
+    { x: actor.body.center.x, y: actor.body.bottom - 1 },
+    { x: actor.body.left + 1, y: actor.body.bottom - 1 },
+    { x: actor.body.right - 1, y: actor.body.bottom - 1 },
+  ];
+  return samples.some((point) =>
+    pointInTriangle(point, verts.rightAngle, verts.horizontal, verts.vertical)
+  );
+}
+
+/** Bottom Y to sit on the hyp when the body is already inside the floor ramp. */
+function floorTriangleEjectSpriteBottom(
+  actor: TrackedActor,
+  triangle: TriangleSolid,
+): number | null {
+  let best: number | null = null;
+  for (const feetX of actorFootXs(actor)) {
+    const surface = triangleFloorSurfaceYAt(
+      triangle.anchorX,
+      triangle.anchorY,
+      triangle.legX,
+      triangle.legY,
+      feetX,
+    );
+    if (surface == null) continue;
+    // Only eject when feet are at/under the hyp (inside), not when far above.
+    if (actor.body.bottom < surface - 1) continue;
+    best = best == null ? surface : Math.min(best, surface);
+  }
+  return best;
 }
 
 function separationForBody(

@@ -10,6 +10,8 @@ import {
   DEFAULT_TRIANGLE_FILL,
   DEFAULT_TRIANGLE_STROKE,
 } from '../../config/trianglePiece';
+import { isColorPickArmed } from './colorPopover';
+import { triangleTileFieldsFromEditor } from './triangleTileEditor';
 
 export function captureTriangleStamp(placed: PlacedObject): void {
   const geometry = normalizePlacedTriangle(placed);
@@ -20,12 +22,14 @@ export function captureTriangleStamp(placed: PlacedObject): void {
     triangleStampStroke: geometry.stroke,
     triangleStampFlipX: flip.flipX,
     triangleStampFlipY: flip.flipY,
+    triangleStampStrokeOn: geometry.strokeOn,
+    triangleStampBackgroundOn: geometry.backgroundOn,
   });
 }
 
 export function triangleStampStatus(): string {
   return editorState.trianglePaintMode
-    ? 'Click ramps to paint this fill and stroke.'
+    ? 'Click ramps to paint this background, stroke, and tiles.'
     : 'Click empty space to place. Click a ramp to select it.';
 }
 
@@ -56,6 +60,9 @@ export function stampedTriangleFields(placed: PlacedObject): Partial<PlacedObjec
   return {
     triangleFill: parseHexColor(editorState.triangleStampFill, geometry.fill),
     triangleStroke: parseHexColor(editorState.triangleStampStroke, geometry.stroke),
+    triangleStrokeOn: editorState.triangleStampStrokeOn,
+    triangleBackgroundOn: editorState.triangleStampBackgroundOn,
+    ...triangleTileFieldsFromEditor(),
   };
 }
 
@@ -65,6 +72,7 @@ export function drawTriangleStampPreview(
   tileY: number,
   origin = { x: 0, y: 0 },
 ): void {
+  if (isColorPickArmed()) return;
   const stamp = triangleStampPlacement(tileX, tileY);
   const verts = triangleVertices(
     origin.x + stamp.anchorX,

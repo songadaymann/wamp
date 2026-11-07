@@ -11,6 +11,7 @@ import type { SwordsmanTraversalIntent } from '../../../enemies/swordsmanTravers
 import type { SwordsmanTraversalPlannerMode } from '../../../enemies/swordsmanRobustPlanner';
 import type { NpcMode } from '../../../npcs/model';
 import type { RollingBallSettings } from '../../../config/rollingBall';
+import type { TriangleTilePaint } from '../../../config/triangleTileFill';
 import type { RoomCoordinates } from '../../../persistence/roomModel';
 import type { PlayerGravityDirection } from '../specialTiles';
 
@@ -42,6 +43,8 @@ export interface LoadedRoomObjectRuntimeState {
   aiFacingDirectionX: number;
   aiFacingLastFlipAt: number;
   aiFacingLastFlipX: number;
+  /** Timestamps of recent direction turns (sliding window anti-vibration). */
+  aiDirectionTurnAtMs: number[];
   elapsedMs: number;
   nextActionAt: number;
   actionStartedAt: number;
@@ -134,6 +137,9 @@ export interface LoadedRoomObject {
     legY: number;
     fill: string;
     stroke: string;
+    strokeOn?: boolean;
+    backgroundOn?: boolean;
+    tiles?: TriangleTilePaint | null;
   } | null;
 }
 
@@ -172,6 +178,9 @@ export interface CreateLiveObjectEntryOptions {
     legY: number;
     fill: string;
     stroke: string;
+    strokeOn?: boolean;
+    backgroundOn?: boolean;
+    tiles?: TriangleTilePaint | null;
   } | null;
   countsTowardGoals: boolean;
 }

@@ -3,6 +3,7 @@
     "src/styles/sections/base.css": 1,
     "src/styles/sections/course-editor.css": 3,
     "src/styles/sections/editor/music.css": 1,
+    "src/styles/sections/editor/object-inspector.css": 1,
     "src/styles/sections/modals/leaderboard-profile-explore/explore-queues.css": 1,
     "src/styles/sections/modals/rewards-xp.css": 4,
     "src/styles/sections/modals/room-course.css": 2,

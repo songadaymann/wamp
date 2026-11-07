@@ -558,22 +558,64 @@
 
   .triangle-options-body {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
   }
 
-  .triangle-color-stack {
+  .triangle-color-head {
+    display: grid;
+    grid-template-columns: max-content minmax(48px, 1fr);
+    align-items: center;
+    column-gap: 8px;
+  }
+
+  .triangle-color-label {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .triangle-color-row:has(input[type='checkbox']:not(:checked)) .color-swatch,
+  .triangle-color-row:has(input[type='checkbox']:not(:checked)) .goal-input {
+    opacity: 0.45;
+  }
+
+  .triangle-color-stack {
+    display: grid;
+    grid-template-columns: max-content 28px minmax(0, 8em);
+    column-gap: 8px;
+    row-gap: 10px;
+    align-items: center;
     min-width: 0;
   }
 
   .triangle-color-row {
     display: grid;
-    grid-template-columns: 52px 28px 8em;
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
+    align-items: center;
+    column-gap: 8px;
+  }
+
+  .triangle-tile-options {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+  }
+
+  .triangle-tile-fill-row {
+    display: flex;
     align-items: center;
     gap: 8px;
+    margin: 0;
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+
+  .triangle-tile-fill-row:has(input:disabled) {
+    opacity: 0.45;
+    filter: grayscale(0.35);
   }
 
   .triangle-color-row .goal-input {
@@ -589,6 +631,7 @@
     width: 48px;
     height: 48px;
     margin: 0;
+    justify-self: center;
     flex-shrink: 0;
   }
 
@@ -624,11 +667,64 @@
     fill: var(--editor-retro-green, var(--wamp-green));
   }
 
+  html.color-pick-armed,
+  html.color-pick-armed * {
+    cursor: none !important;
+  }
+
+  .color-pick-reticle {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: var(--z-editor-color-pick);
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  .color-pick-reticle.hidden,
+  .color-pick-reticle.is-empty .color-pick-reticle-hex:empty {
+    display: none;
+  }
+
+  .color-pick-reticle-canvas {
+    display: block;
+    width: 156px;
+    height: 156px;
+    border-radius: 50%;
+    border: 3px solid #111;
+    box-shadow:
+      0 0 0 2px var(--wamp-white),
+      0 8px 18px rgba(var(--wamp-black-rgb), 0.45);
+    background: #1a1a1a;
+    image-rendering: pixelated;
+  }
+
+  .color-pick-reticle.is-empty .color-pick-reticle-canvas {
+    opacity: 0.55;
+  }
+
+  .color-pick-reticle-hex {
+    min-width: 7ch;
+    padding: 2px 6px;
+    border: 2px solid #111;
+    background: var(--editor-retro-cream, var(--wamp-cream));
+    color: #111;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+
   .color-popover canvas {
     width: 160px;
     height: 120px;
     image-rendering: pixelated;
     cursor: crosshair;
+    touch-action: none;
   }
 
   .color-popover-hue {

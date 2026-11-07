@@ -7,7 +7,6 @@ import { getPlacedBossHitPoints } from '../../enemies/boss';
 import type { SfxCue } from '../../audio/sfx';
 import {
   canObjectBeStoredInContainer,
-  decodeTileDataValue,
   getObjectById,
   getObjectDisplayOffset,
   getObjectDisplayScale,
@@ -19,15 +18,9 @@ import {
   isMovingPlatformObjectId,
   isPushableObjectConfig,
   getPlacedObjectLayer,
-  getSpecialTileKindForGid,
-  LAYER_NAMES,
-  ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  ROOM_WIDTH,
-  TILE_SIZE,
   type GameObjectConfig,
-  type SpecialTileKind,
 } from '../../config';
 import { LiveUtilitySession, presentUtilityObject } from './liveObjects/liveUtilitySession';
 import { placedObjectRuntimeDepth, syncGravityPresentation } from './liveObjects/objectPresentation';
@@ -36,12 +29,12 @@ import { ensureCustomSpriteTexture } from '../../customSprites/registry';
 import {
   SWORDSMAN_AI_OBJECT_ID,
 } from '../../enemies/swordsmanAi';
+import { GHOST_OBJECT_ID } from '../../enemies/ghost';
 import {
   isPoliceEnemyObjectId,
 } from '../../enemies/policeEnemy';
 import type { SwordsmanTraversalPlannerMode } from '../../enemies/swordsmanRobustPlanner';
 import type { LoadedFullRoom } from './worldStreaming';
-import { terrainTileCollidesAtLocalPixel } from './terrainCollision';
 import {
   bodyIsBlockedInGravityDirection,
   getBodyVelocityAlongVector,
@@ -76,6 +69,14 @@ import {
 } from './liveObjects/behaviorRegistry';
 import { carryMovingPlatformRiders } from './liveObjects/movingPlatforms';
 import { resolveFlyingEnemyMotion, type FlyingEnemyMotion } from './liveObjects/flyingEnemyMotion';
+import {
+  flyingEnemyResolveTriangles,
+  hasGroundEnemySupportOrSpecialTileAhead,
+  hasSolidTerrainAtWorldPoint,
+  hasTriangleFloorNearWorldPoint,
+  hasTriangleFloorSupportAtWorldPoint,
+  tryStepOntoTriangleLanding,
+} from './liveObjects/triangleFloorSupport';
 import { getContainedLiveObjectKey } from './liveObjects/indexing';
 import {
   JIMOTHY_ANIMATION_KEYS,
@@ -255,19 +256,6 @@ const BUTT_STOMP_BREAK_BOUNCE_VELOCITY = -150;
 const BUTT_STOMP_BREAK_TOP_TOLERANCE_PX = 12;
 const BUTT_STOMP_BREAK_MIN_HORIZONTAL_OVERLAP_PX = 3;
 const BUTT_STOMP_BREAK_STACK_VERTICAL_GAP_TOLERANCE_PX = 4;
-const GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS = new Set<SpecialTileKind>([
-  'conveyorLeft',
-  'conveyorRight',
-  'ice',
-  'sticky',
-  'bounce',
-  'gravityUp',
-  'gravityDown',
-  'gravityLeft',
-  'gravityRight',
-  'water',
-]);
-
 export class OverworldLiveObjectController<TEdgeWall = unknown> {
   private readonly specialTileBodySamples = new SpecialTileBodySamples();
   private readonly triggerController: LiveObjectTriggerController<TEdgeWall>;
@@ -385,7 +373,7 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       applyDirectionalFacing: (sprite, config, directionX) =>
         this.applyDirectionalFacing(sprite, config, directionX),
       hasSolidTerrainAtWorldPoint: (room, worldX, worldY) =>
-        this.hasSolidTerrainAtWorldPoint(room, worldX, worldY),
+        hasSolidTerrainAtWorldPoint(room, worldX, worldY, this.options.getRoomOrigin),
       playBounceFx: (x, y, roomCoordinates) =>
         this.options.playBounceFx(x, y, roomCoordinates),
       bouncePadVelocity: this.options.settings.bouncePadVelocity,
@@ -1521,9 +1509,41 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
 
     const bounds = this.getObjectHorizontalTravelBounds(room, liveObject.config);
     liveObject.runtime.elapsedMs += delta;
-    const nextY =
-      liveObject.runtime.baseY +
-      Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
+    const wave = Math.sin(liveObject.runtime.elapsedMs * waveSpeed) * waveAmplitude;
+    let nextY = liveObject.runtime.baseY + wave;
+    let onSlope = false;
+    let climbingSlope = false;
+    let hitTriangleVertical = false;
+    if (liveObject.config.id !== GHOST_OBJECT_ID && liveObject.config.collidesWithWorld !== false) {
+      const resolved = flyingEnemyResolveTriangles(
+        room,
+        liveObject,
+        body,
+        nextY,
+        this.options.getRoomOrigin,
+      );
+      if (resolved.hitVerticalWall) {
+        hitTriangleVertical = true;
+        const pushedX = liveObject.sprite.x + resolved.pushX;
+        if (isDynamicArcadeBody(body)) {
+          // Keep Y — vertical faces are walls, not ramps.
+          body.reset(pushedX, liveObject.sprite.y);
+        } else {
+          liveObject.sprite.x = pushedX;
+        }
+        // Face out of the vertical leg — same as hitting a tile wall.
+        liveObject.runtime.directionX = resolved.pushX < 0 ? -1 : 1;
+      }
+      // Vertical-face hits must not also apply hyp lift (corner bump each bounce).
+      if (resolved.rideY != null && !resolved.hitVerticalWall) {
+        // Same triangle rules as fish: hyp owns Y while in contact. Wave (bat/bird)
+        // resumes from the exit altitude once clear of the solid.
+        nextY = resolved.rideY;
+        liveObject.runtime.baseY = resolved.rideY;
+        onSlope = true;
+        climbingSlope = resolved.rideY < liveObject.sprite.y - 0.5;
+      }
+    }
 
     if (isDynamicArcadeBody(body)) {
       if (this.resetDynamicObjectIfOutOfBounds(room, liveObject, body)) {
@@ -1536,8 +1556,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       const reachedBounds =
         (liveObject.sprite.x <= bounds.left && liveObject.runtime.directionX < 0) ||
         (liveObject.sprite.x >= bounds.right && liveObject.runtime.directionX > 0);
+      const pinnedUp = body.blocked.up || body.touching.up;
+      const pinnedDown = body.blocked.down || body.touching.down;
 
-      if (touchingHorizontalObstacle || reachedBounds) {
+      // Rising wedge into a ceiling: stop lifting so wall reverse can win.
+      if (onSlope && climbingSlope && pinnedUp) {
+        nextY = liveObject.sprite.y;
+        liveObject.runtime.baseY = liveObject.sprite.y;
+        climbingSlope = false;
+      }
+
+      // Real tile/world walls always reverse — including slope+ceiling corners.
+      // Triangle vertical legs already flipped via hitTriangleVertical above.
+      // (Triangle pieces have no arcade body, so blocked.left/right is tiles.)
+      if (!hitTriangleVertical && (touchingHorizontalObstacle || reachedBounds)) {
         const clampedX = Phaser.Math.Clamp(liveObject.sprite.x, bounds.left, bounds.right);
         if (clampedX !== liveObject.sprite.x) {
           body.reset(clampedX, liveObject.sprite.y);
@@ -1546,15 +1578,20 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
       }
 
       const deltaSeconds = Math.max(delta / 1000, 1 / 60);
-      const maxVerticalSpeed = Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
-      let velocityY = Phaser.Math.Clamp(
-        (nextY - liveObject.sprite.y) / deltaSeconds,
-        -maxVerticalSpeed,
-        maxVerticalSpeed
-      );
+      // Climb about as fast as horizontal travel so 45° is 1:1, not a rocket.
+      const maxVerticalSpeed = onSlope
+        ? Math.max(speed * 1.15, 40)
+        : Math.max(24, waveAmplitude * waveSpeed * 1000 * 1.5);
+      let velocityY = onSlope || waveAmplitude > 0
+        ? Phaser.Math.Clamp(
+          (nextY - liveObject.sprite.y) / deltaSeconds,
+          -maxVerticalSpeed,
+          maxVerticalSpeed,
+        )
+        : 0;
       const movingIntoVerticalObstacle =
-        (velocityY < 0 && (body.blocked.up || body.touching.up)) ||
-        (velocityY > 0 && (body.blocked.down || body.touching.down));
+        (velocityY < 0 && pinnedUp) ||
+        (velocityY > 0 && pinnedDown);
       if (movingIntoVerticalObstacle) {
         velocityY = 0;
       }
@@ -1681,15 +1718,41 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     const reachedBounds =
       (tangentPosition <= bounds.min && axisDirection < 0) ||
       (tangentPosition >= bounds.max && axisDirection > 0);
-    const onFloor = bodyIsBlockedInGravityDirection(body, gravityDirection);
+    const origin = this.options.getRoomOrigin;
+    const onFloor =
+      bodyIsBlockedInGravityDirection(body, gravityDirection)
+      || (
+        gravityDirection === 'down'
+        && hasTriangleFloorSupportAtWorldPoint(room, body.center.x, body.bottom, origin)
+      );
+    // Wall-assisted crest only. Flush ramp→floor seating happens in utility
+    // support along the hypotenuse so walkers never dip off the tip.
+    if (
+      touchingWall
+      && gravityDirection === 'down'
+      && tryStepOntoTriangleLanding(room, liveObject, body, true, origin)
+    ) {
+      return;
+    }
+
+    const onTriangleFloor =
+      gravityDirection === 'down'
+      && (
+        hasTriangleFloorSupportAtWorldPoint(room, body.center.x, body.bottom, origin)
+        || hasTriangleFloorNearWorldPoint(room, body.center.x, body.bottom, 4, 4, origin)
+      );
+    // Still on a ramp: do not treat the downhill tip as a ledge. Support ahead
+    // already accepts a descending hypotenuse; this covers mid-slope frames.
     const missingGroundAhead =
       onFloor &&
+      !onTriangleFloor &&
       this.groundEnemyAvoidsEdges(liveObject.config.id) &&
-      !this.hasGroundEnemySupportOrSpecialTileAhead(
+      !hasGroundEnemySupportOrSpecialTileAhead(
         room,
         body,
         liveObject.runtime.directionX,
         gravityDirection,
+        origin,
       );
 
     if (touchingWall || reachedBounds || missingGroundAhead) {
@@ -1845,79 +1908,6 @@ export class OverworldLiveObjectController<TEdgeWall = unknown> {
     }
     body.setVelocity(0, 0);
     return true;
-  }
-
-  private hasGroundEnemySupportOrSpecialTileAhead(
-    room: RoomSnapshot,
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number,
-    gravityDirection: PlayerGravityDirection,
-    leadPx = 4,
-  ): boolean {
-    const probe = this.getGroundEnemySupportProbePoint(body, directionX, gravityDirection, leadPx);
-    return (
-      this.hasSolidTerrainAtWorldPoint(room, probe.x, probe.y) ||
-      this.hasEdgeSafeSpecialTileAtWorldPoint(room, probe.x, probe.y)
-    );
-  }
-
-  private getGroundEnemySupportProbePoint(
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number,
-    gravityDirection: PlayerGravityDirection,
-    leadPx: number,
-  ): { x: number; y: number } {
-    const gravityVector = getGravityVector(gravityDirection);
-    const rightVector = getGravityRightVector(gravityDirection);
-    const tangentHalfExtent = rightVector.x !== 0 ? body.halfWidth : body.halfHeight;
-    const gravityHalfExtent = gravityVector.x !== 0 ? body.halfWidth : body.halfHeight;
-    return {
-      x:
-        body.center.x +
-        rightVector.x * directionX * (tangentHalfExtent + leadPx) +
-        gravityVector.x * (gravityHalfExtent + 2),
-      y:
-        body.center.y +
-        rightVector.y * directionX * (tangentHalfExtent + leadPx) +
-        gravityVector.y * (gravityHalfExtent + 2),
-    };
-  }
-
-  private hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
-    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
-
-    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
-      return false;
-    }
-
-    const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
-    return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
-  }
-
-  private hasEdgeSafeSpecialTileAtWorldPoint(
-    room: RoomSnapshot,
-    worldX: number,
-    worldY: number,
-  ): boolean {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
-    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
-
-    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
-      return false;
-    }
-
-    for (const layerName of LAYER_NAMES) {
-      const gid = decodeTileDataValue(room.tileData[layerName][localY][localX]).gid;
-      const specialKind = getSpecialTileKindForGid(gid);
-      if (specialKind && GROUND_ENEMY_EDGE_SAFE_SPECIAL_TILE_KINDS.has(specialKind)) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private groundEnemyAvoidsEdges(objectId: string): boolean {

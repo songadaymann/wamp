@@ -260,6 +260,14 @@ interface ObjectConfiguration {
   triangleLegY?: number | null;
   triangleFill?: string | null;
   triangleStroke?: string | null;
+  triangleTileFill?: boolean | null;
+  triangleTileMode?: 'wrap' | 'pattern' | 'shuffle' | null;
+  triangleTileSlopeOnly?: boolean | null;
+  triangleTileFlipX?: 'off' | 'on' | 'rand' | null;
+  triangleTileFlipY?: 'off' | 'on' | 'rand' | null;
+  triangleTileGids?: number[] | null;
+  triangleStrokeOn?: boolean | null;
+  triangleBackgroundOn?: boolean | null;
 }
 
 interface ConfigureObjectCommand extends ObjectConfiguration {
@@ -564,6 +572,40 @@ function normalizeConfiguration(command: Record<string, unknown>, index: number,
     configuration.triangleStroke = command.triangleStroke === null ? null : parseHexColor(String(command.triangleStroke), '');
     if (configuration.triangleStroke === '') throw new HttpError(400, `commands[${index}].triangleStroke must be a #RRGGBB color or null.`);
   }
+  if (hasOwn(command, 'triangleTileFill')) {
+    configuration.triangleTileFill = normalizeNullableBoolean(command.triangleTileFill, `commands[${index}].triangleTileFill`);
+  }
+  if (hasOwn(command, 'triangleTileSlopeOnly')) {
+    configuration.triangleTileSlopeOnly = normalizeNullableBoolean(command.triangleTileSlopeOnly, `commands[${index}].triangleTileSlopeOnly`);
+  }
+  if (hasOwn(command, 'triangleStrokeOn')) {
+    configuration.triangleStrokeOn = normalizeNullableBoolean(command.triangleStrokeOn, `commands[${index}].triangleStrokeOn`);
+  }
+  if (hasOwn(command, 'triangleBackgroundOn')) {
+    configuration.triangleBackgroundOn = normalizeNullableBoolean(command.triangleBackgroundOn, `commands[${index}].triangleBackgroundOn`);
+  }
+  if (hasOwn(command, 'triangleTileMode')) {
+    const mode = command.triangleTileMode;
+    if (mode !== null && mode !== 'wrap' && mode !== 'pattern' && mode !== 'shuffle') {
+      throw new HttpError(400, `commands[${index}].triangleTileMode must be wrap, pattern, shuffle, or null.`);
+    }
+    configuration.triangleTileMode = mode;
+  }
+  for (const key of ['triangleTileFlipX', 'triangleTileFlipY'] as const) {
+    if (!hasOwn(command, key)) continue;
+    const flip = command[key];
+    if (flip !== null && flip !== 'off' && flip !== 'on' && flip !== 'rand') {
+      throw new HttpError(400, `commands[${index}].${key} must be off, on, rand, or null.`);
+    }
+    configuration[key] = flip;
+  }
+  if (hasOwn(command, 'triangleTileGids')) {
+    const gids = command.triangleTileGids;
+    if (gids !== null && (!Array.isArray(gids) || gids.some((gid) => !Number.isInteger(gid) || (gid as number) <= 0))) {
+      throw new HttpError(400, `commands[${index}].triangleTileGids must be an array of tile ids or null.`);
+    }
+    configuration.triangleTileGids = gids === null ? null : gids.slice(0, 512);
+  }
   if (hasOwn(command, 'npcName')) {
     if (command.npcName !== null && typeof command.npcName !== 'string') throw new HttpError(400, `commands[${index}].npcName must be a string or null.`);
     if (typeof command.npcName === 'string' && command.npcName.replace(/\r\n?/g, ' ').trim().length > NPC_NAME_MAX_LENGTH) {
@@ -733,6 +775,8 @@ function normalizeCommand(value: unknown, index: number, state: NormalizationSta
         'npcCanJumpFall', 'npcPlayerCollision', 'npcFriendlyFire', 'npcName', 'npcDefeatMode',
         'ballGraphic', 'ballWeight', 'ballHurtEnemies', 'ballHurtFriendlies', 'ballHurtPlayer', 'ballPushable',
         'triangleLegX', 'triangleLegY', 'triangleFill', 'triangleStroke',
+        'triangleTileFill', 'triangleTileMode', 'triangleTileSlopeOnly', 'triangleTileFlipX', 'triangleTileFlipY', 'triangleTileGids',
+        'triangleStrokeOn', 'triangleBackgroundOn',
       ] as const;
       assertAllowedKeys(command, ['type', 'target', ...configurationKeys], `commands[${index}]`);
       if (!configurationKeys.some((key) => hasOwn(command, key))) throw new HttpError(400, `commands[${index}] must include at least one configuration field.`);
@@ -848,6 +892,14 @@ function placeObjectAtTile(command: PlaceObjectCommand): PlacedObject {
     triangleLegY: triangleLegs?.legY ?? null,
     triangleFill: triangle ? DEFAULT_TRIANGLE_FILL : null,
     triangleStroke: triangle ? DEFAULT_TRIANGLE_STROKE : null,
+    triangleTileFill: triangle ? false : null,
+    triangleTileMode: triangle ? 'wrap' : null,
+    triangleTileSlopeOnly: triangle ? false : null,
+    triangleTileFlipX: triangle ? 'off' : null,
+    triangleTileFlipY: triangle ? 'off' : null,
+    triangleTileGids: triangle ? [] : null,
+    triangleStrokeOn: triangle ? true : null,
+    triangleBackgroundOn: triangle ? true : null,
   };
 }
 
@@ -963,6 +1015,14 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
     command.triangleLegY,
     command.triangleFill,
     command.triangleStroke,
+    command.triangleTileFill,
+    command.triangleTileMode,
+    command.triangleTileSlopeOnly,
+    command.triangleTileFlipX,
+    command.triangleTileFlipY,
+    command.triangleTileGids,
+    command.triangleStrokeOn,
+    command.triangleBackgroundOn,
   ].some((value) => value !== undefined);
   if (hasTriangleConfiguration && !isTrianglePieceObjectId(placed.id)) {
     throw new HttpError(400, 'Triangle settings only apply to triangle_piece.');
@@ -972,6 +1032,14 @@ function applyObjectConfiguration(room: RoomSnapshot, placed: PlacedObject, comm
     if (command.triangleLegY !== undefined && command.triangleLegY !== null) placed.triangleLegY = command.triangleLegY;
     if (command.triangleFill !== undefined && command.triangleFill !== null) placed.triangleFill = command.triangleFill;
     if (command.triangleStroke !== undefined && command.triangleStroke !== null) placed.triangleStroke = command.triangleStroke;
+    if (command.triangleTileFill !== undefined && command.triangleTileFill !== null) placed.triangleTileFill = command.triangleTileFill;
+    if (command.triangleTileMode !== undefined && command.triangleTileMode !== null) placed.triangleTileMode = command.triangleTileMode;
+    if (command.triangleTileSlopeOnly !== undefined && command.triangleTileSlopeOnly !== null) placed.triangleTileSlopeOnly = command.triangleTileSlopeOnly;
+    if (command.triangleTileFlipX !== undefined && command.triangleTileFlipX !== null) placed.triangleTileFlipX = command.triangleTileFlipX;
+    if (command.triangleTileFlipY !== undefined && command.triangleTileFlipY !== null) placed.triangleTileFlipY = command.triangleTileFlipY;
+    if (command.triangleTileGids !== undefined) placed.triangleTileGids = command.triangleTileGids;
+    if (command.triangleStrokeOn !== undefined && command.triangleStrokeOn !== null) placed.triangleStrokeOn = command.triangleStrokeOn;
+    if (command.triangleBackgroundOn !== undefined && command.triangleBackgroundOn !== null) placed.triangleBackgroundOn = command.triangleBackgroundOn;
   }
 }
 

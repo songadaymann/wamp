@@ -33,6 +33,7 @@ import {
   getTileFlipModePipState,
   isEditorToolUnavailable,
   isShapeFillModeAvailable,
+  isTriangleEditorTool,
   isPencilSprayPlacement,
   isPencilStampPlacement,
   ensureEditorToolAvailable,
@@ -735,6 +736,11 @@ export class EditorUiBridge {
         if (!SHAPE_FILL_MODES.includes(nextMode as ShapeFillMode)) {
           return;
         }
+        if (isTriangleEditorTool()) {
+          updateEditorState({ triangleStampTileMode: nextMode === 'shuffle' ? 'shuffle' : nextMode === 'pattern' ? 'pattern' : 'wrap' });
+          this.syncEditorChromeState();
+          return;
+        }
         updateEditorState({ shapeFillMode: nextMode as ShapeFillMode });
         this.syncEditorChromeState();
       };
@@ -755,7 +761,7 @@ export class EditorUiBridge {
       });
       bindButton(this.cleanupCallbacks, button, () => {
         const cell = this.doc.body.dataset.editorCourseMode === 'true' ? ' in the selected Expanded Room cell' : '';
-        if (!this.windowObj.confirm(`Clear every tile on the current layer${cell}?`)) {
+        if (!this.windowObj.confirm(`Clear every tile and triangle on the current layer${cell}?`)) {
           return;
         }
         this.actions.onClearCurrentLayer();
@@ -764,7 +770,7 @@ export class EditorUiBridge {
 
     for (const button of this.elements.clearAllButtons) {
       bindButton(this.cleanupCallbacks, button, () => {
-        if (!this.windowObj.confirm('Remove all tiles from Back, Gameplay, and Front?')) {
+        if (!this.windowObj.confirm('Remove all tiles and triangles from Back, Gameplay, and Front?')) {
           return;
         }
         this.actions.onClearAllTiles();
@@ -2071,6 +2077,7 @@ export class EditorUiBridge {
       const active = !unavailable && mode === shapeFillUiMode;
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (mode === 'stamp') button.textContent = editorState.activeTool === 'triangle' ? 'Wrap' : 'Stamp';
       button.title = getShapeFillModeUnavailableTitle(mode) ?? '';
     }
 
@@ -2122,17 +2129,18 @@ export class EditorUiBridge {
     for (const tab of this.elements.paletteTabs) {
       tab.classList.toggle('active', tab.dataset.mode === editorState.paletteMode);
     }
-    this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.elements.tileControlsSection?.classList.toggle('hidden', !paletteModeIsTiles);
-    this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     const triangleOptions = this.doc.body.dataset.editorTriangleOptions === 'true';
+    this.elements.tilesetSection?.classList.toggle('hidden', !paletteModeIsTiles && !triangleOptions);
+    this.elements.tileControlsSection?.classList.toggle('hidden', !paletteModeIsTiles && !triangleOptions);
+    this.elements.smartPaletteSection?.classList.toggle('hidden', !paletteModeIsSmart);
     this.elements.objectPaletteSection?.classList.toggle(
       'hidden',
       editorState.paletteMode !== 'objects' && !triangleOptions,
     );
-    if (paletteModeIsTiles) {
+    if (paletteModeIsTiles || triangleOptions) {
       this.windowObj.requestAnimationFrame(() => {
-        if (this.destroyed || editorState.paletteMode !== 'tiles') {
+        if (this.destroyed) return;
+        if (editorState.paletteMode !== 'tiles' && this.doc.body.dataset.editorTriangleOptions !== 'true') {
           return;
         }
         runtimeConfig.paletteController?.renderPalette();

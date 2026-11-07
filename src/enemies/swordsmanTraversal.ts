@@ -2,10 +2,11 @@ import {
   ROOM_HEIGHT,
   ROOM_WIDTH,
   TILE_SIZE,
-  getObjectById,
-  getObjectDisplayOffset,
-  type PlacedObject,
 } from '../config';
+import {
+  triangleFloorHighTip,
+  triangleFloorSurfaceYAt,
+} from '../config/trianglePiece';
 import {
   SWORDSMAN_AI_DROP_SETUP_APPROACH_TOLERANCE_PX,
   SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
@@ -20,6 +21,18 @@ import {
   getTerrainTileCollisionProfile,
   roomHasTerrainTile,
 } from '../scenes/overworld/terrainCollision';
+import {
+  buildLadderEdges,
+  buildLadderSegments,
+  type SwordsmanLadderSegment,
+} from './swordsmanTraversalLadders';
+import {
+  appendTriangleSurfaceSegments,
+  appendTriangleWallSegments,
+  buildTriangleCrestTransferEdge,
+  buildTriangleFloorTransferEdge,
+  findCrestWalkTowardTarget,
+} from './swordsmanTraversalTriangles';
 
 export type SwordsmanTraversalIntent =
   | 'same-platform'
@@ -42,6 +55,13 @@ export interface SwordsmanSurfaceSegment {
   centerX: number;
   hasOpenLeft: boolean;
   hasOpenRight: boolean;
+  /** Floor-ramp hyp; feet match against Y-at-X instead of flat topY. */
+  triangle?: {
+    anchorX: number;
+    anchorY: number;
+    legX: number;
+    legY: number;
+  };
 }
 
 export interface SwordsmanWallSegment {
@@ -144,27 +164,10 @@ const WALL_JUMP_TO_SURFACE_MIN_VERTICAL_PX = 8;
 const WALL_JUMP_TO_SURFACE_MAX_VERTICAL_PX = 86;
 const WALL_JUMP_TO_SURFACE_MAX_HORIZONTAL_PX = 96;
 const WALL_JUMP_PREFERRED_RISE_PX = 40;
-const LADDER_SURFACE_ATTACH_TOLERANCE_X_PX = TILE_SIZE * 1.25;
-const LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX = TILE_SIZE * 1.5;
-const LADDER_VERTICAL_MERGE_GAP_PX = TILE_SIZE * 1.25;
-const LADDER_COLUMN_MERGE_TOLERANCE_X_PX = TILE_SIZE * 0.5;
-const LADDER_MIN_VERTICAL_DELTA_PX = TILE_SIZE * 0.75;
 const LADDER_ATTACH_APPROACH_TOLERANCE_PX = 5;
 const MAX_SEARCH_DEPTH = 3;
 const TARGET_MATCH_SCORE_BONUS = 240;
 const FALLBACK_DROP_EDGE_PREFIX = 'fallback-drop';
-
-interface SwordsmanLadderSegment {
-  id: string;
-  centerX: number;
-  topY: number;
-  bottomY: number;
-}
-
-interface SwordsmanLadderSurfaceAttachment {
-  surface: SwordsmanSurfaceSegment;
-  anchorX: number;
-}
 
 export function getSwordsmanTraversalGraphCacheKey(room: RoomSnapshot): string {
   return `${room.id}:${room.version}:${room.updatedAt}`;
@@ -322,6 +325,11 @@ export function startSwordsmanTraversalGraphBuild(room: RoomSnapshot): Swordsman
         for (const dropEdge of buildDropDownEdges(room, source, target, surfaceSegments)) {
           addEdge(dropEdge);
         }
+        // Ramp tips nested inside a flush floor fail normal jump-up approach
+        // geometry — add an explicit tip walk-off onto that floor.
+        addEdge(buildTriangleFloorTransferEdge(room, source, target));
+        // Back-to-back peak: walk over the shared tip onto the other hyp.
+        addEdge(buildTriangleCrestTransferEdge(source, target));
       }
 
       for (const wall of wallSegments) {
@@ -367,8 +375,9 @@ export function decideSwordsmanTraversal(
   enemy: SwordsmanBodySnapshot,
   target: SwordsmanBodySnapshot,
   blockedEdgeIds: ReadonlySet<string> = new Set<string>(),
+  preferredSurfaceId: string | null = null,
 ): SwordsmanTraversalDecision {
-  const currentContext = getSwordsmanTraversalContext(graph, enemy);
+  const currentContext = getSwordsmanTraversalContext(graph, enemy, preferredSurfaceId);
   const currentSurface = currentContext.currentSurface;
   const targetContext = getSwordsmanTraversalTargetContext(graph, target);
   const targetSurface = targetContext.targetSurface;
@@ -502,6 +511,7 @@ function buildSurfaceSegments(room: RoomSnapshot): SwordsmanSurfaceSegment[] {
     }
   }
 
+  appendTriangleSurfaceSegments(room, segments);
   return segments;
 }
 
@@ -558,130 +568,8 @@ function buildWallSegments(room: RoomSnapshot): SwordsmanWallSegment[] {
     }
   }
 
+  appendTriangleWallSegments(room, segments);
   return segments;
-}
-
-function buildLadderSegments(room: RoomSnapshot): SwordsmanLadderSegment[] {
-  const ladderConfig = getObjectById('ladder');
-  if (!ladderConfig) {
-    return [];
-  }
-
-  const rawSegments = room.placedObjects
-    .map((placed, index) => buildPlacedLadderSegment(placed, index, ladderConfig))
-    .filter((segment): segment is SwordsmanLadderSegment => segment !== null)
-    .sort((left, right) => left.centerX - right.centerX || left.topY - right.topY);
-  const mergedSegments: SwordsmanLadderSegment[] = [];
-
-  for (const segment of rawSegments) {
-    const existing = mergedSegments.find((candidate) => {
-      const sameColumn =
-        Math.abs(candidate.centerX - segment.centerX) <= LADDER_COLUMN_MERGE_TOLERANCE_X_PX;
-      const verticalTouching =
-        segment.topY <= candidate.bottomY + LADDER_VERTICAL_MERGE_GAP_PX &&
-        segment.bottomY >= candidate.topY - LADDER_VERTICAL_MERGE_GAP_PX;
-      return sameColumn && verticalTouching;
-    });
-
-    if (!existing) {
-      mergedSegments.push({ ...segment });
-      continue;
-    }
-
-    existing.id = `${existing.id}+${segment.id}`;
-    existing.centerX = (existing.centerX + segment.centerX) * 0.5;
-    existing.topY = Math.min(existing.topY, segment.topY);
-    existing.bottomY = Math.max(existing.bottomY, segment.bottomY);
-  }
-
-  return mergedSegments;
-}
-
-function buildPlacedLadderSegment(
-  placed: PlacedObject,
-  index: number,
-  ladderConfig: NonNullable<ReturnType<typeof getObjectById>>,
-): SwordsmanLadderSegment | null {
-  if (placed.id !== 'ladder' || ladderConfig.bodyWidth <= 0 || ladderConfig.bodyHeight <= 0) {
-    return null;
-  }
-
-  const displayOffset = getObjectDisplayOffset(ladderConfig);
-  const spriteX = placed.x + displayOffset.x;
-  const spriteY = placed.y + displayOffset.y;
-  const bodyOffsetX =
-    ladderConfig.bodyOffsetX ?? Math.max(0, (ladderConfig.frameWidth - ladderConfig.bodyWidth) * 0.5);
-  const bodyOffsetY =
-    ladderConfig.bodyOffsetY ?? Math.max(0, (ladderConfig.frameHeight - ladderConfig.bodyHeight) * 0.5);
-  const leftX = spriteX - ladderConfig.frameWidth * 0.5 + bodyOffsetX;
-  const topY = spriteY - ladderConfig.frameHeight * 0.5 + bodyOffsetY;
-
-  return {
-    id: `ladder:${placed.instanceId ?? index}:${Math.round(spriteX)}:${Math.round(topY)}`,
-    centerX: leftX + ladderConfig.bodyWidth * 0.5,
-    topY,
-    bottomY: topY + ladderConfig.bodyHeight,
-  };
-}
-
-function buildLadderEdges(
-  ladderSegments: readonly SwordsmanLadderSegment[],
-  surfaceSegments: readonly SwordsmanSurfaceSegment[],
-): SwordsmanTraversalEdge[] {
-  const edges: SwordsmanTraversalEdge[] = [];
-
-  for (const ladder of ladderSegments) {
-    const attachments = surfaceSegments
-      .map((surface) => getLadderSurfaceAttachment(ladder, surface))
-      .filter((attachment): attachment is SwordsmanLadderSurfaceAttachment => attachment !== null)
-      .sort((left, right) => left.surface.topY - right.surface.topY);
-
-    for (const source of attachments) {
-      for (const target of attachments) {
-        const verticalDelta = target.surface.topY - source.surface.topY;
-        if (Math.abs(verticalDelta) < LADDER_MIN_VERTICAL_DELTA_PX) {
-          continue;
-        }
-
-        const type = verticalDelta < 0 ? 'ladder-up' : 'ladder-down';
-        const directionX = directionFromDelta(ladder.centerX - source.surface.centerX, 1);
-        edges.push({
-          id: `${source.surface.id}->${target.surface.id}:${ladder.id}:${type}`,
-          type,
-          fromId: source.surface.id,
-          toId: target.surface.id,
-          directionX,
-          setupX: source.anchorX,
-          targetX: target.anchorX,
-          allowEdgeDrop: false,
-          ladderX: ladder.centerX,
-          ladderTopY: ladder.topY,
-          ladderBottomY: ladder.bottomY,
-        });
-      }
-    }
-  }
-
-  return edges;
-}
-
-function getLadderSurfaceAttachment(
-  ladder: SwordsmanLadderSegment,
-  surface: SwordsmanSurfaceSegment,
-): SwordsmanLadderSurfaceAttachment | null {
-  if (
-    surface.topY < ladder.topY - LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX ||
-    surface.topY > ladder.bottomY + LADDER_SURFACE_ATTACH_TOLERANCE_Y_PX
-  ) {
-    return null;
-  }
-
-  const anchorX = getSurfaceAnchorNearestX(surface, ladder.centerX);
-  if (Math.abs(anchorX - ladder.centerX) > LADDER_SURFACE_ATTACH_TOLERANCE_X_PX) {
-    return null;
-  }
-
-  return { surface, anchorX };
 }
 
 function buildJumpUpEdge(
@@ -689,12 +577,6 @@ function buildJumpUpEdge(
   target: SwordsmanSurfaceSegment,
   allSurfaces: readonly SwordsmanSurfaceSegment[],
 ): SwordsmanTraversalEdge | null {
-  const verticalRise = source.topY - target.topY;
-  if (verticalRise > JUMP_UP_MAX_VERTICAL_PX || verticalRise < -JUMP_GAP_MAX_DESCENT_PX) {
-    return null;
-  }
-  const edgeType = verticalRise >= JUMP_UP_MIN_VERTICAL_PX ? 'jump-up' : 'jump-gap';
-
   const sourceMinX = getSurfaceMinAnchorX(source);
   const sourceMaxX = getSurfaceMaxAnchorX(source);
   const targetMinX = getSurfaceMinAnchorX(target);
@@ -707,6 +589,14 @@ function buildJumpUpEdge(
     setupX: number,
     targetX: number,
   ): void => {
+    // Sample hyp height at the departure point so tall ramps still connect to
+    // flush floor tips (flat topY would look like a full-ramp jump).
+    const verticalRise =
+      surfaceTopYNearBody(source, setupX) - surfaceTopYNearBody(target, targetX);
+    if (verticalRise > JUMP_UP_MAX_VERTICAL_PX || verticalRise < -JUMP_GAP_MAX_DESCENT_PX) {
+      return;
+    }
+    const edgeType = verticalRise >= JUMP_UP_MIN_VERTICAL_PX ? 'jump-up' : 'jump-gap';
     const horizontal = targetX - setupX;
     if (Math.abs(horizontal) > JUMP_UP_MAX_HORIZONTAL_PX) {
       return;
@@ -811,22 +701,24 @@ function buildDropDownEdges(
   target: SwordsmanSurfaceSegment,
   allSurfaces: readonly SwordsmanSurfaceSegment[],
 ): SwordsmanTraversalEdge[] {
-  if (target.topY <= source.topY + DROP_DOWN_MIN_VERTICAL_PX) {
-    return [];
-  }
-
   const edges: SwordsmanTraversalEdge[] = [];
   const targetMinX = getSurfaceMinAnchorX(target);
   const targetMaxX = getSurfaceMaxAnchorX(target);
   const sourceEdges = [];
-  if (!roomHasTerrainTile(room, source.leftTileX - 1, source.tileY)) {
+  const openLeft = source.triangle
+    ? source.hasOpenLeft
+    : !roomHasTerrainTile(room, source.leftTileX - 1, source.tileY);
+  const openRight = source.triangle
+    ? source.hasOpenRight
+    : !roomHasTerrainTile(room, source.rightTileX + 1, source.tileY);
+  if (openLeft) {
     sourceEdges.push({
       directionX: -1 as const,
       setupX: source.leftX + SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
       suffix: 'left' as const,
     });
   }
-  if (!roomHasTerrainTile(room, source.rightTileX + 1, source.tileY)) {
+  if (openRight) {
     sourceEdges.push({
       directionX: 1 as const,
       setupX: source.rightX - SWORDSMAN_AI_DROP_SETUP_EDGE_INSET_PX,
@@ -836,6 +728,11 @@ function buildDropDownEdges(
 
   for (const edge of sourceEdges) {
     const targetX = clamp(edge.setupX, targetMinX, targetMaxX);
+    const sourceTop = surfaceTopYNearBody(source, edge.setupX);
+    const targetTop = surfaceTopYNearBody(target, targetX);
+    if (targetTop <= sourceTop + DROP_DOWN_MIN_VERTICAL_PX) {
+      continue;
+    }
     const horizontal = targetX - edge.setupX;
     if (Math.abs(horizontal) > DROP_DOWN_MAX_HORIZONTAL_PX) {
       continue;
@@ -885,8 +782,36 @@ function buildJumpToWallEdge(
   source: SwordsmanSurfaceSegment,
   wall: SwordsmanWallSegment,
 ): SwordsmanTraversalEdge | null {
+  // Peak / crest verticals are walked, not jumped — jump-to-wall here wall-jumps
+  // the hunter back down the ramp he just climbed.
+  if (source.triangle) {
+    const tip = triangleFloorHighTip(
+      source.triangle.anchorX,
+      source.triangle.anchorY,
+      source.triangle.legX,
+      source.triangle.legY,
+    );
+    if (
+      tip
+      && Math.abs(wall.x - tip.x) <= 6
+      && Math.abs(wall.topY - tip.y) <= 6
+    ) {
+      return null;
+    }
+  }
+
   const sourceMinX = getSurfaceMinAnchorX(source);
   const sourceMaxX = getSurfaceMaxAnchorX(source);
+  // Ramp low tip against a tile wall is a corner stand, not a jump-to-wall.
+  // Keep this triangle-only: shaft/ledge walls under a flat floor still jump.
+  if (
+    source.triangle
+    && wall.x >= source.leftX - 2
+    && wall.x <= source.rightX + 2
+  ) {
+    return null;
+  }
+
   const setupX = clamp(
     wall.x - wall.contactSide * SWORDSMAN_AI_JUMP_SETUP_BACKOFF_PX,
     sourceMinX,
@@ -976,6 +901,16 @@ function buildDecisionFromFirstEdge(
     case 'jump-up':
     case 'jump-gap':
     case 'jump-to-wall': {
+      // Shared-tip peaks: keep walking over the crest; never jump the lip.
+      if (enemy.onFloor && edge.id.includes(':crest-walk:')) {
+        return baseDecision('same-platform', {
+          directionX: edge.directionX,
+          targetX: edge.targetX,
+          traversalEdgeId: edge.id,
+          traversalNextNodeId: edge.toId,
+        });
+      }
+
       if (enemy.onFloor) {
         const setupReferenceX = getTraversalSetupReferenceX(enemy);
         const setupDelta = edge.setupX - setupReferenceX;
@@ -1210,6 +1145,20 @@ function findBestTraversalFirstEdge(
     return null;
   }
 
+  // Peak crest walks are an extra hop, so depth-3 search often prefers jumping off
+  // the wrong tip. When the crest moves toward the target, take it immediately.
+  const crestWalk = findCrestWalkTowardTarget(
+    graph,
+    startNodeIds,
+    targetNodeIds,
+    enemyBody,
+    targetBody,
+    blockedEdgeIds,
+  );
+  if (crestWalk) {
+    return crestWalk;
+  }
+
   // The routes are listed once per start-node and blocked-edge set, so a chase only searches again
   // when the enemy reaches another node or an edge is blocked. Scoring them against the live
   // positions still runs every call, so the chosen edge is the one a full search would pick (F305).
@@ -1407,16 +1356,28 @@ export function getSwordsmanTraversalCurrentNodeId(
 export function getSwordsmanTraversalContext(
   graph: SwordsmanTraversalGraph,
   body: SwordsmanBodySnapshot,
+  preferredSurfaceId: string | null = null,
 ): SwordsmanTraversalContext {
   const currentSurface = findSurfaceSegmentNearBody(
     graph,
     body,
     body.onFloor ? SURFACE_MATCH_TOLERANCE_PX : AIRBORNE_SURFACE_MATCH_TOLERANCE_PX,
+    preferredSurfaceId,
   );
   const currentWall =
     body.wallContactSide === 0
       ? null
       : findWallSegmentNearBody(graph, body, body.wallContactSide);
+  // Grounded on a ramp near its vertical tip must stay on the surface node —
+  // preferring the wall freezes dismount / walk-off planning.
+  if (body.onFloor && currentSurface) {
+    return {
+      currentSurface,
+      currentWall,
+      currentNodeId: currentSurface.id,
+      startNodeIds: uniqueNodeIds([currentSurface.id]),
+    };
+  }
   return {
     currentSurface,
     currentWall,
@@ -1436,7 +1397,7 @@ export function measureSwordsmanTraversalNodeDistanceToBody(
         getSurfaceMinAnchorX(node),
         getSurfaceMaxAnchorX(node),
       ),
-      verticalDistance: Math.abs(node.topY - body.bottom),
+      verticalDistance: Math.abs(surfaceTopYNearBody(node, body.centerX) - body.bottom),
     };
   }
 
@@ -1450,6 +1411,7 @@ function findSurfaceSegmentNearBody(
   graph: SwordsmanTraversalGraph,
   body: SwordsmanBodySnapshot,
   tolerancePx: number,
+  preferredSurfaceId: string | null = null,
 ): SwordsmanSurfaceSegment | null {
   let best: SwordsmanSurfaceSegment | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -1462,7 +1424,8 @@ function findSurfaceSegmentNearBody(
       continue;
     }
 
-    const verticalDistance = Math.abs(body.bottom - segment.topY);
+    const surfaceTopY = surfaceTopYNearBody(segment, body.centerX);
+    const verticalDistance = Math.abs(body.bottom - surfaceTopY);
     if (verticalDistance > tolerancePx) {
       continue;
     }
@@ -1473,7 +1436,11 @@ function findSurfaceSegmentNearBody(
       getSurfaceMinAnchorX(segment),
       getSurfaceMaxAnchorX(segment),
     );
-    const score = verticalDistance * 4 + horizontalOverflow;
+    // Prefer triangle hyps over a tile floor under the ramp, and stick to the
+    // last surface briefly so ramp feet don't flicker floor↔triangle each frame.
+    const triangleBias = segment.triangle ? -28 : 0;
+    const stickyBias = preferredSurfaceId && segment.id === preferredSurfaceId ? -18 : 0;
+    const score = verticalDistance * 4 + horizontalOverflow + triangleBias + stickyBias;
     if (score < bestScore) {
       best = segment;
       bestScore = score;
@@ -1481,6 +1448,21 @@ function findSurfaceSegmentNearBody(
   }
 
   return best;
+}
+
+function surfaceTopYNearBody(segment: SwordsmanSurfaceSegment, localX: number): number {
+  if (!segment.triangle) {
+    return segment.topY;
+  }
+  return (
+    triangleFloorSurfaceYAt(
+      segment.triangle.anchorX,
+      segment.triangle.anchorY,
+      segment.triangle.legX,
+      segment.triangle.legY,
+      localX,
+    ) ?? segment.topY
+  );
 }
 
 function findWallSegmentNearBody(

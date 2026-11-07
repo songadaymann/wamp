@@ -4,8 +4,14 @@ import type { DeathMapCell, RoomInsightTarget } from '../insights/model';
 import { getActiveCourseDraftSessionPublished } from '../courses/draftSession';
 import Phaser from 'phaser';
 import { EditorDraftLifecycle } from './editor/draftLifecycle';
+import { createEditorHistoryShortcutHandler, handlePinnedTriangleDeleteKey } from './editor/editorHistoryShortcuts';
 import { createEditorTriangleHandles } from './editor/triangleHandleSetup';
 import type { TriangleHandleController } from './editor/triangleHandles';
+import {
+  runEditorPreviewSmokeCommands,
+  type EditorPreviewSmokeCommand,
+  type EditorPreviewSmokeResult,
+} from './editor/previewSmokeCommands';
 import { utilityInspectorCallbacks } from './editor/utilityInspectorCallbacks';
 import { courseEditorWakeData } from './editor/courseWakeData';
 import { applyEditorLayerVisibility } from './editor/layerVisibility';
@@ -61,7 +67,7 @@ import {
   showBusyError,
   showBusyOverlay,
 } from '../ui/appFeedback';
-import { isNativeTextEditingFocused, isTextInputFocused } from '../ui/keyboardFocus';
+import { isTextInputFocused } from '../ui/keyboardFocus';
 import type { CustomSpriteDefinition } from '../customSprites/model';
 import { roomSnapshotUsesCustomSprite } from '../customSprites/usage';
 import type {
@@ -115,7 +121,6 @@ import { EditorDocumentCache } from './editor/documentCache';
 import { EditorEdgeGuideCache } from './editor/edgeGuides';
 import { saveEditorClipboard } from './editor/clipboardStorage';
 import type { EditorCourseUiState, RoomEditorSceneBridge } from '../ui/setup/sceneBridge';
-import type { EditorShapeKind } from './editor/shapeTiles';
 import {
   requestEditorShellEscape,
   type EditorShellEscapeRequestedDetail,
@@ -125,40 +130,7 @@ import { getEditorToolForShortcutKey } from './editor/keyboardShortcuts';
 const EDITOR_NEIGHBOR_RADIUS = 1;
 type EditorMarkerPlacementMode = Exclude<GoalPlacementMode, null> | 'start';
 
-export type EditorPreviewSmokeCommand =
-  | { op: 'beginBatch' }
-  | { op: 'commitBatch' }
-  | { op: 'placeCells'; cells: Array<{ x: number; y: number }> }
-  | { op: 'eraseCells'; cells: Array<{ x: number; y: number }> }
-  | {
-      op: 'stampShape';
-      kind: EditorShapeKind;
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      outline: boolean;
-      erase: boolean;
-      mid?: { x: number; y: number };
-    }
-  | { op: 'floodFill'; x: number; y: number }
-  | { op: 'copy'; x1: number; y1: number; x2: number; y2: number }
-  | { op: 'paste'; x: number; y: number }
-  | { op: 'undo' }
-  | { op: 'redo' }
-  | { op: 'clearAllTiles' }
-  | { op: 'clearCurrentLayer' }
-  | { op: 'capture'; name: string }
-  | { op: 'applyCapture'; name: string }
-  | { op: 'fitToScreen' }
-  | { op: 'setCamera'; zoom: number; centerTileX: number; centerTileY: number };
-
-export interface EditorPreviewSmokeResult extends Record<string, unknown> {
-  ok: boolean;
-  reason?: string;
-  commandIndex?: number;
-  captures?: Record<string, RoomSnapshot>;
-}
+export type { EditorPreviewSmokeCommand, EditorPreviewSmokeResult } from './editor/previewSmokeCommands';
 
 export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
   private placedObjects: PlacedObject[] = [];
@@ -256,6 +228,10 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     event.stopPropagation();
     this.toolController.selectTool(shortcutTool);
   };
+  private readonly handleHistoryShortcutCapture = createEditorHistoryShortcutHandler(() => ({
+    sceneActive: this.scene.isActive(this.scene.key),
+    undo: () => this.toolController.undo(), redo: () => this.toolController.redo(),
+  }));
   private readonly handleDocumentKeyDown = (event: KeyboardEvent): void => {
     if (!this.scene.isActive(this.scene.key) || editorState.isPlaying || event.defaultPrevented) {
       return;
@@ -263,27 +239,12 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
 
     const key = event.key.toLowerCase();
     const primaryModifier = event.metaKey || event.ctrlKey;
-    const undoRequested = primaryModifier && key === 'z';
-    const ctrlRedoRequested = event.ctrlKey && !event.metaKey && key === 'y';
-
-    if (undoRequested || ctrlRedoRequested) {
-      if (isNativeTextEditingFocused()) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      if ((undoRequested && event.shiftKey) || ctrlRedoRequested) {
-        this.toolController.redo();
-      } else {
-        this.toolController.undo();
-      }
-      return;
-    }
 
     if (isTextInputFocused()) {
       return;
     }
+
+    if (handlePinnedTriangleDeleteKey(event, () => this.inspectorController.deletePinnedTriangle())) return;
 
     if (key === 'escape') {
       event.preventDefault();
@@ -435,6 +396,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.draftLifecycle = null;
     this.interactionController.stopMusicRoomFit();
     window.removeEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.removeEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.events.off('wake', this.handleWake, this);
     this.scale.off('resize', this.handleResize, this);
     this.input.removeAllListeners();
@@ -696,7 +658,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
       commitObjectBatch: () => this.editRuntime.commitObjectBatch(),
       cancelObjectBatch: () => this.editRuntime.cancelObjectBatch(),
       removeGoalMarkerAt: (worldX, worldY) => this.removeGoalMarkerAt(worldX, worldY),
-      removeObjectAt: (worldX, worldY) => this.removeObjectAt(worldX, worldY),
+      removeObjectAt: (worldX, worldY, filter) => this.removeObjectAt(worldX, worldY, filter),
       placeGoalMarker: (tileX, tileY) => this.placeGoalMarker(tileX, tileY),
       placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
       paintRandomizeAt: (worldX, worldY) => this.editRuntime.paintRandomizeAt(worldX, worldY),
@@ -1023,6 +985,7 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.setupInput();
     this.setupKeyboard();
     window.addEventListener('keydown', this.handleToolShortcutCapture, { capture: true });
+    window.addEventListener('keydown', this.handleHistoryShortcutCapture, { capture: true });
     this.rebuildObjectSprites();
     this.updateBackgroundPreview();
     this.updateLightingPreview();
@@ -1428,114 +1391,31 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return { ok: true };
   }
 
-  /**
-   * Narrow command surface for safety-preview browser proof. The raw edit
-   * runtime remains private, and production builds cannot enable this path.
-   */
+
   debugRunPreviewSmokeCommands(
     commands: readonly EditorPreviewSmokeCommand[],
   ): EditorPreviewSmokeResult {
-    const previewSmokeEnabled = import.meta.env.VITE_ENABLE_TEST_RESET === '1'
-      && new URLSearchParams(window.location.search).get('previewSmoke') === '1';
-    if (!previewSmokeEnabled) {
-      return { ok: false, reason: 'preview-smoke-disabled' };
-    }
-    if (!Array.isArray(commands as unknown) || commands.length > 5_000) {
-      return { ok: false, reason: 'invalid-editor-command-list' };
-    }
-
-    const captures: Record<string, RoomSnapshot> = {};
-    for (let commandIndex = 0; commandIndex < commands.length; commandIndex += 1) {
-      const command = commands[commandIndex]!;
-      try {
-        switch (command.op) {
-          case 'beginBatch':
-            this.editRuntime.beginTileBatch();
-            break;
-          case 'commitBatch':
-            this.editRuntime.commitTileBatch();
-            break;
-          case 'placeCells':
-            command.cells.forEach(({ x, y }) => {
-              this.editRuntime.placeTileAt(x * TILE_SIZE + 1, y * TILE_SIZE + 1);
-            });
-            break;
-          case 'eraseCells':
-            command.cells.forEach(({ x, y }) => {
-              this.editRuntime.eraseTileAt(x * TILE_SIZE + 1, y * TILE_SIZE + 1);
-            });
-            break;
-          case 'stampShape':
-            this.editRuntime.stampShape(
-              command.kind,
-              command.x1,
-              command.y1,
-              command.x2,
-              command.y2,
-              { outline: command.outline, erase: command.erase, mid: command.mid },
-            );
-            break;
-          case 'floodFill':
-            this.editRuntime.floodFill(command.x, command.y);
-            break;
-          case 'copy':
-            this.editRuntime.copyTilesToClipboard(command.x1, command.y1, command.x2, command.y2);
-            break;
-          case 'paste':
-            this.editRuntime.pasteClipboardAt(command.x, command.y);
-            break;
-          case 'undo':
-            this.editRuntime.undo();
-            break;
-          case 'redo':
-            this.editRuntime.redo();
-            break;
-          case 'clearAllTiles':
-            this.editRuntime.clearAllTiles();
-            break;
-          case 'clearCurrentLayer':
-            this.editRuntime.clearCurrentLayer();
-            break;
-          case 'capture':
-            if (!/^[a-z][a-zA-Z0-9]*$/.test(command.name)) {
-              return { ok: false, reason: 'invalid-capture-name', commandIndex };
-            }
-            captures[command.name] = this.editRuntime.exportRoomSnapshot();
-            break;
-          case 'applyCapture': {
-            const capture = captures[command.name];
-            if (!capture) {
-              return { ok: false, reason: 'capture-not-found', commandIndex };
-            }
-            this.applyRoomSnapshot(JSON.parse(JSON.stringify(capture)) as RoomSnapshot);
-            break;
-          }
-          case 'fitToScreen':
-            this.fitToScreen();
-            break;
-          case 'setCamera':
-            this.cameras.main.setZoom(command.zoom);
-            this.cameras.main.centerOn(
-              command.centerTileX * TILE_SIZE,
-              command.centerTileY * TILE_SIZE,
-            );
-            break;
-          default:
-            return {
-              ok: false,
-              reason: `unsupported-editor-command:${String((command as { op?: unknown }).op)}`,
-              commandIndex,
-            };
-        }
-      } catch (error) {
-        return {
-          ok: false,
-          reason: error instanceof Error ? error.message : String(error),
-          commandIndex,
-        };
-      }
-    }
-    return { ok: true, captures };
+    return runEditorPreviewSmokeCommands({
+      beginTileBatch: () => this.editRuntime.beginTileBatch(),
+      commitTileBatch: () => this.editRuntime.commitTileBatch(),
+      placeTileAt: (worldX, worldY) => this.editRuntime.placeTileAt(worldX, worldY),
+      eraseTileAt: (worldX, worldY) => this.editRuntime.eraseTileAt(worldX, worldY),
+      stampShape: (kind, x1, y1, x2, y2, options) => this.editRuntime.stampShape(kind, x1, y1, x2, y2, options),
+      floodFill: (x, y) => this.editRuntime.floodFill(x, y),
+      copyTilesToClipboard: (x1, y1, x2, y2) => this.editRuntime.copyTilesToClipboard(x1, y1, x2, y2),
+      pasteClipboardAt: (x, y) => this.editRuntime.pasteClipboardAt(x, y),
+      undo: () => this.editRuntime.undo(),
+      redo: () => this.editRuntime.redo(),
+      clearAllTiles: () => this.editRuntime.clearAllTiles(),
+      clearCurrentLayer: () => this.editRuntime.clearCurrentLayer(),
+      exportRoomSnapshot: () => this.editRuntime.exportRoomSnapshot(),
+      applyRoomSnapshot: (room) => this.applyRoomSnapshot(room),
+      fitToScreen: () => this.fitToScreen(),
+      setCamera: (zoom, centerTileX, centerTileY) => {
+        this.cameras.main.setZoom(zoom);
+        this.cameras.main.centerOn(centerTileX * TILE_SIZE, centerTileY * TILE_SIZE);
+      },
+    }, commands);
   }
 
   private maybeAutoSave(_time: number): void {
@@ -1701,9 +1581,8 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     this.inspectorController.handleObjectPlaced(placed);
   }
 
-  private removeObjectAt(worldX: number, worldY: number): void {
-    const removed = this.editRuntime.removeObjectAt(worldX, worldY);
-    this.inspectorController.handleObjectRemoved(removed);
+  private removeObjectAt(worldX: number, worldY: number, filter?: (placed: PlacedObject) => boolean): void {
+    this.inspectorController.handleObjectRemoved(this.editRuntime.removeObjectAt(worldX, worldY, filter));
   }
 
   rebuildObjectSprites(): void {
@@ -1979,15 +1858,13 @@ export class EditorScene extends Phaser.Scene implements RoomEditorSceneBridge {
     return this.persistenceController.setLeaderboardSourceVersion(targetVersion, sourceVersion);
   }
 
-  undoAction(): void {
+  undoAction(): void { this.runHistoryAction(() => this.toolController.undo()); }
+  redoAction(): void { this.runHistoryAction(() => this.toolController.redo()); }
+  private runHistoryAction(run: () => void): void {
     this.objectMoveController.cancel();
-    this.toolController.undo();
-    this.updateBottomBar();
-  }
-
-  redoAction(): void {
-    this.objectMoveController.cancel();
-    this.toolController.redo();
+    run();
+    this.inspectorController.refreshAfterHistory();
+    this.renderEditorUi();
     this.updateBottomBar();
   }
 

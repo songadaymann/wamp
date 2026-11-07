@@ -6,18 +6,27 @@ export interface EditorColorPopoverElements {
   dropper: HTMLButtonElement | null;
 }
 
-interface EyeDropperResult {
-  sRGBHex: string;
-}
+/** Magnified neighborhood shown in the pick loupe (browser eyedropper style). */
+export const COLOR_PICK_RADIUS = 6;
+export const COLOR_PICK_CELL = 12;
 
-interface EyeDropperWindow {
-  EyeDropper?: new () => { open: () => Promise<EyeDropperResult> };
+let colorPickArmed = false;
+
+/** True while Pick pixel is waiting for a click (loupe visible). */
+export function isColorPickArmed(): boolean {
+  return colorPickArmed;
 }
 
 export class EditorColorPopover {
   private hsv = { h: 0, s: 0, v: 1 };
   private openTarget: ((hex: string) => void) | null = null;
   private anchor: HTMLElement | null = null;
+  private picking = false;
+  private reticle: HTMLElement | null = null;
+  private reticleCanvas: HTMLCanvasElement | null = null;
+  private reticleHex: HTMLElement | null = null;
+  private reticleQueued = false;
+  private reticleClient = { x: 0, y: 0 };
 
   constructor(
     private readonly elements: EditorColorPopoverElements,
@@ -27,6 +36,7 @@ export class EditorColorPopover {
   bind(cleanup: Array<() => void>): void {
     const { square, hue, hex, dropper, popover } = this.elements;
     const paint = () => this.paint();
+    let draggingSquare = false;
     const pickFromSquare = (event: PointerEvent) => {
       if (!square) return;
       const rect = square.getBoundingClientRect();
@@ -34,12 +44,28 @@ export class EditorColorPopover {
       this.hsv.v = 1 - clamp01((event.clientY - rect.top) / rect.height);
       this.emit();
     };
+    const dragSquare = (event: PointerEvent) => {
+      draggingSquare = true;
+      square?.setPointerCapture(event.pointerId);
+      pickFromSquare(event);
+    };
+    const slideSquare = (event: PointerEvent) => {
+      if (!draggingSquare) return;
+      pickFromSquare(event);
+    };
+    const releaseSquare = (event: PointerEvent) => {
+      draggingSquare = false;
+      if (square?.hasPointerCapture(event.pointerId)) square.releasePointerCapture(event.pointerId);
+    };
     const dismissOutside = (event: PointerEvent) => {
       if (!shouldDismissColorPopover(event.target, popover, this.anchor)) return;
       this.close();
     };
     const keepInside = (event: PointerEvent) => event.stopPropagation();
-    square?.addEventListener('pointerdown', pickFromSquare);
+    square?.addEventListener('pointerdown', dragSquare);
+    square?.addEventListener('pointermove', slideSquare);
+    square?.addEventListener('pointerup', releaseSquare);
+    square?.addEventListener('pointercancel', releaseSquare);
     hue?.addEventListener('input', () => {
       this.hsv.h = Number(hue.value) || 0;
       this.emit();
@@ -50,15 +76,58 @@ export class EditorColorPopover {
       this.hsv = hexToHsv(next);
       this.emit();
     });
-    dropper?.addEventListener('click', () => {
-      void this.sampleScreen();
-    });
+    const armDropper = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.picking) this.cancelPick();
+      else this.armPick();
+    };
+    dropper?.addEventListener('click', armDropper);
     popover?.addEventListener('pointerdown', keepInside);
     const doc = popover?.ownerDocument ?? (typeof document === 'undefined' ? null : document);
+    const pickPixel = (event: PointerEvent) => {
+      if (!this.picking) return;
+      if (isDomNode(event.target) && (popover?.contains(event.target) || dropper?.contains(event.target))) return;
+      this.cancelPick();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.sampleCanvas(event);
+    };
+    const moveReticle = (event: PointerEvent) => {
+      if (!this.picking) return;
+      this.reticleClient = { x: event.clientX, y: event.clientY };
+      this.queueReticle();
+    };
+    const cancelPickKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') this.cancelPick();
+    };
+    doc?.addEventListener('pointerdown', pickPixel, true);
+    doc?.addEventListener('pointermove', moveReticle, true);
+    doc?.addEventListener('keydown', cancelPickKey);
     doc?.addEventListener('pointerdown', dismissOutside, true);
-    if (square) cleanup.push(() => square.removeEventListener('pointerdown', pickFromSquare));
+    if (square) {
+      cleanup.push(() => {
+        square.removeEventListener('pointerdown', dragSquare);
+        square.removeEventListener('pointermove', slideSquare);
+        square.removeEventListener('pointerup', releaseSquare);
+        square.removeEventListener('pointercancel', releaseSquare);
+      });
+    }
+    if (dropper) cleanup.push(() => dropper.removeEventListener('click', armDropper));
     if (popover) cleanup.push(() => popover.removeEventListener('pointerdown', keepInside));
-    if (doc) cleanup.push(() => doc.removeEventListener('pointerdown', dismissOutside, true));
+    if (doc) {
+      cleanup.push(() => {
+        this.cancelPick();
+        this.reticle?.remove();
+        this.reticle = null;
+        this.reticleCanvas = null;
+        this.reticleHex = null;
+        doc.removeEventListener('pointerdown', pickPixel, true);
+        doc.removeEventListener('pointermove', moveReticle, true);
+        doc.removeEventListener('keydown', cancelPickKey);
+        doc.removeEventListener('pointerdown', dismissOutside, true);
+      });
+    }
     paint();
   }
 
@@ -86,15 +155,16 @@ export class EditorColorPopover {
   }
 
   close(): void {
+    this.cancelPick();
     this.elements.popover?.classList.add('hidden');
     this.openTarget = null;
     this.anchor = null;
   }
 
-  private emit(): void {
-    const hex = hsvToHex(this.hsv.h, this.hsv.s, this.hsv.v);
-    if (this.elements.hex) this.elements.hex.value = hex;
+  private emit(exactHex?: string): void {
+    const hex = exactHex ?? hsvToHex(this.hsv.h, this.hsv.s, this.hsv.v);
     this.paint();
+    if (this.elements.hex && document.activeElement !== this.elements.hex) this.elements.hex.value = hex;
     (this.openTarget ?? this.onColor)(hex);
   }
 
@@ -126,18 +196,133 @@ export class EditorColorPopover {
     context.strokeRect(this.hsv.s * width - 3, (1 - this.hsv.v) * height - 3, 6, 6);
   }
 
-  private async sampleScreen(): Promise<void> {
-    const EyeDropper = (window as EyeDropperWindow).EyeDropper;
-    if (!EyeDropper) return;
-    try {
-      const result = await new EyeDropper().open();
-      const next = normalizeHex(result.sRGBHex);
-      if (!next) return;
-      this.hsv = hexToHsv(next);
-      this.emit();
-    } catch {
-      // The eyedropper dismisses when the user presses Escape.
+  private armPick(): void {
+    this.picking = true;
+    colorPickArmed = true;
+    const doc = this.elements.popover?.ownerDocument ?? document;
+    doc.documentElement.classList.add('color-pick-armed');
+    this.ensureReticle(doc);
+    this.reticle?.classList.remove('hidden');
+  }
+
+  private cancelPick(): void {
+    this.picking = false;
+    colorPickArmed = false;
+    this.reticleQueued = false;
+    const doc = this.elements.popover?.ownerDocument ?? (typeof document === 'undefined' ? null : document);
+    doc?.documentElement.classList.remove('color-pick-armed');
+    this.reticle?.classList.add('hidden');
+  }
+
+  private ensureReticle(doc: Document): void {
+    if (this.reticle) return;
+    const size = (COLOR_PICK_RADIUS * 2 + 1) * COLOR_PICK_CELL;
+    const root = doc.createElement('div');
+    root.id = 'color-pick-reticle';
+    root.className = 'color-pick-reticle hidden';
+    root.setAttribute('aria-hidden', 'true');
+    const canvas = doc.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    canvas.className = 'color-pick-reticle-canvas';
+    const hex = doc.createElement('div');
+    hex.className = 'color-pick-reticle-hex';
+    hex.textContent = '#------';
+    root.append(canvas, hex);
+    doc.body.append(root);
+    this.reticle = root;
+    this.reticleCanvas = canvas;
+    this.reticleHex = hex;
+  }
+
+  private queueReticle(): void {
+    if (this.reticleQueued || !this.picking) return;
+    this.reticleQueued = true;
+    const doc = this.elements.popover?.ownerDocument ?? document;
+    const view = doc.defaultView;
+    const run = () => {
+      this.reticleQueued = false;
+      if (!this.picking) return;
+      this.updateReticle(this.reticleClient.x, this.reticleClient.y);
+    };
+    if (view) view.requestAnimationFrame(run);
+    else run();
+  }
+
+  private updateReticle(clientX: number, clientY: number): void {
+    const reticle = this.reticle;
+    const canvas = this.reticleCanvas;
+    if (!reticle || !canvas) return;
+    const size = canvas.width;
+    // Keep the loupe centered on the hot pixel; the hex chip hangs just below.
+    reticle.style.transform = `translate(${Math.round(clientX - size / 2)}px, ${Math.round(clientY - size / 2)}px)`;
+    this.readNeighborhood(clientX, clientY, (patch) => {
+      if (!this.picking || !patch) {
+        reticle.classList.add('is-empty');
+        if (this.reticleHex) this.reticleHex.textContent = '';
+        return;
+      }
+      reticle.classList.remove('is-empty');
+      paintPickReticle(canvas, patch);
+      const center = patchCenter(patch);
+      if (this.reticleHex) this.reticleHex.textContent = center ? rgbToHex(center.r, center.g, center.b) : '';
+    });
+  }
+
+  /**
+   * Read the canvas pixel that was authored, not the browser eyedropper.
+   * The eyedropper samples the color-managed screen, so each pick of the same
+   * triangle comes back slightly paler.
+   */
+  private sampleCanvas(event: PointerEvent): void {
+    this.readNeighborhood(event.clientX, event.clientY, (patch) => {
+      const center = patch ? patchCenter(patch) : null;
+      if (!center) return;
+      const hex = rgbToHex(center.r, center.g, center.b);
+      this.hsv = hexToHsv(hex);
+      this.emit(hex);
+    });
+  }
+
+  private readNeighborhood(
+    clientX: number,
+    clientY: number,
+    done: (patch: ColorPickPatch | null) => void,
+  ): void {
+    const doc = this.elements.popover?.ownerDocument ?? document;
+    const stack = doc.elementsFromPoint(clientX, clientY).filter((element) => element !== this.reticle && !this.reticle?.contains(element));
+    const canvases = stack.filter((element): element is HTMLCanvasElement => element instanceof HTMLCanvasElement);
+    const game = doc.defaultView?.__EVERYBODYS_PLATFORMER_GAME__;
+    const canvas = canvases.find((item) => item === game?.canvas) ?? canvases[0];
+    if (!canvas) {
+      done(null);
+      return;
     }
+    const renderer = webglRenderer(game);
+    if (renderer && canvas === game?.canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const point = backingPixel(clientX, clientY, rect, renderer.gl.drawingBufferWidth, renderer.gl.drawingBufferHeight);
+      if (!point) {
+        done(null);
+        return;
+      }
+      const premultiplied = renderer.gl.getContextAttributes()?.premultipliedAlpha !== false;
+      renderer.once('postrender', () => {
+        done(readWebglNeighborhood(renderer.gl, point.x, point.y, COLOR_PICK_RADIUS, premultiplied));
+      });
+      return;
+    }
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+      done(null);
+      return;
+    }
+    const point = backingPixel(clientX, clientY, canvas.getBoundingClientRect(), canvas.width, canvas.height);
+    if (!point) {
+      done(null);
+      return;
+    }
+    done(readCanvasNeighborhood(context, point.x, point.y, canvas.width, canvas.height, COLOR_PICK_RADIUS));
   }
 }
 
@@ -155,6 +340,195 @@ export function shouldDismissColorPopover(
 
 function isDomNode(value: EventTarget | null): value is Node {
   return Boolean(value && typeof (value as Node).nodeType === 'number');
+}
+
+interface ReadableWebglRenderer {
+  gl: WebGLRenderingContext | WebGL2RenderingContext;
+  once(event: string, listener: () => void): void;
+}
+
+function webglRenderer(game: { canvas?: HTMLCanvasElement; renderer?: { type?: number; gl?: WebGLRenderingContext | WebGL2RenderingContext; once?: (event: string, listener: () => void) => void } } | undefined): ReadableWebglRenderer | null {
+  const renderer = game?.renderer;
+  if (!renderer?.gl || renderer.type !== 2 || typeof renderer.once !== 'function') return null;
+  return renderer as ReadableWebglRenderer;
+}
+
+export function backingPixel(
+  clientX: number,
+  clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+  bufferWidth: number,
+  bufferHeight: number,
+): { x: number; y: number } | null {
+  if (rect.width <= 0 || rect.height <= 0 || bufferWidth <= 0 || bufferHeight <= 0) return null;
+  const x = Math.floor((clientX - rect.left) * (bufferWidth / rect.width));
+  const y = Math.floor((clientY - rect.top) * (bufferHeight / rect.height));
+  if (x < 0 || y < 0 || x >= bufferWidth || y >= bufferHeight) return null;
+  return { x, y };
+}
+
+/** Authored color of a canvas pixel. Transparent hits and premultiplied darkening are discarded. */
+export function straightPixel(
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number,
+  premultiplied: boolean,
+): { r: number; g: number; b: number } | null {
+  if (alpha < 16) return null;
+  if (!premultiplied || alpha >= 255) return { r: red, g: green, b: blue };
+  const scale = 255 / alpha;
+  return {
+    r: Math.min(255, Math.round(red * scale)),
+    g: Math.min(255, Math.round(green * scale)),
+    b: Math.min(255, Math.round(blue * scale)),
+  };
+}
+
+export function rgbToHex(red: number, green: number, blue: number): string {
+  return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+}
+
+export interface ColorPickPatch {
+  size: number;
+  /** Row-major RGBA for the neighborhood, center at floor(size/2). */
+  pixels: Uint8ClampedArray;
+}
+
+export function patchCenter(patch: ColorPickPatch): { r: number; g: number; b: number } | null {
+  const mid = Math.floor(patch.size / 2);
+  const offset = (mid * patch.size + mid) * 4;
+  return straightPixel(
+    patch.pixels[offset],
+    patch.pixels[offset + 1],
+    patch.pixels[offset + 2],
+    patch.pixels[offset + 3],
+    false,
+  );
+}
+
+export function paintPickReticle(canvas: HTMLCanvasElement, patch: ColorPickPatch): void {
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  const cell = COLOR_PICK_CELL;
+  const size = patch.size;
+  canvas.width = size * cell;
+  canvas.height = size * cell;
+  context.imageSmoothingEnabled = false;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const offset = (y * size + x) * 4;
+      const alpha = patch.pixels[offset + 3];
+      if (alpha < 16) {
+        context.fillStyle = ((x + y) & 1) === 0 ? '#2a2a2a' : '#3a3a3a';
+      } else {
+        context.fillStyle = rgbToHex(patch.pixels[offset], patch.pixels[offset + 1], patch.pixels[offset + 2]);
+      }
+      context.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }
+  const mid = Math.floor(size / 2) * cell;
+  context.strokeStyle = '#fff';
+  context.lineWidth = 2;
+  context.strokeRect(mid + 1, mid + 1, cell - 2, cell - 2);
+  context.strokeStyle = '#111';
+  context.lineWidth = 1;
+  context.strokeRect(mid + 0.5, mid + 0.5, cell - 1, cell - 1);
+  const center = mid + cell / 2;
+  context.beginPath();
+  context.moveTo(center, 0);
+  context.lineTo(center, mid);
+  context.moveTo(center, mid + cell);
+  context.lineTo(center, canvas.height);
+  context.moveTo(0, center);
+  context.lineTo(mid, center);
+  context.moveTo(mid + cell, center);
+  context.lineTo(canvas.width, center);
+  context.strokeStyle = 'rgba(255,255,255,0.85)';
+  context.lineWidth = 1;
+  context.stroke();
+}
+
+function readCanvasNeighborhood(
+  context: CanvasRenderingContext2D,
+  pixelX: number,
+  pixelY: number,
+  width: number,
+  height: number,
+  radius: number,
+): ColorPickPatch {
+  const size = radius * 2 + 1;
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  const left = Math.max(0, pixelX - radius);
+  const top = Math.max(0, pixelY - radius);
+  const right = Math.min(width - 1, pixelX + radius);
+  const bottom = Math.min(height - 1, pixelY + radius);
+  const readWidth = right - left + 1;
+  const readHeight = bottom - top + 1;
+  let sample: ImageData;
+  try {
+    sample = context.getImageData(left, top, readWidth, readHeight);
+  } catch {
+    return { size, pixels };
+  }
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const x = pixelX + dx;
+      const y = pixelY + dy;
+      if (x < left || y < top || x > right || y > bottom) continue;
+      const source = ((y - top) * readWidth + (x - left)) * 4;
+      const dest = ((dy + radius) * size + (dx + radius)) * 4;
+      pixels[dest] = sample.data[source];
+      pixels[dest + 1] = sample.data[source + 1];
+      pixels[dest + 2] = sample.data[source + 2];
+      pixels[dest + 3] = sample.data[source + 3];
+    }
+  }
+  return { size, pixels };
+}
+
+function readWebglNeighborhood(
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
+  pixelX: number,
+  pixelY: number,
+  radius: number,
+  premultiplied: boolean,
+): ColorPickPatch {
+  const size = radius * 2 + 1;
+  const left = Math.max(0, pixelX - radius);
+  const top = Math.max(0, pixelY - radius);
+  const right = Math.min(gl.drawingBufferWidth - 1, pixelX + radius);
+  const bottom = Math.min(gl.drawingBufferHeight - 1, pixelY + radius);
+  const readWidth = right - left + 1;
+  const readHeight = bottom - top + 1;
+  const raw = new Uint8Array(readWidth * readHeight * 4);
+  const bound = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.readPixels(left, gl.drawingBufferHeight - 1 - bottom, readWidth, readHeight, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+  if (bound) gl.bindFramebuffer(gl.FRAMEBUFFER, bound);
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const x = pixelX + dx;
+      const y = pixelY + dy;
+      if (x < left || y < top || x > right || y > bottom) continue;
+      const sourceX = x - left;
+      const sourceY = bottom - y;
+      const source = (sourceY * readWidth + sourceX) * 4;
+      const straight = straightPixel(raw[source], raw[source + 1], raw[source + 2], raw[source + 3], premultiplied);
+      const dest = ((dy + radius) * size + (dx + radius)) * 4;
+      if (!straight) {
+        pixels[dest + 3] = 0;
+        continue;
+      }
+      pixels[dest] = straight.r;
+      pixels[dest + 1] = straight.g;
+      pixels[dest + 2] = straight.b;
+      pixels[dest + 3] = 255;
+    }
+  }
+  return { size, pixels };
 }
 
 function clamp01(value: number): number {

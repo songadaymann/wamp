@@ -32,7 +32,7 @@
     height: 100%;
     min-height: 0;
     padding: 4px 0;
-    color: var(--text-muted);
+    color: #111;
     cursor: pointer;
     font-family: var(--editor-button-font, var(--font-mono));
     font-size: var(--ui-text-small, 10px);
@@ -43,7 +43,7 @@
   }
 
   #layers-section .layer-guides-option:has(:checked) {
-    color: var(--editor-retro-green, var(--wamp-green));
+    color: #111;
   }
 
   #layers-section .layer-guides-option input {

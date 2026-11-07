@@ -1,5 +1,6 @@
 export { objectMatchesEditorScope, type EditorObjectScope } from './paletteObjectScopes';
 import { objectMatchesEditorScope, type EditorObjectScope } from './paletteObjectScopes';
+import { requestTriangleDeselect } from '../../scenes/editor/triangleSelectionRelease';
 import { assetUrl } from '../../assets/assetUrl';
 import { createObjectPaletteThumbnail } from './objectPaletteThumbnail';
 import {
@@ -740,6 +741,7 @@ export class PaletteController {
       item.appendChild(img);
 
       item.addEventListener('click', () => {
+        requestTriangleDeselect();
         updateEditorState({ selectedObjectId: objectConfig.id });
         updateEditorState({ objectFacing: objectConfig.facingDirection ?? 'right' });
         this.doc.querySelectorAll('.object-item').forEach((element) => setObjectPaletteTilePressed(element, false));

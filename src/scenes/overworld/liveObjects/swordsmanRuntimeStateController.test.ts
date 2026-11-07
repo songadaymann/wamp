@@ -92,7 +92,7 @@ describe('SwordsmanRuntimeStateController', () => {
       onFloor: true,
     })).toBe(-1);
     expect(runtime).toMatchObject({
-      directionX: -1,
+      // Direction is owned by the turn-rate limiter in swordsmanController.
       aiIntent: 'jump-up',
       aiTargetX: 44,
       aiCurrentSegmentId: 'surface-a',
@@ -106,7 +106,6 @@ describe('SwordsmanRuntimeStateController', () => {
       onFloor: false,
     })).toBe(1);
     expect(runtime).toMatchObject({
-      directionX: 1,
       aiIntent: 'air-chase',
       aiTargetX: 99,
       aiCurrentSegmentId: null,

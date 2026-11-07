@@ -97,7 +97,7 @@
     align-items: center;
     gap: 9px;
     min-width: 0;
-    padding: 10px 112px 10px 16px;
+    padding: 10px calc(16px + var(--safe-right, 0px)) 10px 16px;
     border-bottom: 2px solid var(--editor-retro-cream);
     background: #0b0b0b;
     color: var(--editor-retro-cream);
@@ -134,6 +134,11 @@
   body[data-editor-dock-shell='true'] .editor-shell-actions {
     position: relative;
     min-width: 0;
+  }
+
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']) .editor-shell-tools,
+  body[data-editor-dock-shell='true']:not([data-device-class='phone']) .editor-shell-actions {
+    align-self: start;
   }
 
   body[data-editor-dock-shell='true'] .editor-shell-action-grid {
@@ -1143,12 +1148,54 @@
   body[data-editor-dock-shell='true'][data-editor-shell-panel='stuff'] #object-palette-section,
   body[data-editor-dock-shell='true'][data-editor-shell-panel='characters'] #object-palette-section,
   body[data-editor-dock-shell='true'][data-editor-shell-panel='hazards'] #object-palette-section,
-  body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-palette-section,
-  body[data-editor-dock-shell='true'][data-editor-triangle-options='true'] #object-palette-section {
+  body[data-editor-dock-shell='true'][data-editor-shell-panel='deco'] #object-palette-section {
     align-self: stretch;
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
+  }
+
+  body[data-editor-triangle-options='true'] #object-palette-section,
+  body[data-app-mode='editor']:not([data-device-class='phone'])[data-editor-triangle-options='true'] #object-palette-section {
+    order: 1;
+    align-self: stretch;
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body[data-app-mode='editor']:not([data-device-class='phone'])[data-editor-triangle-options='true'] #object-palette-section .sidebar-section-body {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #tileset-section {
+    display: grid;
+    grid-template-columns: minmax(58px, auto) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 10px;
+    row-gap: 10px;
+    order: 2;
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #tile-controls-section {
+    display: block;
+    order: 3;
+    flex: 0 0 auto;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  body[data-editor-triangle-options='true'][data-editor-triangle-tile-fill='off'] #tileset-section,
+  body[data-editor-triangle-options='true'][data-editor-triangle-tile-fill='off'] #tile-controls-section {
+    opacity: 0.45;
+    filter: grayscale(0.35);
+    pointer-events: none;
   }
 
   body[data-editor-triangle-options='true'] #object-palette-section > .section-label,
@@ -1165,14 +1212,20 @@
 
   body[data-editor-triangle-options='true'] #object-palette-section .sidebar-section-body {
     display: flex;
+    flex: 0 0 auto;
     flex-direction: column;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  body[data-editor-triangle-options='true'] #triangle-panel {
+    flex: 0 0 auto;
+    min-height: auto;
     overflow: visible;
   }
 
   body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #palette-mode-section,
-  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #smart-palette-section,
-  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #tileset-section,
-  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #tile-controls-section {
+  body[data-app-mode='editor'][data-editor-triangle-options='true'][data-editor-dock-shell='true'] #smart-palette-section {
     display: none;
   }
 
@@ -1371,7 +1424,7 @@
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       grid-template-rows: 52px minmax(0, 1fr);
       gap: 8px 12px;
-      padding-right: 68px;
+      padding-right: calc(16px + var(--safe-right, 0px));
     }
 
     body[data-editor-dock-shell='true'] .editor-shell-title-slot {
@@ -1431,7 +1484,7 @@
     }
 
     body[data-editor-dock-shell='true'] .editor-shell-top {
-      padding-right: 60px;
+      padding-right: calc(16px + var(--safe-right, 0px));
       padding-left: 10px;
     }
 

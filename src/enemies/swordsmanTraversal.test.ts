@@ -300,3 +300,209 @@ describe('shared traversal caches (F302)', () => {
   });
 });
 
+describe('triangle walls', () => {
+  it('exposes vertical triangle legs as wall-jump nodes', () => {
+    const room = buildRoom('triangle-wall', [[17, 4, 10]]);
+    room.placedObjects.push({
+      id: 'triangle_piece',
+      instanceId: 'ramp-1',
+      x: 10 * TILE_SIZE,
+      y: 17 * TILE_SIZE,
+      triangleLegX: -64,
+      triangleLegY: -64,
+      layer: 'terrain',
+    });
+    const graph = buildSwordsmanTraversalGraph(room);
+    const triangleWalls = graph.wallSegments.filter((wall) => wall.id.startsWith('wall:triangle:'));
+    expect(triangleWalls).toHaveLength(1);
+    expect(triangleWalls[0]).toMatchObject({
+      x: 10 * TILE_SIZE,
+      contactSide: -1,
+      jumpDirectionX: 1,
+    });
+    expect(triangleWalls[0].bottomY - triangleWalls[0].topY).toBe(64);
+  });
+
+  it('exposes floor triangles as walkable surfaces matched on the hypotenuse', () => {
+    const room = buildRoom('triangle-surface', [[17, 4, 10]]);
+    room.placedObjects.push({
+      id: 'triangle_piece',
+      instanceId: 'ramp-1',
+      x: 12 * TILE_SIZE,
+      y: 17 * TILE_SIZE,
+      triangleLegX: -64,
+      triangleLegY: -64,
+      layer: 'terrain',
+    });
+    const graph = buildSwordsmanTraversalGraph(room);
+    const triangleSurfaces = graph.surfaceSegments.filter((surface) =>
+      surface.id.startsWith('surface:triangle:'),
+    );
+    expect(triangleSurfaces).toHaveLength(1);
+    expect(triangleSurfaces[0].triangle).toEqual({
+      anchorX: 12 * TILE_SIZE,
+      anchorY: 17 * TILE_SIZE,
+      legX: -64,
+      legY: -64,
+    });
+    // Vertical tip is on the right (anchor); must not be walk-off open.
+    expect(triangleSurfaces[0].hasOpenRight).toBe(false);
+
+    const midX = 12 * TILE_SIZE - 32;
+    const midBottom = 17 * TILE_SIZE - 32;
+    const context = getSwordsmanTraversalContext(graph, {
+      centerX: midX,
+      centerY: midBottom - 16,
+      left: midX - 8,
+      right: midX + 8,
+      bottom: midBottom,
+      onFloor: true,
+      wallContactSide: -1,
+    });
+    expect(context.currentSurface?.id).toBe(triangleSurfaces[0].id);
+    expect(context.currentNodeId).toBe(triangleSurfaces[0].id);
+  });
+
+  it('adds a tip walk-off onto a flush floor nested under the ramp', () => {
+    // Floor row at tileY 17; ramp sits on it with vertical tip on the left.
+    const room = buildRoom('triangle-transfer', []);
+    for (let tileX = 4; tileX <= 16; tileX += 1) {
+      room.tileData.terrain[17][tileX] = GROUND;
+    }
+    room.placedObjects.push({
+      id: 'triangle_piece',
+      instanceId: 'ramp-nest',
+      x: 10 * TILE_SIZE,
+      y: 17 * TILE_SIZE,
+      triangleLegX: 48,
+      triangleLegY: -48,
+      layer: 'terrain',
+    });
+    const graph = buildSwordsmanTraversalGraph(room);
+    const triangle = graph.surfaceSegments.find((surface) => surface.id === 'surface:triangle:0');
+    expect(triangle).toBeTruthy();
+    const transfers = (graph.edgesByNodeId.get(triangle!.id) ?? []).filter((edge) =>
+      edge.id.includes('triangle-transfer'),
+    );
+    expect(transfers.length).toBeGreaterThan(0);
+    expect(transfers.some((edge) => edge.directionX === 1 && edge.type === 'jump-gap')).toBe(true);
+  });
+
+  it('walks over a shared triangle tip instead of jump-to-wall / wall-jump reverse', () => {
+    const room = buildRoom('triangle-crest', []);
+    for (let tileX = 0; tileX < ROOM_WIDTH; tileX += 1) {
+      room.tileData.terrain[17][tileX] = GROUND;
+    }
+    const peakX = 12 * TILE_SIZE;
+    const floorTop = 17 * TILE_SIZE;
+    room.placedObjects.push(
+      {
+        id: 'triangle_piece',
+        instanceId: 'peak-left',
+        x: peakX,
+        y: floorTop,
+        triangleLegX: -32,
+        triangleLegY: -32,
+        layer: 'terrain',
+      },
+      {
+        id: 'triangle_piece',
+        instanceId: 'peak-right',
+        x: peakX,
+        y: floorTop,
+        triangleLegX: 32,
+        triangleLegY: -32,
+        layer: 'terrain',
+      },
+    );
+
+    const graph = buildSwordsmanTraversalGraph(room);
+    const right = graph.surfaceSegments.find(
+      (surface) => surface.triangle && surface.rightX > peakX + 8,
+    );
+    const left = graph.surfaceSegments.find(
+      (surface) => surface.triangle && surface.leftX < peakX - 8,
+    );
+    expect(right).toBeTruthy();
+    expect(left).toBeTruthy();
+
+    const rightEdges = graph.edgesByNodeId.get(right!.id) ?? [];
+    expect(rightEdges.some((edge) => edge.id.includes('crest-walk') && edge.directionX === -1)).toBe(
+      true,
+    );
+    expect(rightEdges.some((edge) => edge.type === 'jump-to-wall')).toBe(false);
+
+    const enemy = standingOn(peakX + 12, floorTop - 12);
+    const target = standingOn(peakX - 16, floorTop - 12);
+    const decision = decideSwordsmanTraversal(graph, enemy, target, new Set());
+    expect(decision.traversalEdgeId).toContain('crest-walk');
+    expect(decision.directionX).toBe(-1);
+    expect(decision.intent).toBe('same-platform');
+    expect(decision.jumpVelocityY).toBe(0);
+  });
+
+  it('prefers crest-walk toward the target over a shorter reverse tip transfer', () => {
+    const room = buildRoom('triangle-crest-prefer', []);
+    for (let tileX = 0; tileX < ROOM_WIDTH; tileX += 1) {
+      room.tileData.terrain[17][tileX] = GROUND;
+    }
+    const peakX = 12 * TILE_SIZE;
+    const floorTop = 17 * TILE_SIZE;
+    room.placedObjects.push(
+      {
+        id: 'triangle_piece',
+        instanceId: 'peak-left',
+        x: peakX,
+        y: floorTop,
+        triangleLegX: -32,
+        triangleLegY: -32,
+        layer: 'terrain',
+      },
+      {
+        id: 'triangle_piece',
+        instanceId: 'peak-right',
+        x: peakX,
+        y: floorTop,
+        triangleLegX: 32,
+        triangleLegY: -32,
+        layer: 'terrain',
+      },
+    );
+
+    const graph = buildSwordsmanTraversalGraph(room);
+    const enemy = standingOn(peakX + 14, floorTop - 10);
+    // Without crest preference, depth-3 search picks triangle-transfer:right off the peak.
+    const leftTarget = standingOn(peakX - 40, floorTop);
+    const leftDecision = decideSwordsmanTraversal(graph, enemy, leftTarget, new Set());
+    expect(leftDecision.traversalEdgeId).toContain('crest-walk');
+    expect(leftDecision.directionX).toBe(-1);
+  });
+
+  it('does not jump-to-wall or transfer into a tile wall at the ramp low tip', () => {
+    const room = buildRoom('triangle-corner-trap', []);
+    for (let tileX = 4; tileX <= 14; tileX += 1) {
+      room.tileData.terrain[17][tileX] = GROUND;
+    }
+    // Vertical wall capping the downhill tip.
+    for (let tileY = 10; tileY <= 17; tileY += 1) {
+      room.tileData.terrain[tileY][15] = GROUND;
+    }
+    room.placedObjects.push({
+      id: 'triangle_piece',
+      instanceId: 'ramp-corner',
+      x: 12 * TILE_SIZE,
+      y: 17 * TILE_SIZE,
+      triangleLegX: 48,
+      triangleLegY: -32,
+      layer: 'terrain',
+    });
+
+    const graph = buildSwordsmanTraversalGraph(room);
+    const triangle = graph.surfaceSegments.find((surface) => surface.id === 'surface:triangle:0');
+    expect(triangle).toBeTruthy();
+    const edges = graph.edgesByNodeId.get(triangle!.id) ?? [];
+    expect(edges.some((edge) => edge.type === 'jump-to-wall')).toBe(false);
+    expect(edges.some((edge) => edge.id.includes('triangle-transfer:right'))).toBe(false);
+  });
+});
+
