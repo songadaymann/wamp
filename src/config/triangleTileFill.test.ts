@@ -4,7 +4,7 @@ import {
   triangleTilePoolIndex,
   triangleWrapDistance,
 } from './triangleTileFill';
-import { diagonalPatternIndex } from '../scenes/editor/selectionPattern';
+import { diagonalPatternIndex } from './selectionPattern';
 
 describe('triangle tile fill', () => {
   it('starts each row on the hypotenuse and steps toward the vertical edge', () => {

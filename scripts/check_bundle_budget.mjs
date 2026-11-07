@@ -15,7 +15,9 @@ import { brotliCompressSync, constants } from 'node:zlib';
 // out (F319). The budget stays at 670 so the waiting dialog work has room.
 // 2026-10-31: 672.1 KB after rolling-ball physics and triangle ramp collision joined the
 // play scene. Those run before the first frame, so the budget is 673.
-const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 673);
+// 2026-11-07: 678.8 KB after Sword Hunter ramp chase (crest walks, floor contact,
+// triangle traversal) joined the same play-scene path, so the budget is 680.
+const BUDGET_KB = Number(process.env.WAMP_BOOT_JS_BUDGET_KB ?? 680);
 const report = JSON.parse(readFileSync(resolve('output/build/boot-bundle.json'), 'utf8'));
 const rows = report.files.map((file) => {
   const bytes = readFileSync(resolve('dist', file));

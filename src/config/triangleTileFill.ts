@@ -1,6 +1,6 @@
 import { TILE_SIZE, type TileFlipMode, type TileSelection } from './room';
 import { getTilesetByGid, getTilesetByKey } from './tilesets';
-import { diagonalPatternIndex, resolveSelectionPatternOrder } from '../scenes/editor/selectionPattern';
+import { diagonalPatternIndex, resolveSelectionPatternOrder } from './selectionPattern';
 
 export type TriangleTileMode = 'wrap' | 'pattern' | 'shuffle';
 
