@@ -4,20 +4,11 @@ import {
   getObjectRuntimeBodyOffset,
   isSolidRuntimeObjectConfig,
   objectCollidesWithWorld,
-  ROOM_HEIGHT,
   ROOM_PX_HEIGHT,
   ROOM_PX_WIDTH,
-  ROOM_WIDTH,
   TILE_SIZE,
   type GameObjectConfig,
 } from '../../../config';
-import {
-  isFloorTriangle,
-  normalizePlacedTriangle,
-  triangleFloorHighTip,
-  triangleFloorSurfaceYAt,
-  triangleSupportsFeetAt,
-} from '../../../config/trianglePiece';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
 import {
   SWORDSMAN_AI_ANIMATION_KEYS,
@@ -39,13 +30,11 @@ import {
 } from '../../../enemies/swordsmanObjectives';
 import {
   getSwordsmanTraversalAirSpeed,
-  SWORDSMAN_AI_DIRECTION_TURN_WINDOW_MS,
   SWORDSMAN_AI_JUMP_SETUP_APPROACH_TOLERANCE_PX,
   SWORDSMAN_AI_JUMP_VELOCITY_X,
   SWORDSMAN_AI_JUMP_VELOCITY_Y,
   SWORDSMAN_AI_LADDER_ALIGN_SPEED,
   SWORDSMAN_AI_LADDER_CLIMB_SPEED,
-  SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_X,
   SWORDSMAN_AI_WALL_JUMP_VELOCITY_Y,
   SWORDSMAN_STANDING_BODY_HEIGHT,
@@ -63,7 +52,6 @@ import {
   getSwordsmanTraversalTargetContext,
   isSwordsmanLadderTraversalEdge,
   type SwordsmanBodySnapshot,
-  type SwordsmanSurfaceSegment,
   type SwordsmanTraversalDecision,
   type SwordsmanTraversalEdge,
   type SwordsmanTraversalGraph,
@@ -76,7 +64,6 @@ import {
 } from '../../../enemies/swordsmanRobustPlanner';
 import type { LoadedRoomObject } from './model';
 import type { LoadedFullRoom } from '../worldStreaming';
-import { terrainTileCollidesAtLocalPixel } from '../terrainCollision';
 import { isAnimationSafelyPlayable } from './animationReadiness';
 import {
   getArcadeBodyBounds,
@@ -91,7 +78,30 @@ import {
   type CollectNodeStats,
   type CollectCandidateInventory,
 } from './swordsmanCollectSelection';
+import {
+  getSwordsmanCollectOverheadJump,
+  SWORDSMAN_AI_COLLECT_OVERHEAD_BEHIND_GRACE_PX,
+} from './swordsmanCollectOverhead';
+import {
+  commitSwordsmanDirectionX,
+  resetSwordsmanFacingMemory,
+  trySetSwordsmanDirectionX,
+  updateSwordsmanFacingDirection,
+} from './swordsmanDirectionGuard';
+import {
+  evaluateSwordsmanTriangleTipJumpClearDirection,
+  getSwordsmanWallContactSide,
+  hasSolidSupportAhead,
+  hasSwordsmanTriangleCrestContinuation,
+  hasTriangleFloorSupport,
+  isSwordsmanOnFloor,
+  swordsmanStandingBlockedAhead,
+} from './swordsmanFloorContact';
 import { SwordsmanRuntimeStateController } from './swordsmanRuntimeStateController';
+import {
+  getSwordsmanSwordPathLane,
+  swordsmanSwordLaneHitsSolidTerrain,
+} from './swordsmanSwordPath';
 
 const SWORDSMAN_AI_CHASE_RANGE_X = 240;
 const SWORDSMAN_AI_CHASE_RANGE_Y = 176;
@@ -123,18 +133,7 @@ const POLICE_AI_SHOOT_RANGE_Y = 20;
 const POLICE_AI_WINDUP_MS = 220;
 const POLICE_AI_ATTACK_MS = 650;
 const POLICE_AI_COOLDOWN_MS = 680;
-const SWORDSMAN_AI_SWORD_LOS_STEP_PX = 4;
 const SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX = 4;
-const SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS = Math.ceil(
-  SWORDSMAN_AI_DIRECTION_TURN_WINDOW_MS / SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW,
-);
-const SWORDSMAN_AI_COLLECT_OVERHEAD_MIN_RISE_PX = 18;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_MAX_RISE_PX = 86;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_MAX_HORIZONTAL_PX = 48;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_BEHIND_GRACE_PX = 12;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_SURFACE_MARGIN_PX = 10;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_EDGE_CLEARANCE_PX = 72;
-const SWORDSMAN_AI_COLLECT_OVERHEAD_PATH_STEP_PX = 8;
 
 interface LiveObjectSwordsmanControllerOptions<TEdgeWall> {
   scene: Phaser.Scene;
@@ -194,7 +193,12 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
   }
 
   resetFacingMemory(liveObject: LoadedRoomObject, directionX: number): void {
-    this.resetSwordsmanFacingMemory(liveObject, directionX);
+    resetSwordsmanFacingMemory(
+      liveObject.runtime,
+      directionX,
+      this.options.getCurrentTime(),
+      liveObject.sprite.x,
+    );
   }
 
   applyFacing(
@@ -204,6 +208,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     options: { force?: boolean } = {},
   ): void {
     this.applySwordsmanFacing(liveObject, body, directionX, options);
+  }
+
+  private roomOrigin(room: RoomSnapshot): { x: number; y: number } {
+    return this.options.getRoomOrigin(room.coordinates);
   }
 
   private updateSwordsmanEnemy(
@@ -279,7 +287,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.holdGroundedSwordsmanAttackBody(loadedRoom.room, body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'police-patrol-windup', body);
       if (target) {
-        this.trySetSwordsmanDirectionX(liveObject, target.directionX, { force: true });
+        trySetSwordsmanDirectionX(liveObject.runtime, target.directionX, this.options.getCurrentTime(), { force: true });
       }
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
       this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
@@ -294,7 +302,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     }
 
     if (target?.withinActionRange && now >= liveObject.runtime.cooldownUntil) {
-      this.trySetSwordsmanDirectionX(liveObject, target.directionX, { force: true });
+      trySetSwordsmanDirectionX(liveObject.runtime, target.directionX, this.options.getCurrentTime(), { force: true });
       this.startSwordsmanWindup(liveObject);
       body.setVelocityX(0);
       return;
@@ -341,7 +349,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       this.holdGroundedSwordsmanAttackBody(loadedRoom.room, body);
       this.clearSwordsmanObjectiveTraversalState(liveObject, 'windup', body);
       if (target) {
-        this.trySetSwordsmanDirectionX(liveObject, target.directionX, { force: true });
+        trySetSwordsmanDirectionX(liveObject.runtime, target.directionX, this.options.getCurrentTime(), { force: true });
       }
       this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX, { force: true });
       this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
@@ -396,7 +404,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         if (!target) {
           return;
         }
-        if (!liveObject.runtime.aiActiveTraversalEdgeId && this.isSwordsmanOnFloor(loadedRoom.room, body)) {
+        if (!liveObject.runtime.aiActiveTraversalEdgeId && isSwordsmanOnFloor(loadedRoom.room, body, this.roomOrigin(loadedRoom.room))) {
           body.setVelocityX(0);
           this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
         }
@@ -563,12 +571,13 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         directionX: deltaX >= 0 ? 1 : -1,
         withinActionRange,
       };
-      const overheadJump = this.getSwordsmanCollectOverheadJump(
+      const overheadJump = getSwordsmanCollectOverheadJump(
         room,
         currentContext.currentSurface,
         body,
         targetBody,
         sweepDirectionX,
+        this.roomOrigin(room),
       );
 
       if (withinActionRange) {
@@ -663,105 +672,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     return { groupedCandidates, currentSweepCandidates, collectNodeStats, bestImmediateTarget, bestOverheadJumpTarget };
   }
 
-  private getSwordsmanCollectOverheadJump(
-    room: RoomSnapshot,
-    currentSurface: SwordsmanSurfaceSegment | null,
-    body: Phaser.Physics.Arcade.Body,
-    targetBody: ArcadeObjectBody,
-    sweepDirectionX: -1 | 1,
-  ): NonNullable<SwordsmanObjectiveTarget['opportunisticJump']> | null {
-    if (!currentSurface || !this.isSwordsmanOnFloor(room, body)) {
-      return null;
-    }
 
-    const deltaX = targetBody.center.x - body.center.x;
-    const rise = body.center.y - targetBody.center.y;
-    if (
-      rise < SWORDSMAN_AI_COLLECT_OVERHEAD_MIN_RISE_PX ||
-      rise > SWORDSMAN_AI_COLLECT_OVERHEAD_MAX_RISE_PX ||
-      Math.abs(deltaX) > SWORDSMAN_AI_COLLECT_OVERHEAD_MAX_HORIZONTAL_PX ||
-      deltaX * sweepDirectionX < -SWORDSMAN_AI_COLLECT_OVERHEAD_BEHIND_GRACE_PX
-    ) {
-      return null;
-    }
-
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const bodyLocalX = body.center.x - roomOrigin.x;
-    const targetLocalX = targetBody.center.x - roomOrigin.x;
-    if (
-      targetLocalX < currentSurface.leftX - SWORDSMAN_AI_COLLECT_OVERHEAD_SURFACE_MARGIN_PX ||
-      targetLocalX > currentSurface.rightX + SWORDSMAN_AI_COLLECT_OVERHEAD_SURFACE_MARGIN_PX
-    ) {
-      return null;
-    }
-
-    const directionX = (Math.abs(deltaX) <= 4 ? sweepDirectionX : deltaX >= 0 ? 1 : -1) as -1 | 1;
-    const minSafeJumpX =
-      currentSurface.leftX +
-      body.halfWidth +
-      SWORDSMAN_AI_COLLECT_OVERHEAD_SURFACE_MARGIN_PX;
-    const maxSafeJumpX =
-      currentSurface.rightX -
-      body.halfWidth -
-      SWORDSMAN_AI_COLLECT_OVERHEAD_SURFACE_MARGIN_PX;
-    const edgeClearance =
-      directionX > 0
-        ? currentSurface.rightX - bodyLocalX
-        : bodyLocalX - currentSurface.leftX;
-    if (
-      bodyLocalX < minSafeJumpX ||
-      bodyLocalX > maxSafeJumpX ||
-      targetLocalX < minSafeJumpX ||
-      targetLocalX > maxSafeJumpX ||
-      edgeClearance < SWORDSMAN_AI_COLLECT_OVERHEAD_EDGE_CLEARANCE_PX
-    ) {
-      return null;
-    }
-
-    if (!this.hasClearSwordsmanCollectOverheadPath(room, body, targetBody)) {
-      return null;
-    }
-
-    const velocityX =
-      Math.abs(deltaX) <= 6
-        ? body.velocity.x || directionX * SWORDSMAN_AI_SPEED
-        : directionX *
-          Phaser.Math.Clamp(Math.abs(deltaX) * 3.25, SWORDSMAN_AI_SPEED, SWORDSMAN_AI_JUMP_VELOCITY_X);
-
-    return {
-      directionX,
-      targetX: targetBody.center.x,
-      velocityX,
-      velocityY: SWORDSMAN_AI_JUMP_VELOCITY_Y,
-    };
-  }
-
-  private hasClearSwordsmanCollectOverheadPath(
-    room: RoomSnapshot,
-    body: Phaser.Physics.Arcade.Body,
-    targetBody: ArcadeObjectBody,
-  ): boolean {
-    const startY = body.top - 2;
-    const endY = targetBody.bottom + 2;
-    if (endY >= startY) {
-      return true;
-    }
-
-    const steps = Math.max(
-      1,
-      Math.ceil((startY - endY) / SWORDSMAN_AI_COLLECT_OVERHEAD_PATH_STEP_PX),
-    );
-    for (let index = 0; index <= steps; index += 1) {
-      const progress = index / steps;
-      const x = Phaser.Math.Linear(body.center.x, targetBody.center.x, progress);
-      const y = Phaser.Math.Linear(startY, endY, progress);
-      if (this.hasSolidTerrainAtWorldPoint(room, x, y)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
 
   private buildSwordsmanCollectNodeObjectiveTarget(
     graph: SwordsmanTraversalGraph,
@@ -846,7 +757,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     },
   ): void {
     const room = loadedRoom.room;
-    const onFloor = this.isSwordsmanOnFloor(room, body);
+    const onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     if (!target) {
       if (options.idleReason === 'collect-idle') {
         const hasBlockedCollectRoute = liveObject.runtime.aiTraversalBlockedEdges.some(
@@ -900,10 +811,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         onFloor,
       },
     );
-    const chaseDirectionX = this.commitSwordsmanDirectionX(
-      liveObject,
+    const chaseDirectionX = commitSwordsmanDirectionX(
+      liveObject.runtime,
       desiredChaseDirectionX,
       previousDirectionX,
+      this.options.getCurrentTime(),
     );
     if (target.withinActionRange) {
       options.onActionRangeReached?.();
@@ -988,11 +900,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     } = {},
   ): void {
     const room = loadedRoom.room;
-    let onFloor = this.isSwordsmanOnFloor(room, body);
+    let onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     // Crest seating at flush tile landings while riding a ramp (chase skips the
     // patrol maybeReverse path). Skip when not on a triangle so intentional
     // drop-down edges are not cancelled at ordinary ledges.
-    if (onFloor && this.hasTriangleFloorSupport(room, body)) {
+    if (onFloor && hasTriangleFloorSupport(room, body, this.roomOrigin(room))) {
       const directionBeforeReverse = liveObject.runtime.directionX;
       this.options.maybeReverseGroundEnemy(room, liveObject, body);
       if (
@@ -1002,16 +914,17 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
         const desired = liveObject.runtime.directionX;
         liveObject.runtime.directionX = directionBeforeReverse;
         // Shared peaks: keep climbing — do not turn around at the tip.
-        const towardCrest = this.hasSwordsmanTriangleCrestContinuation(
+        const towardCrest = hasSwordsmanTriangleCrestContinuation(
           room,
           body,
           (directionBeforeReverse >= 0 ? 1 : -1),
+          this.roomOrigin(room),
         );
         if (!towardCrest) {
-          this.trySetSwordsmanDirectionX(liveObject, desired);
+          trySetSwordsmanDirectionX(liveObject.runtime, desired, this.options.getCurrentTime());
         }
       }
-      onFloor = this.isSwordsmanOnFloor(room, body);
+      onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     }
 
     // Facing into the vertical tip on a ramp: jump clear (≤2 tiles is in jump range)
@@ -1024,14 +937,14 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     if (
       onFloor &&
       liveObject.config.id === SWORDSMAN_AI_OBJECT_ID &&
-      this.swordsmanStandingBlockedAhead(loadedRoom, liveObject, body)
+      swordsmanStandingBlockedAhead(loadedRoom.room, liveObject, body, this.roomOrigin(loadedRoom.room))
     ) {
       body.setVelocityX(0);
       this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'idle'));
       return;
     }
 
-    const wallContactSide = this.getSwordsmanWallContactSide(room, body);
+    const wallContactSide = getSwordsmanWallContactSide(room, body, this.roomOrigin(room));
     const movingTowardWall =
       (wallContactSide === -1 && liveObject.runtime.directionX < 0) ||
       (wallContactSide === 1 && liveObject.runtime.directionX > 0);
@@ -1052,26 +965,28 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !allowEdgeDrop &&
       !allowJumpSetupApproach &&
       onFloor &&
-      !this.hasSolidSupportAhead(
-        loadedRoom,
-        liveObject,
+      !hasSolidSupportAhead(
+        loadedRoom.room,
         body,
         liveObject.runtime.directionX,
         SWORDSMAN_AI_EDGE_GUARD_PROBE_LEAD_PX,
+        this.roomOrigin(loadedRoom.room),
+        (x, y) => this.solidRuntimeObjectContainsPoint(loadedRoom, liveObject, x, y),
       );
 
     if (movingTowardWall || missingGroundAhead) {
       // Still seated on a ramp: keep running with chase direction. Tip probes often
       // miss the descending hyp and a reverse here caused L/R facing vibration.
-      if (missingGroundAhead && !movingTowardWall && this.hasTriangleFloorSupport(room, body)) {
+      if (missingGroundAhead && !movingTowardWall && hasTriangleFloorSupport(room, body, this.roomOrigin(room))) {
         body.setVelocityX(liveObject.runtime.directionX * speed);
         this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'run'));
         return;
       }
       if (missingGroundAhead && !movingTowardWall) {
-        const reversed = this.trySetSwordsmanDirectionX(
-          liveObject,
+        const reversed = trySetSwordsmanDirectionX(
+          liveObject.runtime,
           -liveObject.runtime.directionX,
+          this.options.getCurrentTime(),
         );
         body.setVelocityX(reversed ? liveObject.runtime.directionX * speed : 0);
         this.playSwordsmanAnimation(
@@ -1089,43 +1004,24 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'run'));
   }
 
-  /**
-   * Jump up-and-over a triangle vertical tip while grounded on the hypotenuse.
-   * Used when chase walks into the face (drop edges no longer open through it).
-   */
+  /** Jump up-and-over a triangle vertical tip while grounded on the hypotenuse. */
   private tryClearSwordsmanTriangleTipJump(
     room: RoomSnapshot,
     liveObject: LoadedRoomObject,
     body: Phaser.Physics.Arcade.Body,
   ): boolean {
-    if (this.options.getCurrentTime() < liveObject.runtime.aiTraversalCooldownUntil) {
-      return false;
-    }
-    if (!this.hasTriangleFloorSupport(room, body)) {
-      return false;
-    }
-
-    const tipWall = this.getTriangleVerticalContactSide(room, body);
-    if (tipWall === 0) {
-      return false;
-    }
-    const intoWall =
-      (tipWall === -1 && liveObject.runtime.directionX < 0) ||
-      (tipWall === 1 && liveObject.runtime.directionX > 0);
-    if (!intoWall) {
-      return false;
-    }
-
-    const clearDirectionX = (liveObject.runtime.directionX >= 0 ? 1 : -1) as -1 | 1;
-    // Mountain peaks: the paired hyp continues past the tip — walk over, don't jump.
-    if (this.hasSwordsmanTriangleCrestContinuation(room, body, clearDirectionX)) {
-      return false;
-    }
-
-    // Jump in the approach direction so the arc clears the vertical lip.
+    const clearDirectionX = evaluateSwordsmanTriangleTipJumpClearDirection(
+      room,
+      body,
+      liveObject.runtime.directionX,
+      this.roomOrigin(room),
+      this.options.getCurrentTime(),
+      liveObject.runtime.aiTraversalCooldownUntil,
+    );
+    if (clearDirectionX == null) return false;
     body.setVelocityX(clearDirectionX * SWORDSMAN_AI_JUMP_VELOCITY_X);
     body.setVelocityY(SWORDSMAN_AI_JUMP_VELOCITY_Y);
-    if (!this.trySetSwordsmanDirectionX(liveObject, clearDirectionX)) {
+    if (!trySetSwordsmanDirectionX(liveObject.runtime, clearDirectionX, this.options.getCurrentTime())) {
       return false;
     }
     liveObject.runtime.aiTraversalCooldownUntil =
@@ -1133,78 +1029,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX);
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'jump-rise'));
     return true;
-  }
-
-  /** True when another floor triangle's hyp continues past the tip we're facing. */
-  private hasSwordsmanTriangleCrestContinuation(
-    room: RoomSnapshot,
-    body: ArcadeObjectBody,
-    directionX: -1 | 1,
-  ): boolean {
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    const localBottom = body.bottom - origin.y;
-    const localCenterX = body.center.x - origin.x;
-    let nearTip: { x: number; y: number } | null = null;
-
-    for (const placed of room.placedObjects) {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry || !isFloorTriangle(geometry.legY) || geometry.legX === 0) {
-        continue;
-      }
-      const tip = triangleFloorHighTip(
-        geometry.anchorX,
-        geometry.anchorY,
-        geometry.legX,
-        geometry.legY,
-      );
-      if (!tip) {
-        continue;
-      }
-      if (Math.abs(localBottom - tip.y) > 8) {
-        continue;
-      }
-      if (Math.abs(localCenterX - tip.x) > body.halfWidth + 12) {
-        continue;
-      }
-      nearTip = tip;
-      break;
-    }
-
-    if (!nearTip) {
-      return false;
-    }
-
-    const probeX = nearTip.x + directionX * 6;
-    for (const placed of room.placedObjects) {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry || !isFloorTriangle(geometry.legY) || geometry.legX === 0) {
-        continue;
-      }
-      const tip = triangleFloorHighTip(
-        geometry.anchorX,
-        geometry.anchorY,
-        geometry.legX,
-        geometry.legY,
-      );
-      if (!tip) {
-        continue;
-      }
-      if (Math.abs(tip.x - nearTip.x) > 6 || Math.abs(tip.y - nearTip.y) > 6) {
-        continue;
-      }
-      const hypY = triangleFloorSurfaceYAt(
-        geometry.anchorX,
-        geometry.anchorY,
-        geometry.legX,
-        geometry.legY,
-        probeX,
-      );
-      if (hypY != null && Math.abs(hypY - nearTip.y) <= 10) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   private getSwordsmanTraversalDecision(
@@ -1322,7 +1146,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const fallbackDirectionX = (targetSnapshot.centerX >= enemySnapshot.centerX ? 1 : -1) as -1 | 1;
     const fallbackTargetX = targetContext.targetSurface?.centerX ?? targetSnapshot.centerX;
     const now = this.options.getCurrentTime();
-    const onFloor = this.isSwordsmanOnFloor(room, body);
+    const onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     const routeLifetimeMs =
       this.getSwordsmanObjectiveMode(liveObject) === 'collect'
         ? Math.max(
@@ -1694,7 +1518,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !decision ||
       decision.intent !== 'same-platform' ||
       !decision.traversalEdgeId ||
-      !this.isSwordsmanOnFloor(room, body)
+      !isSwordsmanOnFloor(room, body, this.roomOrigin(room))
     ) {
       return false;
     }
@@ -1737,8 +1561,8 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       left: body.left - roomOrigin.x,
       right: body.right - roomOrigin.x,
       bottom: body.bottom - roomOrigin.y,
-      onFloor: this.isSwordsmanOnFloor(room, body),
-      wallContactSide: this.getSwordsmanWallContactSide(room, body),
+      onFloor: isSwordsmanOnFloor(room, body, this.roomOrigin(room)),
+      wallContactSide: getSwordsmanWallContactSide(room, body, this.roomOrigin(room)),
     };
   }
 
@@ -1750,190 +1574,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     return liveObject.config.id === SWORDSMAN_AI_OBJECT_ID
       ? SWORDSMAN_STANDING_BODY_HEIGHT
       : body.height;
-  }
-
-  private swordsmanStandingBlockedAhead(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject,
-    body: Phaser.Physics.Arcade.Body,
-  ): boolean {
-    const directionX = liveObject.runtime.directionX >= 0 ? 1 : -1;
-    const probeX = body.center.x + directionX * (body.halfWidth + 4);
-    return !this.swordsmanStandingHitboxFitsAt(
-      loadedRoom.room,
-      liveObject,
-      body,
-      probeX,
-    );
-  }
-
-  private swordsmanStandingHitboxFitsAt(
-    room: RoomSnapshot,
-    liveObject: LoadedRoomObject,
-    body: Phaser.Physics.Arcade.Body,
-    centerX: number,
-  ): boolean {
-    const height = SWORDSMAN_STANDING_BODY_HEIGHT;
-    const halfWidth = Math.max(2, (liveObject.config.bodyWidth || body.width) * 0.5);
-    const top = body.bottom - height;
-    const midY = body.bottom - height * 0.5;
-    for (const sampleX of [centerX, centerX - halfWidth + 1, centerX + halfWidth - 1]) {
-      if (
-        this.hasSolidTerrainAtWorldPoint(room, sampleX, top + 1)
-        || this.hasSolidTerrainAtWorldPoint(room, sampleX, midY)
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /** Arcade blocked.down misses triangle floors (zero-size bodies), so check hyps too. */
-  private isSwordsmanOnFloor(room: RoomSnapshot, body: ArcadeObjectBody): boolean {
-    if (!isDynamicArcadeBody(body)) {
-      return false;
-    }
-    if (body.blocked.down || body.touching.down) {
-      return true;
-    }
-    // Rising jumps must not keep "floor" from a nearby hyp — that blocked wall-jumps
-    // and tip-clear arcs at the crest.
-    if (body.velocity.y < -40) {
-      return false;
-    }
-    return this.hasTriangleFloorSupport(room, body);
-  }
-
-  private hasTriangleFloorSupport(room: RoomSnapshot, body: ArcadeObjectBody): boolean {
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    const feetY = body.bottom;
-    for (const feetX of [body.center.x, body.left + 1, body.right - 1]) {
-      for (const placed of room.placedObjects) {
-        const geometry = normalizePlacedTriangle(placed);
-        if (!geometry) {
-          continue;
-        }
-        const anchorX = origin.x + geometry.anchorX;
-        const anchorY = origin.y + geometry.anchorY;
-        if (
-          triangleSupportsFeetAt(
-            anchorX,
-            anchorY,
-            geometry.legX,
-            geometry.legY,
-            feetX,
-            feetY,
-          )
-        ) {
-          return true;
-        }
-        const surfaceY = triangleFloorSurfaceYAt(
-          anchorX,
-          anchorY,
-          geometry.legX,
-          geometry.legY,
-          feetX,
-        );
-        if (surfaceY != null && feetY >= surfaceY - 4 && feetY <= surfaceY + 8) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  private hasTriangleFloorNearWorldPoint(
-    room: RoomSnapshot,
-    worldX: number,
-    feetY: number,
-    maxRise: number,
-    maxDrop: number,
-  ): boolean {
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    for (const placed of room.placedObjects) {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry) {
-        continue;
-      }
-      const surfaceY = triangleFloorSurfaceYAt(
-        origin.x + geometry.anchorX,
-        origin.y + geometry.anchorY,
-        geometry.legX,
-        geometry.legY,
-        worldX,
-      );
-      if (surfaceY == null) {
-        continue;
-      }
-      if (surfaceY >= feetY - maxRise && surfaceY <= feetY + maxDrop) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private getSwordsmanWallContactSide(room: RoomSnapshot, body: ArcadeObjectBody): -1 | 0 | 1 {
-    if (!isDynamicArcadeBody(body)) {
-      return 0;
-    }
-    if (body.blocked.left || body.touching.left) {
-      return -1;
-    }
-    if (body.blocked.right || body.touching.right) {
-      return 1;
-    }
-    // Grounded: ignore triangle verticals so he can walk the hyp and dismount.
-    // Airborne: keep contact so wall-jumps still work on those faces.
-    if (this.isSwordsmanOnFloor(room, body)) {
-      return 0;
-    }
-    return this.getTriangleVerticalContactSide(room, body);
-  }
-
-  /**
-   * Vertical triangle legs do not set Arcade blocked.left/right. Detect contact
-   * from either side (hyp approach or open-air face) so tip-clear jumps and
-   * wall-jumps both work.
-   */
-  private getTriangleVerticalContactSide(
-    room: RoomSnapshot,
-    body: ArcadeObjectBody,
-  ): -1 | 0 | 1 {
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    let bestSide: -1 | 0 | 1 = 0;
-    let bestDist = Number.POSITIVE_INFINITY;
-
-    for (const placed of room.placedObjects) {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry || geometry.legX === 0) {
-        continue;
-      }
-
-      const wallX = origin.x + geometry.anchorX;
-      const wallTop = origin.y + Math.min(geometry.anchorY, geometry.anchorY + geometry.legY);
-      const wallBottom = origin.y + Math.max(geometry.anchorY, geometry.anchorY + geometry.legY);
-      if (wallBottom - wallTop < 8) {
-        continue;
-      }
-      if (body.bottom <= wallTop + 2 || body.top >= wallBottom - 2) {
-        continue;
-      }
-
-      const fromRightDist = Math.abs(body.left - wallX);
-      const fromLeftDist = Math.abs(body.right - wallX);
-      // Body on the right of the face → left side touching → contactSide -1.
-      if (fromRightDist <= 5 && body.center.x >= wallX - 2 && fromRightDist < bestDist) {
-        bestDist = fromRightDist;
-        bestSide = -1;
-      }
-      // Body on the left of the face → right side touching → contactSide 1.
-      if (fromLeftDist <= 5 && body.center.x <= wallX + 2 && fromLeftDist < bestDist) {
-        bestDist = fromLeftDist;
-        bestSide = 1;
-      }
-    }
-
-    return bestSide;
   }
 
   private syncSwordsmanLadderGravity(
@@ -2028,7 +1668,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       Math.abs(deltaX) > SWORDSMAN_AI_LADDER_ATTACH_TOLERANCE_PX
         ? (deltaX > 0 ? 1 : -1)
         : decision.directionX;
-    this.trySetSwordsmanDirectionX(liveObject, facingDirectionX);
+    trySetSwordsmanDirectionX(liveObject.runtime, facingDirectionX, this.options.getCurrentTime());
     this.applySwordsmanFacing(liveObject, body, liveObject.runtime.directionX);
     this.playSwordsmanAnimation(liveObject, this.getEnemyAnimationKey(liveObject, 'ladder-climb'));
     return true;
@@ -2044,10 +1684,10 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return false;
     }
 
-    const onFloor = this.isSwordsmanOnFloor(room, body);
+    const onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     if (decision.intent === 'jump-up' && onFloor) {
       // Rate-limit opposite-facing jumps — valley / tip loops used force flips to blur.
-      if (!this.trySetSwordsmanDirectionX(liveObject, decision.directionX)) {
+      if (!trySetSwordsmanDirectionX(liveObject.runtime, decision.directionX, this.options.getCurrentTime())) {
         return false;
       }
       body.setVelocityX(decision.jumpVelocityX * SWORDSMAN_AI_JUMP_VELOCITY_X);
@@ -2060,14 +1700,14 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return true;
     }
 
-    const wallContactSide = this.getSwordsmanWallContactSide(room, body);
+    const wallContactSide = getSwordsmanWallContactSide(room, body, this.roomOrigin(room));
     if (
       decision.intent === 'wall-jump' &&
       !onFloor &&
       wallContactSide !== 0 &&
       wallContactSide === -decision.directionX
     ) {
-      if (!this.trySetSwordsmanDirectionX(liveObject, decision.directionX)) {
+      if (!trySetSwordsmanDirectionX(liveObject.runtime, decision.directionX, this.options.getCurrentTime())) {
         return false;
       }
       body.setVelocityX(decision.jumpVelocityX * SWORDSMAN_AI_WALL_JUMP_VELOCITY_X);
@@ -2100,7 +1740,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       return;
     }
 
-    const onFloor = this.isSwordsmanOnFloor(loadedRoom.room, body);
+    const onFloor = isSwordsmanOnFloor(loadedRoom.room, body, this.roomOrigin(loadedRoom.room));
     if (!onFloor) {
       return;
     }
@@ -2125,7 +1765,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !jump ||
       liveObject.runtime.aiActiveTraversalEdgeId ||
       now < liveObject.runtime.aiTraversalCooldownUntil ||
-      !this.isSwordsmanOnFloor(room, body)
+      !isSwordsmanOnFloor(room, body, this.roomOrigin(room))
     ) {
       return false;
     }
@@ -2150,70 +1790,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     this.runtimeState.resetTraversalMemory(liveObject.runtime);
   }
 
-  private resetSwordsmanFacingMemory(
-    liveObject: LoadedRoomObject,
-    directionX: number,
-  ): void {
-    const facingDirectionX = directionX >= 0 ? 1 : -1;
-    liveObject.runtime.aiFacingDirectionX = facingDirectionX;
-    liveObject.runtime.aiFacingLastFlipAt = this.options.getCurrentTime();
-    liveObject.runtime.aiFacingLastFlipX = liveObject.sprite.x;
-    liveObject.runtime.aiDirectionTurnAtMs = [];
-  }
-
-  /**
-   * Apply a chase/patrol facing change with a sliding-window turn cap so tip
-   * contact cannot flip him every frame (blurred run cycle).
-   */
-  private trySetSwordsmanDirectionX(
-    liveObject: LoadedRoomObject,
-    desiredDirectionX: number,
-    options: { force?: boolean } = {},
-  ): boolean {
-    if (desiredDirectionX === 0) {
-      return false;
-    }
-    const next = (desiredDirectionX > 0 ? 1 : -1) as -1 | 1;
-    const current = (liveObject.runtime.directionX >= 0 ? 1 : -1) as -1 | 1;
-    if (next === current) {
-      liveObject.runtime.directionX = next;
-      return true;
-    }
-
-    const now = this.options.getCurrentTime();
-    if (!Array.isArray(liveObject.runtime.aiDirectionTurnAtMs)) {
-      liveObject.runtime.aiDirectionTurnAtMs = [];
-    }
-    const turns = liveObject.runtime.aiDirectionTurnAtMs;
-    const windowStart = now - SWORDSMAN_AI_DIRECTION_TURN_WINDOW_MS;
-    while (turns.length > 0 && turns[0]! < windowStart) {
-      turns.shift();
-    }
-
-    if (!options.force && turns.length >= SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW) {
-      return false;
-    }
-
-    turns.push(now);
-    if (turns.length > SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW) {
-      turns.splice(0, turns.length - SWORDSMAN_AI_MAX_DIRECTION_TURNS_PER_WINDOW);
-    }
-    liveObject.runtime.directionX = next;
-    return true;
-  }
-
-  private commitSwordsmanDirectionX(
-    liveObject: LoadedRoomObject,
-    desiredDirectionX: number,
-    previousDirectionX: number,
-  ): -1 | 1 {
-    // Ensure comparison is against the pre-decision facing (not a premature write).
-    liveObject.runtime.directionX = previousDirectionX >= 0 ? 1 : -1;
-    if (this.trySetSwordsmanDirectionX(liveObject, desiredDirectionX)) {
-      return (liveObject.runtime.directionX >= 0 ? 1 : -1);
-    }
-    return liveObject.runtime.directionX as -1 | 1;
-  }
 
   private applySwordsmanFacing(
     liveObject: LoadedRoomObject,
@@ -2223,22 +1799,13 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       force?: boolean;
     } = {},
   ): void {
-    if (desiredDirectionX !== 0) {
-      const facingDirectionX = desiredDirectionX > 0 ? 1 : -1;
-      if (facingDirectionX !== liveObject.runtime.aiFacingDirectionX) {
-        const now = this.options.getCurrentTime();
-        const currentX = body?.center.x ?? liveObject.sprite.x;
-        const recentlyFlipped =
-          now <
-          liveObject.runtime.aiFacingLastFlipAt + SWORDSMAN_AI_FACING_FLIP_MIN_INTERVAL_MS;
-        if (options.force || !recentlyFlipped) {
-          liveObject.runtime.aiFacingDirectionX = facingDirectionX;
-          liveObject.runtime.aiFacingLastFlipAt = now;
-          liveObject.runtime.aiFacingLastFlipX = currentX;
-        }
-      }
-    }
-
+    updateSwordsmanFacingDirection(
+      liveObject.runtime,
+      desiredDirectionX,
+      this.options.getCurrentTime(),
+      body?.center.x ?? liveObject.sprite.x,
+      options,
+    );
     this.applyDirectionalFacing(
       liveObject.sprite,
       liveObject.config,
@@ -2395,7 +1962,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     const activeTraversalGraceElapsed =
       now >= liveObject.runtime.aiActiveTraversalStartedAt + activeTraversalGraceMs;
 
-    const onFloor = this.isSwordsmanOnFloor(room, body);
+    const onFloor = isSwordsmanOnFloor(room, body, this.roomOrigin(room));
     if (!onFloor || !activeTraversalGraceElapsed) {
       return;
     }
@@ -2540,7 +2107,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !fallbackEdgeId ||
       !decision.currentSegmentId ||
       (decision.intent !== 'same-platform' && decision.intent !== 'drop-down') ||
-      !this.isSwordsmanOnFloor(room, body)
+      !isSwordsmanOnFloor(room, body, this.roomOrigin(room))
     ) {
       return false;
     }
@@ -2599,7 +2166,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !fallbackEdgeId ||
       !decision.currentSegmentId ||
       (decision.intent !== 'same-platform' && decision.intent !== 'drop-down') ||
-      !this.isSwordsmanOnFloor(room, body)
+      !isSwordsmanOnFloor(room, body, this.roomOrigin(room))
     ) {
       this.clearSwordsmanFallbackTraversal(liveObject);
       return;
@@ -2654,7 +2221,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       !signature ||
       !activeDecision.traversalEdgeId ||
       liveObject.runtime.aiActiveTraversalEdgeId ||
-      !this.isSwordsmanOnFloor(room, body) ||
+      !isSwordsmanOnFloor(room, body, this.roomOrigin(room)) ||
       (activeDecision.intent !== 'same-platform' && activeDecision.intent !== 'drop-down')
     ) {
       this.clearSwordsmanRouteLoopMemory(liveObject);
@@ -3028,7 +2595,11 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     }
 
     const lane = new Phaser.Geom.Rectangle(left, shotY - 2, right - left, 4);
-    if (this.swordsmanSwordLaneHitsSolidTerrain(loadedRoom.room, lane)) {
+    if (swordsmanSwordLaneHitsSolidTerrain(
+      loadedRoom.room,
+      lane,
+      this.roomOrigin(loadedRoom.room),
+    )) {
       return false;
     }
 
@@ -3050,12 +2621,20 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     liveObject: LoadedRoomObject,
     targetBounds: Phaser.Geom.Rectangle,
   ): boolean {
-    const lane = this.getSwordsmanSwordPathLane(liveObject, targetBounds);
+    const lane = getSwordsmanSwordPathLane(
+      liveObject,
+      targetBounds,
+      this.getSwordsmanAttackBounds(liveObject),
+    );
     if (!lane) {
       return false;
     }
 
-    if (this.swordsmanSwordLaneHitsSolidTerrain(loadedRoom.room, lane)) {
+    if (swordsmanSwordLaneHitsSolidTerrain(
+      loadedRoom.room,
+      lane,
+      this.roomOrigin(loadedRoom.room),
+    )) {
       return true;
     }
 
@@ -3070,120 +2649,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
       }
     }
 
-    return false;
-  }
-
-  private getSwordsmanSwordPathLane(
-    liveObject: LoadedRoomObject,
-    targetBounds: Phaser.Geom.Rectangle,
-  ): Phaser.Geom.Rectangle | null {
-    const body = liveObject.sprite.body as ArcadeObjectBody | null;
-    if (!body) {
-      return null;
-    }
-
-    const attackBounds = this.getSwordsmanAttackBounds(liveObject);
-    const overlapTop = Math.max(attackBounds.top, targetBounds.top);
-    const overlapBottom = Math.min(attackBounds.bottom, targetBounds.bottom);
-    if (overlapBottom <= overlapTop) {
-      return null;
-    }
-
-    const bodyBounds = getArcadeBodyBounds(body);
-    const directionX = liveObject.runtime.directionX >= 0 ? 1 : -1;
-    const pathStartX = directionX > 0 ? bodyBounds.right : targetBounds.right;
-    const pathEndX = directionX > 0 ? targetBounds.left : bodyBounds.left;
-    const left = Math.min(pathStartX, pathEndX);
-    const right = Math.max(pathStartX, pathEndX);
-    if (right - left <= 1) {
-      return null;
-    }
-
-    return new Phaser.Geom.Rectangle(left, overlapTop, right - left, overlapBottom - overlapTop);
-  }
-
-  private swordsmanSwordLaneHitsSolidTerrain(
-    room: RoomSnapshot,
-    lane: Phaser.Geom.Rectangle,
-  ): boolean {
-    const left = Math.floor(lane.left) + 1;
-    const right = Math.ceil(lane.right) - 1;
-    if (right < left) {
-      return false;
-    }
-
-    const top = lane.top + 1;
-    const bottom = lane.bottom - 1;
-    const sampleYs = [
-      lane.centerY,
-      Phaser.Math.Clamp(top, lane.top, lane.bottom),
-      Phaser.Math.Clamp(bottom, lane.top, lane.bottom),
-    ];
-    const sampleAtX = (x: number): boolean => {
-      for (const y of sampleYs) {
-        if (this.hasSolidTerrainAtWorldPoint(room, x, y)) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    for (let x = left; x <= right; x += SWORDSMAN_AI_SWORD_LOS_STEP_PX) {
-      if (sampleAtX(x)) {
-        return true;
-      }
-    }
-
-    return sampleAtX(right);
-  }
-
-  private hasSolidSupportAhead(
-    loadedRoom: LoadedFullRoom<LoadedRoomObject, TEdgeWall>,
-    liveObject: LoadedRoomObject,
-    body: Phaser.Physics.Arcade.Body,
-    directionX: number,
-    leadPx = 4,
-  ): boolean {
-    const room = loadedRoom.room;
-    const probeX = body.center.x + directionX * (body.halfWidth + leadPx);
-    const probeY = body.bottom + 2;
-    if (
-      this.hasSolidTerrainAtWorldPoint(room, probeX, probeY) ||
-      this.solidRuntimeObjectContainsPoint(loadedRoom, liveObject, probeX, probeY)
-    ) {
-      return true;
-    }
-    // Triangle floors are not tile solids — keep walking onto / along ramps.
-    return (
-      this.hasTriangleFloorSupportAtWorldPoint(room, probeX, body.bottom) ||
-      this.hasTriangleFloorNearWorldPoint(room, probeX, body.bottom, 4, TILE_SIZE + 2)
-    );
-  }
-
-  private hasTriangleFloorSupportAtWorldPoint(
-    room: RoomSnapshot,
-    worldX: number,
-    worldY: number,
-  ): boolean {
-    const origin = this.options.getRoomOrigin(room.coordinates);
-    for (const placed of room.placedObjects) {
-      const geometry = normalizePlacedTriangle(placed);
-      if (!geometry) {
-        continue;
-      }
-      if (
-        triangleSupportsFeetAt(
-          origin.x + geometry.anchorX,
-          origin.y + geometry.anchorY,
-          geometry.legX,
-          geometry.legY,
-          worldX,
-          worldY,
-        )
-      ) {
-        return true;
-      }
-    }
     return false;
   }
 
@@ -3241,7 +2706,7 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     room: RoomSnapshot,
     body: Phaser.Physics.Arcade.Body,
   ): void {
-    if (this.isSwordsmanOnFloor(room, body)) {
+    if (isSwordsmanOnFloor(room, body, this.roomOrigin(room))) {
       body.setVelocityY(0);
     }
   }
@@ -3307,18 +2772,6 @@ export class LiveObjectSwordsmanController<TEdgeWall = unknown> {
     sprite.setFlipX(config.facingDirection === 'right' ? !facingRight : facingRight);
   }
 
-  private hasSolidTerrainAtWorldPoint(room: RoomSnapshot, worldX: number, worldY: number): boolean {
-    const roomOrigin = this.options.getRoomOrigin(room.coordinates);
-    const localX = Math.floor((worldX - roomOrigin.x) / TILE_SIZE);
-    const localY = Math.floor((worldY - roomOrigin.y) / TILE_SIZE);
-
-    if (localX < 0 || localX >= ROOM_WIDTH || localY < 0 || localY >= ROOM_HEIGHT) {
-      return false;
-    }
-
-    const localPixelY = worldY - roomOrigin.y - localY * TILE_SIZE;
-    return terrainTileCollidesAtLocalPixel(room, localX, localY, localPixelY);
-  }
 
   private getDynamicBody(sprite: Phaser.GameObjects.Sprite): Phaser.Physics.Arcade.Body | null {
     const body = sprite.body as ArcadeObjectBody | null;

@@ -50,6 +50,7 @@ import {
 import { isRollingBallObjectId } from '../../config/rollingBall';
 import { isTrianglePieceObjectId, parseHexColor, DEFAULT_TRIANGLE_FILL, DEFAULT_TRIANGLE_STROKE } from '../../config/trianglePiece';
 import { isTriangleEditorTool } from './editorToolSelection';
+import { deletePinnedTriangleObject } from './triangleDelete';
 import { watchTriangleSelectionRelease } from './triangleSelectionRelease';
 import { captureTriangleStamp, triangleStampStatus } from './triangleStamp';
 import {
@@ -1038,6 +1039,14 @@ export class EditorInspectorController {
 
   getPinnedTriangleId(): string | null {
     return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : null;
+  }
+
+  deletePinnedTriangle(): boolean {
+    return deletePinnedTriangleObject({
+      getPinnedTriangleId: () => this.getPinnedTriangleId(),
+      removePlacedObjectByInstanceId: (id) => this.editRuntime.removePlacedObjectByInstanceId(id),
+      handleObjectRemoved: (removed) => this.handleObjectRemoved(removed),
+    });
   }
 
   setFocusedBallGraphic(graphicId: string): void {

@@ -737,9 +737,7 @@ export class EditorUiBridge {
           return;
         }
         if (isTriangleEditorTool()) {
-          updateEditorState({
-            triangleStampTileMode: nextMode === 'shuffle' ? 'shuffle' : nextMode === 'pattern' ? 'pattern' : 'wrap',
-          });
+          updateEditorState({ triangleStampTileMode: nextMode === 'shuffle' ? 'shuffle' : nextMode === 'pattern' ? 'pattern' : 'wrap' });
           this.syncEditorChromeState();
           return;
         }
