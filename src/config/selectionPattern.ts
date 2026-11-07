@@ -5,7 +5,7 @@ export interface PaletteCell {
   row: number;
 }
 
-export function paletteCellKey(cell: PaletteCell): string {
+function paletteCellKey(cell: PaletteCell): string {
   return `${cell.col},${cell.row}`;
 }
 
@@ -94,7 +94,7 @@ export function countOccupiedSelectionTiles(selection: TileSelection): number {
   return resolveSelectionPatternOrder(selection).length;
 }
 
-export function isSelectionCellOccupied(
+function isSelectionCellOccupied(
   selection: TileSelection,
   col: number,
   row: number,
