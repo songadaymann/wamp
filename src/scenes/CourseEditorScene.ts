@@ -128,6 +128,7 @@ import { phoneToolSwitchClearArea } from './editor/phoneToolSwitchArea';
 import type { MapArea } from './editor/composerMap';
 import {
   requestEditorShellEscape,
+  notifyEditorToolChosen,
   type EditorShellEscapeRequestedDetail,
 } from './editor/uiEvents';
 import type { EditorStatusDetails } from './editor/roomSession';
@@ -336,6 +337,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     event.preventDefault();
     event.stopPropagation();
     applyEditorToolSelection(tool);
+    notifyEditorToolChosen(window);
     this.updateToolUi();
   };
 
@@ -716,6 +718,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       onSetCoursePlayerHearts: (hearts) => this.setCoursePlayerHearts(hearts),
       onSelectTool: (tool) => {
         applyEditorToolSelection(tool);
+        notifyEditorToolChosen(window);
         this.updateToolUi();
       },
       onClearCurrentLayer: () => {
