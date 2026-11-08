@@ -37,8 +37,16 @@ describe('triangle stamp paint', () => {
       expect(stampedTriangleFields(triangle())).toEqual({
         triangleFill: '#FF0000',
         triangleStroke: '#00FF00',
+        triangleTileFill: false,
+        triangleTileMode: 'wrap',
+        triangleTileSlopeOnly: false,
+        triangleTileFlipX: 'off',
+        triangleTileFlipY: 'off',
+        triangleTileGids: [],
+        triangleStrokeOn: true,
+        triangleBackgroundOn: true,
       });
-      expect(triangleStampStatus()).toBe('Click ramps to paint this fill and stroke.');
+      expect(triangleStampStatus()).toBe('Click ramps to paint this background, stroke, and tiles.');
     } finally {
       updateEditorState({
         triangleStampFill: previous.fill,

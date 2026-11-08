@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ROOM_PX_HEIGHT, ROOM_PX_WIDTH } from '../../config';
 import { isTriangleEditorTool } from './editorToolSelection';
 import { drawTriangleStampPreview } from './triangleStamp';
 import { TriangleHandleController, type TriangleHandleGeometry } from './triangleHandles';
@@ -31,6 +32,10 @@ export function createEditorTriangleHandles(host: {
   return new TriangleHandleController({
     selected: () => editorTriangleHandleGeometry(host.placed(host.pinnedId()), host.origin()),
     hitRadius: () => Math.max(8, 10 / Math.max(host.zoom(), 0.25)),
+    roomBounds: () => {
+      const origin = host.origin();
+      return { minX: origin.x, minY: origin.y, maxX: origin.x + ROOM_PX_WIDTH, maxY: origin.y + ROOM_PX_HEIGHT };
+    },
     begin: (instanceId) => { host.edits.beginTriangleDrag(instanceId); },
     apply: (instanceId, next) => { host.edits.applyTriangleDrag(instanceId, next); },
     commit: () => host.edits.commitTriangleDrag(),
@@ -55,6 +60,20 @@ export function createCourseTriangleHandles(host: {
   return new TriangleHandleController({
     selected: () => geometry(host.pinnedTriangleId()),
     hitRadius: () => Math.max(8, 10 / Math.max(host.zoom(), 0.25)),
+    roomBounds: () => {
+      const id = host.pinnedTriangleId();
+      if (!id) return null;
+      for (const slice of host.slices()) {
+        if (!slice.runtime.getPlacedObjectByInstanceId(id)) continue;
+        return {
+          minX: slice.origin.x,
+          minY: slice.origin.y,
+          maxX: slice.origin.x + ROOM_PX_WIDTH,
+          maxY: slice.origin.y + ROOM_PX_HEIGHT,
+        };
+      }
+      return null;
+    },
     begin: (instanceId) => {
       const match = geometry(instanceId);
       dragRuntime = match?.runtime ?? null;

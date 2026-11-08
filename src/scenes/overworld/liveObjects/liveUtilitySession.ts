@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { isRollingBallObjectId } from '../../../config';
 import { getRollingBallGraphic, rollingBallFrame } from '../../../config/rollingBall';
 import type { RollingBallSettings } from '../../../config/rollingBall';
+import type { TriangleTilePaint } from '../../../config/triangleTileFill';
 import type { RoomCoordinates, RoomSnapshot } from '../../../persistence/roomModel';
 import type { PlayerGravityDirection, SpecialTilePlayerEnvironment } from '../specialTiles';
 import type { LoadedFullRoom } from '../worldStreaming';
@@ -53,7 +54,15 @@ export function presentUtilityObject(
   liveObject: LoadedRoomObject,
   sprite: Phaser.GameObjects.Sprite,
   ball: RollingBallSettings | null,
-  triangle: { legX: number; legY: number; fill: string; stroke: string } | null,
+  triangle: {
+    legX: number;
+    legY: number;
+    fill: string;
+    stroke: string;
+    strokeOn?: boolean;
+    backgroundOn?: boolean;
+    tiles?: TriangleTilePaint | null;
+  } | null,
   anchorX: number,
   anchorY: number,
 ): void {
@@ -66,8 +75,22 @@ export function presentUtilityObject(
       legY: triangle.legY,
       fill: triangle.fill,
       stroke: triangle.stroke,
+      strokeOn: triangle.strokeOn !== false,
+      backgroundOn: triangle.backgroundOn !== false,
+      tiles: triangle.tiles ?? null,
     };
-    placeTriangleSprite(sprite, anchorX, anchorY, triangle.legX, triangle.legY, triangle.fill, triangle.stroke);
+    placeTriangleSprite(
+      sprite,
+      anchorX,
+      anchorY,
+      triangle.legX,
+      triangle.legY,
+      triangle.fill,
+      triangle.stroke,
+      triangle.tiles ?? null,
+      triangle.strokeOn !== false,
+      triangle.backgroundOn !== false,
+    );
   } else if (ball) {
     sprite.setFrame(rollingBallFrame(getRollingBallGraphic(ball.graphicId).column, 0));
   }

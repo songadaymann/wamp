@@ -602,19 +602,26 @@
           <div class="section-label">Triangle</div>
           <div id="triangle-status" class="object-selection-description">Click empty space to place. Click a ramp to select it.</div>
           <div class="triangle-options-body">
-            <div class="triangle-color-stack">
-              <div class="triangle-color-row">
-                <label class="goal-control-label" for="triangle-stroke-input">Stroke</label>
-                <button id="triangle-stroke-swatch" class="color-swatch" type="button" aria-label="Pick stroke color"></button>
-                <input id="triangle-stroke-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#2C3138" />
+            <div class="triangle-color-head">
+              <div class="triangle-color-stack">
+                <div class="triangle-color-row">
+                  <label class="goal-control-label triangle-color-label" for="triangle-stroke-enabled">
+                    <input id="triangle-stroke-enabled" type="checkbox" checked />
+                    <span>Stroke</span>
+                  </label>
+                  <button id="triangle-stroke-swatch" class="color-swatch" type="button" aria-label="Pick stroke color"></button>
+                  <input id="triangle-stroke-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#2C3138" />
+                </div>
+                <div class="triangle-color-row">
+                  <label class="goal-control-label triangle-color-label" for="triangle-background-enabled">
+                    <input id="triangle-background-enabled" type="checkbox" checked />
+                    <span>Background</span>
+                  </label>
+                  <button id="triangle-fill-swatch" class="color-swatch" type="button" aria-label="Pick background color"></button>
+                  <input id="triangle-fill-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#8A8F98" />
+                </div>
               </div>
-              <div class="triangle-color-row">
-                <label class="goal-control-label" for="triangle-fill-input">Fill</label>
-                <button id="triangle-fill-swatch" class="color-swatch" type="button" aria-label="Pick fill color"></button>
-                <input id="triangle-fill-input" class="goal-input" type="text" maxlength="7" spellcheck="false" value="#8A8F98" />
-              </div>
-            </div>
-            <div id="triangle-orient-picker" class="triangle-orient-picker" role="radiogroup" aria-label="Triangle orientation">
+              <div id="triangle-orient-picker" class="triangle-orient-picker" role="radiogroup" aria-label="Triangle orientation">
               <button type="button" class="triangle-orient-option" data-triangle-orient="nw" aria-label="Upper-left ramp">
                 <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="21,1 1,21 21,21" /></svg>
               </button>
@@ -627,6 +634,17 @@
               <button type="button" class="triangle-orient-option" data-triangle-orient="se" aria-label="Lower-right ramp">
                 <svg viewBox="0 0 22 22" aria-hidden="true"><polygon points="1,1 21,1 1,21" /></svg>
               </button>
+              </div>
+            </div>
+            <div class="triangle-tile-options">
+              <label class="triangle-tile-fill-row" for="triangle-tile-fill-checkbox">
+                <input id="triangle-tile-fill-checkbox" type="checkbox" />
+                <span>Tile Fill</span>
+              </label>
+              <label class="triangle-tile-fill-row" for="triangle-slope-only-checkbox">
+                <input id="triangle-slope-only-checkbox" type="checkbox" />
+                <span>1st tile only on slope</span>
+              </label>
             </div>
           </div>
         </div>

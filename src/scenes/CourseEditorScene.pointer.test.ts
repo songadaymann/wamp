@@ -31,6 +31,7 @@ function harness() {
   const register = () => ({ on: vi.fn() });
   const objectMoveController = { down: vi.fn(() => false), move: vi.fn(() => false), up: vi.fn(() => false), stopGesture: vi.fn(), cancel: vi.fn() };
   const touchControls = { down: vi.fn(), move: vi.fn(), up: vi.fn() };
+  const triangleTool = { down: vi.fn(() => false), move: vi.fn(() => false), up: vi.fn() };
   const scene = Object.assign(Object.create(CourseEditorScene.prototype), {
     input: { on: (name: string, fn: (p: ReturnType<typeof pointer>) => void) => handlers.set(name, fn) },
     game: { events: register() }, events: register(),
@@ -38,7 +39,7 @@ function harness() {
     modifierKeys: {}, musicWorkflow: { isActive: () => false },
     pendingRightClickPanPointerId: null, isPanning: false,
     drawing: { isDrawing: false, hasBend: false },
-    objectMoveController, touchControls, constrainCamera: vi.fn(),
+    objectMoveController, touchControls, triangleTool, constrainCamera: vi.fn(),
     handlePrimaryPointerDown: vi.fn(), handleSecondaryPointerClick: vi.fn(),
     handlePointerDrag: vi.fn(), finishPointerAction: vi.fn(), updateCursorHighlight: vi.fn(),
   });

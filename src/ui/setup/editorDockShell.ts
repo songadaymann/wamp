@@ -22,6 +22,8 @@ import {
   type EditorToolChosenDetail,
 } from '../../scenes/editor/uiEvents';
 import { applyEditorToolSelection } from '../../scenes/editor/editorToolSelection';
+import { requestTriangleDeselect } from '../../scenes/editor/triangleSelectionRelease';
+import { resumeTriangleTileSession } from '../../scenes/editor/triangleTileEditor';
 import { EDITOR_SIDEBAR_RESIZED_EVENT } from './sidebarSections';
 import { type EditorObjectScope, PaletteController } from './paletteController';
 import {
@@ -180,6 +182,16 @@ export function editorDockDrawerTitle(state: EditorDockShellState): string {
   return state.triangleSidebar ? 'Triangle' : PANEL_TITLES[state.openPanel];
 }
 
+/** Dock changes that leave triangle editing, including Terrain and the object docks. */
+export function editorShellReleasesTriangleSelection(
+  previous: EditorDockShellState,
+  next: EditorDockShellState,
+): boolean {
+  if (next.triangleSidebar) return false;
+  if (previous.triangleSidebar && !next.triangleSidebar) return true;
+  return previous.openPanel !== next.openPanel;
+}
+
 function followToolDockState(state: EditorDockShellState, tool: ToolName): EditorDockShellState {
   if (tool === 'triangle') {
     if (state.triangleSidebar && state.openPanel === 'terrain') return state;
@@ -284,7 +296,7 @@ export class EditorDockShellController {
     if (isObjectPanel(previous.openPanel)) {
       this.rememberObjectPanel(previous.openPanel);
     }
-    if (previous.openPanel === 'terrain' && editorState.paletteMode !== 'objects') {
+    if (previous.openPanel === 'terrain' && !previous.triangleSidebar && editorState.paletteMode !== 'objects') {
       this.terrainPaletteMode = editorState.paletteMode;
     }
 
@@ -293,15 +305,16 @@ export class EditorDockShellController {
       || previous.triangleSidebar !== this.state.triangleSidebar;
     const popoverChanged = previous.markersOpen !== this.state.markersOpen
       || previous.shareOpen !== this.state.shareOpen;
-    const leaveTriangleTool = action.type === 'toggle-dock'
-      && action.dock === 'terrain'
-      && previous.triangleSidebar
+    const leaveTriangleTool = previous.triangleSidebar
+      && !this.state.triangleSidebar
       && editorState.activeTool === 'triangle';
 
     if (drawerChanged && this.state.openPanel) {
       this.lastDrawerTrigger = trigger ?? this.lastDrawerTrigger;
       this.preparePanel(this.state.openPanel);
     }
+    if (this.state.triangleSidebar) this.ensurePaletteMode('tiles');
+    if (!previous.triangleSidebar && this.state.triangleSidebar) resumeTriangleTileSession();
     if (popoverChanged && (this.state.markersOpen || this.state.shareOpen)) {
       this.lastPopoverTrigger = trigger ?? this.lastPopoverTrigger;
     }
@@ -316,6 +329,9 @@ export class EditorDockShellController {
     if (leaveTriangleTool) {
       applyEditorToolSelection('pencil');
       refreshEditorUi(this.doc.defaultView);
+    }
+    if (editorShellReleasesTriangleSelection(previous, this.state)) {
+      requestTriangleDeselect();
     }
     if (drawerChanged) {
       this.queueLayoutResize();
@@ -646,7 +662,10 @@ export class EditorDockShellController {
     const drawerTitle = this.doc.getElementById('editor-drawer-title');
     if (drawerTitle) drawerTitle.textContent = editorDockDrawerTitle(this.state);
     if (this.state.triangleSidebar) this.doc.body.dataset.editorTriangleOptions = 'true';
-    else delete this.doc.body.dataset.editorTriangleOptions;
+    else {
+      delete this.doc.body.dataset.editorTriangleOptions;
+      delete this.doc.body.dataset.editorTriangleTileFill;
+    }
     const back = this.doc.querySelector<HTMLButtonElement>('[data-editor-shell-action="back"]');
     const backLabel = back?.querySelector('span:last-child');
     if (backLabel) backLabel.textContent = courseMode ? 'Back to Setup' : 'Back to World';

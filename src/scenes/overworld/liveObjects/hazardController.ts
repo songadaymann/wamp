@@ -453,6 +453,7 @@ export class LiveObjectHazardController<TEdgeWall = unknown> {
         aiFacingDirectionX: directionX,
         aiFacingLastFlipAt: this.options.getCurrentTime(),
         aiFacingLastFlipX: spawnX,
+        aiDirectionTurnAtMs: [],
         elapsedMs: 0,
         nextActionAt: 0,
         actionStartedAt: this.options.getCurrentTime(),

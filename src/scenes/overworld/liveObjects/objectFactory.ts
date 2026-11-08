@@ -108,6 +108,7 @@ export function createLiveObjectRuntimeState(options: {
     aiFacingDirectionX: initialDirectionX,
     aiFacingLastFlipAt: getCurrentTime(),
     aiFacingLastFlipX: sprite.x,
+    aiDirectionTurnAtMs: [],
     elapsedMs: 0,
     nextActionAt: //these are custom delays before these objects start doing things
       config.id === 'frog'

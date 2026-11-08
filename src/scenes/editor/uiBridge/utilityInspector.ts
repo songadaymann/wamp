@@ -92,6 +92,18 @@ export function bindUtilityInspectorControls(host: {
   elements.triangleFillInput?.addEventListener('change', () => {
     actions.onSetFocusedTriangleFill(elements.triangleFillInput?.value ?? '');
   });
+  elements.triangleTileFillCheckbox?.addEventListener('change', () => {
+    actions.onSetFocusedTriangleTileFill(elements.triangleTileFillCheckbox?.checked === true);
+  });
+  elements.triangleStrokeEnabled?.addEventListener('change', () => {
+    actions.onSetFocusedTriangleStrokeEnabled(elements.triangleStrokeEnabled?.checked === true);
+  });
+  elements.triangleBackgroundEnabled?.addEventListener('change', () => {
+    actions.onSetFocusedTriangleBackgroundEnabled(elements.triangleBackgroundEnabled?.checked === true);
+  });
+  elements.triangleSlopeOnlyCheckbox?.addEventListener('change', () => {
+    actions.onSetFocusedTriangleSlopeOnly(elements.triangleSlopeOnlyCheckbox?.checked === true);
+  });
   elements.triangleStrokeInput?.addEventListener('change', () => {
     actions.onSetFocusedTriangleStroke(elements.triangleStrokeInput?.value ?? '');
   });

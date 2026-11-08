@@ -110,6 +110,9 @@ export class EditorDocumentPresentationController {
             geometry.legY,
             geometry.fill,
             geometry.stroke,
+            geometry.tiles,
+            geometry.strokeOn,
+            geometry.backgroundOn,
           );
         }
       } else if (isRollingBallObjectId(placed.id)) {

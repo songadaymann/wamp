@@ -9,6 +9,7 @@ export function clonePlacedObjectDocument(
     linkedTargetInstanceIds: placed.linkedTargetInstanceIds
       ? [...placed.linkedTargetInstanceIds]
       : placed.linkedTargetInstanceIds,
+    triangleTileGids: placed.triangleTileGids ? [...placed.triangleTileGids] : placed.triangleTileGids,
   }));
 }
 

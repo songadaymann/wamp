@@ -37,6 +37,17 @@ import type { EditorInspectorState } from '../editor/uiBridge';
 import { isRollingBallObjectId } from '../../config/rollingBall';
 import { isTrianglePieceObjectId, parseHexColor, DEFAULT_TRIANGLE_FILL, DEFAULT_TRIANGLE_STROKE } from '../../config/trianglePiece';
 import { isTriangleEditorTool } from '../editor/editorToolSelection';
+import { watchTriangleSelectionRelease } from '../editor/triangleSelectionRelease';
+import {
+  activeTriangleLayers,
+  canTurnOffTriangleLayer,
+  closeTriangleTileSession,
+  disableTriangleTileFill,
+  enableTriangleTileFill,
+  installTriangleTileSync,
+  setTriangleSlopeOnly,
+  noteTriangleSelection,
+} from '../editor/triangleTileEditor';
 import { captureTriangleStamp, triangleStampStatus } from '../editor/triangleStamp';
 import {
   buildBallInspectorState,
@@ -117,7 +128,16 @@ export class CourseEditorObjectInspectorController {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly host: CourseEditorObjectInspectorHost,
-  ) {}
+  ) {
+    watchTriangleSelectionRelease(() => this.releaseTriangleSelection());
+    installTriangleTileSync((fields) => {
+      if (!this.scene.sys.isActive() || editorState.trianglePaintMode) return false;
+      if (this.pinnedInspector?.kind !== 'triangle') return false;
+      const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
+      if (!ref?.placed.instanceId) return false;
+      return ref.slice.runtime.utilityEdits.setTriangleTiles(ref.placed.instanceId, fields);
+    });
+  }
 
   isConnectingPressurePlate(): boolean {
     return this.connectingPressurePlateInstanceId !== null;
@@ -306,6 +326,59 @@ export class CourseEditorObjectInspectorController {
     this.editFocusedUtility('ball', (runtime, id) => runtime.utilityEdits.setRollingBallPushable(id, enabled));
   }
 
+  setFocusedTriangleTileFill(enabled: boolean): void {
+    const ref = !editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle'
+      ? this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId)
+      : null;
+    if (!enabled && !canTurnOffTriangleLayer(activeTriangleLayers(ref?.placed ?? null), 'tile')) {
+      this.renderInspectorUi();
+      return;
+    }
+    const fields = enabled ? enableTriangleTileFill(ref?.placed ?? null) : disableTriangleTileFill(ref?.placed ?? null);
+    if (ref?.placed.instanceId) {
+      ref.slice.runtime.utilityEdits.setTriangleTiles(ref.placed.instanceId, fields);
+    }
+    this.renderInspectorUi();
+  }
+
+  setFocusedTriangleStrokeEnabled(enabled: boolean): void {
+    this.setTriangleDrawFlag('stroke', enabled);
+  }
+
+  setFocusedTriangleBackgroundEnabled(enabled: boolean): void {
+    this.setTriangleDrawFlag('background', enabled);
+  }
+
+  private setTriangleDrawFlag(layer: 'stroke' | 'background', enabled: boolean): void {
+    const ref = !editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle'
+      ? this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId)
+      : null;
+    if (!enabled && !canTurnOffTriangleLayer(activeTriangleLayers(ref?.placed ?? null), layer)) {
+      this.renderInspectorUi();
+      return;
+    }
+    updateEditorState(layer === 'stroke' ? { triangleStampStrokeOn: enabled } : { triangleStampBackgroundOn: enabled });
+    if (ref?.placed.instanceId) {
+      ref.slice.runtime.utilityEdits.setTriangleDrawFlags(
+        ref.placed.instanceId,
+        layer === 'stroke' ? enabled : null,
+        layer === 'background' ? enabled : null,
+      );
+    }
+    this.renderInspectorUi();
+  }
+
+  setFocusedTriangleSlopeOnly(enabled: boolean): void {
+    const ref = !editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle'
+      ? this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId)
+      : null;
+    const fields = setTriangleSlopeOnly(ref?.placed ?? null, enabled);
+    if (ref?.placed.instanceId) {
+      ref.slice.runtime.utilityEdits.setTriangleTiles(ref.placed.instanceId, fields);
+    }
+    this.renderInspectorUi();
+  }
+
   setFocusedTriangleFill(color: string): void {
     updateEditorState({
       triangleStampFill: parseHexColor(color, editorState.triangleStampFill || DEFAULT_TRIANGLE_FILL),
@@ -330,13 +403,18 @@ export class CourseEditorObjectInspectorController {
 
   setTriangleOrientation(flipX: boolean, flipY: boolean): void {
     updateEditorState({ triangleStampFlipX: flipX, triangleStampFlipY: flipY });
-    if (!editorState.trianglePaintMode && this.pinnedInspector?.kind === 'triangle') {
-      this.editFocusedUtility('triangle', (runtime, id) => runtime.utilityEdits.setTriangleOrientation(id, flipX, flipY));
-      const ref = this.getPlacedObjectRefByInstanceId(this.pinnedInspector.instanceId);
-      if (ref) captureTriangleStamp(ref.placed);
-      return;
-    }
     this.renderInspectorUi();
+  }
+
+  refreshAfterHistory(): void {
+    if (this.pinnedInspector?.kind === 'triangle') {
+      const id = this.pinnedInspector.instanceId;
+      const stillThere = this.getPlacedObjectRefByInstanceId(id);
+      if (!stillThere) {
+        this.pinnedInspector = null;
+      }
+    }
+    if (this.scene.sys.isActive()) this.renderInspectorUi();
   }
 
   private editFocusedUtility(
@@ -351,6 +429,24 @@ export class CourseEditorObjectInspectorController {
 
   getPinnedTriangleId(): string | null {
     return this.pinnedInspector?.kind === 'triangle' ? this.pinnedInspector.instanceId : null;
+  }
+
+  deletePinnedTriangle(): boolean {
+    const instanceId = this.getPinnedTriangleId();
+    if (!instanceId) return false;
+    const ref = this.getPlacedObjectRefByInstanceId(instanceId);
+    if (!ref) return false;
+    const removed = ref.slice.runtime.removePlacedObjectByInstanceId(instanceId);
+    if (!removed) return false;
+    this.handleObjectRemoved(ref.slice.roomId, removed);
+    return true;
+  }
+
+  private releaseTriangleSelection(): void {
+    const pinned = this.pinnedInspector?.kind === 'triangle';
+    if (pinned) this.pinnedInspector = null;
+    if (!isTriangleEditorTool()) closeTriangleTileSession();
+    if (pinned && this.scene.sys.isActive()) this.renderInspectorUi();
   }
 
   clearPinnedInspector(): void {
@@ -397,6 +493,7 @@ export class CourseEditorObjectInspectorController {
       this.clearTransientState();
       this.pinInspector('triangle', triangle.instanceId);
       captureTriangleStamp(triangle);
+      noteTriangleSelection(triangle);
       this.renderInspectorUi();
       return true;
     }
@@ -411,6 +508,7 @@ export class CourseEditorObjectInspectorController {
     if (triangle?.instanceId) {
       this.clearTransientState();
       this.pinInspector('triangle', triangle.instanceId);
+      noteTriangleSelection(triangle);
       this.renderInspectorUi();
       return true;
     }

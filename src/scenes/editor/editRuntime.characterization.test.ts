@@ -193,6 +193,48 @@ describe('editor edit runtime document contracts', () => {
     expect(host.getPlacedObjects()).toHaveLength(0);
   });
 
+  it('undoes triangle placement, color, and reshape, and clear layer and nuke remove triangles', () => {
+    const { runtime, host } = createHarness(createRoom());
+    updateEditorState({ activeTool: 'triangle' });
+    updateEditorState({ activeLayer: 'terrain' });
+    const placed = runtime.handleObjectPlace(64, 80, 4, 4);
+    expect(placed?.id).toBe('triangle_piece');
+    const id = placed?.instanceId ?? '';
+    runtime.undo();
+    expect(host.getPlacedObjects()).toHaveLength(0);
+    runtime.redo();
+    expect(host.getPlacedObjects()).toHaveLength(1);
+    runtime.utilityEdits.setTriangleColors(id, '#112233', null);
+    expect(host.getPlacedObjects()[0]?.triangleFill).toBe('#112233');
+    runtime.undo();
+    expect(host.getPlacedObjects()[0]?.triangleFill).not.toBe('#112233');
+    const legs = host.getPlacedObjects()[0]?.triangleLegX;
+    runtime.utilityEdits.beginTriangleDrag(id);
+    runtime.utilityEdits.applyTriangleDrag(id, { anchorX: 80, anchorY: 96, legX: 64, legY: -48 });
+    runtime.utilityEdits.commitTriangleDrag();
+    expect(host.getPlacedObjects()[0]?.triangleLegX).toBe(64);
+    runtime.undo();
+    expect(host.getPlacedObjects()[0]?.triangleLegX).toBe(legs);
+    runtime.utilityEdits.setTriangleOrientation(id, true, true);
+    const flipped = host.getPlacedObjects()[0]?.triangleLegX;
+    runtime.undo();
+    expect(host.getPlacedObjects()[0]?.triangleLegX).toBe(legs);
+    expect(flipped).not.toBe(legs);
+    updateEditorState({ activeLayer: 'background' });
+    const back = runtime.handleObjectPlace(96, 96, 6, 5);
+    expect(back?.layer).toBe('background');
+    updateEditorState({ activeLayer: 'terrain' });
+    runtime.clearCurrentLayer();
+    const ids = host.getPlacedObjects().map((object) => object.instanceId);
+    expect(ids).toEqual([back?.instanceId]);
+    runtime.undo();
+    expect(host.getPlacedObjects().some((object) => object.instanceId === id)).toBe(true);
+    runtime.clearAllTiles();
+    expect(host.getPlacedObjects().some((object) => object.id === 'triangle_piece')).toBe(false);
+    runtime.undo();
+    expect(host.getPlacedObjects().some((object) => object.id === 'triangle_piece')).toBe(true);
+  });
+
   it('keeps missing-marker goals saveable, places explicitly, and restores publish checks through Undo', () => {
     const { runtime, setEditable } = createHarness(createRoom());
     runtime.setGoalType('reach_exit');

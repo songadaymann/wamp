@@ -61,8 +61,8 @@ export class SwordsmanRuntimeStateController {
     decision: SwordsmanTraversalDecision | null,
     input: { fallbackDirectionX: -1 | 1; fallbackTargetX: number; onFloor: boolean },
   ): -1 | 1 {
+    // Direction is committed by the controller turn-rate limiter — do not write it here.
     const directionX = decision?.directionX ?? input.fallbackDirectionX;
-    runtime.directionX = directionX;
     runtime.aiIntent = decision?.intent ?? (input.onFloor ? 'same-platform' : 'air-chase');
     runtime.aiTargetX = decision?.targetX ?? input.fallbackTargetX;
     runtime.aiCurrentSegmentId = decision?.currentSegmentId ?? null;

@@ -9,6 +9,7 @@ import type { EditorInspectorState, EditorUiViewModel } from './model';
 import { inspectorWindowLabel, isInspectorWindowMinimized } from '../inspectorWindows';
 import { editorState } from '../../../config';
 import { triangleOrientId } from '../../../config/trianglePiece';
+import { TRIANGLE_LAYER_REQUIRED_TITLE } from '../triangleTileEditor';
 
 export function renderEditorUiViewModel(
   elements: EditorUiElements,
@@ -210,6 +211,37 @@ export function renderInspectorPanel(
   }
   if (elements.triangleFillSwatch) elements.triangleFillSwatch.style.background = state.triangleFillValue;
   if (elements.triangleStrokeSwatch) elements.triangleStrokeSwatch.style.background = state.triangleStrokeValue;
+  const lockTitle = (layer: 'stroke' | 'background' | 'tile') => (
+    state.triangleLayerLock === layer ? TRIANGLE_LAYER_REQUIRED_TITLE : ''
+  );
+  if (elements.triangleStrokeEnabled) {
+    elements.triangleStrokeEnabled.checked = state.triangleStrokeEnabled;
+    const label = elements.triangleStrokeEnabled.closest('label');
+    if (label instanceof HTMLElement) label.title = lockTitle('stroke');
+  }
+  if (elements.triangleBackgroundEnabled) {
+    elements.triangleBackgroundEnabled.checked = state.triangleBackgroundEnabled;
+    const label = elements.triangleBackgroundEnabled.closest('label');
+    if (label instanceof HTMLElement) label.title = lockTitle('background');
+  }
+  if (elements.triangleTileFillCheckbox) elements.triangleTileFillCheckbox.checked = state.triangleTileFillChecked;
+  const tileLabel = elements.triangleTileFillCheckbox?.closest('label');
+  if (tileLabel instanceof HTMLElement) tileLabel.title = lockTitle('tile');
+  if (elements.triangleSlopeOnlyCheckbox) {
+    elements.triangleSlopeOnlyCheckbox.checked = state.triangleSlopeOnlyChecked;
+    elements.triangleSlopeOnlyCheckbox.disabled = !state.triangleSlopeOnlyEnabled;
+    const label = elements.triangleSlopeOnlyCheckbox.closest('label');
+    if (label instanceof HTMLElement) {
+      label.title = state.triangleSlopeOnlyEnabled ? '' : 'Select more than one tile';
+    }
+  }
+  const triangleTileFill = state.triangleVisible
+    ? (state.triangleTileFillChecked ? 'on' : 'off')
+    : null;
+  if (typeof document !== 'undefined') {
+    if (triangleTileFill) document.body.dataset.editorTriangleTileFill = triangleTileFill;
+    else delete document.body.dataset.editorTriangleTileFill;
+  }
   if (!state.triangleVisible) elements.colorPopover?.classList.add('hidden');
 }
 

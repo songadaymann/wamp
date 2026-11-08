@@ -203,6 +203,10 @@ export interface EditorUiElements {
   triangleOrientButtons: HTMLButtonElement[];
   triangleFillInput: HTMLInputElement | null;
   triangleFillSwatch: HTMLButtonElement | null;
+  triangleTileFillCheckbox: HTMLInputElement | null;
+  triangleSlopeOnlyCheckbox: HTMLInputElement | null;
+  triangleStrokeEnabled: HTMLInputElement | null;
+  triangleBackgroundEnabled: HTMLInputElement | null;
   triangleStrokeInput: HTMLInputElement | null;
   triangleStrokeSwatch: HTMLButtonElement | null;
   colorPopover: HTMLElement | null;
@@ -444,6 +448,10 @@ export function lookupEditorUiElements(doc: Document): EditorUiElements {
     triangleOrientButtons: all<HTMLButtonElement>(doc, '[data-triangle-orient]'),
     triangleFillInput: byId<HTMLInputElement>(doc, 'triangle-fill-input'),
     triangleFillSwatch: byId<HTMLButtonElement>(doc, 'triangle-fill-swatch'),
+    triangleTileFillCheckbox: byId<HTMLInputElement>(doc, 'triangle-tile-fill-checkbox'),
+    triangleSlopeOnlyCheckbox: byId<HTMLInputElement>(doc, 'triangle-slope-only-checkbox'),
+    triangleStrokeEnabled: byId<HTMLInputElement>(doc, 'triangle-stroke-enabled'),
+    triangleBackgroundEnabled: byId<HTMLInputElement>(doc, 'triangle-background-enabled'),
     triangleStrokeInput: byId<HTMLInputElement>(doc, 'triangle-stroke-input'),
     triangleStrokeSwatch: byId<HTMLButtonElement>(doc, 'triangle-stroke-swatch'),
     colorPopover: byId<HTMLElement>(doc, 'color-popover'),

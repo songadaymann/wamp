@@ -15,6 +15,10 @@ import {
   steepSlopeMotion,
   applyTriangleStampOrientation,
   triangleEdges,
+  triangleCeilingLowTip,
+  triangleFloorHighTip,
+  triangleFloorSurfaceOrFlushTip,
+  triangleFloorSurfaceYAt,
   triangleHandleMotion,
   triangleHandlePoints,
   triangleVertices,
@@ -227,6 +231,52 @@ describe('rolling ball and triangle helpers', () => {
       horizontalIntent: 1,
       deltaSeconds: 1 / 60,
     })).toBeNull();
+    expect(slopeWalk({
+      anchorX: 0,
+      anchorY: 64,
+      legX: 32,
+      legY: -64,
+      feetX: 16,
+      feetY: 32,
+      verticalVelocity: 0,
+      horizontalIntent: -1,
+      deltaSeconds: 1 / 60,
+    })).toMatchObject({ supported: true, blockUphill: true });
+    expect(slopeWalk({
+      anchorX: 0,
+      anchorY: 64,
+      legX: 32,
+      legY: -64,
+      feetX: 16,
+      feetY: 32,
+      verticalVelocity: 0,
+      horizontalIntent: -1,
+      deltaSeconds: 1 / 60,
+      allowSteepClimb: true,
+    })).toMatchObject({ supported: true, blockUphill: false });
+  });
+
+  it('reports floor hypotenuse Y so edge probes can see a descending ramp', () => {
+    // Legs -32/-32: high tip at the vertical corner (160, 288), low at (128, 320).
+    expect(triangleFloorSurfaceYAt(160, 320, -32, -32, 160)).toBe(288);
+    expect(triangleFloorSurfaceYAt(160, 320, -32, -32, 128)).toBe(320);
+    expect(triangleFloorSurfaceYAt(160, 320, -32, -32, 144)).toBe(304);
+    expect(triangleFloorSurfaceYAt(160, 320, -32, -32, 120)).toBeNull();
+    expect(triangleFloorSurfaceYAt(160, 320, -32, 32, 144)).toBeNull();
+  });
+
+  it('extends a flush crest so feet keep the tip height past the hypotenuse', () => {
+    expect(triangleFloorHighTip(160, 320, -32, -32)).toEqual({ x: 160, y: 288 });
+    expect(triangleFloorSurfaceOrFlushTip(160, 320, -32, -32, 164, 288)).toBe(288);
+    expect(triangleFloorSurfaceOrFlushTip(160, 320, -32, -32, 164, 300)).toBeNull();
+    expect(triangleFloorSurfaceOrFlushTip(160, 320, -32, -32, 144, 288)).toBe(304);
+  });
+
+  it('picks the low hang tip of a ceiling ramp for flyer handoff', () => {
+    // Ceiling wedge: hyp from (160,320) to (160,352) side — low tip at anchorY+legY.
+    expect(triangleCeilingLowTip(160, 320, -32, 32)).toEqual({ x: 160, y: 352 });
+    expect(triangleCeilingLowTip(160, 320, 32, 32)).toEqual({ x: 160, y: 352 });
+    expect(triangleCeilingLowTip(160, 320, -32, -32)).toBeNull();
   });
 
   it('stands on the flat top of a downward triangle like a platform', () => {
