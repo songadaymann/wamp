@@ -90,74 +90,67 @@ export async function searchChatMentionUsers(
   const normalizedQuery = normalizeMentionSearchQuery(query);
   const boundedLimit = Math.max(1, Math.min(MAX_CHAT_MENTION_USER_LIMIT, Math.floor(limit)));
 
-  try {
-    if (!normalizedQuery) {
-      const result = await env.DB.prepare(
-        `
-          SELECT u.id, u.display_name, u.username
-          FROM (
-            SELECT user_id, MAX(created_at) AS latest_at
-            FROM chat_messages
-            WHERE deleted_at IS NULL
-            GROUP BY user_id
-            ORDER BY latest_at DESC
-            LIMIT 50
-          ) recent
-          JOIN users u ON u.id = recent.user_id
-          WHERE u.username IS NOT NULL
-            AND trim(u.username) != ''
-          ORDER BY recent.latest_at DESC, lower(u.username) ASC
-          LIMIT ?
-        `
-      )
-        .bind(boundedLimit)
-        .all<ChatMentionUserRow>();
-
-      return result.results.map(mapChatMentionUserRow);
-    }
-
-    const escapedQuery = escapeSqlLike(normalizedQuery);
-    const usernamePrefix = `${escapedQuery}%`;
-    const displayNameMatch = `%${escapedQuery}%`;
+  if (!normalizedQuery) {
     const result = await env.DB.prepare(
       `
-        SELECT id, display_name, username
-        FROM users
-        WHERE username IS NOT NULL
-          AND trim(username) != ''
-          AND (
-            lower(username) LIKE ? ESCAPE '\\'
-            OR lower(display_name) LIKE ? ESCAPE '\\'
-          )
-        ORDER BY
-          CASE
-            WHEN lower(username) = ? THEN 0
-            WHEN lower(username) LIKE ? ESCAPE '\\' THEN 1
-            WHEN lower(display_name) LIKE ? ESCAPE '\\' THEN 2
-            ELSE 3
-          END,
-          lower(username) ASC,
-          lower(display_name) ASC
+        SELECT u.id, u.display_name, u.username
+        FROM (
+          SELECT user_id, MAX(created_at) AS latest_at
+          FROM chat_messages
+          WHERE deleted_at IS NULL
+          GROUP BY user_id
+          ORDER BY latest_at DESC
+          LIMIT 50
+        ) recent
+        JOIN users u ON u.id = recent.user_id
+        WHERE u.username IS NOT NULL
+          AND trim(u.username) != ''
+        ORDER BY recent.latest_at DESC, lower(u.username) ASC
         LIMIT ?
       `
     )
-      .bind(
-        usernamePrefix,
-        displayNameMatch,
-        normalizedQuery,
-        usernamePrefix,
-        displayNameMatch,
-        boundedLimit
-      )
+      .bind(boundedLimit)
       .all<ChatMentionUserRow>();
 
     return result.results.map(mapChatMentionUserRow);
-  } catch (error) {
-    if (isMissingUsernameColumnError(error)) {
-      return [];
-    }
-    throw error;
   }
+
+  const escapedQuery = escapeSqlLike(normalizedQuery);
+  const usernamePrefix = `${escapedQuery}%`;
+  const displayNameMatch = `%${escapedQuery}%`;
+  const result = await env.DB.prepare(
+    `
+      SELECT id, display_name, username
+      FROM users
+      WHERE username IS NOT NULL
+        AND trim(username) != ''
+        AND (
+          lower(username) LIKE ? ESCAPE '\\'
+          OR lower(display_name) LIKE ? ESCAPE '\\'
+        )
+      ORDER BY
+        CASE
+          WHEN lower(username) = ? THEN 0
+          WHEN lower(username) LIKE ? ESCAPE '\\' THEN 1
+          WHEN lower(display_name) LIKE ? ESCAPE '\\' THEN 2
+          ELSE 3
+        END,
+        lower(username) ASC,
+        lower(display_name) ASC
+      LIMIT ?
+    `
+  )
+    .bind(
+      usernamePrefix,
+      displayNameMatch,
+      normalizedQuery,
+      usernamePrefix,
+      displayNameMatch,
+      boundedLimit
+    )
+    .all<ChatMentionUserRow>();
+
+  return result.results.map(mapChatMentionUserRow);
 }
 
 export async function loadLatestChatMessageForUser(
@@ -462,8 +455,4 @@ function normalizeMentionSearchQuery(value: string): string {
 
 function escapeSqlLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&');
-}
-
-function isMissingUsernameColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*(u\.)?username|no such column:\s*username/i.test(error.message);
 }
