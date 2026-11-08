@@ -3,6 +3,7 @@ import { editorState, updateEditorState } from '../../config';
 import { registerCustomSprite } from '../../customSprites/registry';
 import {
   applyEditorToolSelection,
+  chooseEditorTool,
   isEditorLineCurve,
   resolveEditorLineEnd,
   getEditorToolUnavailableTitle,
@@ -26,6 +27,23 @@ const originalObjectId = editorState.selectedObjectId;
 afterEach(() => {
   updateEditorState({ paletteMode: originalMode });
   updateEditorState({ selectedObjectId: originalObjectId });
+});
+
+describe('user tool choices notify the shared dock', () => {
+  it.each(['triangle', 'pencil', 'eraser'] as const)('publishes %s after applying its state', tool => {
+    const original = { activeTool: editorState.activeTool, trianglePaintMode: editorState.trianglePaintMode,
+      pencilSprayMode: editorState.pencilSprayMode };
+    const target = new EventTarget();
+    const seen: string[][] = [];
+    target.addEventListener('editor-tool-chosen', event => {
+      seen.push([(event as CustomEvent<{ tool: string }>).detail.tool, editorState.activeTool]);
+    });
+    try {
+      updateEditorState({ activeTool: 'move' });
+      chooseEditorTool(tool, target as unknown as Window);
+      expect(seen).toEqual([[tool, tool]]);
+    } finally { updateEditorState(original); }
+  });
 });
 
 describe('editorToolSelection availability', () => {

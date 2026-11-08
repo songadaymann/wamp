@@ -162,7 +162,7 @@ async function verifyExpandedRoomShell(page, viewport, viewportOutputDir) {
   await auditButtonRoles(page, 'editor');
   const topTools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await topTools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
-    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line', 'triangle']);
   for (const tool of await topTools.all()) assert.equal(await tool.isVisible(), true);
   assert.equal(await page.locator('[data-editor-shell-action="back"] span:last-child').textContent(), 'Back to Setup');
   assert.equal(await page.locator('[data-editor-shell-action="save"]').isVisible(), true);
@@ -295,7 +295,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   await auditButtonRoles(page, 'editor');
   const tools = page.locator('.editor-shell-tools [data-tool]');
   assert.deepEqual(await tools.evaluateAll(nodes => nodes.map(node => node.dataset.tool)),
-    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line']);
+    ['pencil', 'eraser', 'copy', 'move', 'fill', 'randomize', 'rect', 'ellipse', 'line', 'triangle']);
   for (const tool of await tools.all()) assert.equal(await tool.isVisible(), true);
   await page.locator('#menu-toggle').click();
   for (const selector of ['#btn-world-settings', '#btn-guestbook-open', '#btn-world-controls']) {
@@ -512,9 +512,9 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const fittedDefaultZoom = (await activeScene(page)).zoom;
 
   const deviceClass = await page.evaluate(() => document.body.dataset.deviceClass);
-  const expectedMax = Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520));
+  const expectedMax = Math.max(380, Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520)));
   const minWidth = await resizeDrawer(page, -1000);
-  assert.ok(Math.abs(minWidth - 280) <= 1, `expected 280px drawer, received ${minWidth}`);
+  assert.ok(Math.abs(minWidth - 380) <= 1, `expected 380px drawer, received ${minWidth}`);
   const fittedMinZoom = (await activeScene(page)).zoom;
   assert.ok(fittedMinZoom >= fittedDefaultZoom);
   await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'drawer-min.png') });
@@ -530,10 +530,10 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal((await activeScene(page)).zoom, manualZoom);
 
   await page.locator('[data-editor-dock="stuff"]').click();
-  const twoColumnCount = countGridColumns(await page.locator('#object-grid').evaluate((element) => (
+  const minWidthColumnCount = countGridColumns(await page.locator('#object-grid').evaluate((element) => (
     getComputedStyle(element).gridTemplateColumns
   )));
-  assert.equal(twoColumnCount, 2);
+  assert.equal(minWidthColumnCount, 3);
 
   const maxWidth = await resizeDrawer(page, 1000);
   assert.ok(Math.abs(maxWidth - expectedMax) <= 1, `expected ${expectedMax}px drawer, received ${maxWidth}`);
@@ -578,7 +578,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     manualZoom,
     minDrawerWidth: Math.round(minWidth),
     maxDrawerWidth: Math.round(maxWidth),
-    minGridColumns: twoColumnCount,
+    minGridColumns: minWidthColumnCount,
     maxGridColumns: threeColumnCount,
   };
 }
@@ -597,10 +597,10 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   const clearLayerButton = page.locator('#btn-editor-shell-clear-layer');
   const selectedLayer = (await activeScene(page)).selectedLayer;
   assert.ok(beforeNukeTerrain.tileData[selectedLayer].some(row => row.some(value => value >= 0)));
-  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', false, 'Enter');
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile and triangle on the current layer?', false, 'Enter');
   const { afterCancelledClearLayer } = await runEditorCommands(page, [{ op: 'capture', name: 'afterCancelledClearLayer' }]);
   assert.deepEqual(afterCancelledClearLayer.tileData, beforeNukeTerrain.tileData);
-  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', true, 'Space');
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile and triangle on the current layer?', true, 'Space');
   const { afterClearLayer, afterClearLayerUndo } = await runEditorCommands(page, [
     { op: 'capture', name: 'afterClearLayer' }, { op: 'undo' }, { op: 'capture', name: 'afterClearLayerUndo' },
   ]);
@@ -611,7 +611,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await clickConfirmed(
     page,
     nukeTerrainButton,
-    'Remove all tiles from Back, Gameplay, and Front?',
+    'Remove all tiles and triangles from Back, Gameplay, and Front?',
     false,
   );
   const { afterCancelledNukeTerrain } = await runEditorCommands(page, [
@@ -622,7 +622,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await clickConfirmed(
     page,
     nukeTerrainButton,
-    'Remove all tiles from Back, Gameplay, and Front?',
+    'Remove all tiles and triangles from Back, Gameplay, and Front?',
     true,
   );
   const { afterNukeTerrain, afterNukeTerrainUndo } = await runEditorCommands(page, [

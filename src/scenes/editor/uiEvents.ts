@@ -27,6 +27,13 @@ declare global {
   }
 }
 
+/** Tool choices must reach the shared dock in both editor scenes. */
+export function notifyEditorToolChosen(target: Window | null): void {
+  target?.dispatchEvent?.(new CustomEvent<EditorToolChosenDetail>(EDITOR_TOOL_CHOSEN_EVENT, {
+    detail: { tool: editorState.activeTool },
+  }));
+}
+
 /** Explicit invalidation for UI-only changes, separate from automatic state notifications. */
 export function refreshEditorUi(target: Window | null, detail: EditorUiRefreshDetail = {}): void {
   target?.dispatchEvent(new CustomEvent(EDITOR_UI_REFRESH_EVENT, { detail }));

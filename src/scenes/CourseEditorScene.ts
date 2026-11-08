@@ -121,7 +121,7 @@ import type { EditorCourseUiState, EditorMarkerPlacementMode, CourseWorkspaceSce
 import { EditorUiBridge } from './editor/uiBridge';
 import { drawDeadlyPitBoundary, drawEditorGrid } from './editor/grid';
 import {
-  applyEditorToolSelection,
+  chooseEditorTool,
   canRepeatSelectedEditorObject,
   isDragStampEditorTool,
 } from './editor/editorToolSelection';
@@ -338,7 +338,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
     if (!tool) return;
     event.preventDefault();
     event.stopPropagation();
-    applyEditorToolSelection(tool);
+    chooseEditorTool(tool);
     this.updateToolUi();
   };
 
@@ -453,7 +453,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
 
     if (event.code === 'Digit3') {
       event.preventDefault();
-      applyEditorToolSelection('copy');
+      chooseEditorTool('copy');
       this.updateToolUi();
       return;
     }
@@ -714,7 +714,7 @@ export class CourseEditorScene extends Phaser.Scene implements CourseWorkspaceSc
       onSetCoursePitsAreDeadly: (enabled) => this.setCoursePitsAreDeadly(enabled),
       onSetCoursePlayerHearts: (hearts) => this.setCoursePlayerHearts(hearts),
       onSelectTool: (tool) => {
-        applyEditorToolSelection(tool);
+        chooseEditorTool(tool);
         this.updateToolUi();
       },
       onClearCurrentLayer: () => {

@@ -13,8 +13,12 @@ export async function auditButtonRoles(page, phase) {
     const css = getComputedStyle(e), r = e.getBoundingClientRect();
     const label = e.matches('[data-editor-shell-action]') ? e.lastElementChild : e;
     const l = label?.getBoundingClientRect();
-    const tapsClear = !e.matches('[data-editor-shell-action]') || [[0.5,0.5],[0,0],[1,0],[0,1],[1,1]].every(([x,y]) => e.contains(document.elementFromPoint(r.left + 3 + x * (r.width - 6), r.top + 3 + y * (r.height - 6))));
-    return { id: e.id || e.dataset.editorShellAction, text: e.textContent?.trim(), role: e.dataset.buttonVariant, disabled: e.disabled || e.getAttribute('aria-disabled') === 'true', background: css.backgroundColor, color: css.color, opacity: css.opacity, radius: css.borderRadius, height: r.height, right: r.right, x: r.x, viewport: innerWidth, primary: e.dataset.buttonSize === 'lg', tapsClear, labelFits: !l || l.left >= r.left - 1 && l.right <= r.right + 1 && label.scrollWidth <= r.width + 1 };
+    const blockedBy = !e.matches('[data-editor-shell-action]') ? [] : [[0.5,0.5],[0,0],[1,0],[0,1],[1,1]].flatMap(([x,y]) => {
+      const hit = document.elementFromPoint(r.left + 3 + x * (r.width - 6), r.top + 3 + y * (r.height - 6));
+      return e.contains(hit) ? [] : [{ x, y, id: hit?.id, tag: hit?.tagName, className: hit?.getAttribute('class') }];
+    });
+    const tapsClear = blockedBy.length === 0;
+    return { id: e.id || e.dataset.editorShellAction, text: e.textContent?.trim(), role: e.dataset.buttonVariant, disabled: e.disabled || e.getAttribute('aria-disabled') === 'true', background: css.backgroundColor, color: css.color, opacity: css.opacity, radius: css.borderRadius, height: r.height, right: r.right, x: r.x, viewport: innerWidth, blockedBy, primary: e.dataset.buttonSize === 'lg', tapsClear, labelFits: !l || l.left >= r.left - 1 && l.right <= r.right + 1 && label.scrollWidth <= r.width + 1 };
   }));
   assert(states.length, `No action buttons visible during ${phase}`);
   const expectedRoles = { 'btn-world-play': phase === 'editor-test' ? 'neutral' : phase === 'play' ? 'danger' : 'play', 'btn-world-build': 'build', 'btn-world-edit': 'build', 'btn-world-course-builder': 'build', 'btn-world-comment': 'curate', 'btn-world-room-comment': 'curate', 'btn-room-sequence-comment': 'curate', 'btn-world-leaderboard': 'curate', 'btn-world-restart': 'play', 'btn-mobile-world-restart': 'play', 'btn-mobile-world-stop': phase === 'editor-test' ? 'neutral' : 'danger', back: 'neutral', share: 'curate', save: 'build', test: 'play', publish: 'play', 'btn-course-workbench-publish': 'play', 'btn-course-workbench-test': 'play', 'btn-course-workbench-save': 'build', 'btn-course-workbench-edit-course': 'build', 'btn-course-workbench-open-room': 'build', 'btn-course-workbench-unpublish': 'danger', 'btn-course-workbench-back-world': 'neutral' };
@@ -23,7 +27,7 @@ export async function auditButtonRoles(page, phase) {
     assert(state.x >= -1 && state.right <= state.viewport + 1, `${phase}: action outside viewport ${JSON.stringify(state)}`);
     assert.equal(state.radius, '0px', `${phase}/${state.id}: square action corners`);
     assert.equal(state.opacity, '1', `${phase}/${state.id}: opaque action state`);
-    assert(state.tapsClear, `${phase}/${state.id}: another control covers the action`);
+    assert(state.tapsClear, `${phase}/${state.id}: another control covers the action ${JSON.stringify(state)}`);
     assert(state.labelFits, `${phase}/${state.id}: clipped action label ${JSON.stringify(state)}`);
     if (state.disabled) {
       assert.equal(state.background, 'rgb(210, 202, 186)', `${phase}/${state.id}: quiet disabled action`);

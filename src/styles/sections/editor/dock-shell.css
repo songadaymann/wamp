@@ -97,7 +97,9 @@
     align-items: center;
     gap: 9px;
     min-width: 0;
-    padding: 10px calc(16px + var(--safe-right, 0px)) 10px 16px;
+    /* Reserve the fixed account menu's gutter, touch target and separation.
+       The two-row layout below puts actions on its second row instead. */
+    padding: 10px calc(72px + var(--safe-right, 0px)) 10px 16px;
     border-bottom: 2px solid var(--editor-retro-cream);
     background: #0b0b0b;
     color: var(--editor-retro-cream);
