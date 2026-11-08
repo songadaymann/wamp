@@ -578,7 +578,7 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
     manualZoom,
     minDrawerWidth: Math.round(minWidth),
     maxDrawerWidth: Math.round(maxWidth),
-    minGridColumns: twoColumnCount,
+    minGridColumns: minWidthColumnCount,
     maxGridColumns: threeColumnCount,
   };
 }
@@ -597,10 +597,10 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   const clearLayerButton = page.locator('#btn-editor-shell-clear-layer');
   const selectedLayer = (await activeScene(page)).selectedLayer;
   assert.ok(beforeNukeTerrain.tileData[selectedLayer].some(row => row.some(value => value >= 0)));
-  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', false, 'Enter');
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile and triangle on the current layer?', false, 'Enter');
   const { afterCancelledClearLayer } = await runEditorCommands(page, [{ op: 'capture', name: 'afterCancelledClearLayer' }]);
   assert.deepEqual(afterCancelledClearLayer.tileData, beforeNukeTerrain.tileData);
-  await clickConfirmed(page, clearLayerButton, 'Clear every tile on the current layer?', true, 'Space');
+  await clickConfirmed(page, clearLayerButton, 'Clear every tile and triangle on the current layer?', true, 'Space');
   const { afterClearLayer, afterClearLayerUndo } = await runEditorCommands(page, [
     { op: 'capture', name: 'afterClearLayer' }, { op: 'undo' }, { op: 'capture', name: 'afterClearLayerUndo' },
   ]);
@@ -611,7 +611,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await clickConfirmed(
     page,
     nukeTerrainButton,
-    'Remove all tiles from Back, Gameplay, and Front?',
+    'Remove all tiles and triangles from Back, Gameplay, and Front?',
     false,
   );
   const { afterCancelledNukeTerrain } = await runEditorCommands(page, [
@@ -622,7 +622,7 @@ async function verifyDetailedWorkflows(page, viewportOutputDir) {
   await clickConfirmed(
     page,
     nukeTerrainButton,
-    'Remove all tiles from Back, Gameplay, and Front?',
+    'Remove all tiles and triangles from Back, Gameplay, and Front?',
     true,
   );
   const { afterNukeTerrain, afterNukeTerrainUndo } = await runEditorCommands(page, [
