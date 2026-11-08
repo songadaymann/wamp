@@ -530,10 +530,10 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   assert.equal((await activeScene(page)).zoom, manualZoom);
 
   await page.locator('[data-editor-dock="stuff"]').click();
-  const twoColumnCount = countGridColumns(await page.locator('#object-grid').evaluate((element) => (
+  const minWidthColumnCount = countGridColumns(await page.locator('#object-grid').evaluate((element) => (
     getComputedStyle(element).gridTemplateColumns
   )));
-  assert.equal(twoColumnCount, 2);
+  assert.equal(minWidthColumnCount, 3);
 
   const maxWidth = await resizeDrawer(page, 1000);
   assert.ok(Math.abs(maxWidth - expectedMax) <= 1, `expected ${expectedMax}px drawer, received ${maxWidth}`);
