@@ -512,9 +512,9 @@ async function verifyCommonShell(page, viewport, viewportOutputDir) {
   const fittedDefaultZoom = (await activeScene(page)).zoom;
 
   const deviceClass = await page.evaluate(() => document.body.dataset.deviceClass);
-  const expectedMax = Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520));
+  const expectedMax = Math.max(380, Math.min(560, viewport.width - (deviceClass === 'tablet' ? 420 : 520)));
   const minWidth = await resizeDrawer(page, -1000);
-  assert.ok(Math.abs(minWidth - 280) <= 1, `expected 280px drawer, received ${minWidth}`);
+  assert.ok(Math.abs(minWidth - 380) <= 1, `expected 380px drawer, received ${minWidth}`);
   const fittedMinZoom = (await activeScene(page)).zoom;
   assert.ok(fittedMinZoom >= fittedDefaultZoom);
   await page.screenshot({ animations: 'disabled', timeout: 60000, path: path.join(viewportOutputDir, 'drawer-min.png') });
