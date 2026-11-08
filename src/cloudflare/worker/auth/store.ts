@@ -1,4 +1,3 @@
-import { storedRoomProtectionSql } from '../rooms/protection';
 import { createEmailClient, emailConfigured } from '../email/provider';
 import { API_TOKEN_SCOPES, type ApiTokenRecord, type ApiTokenScope, type AuthUser } from '../../../auth/model';
 import {
@@ -15,10 +14,8 @@ import type {
   RequestAuth,
   SessionJoinRow,
   UserRow,
-  UserStatsRow,
   WalletChallengeRow,
 } from '../core/types';
-import { sqlUserIdIsNotLegacyGeneratedOnly } from '../generatedUsers/leaderboardIsolation';
 import { mapSchoolAuthContextRow } from '../school/authContext';
 import { ensureFounderIdentityQualification } from '../progression/store';
 import { displayNameKey } from '../core/displayText';
@@ -31,79 +28,26 @@ const DEFAULT_PUBLIC_BASE_URL = 'https://wamp.land';
 export const API_TOKEN_PREFIX = 'epat_';
 const API_TOKEN_SCOPE_SET = new Set<string>(API_TOKEN_SCOPES);
 
-export async function findUserByEmail(env: Env, email: string): Promise<AuthUser | null> {
-  const row = await env.DB.prepare(
-    `
-      SELECT
-        id,
-        email,
-        wallet_address,
-        display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
-        created_at,
-        updated_at
-      FROM users
-      WHERE email = ?
-      LIMIT 1
-    `
-  )
-    .bind(email)
-    .first<UserRow>();
+const USER_COLUMNS = ['id', 'email', 'wallet_address', 'display_name', 'username',
+  'avatar_url', 'bio', 'selected_avatar_id', 'created_at', 'updated_at'].join(', ');
+const USER_PROFILE_COLUMNS = 'u.username, u.avatar_url, u.bio, u.selected_avatar_id';
 
-  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
+async function selectUser(env: Env, where: string, value: string): Promise<AuthUser | null> {
+  const row = await env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE ${where} LIMIT 1`)
+    .bind(value).first<UserRow>();
+  return row ? mapUserRow(row) : null;
+}
+
+export async function findUserByEmail(env: Env, email: string): Promise<AuthUser | null> {
+  return selectUser(env, 'email = ?', email);
 }
 
 export async function findUserByWallet(env: Env, walletAddress: string): Promise<AuthUser | null> {
-  const row = await env.DB.prepare(
-    `
-      SELECT
-        id,
-        email,
-        wallet_address,
-        display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
-        created_at,
-        updated_at
-      FROM users
-      WHERE wallet_address = ?
-      LIMIT 1
-    `
-  )
-    .bind(walletAddress)
-    .first<UserRow>();
-
-  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
+  return selectUser(env, 'wallet_address = ?', walletAddress);
 }
 
 export async function findUserById(env: Env, userId: string): Promise<AuthUser | null> {
-  const row = await env.DB.prepare(
-    `
-      SELECT
-        id,
-        email,
-        wallet_address,
-        display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
-        created_at,
-        updated_at
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `
-  )
-    .bind(userId)
-    .first<UserRow>();
-
-  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
+  return selectUser(env, 'id = ?', userId);
 }
 
 /**
@@ -122,17 +66,7 @@ export async function findUserByDisplayName(
   }
   const result = await env.DB.prepare(
     `
-      SELECT
-        id,
-        email,
-        wallet_address,
-        display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
-        created_at,
-        updated_at
+      SELECT ${USER_COLUMNS}
       FROM users
       WHERE lower(display_name) = ?
         OR display_name GLOB '*[^ -~]*'
@@ -146,39 +80,11 @@ export async function findUserByDisplayName(
   const matches = result.results.filter((row) => displayNameKey(row.display_name ?? '') === key);
   const row = matches.find((candidate) => candidate.id !== viewerUserId) ?? matches[0] ?? null;
 
-  return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
+  return row ? mapUserRow(row) : null;
 }
 
 export async function findUserByUsername(env: Env, username: string): Promise<AuthUser | null> {
-  try {
-    const row = await env.DB.prepare(
-      `
-        SELECT
-          id,
-          email,
-          wallet_address,
-          display_name,
-          username,
-          NULL AS avatar_url,
-          NULL AS bio,
-          NULL AS selected_avatar_id,
-          created_at,
-          updated_at
-        FROM users
-        WHERE lower(username) = lower(?)
-        LIMIT 1
-      `
-    )
-      .bind(username)
-      .first<UserRow>();
-
-    return row ? mapUserRow(await withUserProfileFields(env, row, row.id)) : null;
-  } catch (error) {
-    if (isMissingUsernameColumnError(error)) {
-      return null;
-    }
-    throw error;
-  }
+  return selectUser(env, 'lower(username) = lower(?)', username);
 }
 
 export async function createUserForEmail(env: Env, email: string): Promise<AuthUser> {
@@ -222,37 +128,22 @@ export async function createUserForWallet(env: Env, walletAddress: string): Prom
 }
 
 async function insertUserRecord(env: Env, user: AuthUser, now: string): Promise<void> {
-  try {
-    await env.DB.batch([
-      env.DB.prepare(
-        `
-          INSERT INTO users (id, email, wallet_address, display_name, username, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `
-      ).bind(
-        user.id,
-        user.email,
-        user.walletAddress,
-        user.displayName,
-        user.username ?? null,
-        now,
-        now
-      ),
-    ]);
-  } catch (error) {
-    if (!isMissingUsernameColumnError(error)) {
-      throw error;
-    }
-
-    await env.DB.batch([
-      env.DB.prepare(
-        `
-          INSERT INTO users (id, email, wallet_address, display_name, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `
-      ).bind(user.id, user.email, user.walletAddress, user.displayName, now, now),
-    ]);
-  }
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT INTO users (id, email, wallet_address, display_name, username, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+    ).bind(
+      user.id,
+      user.email,
+      user.walletAddress,
+      user.displayName,
+      user.username ?? null,
+      now,
+      now
+    ),
+  ]);
 }
 
 async function createUniqueUsername(
@@ -260,10 +151,6 @@ async function createUniqueUsername(
   displayName: string,
   fallbackSeed: string,
 ): Promise<string | null> {
-  if (!(await hasUsernameColumn(env))) {
-    return null;
-  }
-
   const seed = fallbackSeed.replace(/-/g, '').slice(0, 12);
   const base = deriveProfileUsernameBase(displayName, `player${seed}`);
   const trimmedBase = base.slice(0, PROFILE_USERNAME_MAX_LENGTH);
@@ -277,18 +164,6 @@ async function createUniqueUsername(
   }
 
   return `player-${seed.slice(0, 16)}`.slice(0, PROFILE_USERNAME_MAX_LENGTH);
-}
-
-async function hasUsernameColumn(env: Env): Promise<boolean> {
-  try {
-    await env.DB.prepare('SELECT username FROM users LIMIT 1').first<{ username: string | null }>();
-    return true;
-  } catch (error) {
-    if (isMissingUsernameColumnError(error)) {
-      return false;
-    }
-    throw error;
-  }
 }
 
 export async function attachWalletToUser(
@@ -499,25 +374,7 @@ export async function updateUserProfile(
     );
   }
 
-  try {
-    await env.DB.batch(statements);
-  } catch (error) {
-    if (isMissingUsernameColumnError(error) && updates.username !== undefined) {
-      throw new HttpError(
-        503,
-        'Profile sharing needs the latest database migration before usernames can be saved.'
-      );
-    }
-
-    if (isMissingUserProfileColumnError(error)) {
-      throw new HttpError(
-        503,
-        'Profile editing needs the latest database migration before avatar fields can be saved.'
-      );
-    }
-
-    throw error;
-  }
+  await env.DB.batch(statements);
 
   return {
     ...user,
@@ -535,81 +392,6 @@ export async function updateUserSelectedAvatarId(
   selectedAvatarId: string
 ): Promise<AuthUser> {
   return updateUserProfile(env, user, { selectedAvatarId });
-}
-
-export async function loadPublicUserProfileCourseCount(env: Env, userId: string): Promise<number> {
-  const row = await env.DB.prepare(
-    `
-      SELECT COUNT(*) AS count
-      FROM courses
-      WHERE owner_user_id = ?
-        AND published_json IS NOT NULL
-    `
-  )
-    .bind(userId)
-    .first<{ count: number | string | null }>();
-
-  return Number(row?.count ?? 0) || 0;
-}
-
-export async function loadUserStatsRow(env: Env, userId: string) {
-  return env.DB.prepare(
-    `
-      SELECT
-        user_id,
-        user_display_name,
-        total_points,
-        total_score,
-        total_deaths,
-        total_collectibles,
-        total_enemies_defeated,
-        total_checkpoints,
-        total_rooms_published,
-        completed_runs,
-        failed_runs,
-        abandoned_runs,
-        pvp_wins,
-        pvp_losses,
-        pvp_draws,
-        best_score,
-        fastest_clear_ms,
-        updated_at
-      FROM user_stats
-      WHERE user_id = ?
-        AND ${sqlUserIdIsNotLegacyGeneratedOnly('user_stats.user_id')}
-      LIMIT 1
-    `
-  )
-    .bind(userId)
-    .first<UserStatsRow>();
-}
-
-export async function loadPublishedRoomsByCreator(env: Env, userId: string) {
-  const result = await env.DB.prepare(
-    `
-      SELECT
-        id,
-        x,
-        y,
-        published_title,
-        published_json,
-        CASE WHEN ${storedRoomProtectionSql()} THEN 1 ELSE 0 END AS is_minted
-      FROM rooms
-      WHERE published_json IS NOT NULL
-        AND claimer_user_id = ?
-    `
-  )
-    .bind(userId)
-    .all<{
-      id: string;
-      x: number;
-      y: number;
-      published_title: string | null;
-      published_json: string;
-      is_minted?: number;
-    }>();
-
-  return result.results;
 }
 
 export async function loadMagicLinkByTokenHash(
@@ -631,10 +413,7 @@ export async function loadMagicLinkByTokenHash(
         u.email AS user_email,
         u.wallet_address,
         u.display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
+        ${USER_PROFILE_COLUMNS},
         u.created_at AS user_created_at
       FROM magic_link_tokens m
       JOIN users u ON u.id = m.user_id
@@ -645,7 +424,7 @@ export async function loadMagicLinkByTokenHash(
     .bind(tokenHash)
     .first<MagicLinkJoinRow>();
 
-  return row ? withUserProfileFields(env, row, row.user_id) : null;
+  return row;
 }
 
 export async function createMagicLinkToken(
@@ -673,13 +452,13 @@ export async function loadLiveEmailCodes(env: Env, email: string, nowIso: string
     SELECT m.id, m.user_id, m.email, m.token_hash, m.code_hash, m.code_attempts,
       m.expires_at, m.consumed_at, m.created_at,
       u.email AS user_email, u.wallet_address, u.display_name,
-      NULL AS username, NULL AS avatar_url, NULL AS bio, NULL AS selected_avatar_id,
+      ${USER_PROFILE_COLUMNS},
       u.created_at AS user_created_at
     FROM magic_link_tokens m JOIN users u ON u.id = m.user_id
     WHERE m.email = ? AND m.consumed_at IS NULL AND m.code_hash IS NOT NULL AND m.expires_at > ?
     ORDER BY m.created_at DESC, m.rowid DESC LIMIT 2
   `).bind(email, nowIso).all<MagicLinkJoinRow>();
-  return Promise.all(results.map((row) => withUserProfileFields(env, row, row.user_id)));
+  return results;
 }
 
 export async function hasRecentEmailSignInRequest(env: Env, email: string, since: string): Promise<boolean> {
@@ -913,10 +692,7 @@ export async function loadApiTokenAuth(
         u.email,
         u.wallet_address,
         u.display_name,
-        NULL AS username,
-        NULL AS avatar_url,
-        NULL AS bio,
-        NULL AS selected_avatar_id,
+        ${USER_PROFILE_COLUMNS},
         u.created_at AS user_created_at
       FROM api_tokens t
       JOIN users u ON u.id = t.user_id
@@ -931,18 +707,17 @@ export async function loadApiTokenAuth(
     return null;
   }
 
-  const hydratedRow = await withUserProfileFields(env, row, row.user_id);
   const scopes = parseApiTokenScopes(row.scopes_json);
   const user: AuthUser = {
-    id: hydratedRow.user_id,
-    email: hydratedRow.email,
-    walletAddress: hydratedRow.wallet_address,
-    displayName: hydratedRow.display_name,
-    username: hydratedRow.username ?? null,
-    createdAt: hydratedRow.user_created_at,
-    avatarUrl: hydratedRow.avatar_url,
-    bio: hydratedRow.bio,
-    selectedAvatarId: hydratedRow.selected_avatar_id,
+    id: row.user_id,
+    email: row.email,
+    walletAddress: row.wallet_address,
+    displayName: row.display_name,
+    username: row.username ?? null,
+    createdAt: row.user_created_at,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    selectedAvatarId: row.selected_avatar_id,
   };
 
   const lastUsedAt = new Date().toISOString();
@@ -1100,152 +875,6 @@ export function mapUserRow(row: UserRow): AuthUser {
     avatarUrl: row.avatar_url,
     bio: row.bio,
     selectedAvatarId: row.selected_avatar_id,
-  };
-}
-
-async function withUserProfileFields<
-  T extends {
-    username?: string | null;
-    avatar_url: string | null;
-    bio: string | null;
-    selected_avatar_id: string | null;
-  },
->(
-  env: Env,
-  row: T,
-  userId: string
-): Promise<T> {
-  const profileFields = await loadOptionalUserProfileFields(env, userId);
-  return {
-    ...row,
-    ...profileFields,
-  };
-}
-
-async function loadOptionalUserProfileFields(
-  env: Env,
-  userId: string
-): Promise<{
-  username: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  selected_avatar_id: string | null;
-}> {
-  try {
-    const row = await env.DB.prepare(
-      `
-        SELECT username, avatar_url, bio, selected_avatar_id
-        FROM users
-        WHERE id = ?
-        LIMIT 1
-      `
-    )
-      .bind(userId)
-      .first<{
-        username: string | null;
-        avatar_url: string | null;
-        bio: string | null;
-        selected_avatar_id: string | null;
-      }>();
-
-    return {
-      username: row?.username ?? null,
-      avatar_url: row?.avatar_url ?? null,
-      bio: row?.bio ?? null,
-      selected_avatar_id: row?.selected_avatar_id ?? null,
-    };
-  } catch (error) {
-    if (isMissingUsernameColumnError(error)) {
-      return loadOptionalUserProfileFieldsWithoutUsername(env, userId);
-    }
-    if (isMissingSelectedAvatarColumnError(error)) {
-      return loadLegacyOptionalUserProfileFields(env, userId);
-    }
-    if (isMissingUserProfileColumnError(error)) {
-      return {
-        username: null,
-        avatar_url: null,
-        bio: null,
-        selected_avatar_id: null,
-      };
-    }
-
-    throw error;
-  }
-}
-
-function isMissingUserProfileColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*(username|avatar_url|bio|selected_avatar_id)/i.test(error.message);
-}
-
-function isMissingUsernameColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*username/i.test(error.message);
-}
-
-function isMissingSelectedAvatarColumnError(error: unknown): boolean {
-  return error instanceof Error && /no such column:\s*selected_avatar_id/i.test(error.message);
-}
-
-async function loadOptionalUserProfileFieldsWithoutUsername(
-  env: Env,
-  userId: string
-): Promise<{
-  username: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  selected_avatar_id: string | null;
-}> {
-  try {
-    const row = await env.DB.prepare(
-      `
-        SELECT avatar_url, bio, selected_avatar_id
-        FROM users
-        WHERE id = ?
-        LIMIT 1
-      `
-    )
-      .bind(userId)
-      .first<{ avatar_url: string | null; bio: string | null; selected_avatar_id: string | null }>();
-
-    return {
-      username: null,
-      avatar_url: row?.avatar_url ?? null,
-      bio: row?.bio ?? null,
-      selected_avatar_id: row?.selected_avatar_id ?? null,
-    };
-  } catch (error) {
-    if (isMissingSelectedAvatarColumnError(error)) {
-      return loadLegacyOptionalUserProfileFields(env, userId);
-    }
-    throw error;
-  }
-}
-
-async function loadLegacyOptionalUserProfileFields(
-  env: Env,
-  userId: string
-): Promise<{
-  username: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  selected_avatar_id: string | null;
-}> {
-  const row = await env.DB.prepare(
-    `
-      SELECT avatar_url, bio
-      FROM users
-      WHERE id = ?
-      LIMIT 1
-    `
-  )
-    .bind(userId)
-    .first<{ avatar_url: string | null; bio: string | null }>();
-
-  return {
-    username: null,
-    avatar_url: row?.avatar_url ?? null,
-    bio: row?.bio ?? null,
-    selected_avatar_id: null,
   };
 }
 
