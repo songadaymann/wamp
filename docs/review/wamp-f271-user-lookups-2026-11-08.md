@@ -26,7 +26,9 @@ not change agent-token dispatch or the semantics of last-used timestamps.
   magic links, API-token profile/usage/revocation and database error propagation.
 - Initial aggregate run passed all 759 files/6,384 tests, then typecheck caught an
   unused session alias introduced during cleanup. Restored the unchanged session
-  implementation; final aggregate rerun is pending.
+  implementation. Final `npm run check` passes all stages: 759 files, 6,384 passing
+  tests, one expected failure and two skips; boot JavaScript is 678.8/680 KB brotli.
+- PR #362 holds the isolated change; exact-commit CI is pending.
 - No production account, room, email, token or database changes have been made.
 
 F271 remains unticked until delivery. Round 2 remains 102/248.
