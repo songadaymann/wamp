@@ -1,3 +1,4 @@
+import { notifyEditorToolChosen } from './uiEvents';
 import { getSmartBrushDefinition, isSmartBrushToolSupported } from '../../autotiling/registry';
 import { snapLineEnd, type EditorShapeKind, type TilePoint } from './shapeTiles';
 import { countOccupiedSelectionTiles } from './selectionPattern';
@@ -12,6 +13,12 @@ import {
 } from '../../config';
 import { getCustomSpriteDefinitionByObjectId } from '../../customSprites/registry';
 import { requestTriangleDeselect } from './triangleSelectionRelease';
+
+/** Apply a user tool choice and notify the shared dock. */
+export function chooseEditorTool(tool: ToolName, target: Window | null = globalThis as Window & typeof globalThis): void {
+  applyEditorToolSelection(tool);
+  notifyEditorToolChosen(target);
+}
 
 export function canRepeatSelectedEditorObject(): boolean {
   const customSprite = getCustomSpriteDefinitionByObjectId(editorState.selectedObjectId);
