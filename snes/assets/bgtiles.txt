@@ -1,0 +1,32 @@
+# BG1 background tiles, 4bpp. One hex digit per pixel ('.' = 0 = transparent).
+# Blank line separates tiles. Converted by tools/mkchr.py.
+
+# tile 0: blank
+........
+........
+........
+........
+........
+........
+........
+........
+
+# tile 1: blue diamond
+11111111
+11122111
+11233211
+12333321
+12333321
+11233211
+11122111
+11111111
+
+# tile 2: bricks
+66666666
+55565555
+55565555
+55565555
+66666666
+65555555
+65555555
+65555555
