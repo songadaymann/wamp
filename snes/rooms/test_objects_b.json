@@ -1,0 +1,2091 @@
+{
+ "id": "108,0",
+ "coordinates": {
+  "x": 108,
+  "y": 0
+ },
+ "title": "Test Objects B",
+ "goalIntroText": null,
+ "cameraMode": "follow",
+ "pitsAreDeadly": false,
+ "playerHearts": 3,
+ "background": "none",
+ "lighting": {
+  "mode": "off",
+  "darkness": 80,
+  "radius": 50
+ },
+ "weather": {
+  "mode": "off",
+  "intensity": 50
+ },
+ "music": null,
+ "goal": {
+  "type": "reach_exit",
+  "exit": {
+   "x": 488,
+   "y": 320
+  },
+  "timeLimitMs": null
+ },
+ "spawnPoint": {
+  "x": 40,
+  "y": 320
+ },
+ "tileData": {
+  "background": [
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+  ],
+  "terrain": [
+   [20,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,20],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,38,43,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,50,55,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [32,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,44],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [44,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,20,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,32],
+   [30,16,17,16,16,17,17,17,17,16,16,17,17,16,27,16,17,17,16,17,17,17,17,16,17,16,17,17,16,17,17,17,16,17,16,16,16,17,16,27],
+   [41,33,28,41,41,41,41,41,41,41,28,28,41,33,41,41,41,29,39,41,41,40,41,41,41,41,41,41,40,41,29,33,41,41,42,41,41,41,41,41]
+  ],
+  "foreground": [
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+  ]
+ },
+ "smartTerrain": {
+  "version": 2,
+  "editingDisabled": false,
+  "detailsEnabled": false,
+  "semanticCells": {
+   "terrain:0,0": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,0": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,0": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,0": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,1": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,1": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,1": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,1": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,2": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,2": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,2": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,2": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,3": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,3": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,3": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,3": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,4": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,4": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,4": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,4": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,5": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,5": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,5": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,5": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,6": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,6": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,6": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,6": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,7": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,7": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,7": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,7": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,8": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,8": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,8": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,8": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,9": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,9": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,9": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,9": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,10": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,10": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,10": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,10": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,11": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,11": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,11": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,11": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,12": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,12": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,12": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,12": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,13": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,13": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,13": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,13": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,14": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,14": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,14": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,14": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,15": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,15": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,15": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,15": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,16": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,16": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,16": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,16": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,17": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,17": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,18": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,18": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,19": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:14,19": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,19": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:1,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:2,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:3,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:4,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:5,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:6,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:7,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:8,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:9,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:10,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:11,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:12,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:13,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:14,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:15,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:16,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:17,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:18,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:19,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:22,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:23,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:24,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:25,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:26,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:27,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:28,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:29,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:30,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:31,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:32,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:33,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:34,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:35,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:36,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:37,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:38,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,20": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:0,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:1,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:2,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:3,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:4,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:5,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:6,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:7,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:8,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:9,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:10,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:11,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:12,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:13,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:14,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:15,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:16,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:17,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:18,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:19,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:20,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:21,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:22,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:23,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:24,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:25,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:26,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:27,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:28,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:29,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:30,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:31,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:32,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:33,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:34,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:35,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:36,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:37,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:38,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   },
+   "terrain:39,21": {
+    "styleId": "forest",
+    "brushId": "forest.ground",
+    "legacySource": true
+   }
+  },
+  "recipes": {},
+  "ownedOutputs": {},
+  "suppressedOutputParts": [],
+  "cells": {
+   "0,0": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,0": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,0": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,0": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,1": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,1": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,1": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,1": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,2": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,2": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,2": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,2": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,3": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,3": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,3": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,3": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,4": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,4": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,4": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,4": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,5": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,5": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,5": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,5": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,6": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,6": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,6": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,6": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,7": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,7": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,7": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,7": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,8": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,8": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,8": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,8": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,9": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,9": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,9": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,9": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,10": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,10": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,10": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,10": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,11": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,11": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,11": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,11": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,12": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,12": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,12": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,12": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,13": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,13": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,13": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,13": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,14": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,14": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,14": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,14": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,15": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,15": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,15": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,15": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,16": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,16": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,16": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,16": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,17": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,17": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,18": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,18": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,19": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "14,19": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,19": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "1,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "2,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "3,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "4,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "5,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "6,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "7,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "8,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "9,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "10,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "11,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "12,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "13,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "14,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "15,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "16,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "17,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "18,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "19,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "22,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "23,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "24,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "25,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "26,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "27,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "28,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "29,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "30,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "31,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "32,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "33,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "34,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "35,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "36,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "37,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "38,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,20": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "0,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "1,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "2,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "3,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "4,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "5,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "6,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "7,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "8,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "9,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "10,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "11,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "12,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "13,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "14,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "15,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "16,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "17,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "18,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "19,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "20,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "21,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "22,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "23,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "24,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "25,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "26,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "27,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "28,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "29,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "30,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "31,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "32,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "33,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "34,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "35,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "36,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "37,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "38,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   },
+   "39,21": {
+    "theme": "forest",
+    "material": "ground",
+    "styleId": "forest",
+    "brushId": "forest.ground"
+   }
+  },
+  "backdropCells": {},
+  "generatedDecorations": {},
+  "generatedBackgroundDecorations": {},
+  "suppressedDecorationSlots": []
+ },
+ "placedObjects": [
+  {
+   "id": "bat",
+   "x": 176,
+   "y": 208,
+   "instanceId": "obj_0dba4ecd-bf4c-475d-a276-3d80fd7bef13",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "checkpoint_flag",
+   "x": 80,
+   "y": 304,
+   "instanceId": "obj_a448aedb-f2b5-43c2-a8a9-d40e5c19227c",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "key",
+   "x": 120,
+   "y": 312,
+   "instanceId": "obj_81719f7f-cfde-4b9c-a083-51aaf120a018",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "saw",
+   "x": 161,
+   "y": 303,
+   "instanceId": "obj_e5c2ae8a-c71b-47da-a5ef-1588dd44f6e1",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "frog",
+   "x": 272,
+   "y": 304,
+   "instanceId": "obj_426c45ea-90d9-4aa8-af8f-12a598a76113",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "door_locked",
+   "x": 336,
+   "y": 296,
+   "instanceId": "obj_eb5b3307-833f-434d-aeb5-9ceef52eb305",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  }
+ ],
+ "customSprites": [],
+ "customTiles": [],
+ "version": 1,
+ "status": "draft",
+ "createdAt": "2026-01-01T00:00:00.000Z",
+ "updatedAt": "2026-01-01T00:00:00.000Z",
+ "publishedAt": null
+}

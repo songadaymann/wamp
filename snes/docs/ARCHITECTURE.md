@@ -1207,3 +1207,188 @@ then the controller rules of 5.5. On `test_flat` the ROM must match it
 Every test runs on snes9x and bsnes-mercury (`CORES` in the existing harness).
 The pipeline-demo tests are replaced when `main.s` is; `test_rom_header`,
 `test_labels`, `test_input_script_parser` and `test_cli` stay.
+
+---------------------------------------------------------------------------
+
+## Contract deviations
+
+### Asset converter (`tools/mkassets.py`, owner A)
+
+Minimal choices made where section 2 was open or could not be met literally.
+None changes a label, a table layout or a size named above.
+
+1. **Ladder frames 124 and 128 do not use the fixed grid (2.2).** Their art
+   reaches canvas row 34, two rows above the RA §2.5 grid (y 36..83). Because
+   the converter never crops, any base-sheet frame whose opaque box leaves the
+   grid falls back to the free greedy cover used for the slash frames. Both
+   frames need 4 cells (1 per scanline), so "base frames <= 6 cells" still
+   holds; only their `dx, dy` are off-grid. All other base frames use the grid;
+   all combat frames use the cover (measured 7/10/11/8/4 and 5/7/12/8/4/5).
+2. **Special tiles (gids 669-732) are nearest-colour quantised, not redrawn.**
+   Each non-blank cell of `special-traversal-v1.png` is mapped to whichever of
+   the packed BG palettes gives the lowest weighted RGB error (no dithering,
+   opaque mask unchanged). 19 cells have art (669-687), the other 45 are blank
+   (palette 0). Every other tileset is converted exactly (round trip tested).
+3. **Only 4 of the 6 BG palettes and 3 of the 5 object palettes are used.**
+   The packer fits the tile library in BG palettes 2-5 (15/13/15/7 colours) and
+   all object strips in OBJ palettes 1-3; BG 6-7 and OBJ 4-5 are zero-filled
+   in `bgpal.bin` / `objpal.bin` and free. Palette numbers are assigned in
+   order of the lowest library id / `OT_*` that needs them.
+4. **OBJ palette 6 (gold exit flag) is a majority-vote recolour.** Index `i`
+   of palette 6 is the colour that most often replaces index `i` of the
+   exit-flag palette in `flag-checkered-gold.png`. The two sheets are not a
+   pure palette swap: 83 pixels (under 6 % of the four used frames) differ
+   from the real gold sheet. Palette 7 (`flag-green.png`) maps exactly.
+5. **`gen/tile_library.json` is an additional output** (requested for the room
+   compiler; `gen/tilelib_map.json` stays exactly as specified). Schema is in
+   the docstring of `mkassets.py`: per gid `{id, palette, blank, tileset,
+   quantised, special, ruleset_v0, collision}`. `collision` is the fixed
+   `TC_*` class for the eight ruleset-v0 special gids; for other gids it is
+   `TC_SOLID`/`TC_EMPTY` copied from `tools/tilemeta.json` when that file
+   exists at conversion time and `null` otherwise. `tilemeta.json` remains the
+   collision source of truth and the per-cell merge of 3.2 stays in
+   `mkrooms.py`.
+6. **Two more tooling files: `gen/player.json` and `gen/objects.json`.** They
+   mirror the frame, animation, strip and piece tables for the preview, the
+   tests and the room converter (`objects.json` gives `rows` / `alias` per
+   type for the 28-row check).
+7. **`OT_SPRINT_CP` has its own piece list.** The alias shares
+   `OT_CHECKPOINT_FLAG`'s strip, palette, sequence and hold, but its piece is
+   the goal-marker offset `(-16, -30)` instead of the object's `(-16, -32)`.
+   Entries 0 and `OT_CRATE` are all-zero with pointers to an empty
+   sequence/piece list (`rows` = 0).
+8. **Binary file names** (not named by the contract): `tilelib.bin`,
+   `tilelibpal.bin`, `font.bin`, `hudchr.bin`, `bg3pal.bin`, `bgpal.bin`,
+   `objpal.bin`, `player0..1.bin` (one per `PLAYERGFXk` bank, frames never
+   split), `objgfx0.bin`. `HudChr` tiles 7-15 are blank.
+9. **Makefile.** `build/gen/.assets.stamp` runs the converter and is a
+   prerequisite of every object file; `-I build` is passed to ca65;
+   `make preview` writes contact sheets decoded from the generated data to
+   `build/preview/`; `make test` also runs `tests/test_assets.py`. Pillow is
+   required in addition to python3 + cc65.
+
+#### Verification addendum (asset converter, independent review)
+
+- All layouts of section 2 were re-checked from a linked image with a separate
+  decoder (tile library by bank/address, player frames through the 2/4-DMA
+  upload model, object pieces through `ObjGfxTable`): every non-special tile,
+  all 69 player frames and every object strip frame equal the source PNG
+  pixels after 15-bit reduction; special tiles keep their opaque mask.
+- `gen/tile_library.json` (deviation 5), refined: `special` now uses the kind
+  names of `tools/tilemeta.json` (669 is `breakableBrick`), the converter
+  fails if `tilemeta.json` disagrees about a gid's kind, and the kind-less
+  special atlas cells (685, 686, 688-732) get `TC_SOLID`/`TC_EMPTY` from
+  `tilemeta.json` like every plain tile. Special kinds outside ruleset v0
+  keep `collision: null` and `ruleset_v0: false`. Binary outputs unchanged.
+
+### Golden physics traces (`tests/golden/`, web-game reference)
+
+Addendum to 7.3; it changes no label, layout or constant.
+
+- `tests/golden/*.json`: 47 per-step traces (45 scenarios + 2 quirk probes
+  `q*`) recorded from the web game's own movement controller on unmodified
+  Phaser 3.90.0 Arcade physics; schema, units (px, px/s, anchor = body
+  centre x / feet y = `pl_x` / `pl_y`), input scripts and findings are in
+  `tests/golden/README.md`. `python3 tests/golden/verify_traces.py` is an
+  independent consistency check; `python3 tests/golden/layout_to_room.py
+  <trace>` emits the RoomSnapshot that `tools/mkrooms.py` compiles to a blob
+  whose collision plane equals the trace's mask (`--check` proves it for all
+  47). Regenerate with `tests/golden/gen/run.sh [SCRATCH_DIR]` (node + npm,
+  installs only in the scratch directory).
+- Use: the float traces are compared with `tests/physmodel.py` / the ROM with
+  a tolerance (events exact or +-1 frame, `|dy| <= 1 px`, `|dx| <= 0.5 px`);
+  the ROM is compared with `physmodel.py` exactly.
+- Web-game behaviour shown by the traces. Items 1-3 differ from this
+  contract (kept as port behaviour unless the lead decides otherwise);
+  4-5 are reading aids for comparing a trace with WRAM:
+  1. **Lip step-up.** Arcade resolves a convex tile corner on the axis of
+     smaller penetration, so a falling player whose feet are at most as far
+     below a lip as his side is inside it (<= 2.5 px at run speed) is lifted
+     onto the lip. `Coll_MoveX` then `Coll_MoveY` (5.3) blocks instead.
+  2. **7.3 "gap assist ... with Down held the player falls in"** is the
+     port's behaviour (C4b + 5.3). In the web game the crawling player still
+     crosses a 1-tile hole because of (1) (`12_gap_down_held`); he falls in
+     only when the horizontal input is released over the hole
+     (`12_gap_stop_in_hole`).
+  3. **One-way cells next to solid cells.** In the web game a one-way tile
+     removes the facing side of an orthogonally adjacent solid tile and the
+     top of a solid tile below it (`q1_oneway_hides_solid_face`): the player
+     sinks into / walks through that solid. The port does not reproduce it;
+     authored rooms should avoid the adjacency.
+  4. **Down + Jump** starts the drop-through on any ground in the web game
+     (`vy = 86` for one step on solid ground, `11_crouch_idle` step 36).
+  5. `blocked.left/right` (wall contact) exists in the web game only on
+     frames whose movement went into the wall; `pl_vx` read at the end of a
+     frame is +-150 while pushing (the collision zeroes it, the controller
+     sets it again).
+
+### Contract deviations (rooms)
+
+Room pipeline (`tools/mkrooms.py`, `tools/roomsim.py`, `rooms/`, owner F).
+The blob (3.1-3.2), RLE1, the world index (3.4), the collision table and every
+limit are implemented exactly as written; `tests/test_rooms.py` re-derives
+tiles, collision and objects from the source JSON independently and compares
+them with the decoded blobs. The points below are where 1.3 / 3 were open,
+contradicted by the task brief, or need a content rule.
+
+1. **File locations (1.3).** World rooms are `rooms/world/<x>,<y>.json`, test
+   rooms `rooms/test_*.json`; `rooms/world.json` lists them with the relative
+   path in `file` (`"world/0,0.json"`). The authoring scripts live in
+   `rooms/src/` (`buildrooms.mts`, `roomdefs.mts`, `dump_tilemeta.mts`,
+   `build.sh`), not in `tools/`. `rooms/src/build.sh` makes the scratch copy of
+   `/home/user/wamp/src`, installs `@tonaljs/key` + `tonal` there and rewrites
+   the JSON and `tools/tilemeta.json`; it is not part of `make`. Room `name`
+   in `gen/rooms.json` is the file stem (`"0,0"`, `"test_flat"`).
+2. **Inputs.** `mkrooms.py` reads `gen/tile_library.json` (gid -> library id
+   and the `blank` flag) and falls back to `gen/tilelib_map.json`, then to the
+   table of 2.1. Collision comes only from `tools/tilemeta.json` (which also
+   carries a `tileset` key per gid). `gen/objects.json` supplies strip rows and
+   piece sizes; without it the table of 2.3 is used and the density lint is off.
+3. **Blank atlas cells take no slot.** A gid whose library tile has no opaque
+   pixel is stored as slot 0 (its collision class is unaffected). A foreground
+   cell with blank art does not hide the terrain cell under it. Attr bytes of
+   slot-0 cells are 0.
+4. **Extra outputs.** `gen/rooms.inc` also defines `ROOM_START` and asserts at
+   link time that every `Room_<i>` sits where `gen/rooms.json` says (`bank`,
+   `addr`); blobs are `gen/rooms/NN_<name>.bin`; `gen/worldindex.bin` is the
+   index as bytes (tests only; the `.inc` builds `WorldIndex` from the labels).
+   `gen/rooms.json` rows carry `title, goal, size, tiles, objects, strip_rows,
+   bin, bank, addr, start` besides the six contract keys.
+5. **Objects outside ruleset v0** are dropped with a warning (3.2). The task
+   brief asked for an error: `mkrooms.py --strict` turns every warning into an
+   error; the checked-in rooms compile without warnings. A goal that depends on
+   dropped objects (`collect_target` short of collectibles, `defeat_all` with
+   no enemy left), unknown gids, unknown goal types and special kinds outside
+   the ruleset (incl. 671 `movingPlatformTile`) are always errors.
+6. **Snow, lava and water rooms are not smart-brush output.** WAMP has solid
+   smart brushes only for forest/desert/cave/gothic; those two themes use
+   `applyRegisteredSmartBrushCells` (details on). For snow, lava and water the
+   generator has a small 9-slice tiler (`SLICES` in `buildrooms.mts`) and writes
+   the tiles with `set_tiles`; their `smartTerrain` is empty. Every snapshot
+   passes `validateRoomSnapshotForWrite` and the publish validator.
+7. **Water is authored on the background layer** (gid 682 on BG2, class
+   `TC_WATER`), so objects and terrain decorations can share its cells.
+8. **Vertical links are one-way hatches (content rule).** The upper room has
+   one-way cells in row 21 over open cells in row 0 of the lower room, which
+   has a ladder top / block at y = 16 below them: a normal jump (apex 53 px)
+   reaches y' = 315 in the upper room and lands on the hatch (top 336);
+   Down+Jump drops back. This relies on 4.6 as written (ring row -1 answers
+   `TC_ONEWAY`, which never blocks upward) and on the transition keeping
+   `pl_vy`. Bare holes between rooms are not used (a test rejects them), and
+   a room above a neighbour never has deadly pits. The two hatch cells of
+   (1,0) and (2,-1) are the only one-way cells that touch solid cells
+   (cf. golden-trace item 3); all other one-way platforms are free-standing.
+9. **Pools must have a flush exit (content rule).** A swim kick tops out about
+   20 px above the surface, so every pool has a bank at or below its surface.
+10. **Test rooms (7.2), choices where the text was open.** `test_flat`: the
+   hole is 1 tile wide and 1 deep (row 21 stays solid), steps at columns 24-26
+   (3 tiles) and 30-32 (4 tiles), ledge at row 16 columns 35-37, columns 1-19
+   are empty above the floor. `test_edge_b`: the seam block is the single cell
+   (0,19); crossing the seam needs a jump over it. `test_tiles` also has a
+   one-way cell inside water (`TC_ONEWAY_WATER`). Coordinates: x = 100, 102,
+   104, 106, 108 and the pair 110/111, y = 0.
+11. **`tools/roomsim.py`** (not in the contract) is a conservative integer
+   model of 5.2-5.3 (no wall jump, corner correction, gap assist or damage
+   boosting) used to prove that each world room's goal and every seam-to-seam
+   route is reachable; `make roomcheck` prints the report, `make roomshots`
+   renders every blob to `build/gen/rooms/png/`.

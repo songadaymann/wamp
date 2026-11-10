@@ -1,0 +1,380 @@
+{
+ "01_jump_held": {
+  "press_step": 6,
+  "apex_px": 53.666667,
+  "apex_step": 29,
+  "apex_steps_after_press": 23,
+  "airborne_steps": 47,
+  "land_step": 54,
+  "first_step_at_launch_height": 53,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_tap": {
+  "press_step": 6,
+  "apex_px": 17.92267,
+  "apex_step": 16,
+  "apex_steps_after_press": 10,
+  "airborne_steps": 23,
+  "land_step": 30,
+  "first_step_at_launch_height": 30,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_02": {
+  "press_step": 6,
+  "apex_px": 21.359049,
+  "apex_step": 16,
+  "apex_steps_after_press": 10,
+  "airborne_steps": 25,
+  "land_step": 32,
+  "first_step_at_launch_height": 32,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_03": {
+  "press_step": 6,
+  "apex_px": 24.640775,
+  "apex_step": 17,
+  "apex_steps_after_press": 11,
+  "airborne_steps": 27,
+  "land_step": 34,
+  "first_step_at_launch_height": 34,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_04": {
+  "press_step": 6,
+  "apex_px": 27.728056,
+  "apex_step": 18,
+  "apex_steps_after_press": 12,
+  "airborne_steps": 28,
+  "land_step": 35,
+  "first_step_at_launch_height": 35,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_06": {
+  "press_step": 6,
+  "apex_px": 33.319285,
+  "apex_step": 20,
+  "apex_steps_after_press": 14,
+  "airborne_steps": 32,
+  "land_step": 39,
+  "first_step_at_launch_height": 39,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_08": {
+  "press_step": 6,
+  "apex_px": 38.228056,
+  "apex_step": 21,
+  "apex_steps_after_press": 15,
+  "airborne_steps": 34,
+  "land_step": 41,
+  "first_step_at_launch_height": 41,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "02_jump_hold_12": {
+  "press_step": 6,
+  "apex_px": 45.866283,
+  "apex_step": 24,
+  "apex_steps_after_press": 18,
+  "airborne_steps": 39,
+  "land_step": 46,
+  "first_step_at_launch_height": 46,
+  "x_at_press": 104,
+  "x_at_land": 104,
+  "distance_px": 0
+ },
+ "03_jump_run_right": {
+  "press_step": 16,
+  "apex_px": 53.666667,
+  "apex_step": 39,
+  "apex_steps_after_press": 23,
+  "airborne_steps": 47,
+  "land_step": 64,
+  "first_step_at_launch_height": 63,
+  "x_at_press": 129,
+  "x_at_land": 249,
+  "distance_px": 120
+ },
+ "04_ledge_fall": {
+  "first_airborne_step": 25,
+  "last_grounded_step": 24,
+  "land_step": 55
+ },
+ "04_coyote_air1": {
+  "first_airborne_step": 25,
+  "press_step": 25,
+  "airborne_step_of_press": 1,
+  "jumped": true,
+  "vy_after_press_step": -280,
+  "min_y": 170.527778,
+  "land_step": 88
+ },
+ "04_coyote_air6": {
+  "first_airborne_step": 25,
+  "press_step": 30,
+  "airborne_step_of_press": 6,
+  "jumped": true,
+  "vy_after_press_step": -280,
+  "min_y": 174.416667,
+  "land_step": 93
+ },
+ "04_coyote_air7": {
+  "first_airborne_step": 25,
+  "press_step": 31,
+  "airborne_step_of_press": 7,
+  "jumped": false,
+  "vy_after_press_step": 81.666667,
+  "min_y": 224,
+  "land_step": 55
+ },
+ "04_coyote_air6_tap": {
+  "first_airborne_step": 25,
+  "press_step": 30,
+  "jumped": true,
+  "min_y": 197.46244
+ },
+ "05_buffer_1_before_landing": {
+  "land_step": 25,
+  "press_step": 24,
+  "steps_before_landing": 1,
+  "jumped_on_landing_step": true,
+  "vy_after_landing_step": -280,
+  "prot_ms_after_landing_step": 70
+ },
+ "05_buffer_7_before_landing": {
+  "land_step": 25,
+  "press_step": 18,
+  "steps_before_landing": 7,
+  "jumped_on_landing_step": true,
+  "vy_after_landing_step": -280,
+  "prot_ms_after_landing_step": 70
+ },
+ "05_buffer_8_before_landing": {
+  "land_step": 25,
+  "press_step": 17,
+  "steps_before_landing": 8,
+  "jumped_on_landing_step": false,
+  "vy_after_landing_step": 0,
+  "prot_ms_after_landing_step": 0
+ },
+ "05_buffer_7_tap": {
+  "land_step": 25,
+  "press_step": 18,
+  "jumped_on_landing_step": true,
+  "apex_px": 30.620893
+ },
+ "06_wall_slide_jump": {
+  "ground_jump_step": 18,
+  "wall_jump_steps": "46,71,96",
+  "wall_jump_count": 3,
+  "slide_vy_after_controller": 70,
+  "land_step": 221
+ },
+ "06_wall_jump_lock": {
+  "wall_jump_step": 46,
+  "steps_with_vx_205_after_controller": 8,
+  "first_step_vx_negative": 54
+ },
+ "07_corner_01px": {
+  "press_step": 6,
+  "overlap_px": 1,
+  "corrections": 1,
+  "shift_px": 1,
+  "bump_step": 11,
+  "x_final": 165,
+  "apex_px": 51.25
+ },
+ "07_corner_02px": {
+  "press_step": 6,
+  "overlap_px": 2,
+  "corrections": 1,
+  "shift_px": 2,
+  "bump_step": 11,
+  "x_final": 165,
+  "apex_px": 51.25
+ },
+ "07_corner_03px": {
+  "press_step": 6,
+  "overlap_px": 3,
+  "corrections": 1,
+  "shift_px": 3,
+  "bump_step": 11,
+  "x_final": 165,
+  "apex_px": 51.25
+ },
+ "07_corner_04px": {
+  "press_step": 6,
+  "overlap_px": 4,
+  "corrections": 1,
+  "shift_px": 4,
+  "bump_step": 11,
+  "x_final": 165,
+  "apex_px": 51.25
+ },
+ "07_corner_05px": {
+  "press_step": 6,
+  "overlap_px": 5,
+  "corrections": 0,
+  "shift_px": 0,
+  "bump_step": 11,
+  "x_final": 160,
+  "apex_px": 18
+ },
+ "07_corner_10px": {
+  "press_step": 6,
+  "overlap_px": 10,
+  "corrections": 0,
+  "shift_px": 0,
+  "bump_step": 11,
+  "x_final": 155,
+  "apex_px": 18
+ },
+ "07_corner_left_03px": {
+  "corrections": 1,
+  "shift_px": -3,
+  "x_final": 155
+ },
+ "08_fall_terminal": {
+  "first_step_vy_500": 43,
+  "land_step": 57,
+  "max_px_per_step": 8.333334
+ },
+ "09_wall_stop": {
+  "first_blocked_step": 40,
+  "x_at_wall": 187
+ },
+ "10_one_way": {
+  "press_step": 6,
+  "land_on_platform_step": 38,
+  "platform_top_y": 272,
+  "drop_press_step": 49,
+  "vy_after_drop_step": 86,
+  "land_on_floor_step": 65
+ },
+ "10_one_way_walk_off_and_under": {
+  "first_airborne_step": 18,
+  "land_on_floor_step": 39,
+  "jump_press_step": 56,
+  "land_on_platform_step": 88,
+  "ever_blocked_sideways_or_up": false,
+  "final_x": 82.5,
+  "final_y": 272
+ },
+ "11_crouch_crawl": {
+  "first_blocked_step": 27,
+  "x_blocked": 155,
+  "crouch_start_step": 36,
+  "stand_up_step": 127,
+  "x_at_stand_up": 261.166667
+ },
+ "11_crouch_idle": {},
+ "12_gap_assist": {
+  "max_y": 320,
+  "min_y": 320,
+  "always_grounded": true,
+  "steps_without_blocked_down": "25,26,27"
+ },
+ "12_gap_assist_left": {
+  "max_y": 320,
+  "always_grounded": true
+ },
+ "12_gap_down_held": {
+  "first_airborne_step": 47,
+  "airborne_steps": 3,
+  "max_y": 321.166667,
+  "final_y": 320
+ },
+ "12_gap_stop_in_hole": {
+  "first_airborne_step": 26,
+  "final_x": 203,
+  "final_y": 336
+ },
+ "12_gap_two_tiles": {
+  "first_airborne_step": 25,
+  "final_y": 336
+ },
+ "13_butt_stomp": {
+  "stomp_start_step": 21,
+  "hover_steps": 12,
+  "first_fall_step": 33,
+  "land_step": 39
+ },
+ "14_gap_7_tiles_last_ground": {
+  "gap_px": 112,
+  "press_step": 31,
+  "x_at_press": 162.5,
+  "land_step": 79,
+  "cleared": true,
+  "x_at_land": 282.5,
+  "y_at_land": 320,
+  "max_y_before_landing": 320
+ },
+ "14_gap_8_tiles_last_ground": {
+  "gap_px": 128,
+  "press_step": 31,
+  "x_at_press": 162.5,
+  "land_step": 85,
+  "cleared": false,
+  "x_at_land": 283,
+  "y_at_land": 336,
+  "max_y_before_landing": 334.972222
+ },
+ "14_gap_8_tiles_coyote6": {
+  "gap_px": 128,
+  "press_step": 37,
+  "x_at_press": 177.5,
+  "land_step": 84,
+  "cleared": true,
+  "x_at_land": 295,
+  "y_at_land": 320,
+  "max_y_before_landing": 324.083333
+ },
+ "14_gap_9_tiles_coyote6": {
+  "gap_px": 144,
+  "press_step": 37,
+  "x_at_press": 177.5,
+  "land_step": 88,
+  "cleared": false,
+  "x_at_land": 299,
+  "y_at_land": 336,
+  "max_y_before_landing": 334.972222
+ },
+ "14_step_3_tiles": {
+  "press_step": 20,
+  "ledge_top_y": 272,
+  "reached": true,
+  "final_x": 374.5,
+  "final_y": 272,
+  "min_y": 266.333333
+ },
+ "14_step_4_tiles": {
+  "press_step": 20,
+  "ledge_top_y": 256,
+  "reached": false,
+  "final_x": 187,
+  "final_y": 320,
+  "min_y": 266.333333
+ },
+ "q1_oneway_hides_solid_face": {
+  "final_x": 255,
+  "passed_through_solid_tile": true,
+  "max_y": 328.75,
+  "ever_blocked_right": false
+ },
+ "q2_solid_tile_control": {
+  "final_x": 171,
+  "ever_blocked_right": true
+ }
+}

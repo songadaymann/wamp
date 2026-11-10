@@ -1,0 +1,100 @@
+{
+ "start": "world/0,0.json",
+ "rooms": [
+  {
+   "file": "world/0,0.json",
+   "x": 0,
+   "y": 0
+  },
+  {
+   "file": "world/1,0.json",
+   "x": 1,
+   "y": 0
+  },
+  {
+   "file": "world/2,0.json",
+   "x": 2,
+   "y": 0
+  },
+  {
+   "file": "world/3,0.json",
+   "x": 3,
+   "y": 0
+  },
+  {
+   "file": "world/2,-1.json",
+   "x": 2,
+   "y": -1
+  },
+  {
+   "file": "world/3,-1.json",
+   "x": 3,
+   "y": -1
+  },
+  {
+   "file": "world/-1,0.json",
+   "x": -1,
+   "y": 0
+  },
+  {
+   "file": "world/-2,0.json",
+   "x": -2,
+   "y": 0
+  },
+  {
+   "file": "world/1,1.json",
+   "x": 1,
+   "y": 1
+  },
+  {
+   "file": "world/0,1.json",
+   "x": 0,
+   "y": 1
+  },
+  {
+   "file": "world/2,1.json",
+   "x": 2,
+   "y": 1
+  },
+  {
+   "file": "world/3,1.json",
+   "x": 3,
+   "y": 1
+  },
+  {
+   "file": "test_flat.json",
+   "x": 100,
+   "y": 0
+  },
+  {
+   "file": "test_walls.json",
+   "x": 102,
+   "y": 0
+  },
+  {
+   "file": "test_tiles.json",
+   "x": 104,
+   "y": 0
+  },
+  {
+   "file": "test_objects_a.json",
+   "x": 106,
+   "y": 0
+  },
+  {
+   "file": "test_objects_b.json",
+   "x": 108,
+   "y": 0
+  },
+  {
+   "file": "test_edge_a.json",
+   "x": 110,
+   "y": 0
+  },
+  {
+   "file": "test_edge_b.json",
+   "x": 111,
+   "y": 0
+  }
+ ]
+}

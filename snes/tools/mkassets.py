@@ -45,9 +45,12 @@ tile_library.json schema (defined here; the contract leaves it open):
     }
   "collision": for the eight ruleset-v0 special gids it is the fixed class of
   the kind (670 TC_ONEWAY, 672/673 TC_CONV_L/R, 674 TC_ICE, 676 TC_BOUNCE,
-  677 TC_DAMAGE, 682 TC_WATER, 687 TC_CRUMBLE).  For every other gid it is
+  677 TC_DAMAGE, 682 TC_WATER, 687 TC_CRUMBLE).  Special kinds outside ruleset
+  v0 (669, 671, 675, 678-681, 683, 684) are always null.  For every other gid
+  (including the kind-less special atlas cells 685, 686, 688-732) it is
   TC_SOLID / TC_EMPTY taken from tools/tilemeta.json ("solid") when that file
-  exists, else null.  It is the class of the gid ON THE TERRAIN LAYER, alone in
+  exists, else null.  "special" uses the kind names of tilemeta.json; the
+  converter fails if tilemeta.json disagrees about a gid's kind.  It is the class of the gid ON THE TERRAIN LAYER, alone in
   its cell; the per-cell merge rules of contract 3.2 stay in mkrooms.py, and
   tools/tilemeta.json remains the collision source of truth.
 """
@@ -89,7 +92,7 @@ TC = {"TC_EMPTY": 0x00, "TC_DAMAGE": 0x01, "TC_WATER": 0x02, "TC_ONEWAY": 0x03,
 
 # special gid -> (kind, in ruleset v0, collision class)
 SPECIAL_KINDS = {
-    669: ("brick", False, None), 670: ("oneWayPlatform", True, "TC_ONEWAY"),
+    669: ("breakableBrick", False, None), 670: ("oneWayPlatform", True, "TC_ONEWAY"),
     671: ("movingPlatformTile", False, None),
     672: ("conveyorLeft", True, "TC_CONV_L"), 673: ("conveyorRight", True, "TC_CONV_R"),
     674: ("ice", True, "TC_ICE"), 675: ("sticky", False, None),
@@ -395,15 +398,18 @@ def build_tilelib(assets):
 # ---------------------------------------------------------------------------
 # player
 # ---------------------------------------------------------------------------
-def player_cells(grid):
-    """-> list of (gx, gy) canvas top-left of 16x16 cells, row-major."""
+def player_cells(grid, allow_grid=True):
+    """-> list of (gx, gy) canvas top-left of 16x16 cells, row-major.
+    Base-sheet frames use the fixed RA 2.5 grid when their art fits inside it
+    (ladder 124/128 reach 2 px above it and fall back to the free cover so no
+    pixel is cropped); combat frames always use the free greedy cover."""
     H, W = len(grid), len(grid[0])
     opaque = [(x, y) for y in range(H) for x in range(W) if grid[y][x] is not None]
     if not opaque:
         raise SystemExit("mkassets: empty player frame")
     x0 = min(p[0] for p in opaque); x1 = max(p[0] for p in opaque) + 1
     y0 = min(p[1] for p in opaque); y1 = max(p[1] for p in opaque) + 1
-    if x0 >= PL_GRID_X[0] and x1 <= PL_GRID_X[-1] + 16 and y0 >= PL_GRID_Y[0] and y1 <= PL_GRID_Y[-1] + 16:
+    if allow_grid and x0 >= PL_GRID_X[0] and x1 <= PL_GRID_X[-1] + 16 and y0 >= PL_GRID_Y[0] and y1 <= PL_GRID_Y[-1] + 16:
         cells = []
         for gy in PL_GRID_Y:
             for gx in PL_GRID_X:
@@ -448,7 +454,7 @@ def build_player(assets):
                 if (fr["w"], fr["h"]) != (96, 84):
                     raise SystemExit("mkassets: player frame %s %d is not 96x84" % key)
                 grid = grab(img, fr["x"], fr["y"], 96, 84)
-                cells, mode = player_cells(grid)
+                cells, mode = player_cells(grid, allow_grid=(sheet == "base"))
                 if len(cells) > PL_MAX_CELLS:
                     raise SystemExit("mkassets: player frame %s %d needs %d cells (max %d)"
                                      % (sheet, i, len(cells), PL_MAX_CELLS))
@@ -764,8 +770,13 @@ def convert(assets=DEFAULT_ASSETS, out=DEFAULT_OUT, quiet=False):
         kind, inrule, cls = SPECIAL_KINDS.get(gid, (None, True, None))
         if t["tileset"] == "special" and gid not in SPECIAL_KINDS:
             inrule = False
-        if cls is None and t["tileset"] != "special" and meta is not None and str(gid) in meta:
-            cls = "TC_SOLID" if meta[str(gid)].get("solid") else "TC_EMPTY"
+        if meta is not None and str(gid) in meta:
+            m = meta[str(gid)]
+            if m.get("kind") != kind:
+                raise SystemExit("mkassets: gid %d: tools/tilemeta.json kind %r != converter kind %r"
+                                 % (gid, m.get("kind"), kind))
+            if kind is None:    # plain tile (incl. kind-less special atlas cells)
+                cls = "TC_SOLID" if m.get("solid") else "TC_EMPTY"
         tj[str(gid)] = {"id": i, "palette": t["palette"], "blank": t["palette"] == 0,
                         "tileset": t["tileset"], "quantised": t["quantised"],
                         "special": kind, "ruleset_v0": inrule, "collision": cls}

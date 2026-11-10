@@ -1,0 +1,2453 @@
+{
+ "id": "-1,0",
+ "coordinates": {
+  "x": -1,
+  "y": 0
+ },
+ "title": "Dune Dash",
+ "goalIntroText": null,
+ "cameraMode": "follow",
+ "pitsAreDeadly": true,
+ "playerHearts": 3,
+ "background": "desert",
+ "lighting": {
+  "mode": "off",
+  "darkness": 80,
+  "radius": 50
+ },
+ "weather": {
+  "mode": "off",
+  "intensity": 50
+ },
+ "music": null,
+ "goal": {
+  "type": "checkpoint_sprint",
+  "checkpoints": [
+   {
+    "x": 504,
+    "y": 288
+   },
+   {
+    "x": 248,
+    "y": 224
+   }
+  ],
+  "finish": {
+   "x": 56,
+   "y": 288
+  },
+  "timeLimitMs": null
+ },
+ "spawnPoint": {
+  "x": 584,
+  "y": 288
+ },
+ "tileData": {
+  "background": [
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,109,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,109,-1],
+   [-1,109,-1,-1,-1,-1,-1,-1,-1,-1,-1,121,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,109,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,121,-1],
+   [-1,133,-1,-1,79,-1,-1,-1,-1,-1,-1,133,-1,-1,-1,-1,-1,-1,-1,75,-1,-1,-1,-1,-1,133,-1,-1,-1,-1,-1,-1,-1,-1,-1,80,-1,-1,133,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+  ],
+  "terrain": [
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,98,89,103,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,110,113,115,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,98,88,99,113,102,89,90,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,75,-1,-1,-1,-1,-1,-1,-1,-1,-1,110,113,101,100,113,113,115,77,-1,-1,-1,-1,-1,-1,-1,92,77,-1,-1,76,-1,-1,-1,-1,76,-1,-1,-1],
+   [89,89,88,89,88,672,672,672,672,672,672,89,99,113,113,113,113,100,102,103,-1,-1,-1,98,88,89,89,99,88,673,673,673,673,673,673,88,89,88,88,89],
+   [113,113,112,113,113,113,113,113,113,113,105,112,113,113,113,113,113,113,113,115,-1,-1,-1,110,101,100,113,113,114,113,113,113,113,113,113,113,113,105,113,113],
+   [113,113,111,113,113,113,113,113,113,113,113,105,113,105,113,105,112,113,113,115,-1,-1,-1,110,113,113,113,113,113,113,113,113,113,113,114,100,113,113,113,113],
+   [113,105,100,113,113,113,113,113,113,113,100,100,113,105,113,113,113,101,111,115,-1,-1,-1,110,113,113,113,113,112,113,101,105,113,113,114,113,113,113,113,113]
+  ],
+  "foreground": [
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [73,-1,-1,-1,73,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+   [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+  ]
+ },
+ "smartTerrain": {
+  "version": 2,
+  "editingDisabled": false,
+  "detailsEnabled": true,
+  "semanticCells": {
+   "terrain:14,14": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,14": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,14": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,15": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,15": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,15": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,16": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:27,17": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:0,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:1,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:2,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:3,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:4,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:5,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:6,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:7,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:8,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:9,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:10,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:11,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:19,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:23,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:24,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:25,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:26,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:27,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:28,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:29,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:30,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:31,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:32,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:33,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:34,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:35,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:36,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:37,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:38,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:39,18": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:0,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:1,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:2,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:3,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:4,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:5,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:6,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:7,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:8,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:9,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:10,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:11,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:19,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:23,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:24,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:25,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:26,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:27,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:28,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:29,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:30,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:31,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:32,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:33,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:34,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:35,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:36,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:37,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:38,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:39,19": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:0,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:1,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:2,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:3,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:4,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:5,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:6,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:7,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:8,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:9,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:10,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:11,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:19,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:23,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:24,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:25,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:26,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:27,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:28,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:29,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:30,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:31,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:32,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:33,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:34,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:35,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:36,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:37,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:38,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:39,20": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:0,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:1,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:2,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:3,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:4,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:5,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:6,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:7,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:8,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:9,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:10,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:11,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:12,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:13,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:14,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:15,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:16,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:17,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:18,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:19,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:23,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:24,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:25,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:26,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:27,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:28,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:29,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:30,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:31,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:32,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:33,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:34,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:35,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:36,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:37,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:38,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   },
+   "terrain:39,21": {
+    "styleId": "desert",
+    "brushId": "desert.ground",
+    "legacySource": true
+   }
+  },
+  "recipes": {},
+  "ownedOutputs": {
+   "terrain:2,17": {
+    "ownerId": "legacy-cell:2,18",
+    "partId": "top",
+    "kind": "legacy-decoration",
+    "layer": "terrain",
+    "value": 75
+   },
+   "terrain:19,17": {
+    "ownerId": "legacy-cell:19,18",
+    "partId": "top",
+    "kind": "legacy-decoration",
+    "layer": "terrain",
+    "value": 77
+   },
+   "terrain:28,17": {
+    "ownerId": "legacy-cell:28,18",
+    "partId": "top",
+    "kind": "legacy-decoration",
+    "layer": "terrain",
+    "value": 77
+   },
+   "terrain:31,17": {
+    "ownerId": "legacy-cell:31,18",
+    "partId": "top",
+    "kind": "legacy-decoration",
+    "layer": "terrain",
+    "value": 76
+   },
+   "terrain:36,17": {
+    "ownerId": "legacy-cell:36,18",
+    "partId": "top",
+    "kind": "legacy-decoration",
+    "layer": "terrain",
+    "value": 76
+   }
+  },
+  "suppressedOutputParts": [],
+  "cells": {
+   "14,14": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,14": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,14": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,15": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,15": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,15": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,16": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "27,17": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "0,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "1,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "2,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "3,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "4,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "5,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "6,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "7,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "8,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "9,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "10,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "11,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "19,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "23,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "24,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "25,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "26,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "27,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "28,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "29,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "30,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "31,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "32,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "33,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "34,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "35,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "36,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "37,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "38,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "39,18": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "0,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "1,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "2,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "3,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "4,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "5,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "6,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "7,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "8,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "9,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "10,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "11,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "19,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "23,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "24,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "25,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "26,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "27,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "28,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "29,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "30,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "31,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "32,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "33,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "34,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "35,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "36,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "37,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "38,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "39,19": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "0,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "1,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "2,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "3,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "4,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "5,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "6,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "7,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "8,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "9,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "10,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "11,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "19,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "23,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "24,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "25,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "26,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "27,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "28,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "29,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "30,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "31,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "32,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "33,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "34,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "35,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "36,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "37,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "38,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "39,20": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "0,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "1,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "2,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "3,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "4,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "5,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "6,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "7,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "8,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "9,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "10,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "11,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "12,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "13,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "14,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "15,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "16,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "17,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "18,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "19,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "23,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "24,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "25,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "26,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "27,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "28,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "29,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "30,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "31,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "32,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "33,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "34,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "35,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "36,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "37,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "38,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   },
+   "39,21": {
+    "theme": "desert",
+    "material": "ground",
+    "styleId": "desert",
+    "brushId": "desert.ground"
+   }
+  },
+  "backdropCells": {},
+  "generatedDecorations": {
+   "2,17": {
+    "ownerKey": "2,18",
+    "slot": "top",
+    "gid": 75,
+    "value": 75,
+    "layer": "terrain"
+   },
+   "19,17": {
+    "ownerKey": "19,18",
+    "slot": "top",
+    "gid": 77,
+    "value": 77,
+    "layer": "terrain"
+   },
+   "28,17": {
+    "ownerKey": "28,18",
+    "slot": "top",
+    "gid": 77,
+    "value": 77,
+    "layer": "terrain"
+   },
+   "31,17": {
+    "ownerKey": "31,18",
+    "slot": "top",
+    "gid": 76,
+    "value": 76,
+    "layer": "terrain"
+   },
+   "36,17": {
+    "ownerKey": "36,18",
+    "slot": "top",
+    "gid": 76,
+    "value": 76,
+    "layer": "terrain"
+   }
+  },
+  "generatedBackgroundDecorations": {},
+  "suppressedDecorationSlots": []
+ },
+ "placedObjects": [
+  {
+   "id": "coin_silver",
+   "x": 248,
+   "y": 184,
+   "instanceId": "obj_4ce1c5ae-6690-4b4f-a2e3-7ca87a7b9657",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 216,
+   "y": 248,
+   "instanceId": "obj_b92944fa-6abc-4214-ad2d-0b2f9f00bcc1",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 280,
+   "y": 248,
+   "instanceId": "obj_aac9effe-94b1-4e31-a2c9-7b02bcb164eb",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 344,
+   "y": 248,
+   "instanceId": "obj_f1b25f21-a83d-4899-a402-21790d6ed803",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 104,
+   "y": 280,
+   "instanceId": "obj_9b05c619-8156-432e-ab9a-6b3eb4a6518f",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 136,
+   "y": 280,
+   "instanceId": "obj_bb75370f-09e3-4239-a71f-eb3ce2c239a9",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "crab",
+   "x": 384,
+   "y": 280,
+   "instanceId": "obj_d412149a-8a9d-43c2-af2b-a44ce7485ad6",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 472,
+   "y": 280,
+   "instanceId": "obj_72804bca-c0ed-4aad-af94-42b9f97f9127",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  },
+  {
+   "id": "coin_gold",
+   "x": 536,
+   "y": 280,
+   "instanceId": "obj_bf30365d-08a6-4571-ae16-2fdd3f3c7952",
+   "customSpriteKind": null,
+   "triggerTargetInstanceId": null,
+   "linkedTargetInstanceIds": null,
+   "containedObjectId": null,
+   "signText": null,
+   "swordsmanObjectiveMode": null,
+   "swordsmanDefeatMode": null,
+   "policeBehaviorMode": null,
+   "bossHitPoints": null,
+   "coopPlate": null,
+   "policePatrolShoots": null,
+   "npcMode": null,
+   "npcPushable": null,
+   "npcCanJumpFall": null,
+   "npcPlayerCollision": null,
+   "npcFriendlyFire": null,
+   "npcName": null,
+   "npcDefeatMode": null,
+   "ballGraphic": null,
+   "ballWeight": null,
+   "ballHurtEnemies": null,
+   "ballHurtFriendlies": null,
+   "ballHurtPlayer": null,
+   "ballPushable": null,
+   "triangleLegX": null,
+   "triangleLegY": null,
+   "triangleFill": null,
+   "triangleStroke": null,
+   "triangleTileFill": null,
+   "triangleTileMode": null,
+   "triangleTileSlopeOnly": null,
+   "triangleTileFlipX": null,
+   "triangleTileFlipY": null,
+   "triangleTileGids": null,
+   "triangleStrokeOn": null,
+   "triangleBackgroundOn": null
+  }
+ ],
+ "customSprites": [],
+ "customTiles": [],
+ "version": 1,
+ "status": "draft",
+ "createdAt": "2026-01-01T00:00:00.000Z",
+ "updatedAt": "2026-01-01T00:00:00.000Z",
+ "publishedAt": null
+}

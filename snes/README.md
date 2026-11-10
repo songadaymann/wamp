@@ -144,3 +144,15 @@ tests/            harness tests
 - Set `EMU_CORE_LOG=1` to see the cores' log output on stderr (format strings
   are unexpanded: libretro.py cannot format C varargs). snes9x also printf()s
   `Map_LoROMMap` at load; emu.py routes that to stderr.
+
+## Rooms
+
+- `rooms/world.json` + `rooms/world/<x>,<y>.json` (12-room world, start `0,0`)
+  + `rooms/test_*.json` (engine test rooms): genuine WAMP RoomSnapshot JSON,
+  checked in. Regenerate with `sh rooms/src/build.sh` (Node; edits go in
+  `rooms/src/roomdefs.mts`).
+- `tools/mkrooms.py` compiles them to room blobs v1 + the world index
+  (`build/gen/rooms/*.bin`, `rooms.inc`, `rooms.json`); `make` runs it.
+  `mkrooms.py --dump <bin>` decodes a blob, `--render <bin>` draws it,
+  `make roomshots` renders all, `make roomcheck` prints the reachability
+  report of `tools/roomsim.py`. Tests: `python3 tests/test_rooms.py`.
