@@ -662,7 +662,12 @@ def test_neighbour_edges_align():
                 # and could not come back), and the lower room needs a foothold at y = 16 under it
                 assert all(d["coll"][(H - 1) * W + c] == TC["TC_ONEWAY"] for c in hatch), \
                     "vertical seam %s / %s has an open cell that is not a one-way hatch" % (e["name"], below["name"])
-                assert not db["pits_deadly"] or True
+                # foothold: under every hatch cell the lower room has a ladder top (support at y = 15)
+                # or a solid block top at y = 16, so a 53 px jump lands on the hatch (top = y 336 above)
+                for c in hatch:
+                    ladder = any(o["type"] == 11 and o["x"] >> 4 == c and o["y"] - 51 + 2 <= 16 for o in db["objects"])
+                    assert ladder or solid(db, c, 1), \
+                        "hatch %s / %s: no foothold under column %d" % (e["name"], below["name"], c)
                 links[(x, y)].add((x, y + 1))
                 links[(x, y + 1)].add((x, y))
     seen, todo = {(0, 0)}, [(0, 0)]
@@ -707,6 +712,70 @@ def test_oneway_cells_do_not_touch_solid_cells():
                 for nx, ny in ((x - 1, y), (x + 1, y), (x, y + 1)):
                     assert not (0 <= nx < W and c[ny * W + nx] & 0x80), \
                         "%s: one-way cell %d,%d touches solid cell %d,%d" % (e["name"], x, y, nx, ny)
+
+
+def enemy_zone(d, o):
+    """Columns a floor enemy can get to (contract 6.2): slimes and crabs walk on their floor and turn
+    at walls, curbs and ledges; a frog hop peaks at 39 px, so frogs climb up to 2 tiles and drop off
+    ledges.  One-way cells are ground.  The locked door is a wall."""
+    c = d["coll"]
+    frog = o["type"] == 19
+
+    def is_solid(x, y):
+        if not (0 <= x < W and 0 <= y < H):
+            return True
+        for p in d["objects"]:
+            if p["type"] == 13 and p["x"] - 16 <= x * 16 + 8 < p["x"] + 16 and p["y"] - 48 <= y * 16 + 8 < p["y"]:
+                return True
+        return bool(c[y * W + x] & 0x80)
+
+    def ground(x, y):
+        return is_solid(x, y) or (0 <= x < W and 0 <= y < H and c[y * W + x] in (TC["TC_ONEWAY"], TC["TC_ONEWAY_WATER"]))
+
+    start = (o["x"] >> 4, o["y"] >> 4)          # (column, row of the floor cell under the feet)
+    assert ground(*start), "%s does not stand on ground" % o["name"]
+    seen, todo = {start}, [start]
+    while todo:
+        x, r = todo.pop()
+        for nx in (x - 1, x + 1):
+            if not 0 <= nx < W:
+                continue
+            nxt = None
+            if not is_solid(nx, r - 1):
+                if ground(nx, r):
+                    nxt = (nx, r)
+                elif frog:                         # hops off the ledge and lands below
+                    rr = r
+                    while rr < H and not ground(nx, rr):
+                        rr += 1
+                    nxt = (nx, rr) if rr < H else None
+            elif frog:
+                for up in (1, 2):                  # 16 / 32 px steps are inside a 39 px hop
+                    if not is_solid(nx, r - 1 - up) and is_solid(nx, r - up) and not is_solid(x, r - 1 - up):
+                        nxt = (nx, r - up)
+                        break
+            if nxt and nxt not in seen:
+                seen.add(nxt)
+                todo.append(nxt)
+    return {x for x, _r in seen}
+
+
+def test_floor_enemies_are_fenced_off_the_seams():
+    """A slime, crab or frog must not be able to reach the 3 columns next to an edge that has a
+    neighbour: the player walks in there and would be hit before he can react."""
+    _man, _start, _entries, decoded, _s, _c = world()
+    xy = {(e["x"], e["y"]): e for e in world_rooms()}
+    for (x, y), e in xy.items():
+        d = decoded[e["name"]]
+        for o in d["objects"]:
+            if o["type"] in (15, 16, 18, 19):
+                zone = enemy_zone(d, o)
+                if (x - 1, y) in xy:
+                    assert min(zone) >= 3, "%s: %s can walk to the west seam (columns %d..%d)" % (
+                        e["name"], o["name"], min(zone), max(zone))
+                if (x + 1, y) in xy:
+                    assert max(zone) <= W - 4, "%s: %s can walk to the east seam (columns %d..%d)" % (
+                        e["name"], o["name"], min(zone), max(zone))
 
 
 def test_spawns_are_safe():

@@ -1392,3 +1392,39 @@ contradicted by the task brief, or need a content rule.
    boosting) used to prove that each world room's goal and every seam-to-seam
    route is reachable; `make roomcheck` prints the report, `make roomshots`
    renders every blob to `build/gen/rooms/png/`.
+
+#### Verification addendum (rooms, independent review)
+
+- Re-checked from a clean build with a separate decoder written from 3.1-3.4
+  only (no `mkrooms` import): header fields, tile lists, BG1/BG2 visuals
+  (foreground-over-terrain merge, flip and priority bits, blank cells), the
+  collision table of 3.2, object records (anchors of 6.2, layer, facing rule,
+  goal markers and params), strip rows, `checksum`, section packing (no gaps,
+  no trailing bytes) and the greedy RLE1 encoding of all 19 blobs equal what
+  the source JSON demands; `gen/rooms.inc` linked with `lorom.cfg` puts
+  `WorldIndex` at `$01:8000` and every blob where the index says (bank `$0C`).
+  `rooms/src/build.sh` reproduces the checked-in JSON byte for byte.
+- A second reachability model (separate code, same 5.2/5.3/4.6/6.3 rules,
+  hazards fatal, no wall jump / corner correction / gap assist) agrees with
+  `tools/roomsim.py`: every goal is completable from the spawn, every sprint
+  leg from the previous marker, and from every seam or hatch entry the spawn
+  area and all other exits of the room can be reached.
+- **Content rule added: floor enemies are fenced off the seams.** A slime or
+  crab turns at walls, 16 px curbs and ledges; a frog hop peaks at 39 px
+  (`V_FROG_HOP_NEG`), so a frog clears 1- and 2-tile steps and needs a 48 px
+  wall. No slime, crab or frog may be able to reach the 3 columns next to an
+  edge that has a neighbour (the player walks in there and would be hit before
+  he can react). Rooms changed for it: curbs in Slime Meadow (35,17), Frost
+  Cavern (4-5,17), Frozen Steps (37-38,17), Crab Cove (3-4,17) and Ember
+  Depths (34-35,17; the exit is now behind the curb, the slime starts at
+  column 31); the steps of Frost Cavern (22-23) and Mesa Keep (30-31) are 3
+  tiles high on the frog's side. Bats are not fenced (their flight bands do
+  not cross a seam at floor level). `tests/test_rooms.py` enforces the rule
+  (`test_floor_enemies_are_fenced_off_the_seams`) and now also asserts the
+  foothold under every hatch cell (ladder top or block top at y = 16).
+- Sizes after these edits: 19 blobs, 12,352 bytes in total (world rooms
+  511-1004 bytes, test rooms 353-665).
+- Vertical neighbours that are NOT linked (solid floor over solid ceiling, by
+  design): (0,0)/(0,1), (2,0)/(2,1), (3,-1)/(3,0), (3,0)/(3,1). The only
+  vertical links are the hatches (1,0)/(1,1) at columns 11-12 and
+  (2,-1)/(2,0) at columns 30-31.

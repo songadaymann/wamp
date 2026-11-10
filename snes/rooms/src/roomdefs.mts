@@ -17,6 +17,9 @@
 //   y= 1                 (0,1) (1,1) (2,1) (3,1)
 // Seam conventions (checked by tests/test_rooms.py):
 //   outdoor seams: ground top at row 18, rows 0..17 open;  tunnel seams: rows 14..17 open;
+//   floor enemies are fenced in so that none can get within 3 tiles of an open seam (a player
+//   walking into a room is never hit on the first frame): 16 px curbs or pits for slimes and crabs,
+//   48 px walls for frogs (a frog hop peaks at 39 px, so it clears 2-tile steps);
 //   vertical links are "hatches": one-way tiles in row 21 of the upper room over an open row 0 of
 //   the lower room, with a ladder top / block at y = 16 below so a normal jump (apex 53 px) carries
 //   the player through and onto the one-way tiles; down+jump drops back.
@@ -168,6 +171,7 @@ export const WORLD_ROOMS: RoomDef[] = [
     g.fill('#', 36, 0, 39, 13);                  // cliff face with the cave mouth to (2,0) below it
     g.row('#', 16, 20, 25);                      // P
     g.row('#', 14, 28, 31);                      // Q
+    g.put('#', [35, 17]);                        // curb: keeps the slimes away from the east seam
     g.put('@', [3, 17]);
     g.put('1', [16, 17], [22, 15]).put('2', [30, 17]);
     g.put('h', [29, 13]).put('o', ...P([6, 17], [21, 15], [24, 15], [30, 13], [33, 17]));
@@ -203,7 +207,8 @@ export const WORLD_ROOMS: RoomDef[] = [
     cave(g, 2, 3, 37, 17);
     tunnelL(g);
     g.row('I', 18, 6, 19);
-    g.fill('#', 21, 16, 23, 17);
+    g.fill('#', 4, 17, 5, 17);                   // curb: keeps the slime away from the west seam
+    g.fill('#', 21, 16, 23, 17).fill('#', 22, 15, 23, 15);   // 48 px on the frog's side: a frog hop peaks at 39 px
     g.row('I', 14, 25, 29);
     g.row('#', 12, 31, 36);
     g.put('@', [3, 17]);
@@ -228,6 +233,7 @@ export const WORLD_ROOMS: RoomDef[] = [
     g.put('@', [26, 17]);
     g.put('g', ...P([7, 17], [13, 17], [18, 17], [17, 13], [18, 13], [11, 11], [5, 9], [36, 17]));
     g.put('1', [35, 17]);
+    g.fill('#', 37, 17, 38, 17);                 // curb: keeps the slime away from the east seam
     g.stamp('snow', 'background', 31, 3, 17).stamp('snow', 'background', 31, 22, 15);
     g.onGround('snow', 'foreground', [2, 3, 4], 0.2, 51);
     g.hanging('snow', 'background', [62, 63, 64, 65], 0.5, 52);
@@ -272,11 +278,11 @@ export const WORLD_ROOMS: RoomDef[] = [
     g.fill('#', 0, 0, 1, 17);                    // west cliff (no neighbour)
     g.fill('#', 2, 9, 13, 10).fill('#', 12, 11, 13, 14);     // keep roof + gate wall
     g.put('D', [12, 17]);
-    g.fill('#', 30, 16, 33, 17);                 // step (also fences the frog in)
+    g.fill('#', 30, 16, 33, 17).fill('#', 30, 15, 31, 15);   // stair; 48 px on the frog's side (a hop peaks at 39 px)
     g.row('#', 14, 24, 27);
     g.put('@', [36, 17]).put('E', [6, 17]);
     g.put('k', [25, 13]).put('^', [25, 17], [26, 17]).put('r', [17, 17]);
-    g.put('h', [9, 17]).put('*', [4, 17]).put('o', ...P([31, 15], [32, 15], [27, 13], [21, 17], [15, 17]));
+    g.put('h', [9, 17]).put('*', [4, 17]).put('o', ...P([31, 14], [32, 15], [27, 13], [21, 17], [15, 17]));
     g.cactus(35, 17, 3).cactus(22, 17, 2).cactus(15, 17, 4);
     g.pillar('desert', [57, 58], 4, 11, 12).pillar('desert', [57, 58], 9, 11, 12);
     g.stamp('desert', 'background', 6, 3, 17).stamp('desert', 'background', 8, 29, 17).stamp('desert', 'background', 1, 38, 17);
@@ -290,6 +296,7 @@ export const WORLD_ROOMS: RoomDef[] = [
     tunnelL(g); tunnelR(g);
     hatchShaft(g, 11, [3, 6, 9]);                // -> (1,0) Slime Meadow
     g.row('#', 10, 7, 12);
+    g.fill('#', 3, 17, 4, 17);                   // curb: keeps the crab away from the west seam
     g.put('H', [13, 11], [13, 14], [13, 17]);
     g.clear(20, 18, 31, 19).water(20, 18, 31, 19);     // pool, flush with the floor on both sides
     g.fill('#', 33, 16, 34, 17);
@@ -331,7 +338,8 @@ export const WORLD_ROOMS: RoomDef[] = [
     // are inside the 53 px jump apex, so the coins do not need a wall jump
     g.row('#', 15, 12, 15).row('#', 13, 18, 23);
     g.put('@', [3, 17]).put('E', [36, 17]);
-    g.put('F', [13, 17]).put('f', [23, 17]).put('S', [20, 10]).put('2', [33, 17]);
+    g.fill('#', 34, 17, 35, 17);                 // curb: keeps the slime away from the exit and the east seam
+    g.put('F', [13, 17]).put('f', [23, 17]).put('S', [20, 10]).put('2', [31, 17]);
     g.put('o', ...P([9, 15], [10, 15], [13, 14], [14, 14], [19, 12], [22, 12], [27, 15], [28, 15])).put('g', [5, 17]);
     g.hanging('lava', 'background', [53, 54, 55, 56, 57], 0.4, 111);
     g.onGround('lava', 'foreground', [2, 4, 20], 0.25, 112);
