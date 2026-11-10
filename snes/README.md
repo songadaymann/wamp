@@ -3,6 +3,11 @@
 A SNES (65816 assembly) build of WAMP, plus a headless emulator harness so the
 ROM can be built and tested from the command line / CI with no display.
 
+The engine contract for milestone 1 (bank layout, asset and room formats, WRAM
+map, module interfaces, physics rules, test strategy) is
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), with `src/constants.inc` and
+`src/wram.inc` as its machine-readable half.
+
 Right now the ROM is a pipeline demo: Mode 1, a 4bpp checkerboard on BG1, an
 8x8 font on BG3 printing `SNESWAMP HARNESS OK`, and a 16x16 sprite you move
 with the D-pad.
@@ -119,9 +124,10 @@ tests/            harness tests
 
 - Register widths: only switch with the `A8`/`A16`/`I8`/`I16` macros so the
   assembler and the CPU always agree; routines document the widths they expect.
-- WRAM variables are found by name through `build/sneswamp.lbl`. `ZEROPAGE`
-  starts at `$0000`, `BSS` at `$0200`, `BSS7E` at `$7E2000`; the stack is
-  `$1F00-$1FFF`.
+- WRAM variables are found by name through `build/sneswamp.lbl`. The linker
+  segments are small module-private pools: `ZEROPAGE` `$0000-$001F`, `BSS`
+  `$0200-$08FF`, `BSS7E` `$7E2000-$7E3FFF`; everything shared has a fixed address
+  in `src/wram.inc`; the stack is `$1F00-$1FFF`.
 - The 224-line picture is scanlines 1-224: BG vertical scroll is set to -1 so
   tilemap row 0 is screen row 0, while OAM Y = n already lands on screen row n.
 - Reset takes about 5 frames (the RAM clears are slow DMAs) before NMIs start,
